@@ -40,7 +40,7 @@ export const settingsScreen = (
         ${walletMenuRow("account", "Accounts & groups", "wallet")}
         ${walletMenuRow("network", "Network", "globe", status.network)}
         ${walletMenuRow("address-book", "Address book", "book")}
-        ${walletMenuRow("multisigs", "Shared accounts", "users")}
+        ${walletMenuRow("multisigs", "Multisigs", "users")}
       </div>
     </section>
     <section class="section">

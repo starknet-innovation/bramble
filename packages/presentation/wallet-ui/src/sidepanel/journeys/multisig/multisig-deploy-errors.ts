@@ -12,7 +12,7 @@ export const EXPIRED_DEPLOYMENT_REVIEW =
  * Concise recovery copy for a deterministic address already present on-chain.
  */
 export const ALREADY_DEPLOYED_MESSAGE =
-  "This multisig is already deployed. Open it from Shared accounts instead of deploying it again.";
+  "This multisig is already deployed. Open it from Multisigs instead of deploying it again.";
 
 /**
  * Removes raw RPC detail from known deployment-review failures.

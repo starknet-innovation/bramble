@@ -98,11 +98,7 @@ export const multisigsFlow = (
     actionableArgentMultisigIntents(intents.filter((intent) => intent.accountId === record.id))
       .length;
   return (
-    flowHeader(
-      "Shared accounts",
-      status,
-      `${scoped.length} account${scoped.length === 1 ? "" : "s"}`,
-    ) +
+    flowHeader("Multisigs", status, `${scoped.length} account${scoped.length === 1 ? "" : "s"}`) +
     flowScreen(
       "multisigs",
       `${
@@ -117,12 +113,12 @@ export const multisigsFlow = (
         </div>
       </section>
       <section class="section">
-        <p class="eyebrow">Shared accounts</p>
+        <p class="eyebrow">Multisigs</p>
         ${
           account === null
             ? noAccountEmpty(status)
             : scoped.length === 0
-              ? emptyState("No shared accounts are saved on this network yet.")
+              ? emptyState("No multisigs are saved on this network yet.")
               : `<ul class="allowance-list">${scoped.map((view) => multisigRow(view, openCount(view.record))).join("")}</ul>`
         }
         ${loadError ? button({ attributes: { id: "multisig-list-retry" }, label: "Retry" }) : ""}

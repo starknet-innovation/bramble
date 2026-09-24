@@ -66,6 +66,12 @@ One name per concept. The ruled ones:
 | A website connected to the wallet | **site** | dapp, app, application |
 | The Starknet application on a Ledger device | **the Starknet app** | — |
 | The 12/24-word secret | **recovery phrase** | seed phrase, mnemonic |
+| An account several people co-sign for | **multisig** | shared account, shared wallet |
+
+"Shared" survives only where it is the verb — a wallet card or a public key *shared by* a
+participant. An account is never a "shared account"; it is a multisig. Sentence case applies, so
+it is `Multisigs` as a heading and "this multisig" mid-sentence, while `Ready Multisig 0.2` keeps
+its capitals as a product name.
 
 `folder` is the UI word only. The code keeps `group` internally — `AccountGroups`,
 `DEFAULT_GROUP_IDS`, and the stored `preferences.groups` key are unchanged, because renaming a

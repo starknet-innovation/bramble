@@ -183,7 +183,7 @@ export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | nu
           required: true,
           spellcheck: false,
         })}
-        ${button({ disabled: account === null, label: "Add shared account", type: "submit" })}
+        ${button({ disabled: account === null, label: "Add multisig", type: "submit" })}
         <p id="multisig-add-result" role="status"></p>
       </form>
     </section>`,

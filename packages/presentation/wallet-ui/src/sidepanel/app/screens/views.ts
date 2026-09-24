@@ -314,7 +314,7 @@ export const dashboard = (
   const selectedPortfolioBalances =
     selectedMultisigId !== null && multisigBalanceId === selectedMultisigId
       ? multisigBalances
-      : { error: "Shared balances are loading." };
+      : { error: "Multisig balances are loading." };
   const journeyContext: JourneyContext = {
     deployment,
     account,

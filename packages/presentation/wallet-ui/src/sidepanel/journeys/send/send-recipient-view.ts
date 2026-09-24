@@ -173,7 +173,7 @@ export const recipientStage = (
               sharedAccounts.length === 0
                 ? ""
                 : `<div class="send-recipient-folder" data-send-folder="shared">
-                  <div class="send-list-heading">${icon("users")}<strong>Shared accounts</strong></div>
+                  <div class="send-list-heading">${icon("users")}<strong>Multisigs</strong></div>
                   ${sharedAccounts.map(multisigRecipientRow).join("")}
                 </div>`
             )

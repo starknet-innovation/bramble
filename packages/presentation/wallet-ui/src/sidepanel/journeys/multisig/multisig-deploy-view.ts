@@ -251,7 +251,7 @@ export const multisigDeployFlow = (
                     ? '<p class="hint" role="note">Confirm the original signers. The review will verify that they reproduce the watched address.</p>'
                     : ""
               }
-              ${textField({ label: "Shared account name (optional)", maxlength: 48, name: "name", value: selectedMultisig?.record.name ?? "" })}
+              ${textField({ label: "Multisig name (optional)", maxlength: 48, name: "name", value: selectedMultisig?.record.name ?? "" })}
               <section class="multisig-signer-set" aria-labelledby="multisig-signer-set-title">
             <div class="multisig-signer-set-head">
               <strong id="multisig-signer-set-title">Signer set</strong>
