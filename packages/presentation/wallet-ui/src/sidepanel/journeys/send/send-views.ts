@@ -15,7 +15,13 @@ import type { TokenBalance, WalletStatus } from "../../../popup/responses/respon
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
-import { accountDisplayName, accountLabel, flowScreen, noAccountEmpty } from "../../shared/parts";
+import {
+  accountDisplayName,
+  accountLabel,
+  flowScreen,
+  inlineCopyButton,
+  noAccountEmpty,
+} from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { tokenDropdown } from "../../shared/token-dropdown";
 import { starknetNetworkGlyph, tokenGlyph } from "../portfolio/token-row";
@@ -181,16 +187,9 @@ const workingStage = (): string => `
   <section class="send-working" id="send-working" role="status" aria-live="polite" hidden>
     <span class="send-working-mark">${liquidDots("send")}</span>
     <div class="send-working-copy">
-      <h2 id="send-working-title">Authorizing transaction</h2>
-      <p id="send-working-copy">The reviewed transaction is being authorized inside the wallet.</p>
+      <h2 id="send-working-title">Sending your transaction…</h2>
+      <p id="send-working-copy" hidden></p>
     </div>
-    <ol class="send-task-list" aria-label="Transaction status">
-      <li data-send-task="review" data-state="active"><span></span><span id="send-task-review-label">Review transaction</span></li>
-      <li data-send-task="authorize" data-state="pending"><span></span><span id="send-task-authorize-label">Authorize</span></li>
-      <li data-send-task="broadcast" data-state="pending"><span></span><span id="send-task-broadcast-label">Broadcast</span></li>
-      <li data-send-task="confirm" data-state="pending"><span></span><span id="send-task-confirm-label">Confirm on Starknet</span></li>
-    </ol>
-    <p class="send-liveness" id="send-liveness">Keep this panel open.</p>
   </section>`;
 
 const successStage = (copy: TransferModeCopy): string => `
@@ -199,14 +198,16 @@ const successStage = (copy: TransferModeCopy): string => `
       <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
     </span>
     <div class="send-outcome-copy">
-      <p class="send-outcome-kicker">Confirmed on Starknet</p>
       <h2 id="send-success-title">${escapeHtml(copy.successTitle)}</h2>
       <p id="send-success-summary"></p>
-      <code id="send-success-hash"></code>
+      <span class="send-outcome-hash">
+        <a id="send-success-hash-link" target="_blank" rel="noopener noreferrer"><code id="send-success-hash"></code></a>
+        ${inlineCopyButton("", "Copy transaction hash")}
+      </span>
     </div>
     <div class="send-actions">
       ${button({ attributes: { id: "send-view-activity" }, icon: "activity", label: "View activity" })}
-      ${button({ attributes: { id: "send-home" }, label: "Back to home", variant: "secondary" })}
+      ${button({ attributes: { id: "send-home" }, label: "Back", variant: "secondary" })}
     </div>
   </section>`;
 
@@ -286,7 +287,7 @@ export const sendFlow = (
       `<section class="section send-flow">
         ${account ? "" : noAccountEmpty(status)}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" data-sender="${escapeHtml(account?.address ?? "")}" data-sender-label="${escapeHtml(account ? accountDisplayName(account, preferences) : "")}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" data-network-id="${escapeHtml(status.networkId)}" data-sender="${escapeHtml(account?.address ?? "")}" data-sender-label="${escapeHtml(account ? accountDisplayName(account, preferences) : "")}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />

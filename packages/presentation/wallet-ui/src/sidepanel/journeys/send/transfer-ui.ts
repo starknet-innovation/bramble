@@ -243,7 +243,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
   if (homeButton) {
     homeButton.textContent =
-      completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back to home";
+      completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back";
     homeButton.addEventListener("click", complete);
   }
   form

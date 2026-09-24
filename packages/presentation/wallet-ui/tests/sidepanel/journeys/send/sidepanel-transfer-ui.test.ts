@@ -122,7 +122,7 @@ describe("bindTransfer", () => {
     expect(calls.submitTransfer).toHaveLength(1);
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
-    expect(app.querySelector("#send-home")?.textContent).toBe("Back to home");
+    expect(app.querySelector("#send-home")?.textContent).toBe("Back");
     expect(app.querySelector("#send-another")).toBeNull();
     // Three steps: review, authorizing, broadcasting and confirmation all rest
     // on Confirm rather than each taking a step of its own.
@@ -470,10 +470,8 @@ describe("bindTransfer", () => {
     expect(app.querySelector("#send-working-title")?.textContent).toBe("Waiting for your Ledger");
 
     markTransferLedgerAuthorized();
-    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending to Starknet");
-    expect(app.querySelector('[data-send-task="broadcast"]')?.getAttribute("data-state")).toBe(
-      "active",
-    );
+    // The device has answered, so the screen stops pointing at it.
+    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending your transaction…");
 
     resolveSubmit("0xdeadbeef");
     await flush();

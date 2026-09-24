@@ -155,9 +155,11 @@ export const transferStageTitle = (stage: TransferStage, mode: TransferMode = "s
   if (stage === "recipient") return copy.noun;
   if (stage === "details" || stage === "reviewing") return copy.noun;
   if (stage === "review") return `Review ${copy.verb}`;
-  if (stage === "authorizing") return `Authorize ${copy.verb}`;
-  if (stage === "broadcasting") return copy.progressive;
-  if (stage === "confirming") return "Confirming";
+  // Authorizing, broadcasting and confirming are one wait as far as the reader
+  // is concerned: the wallet is sending, and the steps between are its own.
+  if (stage === "authorizing" || stage === "broadcasting" || stage === "confirming") {
+    return copy.progressive;
+  }
   if (stage === "pending") return "Confirmation pending";
   if (stage === "submitted") return "Confirmed";
   return `${copy.noun} failed`;

@@ -127,6 +127,17 @@ export const SEND_OUTCOME_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
+  .send-outcome-hash {
+    align-items: center;
+    display: inline-flex;
+    gap: ${SPACE.xs};
+    justify-content: center;
+    min-width: 0;
+  }
+  .send-outcome-hash a { color: inherit; text-decoration: none; }
+  .send-outcome-hash a[href] code { text-decoration: underline; text-underline-offset: 2px; }
+  .send-outcome-hash a[href]:hover code { color: var(--bramble-accent); }
+  .send-outcome-hash code { overflow-wrap: anywhere; }
   .send-outcome-kicker {
     color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};

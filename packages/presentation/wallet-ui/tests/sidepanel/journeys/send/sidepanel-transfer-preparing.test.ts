@@ -126,9 +126,6 @@ const hidden = (app: HTMLElement, selector: string): boolean =>
 const disabled = (app: HTMLElement, selector: string): boolean =>
   app.querySelector<HTMLButtonElement | HTMLInputElement>(selector)?.disabled ?? false;
 
-const taskState = (app: HTMLElement, task: string): string | undefined =>
-  app.querySelector<HTMLElement>(`[data-send-task="${task}"]`)?.dataset["state"];
-
 const stepState = (app: HTMLElement, step: string): string | undefined =>
   app.querySelector<HTMLElement>(`[data-send-step="${step}"]`)?.dataset["state"];
 
@@ -191,9 +188,6 @@ describe("Review shield", () => {
     // The preparing screen says only what is running.
     expect(text(app, "#send-working-copy")).toBe("");
     expect(hidden(app, "#send-working-copy")).toBe(true);
-    expect(text(app, "#send-task-review-label")).toBe("Build private proof");
-    expect(taskState(app, "review")).toBe("active");
-    expect(taskState(app, "authorize")).toBe("pending");
     // The step rail has moved off Amount: the review is what is in progress.
     expect(stepState(app, "details")).toBe("done");
     expect(stepState(app, "review")).toBe("active");
@@ -277,7 +271,6 @@ describe("Review shield", () => {
     await flush();
     expect(stage(app)).toBe("reviewing");
     expect(hidden(app, "#send-working")).toBe(false);
-    expect(text(app, "#send-task-review-label")).toBe("Build private proof");
 
     pending.resolve(preparation);
     await flush();

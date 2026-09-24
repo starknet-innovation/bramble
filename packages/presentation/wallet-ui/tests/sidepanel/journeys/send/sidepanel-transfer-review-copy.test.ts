@@ -86,6 +86,6 @@ describe("send review recipient copy", () => {
     expect(app.querySelector("#transfer-result")?.textContent).toBe("Copied");
     // The working stage is a live-region container in the same section; the
     // feedback must never have replaced its markup.
-    expect(app.querySelector("#send-working-title")?.textContent).toBe("Authorizing transaction");
+    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending your transaction…");
   });
 });

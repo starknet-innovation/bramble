@@ -5,6 +5,7 @@
  * access and no state of its own.
  */
 
+import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
 import { reviewFeeBlocked } from "../../shared/review-render";
@@ -19,7 +20,6 @@ import {
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
 import {
   setSendProgress,
-  setTaskStatus,
   setText,
   type WorkingStatus,
   workingStatus,
@@ -126,16 +126,30 @@ export const applyTransferProgress = <Review>(
   applyWorkingStatus(form, workingStatus(state, modeOf(form, state.fields)));
 };
 
-// Paints the working screen — title, copy, liveness, and the four task rows —
-// from one status, so a job's progress poll and a full repaint agree.
+// Paints the working screen from one status, so a job's progress poll and a
+// full repaint agree on what it says.
 const applyWorkingStatus = (form: HTMLFormElement, status: WorkingStatus): void => {
   setText(form, "send-working-title", status.title);
   setText(form, "send-working-copy", status.copy);
-  setText(form, "send-liveness", status.liveness);
-  setTaskStatus(form, "review", status.labels[0], status.states[0]);
-  setTaskStatus(form, "authorize", status.labels[1], status.states[1]);
-  setTaskStatus(form, "broadcast", status.labels[2], status.states[2]);
-  setTaskStatus(form, "confirm", status.labels[3], status.states[3]);
+  form.querySelector("#send-working-copy")?.toggleAttribute("hidden", status.copy === "");
+};
+
+/**
+ * Points the confirmed hash at the explorer and arms its copy control. A network
+ * with no explorer (devnet) renders the hash as plain text rather than a link
+ * that cannot resolve.
+ */
+const applySuccessHash = (form: HTMLFormElement, hash: string): void => {
+  const link = form.querySelector<HTMLAnchorElement>("#send-success-hash-link");
+  const explorer = explorerTransactionUrl(form.dataset["networkId"] ?? "", hash);
+  if (link && explorer) {
+    link.href = explorer;
+  } else {
+    link?.removeAttribute("href");
+  }
+  form
+    .querySelector<HTMLElement>(".send-outcome-hash [data-copy]")
+    ?.setAttribute("data-copy", hash);
 };
 
 /**
@@ -231,11 +245,7 @@ export const applyTransferUi = (
   if (working) {
     applyWorkingStatus(form, workingStatus(state, mode));
   }
-  // While a private send is preparing, the screen is the title alone: the task
-  // list and the standing hint belong to a transaction that has been submitted.
-  form.querySelector(".send-task-list")?.toggleAttribute("hidden", preparing);
-  form.querySelector("#send-working-copy")?.toggleAttribute("hidden", preparing);
-  form.querySelector("#send-liveness")?.toggleAttribute("hidden", preparing);
+
   if (state.fields && state.transactionHash) {
     const summary = transferSuccessSummary(
       mode,
@@ -245,6 +255,7 @@ export const applyTransferUi = (
     );
     setText(form, "send-success-summary", summary);
     setText(form, "send-success-hash", state.transactionHash);
+    applySuccessHash(form, state.transactionHash);
     setText(form, "send-pending-hash", state.transactionHash);
     setText(form, "send-failure-hash", state.transactionHash);
   }

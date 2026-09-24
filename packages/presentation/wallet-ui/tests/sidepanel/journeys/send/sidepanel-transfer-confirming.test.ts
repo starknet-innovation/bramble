@@ -10,7 +10,6 @@ import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
-import { PROVING_HINT } from "../../../../src/sidepanel/journeys/privacy/privacy-views";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -117,9 +116,6 @@ const stage = (app: HTMLElement): string | undefined =>
 const hidden = (app: HTMLElement, selector: string): boolean =>
   app.querySelector(selector)?.hasAttribute("hidden") ?? true;
 
-const taskState = (app: HTMLElement, task: string): string | undefined =>
-  app.querySelector<HTMLElement>(`[data-send-task="${task}"]`)?.dataset["state"];
-
 // The amount step's controls, every one of which must be inert while a
 // preparation the user started from them is running.
 
@@ -165,11 +161,7 @@ describe("Confirm and shield", () => {
     submit(app);
     expect(stage(app)).toBe("authorizing");
     expect(hidden(app, "#send-working")).toBe(false);
-    expect(text(app, "#send-working-title")).toBe("Authorizing transaction");
-    expect(text(app, "#send-working-copy")).toContain("proof built at review");
-    expect(taskState(app, "review")).toBe("done");
-    expect(taskState(app, "authorize")).toBe("active");
-    expect(text(app, "#send-task-broadcast-label")).toBe("Broadcast to Starknet");
+    expect(text(app, "#send-working-title")).toBe("Shielding your transaction…");
 
     pending.resolve("0xfeed");
     await flush();
@@ -190,21 +182,14 @@ describe("Confirm and shield", () => {
     submit(app);
     await flush();
     submit(app);
-    expect(taskState(app, "authorize")).toBe("active");
-    expect(taskState(app, "broadcast")).toBe("pending");
 
     // Signing still in progress: the list holds.
     report?.({ elapsedMs: 800, phase: "signing" });
-    expect(taskState(app, "authorize")).toBe("active");
-    expect(text(app, "#send-working-title")).toBe("Authorizing transaction");
+    expect(text(app, "#send-working-title")).toBe("Shielding your transaction…");
 
     // The job hands the signed transaction on: signing is done, broadcast lights.
     report?.({ elapsedMs: 2_400, phase: "broadcasting" });
-    expect(taskState(app, "authorize")).toBe("done");
-    expect(taskState(app, "broadcast")).toBe("active");
-    expect(taskState(app, "confirm")).toBe("pending");
-    expect(text(app, "#send-working-title")).toBe("Shielding on Starknet");
-    expect(text(app, "#send-working-copy")).toContain("being broadcast");
+    expect(text(app, "#send-working-title")).toBe("Shielding your transaction…");
 
     pending.resolve("0xfeed");
     await flush();
@@ -228,8 +213,6 @@ describe("Review unshield", () => {
     expect(hidden(app, "#send-working")).toBe(false);
     expect(text(app, "#send-working-title")).toBe("Preparing private transfer…");
     expect(text(app, "#send-working-copy")).toBe("");
-    expect(text(app, "#send-task-review-label")).toBe("Quote private relay");
-    expect(text(app, "#send-task-broadcast-label")).toBe("Prove and relay privately");
     expect(text(app, "#send-review-label")).toBe("Preparing unshield…");
 
     prepare.resolve({
@@ -252,12 +235,8 @@ describe("Review unshield", () => {
     submit(app);
     expect(stage(app)).toBe("authorizing");
     expect(text(app, "#send-working-title")).toBe("Proving privately");
-    expect(text(app, "#send-working-copy")).toContain("Building the private proof");
-    expect(text(app, "#send-working-copy")).toContain("cannot be interrupted");
-    expect(text(app, "#send-task-authorize-label")).toBe("Build private proof");
-    expect(taskState(app, "authorize")).toBe("active");
-    expect(text(app, "#send-task-broadcast-label")).toBe("Relay privately");
-    expect(text(app, "#send-liveness")).toBe(PROVING_HINT);
+    // Proving is the one software wait long enough to look stuck, so it says so.
+    expect(text(app, "#send-working-copy")).toContain("Proving may take longer");
 
     execute.resolve("0xfeed");
     await flush();
