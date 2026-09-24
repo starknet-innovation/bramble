@@ -20,6 +20,7 @@ import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
+import { setFlowStep } from "../../shared/parts";
 import { reviewPanel } from "../../shared/review-render";
 import { compactAmount, tokenGlyph } from "../portfolio/token-row";
 import {
@@ -32,7 +33,7 @@ import {
 } from "./swap-client";
 import { bindSwapTokenDropdowns } from "./swap-picker";
 import { type SwapStage, transitionSwapStage } from "./swap-transition";
-import { swapConfirmReceipt, swapQuoteDetails } from "./swap-views";
+import { swapConfirmReceipt } from "./swap-views";
 
 /**
  * State accessors and services the swap bindings close over.
@@ -209,11 +210,15 @@ const paintSwapMeta = (root: Element, figures: SwapFigures): void => {
       ? `Insufficient ${figures.sellToken?.symbol ?? "balance"}`
       : figures.highRisk
         ? `Swap anyway (−${figures.lossPercent.toFixed(1)}%)`
-        : "Swap";
+        : "Review swap";
   }
 };
 
+const SWAP_STEP_INDEX: Readonly<Record<SwapStage, number>> = { confirm: 1, edit: 0, success: 2 };
+
 const paintSwapStages = (root: Element, figures: SwapFigures): void => {
+  setFlowStep(root, "data-swap-step", SWAP_STEP_INDEX[stage]);
+  root.querySelector(".send-progress")?.removeAttribute("hidden");
   root.querySelector("#swap-edit")?.toggleAttribute("hidden", stage !== "edit");
   root.querySelector("#swap-confirm")?.toggleAttribute("hidden", stage !== "confirm");
   root.querySelector("#swap-success")?.toggleAttribute("hidden", stage !== "success");
@@ -244,18 +249,6 @@ const paintSwapStages = (root: Element, figures: SwapFigures): void => {
     valueDelta,
   };
   receipt.innerHTML = swapConfirmReceipt(confirmFigures);
-  const quoteDetails = root.querySelector("#swap-quote-details");
-  if (quoteDetails) {
-    quoteDetails.innerHTML = swapQuoteDetails(confirmFigures);
-  }
-  const calls = root.querySelector("#swap-call-review");
-  if (calls) {
-    calls.innerHTML = `<ul class="review-calls">${preparation.summaries
-      .map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`)
-      .join(
-        "",
-      )}</ul><p class="hint">Review digest <code>${escapeHtml(preparation.payloadDigest.slice(0, 23))}…</code></p>`;
-  }
   const risk = root.querySelector("#swap-risk-review");
   if (risk) {
     risk.innerHTML = reviewPanel(preparation.flags.map((flag) => flag.message));
@@ -426,7 +419,13 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         },
       );
   });
-  root.querySelector("#swap-back-button")?.addEventListener("click", () => {
+  // The review stage carries no Back button, so the header's arrow steps back to
+  // the quote from there and leaves the flow from anywhere else.
+  root.ownerDocument.querySelector("#swap-header-back")?.addEventListener("click", () => {
+    if (stage !== "confirm") {
+      deps.navigateHome();
+      return;
+    }
     preparation = null;
     transitionSwapStage(root.ownerDocument, stage, "edit", () => {
       stage = "edit";

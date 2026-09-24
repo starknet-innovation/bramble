@@ -19,6 +19,7 @@ import {
   accountDisplayName,
   accountLabel,
   flowScreen,
+  flowSteps,
   inlineCopyButton,
   noAccountEmpty,
 } from "../../shared/parts";
@@ -54,18 +55,12 @@ const sendHeader = (mode: TransferMode, copy: TransferModeCopy): string => `
     })}
   </header>`;
 
-const sendProgress = (copy: TransferModeCopy): string => `
-  <ol class="send-progress" aria-label="${escapeHtml(copy.progressLabel)}" hidden>
-    <li data-send-step="recipient" data-state="active">
-      <span class="send-step-mark">1</span><span>Recipient</span>
-    </li>
-    <li data-send-step="details" data-state="pending">
-      <span class="send-step-mark">2</span><span>Amount</span>
-    </li>
-    <li data-send-step="review" data-state="pending">
-      <span class="send-step-mark">3</span><span>Confirm</span>
-    </li>
-  </ol>`;
+const sendProgress = (copy: TransferModeCopy): string =>
+  flowSteps("data-send-step", copy.progressLabel, [
+    ["recipient", "Recipient"],
+    ["details", "Amount"],
+    ["review", "Confirm"],
+  ]);
 
 // The dropdown shows a ticker; composing needs the token's decimals, balance
 // and price. Those travel in one hidden element per token, keyed by the same id

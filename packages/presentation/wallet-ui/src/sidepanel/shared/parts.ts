@@ -371,6 +371,42 @@ export const inlineCopyButton = (value: string, label: string): string =>
   });
 
 /**
+ * Renders a flow's step rail: one numbered item per label, the first active.
+ * The caller names the attribute its own binding reads, so two journeys share
+ * one rail rather than each growing a copy of the markup. Each step carries its
+ * own name, which is the binding's own vocabulary and not derived from the
+ * label — a rail whose labels change must not move the hooks under it.
+ */
+export const flowSteps = (
+  attribute: string,
+  ariaLabel: string,
+  steps: readonly (readonly [name: string, label: string])[],
+): string =>
+  `<ol class="send-progress" aria-label="${escapeHtml(ariaLabel)}" hidden>
+    ${steps
+      .map(
+        ([name, label], index) =>
+          `<li ${attribute}="${escapeHtml(name)}" data-state="${index === 0 ? "active" : "pending"}">
+      <span class="send-step-mark">${index + 1}</span><span>${escapeHtml(label)}</span>
+    </li>`,
+      )
+      .join("")}
+  </ol>`;
+
+/**
+ * Marks one step of a rail active, everything before it done, everything after
+ * pending. Shared by every journey that shows a rail.
+ */
+export const setFlowStep = (root: ParentNode, attribute: string, activeIndex: number): void => {
+  root.querySelectorAll<HTMLElement>(`[${attribute}]`).forEach((step, index) => {
+    const current = step;
+    current.dataset["state"] =
+      index < activeIndex ? "done" : index === activeIndex ? "active" : "pending";
+    current.toggleAttribute("aria-current", index === activeIndex);
+  });
+};
+
+/**
  * Renders the network status pill.
  */
 const networkPill = (status: WalletStatus): string =>

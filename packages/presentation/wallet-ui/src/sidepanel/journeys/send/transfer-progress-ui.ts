@@ -4,6 +4,7 @@
  * size budget; pure DOM writes, no wallet access.
  */
 
+import { setFlowStep } from "../../shared/parts";
 import { PROVING_HINT } from "../privacy/privacy-views";
 import { type TransferMode, transferModeCopy } from "./transfer-mode";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
@@ -32,12 +33,7 @@ export const setSendProgress = (form: HTMLFormElement, stage: TransferStage): vo
   // chain's own confirmation — one step for one act, rather than a rail that
   // keeps moving while the user has nothing left to do.
   const activeIndex = stage === "recipient" ? 0 : stage === "details" ? 1 : 2;
-  form.querySelectorAll<HTMLElement>("[data-send-step]").forEach((step, index) => {
-    const currentStep = step;
-    currentStep.dataset["state"] =
-      index < activeIndex ? "done" : index === activeIndex ? "active" : "pending";
-    currentStep.toggleAttribute("aria-current", index === activeIndex);
-  });
+  setFlowStep(form, "data-send-step", activeIndex);
 };
 
 /**

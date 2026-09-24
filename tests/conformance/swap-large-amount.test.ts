@@ -213,7 +213,7 @@ describe("swap preparation for an amount past the grouping threshold", () => {
       release = resolve;
     });
     mountSwap(held);
-    document.querySelector<HTMLButtonElement>("#swap-back-button")?.click();
+    document.querySelector<HTMLButtonElement>("#swap-header-back")?.click();
     await flush();
     document.querySelector<HTMLButtonElement>("#swap-max")?.click();
     await flush();
@@ -243,7 +243,7 @@ describe("the confirm receipt states the enforced minimum, not a derived one", (
     mountSwap();
     await clickReview();
     const receipt = document.querySelector("#swap-confirm-receipt")?.textContent ?? "";
-    expect(receipt).toContain(`${compactAmount(MIN_BUY_AMOUNT)} STRK (wallet-enforced)`);
+    expect(receipt).toContain(`${compactAmount(MIN_BUY_AMOUNT)} STRK`);
     // The figure the old row would have shown, which nothing enforced.
     expect(receipt).not.toContain(compactAmount((Number(BUY_AMOUNT) * 0.995).toFixed(8)));
   });

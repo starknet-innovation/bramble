@@ -156,10 +156,14 @@ describe("sidepanel views", () => {
     expect(html).toContain(`data-approval-id="${pending[0]?.id}"`);
   });
 
-  test("swap flow renders the AVNU screen skeleton with staged sections", () => {
+  test("swap flow renders the avnu screen skeleton with staged sections", () => {
     const html = dashboard("swap", status, [], preferences, { balances: [] });
 
-    expect(html).toContain("Best route via avnu");
+    // The rail names the three steps; the route is not the header's business.
+    expect(html).toContain('data-swap-step="edit"');
+    expect(html).toContain('data-swap-step="confirm"');
+    expect(html).toContain('data-swap-step="success"');
+    expect(html).not.toContain("Best route via avnu");
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
     expect(html).toContain('id="swap-review"');
@@ -170,7 +174,8 @@ describe("sidepanel views", () => {
     expect(html).toMatch(/id="swap-success"[^>]*hidden/);
     expect(html).toContain('class="swap-success-ring"');
     expect(html).toContain('class="swap-success-check"');
-    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
+    // Swap owns its back arrow so it can step from the review to the quote.
+    expect(html).toMatch(/id="swap-header-back"[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
 
