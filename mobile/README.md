@@ -8,13 +8,51 @@ mobile/
   core/        Rust core (UniFFI). Tests: cargo test --locked
   ios/         SwiftUI app (XcodeGen spec; the .xcodeproj is generated)
   android/     Compose app (Gradle Kotlin DSL)
-  scripts/     build-core-ios.sh, build-core-android.sh
+  scripts/     build-core-ios.sh, build-core-android.sh, lint.sh, lint-tools.sh
 ```
 
 Generated files (`*.generated.swift|kt`, `core/generated/networks.json`, the brand-mark assets,
 and `core/tests/fixtures/extension-parity.json`) come from the extension's TypeScript packages.
 Never edit them by hand: run `bun run mobile:assets` or `bun run mobile:parity` from the repo
 root. `bun run check` fails when they drift.
+
+## Linting
+
+Swift and Kotlin are linted strictly by pinned tools: SwiftLint 0.65.1, ktlint 1.8.0 (official
+style) and detekt 1.23.8 (every rule on). `mobile/scripts/lint-tools.sh` downloads each release
+once into the git-ignored `mobile/.tools/` and checks it against a SHA-256 recorded in the script;
+a mismatch deletes the download and fails. Nothing is installed system-wide.
+
+```bash
+bun run mobile:lint                  # both platforms; exits non-zero on any finding
+bash mobile/scripts/lint.sh swift    # SwiftLint over mobile/ios (macOS only)
+bash mobile/scripts/lint.sh kotlin   # ktlint + detekt over mobile/android
+```
+
+ktlint and detekt run on `$JAVA_HOME`, or on Homebrew's keg-only `/opt/homebrew/opt/openjdk` when
+it is unset (JDK 17+; detekt 1.23.8 is verified on JDK 26). SwiftLint's analyzer rules
+(`unused_import`, `unused_declaration`, `capture_variable`, `typesafe_array_init`) need the log of
+a clean build:
+
+```bash
+cd mobile/ios && mkdir -p build && xcodebuild -project Bramble.xcodeproj -scheme Bramble \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' clean build-for-testing | tee build/xcodebuild.log
+cd ../.. && bash mobile/scripts/lint.sh swift-analyze mobile/ios/build/xcodebuild.log
+```
+
+Configs: `ios/.swiftlint.yml`, `android/.editorconfig` (ktlint) and `android/config/detekt.yml`.
+Generated sources are excluded. Never suppress a finding in source (`swiftlint:disable`,
+`@Suppress`, `ktlint-disable`): `lint.sh` reports those markers as findings too. Fix the code, or
+change the config in review. `mobile:lint` is not part of `bun run check`, which must pass on
+Linux and on machines without a JDK; it runs in `.github/workflows/mobile.yml`.
+
+## CI
+
+`.github/workflows/mobile.yml` runs on PRs touching `mobile/**`: `cargo fmt --check`, clippy
+(`-D warnings`) and `cargo test --locked` on Linux; `bun run mobile:lint` on macOS; the iOS core
+build, XcodeGen, `BrambleTests` on a simulator and SwiftLint's analyzer rules on macOS; and the
+Android core build plus `./gradlew :app:testDebugUnitTest`. The UI tests (`BrambleUITests`) stay
+local. The Android job has never run yet, because the Android app has not been compiled.
 
 ## Rust core
 

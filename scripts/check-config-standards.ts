@@ -163,6 +163,7 @@ if (
     "!bun.lock",
     "!dist",
     "!dist-firefox",
+    "!mobile/.tools",
     "!mobile/android/app/build",
     "!mobile/core/target",
     "!mobile/ios/Bramble.xcodeproj",

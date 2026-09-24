@@ -37,6 +37,8 @@ const EXCLUDED = new Set([
 const EXCLUDED_PATHS = new Set([
   "apps/terminal",
   "apps/ui-lab",
+  // Pinned lint tools (SwiftLint, ktlint, detekt jars), downloaded by mobile/scripts/lint-tools.sh.
+  "mobile/.tools",
   "mobile/android/.gradle",
   "mobile/android/app/build",
   "mobile/android/app/src/main/jniLibs",
