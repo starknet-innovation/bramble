@@ -161,14 +161,14 @@ describe("Receive address and wallet card", () => {
       wallet: { loadNostrPublicKey: async () => "11".repeat(32) } as unknown as SidepanelWallet,
     });
     await settle();
-    const pro = app.querySelector<HTMLButtonElement>("#receive-pro");
+    const advanced = app.querySelector<HTMLButtonElement>("#advanced-receive");
     const qr = app.querySelector<HTMLElement>("[data-receive-qr]");
 
-    pro?.click();
+    advanced?.click();
     app.querySelector<HTMLButtonElement>('[data-receive-payload="card"]')?.click();
     expect(qr?.dataset["qrPayload"]).toBe("card");
 
-    pro?.click();
+    advanced?.click();
     expect(qr?.dataset["qrPayload"]).toBe("address");
     expect(qrLabel(app)).toBe("QR code for your Starknet address");
     expect(
@@ -176,7 +176,7 @@ describe("Receive address and wallet card", () => {
     ).toBe("true");
   });
 
-  test("keeps the contact card and the keys behind the Pro switch", () => {
+  test("keeps the contact card and the keys behind the Advanced switch", () => {
     const app = render();
     bindReceiveWalletCard({
       app,
@@ -184,9 +184,9 @@ describe("Receive address and wallet card", () => {
       wallet: { loadNostrPublicKey: async () => "11".repeat(32) } as unknown as SidepanelWallet,
     });
 
-    const pro = app.querySelector<HTMLButtonElement>("#receive-pro");
-    const fields = app.querySelector<HTMLElement>("#receive-pro-fields");
-    expect(pro?.getAttribute("aria-checked")).toBe("false");
+    const advanced = app.querySelector<HTMLButtonElement>("#advanced-receive");
+    const fields = app.querySelector<HTMLElement>("#receive-advanced-fields");
+    expect(advanced?.getAttribute("aria-checked")).toBe("false");
     expect(fields?.hasAttribute("hidden")).toBe(true);
     // The QR and the address stay out in front of it.
     expect(app.querySelector("[data-receive-qr]")).not.toBeNull();
@@ -195,11 +195,11 @@ describe("Receive address and wallet card", () => {
     expect(fields?.querySelector("[data-receive-payload-switch]")).not.toBeNull();
     expect(fields?.querySelector("[data-nostr-key-row]")).not.toBeNull();
 
-    pro?.click();
-    expect(pro?.getAttribute("aria-checked")).toBe("true");
+    advanced?.click();
+    expect(advanced?.getAttribute("aria-checked")).toBe("true");
     expect(fields?.hasAttribute("hidden")).toBe(false);
 
-    pro?.click();
+    advanced?.click();
     expect(fields?.hasAttribute("hidden")).toBe(true);
   });
 });

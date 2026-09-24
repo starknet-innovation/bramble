@@ -125,10 +125,10 @@ export const receiveAddressView = ({
     ${
       publicKeyX
         ? `${switchControl({
-            attributes: { id: "receive-pro" },
-            label: "Pro",
+            attributes: { id: "advanced-receive" },
+            label: "Advanced",
           })}
-      <div class="receive-pro-fields" id="receive-pro-fields" hidden>
+      <div class="receive-advanced-fields" id="receive-advanced-fields" hidden>
         <p class="hint">${escapeHtml(hint)}</p>
         <div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
           <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>

@@ -1,6 +1,6 @@
 /**
  * Receive layer: the QR, the address as its own copy control, and the identity
- * block behind the Pro switch. Receiving needs one address; the contact card
+ * block behind the Advanced switch. Receiving needs one address; the contact card
  * and the coordination keys serve multisig and stay out of the way until asked
  * for.
  */
@@ -137,6 +137,6 @@ export const RECEIVE_STYLES = `
     button.receive-address-copy:not(:disabled):hover { background: var(--bramble-hover); }
   }
   button.receive-address-copy:not(:disabled):active { background: var(--bramble-soft-press); }
-  .receive-pro-fields { display: grid; gap: ${SPACE.md}; }
-  .receive-pro-fields[hidden] { display: none; }
+  .receive-advanced-fields { display: grid; gap: ${SPACE.md}; }
+  .receive-advanced-fields[hidden] { display: none; }
 `;

@@ -117,8 +117,8 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     }
   }
   button.switch-control:not(:disabled):active { background: var(--bramble-soft-press); }
-  .address-pro-fields { display: grid; gap: ${SPACE.md}; }
-  .address-pro-fields[hidden] { display: none; }
+  .address-advanced-fields { display: grid; gap: ${SPACE.md}; }
+  .address-advanced-fields[hidden] { display: none; }
   button.danger { background: var(--bramble-elevated); color: var(--bramble-danger); }
   button.danger:not(:disabled):active { background: var(--bramble-danger-soft); }
   @media (hover: hover) and (pointer: fine) {

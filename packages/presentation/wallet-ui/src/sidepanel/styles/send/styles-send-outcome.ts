@@ -27,23 +27,18 @@ export const SEND_OUTCOME_STYLES = `
     padding: ${SPACE.lg};
   }
   .proposal-review-stack { display: grid; gap: ${SPACE.sm}; }
-  .send-review-hero {
+  /* The facts list leads the review now, so it carries no rule above its first
+     row; the hairline between rows still separates From, To and Amount. */
+  .send-review-facts { margin: 0; }
+  .send-review-amount {
     align-items: center;
-    display: grid;
-    gap: ${SPACE.md};
-    grid-template-columns: ${SIZE.mark} minmax(0, 1fr);
-    padding-bottom: ${SPACE.lg};
+    display: inline-flex;
+    gap: ${SPACE.sm};
   }
-  .send-review-token,
-  .send-review-token > svg,
-  .send-review-token .token-mark { height: ${SIZE.mark}; width: ${SIZE.mark}; }
-  .send-review-hero > span:last-child { display: grid; gap: ${SPACE.xs}; }
-  .send-review-hero strong {
-    font-size: ${TYPE.display.size};
-    font-variant-numeric: tabular-nums;
-  }
-  .send-review-hero small { color: var(--bramble-muted); }
-  .send-review-facts { border-top: 1px solid var(--bramble-hairline); margin: 0; }
+  .send-review-amount > svg,
+  .send-review-amount .token-logo,
+  .send-review-amount .token-mark { height: ${SIZE.pill}; width: ${SIZE.pill}; }
+  .send-review-amount strong { font-variant-numeric: tabular-nums; }
   .send-review-fee {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};

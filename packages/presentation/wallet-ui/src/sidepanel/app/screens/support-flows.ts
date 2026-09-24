@@ -79,10 +79,10 @@ export const addressBookFlow = (
           })}
           <span class="hint">Saving an existing address updates its label.</span>
           ${switchControl({
-            attributes: { id: "address-pro" },
-            label: "Pro",
+            attributes: { id: "advanced-address" },
+            label: "Advanced",
           })}
-          <div class="address-pro-fields" id="address-pro-fields" hidden>
+          <div class="address-advanced-fields" id="address-advanced-fields" hidden>
             ${textareaField({
               autocomplete: "off",
               className: "mono",

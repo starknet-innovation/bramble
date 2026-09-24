@@ -67,7 +67,7 @@ const openDrawer = (context: FrameContext): void => {
   trigger.click();
 };
 
-// The Pro switch that reveals the wallet card and the keys is production
+// The Advanced switch that reveals the wallet card and the keys is production
 // behaviour, so the checkpoint binds the real form; saving is out of scope here.
 const bindFixtureAddressBook = (context: FrameContext): void => {
   bindAddressBook({
@@ -365,7 +365,7 @@ export const assetsScenario: WalletScenario = {
       id: "address-book",
       label: "Address book",
       narrative:
-        "Label and address are the whole form; a shared wallet card and the manual key fields wait behind Pro.",
+        "Label and address are the whole form; a shared wallet card and the manual key fields wait behind Advanced.",
       prepare: bindFixtureAddressBook,
       state: { coordination: "ready", import: "wallet card", saved: 1 },
     },
