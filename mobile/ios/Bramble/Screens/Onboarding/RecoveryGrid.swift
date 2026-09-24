@@ -46,8 +46,10 @@ private struct WordCell<Content: View>: View {
 
 struct RecoveryEntryGrid: View {
     @Environment(\.skin) private var skin
+    @Environment(WalletStore.self) private var store
     @Binding var words: [String]
     @FocusState private var focused: Int?
+    @State private var captured = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.sm) {
@@ -59,16 +61,26 @@ struct RecoveryEntryGrid: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .keyboardType(.asciiCapable)
+                            .textContentType(nil)
+                            .blur(radius: captured ? 6 : 0)
                             .submitLabel(index == words.count - 1 ? .done : .next)
                             .onSubmit { focused = index + 1 < words.count ? index + 1 : nil }
                             .accessibilityLabel("Word \(index + 1)")
                     }
                     .privacySensitive()
             }
-            if let index = focused, index < words.count {
+            if let index = focused, index < words.count, !captured {
                 suggestions(for: index)
             }
         }
+        .trackingScreenCapture($captured)
+    }
+
+    /// A multi-word value can only arrive by paste: clear the clipboard (a write, never a read) so
+    /// the phrase does not linger for other apps or Universal Clipboard.
+    private func clearClipboardAfterPaste() {
+        UIPasteboard.general.items = []
+        store.toast = BrambleCopy.clipboardCleared
     }
 
     /// A space finishes the word and moves on; several words (a paste) spread from this cell,
@@ -79,6 +91,7 @@ struct RecoveryEntryGrid: View {
         } set: { value in
             let parts = value.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
             if parts.count > 1 {
+                clearClipboardAfterPaste()
                 if index + parts.count > 12 && words.count == 12 { words += Array(repeating: "", count: 12) }
                 for (offset, word) in parts.enumerated() where index + offset < words.count {
                     words[index + offset] = word

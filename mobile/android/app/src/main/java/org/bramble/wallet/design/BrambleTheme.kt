@@ -19,7 +19,8 @@ data class BrambleShadowStyle(val y: Dp, val blur: Dp, val alpha: Float)
 
 val BrambleSkin.avatars: List<Color> get() = listOf(accountAvatar0, accountAvatar1, accountAvatar2, accountAvatar3)
 
-val LocalSkin = staticCompositionLocalOf { BrambleSkins.daylight }
+/** Dark (midnight) is the default, including anywhere outside `BrambleTheme`. */
+val LocalSkin = staticCompositionLocalOf { BrambleSkins.midnight }
 
 /**
  * The extension's `ThemeChoice`: midnight by default, daylight when chosen. No follow-the-system

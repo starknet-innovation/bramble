@@ -10,7 +10,12 @@ import { createFreshnessAuthority } from "./store/freshness-authority";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const KDF_ITERATIONS = 600_000;
+/**
+ * PBKDF2-SHA-256 iterations every new envelope is sealed with. Exported so the
+ * mobile core's policy file is generated from it; the Rust vault asserts the
+ * same value and refuses any other strength except the listed legacy ones.
+ */
+export const KDF_ITERATIONS = 600_000;
 // Envelopes written before the iteration bump. Reads accept these exact
 // values (never arbitrary ones, so a tampered-down envelope still fails
 // closed) and the store transparently re-encrypts at the current strength on

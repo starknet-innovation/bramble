@@ -47,10 +47,24 @@ What is reused from the extension, and how drift is prevented:
   commit; tampered iteration counts are refused. Atomic write-then-rename. iOS: Application
   Support, `FileProtectionType.complete`, excluded from backup. Android: `noBackupFilesDir`,
   `allowBackup=false`, data-extraction rules exclude every domain.
+- **Vault v2 and biometrics** ([docs/vault-security.md](docs/vault-security.md)). A random DEK seals
+  the payload; the passphrase slot is the extension envelope around it, and an optional biometric
+  slot wraps it under a host-generated 32-byte secret W held behind `.biometryCurrentSet`
+  (iOS Keychain) / a biometric-bound Keystore key (Android). W is the one new FFI crossing, host →
+  core only; the DEK never leaves Rust. v1 vaults migrate on the first passphrase unlock.
+- **Backoff and idle lock in the core.** Four free wrong passphrases, then 30 s doubling to 1 h,
+  persisted in `security.json`, counted before the KDF under one attempt mutex, and measured on a
+  monotonic, boot-scoped host clock (no wall clock). The 30-minute idle lock is generated from the
+  extension's `DEFAULT_TTL_MS` and renewed only by user-initiated operations.
 - **Session.** Leaving the foreground locks and zeroizes (iOS `scenePhase`, Android
-  `ProcessLifecycleOwner`). iOS covers the app-switcher snapshot; Android sets `FLAG_SECURE`.
-- **Phrase display.** Hidden while the iOS screen is recorded/mirrored; screenshot warning;
-  `privacySensitive`; no autocorrect, capitalisation or keyboard learning on phrase/password fields.
+  `ProcessLifecycleOwner`). iOS covers the app-switcher snapshot; Android sets `FLAG_SECURE` and
+  disables the recents screenshot.
+- **Phrase display.** Masked while the iOS screen is recorded/mirrored, hosted in the secure layer
+  screenshots omit (fails closed), screenshot warning; third-party keyboards blocked on iOS; no
+  autocorrect, capitalisation, content type or keyboard learning on phrase/password fields
+  (Android: password input variation, `TYPE_TEXT_FLAG_NO_SUGGESTIONS` and
+  `IME_FLAG_NO_PERSONALIZED_LEARNING` via `ui/SecretInput.kt`, uncompiled); the clipboard is
+  cleared after a phrase paste on both platforms.
 - **Network.** Sans-IO: no TLS or HTTP code in Rust. HTTPS only (ATS / `usesCleartextTraffic=false`),
   ephemeral URLSession. An endpoint is trusted only after `starknet_chainId` proves the chain;
   responses must answer their request id, are size-bounded, and u256 limbs are range-checked.
@@ -69,8 +83,12 @@ wallet. iOS verified; Android source only.
 2. Transactions in the core: invoke v3 hashing (`krusty_kms::compute_invoke_v3_hash`), fee
    estimation and nonce as sans-IO RPC, OZ deploy-account; Send screen with review. Port the
    extension's review rules rather than re-deriving them.
-3. Biometric unlock: a random vault key wrapped by a Secure Enclave / StrongBox key that needs
-   user presence; the password stays the recovery path. Persisted wrong-password back-off.
+3. ~~Biometric unlock and persisted wrong-password back-off~~ Done: vault v2 (random DEK,
+   passphrase slot + optional biometric slot, one-step v1 → v2 migration), core-enforced
+   exponential back-off persisted across restarts, core-enforced 30-minute idle lock on a
+   monotonic clock, lock on biometric enrolment change, secret-screen and secret-field hardening,
+   and the Security settings screen. Verified on iOS (unit + XCUITest); Android written but
+   uncompiled. Open decisions D1–D6 in [docs/vault-security.md](docs/vault-security.md).
 4. CI job for `cargo test --locked`, clippy, `cargo deny`, and the iOS unit suite.
 
 **Phase 2 — feature parity.** Token list and prices, activity history, Argent/Braavos discovery,
@@ -97,5 +115,11 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
 
 - Swift/Kotlin `String` passwords and the phrase shown at backup can't be zeroized by the host.
   The Rust side zeroizes its copies, but serde's parse buffers aren't guaranteed to be wiped.
-- Unlock back-off is not persisted yet (Phase 1.3).
+- The biometric wrap secret W is zeroed in the host's own buffer and in the core's
+  `Zeroizing` copy, but not in the Keychain's immutable reply `CFData` / `javax.crypto`'s internal
+  buffers, nor in UniFFI's lowering buffers (the foreign-side serialisation array and the `RustBuffer` the
+  core lifts `Vec<u8>` from are freed unwiped). UniFFI has no hook for this; the fix is upstream
+  UniFFI or a dedicated pointer-and-length FFI entry for W.
+- iOS still shows the system Passwords bar on secure fields; there is no public API to remove it
+  without a misleading content type.
 - Send is visible but disabled.

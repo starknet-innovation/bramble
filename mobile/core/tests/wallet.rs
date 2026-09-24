@@ -1,14 +1,17 @@
 //! Lifecycle invariants of `WalletCore`: what is reachable in each state, and what is persisted.
 
-use bramble_core::{CoreError, NetworkId, WalletCore, WalletStatus};
+mod common;
 
-const PHRASE: &str = "habit hope tip crystal because grunt nation idea electric witness alert like";
-const PASSWORD: &str = "a strong password";
+use bramble_core::{CoreError, NetworkId, WalletStatus};
+use common::{FakeClock, PASSWORD, PHRASE};
 
-fn core() -> (tempfile::TempDir, std::sync::Arc<WalletCore>) {
-    let dir = tempfile::tempdir().unwrap();
-    let core = WalletCore::new(dir.path().to_string_lossy().into()).unwrap();
+fn core() -> (tempfile::TempDir, std::sync::Arc<bramble_core::WalletCore>) {
+    let (dir, _clock, core) = common::core();
     (dir, core)
+}
+
+fn reopen(dir: &tempfile::TempDir) -> std::sync::Arc<bramble_core::WalletCore> {
+    common::open(dir.path(), &FakeClock::new())
 }
 
 #[test]
@@ -41,7 +44,7 @@ fn lifecycle_gates_every_key_operation() {
     ));
 
     // A fresh core over the same directory sees the persisted vault.
-    let reopened = WalletCore::new(dir.path().to_string_lossy().into()).unwrap();
+    let reopened = reopen(&dir);
     assert_eq!(reopened.status(), WalletStatus::Locked);
     reopened.unlock(PASSWORD.into()).unwrap();
     assert_eq!(reopened.accounts(NetworkId::Sepolia).unwrap(), first);
@@ -64,6 +67,7 @@ fn the_vault_on_disk_never_contains_the_phrase() {
         assert!(!on_disk.contains(word), "vault leaks {word}");
     }
     assert!(on_disk.contains("\"iterations\":600000"));
+    assert!(on_disk.contains("\"format\":\"bramble.mobile.vault\""));
 }
 
 #[test]
@@ -83,7 +87,7 @@ fn added_accounts_persist_and_are_bounded_to_known_indexes() {
         Err(CoreError::InvalidInput { .. })
     ));
 
-    let reopened = WalletCore::new(dir.path().to_string_lossy().into()).unwrap();
+    let reopened = reopen(&dir);
     reopened.unlock(PASSWORD.into()).unwrap();
     assert_eq!(reopened.accounts(NetworkId::Sepolia).unwrap().len(), 2);
 }

@@ -223,12 +223,12 @@ struct SavePhraseStep: View {
     let words: [String]
     let next: () -> Void
     @State private var revealed = false
-    @State private var captured = UIScreen.main.isCaptured
+    @State private var captured = false
 
     var body: some View {
         OnboardingStep(icon: .book, title: "Save your recovery phrase", lede: "Write these words down in order and keep them offline.") {
             VStack(alignment: .leading, spacing: BrambleSpace.md) {
-                RecoveryWordGrid(words: words, masked: !revealed || captured)
+                ProtectedWordGrid(words: words, masked: !revealed || captured)
                 PillButton(revealed ? "Hide recovery phrase" : "Show recovery phrase", kind: .secondary, icon: .book) { revealed.toggle() }
                 Text("Anyone with these words controls the wallet. Bramble cannot recover them for you.")
                     .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
@@ -238,9 +238,8 @@ struct SavePhraseStep: View {
         } cta: {
             PillButton("I saved my phrase", action: next).disabled(!revealed)
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
-            captured = UIScreen.main.isCaptured
-        }
+        .trackingScreenCapture($captured)
+        .warnsOnScreenshot()
     }
 }
 

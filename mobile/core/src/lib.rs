@@ -9,17 +9,28 @@
 //! Errors carry an operation name or a fixed reason, never input text, so nothing a user typed
 //! can reach a log through an error message.
 
+mod biometric;
+mod clock;
+mod container;
 mod felt;
+mod files;
 mod kms;
+mod migrations;
 mod networks;
+mod records;
 mod rpc;
+mod security;
 mod ui;
 mod vault;
 mod wallet;
 
+pub use biometric::BiometricDomain;
+pub use clock::HostClock;
 pub use networks::{NetworkId, NetworkInfo, TokenInfo};
 pub use ui::{AccountAvatar, PassphraseLevel, PassphraseStrength};
-pub use wallet::{AccountInfo, RecoveryPhrase, StarkSignature, WalletCore, WalletStatus};
+pub use wallet::{
+    AccountInfo, RecoveryPhrase, SecurityStatus, StarkSignature, WalletCore, WalletStatus,
+};
 
 uniffi::setup_scaffolding!();
 
@@ -42,6 +53,15 @@ pub enum CoreError {
     Kms { operation: String },
     #[error("rpc failure: {reason}")]
     Rpc { reason: String },
+    /// Too many wrong passphrases: no attempt is allowed for `retry_after_ms`.
+    #[error("too many attempts; retry in {retry_after_ms} ms")]
+    Throttled { retry_after_ms: u64 },
+    /// Biometric unlock is not set up (no slot, or the vault predates it).
+    #[error("biometric unlock is not enabled")]
+    BiometricUnavailable,
+    /// Enrolment changed or the slot no longer opens; the slot has been removed.
+    #[error("biometric unlock was invalidated")]
+    BiometricInvalidated,
 }
 
 /// Versions compiled into this core, for the About screen and bug reports.
@@ -163,7 +183,10 @@ mod tests {
 /// Test-only hooks for the integration suite; not part of the FFI surface.
 #[doc(hidden)]
 pub mod testing {
+    pub use crate::security::{delay_ms, BASE_DELAY_MS, FREE_ATTEMPTS, MAX_DELAY_MS};
     pub use crate::ui::{account_avatar, passphrase_strength};
+    pub use crate::vault::{KDF_ITERATIONS, MIN_PASSWORD_LENGTH};
+    pub use crate::wallet::IDLE_LOCK_MS;
 
     /// Opens a raw envelope JSON string, as the extension would.
     pub fn open_envelope(
@@ -176,5 +199,15 @@ pub mod testing {
                 reason: "not an envelope".into(),
             })?;
         crate::vault::open(&envelope, password, scope).map(|(plaintext, _)| plaintext.to_vec())
+    }
+
+    /// Opens a DEK passphrase slot (scope `bramble.mobile.dek.v1`) exactly as the vault does.
+    pub fn open_password_slot(json: &str, password: &str) -> Result<Vec<u8>, crate::CoreError> {
+        let envelope: crate::vault::Envelope =
+            serde_json::from_str(json).map_err(|_| crate::CoreError::Storage {
+                reason: "not an envelope".into(),
+            })?;
+        let (plaintext, _) = crate::vault::open(&envelope, password, crate::container::DEK_SCOPE)?;
+        crate::container::decode_dek(&plaintext).map(|dek| dek.to_vec())
     }
 }

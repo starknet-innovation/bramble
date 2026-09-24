@@ -20,7 +20,7 @@ pub const KDF_ITERATIONS: u32 = 600_000;
 /// Legacy strength the extension still reads (never writes).
 const LEGACY_KDF_ITERATIONS: [u32; 1] = [310_000];
 /// Shortest vault password, as `MIN_VAULT_PASSPHRASE_LENGTH` (the rule itself is `ui::is_vault_passphrase`).
-const MIN_PASSWORD_LENGTH: usize = 8;
+pub const MIN_PASSWORD_LENGTH: usize = 8;
 
 /// The extension's v3 envelope, field for field.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,7 +45,8 @@ pub struct SealingKey {
     lineage: String,
 }
 
-fn random<const N: usize>() -> Result<[u8; N], CoreError> {
+/// Fresh bytes from the OS CSPRNG. The one randomness boundary of the vault.
+pub(crate) fn random<const N: usize>() -> Result<[u8; N], CoreError> {
     let mut bytes = [0u8; N];
     getrandom::fill(&mut bytes).map_err(|_| CoreError::Storage {
         reason: "entropy unavailable".into(),
@@ -69,12 +70,57 @@ fn derive_key(password: &str, salt: &[u8], iterations: u32) -> Zeroizing<[u8; 32
     key
 }
 
-fn decode<const N: usize>(value: &str) -> Option<[u8; N]> {
+pub(crate) fn decode<const N: usize>(value: &str) -> Option<[u8; N]> {
     BASE64.decode(value).ok()?.try_into().ok()
 }
 
-fn additional_data(scope: &str, lineage: &str, commit: &str) -> Vec<u8> {
+/// `a \0 b \0 c`, the additional-data layout every Bramble ciphertext uses.
+pub(crate) fn additional_data(scope: &str, lineage: &str, commit: &str) -> Vec<u8> {
     format!("{scope}\0{lineage}\0{commit}").into_bytes()
+}
+
+/// Whether `value` is `len` lowercase hex digits, the lineage and slot-id grammar.
+pub(crate) fn is_lower_hex(value: &str, len: usize) -> bool {
+    value.len() == len
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// Lowercase hex of fresh random bytes.
+pub(crate) fn random_hex<const N: usize>() -> Result<String, CoreError> {
+    Ok(random::<N>()?.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// AES-256-GCM encryption under a raw 32-byte key.
+pub(crate) fn aead_seal(
+    key: &[u8; 32],
+    iv: &[u8; 12],
+    aad: &[u8],
+    msg: &[u8],
+) -> Result<Vec<u8>, CoreError> {
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| CoreError::Storage {
+        reason: "cipher init".into(),
+    })?;
+    cipher
+        .encrypt(&Nonce::from(*iv), Payload { msg, aad })
+        .map_err(|_| CoreError::Storage {
+            reason: "encrypt".into(),
+        })
+}
+
+/// AES-256-GCM decryption under a raw 32-byte key; `None` when authentication fails.
+pub(crate) fn aead_open(
+    key: &[u8; 32],
+    iv: &[u8; 12],
+    aad: &[u8],
+    msg: &[u8],
+) -> Option<Zeroizing<Vec<u8>>> {
+    let cipher = Aes256Gcm::new_from_slice(key).ok()?;
+    cipher
+        .decrypt(&Nonce::from(*iv), Payload { msg, aad })
+        .ok()
+        .map(Zeroizing::new)
 }
 
 impl SealingKey {
@@ -82,7 +128,7 @@ impl SealingKey {
     pub fn create(password: &str) -> Result<Self, CoreError> {
         check_password(password)?;
         let salt = random::<16>()?;
-        let lineage = random::<16>()?.iter().map(|b| format!("{b:02x}")).collect();
+        let lineage = random_hex::<16>()?;
         Ok(Self {
             key: derive_key(password, &salt, KDF_ITERATIONS),
             salt,
@@ -91,25 +137,22 @@ impl SealingKey {
     }
 
     /// Seals JSON plaintext under `scope`, with a fresh IV and commit marker on every call.
+    #[cfg(test)]
     pub fn seal(&self, plaintext: &[u8], scope: &str) -> Result<Envelope, CoreError> {
-        let iv = random::<12>()?;
-        let commit = BASE64.encode(random::<16>()?);
-        let cipher =
-            Aes256Gcm::new_from_slice(self.key.as_ref()).map_err(|_| CoreError::Storage {
-                reason: "cipher init".into(),
-            })?;
+        self.seal_with(plaintext, scope, &random::<12>()?, &random::<16>()?)
+    }
+
+    /// `seal` with the IV and commit supplied, so a migration step can be deterministic.
+    pub(crate) fn seal_with(
+        &self,
+        plaintext: &[u8],
+        scope: &str,
+        iv: &[u8; 12],
+        commit: &[u8; 16],
+    ) -> Result<Envelope, CoreError> {
+        let commit = BASE64.encode(commit);
         let aad = additional_data(scope, &self.lineage, &commit);
-        let data = cipher
-            .encrypt(
-                &Nonce::from(iv),
-                Payload {
-                    msg: plaintext,
-                    aad: &aad,
-                },
-            )
-            .map_err(|_| CoreError::Storage {
-                reason: "encrypt".into(),
-            })?;
+        let data = aead_seal(&self.key, iv, &aad, plaintext)?;
         Ok(Envelope {
             cipher: "AES-256-GCM".into(),
             commit,
@@ -123,6 +166,44 @@ impl SealingKey {
             version: 3,
         })
     }
+
+    /// The vault lineage this key seals under.
+    pub(crate) fn lineage(&self) -> &str {
+        &self.lineage
+    }
+
+    /// Opens an envelope this key sealed (same salt and lineage) without running the KDF again.
+    /// Used to prove a freshly built envelope round-trips before it is written.
+    pub(crate) fn open_sealed(
+        &self,
+        envelope: &Envelope,
+        scope: &str,
+    ) -> Result<Zeroizing<Vec<u8>>, CoreError> {
+        let invalid = || CoreError::Storage {
+            reason: "invalid vault envelope".into(),
+        };
+        if !valid_shape(envelope, scope)
+            || envelope.iterations != KDF_ITERATIONS
+            || envelope.lineage != self.lineage
+            || decode::<16>(&envelope.salt) != Some(self.salt)
+        {
+            return Err(invalid());
+        }
+        let iv = decode::<12>(&envelope.iv).ok_or_else(invalid)?;
+        let data = BASE64.decode(&envelope.data).map_err(|_| invalid())?;
+        let aad = additional_data(scope, &envelope.lineage, &envelope.commit);
+        aead_open(&self.key, &iv, &aad, &data).ok_or_else(invalid)
+    }
+
+    /// A key with fixed parts, for deterministic tests of the migration step.
+    #[cfg(test)]
+    pub(crate) fn fixed(password: &str, salt: [u8; 16], lineage: &str) -> Self {
+        Self {
+            key: derive_key(password, &salt, KDF_ITERATIONS),
+            salt,
+            lineage: lineage.into(),
+        }
+    }
 }
 
 fn valid_shape(envelope: &Envelope, scope: &str) -> bool {
@@ -132,11 +213,7 @@ fn valid_shape(envelope: &Envelope, scope: &str) -> bool {
         && (envelope.iterations == KDF_ITERATIONS
             || LEGACY_KDF_ITERATIONS.contains(&envelope.iterations))
         && envelope.scope == scope
-        && envelope.lineage.len() == 32
-        && envelope
-            .lineage
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        && is_lower_hex(&envelope.lineage, 32)
         && decode::<16>(&envelope.commit).is_some()
 }
 
@@ -164,20 +241,8 @@ pub fn open(
         })?;
     // A legacy-strength vault is re-derived at the current strength before it is re-sealed.
     let key = derive_key(password, &salt, envelope.iterations);
-    let cipher = Aes256Gcm::new_from_slice(key.as_ref()).map_err(|_| CoreError::Storage {
-        reason: "cipher init".into(),
-    })?;
     let aad = additional_data(scope, &envelope.lineage, &envelope.commit);
-    let plaintext = cipher
-        .decrypt(
-            &Nonce::from(iv),
-            Payload {
-                msg: &data,
-                aad: &aad,
-            },
-        )
-        .map(Zeroizing::new)
-        .map_err(|_| CoreError::WrongPassword)?;
+    let plaintext = aead_open(&key, &iv, &aad, &data).ok_or(CoreError::WrongPassword)?;
     let key = if envelope.iterations == KDF_ITERATIONS {
         key
     } else {

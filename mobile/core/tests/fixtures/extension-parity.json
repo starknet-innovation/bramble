@@ -28,6 +28,25 @@
       "signatureS": "0x3d18b5fb72c48c6e963e6da191d917c24fe01bd588b7ec9b985426770c57abf"
     }
   ],
+  "dekSlot": {
+    "password": "parity-dek-slot-password",
+    "plaintext": {
+      "dek": "WlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlo="
+    },
+    "scope": "bramble.mobile.dek.v1",
+    "sealed": {
+      "cipher": "AES-256-GCM",
+      "commit": "IFG/JpU7ltOecFN/Gc9Aww==",
+      "data": "XLHwfPb1V1jja4FD3t4LusBNKqx/ZNkGon3KDtMTmDARe7WBOtuc09qbxUFRdB2tP+Up4xz/9HR/gPiU3e4l8rJ0NOpkig==",
+      "iterations": 600000,
+      "iv": "7qPbVdjVbqAcMa4T",
+      "kdf": "PBKDF2-SHA-256",
+      "lineage": "e7ea8d2b0c67c30ed067417df17d2758",
+      "salt": "sE6z2kHgfg476/Qvg64FOg==",
+      "scope": "bramble.mobile.dek.v1",
+      "version": 3
+    }
+  },
   "envelope": {
     "password": "parity-vector-password",
     "plaintext": {
@@ -37,13 +56,13 @@
     "scope": "bramble.parity",
     "sealed": {
       "cipher": "AES-256-GCM",
-      "commit": "qS40CULi4zJVHEcHSBEIhw==",
-      "data": "PNY3b8qgsg89DHwSd0jsMrxADUwGn13wIveVBbyIclRNtZ+JWdyhOWg=",
+      "commit": "CsBHt6BQ0Cenb9eNsyflrg==",
+      "data": "VytNJdM22UDgY1pQsgrOU63k7eCVE/EKMLoFO1Rnkh4uKe1jI/XWim4=",
       "iterations": 600000,
-      "iv": "jfawoTy46QCir046",
+      "iv": "ELQx7XJnLyBpAzzG",
       "kdf": "PBKDF2-SHA-256",
-      "lineage": "2bc47fe4f49894258b222dc26e2f7a85",
-      "salt": "IcygwOJlmPYCF8n+PWVAvw==",
+      "lineage": "0c555becf302a0691fdafe45cc443c42",
+      "salt": "CmvNPNO3aNUtdLJOnfOuKw==",
       "scope": "bramble.parity",
       "version": 3
     }

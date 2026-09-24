@@ -12,6 +12,9 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
+    # Simulator builds sign ad hoc: an unsigned app cannot use the data-protection Keychain, so a
+    # plain `xcodebuild test` needs no extra flag (README).
+    "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 targets:
   # UniFFI's generated Swift, compiled as its own module so the app writes `import BrambleCore`.
@@ -40,6 +43,12 @@ targets:
         buildPhase: resources
     dependencies:
       - target: BrambleCore
+    # Every file the app creates defaults to complete protection (unreadable while the device is
+    # locked), including the vault files the core writes.
+    entitlements:
+      path: Bramble/Bramble.entitlements
+      properties:
+        com.apple.developer.default-data-protection: NSFileProtectionComplete
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.bramble.wallet
@@ -53,8 +62,10 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         # AppIcon is rendered by scripts/render-brand-assets.ts, the extension icon's source.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Vault files default to complete protection even outside VaultDirectory.
-        INFOPLIST_KEY_NSFileProtectionComplete: YES
+        # Dark is the default appearance from the launch screen on; Light stays a user choice.
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        # Generated copy (scripts/mobile-assets/security-copy.ts); checked in bun run check.
+        INFOPLIST_KEY_NSFaceIDUsageDescription: "Bramble uses Face ID to unlock your wallet instead of typing your passphrase."
 
   BrambleTests:
     type: bundle.unit-test
@@ -64,6 +75,8 @@ targets:
       - path: ../core/tests/fixtures/extension-parity.json
         buildPhase: resources
     dependencies:
+      # Hosted in the app so `@testable import Bramble` reaches the Keychain, clock and copy code.
+      - target: Bramble
       - target: BrambleCore
     settings:
       base:

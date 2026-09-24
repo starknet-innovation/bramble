@@ -1,5 +1,6 @@
 package org.bramble.wallet
 
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -14,6 +15,7 @@ class MainActivity : ComponentActivity() {
         // Blocks screenshots, screen recording, and the recents thumbnail for every screen:
         // the phrase, balances, and addresses never leave the device through the display.
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
         enableEdgeToEdge()
         val store = (application as BrambleApplication).store
         setContent { BrambleTheme { Root(store) } }

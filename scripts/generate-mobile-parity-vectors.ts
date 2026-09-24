@@ -17,9 +17,20 @@ import {
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
 const envelopePlaintext = { hello: "bramble", n: 7 };
+// The mobile vault's passphrase slot is this envelope around `{ dek }` (mobile/docs/vault-security.md
+// §3.1); sealing one here proves the Rust core opens the extension's own bytes for it.
+const dekSlotPassword = "parity-dek-slot-password";
+const dekSlotScope = "bramble.mobile.dek.v1";
+const dekSlotPlaintext = { dek: Buffer.alloc(32, 0x5a).toString("base64") };
 
 const fixture = {
   accounts: await computeParityAccounts(),
+  dekSlot: {
+    password: dekSlotPassword,
+    plaintext: dekSlotPlaintext,
+    scope: dekSlotScope,
+    sealed: await encryptJson(dekSlotPlaintext, dekSlotPassword, dekSlotScope),
+  },
   envelope: {
     password: envelopePassword,
     plaintext: envelopePlaintext,

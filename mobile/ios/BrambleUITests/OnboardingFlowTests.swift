@@ -160,11 +160,20 @@ final class OnboardingFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
         type("wrong passphrase", into: app.secureTextFields["Enter your passphrase"])
         tap(app.buttons["Unlock"])
-        XCTAssertTrue(app.staticTexts["Vault passphrase is incorrect"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Incorrect passphrase"].firstMatch.waitForExistence(timeout: 10))
         snapshot(app, "unlock-failed")
         app.secureTextFields["Enter your passphrase"].tap()
         app.secureTextFields["Enter your passphrase"].typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + passphrase)
         tap(app.buttons["Unlock"])
         XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20))
+
+        // Leave the simulator clean for the suites that follow (SecurityFlowTests expects a
+        // fresh install), through the real removal path.
+        tap(app.buttons["Settings"])
+        app.swipeUp()
+        tap(app.buttons["Remove wallet from this device"])
+        type(passphrase, into: app.secureTextFields["Confirm vault passphrase"])
+        tap(app.buttons["Remove wallet"])
+        XCTAssertTrue(app.buttons["Create a new wallet"].waitForExistence(timeout: 10), "back to first run")
     }
 }

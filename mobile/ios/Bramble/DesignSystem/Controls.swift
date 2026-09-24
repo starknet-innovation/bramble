@@ -119,7 +119,8 @@ struct BrambleField: View {
             }
             Group {
                 if secure {
-                    SecureField("", text: $text, prompt: prompt).textContentType(.password)
+                    // No content type: secrets are never offered to AutoFill or a password manager.
+                    SecureField("", text: $text, prompt: prompt).textContentType(nil)
                 } else {
                     TextField("", text: $text, prompt: prompt)
                 }

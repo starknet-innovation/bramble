@@ -12,6 +12,7 @@ import { BRAMBLE_MARK_PATH, BRAMBLE_MARK_VIEW_BOX } from "@bramble/ui-kit/brand-
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/colors";
 import { renderKotlin } from "./mobile-assets/kotlin";
+import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
 import { renderSwift } from "./mobile-assets/swift";
 import { renderVectorAssets } from "./mobile-assets/vectors";
@@ -27,6 +28,13 @@ export const IOS_MARK_DIR = "mobile/ios/Bramble/Resources/Assets.xcassets/BrandM
 export const ANDROID_MARK_PATH = "mobile/android/app/src/main/res/drawable/brand_mark.xml";
 /** Repository-relative path of the network catalog the Rust core embeds at compile time. */
 export const NETWORKS_JSON_PATH = "mobile/core/generated/networks.json";
+/** Repository-relative path of the security policy the Rust core asserts against. */
+export const POLICY_JSON_PATH = "mobile/core/generated/policy.json";
+/** Repository-relative path of the iOS security copy table. */
+export const SWIFT_COPY_PATH = "mobile/ios/Bramble/DesignSystem/BrambleCopy.generated.swift";
+/** Repository-relative path of the Android security copy table. */
+export const KOTLIN_COPY_PATH =
+  "mobile/android/app/src/main/java/org/bramble/wallet/design/BrambleCopy.generated.kt";
 
 const MOBILE_NETWORK_IDS = ["SN_MAIN", "SN_SEPOLIA"] as const;
 
@@ -109,6 +117,9 @@ export const renderMobileAssets = (
     [SWIFT_TOKENS_PATH, renderSwift(mixes)],
     [KOTLIN_TOKENS_PATH, renderKotlin(mixes)],
     [NETWORKS_JSON_PATH, renderNetworks()],
+    [POLICY_JSON_PATH, renderPolicyJson()],
+    [SWIFT_COPY_PATH, renderSwiftCopy()],
+    [KOTLIN_COPY_PATH, renderKotlinCopy()],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],

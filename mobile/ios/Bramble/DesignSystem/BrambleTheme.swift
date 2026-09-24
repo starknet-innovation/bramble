@@ -56,7 +56,8 @@ enum BrambleFont {
 }
 
 private struct SkinKey: EnvironmentKey {
-    static let defaultValue = BrambleSkin.daylight
+    /// Dark is the default everywhere, including views presented outside a `SkinProvider`.
+    static let defaultValue = BrambleSkin.midnight
 }
 
 extension EnvironmentValues {
@@ -106,11 +107,18 @@ enum ThemeChoice: String {
     case dark, light
 
     static let storageKey = "theme"
+    static let `default` = ThemeChoice.dark
+
+    /// A stored value as a choice: unset, legacy `system`, or anything unknown is dark, as the
+    /// extension resolves it. `@AppStorage` applies the same rule through its default.
+    static func resolve(_ raw: String?) -> ThemeChoice {
+        raw.flatMap(ThemeChoice.init(rawValue:)) ?? .default
+    }
 }
 
 /// Applies the chosen skin (`skinForChoice`) and pins the matching system colour scheme.
 struct SkinProvider<Content: View>: View {
-    @AppStorage(ThemeChoice.storageKey) private var theme = ThemeChoice.dark
+    @AppStorage(ThemeChoice.storageKey) private var theme = ThemeChoice.default
     @ViewBuilder let content: () -> Content
 
     var body: some View {

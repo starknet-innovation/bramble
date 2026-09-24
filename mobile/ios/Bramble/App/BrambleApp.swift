@@ -3,11 +3,12 @@ import SwiftUI
 
 @main
 struct BrambleApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @Environment(\.scenePhase) private var phase
     @State private var store: WalletStore
 
     init() {
-        let core = try! WalletCore(dataDir: VaultDirectory.prepare().path)
+        let core = try! WalletCore(dataDir: VaultDirectory.prepare().path, clock: DeviceClock())
         _store = State(initialValue: WalletStore(core: core))
     }
 
@@ -22,8 +23,18 @@ struct BrambleApp: App {
             .onChange(of: phase) { _, next in
                 // Leaving the foreground ends the session: the core zeroizes the phrase.
                 if next == .background { store.lock() }
+                // Coming back: biometric enrolment and the idle deadline are re-checked.
+                if next == .active { store.sceneBecameActive() }
             }
         }
+    }
+}
+
+/// Blocks third-party keyboards app-wide, so no keyboard extension sees a passphrase or a phrase
+/// word, and none can learn from them.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, shouldAllowExtensionPointIdentifier identifier: UIApplication.ExtensionPointIdentifier) -> Bool {
+        identifier != .keyboard
     }
 }
 
@@ -33,6 +44,10 @@ enum VaultDirectory {
         var url = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             .appendingPathComponent("vault", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
+        // createDirectory leaves an existing directory's class alone: re-assert it every launch, so
+        // the files the core writes there (vault.json, its .tmp, security.json) inherit it. The
+        // app-wide default comes from the Data Protection entitlement (Bramble.entitlements).
+        try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: url.path)
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try url.setResourceValues(values)

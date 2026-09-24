@@ -4,7 +4,9 @@
 //!   BRAMBLE_MOBILE_MAINNET_MNEMONIC="…" BRAMBLE_MOBILE_MAINNET_ADDRESS=0x… \
 //!     cargo test --locked --test mainnet -- --ignored
 
-use bramble_core::{NetworkId, WalletCore};
+mod common;
+
+use bramble_core::NetworkId;
 
 #[test]
 #[ignore = "needs BRAMBLE_MOBILE_MAINNET_MNEMONIC and BRAMBLE_MOBILE_MAINNET_ADDRESS"]
@@ -18,7 +20,7 @@ fn derives_the_configured_mainnet_account() {
     let expected =
         std::env::var("BRAMBLE_MOBILE_MAINNET_ADDRESS").expect("BRAMBLE_MOBILE_MAINNET_ADDRESS");
     let dir = tempfile::tempdir().unwrap();
-    let core = WalletCore::new(dir.path().to_string_lossy().into()).unwrap();
+    let core = common::open(dir.path(), &common::FakeClock::new());
     core.import_wallet("mainnet check password".into(), phrase, None)
         .unwrap();
     let account = &core.accounts(NetworkId::Mainnet).unwrap()[0];

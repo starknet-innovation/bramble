@@ -17,9 +17,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import android.os.SystemClock
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.bramble.core.NetworkId
 import org.bramble.core.coreInfo
@@ -29,6 +32,7 @@ import org.bramble.core.isValidRecoveryPhrase
 import org.bramble.wallet.R
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.describe
+import org.bramble.wallet.throttledText
 import org.bramble.wallet.design.*
 
 /** Route switch; same four routes as the iOS RootView. */
@@ -146,13 +150,17 @@ private fun Backup(store: WalletStore) {
 @Composable
 private fun Import(store: WalletStore) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var phrase by remember { mutableStateOf("") }
     var passphrase by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     Screen("Import a wallet", "Enter your 12–24 word recovery phrase.") {
-        BrambleField("Recovery phrase", phrase, { phrase = it }, minLines = 4)
+        BrambleField("Recovery phrase", phrase, {
+            if (isPhrasePaste(phrase, it)) clearClipboardAfterPaste(context)
+            phrase = it
+        }, minLines = 4)
         BrambleField("BIP-39 passphrase (optional)", passphrase, { passphrase = it }, secure = true)
         BrambleField("Password", password, { password = it }, secure = true)
         BrambleField("Confirm password", confirmation, { confirmation = it }, secure = true)
@@ -176,15 +184,32 @@ private fun Import(store: WalletStore) {
 @Composable
 private fun Unlock(store: WalletStore) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(store.retryAtElapsedMs) {
+        while (store.retryAtElapsedMs > now) {
+            delay(1000)
+            now = SystemClock.elapsedRealtime()
+        }
+    }
+    LaunchedEffect(Unit) { if (store.security.biometricEnabled && store.biometricNotice == null) store.unlockWithBiometric(context) }
+    val remaining = (store.retryAtElapsedMs - now).coerceAtLeast(0)
     Column(Modifier.fillMaxSize().padding(BrambleSpace.lg), verticalArrangement = Arrangement.spacedBy(BrambleSpace.xl, Alignment.CenterVertically)) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BrandMark() }
-        BrambleField("Password", password, { password = it }, secure = true)
-        ErrorText(error)
-        PrimaryButton("Unlock", busy = store.busy) {
+        BrambleField("Vault passphrase", password, { password = it }, secure = true)
+        ErrorText(store.biometricNotice)
+        ErrorText(if (remaining > 0) throttledText(remaining) else error)
+        if (store.security.biometricEnabled) {
+            SecondaryButton(BrambleCopy.unlockWithBiometry.replace("{biometry}", "fingerprint")) {
+                scope.launch { store.unlockWithBiometric(context) }
+            }
+        }
+        PrimaryButton("Unlock", enabled = remaining == 0L && password.isNotEmpty(), busy = store.busy) {
             scope.launch {
-                runCatching { store.unlock(password) }.onSuccess { password = "" }.onFailure { error = describe(it) }
+                runCatching { store.unlock(password) }.onSuccess { password = ""; error = null }.onFailure { error = describe(it) }
+                now = SystemClock.elapsedRealtime()
             }
         }
     }
@@ -262,6 +287,7 @@ private fun Settings(store: WalletStore, close: () -> Unit) {
             }
             SecondaryButton("Add account") { scope.launch { runCatching { store.addAccount() }.onFailure { error = describe(it) } } }
         }
+        SecuritySettings(store)
         Card {
             Text("Security", color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
             SecondaryButton("Lock now") { store.lock() }

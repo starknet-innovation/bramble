@@ -45,8 +45,16 @@ Tests (unit + mainnet UI flow) on a simulator:
 ```bash
 xcrun simctl uninstall "iPhone 16" org.bramble.wallet   # the UI suite starts from a fresh install
 xcodebuild -project Bramble.xcodeproj -scheme Bramble \
-  -destination 'platform=iOS Simulator,name=iPhone 16' CODE_SIGNING_ALLOWED=NO test
+  -destination 'platform=iOS Simulator,name=iPhone 16' test
 ```
+
+Simulator builds are signed ad hoc by `project.yml` (`CODE_SIGN_IDENTITY[sdk=iphonesimulator*]`);
+don't pass `CODE_SIGNING_ALLOWED=NO`: an unsigned app cannot use the data-protection Keychain, so
+biometric unlock and `SecurityTests` would fail. `SecurityFlowTests` drives the simulator's Face ID
+(enrol, match, non-match) itself. Every UI test removes its wallet when it finishes, and
+`SecurityFlowTests` also removes one left behind by an earlier run, so the whole scheme runs in one
+go after a single uninstall. Vault security is specified in
+[docs/vault-security.md](docs/vault-security.md).
 
 The UI suite imports the published E2E phrase on mainnet by default. To run it against a funded
 wallet, prefix the command with `TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_MNEMONIC="…"` and

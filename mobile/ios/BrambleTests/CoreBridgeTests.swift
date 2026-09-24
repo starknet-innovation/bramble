@@ -1,3 +1,4 @@
+@testable import Bramble
 import BrambleCore
 import XCTest
 
@@ -25,7 +26,7 @@ final class CoreBridgeTests: XCTestCase {
 
     private func core() throws -> WalletCore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        return try WalletCore(dataDir: dir.path)
+        return try WalletCore(dataDir: dir.path, clock: DeviceClock())
     }
 
     func testParityWithTheExtension() throws {

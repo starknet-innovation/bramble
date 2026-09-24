@@ -2,7 +2,9 @@
 //! is written by `bun run mobile:parity` from the extension's real Krusty WASM path, and
 //! `tests/conformance/mobile-parity.test.ts` keeps it in step with the extension.
 
-use bramble_core::{NetworkId, WalletCore};
+mod common;
+
+use bramble_core::NetworkId;
 use serde_json::Value;
 
 fn fixture() -> Value {
@@ -21,7 +23,7 @@ fn network(id: &str) -> NetworkId {
 fn accounts_and_signatures_match_the_extension() {
     let fixture = fixture();
     let dir = tempfile::tempdir().unwrap();
-    let core = WalletCore::new(dir.path().to_string_lossy().into()).unwrap();
+    let core = common::open(dir.path(), &common::FakeClock::new());
     core.import_wallet(
         "parity password".into(),
         fixture["mnemonic"].as_str().unwrap().into(),
@@ -75,4 +77,24 @@ fn opens_an_envelope_the_extension_sealed() {
         "other"
     )
     .is_err());
+}
+
+#[test]
+fn opens_a_dek_slot_the_extension_sealed() {
+    use base64::Engine;
+    let fixture = fixture();
+    let slot = &fixture["dekSlot"];
+    assert_eq!(slot["scope"], "bramble.mobile.dek.v1");
+    let sealed = slot["sealed"].to_string();
+    let dek =
+        bramble_core::testing::open_password_slot(&sealed, slot["password"].as_str().unwrap())
+            .unwrap();
+    let expected = base64::engine::general_purpose::STANDARD
+        .decode(slot["plaintext"]["dek"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(dek, expected);
+    assert!(matches!(
+        bramble_core::testing::open_password_slot(&sealed, "not the password"),
+        Err(bramble_core::CoreError::WrongPassword)
+    ));
 }

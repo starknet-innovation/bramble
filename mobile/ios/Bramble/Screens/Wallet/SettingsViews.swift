@@ -5,8 +5,14 @@ import SwiftUI
 struct SettingsHubView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
-    @AppStorage(ThemeChoice.storageKey) private var theme = ThemeChoice.dark
+    @AppStorage(ThemeChoice.storageKey) private var theme = ThemeChoice.default
     let open: (WalletShell.Flow) -> Void
+
+    private var securityValue: String {
+        store.security.biometricEnabled
+            ? BrambleCopy.securityRowOn.replacingOccurrences(of: "{biometry}", with: BiometricKeychain.name)
+            : BrambleCopy.securityRowOff
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.md) {
@@ -25,6 +31,7 @@ struct SettingsHubView: View {
             }
             Eyebrow(text: "Security")
             MenuGroup {
+                MenuRow(icon: .shield, title: BrambleCopy.securityTitle, value: securityValue) { open(.security) }
                 MenuRow(icon: .lockKeyhole, title: "Lock wallet", chevron: false) { store.lock() }
                 MenuRow(icon: .alert, title: "Remove wallet from this device", tone: skin.danger) { open(.remove) }
             }
@@ -84,7 +91,7 @@ struct RevealSecretsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var passphrase = ""
     @State private var words: [String] = []
-    @State private var captured = UIScreen.main.isCaptured
+    @State private var captured = false
 
     var body: some View {
         ScrollView {
@@ -110,16 +117,15 @@ struct RevealSecretsView: View {
                     }
                     .disabled(passphrase.isEmpty)
                 } else {
-                    RecoveryWordGrid(words: words, masked: captured)
+                    ProtectedWordGrid(words: words, masked: captured)
                     PillButton("Hide secrets", kind: .secondary) { words = [] }
                 }
             }
             .padding(.horizontal, BrambleSpace.lg)
         }
-        .onDisappear { words = [] }
-        .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
-            captured = UIScreen.main.isCaptured
-        }
+        .onDisappear { words = []; passphrase = "" }
+        .trackingScreenCapture($captured)
+        .warnsOnScreenshot()
     }
 }
 
@@ -152,7 +158,7 @@ struct RemoveWalletView: View {
 struct AppearanceView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @AppStorage(ThemeChoice.storageKey) private var theme = ThemeChoice.dark
+    @AppStorage(ThemeChoice.storageKey) private var theme = ThemeChoice.default
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.md) {

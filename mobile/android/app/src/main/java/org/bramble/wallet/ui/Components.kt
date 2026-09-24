@@ -93,24 +93,27 @@ fun BrambleField(label: String, value: String, onValueChange: (String) -> Unit, 
     val skin = LocalSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
         Text(label, color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.medium))
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            minLines = minLines,
-            textStyle = textStyle(BrambleTypeScale.row, mono = minLines > 1).copy(color = skin.text),
-            cursorBrush = SolidColor(skin.accent),
-            visualTransformation = if (secure) PasswordVisualTransformation() else VisualTransformation.None,
-            // No suggestions or learning: the keyboard must never remember a phrase or password.
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.None,
-                autoCorrectEnabled = false,
-                keyboardType = if (secure) KeyboardType.Password else KeyboardType.Ascii,
-            ),
-            modifier = Modifier.fillMaxWidth()
-                .background(skin.sunken, RoundedCornerShape(BrambleRadius.sm))
-                .border(BorderStroke(1.dp, skin.border), RoundedCornerShape(BrambleRadius.sm))
-                .padding(BrambleSpace.md),
-        )
+        // Every BrambleField holds a secret (a passphrase or the recovery phrase): the password
+        // keyboard type plus SecretKeyboard's EditorInfo flags stop suggestions and IME learning.
+        SecretKeyboard(masked = secure) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                minLines = minLines,
+                textStyle = textStyle(BrambleTypeScale.row, mono = minLines > 1).copy(color = skin.text),
+                cursorBrush = SolidColor(skin.accent),
+                visualTransformation = if (secure) PasswordVisualTransformation() else VisualTransformation.None,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
+                    keyboardType = KeyboardType.Password,
+                ),
+                modifier = Modifier.fillMaxWidth()
+                    .background(skin.sunken, RoundedCornerShape(BrambleRadius.sm))
+                    .border(BorderStroke(1.dp, skin.border), RoundedCornerShape(BrambleRadius.sm))
+                    .padding(BrambleSpace.md),
+            )
+        }
     }
 }
 
