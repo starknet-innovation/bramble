@@ -36,10 +36,10 @@ private struct WordCell<Content: View>: View {
                 .frame(width: 18, alignment: .trailing)
             content()
                 .brambleText(BrambleTypeScale.body)
+                .foregroundStyle(invalid ? skin.danger : skin.text)
                 .padding(.horizontal, BrambleSpace.sm)
                 .frame(maxWidth: .infinity, minHeight: BrambleSize.control)
-                .background(skin.elevated, in: FieldShape())
-                .overlay(alignment: .bottom) { FieldEdge(color: invalid ? skin.danger : skin.border) }
+                .background(invalid ? skin.dangerSoft : skin.elevated, in: FieldShape())
         }
     }
 }

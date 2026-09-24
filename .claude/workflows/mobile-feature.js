@@ -231,7 +231,8 @@ const final = await agent(
   `${BRANCH} with an imperative summary line scoped "feat(mobile):" and a body explaining why, ending ` +
   `with the line "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>". Before committing, scan the staged ` +
   `diff for any BIP-39 phrase or private key other than the published E2E phrase in tests/e2e/wallet-helpers.ts ` +
-  `and abort if one appears. Do not push. Report the commit hash, ` +
+  `and abort if one appears. Do not push. Finally, clean up: \`xcrun simctl shutdown "${SIMULATOR}"; xcrun simctl delete "${SIMULATOR}"\` ` +
+  `(never touch "iPhone 16"). Report the commit hash, ` +
   `gate results, and anything still open.\n\nBUILD REPORT:\n${JSON.stringify(build, null, 1)}\n\n` +
   `FINDINGS:\n${JSON.stringify(findings, null, 1)}`,
   { label: 'fix+commit', phase: 'Fix', schema: BUILD })

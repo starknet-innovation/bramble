@@ -101,7 +101,8 @@ struct IconButton: View {
     }
 }
 
-/// `input`: elevated fill, `md` radius, a 1pt bottom edge in the field-edge token.
+/// `input`: elevated fill and `md` radius, with no edge or shadow. An invalid value turns the fill and text to
+/// the danger tones.
 struct BrambleField: View {
     @Environment(\.skin) private var skin
     var label: String?
@@ -130,11 +131,10 @@ struct BrambleField: View {
             .autocorrectionDisabled()
             .keyboardType(.asciiCapable)
             .brambleText(mono ? BrambleTypeScale.mono : BrambleTypeScale.row, mono: mono)
-            .foregroundStyle(skin.text)
+            .foregroundStyle(invalid ? skin.danger : skin.text)
             .padding(.horizontal, BrambleSpace.md)
             .frame(minHeight: BrambleSize.control)
-            .background(skin.elevated, in: FieldShape())
-            .overlay(alignment: .bottom) { FieldEdge(color: invalid ? skin.danger : skin.border) }
+            .background(invalid ? skin.dangerSoft : skin.elevated, in: FieldShape())
             if let hint {
                 Text(hint).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
             }
@@ -150,17 +150,6 @@ struct BrambleField: View {
 struct FieldShape: Shape {
     func path(in rect: CGRect) -> Path {
         RoundedRectangle(cornerRadius: BrambleRadius.md, style: .continuous).path(in: rect)
-    }
-}
-
-/// The bottom stroke that identifies a filled field (`border-bottom: 1px`), following its radius.
-struct FieldEdge: View {
-    let color: Color
-
-    var body: some View {
-        FieldShape()
-            .stroke(color, lineWidth: 1)
-            .mask(alignment: .bottom) { Rectangle().frame(height: BrambleRadius.md) }
     }
 }
 
