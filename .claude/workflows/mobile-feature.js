@@ -3,6 +3,7 @@ export const meta = {
   description: 'Research, design, implement, and verify one Bramble mobile feature on the Rust Krusty core',
   whenToUse: 'Adding a wallet capability (vault security, transactions, privacy, …) to the iOS/Android apps in mobile/, built on krusty-kms and matching the extension',
   phases: [
+    { title: 'Setup', detail: 'isolated worktree, branch, and simulator for parallel runs' },
     { title: 'Research', detail: 'extension behaviour, krusty-kms APIs, mobile security practice' },
     { title: 'Design', detail: 'one design, two adversarial reviews' },
     { title: 'Build', detail: 'one implementer across core, iOS, Android' },
@@ -11,20 +12,31 @@ export const meta = {
   ],
 }
 
-// args: { feature: 'vault-security', brief: '…what to build and the bar it must meet…' }
+// args: { feature: 'vault-security', brief: '…', isolated?: true }
+// isolated: run in a dedicated worktree + branch (mobile/<feature>) cut from feature/mobile-wallet, with
+// its own simulator, so several runs can proceed in parallel and be merged back afterwards.
 const FEATURE = args && args.feature
 const BRIEF = args && args.brief
+const ISOLATED = Boolean(args && args.isolated)
 if (!FEATURE || !BRIEF) throw new Error('args.feature and args.brief are required')
 
-const REPO = '/Users/theodorepender/Coding/mc-wallet-mobile'
+const BASE = '/Users/theodorepender/Coding/mc-wallet-mobile'
+const REPO = ISOLATED ? `/Users/theodorepender/Coding/mc-wallet-mobile-${FEATURE}` : BASE
+const BRANCH = ISOLATED ? `mobile/${FEATURE}` : 'feature/mobile-wallet'
+const SIMULATOR = ISOLATED ? `Bramble ${FEATURE}` : 'Bramble Workflow'
 const DOC = `mobile/docs/${FEATURE}.md`
 
 // Rules every agent in this workflow follows. They restate only what is specific to this
 // workflow; the repository's AGENTS.md already binds them.
 const GROUND_RULES = `
 Ground rules for this task (in addition to AGENTS.md):
-- Work ONLY in the git worktree ${REPO} (branch feature/mobile-wallet). Never edit, build, or commit in
-  /Users/theodorepender/Coding/mc-wallet (the user's main checkout).
+- Work ONLY in the git worktree ${REPO} (branch ${BRANCH}). Never edit, build, or commit in
+  /Users/theodorepender/Coding/mc-wallet (the user's main checkout)${ISOLATED ? ` or in ${BASE} (another run owns it)` : ''}.
+- Other workstreams (vault-security, transactions, portfolio-activity, accounts, design-mobile,
+  nostr-multisig, android-parity) run in parallel on sibling branches and will be merged together. Stay
+  inside this workstream's scope, do not refactor code outside it, and keep edits to shared files
+  (mobile/core/src/lib.rs exports, Cargo.toml, WalletStore.swift, WalletShell.swift, SettingsViews.swift)
+  small and additive. Put new logic in new files.
 - Read mobile/SCOPE.md and mobile/README.md first. The mobile architecture is fixed: all key custody and
   protocol logic lives in the Rust core mobile/core (crate bramble-core, UniFFI), built on the published
   krusty-kms crates pinned at =0.11.0 (same release as the extension's @starknetfoundation/krusty-kms-wasm).
@@ -39,9 +51,9 @@ Ground rules for this task (in addition to AGENTS.md):
   bun run mobile:parity). Reuse the existing SwiftUI components in mobile/ios/Bramble/DesignSystem and match
   the extension UI exactly (its stories render in apps/ui-lab; stylesheets in
   packages/presentation/wallet-ui/src/sidepanel/styles).
-- Simulator: NEVER use, boot, uninstall from, or run tests on the "iPhone 16" simulator — the user is using it.
-  Use a dedicated device: \`xcrun simctl list devices | grep "Bramble Workflow" || xcrun simctl create "Bramble Workflow" "iPhone 16" \`
-  then pass -destination 'platform=iOS Simulator,name=Bramble Workflow'. Build the core first with
+- Simulator: NEVER use, boot, uninstall from, or run tests on the "iPhone 16" simulator — the user is using it —
+  or on another run's simulator. Use this run's device: \`xcrun simctl list devices | grep "${SIMULATOR}" || xcrun simctl create "${SIMULATOR}" "iPhone 16"\`
+  then pass -destination 'platform=iOS Simulator,name=${SIMULATOR}'. Build the core first with
   mobile/scripts/build-core-ios.sh debug, then \`cd mobile/ios && xcodegen generate\`.
 - Mainnet: never broadcast a transaction, never spend funds, never read or print a real recovery phrase.
   Any live-network test must be opt-in behind environment variables, skipped by default and refused under CI.
@@ -125,6 +137,21 @@ const VERIFY = {
 
 const briefing = `Feature: ${FEATURE}\n\nBrief:\n${BRIEF}\n${GROUND_RULES}`
 
+if (ISOLATED) {
+  phase('Setup')
+  await agent(
+    `Prepare an isolated workspace for the "${FEATURE}" mobile workstream. Steps, stopping on any failure:\n` +
+    `1. If ${REPO} does not exist: \`git -C ${BASE} worktree add ${REPO} -b ${BRANCH} feature/mobile-wallet\` ` +
+    `(if the branch already exists, add the worktree on it without -b). Do not touch uncommitted work in ${BASE}.\n` +
+    `2. \`cd ${REPO} && bun install --frozen-lockfile\`.\n` +
+    `3. mkdir -p ${REPO}/vendor, then copy ${BASE}/vendor/argent-contracts and ${BASE}/vendor/starknet-privacy ` +
+    `into it as siblings (cp -R each directory into vendor/, never cp -R vendor itself).\n` +
+    `4. Create the simulator "${SIMULATOR}" (iPhone 16 device type) if missing. Never touch "iPhone 16".\n` +
+    `5. \`cd ${REPO}/mobile && ./scripts/build-core-ios.sh debug && cd ios && xcodegen generate\`.\n` +
+    `6. \`cd ${REPO}/mobile/core && cargo test --locked\` must pass.\nReport what you did and any failure.`,
+    { label: 'setup', phase: 'Setup' })
+}
+
 phase('Research')
 const research = await parallel([
   () => agent(
@@ -154,7 +181,7 @@ const draft = await agent(
   `needed; keep it under 500 lines). Cover: user-visible behaviour mapped screen-by-screen to the extension; the ` +
   `exact new UniFFI surface (Rust signatures) and what never crosses it; storage and migration of any persisted ` +
   `state; the threat model and each mitigation; parity fixtures that will pin behaviour to the extension; the test ` +
-  `plan (Rust, Swift unit, XCUITest on the "Bramble Workflow" simulator); and anything out of scope or blocked on ` +
+  `plan (Rust, Swift unit, XCUITest on the "${SIMULATOR}" simulator); and anything out of scope or blocked on ` +
   `krusty-kms. Do not write implementation code. Return the document path and a one-paragraph summary.\n\n` +
   `RESEARCH:\n${researchNotes}`,
   { label: 'design:draft', phase: 'Design' })
@@ -174,7 +201,7 @@ const build = await agent(
   `${briefing}\nIMPLEMENTATION TASK: implement the design in ${REPO}/${DOC}, first updating the document to resolve ` +
   `every must-fix item below. Build in this order: Rust core + tests (cargo test --locked, cargo clippy ` +
   `--all-targets --locked clean) → parity fixtures if behaviour is shared with the extension → iOS (rebuild the core, ` +
-  `xcodegen, unit tests and the relevant XCUITest on "Bramble Workflow") → Android sources. Then run ` +
+  `xcodegen, unit tests and the relevant XCUITest on "${SIMULATOR}") → Android sources. Then run ` +
   `\`bun run check\` from the repo root. Do not commit. Report exactly what is done, what is not, and gate results.\n\n` +
   `MUST-FIX FROM REVIEW:\n${JSON.stringify(mustFix, null, 1)}`,
   { label: 'build', phase: 'Build', schema: BUILD })
@@ -184,7 +211,7 @@ const verdicts = await parallel([
   () => agent(
     `${briefing}\nVERIFY (gates): in ${REPO}, re-run every gate independently — cargo fmt --check, cargo clippy ` +
     `--all-targets --locked, cargo test --locked (mobile/core), bun run check (repo root), the iOS unit tests and the ` +
-    `feature's XCUITests on the "Bramble Workflow" simulator. Report each failure with its output. Change nothing.`,
+    `feature's XCUITests on the "${SIMULATOR}" simulator. Report each failure with its output. Change nothing.`,
     { label: 'verify:gates', phase: 'Verify', schema: VERIFY }),
   () => agent(
     `${briefing}\nVERIFY (security audit): audit the uncommitted diff in ${REPO} (\`git diff HEAD\` plus untracked ` +
@@ -201,7 +228,7 @@ phase('Fix')
 const final = await agent(
   `${briefing}\nFIX AND COMMIT: resolve every blocker and major finding below in ${REPO} (minor ones where cheap), ` +
   `re-run all gates until green, update mobile/SCOPE.md's phase list for what now exists, then commit on ` +
-  `feature/mobile-wallet with an imperative summary line scoped "feat(mobile):" and a body explaining why, ending ` +
+  `${BRANCH} with an imperative summary line scoped "feat(mobile):" and a body explaining why, ending ` +
   `with the line "Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>". Before committing, scan the staged ` +
   `diff for any BIP-39 phrase or private key other than the published E2E phrase in tests/e2e/wallet-helpers.ts ` +
   `and abort if one appears. Do not push. Report the commit hash, ` +
