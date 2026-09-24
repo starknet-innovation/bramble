@@ -140,6 +140,10 @@ const applyWorkingStatus = (form: HTMLFormElement, status: WorkingStatus): void 
  * that cannot resolve.
  */
 const applySuccessHash = (form: HTMLFormElement, hash: string): void => {
+  // Truncated on screen so the row leaves room for the copy control; the link
+  // and that control both carry the whole hash, and the title shows it on hover.
+  setText(form, "send-success-hash", accountLabel(hash));
+  form.querySelector("#send-success-hash")?.setAttribute("title", hash);
   const link = form.querySelector<HTMLAnchorElement>("#send-success-hash-link");
   const explorer = explorerTransactionUrl(form.dataset["sendNetwork"] ?? "", hash);
   if (link && explorer) {
@@ -254,7 +258,6 @@ export const applyTransferUi = (
       state.fields.recipientLabel || accountLabel(state.fields.recipient),
     );
     setText(form, "send-success-summary", summary);
-    setText(form, "send-success-hash", state.transactionHash);
     applySuccessHash(form, state.transactionHash);
     setText(form, "send-pending-hash", state.transactionHash);
     setText(form, "send-failure-hash", state.transactionHash);

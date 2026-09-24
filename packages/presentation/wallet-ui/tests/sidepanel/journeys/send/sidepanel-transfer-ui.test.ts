@@ -6,6 +6,7 @@
  * loadActivity) are stubbed via the shared harness to steer each branch. The
  * activity refresh/export suites live in `sidepanel-activity-ui.test.ts`.
  */
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account } from "@bramble/testkit/sidepanel";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
@@ -17,6 +18,7 @@ import {
   markTransferLedgerAuthorized,
   recipientFieldError,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import { accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
   flush,
@@ -121,7 +123,7 @@ describe("bindTransfer", () => {
     await flush();
     expect(calls.submitTransfer).toHaveLength(1);
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel("0xdeadbeef"));
     expect(app.querySelector("#send-home")?.textContent).toBe("Back");
     expect(app.querySelector("#send-another")).toBeNull();
     // Three steps: review, authorizing, broadcasting and confirmation all rest
@@ -477,6 +479,6 @@ describe("bindTransfer", () => {
     await flush();
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("submitted");
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel("0xdeadbeef"));
   });
 });

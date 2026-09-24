@@ -3,6 +3,7 @@
  * only accepted activity reaches the green receipt, while reverted and delayed
  * statuses retain distinct recovery states.
  */
+
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
@@ -17,6 +18,7 @@ import {
   bindTransfer,
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import { accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x1234";
@@ -134,7 +136,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   // The point of the fast-confirmation work: a pre-confirmation is a real
@@ -145,7 +147,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   test("shows the failure recovery state when Starknet rejects", async () => {

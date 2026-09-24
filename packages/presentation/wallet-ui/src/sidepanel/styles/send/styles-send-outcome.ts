@@ -39,14 +39,18 @@ export const SEND_OUTCOME_STYLES = `
   .send-review-amount .token-logo,
   .send-review-amount .token-mark { height: ${SIZE.pill}; width: ${SIZE.pill}; }
   .send-review-amount strong { font-variant-numeric: tabular-nums; }
+  /* Cost and Visibility are two answers, so they are two boxes: the container
+     only spaces them. */
   .send-review-fee {
-    background: var(--bramble-panel);
-    border-radius: ${RADIUS.lg};
     display: grid;
     gap: ${SPACE.sm};
-    padding: ${SPACE.md} ${SPACE.lg};
   }
   .send-review-fee:empty { display: none; }
+  .send-review-fee > .decision-layer {
+    background: var(--bramble-panel);
+    border-radius: ${RADIUS.lg};
+    padding: ${SPACE.md} ${SPACE.lg};
+  }
   .send-review-disclosure {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
@@ -137,7 +141,6 @@ export const SEND_OUTCOME_STYLES = `
   .send-outcome-hash a { color: inherit; text-decoration: none; }
   .send-outcome-hash a[href] code { text-decoration: underline; text-underline-offset: 2px; }
   .send-outcome-hash a[href]:hover code { color: var(--bramble-accent); }
-  .send-outcome-hash code { overflow-wrap: anywhere; }
   .send-outcome-kicker {
     color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
