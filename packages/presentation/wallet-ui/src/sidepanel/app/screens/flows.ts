@@ -90,7 +90,6 @@ const receiveFlow = (
               copyLabel: "Copy address",
               hint: `Only send ${status.network} assets to this address.`,
               networkId: status.networkId,
-              networkName: status.network,
               publicKeyX: account.publicKeyX,
             })
           : noAccountEmpty(status)

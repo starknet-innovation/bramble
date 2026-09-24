@@ -86,7 +86,6 @@ type ReceiveAddressViewOptions = {
   readonly hint: string;
   readonly networkId: StarknetNetworkId;
   /** Display name of the network, shown beside the address when provided. */
-  readonly networkName?: string;
   readonly nostrPublicKey?: string;
   readonly publicKeyX?: string;
 };
@@ -100,7 +99,6 @@ export const receiveAddressView = ({
   copyLabel,
   hint,
   networkId,
-  networkName,
   nostrPublicKey,
   publicKeyX,
 }: ReceiveAddressViewOptions): string => {
@@ -123,7 +121,6 @@ export const receiveAddressView = ({
         <code id="receive-address-text" data-receive-address-text>${escapeHtml(address)}</code>
         <span class="receive-address-copy-mark" aria-hidden="true">${icon("copy")}</span>
       </button>
-      ${networkName ? `<p class="receive-network">Network: <strong>${escapeHtml(networkName)}</strong></p>` : ""}
     </div>
     ${
       publicKeyX

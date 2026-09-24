@@ -26,7 +26,6 @@ const render = (): HTMLElement => {
         copyLabel: "Copy account address",
         hint: "Share this account.",
         networkId: account.networkId,
-        networkName: "Starknet Sepolia",
         publicKeyX: account.publicKeyX,
       }),
     ),
@@ -49,7 +48,7 @@ const option = (app: HTMLElement, payload: "address" | "card"): HTMLButtonElemen
 };
 
 describe("Receive address and wallet card", () => {
-  test("paints the address QR, the full address, and the network before any derivation", () => {
+  test("paints the address QR and the full address before any derivation", () => {
     const app = render();
 
     expect(qrLabel(app)).toBe("QR code for your Starknet address");
@@ -57,7 +56,8 @@ describe("Receive address and wallet card", () => {
       "address",
     );
     expect(app.querySelector("[data-receive-address-text]")?.textContent).toBe(account.address);
-    expect(app.querySelector(".receive-network")?.textContent).toContain("Starknet Sepolia");
+    // The network is named once, by the header pill — not again under the address.
+    expect(app.querySelector(".receive-network")).toBeNull();
     expect(option(app, "address").getAttribute("aria-pressed")).toBe("true");
     expect(option(app, "card").disabled).toBe(true);
     expect(app.querySelector<HTMLButtonElement>("[data-wallet-card-copy]")?.disabled).toBe(true);
@@ -126,7 +126,6 @@ describe("Receive address and wallet card", () => {
       copyLabel: "Copy address",
       hint: "Multisig.",
       networkId: account.networkId,
-      networkName: "Starknet Sepolia",
     });
     expect(html).toContain("QR code for your Starknet address");
     expect(html).not.toContain("data-receive-payload-switch");

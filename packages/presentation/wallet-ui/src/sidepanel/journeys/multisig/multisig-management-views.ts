@@ -432,7 +432,6 @@ export const multisigReceiveFlow = (
         copyLabel: "Copy address",
         hint: `Send only Starknet assets on ${status.network}.`,
         networkId: status.networkId,
-        networkName: status.network,
       }),
     )
   );
