@@ -44,43 +44,39 @@ struct RootView: View {
     @Environment(WalletStore.self) private var store
 
     var body: some View {
-        Group {
+        ZStack(alignment: .bottom) {
             switch store.route {
-            case .welcome: NavigationStack { WelcomeView() }
-            case .backup: BackupPhraseView()
+            case .onboarding: OnboardingFlow()
             case .locked: UnlockView()
-            case .home: HomeView()
+            case .wallet: WalletShell()
+            }
+            if let message = store.toast {
+                Toast(message: message)
+                    .padding(.horizontal, BrambleSpace.md)
+                    .padding(.bottom, 76)
+                    .task(id: message) {
+                        try? await Task.sleep(for: .seconds(3))
+                        store.toast = nil
+                    }
             }
         }
+        .animation(BrambleEase.out.animation(ms: BrambleMotion.toastMs), value: store.toast)
         .animation(BrambleEase.out.animation(ms: BrambleMotion.enterMs), value: store.route)
     }
 }
 
+/// Covers the app-switcher snapshot so no phrase, address, or balance lands in it.
 private struct PrivacyCover: View {
     @Environment(\.skin) private var skin
 
     var body: some View {
         ZStack {
             skin.bg.ignoresSafeArea()
-            BrandMark()
-        }
-    }
-}
-
-/// The Bramble wordmark block used on welcome, unlock, and the privacy cover.
-struct BrandMark: View {
-    @Environment(\.skin) private var skin
-
-    var body: some View {
-        VStack(spacing: BrambleSpace.sm) {
-            Image("BrandMark")
+            Image("BrandWordmark")
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(width: BrambleSize.brand, height: BrambleSize.brand)
-                .foregroundStyle(skin.text)
-            Text("Bramble")
-                .brambleText(BrambleTypeScale.display, weight: BrambleWeight.bold, tracking: BrambleTracking.display)
+                .frame(width: 180)
                 .foregroundStyle(skin.text)
         }
     }

@@ -35,6 +35,9 @@ targets:
     platform: iOS
     sources:
       - path: Bramble
+      # The onboarding landscape is the extension's own asset, bundled by reference, not copied.
+      - path: ../../apps/extension/public/brand/onboarding-landscape.webp
+        buildPhase: resources
     dependencies:
       - target: BrambleCore
     settings:

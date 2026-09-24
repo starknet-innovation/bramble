@@ -13,10 +13,12 @@ mod felt;
 mod kms;
 mod networks;
 mod rpc;
+mod ui;
 mod vault;
 mod wallet;
 
 pub use networks::{NetworkId, NetworkInfo, TokenInfo};
+pub use ui::{AccountAvatar, PassphraseLevel, PassphraseStrength};
 pub use wallet::{AccountInfo, RecoveryPhrase, StarkSignature, WalletCore, WalletStatus};
 
 uniffi::setup_scaffolding!();
@@ -94,6 +96,30 @@ pub fn rpc_parse_balance(body: String, id: u64) -> Result<String, CoreError> {
     rpc::parse_balance_of(&body, id)
 }
 
+/// Avatar geometry for an account address, identical to the extension's `accountAvatar`.
+#[uniffi::export]
+pub fn account_avatar(address: String) -> AccountAvatar {
+    ui::account_avatar(&address)
+}
+
+/// Vault-passphrase meter reading, identical to the extension's `estimatePassphraseStrength`.
+#[uniffi::export]
+pub fn passphrase_strength(passphrase: String) -> PassphraseStrength {
+    ui::passphrase_strength(&passphrase)
+}
+
+/// Whether a typed word is in the BIP-39 English list (flags unknown words as the user types).
+#[uniffi::export]
+pub fn is_recovery_word(word: String) -> bool {
+    ui::is_recovery_word(&word)
+}
+
+/// Up to five BIP-39 words completing a typed prefix.
+#[uniffi::export]
+pub fn recovery_word_suggestions(prefix: String) -> Vec<String> {
+    ui::recovery_word_suggestions(&prefix)
+}
+
 /// Public explorer page for an account, as the extension's `explorerAccountUrl`; `None` when the
 /// address is not a well-formed non-zero felt, so no caller can build a link that cannot resolve.
 #[uniffi::export]
@@ -137,6 +163,8 @@ mod tests {
 /// Test-only hooks for the integration suite; not part of the FFI surface.
 #[doc(hidden)]
 pub mod testing {
+    pub use crate::ui::{account_avatar, passphrase_strength};
+
     /// Opens a raw envelope JSON string, as the extension would.
     pub fn open_envelope(
         json: &str,

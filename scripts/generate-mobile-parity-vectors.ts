@@ -8,6 +8,7 @@ import { writeFile } from "node:fs/promises";
 import { encryptJson } from "@bramble/vault/encrypted-store";
 import {
   computeParityAccounts,
+  computeUiParity,
   PARITY_FIXTURE_PATH,
   PARITY_MESSAGE_HASH,
   PARITY_MNEMONIC,
@@ -27,6 +28,7 @@ const fixture = {
   },
   messageHash: PARITY_MESSAGE_HASH,
   mnemonic: PARITY_MNEMONIC,
+  ui: computeUiParity(),
 };
 
 await writeFile(PARITY_FIXTURE_PATH, `${JSON.stringify(fixture, null, 2)}\n`);

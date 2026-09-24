@@ -1,48 +1,23 @@
 import SwiftUI
 
-// Hand-written companions to BrambleTokens.generated.swift. Every value on screen comes from a
-// generated token or from one of the derived mixes below, which restate the extension's
-// `color-mix()` formulas in `wallet-ui/src/sidepanel/styles` — never from a literal colour.
+// Hand-written companions to BrambleTokens.generated.swift. Every colour on screen is a generated
+// skin field (base or derived); every size is a generated scale token. Nothing here restates a
+// value: it only adapts the tokens to SwiftUI.
 
 extension Color {
-    /// A colour from a 24-bit `0xRRGGBB` token.
-    init(rgb: UInt32) {
+    /// A colour from a generated `0xAARRGGBB` token.
+    init(argb: UInt32) {
         self.init(
             .sRGB,
-            red: Double((rgb >> 16) & 0xFF) / 255,
-            green: Double((rgb >> 8) & 0xFF) / 255,
-            blue: Double(rgb & 0xFF) / 255,
-            opacity: 1
-        )
-    }
-
-    /// `color-mix(in srgb, self pct%, other)`.
-    func mixed(_ fraction: Double, over other: Color) -> Color {
-        let a = UIColor(self).rgba, b = UIColor(other).rgba
-        return Color(
-            .sRGB,
-            red: a.r * fraction + b.r * (1 - fraction),
-            green: a.g * fraction + b.g * (1 - fraction),
-            blue: a.b * fraction + b.b * (1 - fraction),
-            opacity: a.a * fraction + b.a * (1 - fraction)
+            red: Double((argb >> 16) & 0xFF) / 255,
+            green: Double((argb >> 8) & 0xFF) / 255,
+            blue: Double(argb & 0xFF) / 255,
+            opacity: Double((argb >> 24) & 0xFF) / 255
         )
     }
 }
 
-private extension UIColor {
-    var rgba: (r: Double, g: Double, b: Double, a: Double) {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        getRed(&r, green: &g, blue: &b, alpha: &a)
-        return (Double(r), Double(g), Double(b), Double(a))
-    }
-}
-
-/// Derived surface tokens, as in `styles-base.ts` / `styles-tokens.ts`.
 extension BrambleSkin {
-    var accentSoft: Color { accent.mixed(0.13, over: panel) }
-    var hover: Color { text.mixed(0.06, over: elevated) }
-    var softPress: Color { text.mixed(0.11, over: elevated) }
-    var hairline: Color { text.opacity(0.12) }
     var avatars: [Color] { [accountAvatar0, accountAvatar1, accountAvatar2, accountAvatar3] }
 }
 
@@ -69,7 +44,7 @@ struct BrambleShadowStyle {
 }
 
 enum BrambleFont {
-    /// Maps the CSS weight scale onto SwiftUI weights.
+    /// Maps the CSS weight scale onto SwiftUI weights (600/650 → semibold, as SF renders them).
     static func weight(_ css: Int) -> Font.Weight {
         switch css {
         case ..<500: .regular
@@ -77,14 +52,6 @@ enum BrambleFont {
         case ..<800: .bold
         default: .heavy
         }
-    }
-
-    static func ui(_ style: BrambleTypeStyle, weight css: Int = BrambleWeight.regular) -> Font {
-        .system(size: style.size, weight: weight(css))
-    }
-
-    static func mono(_ style: BrambleTypeStyle, weight css: Int = BrambleWeight.regular) -> Font {
-        .system(size: style.size, weight: weight(css), design: .monospaced)
     }
 }
 
@@ -100,9 +67,9 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Applies a type style with the token's line height and tracking (em × size).
+    /// A type-scale style: size, weight, the token's line height, and tracking in em.
     func brambleText(_ style: BrambleTypeStyle, weight: Int = BrambleWeight.regular, tracking: CGFloat = 0, mono: Bool = false) -> some View {
-        font(mono ? BrambleFont.mono(style, weight: weight) : BrambleFont.ui(style, weight: weight))
+        font(.system(size: style.size, weight: BrambleFont.weight(weight), design: mono ? .monospaced : .default))
             .lineSpacing(style.size * (style.lineHeight - 1))
             .tracking(style.size * tracking)
     }
@@ -112,16 +79,46 @@ extension View {
     }
 }
 
-/// Picks daylight or midnight from the system appearance, as the extension's `theme.ts` does.
+/// One of the extension's stroke icons, tinted by the foreground style.
+struct BrambleIcon: View {
+    let name: BrambleIconName
+    var size: CGFloat = BrambleControl.icon
+
+    init(_ name: BrambleIconName, size: CGFloat = BrambleControl.icon) {
+        self.name = name
+        self.size = size
+    }
+
+    var body: some View {
+        Image(name.rawValue)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
+    }
+}
+
+/// The wallet's theme choice, as the extension's `ThemeChoice`: dark (midnight) by default, or
+/// light (daylight). There is deliberately no follow-the-system option — the extension removed it
+/// because system neutrals broke the designed surface tiers.
+enum ThemeChoice: String {
+    case dark, light
+
+    static let storageKey = "theme"
+}
+
+/// Applies the chosen skin (`skinForChoice`) and pins the matching system colour scheme.
 struct SkinProvider<Content: View>: View {
-    @Environment(\.colorScheme) private var scheme
+    @AppStorage(ThemeChoice.storageKey) private var theme = ThemeChoice.dark
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        let skin = scheme == .dark ? BrambleSkin.midnight : BrambleSkin.daylight
+        let skin = theme == .light ? BrambleSkin.daylight : BrambleSkin.midnight
         content()
             .environment(\.skin, skin)
             .tint(skin.accent)
-            .background(skin.bg.ignoresSafeArea())
+            .foregroundStyle(skin.text)
+            .preferredColorScheme(theme == .light ? .light : .dark)
     }
 }

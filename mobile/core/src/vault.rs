@@ -19,10 +19,8 @@ use crate::CoreError;
 pub const KDF_ITERATIONS: u32 = 600_000;
 /// Legacy strength the extension still reads (never writes).
 const LEGACY_KDF_ITERATIONS: [u32; 1] = [310_000];
-/// Shortest vault password, as `MIN_VAULT_PASSPHRASE_LENGTH`.
-pub const MIN_PASSWORD_LENGTH: usize = 8;
-/// Longest vault password accepted at the boundary.
-pub const MAX_PASSWORD_LENGTH: usize = 1024;
+/// Shortest vault password, as `MIN_VAULT_PASSPHRASE_LENGTH` (the rule itself is `ui::is_vault_passphrase`).
+const MIN_PASSWORD_LENGTH: usize = 8;
 
 /// The extension's v3 envelope, field for field.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,8 +55,7 @@ fn random<const N: usize>() -> Result<[u8; N], CoreError> {
 
 /// Checks the password bounds the extension's setup screen enforces.
 pub fn check_password(password: &str) -> Result<(), CoreError> {
-    let length = password.trim().chars().count();
-    if length < MIN_PASSWORD_LENGTH || password.len() > MAX_PASSWORD_LENGTH {
+    if !crate::ui::is_vault_passphrase(password) {
         return Err(CoreError::InvalidInput {
             reason: format!("password must be at least {MIN_PASSWORD_LENGTH} characters"),
         });

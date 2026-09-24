@@ -7,16 +7,17 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { EXPECTED_DEPENDENCIES } from "../../scripts/config-standards-policy";
-import { renderMobileAssets } from "../../scripts/mobile-assets";
+import { readMobileAssetSources, renderMobileAssets } from "../../scripts/mobile-assets";
 import {
   computeParityAccounts,
+  computeUiParity,
   PARITY_FIXTURE_PATH,
   PARITY_MESSAGE_HASH,
   PARITY_MNEMONIC,
 } from "../../scripts/mobile-parity";
 
-describe("mobile generated sources", () => {
-  for (const [path, expected] of renderMobileAssets()) {
+describe("mobile generated sources", async () => {
+  for (const [path, expected] of renderMobileAssets(await readMobileAssetSources())) {
     test(`${path} matches its TypeScript source`, async () => {
       expect(await readFile(path, "utf8")).toBe(expected);
     });
@@ -29,10 +30,12 @@ describe("mobile core parity", () => {
       readonly accounts: unknown;
       readonly messageHash: string;
       readonly mnemonic: string;
+      readonly ui: unknown;
     };
     expect(fixture.mnemonic).toBe(PARITY_MNEMONIC);
     expect(fixture.messageHash).toBe(PARITY_MESSAGE_HASH);
     expect(fixture.accounts).toEqual(await computeParityAccounts());
+    expect(fixture.ui).toEqual(JSON.parse(JSON.stringify(computeUiParity())));
   });
 
   test("the Rust core pins the same Krusty release as the extension", async () => {

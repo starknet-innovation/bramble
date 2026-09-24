@@ -4,10 +4,11 @@
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { renderMobileAssets } from "./mobile-assets";
+import { readMobileAssetSources, renderMobileAssets } from "./mobile-assets";
 
-for (const [path, content] of renderMobileAssets()) {
+const written = renderMobileAssets(await readMobileAssetSources());
+for (const [path, content] of written) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, content);
-  console.log(`wrote ${path}`);
 }
+console.log(`wrote ${written.size} generated mobile files`);

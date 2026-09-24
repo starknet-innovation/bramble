@@ -2,25 +2,29 @@ import BrambleCore
 import Foundation
 import Observation
 
-/// UI state over the Rust `WalletCore`. Everything secret stays inside the core: this type only
-/// ever holds public account metadata, and a recovery phrase only for the length of the backup
-/// screen (`pendingBackup`), cleared as soon as the user confirms it.
+/// UI state over the Rust `WalletCore`. Everything secret stays inside the core: this type holds
+/// public account metadata, and a new recovery phrase only while onboarding shows and verifies it
+/// (`pendingBackup`), cleared when onboarding finishes or the app locks.
 @MainActor
 @Observable
 final class WalletStore {
-    enum Route: Equatable { case welcome, backup, locked, home }
+    enum Route: Equatable { case onboarding, locked, wallet }
+    enum Tab: Equatable { case home, activity, settings }
 
-    private(set) var route: Route = .welcome
+    private(set) var route: Route = .onboarding
+    var tab: Tab = .home
     private(set) var accounts: [AccountInfo] = []
     private(set) var balances: [String: String] = [:]
-    private(set) var balanceError: String?
+    private(set) var networkHealthy = true
     private(set) var busy = false
     var selectedAccount: UInt32 = 0
-    /// Words shown once after creation; never persisted, cleared on confirm or lock.
+    /// Words of a just-created wallet; never persisted, cleared on finish or lock.
     private(set) var pendingBackup: [String] = []
+    /// A transient error shown as a toast.
+    var toast: String?
 
     var network: NetworkId {
-        didSet { UserDefaults.standard.set(network == .mainnet ? "mainnet" : "sepolia", forKey: "network") }
+        didSet { UserDefaults.standard.set(network == .sepolia ? "sepolia" : "mainnet", forKey: "network") }
     }
 
     let core: WalletCore
@@ -29,12 +33,15 @@ final class WalletStore {
     init(core: WalletCore) {
         self.core = core
         network = UserDefaults.standard.string(forKey: "network") == "sepolia" ? .sepolia : .mainnet
-        route = core.status() == .noWallet ? .welcome : .locked
+        route = core.status() == .noWallet ? .onboarding : .locked
     }
 
     var networkInfo: NetworkInfo {
         supportedNetworks().first { $0.network == network }!
     }
+
+    /// The header's network label, as the side panel's `.account-network-label`.
+    var networkLabel: String { network == .mainnet ? "Starknet" : "Sepolia" }
 
     var account: AccountInfo? {
         accounts.first { $0.index == selectedAccount } ?? accounts.first
@@ -47,28 +54,36 @@ final class WalletStore {
         return try await Task.detached(priority: .userInitiated, operation: body).value
     }
 
+    // MARK: Onboarding
+
     func create(password: String) async throws {
         let core = core
-        let phrase = try await work { try core.createWallet(password: password, wordCount: 12) }
-        pendingBackup = phrase.words
-        route = .backup
+        pendingBackup = try await work { try core.createWallet(password: password, wordCount: 12) }.words
     }
 
-    func confirmBackup() async {
-        pendingBackup = []
-        await enterHome()
-    }
-
-    func importWallet(phrase: String, password: String, passphrase: String?) async throws {
+    func importWallet(phrase: String, password: String) async throws {
         let core = core
-        try await work { try core.importWallet(password: password, phrase: phrase, passphrase: passphrase) }
-        await enterHome()
+        try await work { try core.importWallet(password: password, phrase: phrase, passphrase: nil) }
     }
+
+    /// The first account of a just-written vault, for the review step.
+    func previewAccount() async throws -> AccountInfo? {
+        let core = core, network = network
+        return try await work { try core.accounts(network: network) }.first
+    }
+
+    /// Leaves onboarding for the wallet; the backup words are dropped here.
+    func finishOnboarding() async {
+        pendingBackup = []
+        await enterWallet()
+    }
+
+    // MARK: Session
 
     func unlock(password: String) async throws {
         let core = core
         try await work { try core.unlock(password: password) }
-        await enterHome()
+        await enterWallet()
     }
 
     func lock() {
@@ -76,12 +91,13 @@ final class WalletStore {
         pendingBackup = []
         accounts = []
         balances = [:]
-        if route != .welcome { route = core.status() == .noWallet ? .welcome : .locked }
+        tab = .home
+        if core.status() != .noWallet { route = .locked }
     }
 
     func switchNetwork(_ next: NetworkId) async {
         network = next
-        await enterHome()
+        await enterWallet()
     }
 
     func addAccount() async throws {
@@ -89,6 +105,12 @@ final class WalletStore {
         let account = try await work { try core.addAccount(network: network) }
         accounts.append(account)
         selectedAccount = account.index
+        await refreshBalances()
+    }
+
+    func select(_ index: UInt32) async {
+        selectedAccount = index
+        balances = [:]
         await refreshBalances()
     }
 
@@ -101,24 +123,41 @@ final class WalletStore {
         let core = core
         try await work { try core.deleteWallet(password: password) }
         lock()
-        route = .welcome
+        route = .onboarding
     }
 
-    private func enterHome() async {
+    private func enterWallet() async {
         let core = core, network = network
         accounts = (try? await work { try core.accounts(network: network) }) ?? []
         if !accounts.contains(where: { $0.index == selectedAccount }) { selectedAccount = 0 }
-        route = .home
+        route = .wallet
         await refreshBalances()
     }
 
     func refreshBalances() async {
         guard let account else { return }
-        balanceError = nil
         do {
             balances = try await rpc.balances(of: account.address, on: networkInfo)
+            networkHealthy = true
         } catch {
-            balanceError = "Couldn't reach \(networkInfo.name). Pull to retry."
+            networkHealthy = false
         }
+    }
+
+    /// Base-unit balance formatted for display, or nil until it has loaded.
+    func amount(of token: TokenInfo) -> String? {
+        guard let raw = balances[token.symbol] else { return nil }
+        return try? formatTokenAmount(raw: raw, decimals: token.decimals, maxFraction: 4)
+    }
+}
+
+/// User-facing text for a core error, in the extension's wording. Never includes input.
+func describe(_ error: Error) -> String {
+    switch error as? CoreError {
+    case .WrongPassword: "Vault passphrase is incorrect"
+    case .InvalidInput(let reason): reason.prefix(1).uppercased() + reason.dropFirst()
+    case .WalletExists: "A wallet already exists on this device"
+    case .Locked: "The wallet is locked"
+    default: "Something went wrong. Try again."
     }
 }

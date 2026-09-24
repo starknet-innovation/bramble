@@ -29,6 +29,8 @@ bindgen = ["uniffi/cli"]
 krusty-kms = { version = "=0.11.0", default-features = false }
 krusty-kms-common = { version = "=0.11.0" }
 starknet-types-core = { version = "=0.2.4", features = ["hash"] }
+# BIP-39 English word list for the recovery-phrase word assist (already a Krusty dependency).
+bip39 = { version = "=2.2.2", default-features = false, features = ["std"] }
 # Bindings generator for the Swift and Kotlin surfaces.
 uniffi = { version = "=0.29.5" }
 # Vault envelope: the extension's EncryptedEnvelope v3 (PBKDF2-SHA-256 -> AES-256-GCM).

@@ -8,6 +8,13 @@
  */
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { deriveAccount } from "@bramble/vault/accounts";
+import {
+  estimatePassphraseStrength,
+  isVaultPassphrase,
+  requiresWeakPassphraseAcknowledgement,
+} from "@bramble/wallet-model/passphrase";
+// Not a package export: the avatar is a side-panel renderer, read here only to pin the mobile port.
+import { accountAvatar } from "../packages/presentation/wallet-ui/src/sidepanel/shell/account-avatar";
 
 /** Repository-relative path of the committed parity fixture the Rust tests read. */
 export const PARITY_FIXTURE_PATH = "mobile/core/tests/fixtures/extension-parity.json";
@@ -64,3 +71,68 @@ export const computeParityAccounts = async (): Promise<readonly ParityAccountVec
   }
   return vectors;
 };
+
+/** Addresses whose avatars the mobile core must draw identically. */
+const AVATAR_ADDRESSES = [
+  "0x0",
+  "0x1",
+  "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+  "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+  "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+  "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+  "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "0xabcdef",
+  "0x123456789",
+  "not an address",
+] as const;
+
+/** Passphrases spanning every meter band, both gates, and non-ASCII input. */
+const PASSPHRASES = [
+  "",
+  "a",
+  "short",
+  "        x",
+  "aaaaaaaa",
+  "abcdefgh",
+  "password",
+  "Password1",
+  "Password1!",
+  "correct horse battery staple",
+  "correct horse battery staple!9",
+  "Tr0ub4dor&3",
+  "ünïcödé-pässphrase",
+  "🔒🔒🔒🔒🔒🔒🔒🔒🔒",
+  "x".repeat(1025),
+] as const;
+
+/** One meter reading as the extension computes it. */
+export type ParityPassphrase = {
+  readonly value: string;
+  readonly level: string;
+  readonly ratio: number;
+  readonly hint: string;
+  readonly acceptable: boolean;
+  readonly needsAcknowledgement: boolean;
+};
+
+/** Presentation rules the mobile apps must reproduce: avatar markup and meter readings. */
+export const computeUiParity = (): {
+  readonly avatars: readonly { readonly address: string; readonly svg: string }[];
+  readonly passphrases: readonly ParityPassphrase[];
+} => ({
+  avatars: AVATAR_ADDRESSES.map((address) => ({
+    address,
+    svg: accountAvatar(address).replace(/\s+/g, " ").trim(),
+  })),
+  passphrases: PASSPHRASES.map((value) => {
+    const strength = estimatePassphraseStrength(value);
+    return {
+      acceptable: isVaultPassphrase(value),
+      hint: strength.hint,
+      level: strength.level,
+      needsAcknowledgement: requiresWeakPassphraseAcknowledgement(value),
+      ratio: strength.ratio,
+      value,
+    };
+  }),
+});
