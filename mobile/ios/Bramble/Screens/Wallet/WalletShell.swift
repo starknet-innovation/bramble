@@ -4,7 +4,7 @@ import SwiftUI
 /// The wallet frame from `wallet-shell.ts` / `styles-dock.ts`: persistent account header, the
 /// active dock screen, and the floating dock. Flow screens push over it without the dock.
 struct WalletShell: View {
-    enum Flow: Hashable { case receive, network, appearance, security, reveal, remove, send, deploy, accounts, coordination(CoordinationFlow) }
+    enum Flow: Hashable { case receive, network, appearance, security, reveal, remove, send, deploy, accounts, coordination(CoordinationFlow), tokens, addToken, discoverTokens, token(String) }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -18,11 +18,11 @@ struct WalletShell: View {
                 VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
                     WalletHeader(openAccounts: { accountsOpen = true })
                     switch store.tab {
-                    case .home: HomeView(receive: { flows.append(.receive) }, send: {
+                    case .home: HomeView(receive: { flows.append(.receive) }, open: { flows.append($0) }, send: {
                         // Ready and Braavos accounts are refused by the core; say why up front.
                         if let refusal = store.sendRefusal { store.toast = refusal } else { flows.append(.send) }
                     }, deploy: { flows.append(.deploy) })
-                    case .activity: ActivityView()
+                    case .activity: ActivityScreen()
                     case .settings: SettingsHubView(open: { flows.append($0) })
                     }
                 }
@@ -30,7 +30,10 @@ struct WalletShell: View {
                 // `.screen:not(.flow)`: clear the floating dock's footprint.
                 .padding(.bottom, BrambleMetrics.Dock.height + BrambleSpace.lg)
             }
-            .refreshable { await store.refreshBalances() }
+            .refreshable {
+                await store.refreshBalances()
+                if store.tab == .activity { await store.portfolio.refreshActivity(force: true) }
+            }
             .background(skin.bg.ignoresSafeArea())
             .overlay(alignment: .bottom) { Dock(tab: $store.tab).padding(.bottom, BrambleMetrics.Dock.offset) }
             .toolbar(.hidden, for: .navigationBar)
@@ -47,6 +50,10 @@ struct WalletShell: View {
                     case .deploy: DeployAccountView()
                     case .accounts: AccountsManageView()
                     case .coordination(let flow): CoordinationDestination(flow: flow)
+                    case .tokens: TokensView(open: { flows.append($0) })
+                    case .addToken: AddTokenView()
+                    case .discoverTokens: DiscoverTokensView()
+                    case let .token(id): TokenDetailView(tokenId: id)
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
@@ -88,7 +95,7 @@ struct WalletHeader: View {
                             BrambleIcon(.chevronDown, size: m.chevron).foregroundStyle(skin.muted)
                         }
                         HStack(spacing: m.netGap) {
-                            StatusDot(healthy: store.networkHealthy, size: m.netDot)
+                            StatusDot(healthy: store.networkHealthy && store.portfolio.issue == nil, size: m.netDot)
                             Text(store.networkLabel).brambleText(BrambleTypeScale.caption.sized(m.netSize)).foregroundStyle(skin.muted)
                         }
                     }
@@ -97,7 +104,8 @@ struct WalletHeader: View {
             }
             .buttonStyle(FillPressStyle(fill: .clear, pressed: skin.softPress, shape: Capsule(), scale: 1))
             .accessibilityLabel("Accounts")
-            .accessibilityValue("\(name), \(store.networkLabel)\(store.networkHealthy ? "" : ", network degraded")")
+            // `aria-describedby="network-status-detail"`: the header's data-freshness copy.
+            .accessibilityValue("\(name), \(store.networkLabel)\(store.portfolio.issue.map { ", \($0)" } ?? (store.networkHealthy ? "" : ", network degraded"))")
             .accessibilityHint("Opens the account list")
             Spacer(minLength: 0)
             HStack(spacing: BrambleMetrics.HeaderActions.gap) {

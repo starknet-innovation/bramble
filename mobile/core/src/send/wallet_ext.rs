@@ -11,10 +11,11 @@ use starknet_types_core::felt::Felt;
 
 use super::calls;
 use super::plan::{Account, Kind, Transfer, TransferPlan};
-use super::types::{ActivityRecord, SendError, TransferRequest};
+use super::types::{SendError, TransferRequest};
 use super::u256::U256;
 use crate::account_store::StoredAccount;
 use crate::activity::store;
+use crate::history::activity::ActivityEntry;
 use crate::networks;
 use crate::wallet::WalletCore;
 use crate::wallet_accounts::{sign_for, signing_record, SignRefusal};
@@ -167,27 +168,15 @@ impl WalletCore {
         ))
     }
 
-    /// Local activity for one stored account, newest first. Requires an unlocked wallet (the
-    /// record lives in the vault). Any family may be read.
-    pub fn activity(&self, account_id: String) -> Result<Vec<ActivityRecord>, SendError> {
+    /// The account's one activity list, newest first: the transactions this wallet submitted and
+    /// the on-chain history rows merged into the same log. Requires an unlocked wallet (the record
+    /// lives in the vault). Any family may be read.
+    pub fn activity(&self, account_id: String) -> Result<Vec<ActivityEntry>, SendError> {
         let (account, _) = self.plan_account_for(&account_id, Use::Read)?;
-        let network = account.network;
-        Ok(store::list(&self.data_dir, &account.account_id)
-            .into_iter()
-            .filter_map(|entry| {
-                Some(ActivityRecord {
-                    explorer_url: super::explorer_transaction_url(network, entry.hash.clone()),
-                    kind: store::parse_kind(&entry.kind)?,
-                    status: store::parse_status(&entry.status)?,
-                    hash: entry.hash,
-                    summary: entry.summary,
-                    amount: entry.amount,
-                    counterparty: entry.counterparty,
-                    token: entry.token,
-                    submitted_at_ms: entry.submitted_at,
-                })
-            })
-            .collect())
+        Ok(crate::activity::feed::scope(
+            &self.data_dir,
+            &account.account_id,
+        ))
     }
 
     /// A plan that reads one recorded transaction's status and settles its record; never signs.

@@ -9,6 +9,7 @@ fn entry(hash: &str, at: u64) -> Entry {
         account_id: SCOPE.into(),
         amount: Some("1.5".into()),
         counterparty: Some("0x1".into()),
+        failure_notice: None,
         finalized_on_l1: None,
         hash: hash.into(),
         kind: "transfer".into(),

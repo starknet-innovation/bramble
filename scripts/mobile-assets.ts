@@ -9,6 +9,7 @@
  * metrics are read from the rendered stylesheet constant (`SIDEPANEL_STYLES`). `scripts/generate-mobile-assets.ts` writes.
  */
 import { readFile } from "node:fs/promises";
+import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { BRAMBLE_MARK_PATH, BRAMBLE_MARK_VIEW_BOX } from "@bramble/ui-kit/brand-mark";
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { SIDEPANEL_STYLES } from "../packages/presentation/wallet-ui/src/sidepanel/styles/index";
@@ -23,7 +24,7 @@ import { RPC_FIXTURES_PATH, renderRpcFixtures } from "./mobile-assets/rpc-fixtur
 import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
 import { renderSwift, renderSwiftLayout } from "./mobile-assets/swift";
-import { renderVectorAssets } from "./mobile-assets/vectors";
+import { renderVectorAssets, tokenLogoAddresses } from "./mobile-assets/vectors";
 
 /** Repository-relative path of the Swift design tokens consumed by the iOS app. */
 export const SWIFT_TOKENS_PATH = "mobile/ios/Bramble/DesignSystem/BrambleTokens.generated.swift";
@@ -45,6 +46,8 @@ export const SWIFT_COPY_PATH = "mobile/ios/Bramble/DesignSystem/BrambleCopy.gene
 /** Repository-relative path of the Android security copy table. */
 export const KOTLIN_COPY_PATH =
   "mobile/android/app/src/main/java/org/bramble/wallet/design/BrambleCopy.generated.kt";
+/** Repository-relative path of the token registry and bundled-logo set the Rust core embeds. */
+export const TOKEN_REGISTRY_JSON_PATH = "mobile/core/generated/token-registry.json";
 
 const MOBILE_NETWORK_IDS = ["SN_MAIN", "SN_SEPOLIA"] as const;
 
@@ -70,6 +73,21 @@ const renderNetworks = (): string => {
     })),
   }));
   return `${JSON.stringify({ generatedBy: HEADER, networks }, null, 2)}\n`;
+};
+
+// The curated discovery registry (`knownTokensForNetwork`, ids stripped: the core derives them
+// through its own `tokenConfigId` port) and the addresses that ship a bundled logo.
+const renderTokenRegistry = (): string => {
+  const tokens = MOBILE_NETWORK_IDS.flatMap((id) =>
+    knownTokensForNetwork(id).map((token) => ({
+      address: token.address,
+      decimals: token.decimals,
+      name: token.name,
+      networkId: token.networkId,
+      symbol: token.symbol,
+    })),
+  );
+  return `${JSON.stringify({ generatedBy: HEADER, logos: tokenLogoAddresses(), tokens }, null, 2)}\n`;
 };
 
 const markSize = (): readonly [string, string] => {
@@ -140,6 +158,7 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [RPC_FIXTURES_PATH, renderRpcFixtures()],
     [ACCOUNTS_JSON_PATH, renderAccountsCatalog()],
     [MULTISIG_JSON_PATH, renderMultisigConstants()],
+    [TOKEN_REGISTRY_JSON_PATH, renderTokenRegistry()],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],

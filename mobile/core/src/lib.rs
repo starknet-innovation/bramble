@@ -26,6 +26,8 @@ mod ffi_coordination;
 mod ffi_nostr_multisig;
 mod files;
 mod groups;
+mod history;
+mod js;
 mod kms;
 mod kms_accounts;
 mod migrations;
@@ -35,6 +37,9 @@ mod multisig_store;
 mod networks;
 mod nostr;
 mod nostr_relay;
+mod portfolio;
+#[doc(hidden)]
+pub mod portfolio_testing;
 mod public_store;
 mod records;
 mod recovery;
@@ -76,19 +81,54 @@ pub use recovery_scan::RecoveryScanStep;
 pub use rpc::{RpcRequest, RpcResponse};
 pub use send::plan::TransferPlan;
 pub use send::types::{
-    ActivityKind, ActivityRecord, DeploymentState, FeeAffordability, FeeAmount, FeeUnit,
-    ReviewFlag, RpcPurpose, SendAmountError, SendError, SendFailure, SendFailureCode, SendStep,
-    StepReply, TransferRequest, TransferReview, TxStatus,
+    ActivityKind, DeploymentState, FeeAffordability, FeeAmount, FeeUnit, ReviewFlag, RpcPurpose,
+    SendAmountError, SendError, SendFailure, SendFailureCode, SendStep, StepReply, TransferRequest,
+    TransferReview, TxStatus,
 };
 pub use send::{
-    confirmation_checkpoints_ms, deployment_status_request, explorer_transaction_url,
-    judge_deployment_status, parse_token_amount, validate_recipient,
+    confirmation_checkpoints_ms, deployment_status_request, judge_deployment_status,
+    parse_token_amount, validate_recipient,
 };
 pub use ui::{AccountAvatar, PassphraseLevel, PassphraseStrength};
 pub use wallet::{
     AccountInfo, RecoveryPhrase, SecurityStatus, StarkSignature, WalletCore, WalletStatus,
 };
 pub use wallet_accounts::AccountRecord;
+
+// Portfolio and activity (mobile/docs/portfolio-activity.md).
+pub use history::activity::{ActivityEntry, FailureNotice};
+pub use history::activity_book::{ActivityBook, ActivityView};
+pub use history::appearance::{
+    activity_empty_copy, activity_groups, activity_unavailable_notice, ActivityDayGroup,
+    ActivityDirection, ActivityRow, ActivityTone,
+};
+pub use history::events::{HistoryScan, ScanStep};
+pub use history::explorer::{activity_account_id, explorer_transaction_url};
+pub use portfolio::fiat::{
+    compact_amount, fiat_value_text, format_fiat, portfolio_amount, portfolio_hero, token_row_fiat,
+    token_sparkline, ChangeBadge, FiatDelta, PortfolioHero, Sparkline, SparklinePoint,
+    SparklineTrend,
+};
+pub use portfolio::model::{DisplayCurrency, TokenBalance, TokenConfig};
+pub use portfolio::prices::{
+    ChartPlan, PriceBook, PriceOutcome, PricePlan, PricePoint, PriceRequest, PriceView,
+};
+pub use portfolio::snapshots::{
+    balance_failure_copy, friendly_network_error, network_data_issue, BalanceHealth, BalancePlan,
+    BalanceSnapshots, BalanceView,
+};
+pub use portfolio::token_meta::{
+    balance_judge, balance_requests, discovery_judge, token_add_address, token_metadata_judge,
+    token_metadata_requests, token_network_error, BalanceOutcome, DiscoveryOutcome,
+    TokenMetaOutcome,
+};
+pub use portfolio::tokens::{
+    token_config_id, token_glyph, token_spam_reasons, AddTokenOutcome, HomeRows, SpamReason,
+    TokenGlyph, TokenPreferences, TrackedToken,
+};
+pub use portfolio::wire::{
+    rpc_limits, HttpHeader, HttpMethod, HttpOutcome, HttpRequest, RpcLimits, RpcReply,
+};
 
 uniffi::setup_scaffolding!();
 
@@ -201,16 +241,12 @@ pub fn recovery_word_suggestions(prefix: String) -> Vec<String> {
     ui::recovery_word_suggestions(&prefix)
 }
 
-/// Public explorer page for an account, as the extension's `explorerAccountUrl`; `None` when the
-/// address is not a well-formed non-zero felt, so no caller can build a link that cannot resolve.
+/// Public explorer page for an account, as the extension's `explorerAccountUrl`: the address in
+/// the spelling given; `None` when it is not a well-formed non-zero felt, so no caller can build
+/// a link that cannot resolve.
 #[uniffi::export]
 pub fn explorer_account_url(network: NetworkId, address: String) -> Option<String> {
-    let address = felt::parse_non_zero(&address)?;
-    Some(format!(
-        "{}/contract/{}",
-        networks::info(network).explorer_base_url,
-        felt::canonical(&address)
-    ))
+    history::explorer::explorer_url(network, "contract", &address)
 }
 
 /// Display string for a base-unit amount.
@@ -231,7 +267,7 @@ mod tests {
     fn explorer_urls_match_the_extension() {
         assert_eq!(
             explorer_account_url(NetworkId::Mainnet, "0x00ab".into()).as_deref(),
-            Some("https://starkscan.co/contract/0xab")
+            Some("https://starkscan.co/contract/0x00ab")
         );
         assert_eq!(explorer_account_url(NetworkId::Sepolia, "0x0".into()), None);
         assert_eq!(

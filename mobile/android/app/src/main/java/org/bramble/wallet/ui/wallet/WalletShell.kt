@@ -125,7 +125,7 @@ fun WalletShell(store: WalletStore) {
                 WalletHeader(store, openAccounts = { accountsOpen = true })
                 when (store.tab) {
                     Tab.HOME -> HomeScreen(store, receive = { flows = flows + Flow.RECEIVE }, send = { flows = flows + Flow.SEND })
-                    Tab.ACTIVITY -> ActivityScreen()
+                    Tab.ACTIVITY -> ActivityScreen(store)
                     Tab.SETTINGS -> SettingsHubScreen(store, open = { flows = flows + it })
                 }
                 // Clearance for the floating dock: item, its padding, and the gap above the inset.

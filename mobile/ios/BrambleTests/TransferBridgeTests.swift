@@ -118,8 +118,10 @@ final class TransferBridgeTests: XCTestCase {
         let status = try transactionFixture()["status"] as! [String: Any]
         let window = UInt64(status["unresolvedWindowMs"] as! Int)
         XCTAssertEqual(activityObservationPeriodMs(), UInt64(status["fastObservationPeriodMinutes"] as! Int) * 60_000)
-        func record(_ status: TxStatus) -> ActivityRecord {
-            ActivityRecord(hash: "0xab", kind: .transfer, status: status, summary: "s", amount: nil, counterparty: nil, token: nil, submittedAtMs: 1_000, explorerUrl: nil)
+        func record(_ status: TxStatus) -> ActivityEntry {
+            ActivityEntry(accountId: "SN_SEPOLIA:0x1", amount: nil, counterparty: nil, failureNotice: nil, finalizedOnL1: nil,
+                          hash: "0xab", kind: .transfer, network: .sepolia, notFoundCount: nil, status: status, submittedAt: 1_000,
+                          summary: "s", token: nil)
         }
         XCTAssertTrue(activityNeedsObservation(record: record(.pending), nowMs: 1_000 + window - 1))
         XCTAssertFalse(activityNeedsObservation(record: record(.pending), nowMs: 1_000 + window))

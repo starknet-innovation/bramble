@@ -1,11 +1,14 @@
 //! `activity.v1.json`, next to the vault: `{version: 1, scopes: {"<networkId>:<address>":
-//! [entry…]}}`, where an entry is the extension's `ActivityEntry` field for field. The core owns
-//! the file; the host never reads or writes it.
+//! [entry…]}, sync: [..]}`, where an entry is the extension's `ActivityEntry` field for field and
+//! a scope is the account record id (`activity_account_id`). It is the wallet's ONE activity log:
+//! transactions this wallet submitted and on-chain history rows (`feed.rs`) live in the same
+//! scope, with the history reads' bookkeeping in `sync`. The core owns the file; the host never
+//! reads or writes it.
 //!
 //! Rules mirror `packages/features/transactions/src/activity/activity.ts` and
 //! `tx-observation.ts`: entries are validated on read (invalid ones are dropped), at most 200
 //! per scope (oldest dropped), de-duplicated by numeric hash, status moves forward only
-//! (`monotonicActivityStatus`), and three consecutive not-found answers make an entry
+//! (`monotonicTxStatus`), and three consecutive not-found answers make an entry
 //! `rejected`. A file that cannot be read as version 1 is never overwritten blind: it is renamed
 //! `activity.v1.corrupt-<n>.json` and the store starts empty. Writes are write-then-rename.
 
@@ -54,6 +57,8 @@ pub(crate) struct Entry {
     pub amount: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub counterparty: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_notice: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -76,12 +81,32 @@ pub(crate) struct Entry {
 struct File {
     version: u32,
     scopes: BTreeMap<String, Vec<serde_json::Value>>,
+    /// History-read bookkeeping per scope (`markHistorySynced`); absent in older files.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    sync: Vec<serde_json::Value>,
+}
+
+/// One scope's last history read (`activity.ts` sync record).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct SyncRecord {
+    pub account_id: String,
+    pub synced_at: u64,
+    pub unavailable: bool,
+}
+
+/// The whole log as read: scopes and sync records, both validated.
+pub(super) struct Log {
+    pub scopes: BTreeMap<String, Vec<Entry>>,
+    pub sync: Vec<SyncRecord>,
 }
 
 pub(crate) fn kind_text(kind: ActivityKind) -> &'static str {
     match kind {
-        ActivityKind::Transfer => "transfer",
+        ActivityKind::Declare => "declare",
         ActivityKind::Deploy => "deploy",
+        ActivityKind::Invoke => "invoke",
+        ActivityKind::Transfer => "transfer",
     }
 }
 
@@ -108,13 +133,20 @@ pub(crate) fn parse_status(text: &str) -> Option<TxStatus> {
 
 pub(crate) fn parse_kind(text: &str) -> Option<ActivityKind> {
     match text {
-        "transfer" => Some(ActivityKind::Transfer),
+        "declare" => Some(ActivityKind::Declare),
         "deploy" => Some(ActivityKind::Deploy),
+        "invoke" => Some(ActivityKind::Invoke),
+        "transfer" => Some(ActivityKind::Transfer),
         _ => None,
     }
 }
 
-/// `monotonicActivityStatus`: terminal failures stick, and progress never moves backwards.
+/// `isUnresolvedTxStatus`.
+pub(crate) fn unresolved(status: TxStatus) -> bool {
+    matches!(status, TxStatus::Pending | TxStatus::Preconfirmed)
+}
+
+/// `monotonicTxStatus`: terminal failures stick, and progress never moves backwards.
 pub(crate) fn monotonic(current: TxStatus, observed: TxStatus) -> TxStatus {
     let terminal = |s: TxStatus| matches!(s, TxStatus::Rejected | TxStatus::Reverted);
     if terminal(current) {
@@ -161,6 +193,10 @@ fn valid(entry: &Entry, scope: &str) -> bool {
         && detail_ok(&entry.amount)
         && detail_ok(&entry.counterparty)
         && detail_ok(&entry.token)
+        && entry
+            .failure_notice
+            .as_deref()
+            .is_none_or(|notice| matches!(notice, "pending" | "delivered"))
         && entry.submitted_at < (1u64 << 53)
 }
 
@@ -178,10 +214,15 @@ fn quarantine(dir: &Path) {
     }
 }
 
-fn load(dir: &Path) -> BTreeMap<String, Vec<Entry>> {
+/// Reads the log; an unreadable file is quarantined and reads as empty.
+pub(super) fn load_log(dir: &Path) -> Log {
+    let empty = || Log {
+        scopes: BTreeMap::new(),
+        sync: Vec::new(),
+    };
     let file = path(dir);
     let Ok(metadata) = fs::metadata(&file) else {
-        return BTreeMap::new();
+        return empty();
     };
     let parsed = (metadata.len() <= MAX_FILE_BYTES)
         .then(|| fs::read(&file).ok())
@@ -190,9 +231,15 @@ fn load(dir: &Path) -> BTreeMap<String, Vec<Entry>> {
         .filter(|parsed| parsed.version == 1);
     let Some(parsed) = parsed else {
         quarantine(dir);
-        return BTreeMap::new();
+        return empty();
     };
-    parsed
+    let sync = parsed
+        .sync
+        .into_iter()
+        .filter_map(|value| serde_json::from_value::<SyncRecord>(value).ok())
+        .filter(|record| record.synced_at < (1u64 << 53))
+        .collect();
+    let scopes = parsed
         .scopes
         .into_iter()
         .map(|(scope, values)| {
@@ -203,12 +250,20 @@ fn load(dir: &Path) -> BTreeMap<String, Vec<Entry>> {
                 .collect();
             (scope, entries)
         })
-        .collect()
+        .collect();
+    Log { scopes, sync }
 }
 
-fn save(dir: &Path, scopes: &BTreeMap<String, Vec<Entry>>) -> bool {
+/// Writes the whole log (write-then-rename).
+pub(super) fn save_log(dir: &Path, log: &Log) -> bool {
+    let scopes = &log.scopes;
     let file = File {
         version: 1,
+        sync: log
+            .sync
+            .iter()
+            .filter_map(|record| serde_json::to_value(record).ok())
+            .collect(),
         scopes: scopes
             .iter()
             .map(|(scope, entries)| {
@@ -226,7 +281,7 @@ fn save(dir: &Path, scopes: &BTreeMap<String, Vec<Entry>>) -> bool {
     write_atomic(dir, ACTIVITY_FILE, &body).is_ok()
 }
 
-fn locked<T>(f: impl FnOnce() -> T) -> T {
+pub(super) fn locked<T>(f: impl FnOnce() -> T) -> T {
     let _guard = FILE_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -237,7 +292,8 @@ fn locked<T>(f: impl FnOnce() -> T) -> T {
 /// is kept as it is. Returns whether the file now holds the entry.
 pub(crate) fn record(dir: &Path, entry: Entry) -> bool {
     locked(|| {
-        let mut scopes = load(dir);
+        let mut log = load_log(dir);
+        let scopes = &mut log.scopes;
         let scope = entry.account_id.clone();
         if !valid(&entry, &scope) {
             return false;
@@ -252,7 +308,7 @@ pub(crate) fn record(dir: &Path, entry: Entry) -> bool {
         entries.push(entry);
         let excess = entries.len().saturating_sub(MAX_ENTRIES_PER_SCOPE);
         entries.drain(..excess);
-        save(dir, &scopes)
+        save_log(dir, &log)
     })
 }
 
@@ -265,7 +321,8 @@ pub(crate) fn observe(
     observation: Observation,
 ) -> Option<TxStatus> {
     locked(|| {
-        let mut scopes = load(dir);
+        let mut log = load_log(dir);
+        let scopes = &mut log.scopes;
         let entry = scopes
             .get_mut(account_id)?
             .iter_mut()
@@ -292,7 +349,7 @@ pub(crate) fn observe(
             }
         }
         let result = parse_status(&entry.status);
-        save(dir, &scopes);
+        save_log(dir, &log);
         result
     })
 }
@@ -302,7 +359,8 @@ pub(crate) fn observe(
 /// write is accepted. An entry that has already been observed is left alone.
 pub(crate) fn discard(dir: &Path, account_id: &str, hash: &Felt) {
     locked(|| {
-        let mut scopes = load(dir);
+        let mut log = load_log(dir);
+        let scopes = &mut log.scopes;
         let Some(entries) = scopes.get_mut(account_id) else {
             return;
         };
@@ -313,7 +371,7 @@ pub(crate) fn discard(dir: &Path, account_id: &str, hash: &Felt) {
                 || e.not_found_count.is_some()
         });
         if entries.len() != before {
-            save(dir, &scopes);
+            save_log(dir, &log);
         }
     });
 }
@@ -321,7 +379,7 @@ pub(crate) fn discard(dir: &Path, account_id: &str, hash: &Felt) {
 /// Entries for one account scope, newest first.
 pub(crate) fn list(dir: &Path, account_id: &str) -> Vec<Entry> {
     locked(|| {
-        let mut entries = load(dir).remove(account_id).unwrap_or_default();
+        let mut entries = load_log(dir).scopes.remove(account_id).unwrap_or_default();
         entries.reverse();
         entries.sort_by_key(|entry| std::cmp::Reverse(entry.submitted_at));
         entries

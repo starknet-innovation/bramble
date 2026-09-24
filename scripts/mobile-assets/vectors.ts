@@ -6,7 +6,8 @@
  * data here rather than approximated.
  */
 
-import { tokenLogoSvg } from "@bramble/portfolio/token-logos";
+import { bundledTokenLogoAddresses, tokenLogoSvg } from "@bramble/portfolio/token-logos";
+import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { BRAMBLE_WORDMARK, BRAMBLE_WORDMARK_VIEW_BOX } from "@bramble/ui-kit/brand-mark";
 import { ICON_NAMES, icon } from "@bramble/ui-kit/icons";
 import { DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
@@ -199,31 +200,37 @@ export const tokenLogoAssetName = (address: string): string =>
 
 // iOS takes each logo as an SVG; Android's vector drawables are rendered from the same SVGs by
 // `android-token-logos.ts`.
+
+// The asset title is the token's symbol where the default or registry list names it, so a
+// registry token (USDC, USDT, …) draws its mark on mobile too.
+const logoSymbol = (address: string): string =>
+  [...DEFAULT_TOKENS, ...knownTokensForNetwork("SN_MAIN")].find(
+    (token) => BigInt(token.address) === BigInt(address),
+  )?.symbol ?? "Token";
+
 const iosTokenLogos = (): [string, string][] =>
-  [...new Map(DEFAULT_TOKENS.map((token) => [token.address, token.symbol])).entries()].flatMap(
-    ([address, symbol]) => {
-      const svg = tokenLogoSvg(address);
-      if (svg === null) {
-        return [];
-      }
-      const clean = svg
-        .replace(/ class="token-logo"/, "")
-        .replace(/ aria-hidden="true"/, "")
-        .replace(/^(<svg[^>]*>)/, `$1<title>${symbol}</title>`);
-      return imageset(
-        `${XCASSETS}/Tokens/${tokenLogoAssetName(address)}.imageset`,
-        "logo.svg",
-        `${clean}\n`,
-        false,
-      );
-    },
-  );
+  bundledTokenLogoAddresses().flatMap((address) => {
+    const svg = tokenLogoSvg(address);
+    if (svg === null) {
+      return [];
+    }
+    const clean = svg
+      .replace(/ class="token-logo"/, "")
+      .replace(/ aria-hidden="true"/, "")
+      .replace(/^(<svg[^>]*>)/, `$1<title>${logoSymbol(address)}</title>`);
+    return imageset(
+      `${XCASSETS}/Tokens/${tokenLogoAssetName(address)}.imageset`,
+      "logo.svg",
+      `${clean}\n`,
+      false,
+    );
+  });
 
 /** Addresses (64-digit, lowercase) that ship a bundled logo. */
 export const tokenLogoAddresses = (): readonly string[] =>
-  [...new Set(DEFAULT_TOKENS.map((token) => token.address))]
-    .filter((address) => tokenLogoSvg(address) !== null)
-    .map((address) => tokenLogoAssetName(address).replace(/^token-/, "0x"));
+  bundledTokenLogoAddresses().map((address) =>
+    tokenLogoAssetName(address).replace(/^token-/, "0x"),
+  );
 
 /** Swift enum of every icon, so a screen can only name an icon the extension ships. */
 export const swiftIconEnum = (): string =>

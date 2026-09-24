@@ -21,6 +21,7 @@ import {
   sealedIsCurrent,
 } from "./mobile-parity";
 import { ACCOUNTS_PARITY_FIXTURE_PATHS, computeAccountParity } from "./mobile-parity-accounts";
+import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
@@ -82,3 +83,6 @@ for (const part of ["families", "rules"] as const) {
 await import("./generate-mobile-transaction-vectors");
 
 console.log(`wrote ${await writeNostrMultisigParity()}`);
+
+await writeFile(PORTFOLIO_PARITY_FIXTURE_PATH, await renderPortfolioParity());
+console.log(`wrote ${PORTFOLIO_PARITY_FIXTURE_PATH}`);

@@ -356,6 +356,7 @@ impl PlanState {
                 account_id: self.account.account_id.clone(),
                 amount,
                 counterparty,
+                failure_notice: None,
                 finalized_on_l1: None,
                 hash: felt::canonical(hash),
                 kind: kind.into(),

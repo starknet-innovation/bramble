@@ -60,7 +60,11 @@ fun SettingsHubScreen(store: WalletStore, open: (Flow) -> Unit) {
         }
         Eyebrow("Preferences")
         MenuGroup {
-            MenuRow(BrambleIconName.SETTINGS, "Appearance", value = if (store.theme == ThemeChoice.LIGHT) "Light" else "Dark") {
+            MenuRow(
+                BrambleIconName.SETTINGS,
+                "Appearance & currency",
+                value = "${if (store.theme == ThemeChoice.LIGHT) "Light" else "Dark"} · ${store.portfolio.currency.name.uppercase()}",
+            ) {
                 open(Flow.APPEARANCE)
             }
         }
@@ -136,8 +140,20 @@ fun NetworkScreen(store: WalletStore, back: () -> Unit) {
 @Composable
 fun AppearanceScreen(store: WalletStore, back: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg), verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-        FlowHeader("Appearance", subtitle = "How the wallet looks", network = store.networkLabel, back = back)
+        FlowHeader("Appearance & currency", subtitle = "How the wallet looks and values assets", network = store.networkLabel, back = back)
         Eyebrow("Theme")
         SegmentedControl(listOf("Dark" to ThemeChoice.DARK, "Light" to ThemeChoice.LIGHT), store.theme, onSelect = store::setTheme)
+        // The extension's "Values" section of the same screen (`settings-views.ts`).
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        Eyebrow("Values")
+        SegmentedControl(
+            listOf("USD" to org.bramble.core.DisplayCurrency.USD, "EUR" to org.bramble.core.DisplayCurrency.EUR, "GBP" to org.bramble.core.DisplayCurrency.GBP),
+            store.portfolio.currency,
+        ) { next -> scope.launch { store.portfolio.setCurrency(next) } }
+        Text(
+            "Prices and portfolio totals use this display currency. Token balances remain unchanged.",
+            color = LocalSkin.current.muted,
+            style = textStyle(BrambleTypeScale.caption),
+        )
     }
 }

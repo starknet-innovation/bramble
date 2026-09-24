@@ -20,7 +20,6 @@ import org.bramble.core.CoreException
 import org.bramble.core.NetworkId
 import org.bramble.core.NetworkInfo
 import org.bramble.core.SecurityStatus
-import org.bramble.core.TokenInfo
 import org.bramble.core.TransferPlan
 import org.bramble.core.WalletCore
 import org.bramble.core.WalletStatus
@@ -49,9 +48,15 @@ class WalletStore(
     private val biometrics: BiometricVault,
     /** Main-thread scope that outlives screens: background locks, the idle timer, clipboard expiry. */
     val appScope: CoroutineScope,
+    /** Where the portfolio's public caches live (`noBackupFilesDir/portfolio`). */
+    portfolioDirectory: java.io.File,
 ) {
     private val session = SessionGuard()
-    private val book = Balances()
+    /**
+     * Prices, tracked tokens, the one balance read, and the account's one activity list (the core's
+     * log), for Home, Activity and Send (mobile/docs/portfolio-activity.md).
+     */
+    val portfolio = org.bramble.wallet.portfolio.PortfolioStore(portfolioDirectory, core.activityBook())
     /** For the discovery scan's sans-IO steps (`RecoveryScanDriver`); restoring goes through [accountCall]. */
     internal val walletCore: WalletCore get() = core
     /** Whether a vault exists on disk, tracked here so `lock()` never waits on the core mutex. */
@@ -80,7 +85,7 @@ class WalletStore(
      */
     var onboardingGeneration by mutableStateOf(0)
         private set
-    val networkHealthy: Boolean get() = book.networkHealthy
+    val networkHealthy: Boolean get() = portfolio.balanceError == null
     var busy by mutableStateOf(false)
         private set
     /** Words of a just-created wallet; never persisted, cleared on finish or lock. */
@@ -234,7 +239,7 @@ class WalletStore(
         coordination.reset()
         pendingBackup = emptyList()
         accountState = AccountsSnapshot()
-        clearBalances()
+        portfolio.lock()
         tab = Tab.HOME
         if (!vaultWritten) onboardingGeneration += 1
         route = if (vaultWritten) Route.LOCKED else Route.ONBOARDING
@@ -249,7 +254,7 @@ class WalletStore(
 
     suspend fun switchNetwork(next: NetworkId) {
         network = next
-        clearBalances()
+        portfolio.lock()
         prefs.edit().putString(NetworkPreference.KEY, NetworkPreference.stored(next)).apply()
         enterWallet(session.ticket())
     }
@@ -268,7 +273,7 @@ class WalletStore(
         if (!reload) return result
         reloadAccounts(ticket, ensure = false)
         if (activeRecord?.id != before) {
-            clearBalances()
+            portfolio.lock()
             refreshBalances(ticket)
         }
         return result
@@ -305,6 +310,7 @@ class WalletStore(
         vaultWritten = false
         biometrics.delete()
         lock()
+        portfolio.deleteFiles()
     }
 
     /**
@@ -467,7 +473,7 @@ class WalletStore(
     fun makeSendModel(): SendFlowModel? {
         val account = activeRecord ?: return null
         if (sendRefusal(account) != null) return null
-        val current = book.of(currentView())
+        val current = portfolio.rawBalances(networkInfo)
         return SendFlowModel(core, networkInfo, account, records.filter { it.id != account.id }, current, { plans += it }) { message, success ->
             showToast(message, positive = success)
         }
@@ -475,18 +481,17 @@ class WalletStore(
 
     // Balances
 
-    private fun clearBalances() = book.clear()
-
-    private fun currentView(): BalanceView? = activeRecord?.let { network to it.address }
-
-    /** Reads public balances for the active account; a late result is dropped ([Balances]). */
+    /**
+     * Reads the active account's balances through the portfolio (the one balance read): entering
+     * the account's scope serves its saved figures first; otherwise the read is forced. A late
+     * result is dropped by the portfolio's generation.
+     */
     suspend fun refreshBalances(ticket: Long = session.ticket()) {
-        val view = currentView() ?: return
-        book.refresh(view, networkInfo) { session.isCurrent(ticket) && currentView() == view }
+        val account = activeRecord ?: return
+        if (!session.isCurrent(ticket)) return
+        if (portfolio.scope?.accountId != account.id) portfolio.load(account, networkInfo) else portfolio.refresh(force = true)
     }
 
-    /** Base-unit balance formatted for display, or null until it has loaded for this view. */
-    fun amount(token: TokenInfo): String? = book.amount(token, currentView())
 
     /** Core lifecycle state, for tests and diagnostics. Takes the core's session mutex. */
     internal fun coreStatus(): WalletStatus = core.status()

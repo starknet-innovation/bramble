@@ -173,7 +173,7 @@ final class OnboardingFlowTests: XCTestCase {
         tap(app.buttons["Network"])
         snapshot(app, "network")
         tap(app.buttons["Back"])
-        tap(app.buttons["Appearance"])
+        tap(app.buttons["Appearance & currency"])
         tap(app.buttons["Light"])
         snapshot(app, "appearance-light")
         tap(app.buttons["Dark"])

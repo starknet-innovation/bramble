@@ -22,8 +22,6 @@ final class WalletStore {
     /// The active account: one for the whole vault, as in the extension. Everything that acts for
     /// an account (send, deploy, activity) names it by `activeRecord.id`, never by index.
     var activeRecord: AccountRecord?
-    private(set) var balances: [String: String] = [:]
-    private(set) var networkHealthy = true
     private(set) var busy = false
     /// Words of a just-created wallet; never persisted, cleared on finish or lock.
     private(set) var pendingBackup: [String] = []
@@ -43,8 +41,6 @@ final class WalletStore {
     @ObservationIgnored private var idleTimer: Task<Void, Never>?
     /// The core's judgement of the selected account's deployment, for the home deploy notice.
     var deployment: DeploymentState = .unknown
-    /// Locally recorded transactions for the selected account (WalletStore+Send.swift).
-    var activity: [ActivityRecord] = []
     /// Open transfer plans, closed on lock (defence in depth: the core refuses them anyway).
     var plans: [TransferPlan] = []
     /// When each pending record was last read (ms), so reconciliation keeps the extension's cadence.
@@ -58,9 +54,13 @@ final class WalletStore {
     let rpc = RpcClient()
     /// Wallet card, contacts, shared accounts, and Nostr coordination (public state only).
     @ObservationIgnored private(set) lazy var coordination = CoordinationStore(wallet: self)
+    /// Prices, tracked tokens, balances, and the account's one activity list (the core's log),
+    /// for Home, Activity and Send (mobile/docs/portfolio-activity.md).
+    let portfolio: PortfolioStore
 
     init(core: WalletCore) {
         self.core = core
+        portfolio = PortfolioStore(activity: core.activityBook())
         network = UserDefaults.standard.string(forKey: "network") == "sepolia" ? .sepolia : .mainnet
         security = core.securityStatus()
         route = core.status() == .noWallet ? .onboarding : .locked
@@ -138,16 +138,15 @@ final class WalletStore {
         plans = []
         observedAtMs = [:]
         deployment = .unknown
-        activity = []
         core.lock()
         refreshSecurity()
         coordination.reset()
+        portfolio.lock()
         pendingBackup = []
         records = []
         allRecords = []
         groups = []
         activeRecord = nil
-        balances = [:]
         tab = .home
         if core.status() != .noWallet { route = .locked }
     }
@@ -173,6 +172,7 @@ final class WalletStore {
         }
         BiometricKeychain.delete()
         lock()
+        portfolio.deleteFiles()
         route = .onboarding
     }
 
@@ -294,18 +294,40 @@ final class WalletStore {
         refreshSecurity()
     }
 
-    /// Reads the active account's balances; `reset` first clears the previous account's figures.
+    /// Reads the active account's balances through the portfolio (the one balance read: tracked
+    /// tokens, saved snapshots, prices). `reset` enters the account's scope, serving its saved
+    /// figures first; otherwise the read is forced, as pull-to-refresh and Retry ask.
     func refreshBalances(reset: Bool = false) async {
-        if reset { balances = [:] }
         guard let account = activeRecord else { return }
-        do {
-            balances = try await rpc.balances(of: account.address, on: networkInfo)
-            networkHealthy = true
-        } catch {
-            networkHealthy = false
+        if reset || portfolio.scope?.accountId != account.id {
+            await portfolio.load(account: account, network: networkInfo)
+        } else {
+            await portfolio.refresh(force: true)
         }
         await refreshSendState()
     }
+
+    /// Base units per symbol of the network's own tokens, from the portfolio's loaded balances
+    /// (Send's amount checks and the deploy notice). Empty until they have loaded.
+    var balances: [String: String] {
+        guard case let .loaded(view) = portfolio.balances else { return [:] }
+        var bySymbol: [String: String] = [:]
+        for token in networkInfo.tokens {
+            let id = tokenConfigId(network: network, symbol: token.symbol, address: token.address)
+            if let row = view.balances.first(where: { $0.token.id == id }) { bySymbol[token.symbol] = row.balance }
+        }
+        return bySymbol
+    }
+
+    /// Whether the last balance read answered (or saved figures are showing).
+    var networkHealthy: Bool {
+        if case .failed = portfolio.balances { return false }
+        return true
+    }
+
+    /// The active account's one activity list: this wallet's transactions and on-chain history,
+    /// as the core's log holds them (the same rows the Activity screen groups).
+    var activity: [ActivityEntry] { portfolio.activityView?.entries ?? [] }
 
     /// Base-unit balance formatted for display, or nil until it has loaded.
     func amount(of token: TokenInfo) -> String? {

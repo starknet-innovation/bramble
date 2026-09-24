@@ -12,6 +12,9 @@ use bramble_core::{
 };
 use serde_json::{json, Value};
 
+/// Readers for the extension-written portfolio parity fixture.
+pub mod portfolio;
+
 /// The repository's published E2E phrase; never holds funds.
 pub const PHRASE: &str =
     "habit hope tip crystal because grunt nation idea electric witness alert like";

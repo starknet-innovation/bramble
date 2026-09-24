@@ -39,21 +39,14 @@ import org.bramble.wallet.design.textStyle
 
 /**
  * `homeView()` from `portfolio/home-view.ts`, port of the iOS `HomeView`: hero total, the four
- * major actions (Send opens `SendScreen` for an OpenZeppelin account only), the token list. Mobile has no price source yet, so the total and fiat column read
- * "—", the side panel's prices-unavailable state (the `portfolio-activity` workstream fills them).
+ * major actions (Send opens `SendScreen` for an OpenZeppelin account only), and the token list,
+ * all from the portfolio store (prices, tracked tokens, the one balance read).
  */
 @Composable
 fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit) {
     val skin = LocalSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xl)) {
-        Text(
-            "—",
-            color = skin.text,
-            textAlign = TextAlign.Center,
-            style = textStyle(BrambleTypeScale.portfolio, BrambleWeight.heavy, BrambleTracking.amount),
-            modifier = Modifier.fillMaxWidth().padding(top = BrambleSpace.md)
-                .clearAndSetSemantics { contentDescription = "Portfolio total unavailable" },
-        )
+        org.bramble.wallet.portfolio.PortfolioHeroSection(store.portfolio)
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
             val active = store.activeRecord
             ActionTile("Send", BrambleIconName.SEND, enabled = active != null, modifier = Modifier.weight(1f)) {
@@ -72,12 +65,7 @@ fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit) {
                     BrambleIcon(BrambleIconName.MORE_HORIZONTAL, skin.muted)
                 }
             }
-            Column {
-                store.networkInfo.tokens.forEachIndexed { offset, token ->
-                    if (offset > 0) Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
-                    TokenRow(token, store.amount(token))
-                }
-            }
+            org.bramble.wallet.portfolio.PortfolioTokenList(store.portfolio)
         }
     }
 }
@@ -98,36 +86,15 @@ private fun ActionTile(title: String, icon: BrambleIconName, modifier: Modifier,
     }
 }
 
-/** `.token-row`: logo, symbol over amount (tabular digits), fiat value on the right. */
+/** Activity dock screen: the account's one activity list, read when due and while visible. */
 @Composable
-private fun TokenRow(token: TokenInfo, amount: String?) {
+fun ActivityScreen(store: WalletStore) {
     val skin = LocalSkin.current
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = BrambleSize.rowCompact).padding(horizontal = BrambleSpace.sm, vertical = BrambleSpace.md),
-        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TokenMark(token.address, token.symbol)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
-            Text(token.symbol, color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.semibold))
-            Text(amount ?: "…", color = skin.muted, style = textStyle(BrambleTypeScale.body).copy(fontFeatureSettings = "tnum"))
-        }
-        Text("—", color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.bold))
+    androidx.compose.runtime.LaunchedEffect(store.portfolio.scope?.accountId) {
+        store.portfolio.refreshActivity(force = false)
     }
-}
-
-/** Activity dock screen: no history yet, so the side panel's empty copy (for `portfolio-activity`). */
-@Composable
-fun ActivityScreen() {
-    val skin = LocalSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         Text("Activity", color = skin.text, style = textStyle(BrambleTypeScale.title, BrambleWeight.bold))
-        Text(
-            "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.",
-            color = skin.muted,
-            textAlign = TextAlign.Center,
-            style = textStyle(BrambleTypeScale.label),
-            modifier = Modifier.fillMaxWidth().padding(vertical = BrambleSpace.lg, horizontal = BrambleSpace.md),
-        )
+        org.bramble.wallet.portfolio.PortfolioActivity(store.portfolio)
     }
 }

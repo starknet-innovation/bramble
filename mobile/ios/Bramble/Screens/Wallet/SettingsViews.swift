@@ -26,7 +26,7 @@ struct SettingsHubView: View {
                 MenuRow(icon: .users, title: "Shared accounts") { open(.coordination(.sharedAccounts)) }
             }
             SettingsSection(title: "Preferences") {
-                MenuRow(icon: .settings, title: "Appearance", value: theme == .light ? "Light" : "Dark") { open(.appearance) }
+                MenuRow(icon: .settings, title: "Appearance & currency", value: "\(theme == .light ? "Light" : "Dark") · \(store.portfolio.currency.code)") { open(.appearance) }
             }
             SettingsSection(title: "Backup & recovery") {
                 MenuRow(icon: .lock, title: "Reveal recovery secrets", hint: "Asks for your passphrase first") { open(.reveal) }
@@ -181,10 +181,11 @@ struct AppearanceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleSpace.md) {
-            FlowHeader(title: "Appearance", subtitle: "How the wallet looks", network: store.networkLabel) { dismiss() }
+            FlowHeader(title: "Appearance & currency", subtitle: "How the wallet looks and values assets", network: store.networkLabel) { dismiss() }
             Eyebrow(text: "Theme")
             SegmentedControl(options: [("Dark", ThemeChoice.dark), ("Light", ThemeChoice.light)], selection: $theme)
                 .accessibilityIdentifier("theme-control")
+            CurrencySection()
             Spacer()
         }
         .padding(BrambleMetrics.Screen.shellPadding)

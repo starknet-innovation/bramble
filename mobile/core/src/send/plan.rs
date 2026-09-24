@@ -382,7 +382,10 @@ impl PlanState {
         let hash = crate::felt::canonical(&hash);
         SendStep::Finished {
             status,
-            explorer_url: super::explorer_transaction_url(self.account.network, hash.clone()),
+            explorer_url: crate::history::explorer::explorer_transaction_url(
+                self.account.network,
+                hash.clone(),
+            ),
             hash,
         }
     }

@@ -223,3 +223,50 @@ fn a_refused_deploy_write_leaves_no_activity_record() {
         .unwrap()
         .is_empty());
 }
+
+/// One activity list and store: a submitted transaction and an on-chain history row for the
+/// same account land in the same log, keyed by the account record id that `activity_account_id`
+/// builds, and the history merge promotes the pending row once the chain saw it.
+#[test]
+fn submitted_and_on_chain_rows_share_one_log() {
+    use bramble_core::{activity_account_id, ActivityEntry, ActivityKind, NetworkId};
+    let (_dir, core) = wallet();
+    let mut node = sepolia(true);
+    let plan = reviewed(&core, &mut node, ACCOUNT_1);
+    let step = plan.advance(StepReply::Confirm).unwrap();
+    run_until(&plan, &core, &mut node, step, |_, w| w);
+    let hash = latest_hash(&core);
+    let id = oz_id(&core, NetworkId::Sepolia, 0);
+    let record = core.active_account().unwrap().unwrap();
+    assert_eq!(
+        activity_account_id(NetworkId::Sepolia, record.address).unwrap(),
+        id
+    );
+    let incoming = ActivityEntry {
+        account_id: id.clone(),
+        amount: Some("2".into()),
+        counterparty: Some("0x123".into()),
+        failure_notice: None,
+        finalized_on_l1: None,
+        hash: "0x777".into(),
+        kind: ActivityKind::Transfer,
+        network: NetworkId::Sepolia,
+        not_found_count: None,
+        status: TxStatus::Accepted,
+        submitted_at: 1,
+        summary: "Received 2 STRK from 0x123".into(),
+        token: Some("STRK".into()),
+    };
+    let book = core.activity_book();
+    let view = book.scan_apply(id.clone(), NetworkId::Sepolia, vec![incoming], 2_000.0);
+    assert_eq!(view.entries.len(), 2);
+    let listed = core.activity(id.clone()).unwrap();
+    assert_eq!(
+        listed, view.entries,
+        "the send journey and the feed read the same list"
+    );
+    assert!(listed
+        .iter()
+        .any(|e| e.hash == hash && e.status == TxStatus::Pending));
+    assert_eq!(book.cached(id, NetworkId::Sepolia).entries, listed);
+}

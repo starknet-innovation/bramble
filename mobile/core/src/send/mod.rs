@@ -20,8 +20,7 @@ pub(crate) mod u256;
 mod wallet_ext;
 
 use crate::felt;
-use crate::networks::{self, NetworkId};
-use types::{ActivityRecord, DeploymentState, SendError};
+use types::{DeploymentState, SendError};
 
 /// `normalizeFeltInput` + `isStarkFieldElement`: the canonical felt for a typed or pasted
 /// address, or `None`. `0x0` is returned as the extension's field check returns it; the call
@@ -39,23 +38,12 @@ pub fn parse_token_amount(amount: String, decimals: u8) -> Result<String, SendEr
         .map_err(|reason| SendError::InvalidAmount { reason })
 }
 
-/// `explorerTransactionUrl`: the hash as given when it is a well-formed non-zero felt (the
-/// extension does not re-spell it), `None` otherwise, so no broken link is drawn.
-#[uniffi::export]
-pub fn explorer_transaction_url(network: NetworkId, hash: String) -> Option<String> {
-    felt::parse_non_zero(&hash)?;
-    Some(format!(
-        "{}/tx/{hash}",
-        networks::info(network).explorer_base_url
-    ))
-}
-
 /// Whether a recorded transaction is still due a status read at `now_ms` (the extension's
 /// fast-tier `isObservedAt`): pending or pre-confirmed and submitted less than an hour ago. Hosts
 /// reconcile only these, and at most once per `activity_observation_period_ms`.
 #[uniffi::export]
-pub fn activity_needs_observation(record: ActivityRecord, now_ms: u64) -> bool {
-    crate::activity::store::is_observed(record.status, record.submitted_at_ms, now_ms)
+pub fn activity_needs_observation(record: crate::ActivityEntry, now_ms: u64) -> bool {
+    crate::activity::store::is_observed(record.status, record.submitted_at, now_ms)
 }
 
 /// The extension's `FAST_OBSERVATION_PERIOD_MINUTES`, in milliseconds.

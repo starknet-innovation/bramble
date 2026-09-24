@@ -23,7 +23,7 @@ class BrambleApplication : Application() {
         super.onCreate()
         // noBackupFilesDir: app-private, excluded from backup and device transfer.
         val core = WalletCore(noBackupFilesDir.resolve("vault").absolutePath, DeviceClock(contentResolver))
-        store = WalletStore(core, getSharedPreferences("bramble", MODE_PRIVATE), BiometricVault(this), MainScope())
+        store = WalletStore(core, getSharedPreferences("bramble", MODE_PRIVATE), BiometricVault(this), MainScope(), noBackupFilesDir.resolve("portfolio"))
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) = store.lock()
             override fun onStart(owner: LifecycleOwner) = store.onForeground()

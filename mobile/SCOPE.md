@@ -134,6 +134,13 @@ Braavos signing.
 **Phase 2 — feature parity.** Token list and prices, activity history, private-key import,
 multisig, WalletConnect in place of the injected provider, STRK20 privacy (viewing keys stay in
 the core, as the extension's AGENTS.md rules require), Ledger over BLE.
+- *Done (portfolio-activity, iOS verified; Android source only, uncompiled):* fiat prices in
+  USD/EUR/GBP with the hero total and 24h change, per-token fiat and change, tracked/hidden
+  tokens with "Manage tokens · N not shown", add by contract, find held tokens, token chart, and
+  an Activity tab fed by the Starkscan lane or the RPC scan with explorer links. The saved-data,
+  prices-offline, balance-failed and history-unavailable states match the extension's stories.
+  All request building and response judging is in the core, byte-checked against the extension
+  by `bun run mobile:parity` (`mobile/docs/portfolio-activity.md`).
 
 *Phase 2 — delivered on `mobile/nostr-multisig`* (design and status: `docs/nostr-multisig.md`,
 `docs/nostr-multisig-status.md`). Nostr coordination key derived in the core (private key never

@@ -95,7 +95,8 @@ pub enum RpcPurpose {
     TransactionReceipt,
 }
 
-/// A transaction's chain status as the wallet reports it.
+/// A transaction's chain status as the wallet reports it: the extension's `TxStatus`, the one
+/// status for plans and activity rows alike.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum TxStatus {
     Pending,
@@ -218,23 +219,12 @@ pub struct SendFailure {
     pub hash: Option<String>,
 }
 
-/// Kind of a locally recorded transaction.
+/// What an activity row's transaction did: the extension's `ActivityEntry.kind`. The one kind
+/// for local and on-chain rows alike (`history::activity::ActivityEntry`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ActivityKind {
-    Transfer,
+    Declare,
     Deploy,
-}
-
-/// One locally recorded transaction; public on-chain data only.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct ActivityRecord {
-    pub hash: String,
-    pub kind: ActivityKind,
-    pub status: TxStatus,
-    pub summary: String,
-    pub amount: Option<String>,
-    pub counterparty: Option<String>,
-    pub token: Option<String>,
-    pub submitted_at_ms: u64,
-    pub explorer_url: Option<String>,
+    Invoke,
+    Transfer,
 }

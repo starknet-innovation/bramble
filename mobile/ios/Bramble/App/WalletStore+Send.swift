@@ -36,7 +36,7 @@ extension WalletStore {
         }
     }
 
-    /// Refreshes the deploy notice and the local activity, then settles pending records through
+    /// Refreshes the deploy notice and the activity list, then settles pending records through
     /// the core's status reconciliation (never signs; three not-found answers mark a record
     /// rejected). This is how a send whose reply was lost to backgrounding gets its outcome.
     /// Only records the core says are still observed (unresolved, under an hour old) are read,
@@ -47,7 +47,7 @@ extension WalletStore {
         let network = networkInfo
         // The deploy notice is for accounts this core can deploy; others never show it.
         deployment = sendRefusal == nil ? await rpc.deploymentState(of: account.address, on: network) : .unknown
-        activity = (try? core.activity(accountId: account.id)) ?? []
+        portfolio.reloadActivity()
         let now = UInt64(Date().timeIntervalSince1970 * 1000)
         let period = activityObservationPeriodMs()
         for record in activity where activityNeedsObservation(record: record, nowMs: now) {
@@ -56,6 +56,6 @@ extension WalletStore {
             guard let plan = try? core.refreshActivity(accountId: account.id, hash: record.hash) else { continue }
             _ = try? await SendDriver(plan: plan, network: network, transport: rpc.transport).run(from: .start)
         }
-        activity = (try? core.activity(accountId: account.id)) ?? activity
+        portfolio.reloadActivity()
     }
 }

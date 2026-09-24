@@ -128,7 +128,7 @@ fn run(core: &std::sync::Arc<WalletCore>, scenario: &Value) {
         .find(|r| r.hash == hash)
         .expect("pending record");
     assert_eq!(record.status, TxStatus::Pending);
-    assert_eq!(record.submitted_at_ms, NOW);
+    assert_eq!(record.submitted_at, NOW);
     if transfer {
         assert_eq!(record.summary, "Send 1.5 STRK to 0x3fa7…41a3");
         assert_eq!(record.amount.as_deref(), Some("1.5"));

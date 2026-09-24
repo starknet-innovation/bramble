@@ -92,6 +92,8 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/nostr-multisig-parity.json
         buildPhase: resources
+      - path: ../core/tests/fixtures/portfolio-parity.jsonl
+        buildPhase: resources
     dependencies:
       # Hosted in the app so `@testable import Bramble` reaches the Keychain, clock and copy code,
       # and the host-side account code (Clipboard, the discovery driver, routing).

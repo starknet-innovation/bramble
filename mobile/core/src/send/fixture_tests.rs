@@ -176,7 +176,10 @@ fn presentation_rules_match_the_extension() {
             "SN_MAIN" => NetworkId::Mainnet,
             _ => NetworkId::Sepolia,
         };
-        let url = super::explorer_transaction_url(network, case["hash"].as_str().unwrap().into());
+        let url = crate::history::explorer::explorer_transaction_url(
+            network,
+            case["hash"].as_str().unwrap().into(),
+        );
         assert_eq!(url.as_deref(), case["url"].as_str(), "{case}");
     }
     for case in presentation["feeText"].as_array().unwrap() {
