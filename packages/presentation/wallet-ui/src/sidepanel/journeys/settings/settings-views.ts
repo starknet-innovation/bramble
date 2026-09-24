@@ -40,7 +40,7 @@ export const settingsScreen = (
         ${walletMenuRow("account", "Accounts & groups", "wallet")}
         ${walletMenuRow("network", "Network", "globe", status.network)}
         ${walletMenuRow("address-book", "Address book", "book")}
-        ${walletMenuRow("multisigs", "Multisigs", "users")}
+        ${walletMenuRow("multisigs", "Multisig accounts", "users")}
       </div>
     </section>
     <section class="section">
@@ -160,7 +160,7 @@ export const securityFlow = (status: WalletStatus): string =>
       <div class="menu-list" role="group" aria-label="External access">
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
-        ${walletMenuRow("multisigs", "Multisigs", "users")}
+        ${walletMenuRow("multisigs", "Multisig accounts", "users")}
       </div>
     </section>
     <section class="section">

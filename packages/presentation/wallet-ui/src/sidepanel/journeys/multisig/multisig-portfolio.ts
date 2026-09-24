@@ -133,7 +133,7 @@ export const multisigPortfolio = (input: {
                   : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
-  <section class="home-tabs multisig-portfolio-tabs" aria-label="Multisig">
+  <section class="home-tabs multisig-portfolio-tabs" aria-label="Multisig account">
     <div class="tab-bar">
       <div class="tab-set" role="tablist" aria-label="Multisig sections">
         <button class="home-tab" id="multisig-tab-assets" data-ms-home-tab="assets" type="button" role="tab" aria-controls="multisig-panel-assets" aria-selected="true" tabindex="0">Tokens</button>

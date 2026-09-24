@@ -148,7 +148,7 @@ export const accountDrawer = (
               shared.length === 0
                 ? ""
                 : `<section class="drawer-folder drawer-shared">
-                    <p class="eyebrow">Multisigs</p>
+                    <p class="eyebrow">Multisig accounts</p>
                     <ul class="drawer-list">${shared
                       .map((view) =>
                         drawerMultisigRow(

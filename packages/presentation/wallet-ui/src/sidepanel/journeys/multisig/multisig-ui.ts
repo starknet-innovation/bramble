@@ -244,7 +244,7 @@ const preparedCall = (form: HTMLFormElement) => {
     );
     const balance = String(data.get("tokenBalance") ?? "");
     if (balance && amount > BigInt(balance)) {
-      throw new Error("Amount exceeds the shared account balance");
+      throw new Error("Amount exceeds the multisig account balance");
     }
     const call = buildErc20TransferCall(
       normalizeFeltInput(String(data.get("tokenAddress") ?? "")),

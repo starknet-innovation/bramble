@@ -156,7 +156,7 @@ export const multisigDeployFlow = (
   selectedMultisig: ArgentMultisigView | null = null,
 ): string => {
   const flowTitle =
-    selectedMultisig?.deployed === false ? "Complete multisig setup" : "Create multisig";
+    selectedMultisig?.deployed === false ? "Complete multisig setup" : "Create a multisig account";
   if (!account) {
     return flowHeader(flowTitle, status) + flowScreen("multisig-deploy", noAccountEmpty(status));
   }

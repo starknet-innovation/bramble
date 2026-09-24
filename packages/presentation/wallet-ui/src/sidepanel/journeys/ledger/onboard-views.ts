@@ -86,7 +86,7 @@ export const addAccountChooser = (): string => {
     <div class="add-account-chooser" role="group" aria-label="Add an account">
       ${chooserOption("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
       ${chooserOption("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.")}
-      ${chooserOption("multisig", "users", "Multisig account", "Create or add a shared account controlled by multiple signers.")}
+      ${chooserOption("multisig", "users", "Multisig account", "Create or add a multisig account controlled by multiple signers.")}
       ${chooserOption("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
     </div>
   </div>`;

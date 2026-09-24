@@ -98,7 +98,11 @@ export const multisigsFlow = (
     actionableArgentMultisigIntents(intents.filter((intent) => intent.accountId === record.id))
       .length;
   return (
-    flowHeader("Multisigs", status, `${scoped.length} account${scoped.length === 1 ? "" : "s"}`) +
+    flowHeader(
+      "Multisig accounts",
+      status,
+      `${scoped.length} account${scoped.length === 1 ? "" : "s"}`,
+    ) +
     flowScreen(
       "multisigs",
       `${
@@ -108,17 +112,17 @@ export const multisigsFlow = (
       }
       <section class="section">
         <div class="menu-list" role="group" aria-label="Ready multisig actions">
-          ${walletMenuRow("multisig-watch", "Add shared account", "plus")}
-          ${walletMenuRow("multisig-deploy", "Create a multisig", "users")}
+          ${walletMenuRow("multisig-watch", "Add multisig account", "plus")}
+          ${walletMenuRow("multisig-deploy", "Create a multisig account", "users")}
         </div>
       </section>
       <section class="section">
-        <p class="eyebrow">Multisigs</p>
+        <p class="eyebrow">Multisig accounts</p>
         ${
           account === null
             ? noAccountEmpty(status)
             : scoped.length === 0
-              ? emptyState("No multisigs are saved on this network yet.")
+              ? emptyState("No multisig accounts are saved on this network yet.")
               : `<ul class="allowance-list">${scoped.map((view) => multisigRow(view, openCount(view.record))).join("")}</ul>`
         }
         ${loadError ? button({ attributes: { id: "multisig-list-retry" }, label: "Retry" }) : ""}

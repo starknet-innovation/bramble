@@ -442,7 +442,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
               <code title="${escapeHtml(next.address)}">${escapeHtml(accountLabel(next.address))}</code>
               ${copyButton(next.address, "Copy predicted multisig address")}
             </div>
-            ${reviewPanel([], fundingRequired ? `Funding is required first. Send at least ${formatFeeEstimate(next.fee)} to the predicted address, then check again.` : "Deployment creates a new on-chain shared account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
+            ${reviewPanel([], fundingRequired ? `Funding is required first. Send at least ${formatFeeEstimate(next.fee)} to the predicted address, then check again.` : "Deployment creates a new on-chain multisig account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
             ${reviewConstraints(`Maximum network fee: ${formatFeeEstimate(next.fee)}`)}
             <details class="disclosure" data-disclosure="multisig-deployment-technical">
               <summary>

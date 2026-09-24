@@ -157,7 +157,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
     `<section class="section">
       ${account ? "" : noAccountEmpty(status)}
       <div class="multisig-setup-options" role="group" aria-label="Ready multisig setup">
-        ${setupOption("multisig-deploy", "users", "Create a multisig", "Set participants, fund, and deploy.")}
+        ${setupOption("multisig-deploy", "users", "Create a multisig account", "Set participants, fund, and deploy.")}
         ${setupOption("multisig-watch", "search", "Add a shared address", "Sync it or resume setup.")}
       </div>
     </section>`,
@@ -167,7 +167,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
  * Renders address-only discovery; authority is read from chain and matched locally.
  */
 export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Add shared account", status, "Sync or resume a Ready multisig") +
+  flowHeader("Add multisig account", status) +
   flowScreen(
     "multisig-watch",
     `<section class="section">
@@ -176,14 +176,13 @@ export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | nu
         ${textField({
           autocomplete: "off",
           className: "mono",
-          hint: "If deployed, signer authority syncs from Starknet. If not, the address is saved and deployment setup is verified before use.",
           label: "Multisig address",
           name: "address",
           placeholder: "0x…",
           required: true,
           spellcheck: false,
         })}
-        ${button({ disabled: account === null, label: "Add multisig", type: "submit" })}
+        ${button({ disabled: account === null, label: "Add multisig account", type: "submit" })}
         <p id="multisig-add-result" role="status"></p>
       </form>
     </section>`,

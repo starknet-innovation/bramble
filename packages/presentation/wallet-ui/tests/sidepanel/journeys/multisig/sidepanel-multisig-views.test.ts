@@ -433,7 +433,6 @@ describe("Argent frozen-intent composer", () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigWatchFlow(fixture.status, fixture.status.accounts[0] ?? null);
     expect(html).toContain('name="address"');
-    expect(html).toContain("If deployed, signer authority syncs from Starknet");
     expect(html).not.toContain('name="signerPublicKeys"');
     expect(html).not.toContain('name="signerAccountId"');
     expect(html).not.toContain('name="threshold"');
