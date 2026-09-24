@@ -317,6 +317,39 @@ describe("bindPickers", () => {
     wallet: wallet as unknown as ShellBindingDeps["wallet"],
   });
 
+  test("ignores a non-button carrying the network, and everything inside it", async () => {
+    // The Send form carries its own network for the explorer link. Binding on
+    // the attribute alone made every click inside it switch network and leave
+    // for settings, because the click bubbled to the form.
+    const container = mount(`
+      <form data-network-id="SN_SEPOLIA">
+        <button id="inner" type="button">Choose a recipient</button>
+      </form>
+      <p id="picker-result" role="status"></p>`);
+    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
+    const seen: string[] = [];
+    bindPickers(
+      makeDeps(
+        container,
+        {
+          setActiveNetwork: async (id: string) => {
+            seen.push(id);
+            return status;
+          },
+        },
+        sinks,
+      ),
+    );
+
+    click(container.querySelector("#inner"));
+    await tick();
+    click(container.querySelector("form"));
+    await tick();
+
+    expect(seen).toEqual([]);
+    expect(sinks.views).toEqual([]);
+  });
+
   test("switches the network, returns to settings, and re-renders", async () => {
     const container = mount(pickerMarkup);
     const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };

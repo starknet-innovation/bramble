@@ -141,7 +141,7 @@ const applyWorkingStatus = (form: HTMLFormElement, status: WorkingStatus): void 
  */
 const applySuccessHash = (form: HTMLFormElement, hash: string): void => {
   const link = form.querySelector<HTMLAnchorElement>("#send-success-hash-link");
-  const explorer = explorerTransactionUrl(form.dataset["networkId"] ?? "", hash);
+  const explorer = explorerTransactionUrl(form.dataset["sendNetwork"] ?? "", hash);
   if (link && explorer) {
     link.href = explorer;
   } else {

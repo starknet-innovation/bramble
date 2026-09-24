@@ -220,7 +220,10 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
   const { app, wallet, render, setActiveView } = deps;
   const result = app?.querySelector<HTMLElement>("#picker-result");
 
-  app?.querySelectorAll<HTMLButtonElement>("[data-network-id]").forEach((button) => {
+  // Buttons only. The attribute alone once matched a form that carried the
+  // network for its own reasons, and every click inside it bubbled up here —
+  // switching network and leaving for settings.
+  app?.querySelectorAll<HTMLButtonElement>("button[data-network-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const networkId = button.dataset["networkId"];
       if (!networkId || button.getAttribute("aria-pressed") === "true") {
