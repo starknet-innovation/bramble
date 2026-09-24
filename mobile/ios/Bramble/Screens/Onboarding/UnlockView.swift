@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// `.gate` unlock: the brand disc, "Welcome back", one passphrase field, Unlock at the foot, and
-/// the error toast the side panel raises on a wrong passphrase. With biometrics on, the system
-/// prompt starts once per appearance and a secondary button offers it again; the passphrase
+/// the error toast the side panel raises on a wrong passphrase. Laid out in the `.shell` padding
+/// with the `.gate` / `.gate-brand` / `.gate-head` / `.gate-cta` metrics. With biometrics on, the
+/// system prompt starts once per appearance and a secondary button offers it again; the passphrase
 /// always stays usable. While the core throttles attempts the button is disabled and the status
 /// line counts down (the core refuses early attempts regardless).
 struct UnlockView: View {
@@ -10,36 +11,48 @@ struct UnlockView: View {
     @Environment(\.skin) private var skin
     @State private var passphrase = ""
     @State private var failed = false
+    @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(spacing: BrambleSpace.lg) {
-            Image("BrandMark")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 34, height: 34)
-                .foregroundStyle(skin.accentText)
-                .frame(width: BrambleSize.brand, height: BrambleSize.brand)
-                .background(skin.accent, in: Circle())
-                .padding(.top, BrambleSpace.xl + BrambleSpace.xl)
-            VStack(spacing: BrambleSpace.sm) {
-                Text("Welcome back").brambleText(BrambleTypeScale.headline, weight: BrambleWeight.heavy, tracking: -0.035)
-                Text("Unlock your wallet to continue.").brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+        let gate = BrambleMetrics.Gate.self
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: gate.gap) {
+                    Image("BrandMark")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: gate.brandGlyph, height: gate.brandGlyph)
+                        .foregroundStyle(skin.accentText)
+                        .frame(width: gate.brandSize, height: gate.brandSize)
+                        .background(skin.accent, in: Circle())
+                        .padding(.top, gate.brandTop)
+                        .accessibilityHidden(true)
+                    VStack(spacing: gate.headGap) {
+                        Text("Welcome back")
+                            .brambleText(BrambleTypeStyle(size: gate.titleSize, lineHeight: gate.titleLineHeight), weight: gate.titleWeight, tracking: gate.titleTracking)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Unlock your wallet to continue.").brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+                    }
+                    .multilineTextAlignment(.center)
+                    VStack(spacing: gate.formGap) {
+                        BrambleField(placeholder: "Enter your passphrase", text: $passphrase, secure: true)
+                            .focused($focused)
+                            .submitLabel(.go)
+                            .onSubmit(unlock)
+                        status
+                    }
+                }
+                .padding(.top, gate.paddingTop)
+                .padding(BrambleMetrics.Screen.shellPadding)
             }
-            BrambleField(placeholder: "Enter your passphrase", text: $passphrase, secure: true)
-                .onSubmit(unlock)
+            .scrollDismissesKeyboard(.interactively)
+            .scrollBounceBehavior(.basedOnSize)
+            // `.gate-cta` (`margin-top: auto`): at the foot, above the keyboard while it is up. The
+            // biometric button sits above Unlock as the secondary action.
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 let remaining = remainingMs
-                VStack(spacing: BrambleSpace.sm) {
-                    if let notice = store.biometricNotice {
-                        StatusLine(text: notice, tone: .danger)
-                    }
-                    if remaining > 0 {
-                        StatusLine(text: throttledText(ms: remaining), tone: .danger)
-                    } else {
-                        StatusLine(text: failed ? BrambleCopy.incorrectPassphrase : nil, tone: .danger)
-                    }
-                    Spacer(minLength: 0)
+                VStack(spacing: gate.ctaGap) {
                     if store.security.biometricEnabled {
                         PillButton(biometricTitle, kind: .secondary, icon: .lockKeyhole) {
                             Task { await store.unlockWithBiometric() }
@@ -49,14 +62,32 @@ struct UnlockView: View {
                         .disabled(passphrase.isEmpty || remaining > 0)
                 }
             }
+            .padding(.top, gate.ctaTop)
+            .padding(BrambleMetrics.Screen.shellPadding)
         }
-        .padding(.horizontal, BrambleSpace.lg)
-        .padding(.bottom, BrambleSpace.lg)
         .background(skin.bg.ignoresSafeArea())
         .task {
             store.refreshSecurity()
             if store.security.biometricEnabled && store.biometricNotice == nil {
                 await store.unlockWithBiometric()
+            }
+        }
+    }
+
+    /// The biometric-invalidation notice, then either the throttle countdown or the wrong-passphrase
+    /// line, refreshed every second so the countdown ticks.
+    private var status: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            let remaining = remainingMs
+            VStack(spacing: BrambleMetrics.Gate.formGap) {
+                if let notice = store.biometricNotice {
+                    StatusLine(text: notice, tone: .danger)
+                }
+                if remaining > 0 {
+                    StatusLine(text: throttledText(ms: remaining), tone: .danger)
+                } else {
+                    StatusLine(text: failed ? BrambleCopy.incorrectPassphrase : nil, tone: .danger)
+                }
             }
         }
     }

@@ -15,7 +15,7 @@ struct WalletShell: View {
         @Bindable var store = store
         NavigationStack(path: $flows) {
             ScrollView {
-                VStack(alignment: .leading, spacing: BrambleSpace.lg) {
+                VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
                     WalletHeader(openAccounts: { accountsOpen = true })
                     switch store.tab {
                     case .home: HomeView(receive: { flows.append(.receive) })
@@ -23,12 +23,13 @@ struct WalletShell: View {
                     case .settings: SettingsHubView(open: { flows.append($0) })
                     }
                 }
-                .padding(.horizontal, BrambleSpace.lg)
-                .padding(.bottom, BrambleControl.dockItem + 12 + BrambleSpace.lg + BrambleSpace.lg)
+                .padding(BrambleMetrics.Screen.shellPadding)
+                // `.screen:not(.flow)`: clear the floating dock's footprint.
+                .padding(.bottom, BrambleMetrics.Dock.height + BrambleSpace.lg)
             }
             .refreshable { await store.refreshBalances() }
             .background(skin.bg.ignoresSafeArea())
-            .overlay(alignment: .bottom) { Dock(tab: $store.tab).padding(.bottom, BrambleSpace.sm) }
+            .overlay(alignment: .bottom) { Dock(tab: $store.tab).padding(.bottom, BrambleMetrics.Dock.offset) }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Flow.self) { flow in
                 Group {
@@ -43,48 +44,58 @@ struct WalletShell: View {
                 }
                 .toolbar(.hidden, for: .navigationBar)
                 .background(skin.bg.ignoresSafeArea())
+                // The hidden bar disables UIKit's interactive pop; restore the back swipe.
+                .edgeSwipeBack(enabled: flow != .reveal && !store.busy) { if !flows.isEmpty { flows.removeLast() } }
             }
         }
+        .brambleHaptic(.selection, trigger: store.selectedAccount)
         .sheet(isPresented: $accountsOpen) {
             SkinProvider { AccountsSheet() }.environment(store)
         }
     }
 }
 
-/// `.wallet-header`: avatar, account name with the drawer chevron, network status, actions.
+/// `.wallet-header`: avatar, account name with the drawer chevron, network status, actions. The
+/// extension's Connected sites button is absent: mobile has no dApp connections (recorded as an
+/// intentional difference).
 struct WalletHeader: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let openAccounts: () -> Void
 
     var body: some View {
-        HStack(spacing: BrambleSpace.md) {
+        let m = BrambleMetrics.WalletHeader.self
+        let name = "Account \((store.account?.index ?? 0) + 1)"
+        HStack(spacing: m.gap) {
             Button(action: openAccounts) {
-                HStack(spacing: BrambleSpace.md) {
+                HStack(spacing: m.triggerGap) {
                     AccountAvatarView(address: store.account?.address ?? "0x0")
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 4) {
-                            Text("Account \((store.account?.index ?? 0) + 1)")
-                                .brambleText(BrambleTypeScale.body, weight: BrambleWeight.bold)
+                    VStack(alignment: .leading, spacing: m.accountGap) {
+                        HStack(spacing: m.nameGap) {
+                            Text(name)
+                                .brambleText(BrambleTypeScale.body.sized(m.nameSize), weight: m.nameWeight)
                                 .lineLimit(1)
-                            BrambleIcon(.chevronDown, size: 12).foregroundStyle(skin.muted)
+                            BrambleIcon(.chevronDown, size: m.chevron).foregroundStyle(skin.muted)
                         }
-                        HStack(spacing: 6) {
-                            Circle().fill(store.networkHealthy ? skin.positive : skin.warning).frame(width: 6, height: 6)
-                            Text(store.networkLabel).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                        HStack(spacing: m.netGap) {
+                            StatusDot(healthy: store.networkHealthy, size: m.netDot)
+                            Text(store.networkLabel).brambleText(BrambleTypeScale.caption.sized(m.netSize)).foregroundStyle(skin.muted)
                         }
                     }
                 }
+                .padding(m.triggerPadding)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(FillPressStyle(fill: .clear, pressed: skin.softPress, shape: Capsule(), scale: 1))
             .accessibilityLabel("Accounts")
-            Spacer()
-            HStack(spacing: BrambleSpace.xs) {
-                IconButton(icon: .externalLink, label: "Open in explorer", tint: skin.muted) { openExplorer() }
+            .accessibilityValue("\(name), \(store.networkLabel)\(store.networkHealthy ? "" : ", network degraded")")
+            .accessibilityHint("Opens the account list")
+            Spacer(minLength: 0)
+            HStack(spacing: BrambleMetrics.HeaderActions.gap) {
+                IconButton(icon: .externalLink, label: "Open in explorer", hint: "Opens this account in the block explorer", tint: skin.muted) { openExplorer() }
                 IconButton(icon: .lock, label: "Lock wallet", tint: skin.muted) { store.lock() }
             }
         }
-        .padding(.top, BrambleSpace.sm)
+        .padding(m.padding)
     }
 
     private func openExplorer() {
@@ -95,33 +106,39 @@ struct WalletHeader: View {
     }
 }
 
-/// `.wallet-dock`: a floating pill of three 44pt items; the active one sits on accent-soft.
+/// `.wallet-dock`: a floating pill of 44pt items with the md elevation; the active one sits on
+/// accent-soft.
 struct Dock: View {
     @Environment(\.skin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var tab: WalletStore.Tab
 
     var body: some View {
-        HStack(spacing: BrambleSpace.md) {
+        let m = BrambleMetrics.Dock.self
+        HStack(spacing: m.gap) {
             item(.home, .home, "Home")
             item(.activity, .activity, "Activity")
             item(.settings, .settings, "Settings")
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, BrambleSpace.md)
+        .padding(m.padding)
         .background(skin.panel, in: Capsule())
-        .brambleShadow(BrambleShadow.md)
+        .elevation(BrambleElevation.dock)
+        // Chrome stops growing at accessibility sizes; content does not (design-mobile.md 4.2).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility3)
+        .brambleHaptic(.selection, trigger: tab)
     }
 
     private func item(_ target: WalletStore.Tab, _ icon: BrambleIconName, _ label: String) -> some View {
         let selected = tab == target
+        let size = BrambleMetrics.Dock.item
         return Button { tab = target } label: {
             BrambleIcon(icon, size: BrambleControl.dockIcon)
                 .foregroundStyle(selected ? skin.accent : skin.muted)
-                .frame(width: BrambleControl.dockItem, height: BrambleControl.dockItem)
+                .frame(width: size, height: size)
         }
-        .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: Circle(), scale: 0.96))
-        .animation(BrambleEase.standard.animation(ms: BrambleMotion.tabMs), value: selected)
+        .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: Circle(), scale: BramblePress.navItem))
+        .animation(BrambleMotionPolicy.animation(BrambleEase.standard.animation(ms: BrambleMotion.tabMs), reduceMotion: reduceMotion), value: selected)
         .accessibilityLabel(label)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }

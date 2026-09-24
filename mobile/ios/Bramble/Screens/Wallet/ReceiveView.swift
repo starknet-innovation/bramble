@@ -1,6 +1,5 @@
 import CoreImage.CIFilterBuiltins
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// `receive` from the activity-and-assets journey: QR card, full address, network line, copy.
 struct ReceiveView: View {
@@ -12,45 +11,61 @@ struct ReceiveView: View {
     var body: some View {
         let address = store.account?.address ?? ""
         let networkName = store.networkInfo.name
+        let m = BrambleMetrics.Receive.self
         ScrollView {
-            VStack(spacing: BrambleSpace.md) {
+            VStack(spacing: m.gap) {
                 FlowHeader(title: "Receive", network: store.networkLabel) { dismiss() }
-                if let image = qrCode(address) {
-                    Image(uiImage: image)
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 156, height: 156)
-                        .padding(BrambleSpace.lg + BrambleSpace.xs)
-                        // `.qr-card` pins the card to white in every skin so scanners read it.
-                        .background(.white, in: RoundedRectangle(cornerRadius: BrambleRadius.md, style: .continuous))
-                        .brambleShadow(BrambleShadow.md)
-                        .padding(.vertical, BrambleSpace.sm)
-                }
-                Text("Your Starknet address").brambleText(BrambleTypeScale.display, weight: BrambleWeight.bold, tracking: BrambleTracking.display)
-                Text(address)
-                    .brambleText(BrambleTypeScale.body, mono: true)
+                QRCard(text: address)
+                VStack(spacing: m.introGap) {
+                    Text("Your Starknet address")
+                        .brambleText(BrambleTypeScale.title.sized(m.titleSize), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(address)
+                        .brambleText(BrambleTypeStyle(size: BrambleTypeScale.mono.size, lineHeight: m.introLineHeight), mono: true)
+                        .multilineTextAlignment(.center)
+                        .textSelection(.enabled)
+                        .accessibilityLabel("Address \(address)")
+                    Group {
+                        (Text("Network: ") + Text(networkName).fontWeight(.semibold))
+                        Text("Only send \(networkName) assets to this address.")
+                    }
+                    .brambleText(BrambleTypeStyle(size: m.introSize, lineHeight: m.introLineHeight))
+                    .foregroundStyle(skin.muted)
                     .multilineTextAlignment(.center)
-                    .textSelection(.enabled)
-                (Text("Network: ").foregroundStyle(skin.muted) + Text(networkName).fontWeight(.semibold).foregroundStyle(skin.muted))
-                    .brambleText(BrambleTypeScale.label)
-                Text("Only send \(networkName) assets to this address.")
-                    .brambleText(BrambleTypeScale.label).foregroundStyle(skin.muted).multilineTextAlignment(.center)
-                PillButton(copied ? "Copied" : "Copy address", icon: .copy) {
-                    // Local-only and expiring: no Universal Clipboard hand-off.
-                    UIPasteboard.general.setItems(
-                        [[UTType.plainText.identifier: address]],
-                        options: [.localOnly: true, .expirationDate: Date().addingTimeInterval(120)]
-                    )
+                }
+                PillButton(copied ? "Copied" : "Copy address", icon: copied ? .check : .copy) {
+                    SecurePasteboard.copy(address)
                     copied = true
                 }
-                .padding(.top, BrambleSpace.sm)
+                .accessibilityHint("Copies the address to this device's clipboard for two minutes")
+                .brambleHaptic(.success, trigger: copied) { _, new in new }
             }
-            .padding(.horizontal, BrambleSpace.lg)
+            .padding(BrambleMetrics.Screen.shellPadding)
+        }
+    }
+}
+
+/// `.qr-card`: pinned to white in every skin so scanners read it, with the md elevation.
+struct QRCard: View {
+    let text: String
+
+    var body: some View {
+        let m = BrambleMetrics.QRCard.self
+        if let image = Self.qrCode(text) {
+            Image(uiImage: image)
+                .interpolation(.none)
+                .resizable()
+                .scaledToFit()
+                .padding(m.padding)
+                .frame(width: m.receiveWidth, height: m.receiveWidth)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: m.radius, style: .continuous))
+                .elevation(BrambleElevation.qrCard)
+                .accessibilityLabel("QR code of the address")
         }
     }
 
-    private func qrCode(_ text: String) -> UIImage? {
+    /// A QR code with its standard four-module quiet zone, rendered at 10× for crisp scaling.
+    static func qrCode(_ text: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(text.utf8)
         filter.correctionLevel = "M"

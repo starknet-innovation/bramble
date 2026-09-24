@@ -3,38 +3,60 @@ import SwiftUI
 
 /// `homeView()` from `portfolio/home-view.ts`: hero total, the four major actions, the token list.
 /// Mobile has no price source yet, so the total and fiat column read "—", exactly the side
-/// panel's prices-unavailable state; token amounts still show under each symbol.
+/// panel's prices-unavailable state; token amounts still show under each symbol. When no endpoint
+/// answers, the list becomes the extension's `.panel-error` with a retry.
 struct HomeView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
+    @State private var retrying = false
     let receive: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: BrambleSpace.xl) {
-            Text("—")
-                .brambleText(BrambleTypeScale.portfolio, weight: BrambleWeight.heavy, tracking: BrambleTracking.amount)
-                .frame(maxWidth: .infinity)
-                .padding(.top, BrambleSpace.md)
-                .accessibilityLabel("Portfolio total unavailable")
-            HStack(spacing: BrambleSpace.md) {
+        let hero = BrambleMetrics.Hero.self
+        VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
+            Placeholder(
+                style: BrambleTypeStyle(size: hero.totalSize, lineHeight: hero.totalLineHeight),
+                weight: hero.totalWeight,
+                accessibilityText: "Portfolio total unavailable"
+            )
+            .tracking(hero.totalSize * hero.totalTracking)
+            .frame(maxWidth: .infinity)
+            .padding(hero.padding)
+            HStack(spacing: BrambleMetrics.ActionRow.gap) {
                 ActionTile(title: "Send", icon: .send) {}.disabled(true)
                 ActionTile(title: "Swap", icon: .shuffle) {}.disabled(true)
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
                 ActionTile(title: "Shield", icon: .shield) {}.disabled(true)
             }
-            VStack(alignment: .leading, spacing: BrambleSpace.sm) {
+            VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("Tokens").brambleText(BrambleTypeScale.title, weight: BrambleWeight.bold)
+                    Text("Tokens")
+                        .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.HomeTab.fontSize), weight: BrambleMetrics.HomeTab.weight)
+                        .frame(minHeight: BrambleMetrics.HomeTab.height)
+                        .accessibilityAddTraits(.isHeader)
                     Spacer()
-                    BrambleIcon(.moreHorizontal).foregroundStyle(skin.muted).frame(width: BrambleControl.hit, height: BrambleControl.hit)
+                    BrambleIcon(.moreHorizontal).foregroundStyle(skin.muted)
+                        .frame(width: BrambleMetrics.IconButton.size, height: BrambleMetrics.IconButton.size)
+                        .accessibilityHidden(true)
                 }
-                VStack(spacing: 0) {
-                    ForEach(Array(store.networkInfo.tokens.enumerated()), id: \.element.address) { offset, token in
-                        TokenRow(token: token, amount: store.amount(of: token))
-                            .overlay(alignment: .top) {
-                                if offset > 0 { Rectangle().fill(skin.hairline).frame(height: 1) }
-                            }
+                if store.networkHealthy {
+                    VStack(spacing: 0) {
+                        ForEach(Array(store.networkInfo.tokens.enumerated()), id: \.element.address) { offset, token in
+                            TokenRow(token: token, amount: store.amount(of: token))
+                                .overlay(alignment: .top) {
+                                    if offset > 0 { Rectangle().fill(skin.hairline).frame(height: 1).accessibilityHidden(true) }
+                                }
+                        }
                     }
+                } else {
+                    ErrorPanel(message: "RPC endpoints unavailable", retryHint: "Retry loading balances", busy: retrying) {
+                        Task {
+                            retrying = true
+                            await store.refreshBalances()
+                            retrying = false
+                        }
+                    }
+                    .padding(.top, BrambleSpace.sm)
                 }
             }
         }
@@ -50,16 +72,20 @@ struct ActionTile: View {
     let action: () -> Void
 
     var body: some View {
+        let m = BrambleMetrics.ActionTile.self
         Button(action: action) {
-            VStack(spacing: BrambleSpace.xs) {
+            VStack(spacing: m.gap) {
                 BrambleIcon(icon, size: BrambleControl.majorIcon)
-                Text(title).brambleText(BrambleTypeScale.caption, weight: BrambleWeight.semibold)
+                Text(title).brambleText(BrambleTypeScale.body, weight: BrambleMetrics.Button.weight, tracking: BrambleMetrics.Button.tracking)
             }
             .foregroundStyle(skin.accent)
-            .frame(maxWidth: .infinity, minHeight: BrambleSize.actionTile)
+            .padding(m.padding)
+            .frame(maxWidth: .infinity, minHeight: m.height)
         }
-        .buttonStyle(FillPressStyle(fill: skin.accentSoft, pressed: skin.accentSoft.opacity(0.8), shape: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous), scale: 0.97))
+        .buttonStyle(FillPressStyle(fill: skin.accentSoft, pressed: skin.actionTilePress, shape: RoundedRectangle(cornerRadius: m.radius, style: .continuous), scale: BramblePress.actionTile))
         .opacity(enabled ? 1 : 0.4)
+        .accessibilityLabel(title)
+        .accessibilityHint(enabled ? "" : "Not available on mobile yet")
     }
 }
 
@@ -70,35 +96,30 @@ struct TokenRow: View {
     let amount: String?
 
     var body: some View {
-        HStack(spacing: BrambleSpace.md) {
+        let m = BrambleMetrics.TokenRow.self
+        HStack(spacing: m.gap) {
             TokenMark(address: token.address, symbol: token.symbol)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(token.symbol).brambleText(BrambleTypeScale.row, weight: BrambleWeight.semibold)
-                Text(amount ?? "…").brambleText(BrambleTypeScale.body).monospacedDigit().foregroundStyle(skin.muted)
+            VStack(alignment: .leading, spacing: m.copyGap) {
+                Text(token.symbol).brambleText(BrambleTypeScale.body.sized(m.symbolSize), weight: m.symbolWeight)
+                Text(amount ?? "…").brambleText(BrambleTypeScale.caption.sized(m.amountSize)).monospacedDigit().foregroundStyle(skin.muted)
             }
-            Spacer()
-            Text("—").brambleText(BrambleTypeScale.row, weight: BrambleWeight.bold)
+            Spacer(minLength: m.gap)
+            Text("—").brambleText(BrambleTypeScale.body, weight: m.valueWeight).monospacedDigit()
         }
-        .padding(.horizontal, BrambleSpace.sm)
-        .padding(.vertical, BrambleSpace.md)
-        .frame(minHeight: BrambleSize.rowCompact)
+        .padding(m.padding)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(token.symbol), \(amount ?? "loading"), value unavailable")
     }
 }
 
 /// Activity dock screen: mobile keeps no history yet, so it shows the side panel's empty copy.
 struct ActivityView: View {
-    @Environment(\.skin) private var skin
-
     var body: some View {
-        VStack(alignment: .leading, spacing: BrambleSpace.md) {
-            Text("Activity").brambleText(BrambleTypeScale.title, weight: BrambleWeight.bold)
-            Text("No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")
-                .brambleText(BrambleTypeScale.label)
-                .foregroundStyle(skin.muted)
-                .multilineTextAlignment(.center)
-                .padding(.vertical, BrambleSpace.lg)
-                .padding(.horizontal, BrambleSpace.md)
-                .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
+            Text("Activity")
+                .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.H2.size), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
+                .accessibilityAddTraits(.isHeader)
+            EmptyState(message: "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")
         }
     }
 }

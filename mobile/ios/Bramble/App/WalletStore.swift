@@ -20,8 +20,12 @@ final class WalletStore {
     var selectedAccount: UInt32 = 0
     /// Words of a just-created wallet; never persisted, cleared on finish or lock.
     private(set) var pendingBackup: [String] = []
-    /// A transient error shown as a toast.
+    /// A transient message shown as a toast: an error unless it was raised through `notify`.
     var toast: String?
+    /// The message `notify` raised last. Only while it is still the toast does the toast take the
+    /// success tone, so an error assigned over a notice is always shown as an error.
+    @ObservationIgnored private var notice: String?
+    var toastTone: ToastTone { toast != nil && toast == notice ? .success : .error }
     /// Lock, backoff and biometric state from the core (passive; never renews the session).
     private(set) var security: SecurityStatus
     /// When the next passphrase attempt is allowed, on the monotonic clock; nil when it is now.
@@ -45,6 +49,12 @@ final class WalletStore {
         route = core.status() == .noWallet ? .onboarding : .locked
         if route == .onboarding { BiometricKeychain.delete() }
         refreshSecurity()
+    }
+
+    /// Shows a confirmation (not an error) as the toast, in the success tone.
+    func notify(_ message: String) {
+        notice = message
+        toast = message
     }
 
     var networkInfo: NetworkInfo {

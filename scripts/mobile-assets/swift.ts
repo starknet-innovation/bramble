@@ -1,6 +1,8 @@
 /**
  * Renders `BrambleTokens.generated.swift`: skins (base and derived colours), the scale, motion,
- * spring and shadow tokens, and the icon / token-logo catalogues.
+ * spring and shadow tokens, and the icon / token-logo catalogues. The per-component layout read
+ * from the side panel stylesheet is rendered separately (`renderSwiftLayout`) to keep each file
+ * reviewable.
  */
 import { darkSkin } from "@bramble/ui-kit/dark-skin";
 import { defaultSkin } from "@bramble/ui-kit/default-skin";
@@ -19,6 +21,11 @@ import {
   WEIGHT,
 } from "@bramble/ui-kit/tokens";
 import { evaluateDerived, type parseDerivedColors } from "./colors";
+import { COMPONENT_COLORS, evaluateComponentColors } from "./component-colors";
+import type { CssRule } from "./css";
+import { renderSwiftElevation } from "./elevation";
+import { renderSwiftToast } from "./feedback";
+import { renderSwiftMetrics } from "./metrics";
 import {
   argbHex,
   bezier,
@@ -38,9 +45,10 @@ type Mixes = ReturnType<typeof parseDerivedColors>;
 const colorFields = (mixes: Mixes): readonly string[] => [
   ...SKIN_TOKENS.map(camel),
   ...mixes.map((m) => camel(`--bramble-${m.name}`)),
+  ...Object.keys(COMPONENT_COLORS),
 ];
 
-const skinValue = (skin: Skin, name: string, mixes: Mixes): string => {
+const skinValue = (skin: Skin, name: string, mixes: Mixes, rules: readonly CssRule[]): string => {
   const derived = evaluateDerived(skin, mixes);
   const values = [
     ...SKIN_TOKENS.map((token) => argbHex(hexRgba(skin.tokens[token]))),
@@ -51,6 +59,7 @@ const skinValue = (skin: Skin, name: string, mixes: Mixes): string => {
       }
       return argbHex(color);
     }),
+    ...evaluateComponentColors(rules, skin, mixes).map(([, color]) => argbHex(color)),
   ];
   const fields = colorFields(mixes);
   return [
@@ -74,22 +83,23 @@ const scale = (name: string, record: Readonly<Record<string, string>>): string[]
 ];
 
 /** The Swift token file. */
-export const renderSwift = (mixes: Mixes): string =>
+export const renderSwift = (mixes: Mixes, rules: readonly CssRule[]): string =>
   [
     `// ${HEADER}`,
     "import SwiftUI",
     "",
     "/// Skin contract from `ui-kit/src/theme/skin.ts`, plus the side panel's derived `color-mix`",
-    "/// surfaces evaluated per skin (`styles-base.ts`, `styles-tokens.ts`).",
+    "/// surfaces evaluated per skin (`styles-base.ts`, `styles-tokens.ts`), then the inline",
+    "/// component mixes (`component-colors.ts`).",
     "struct BrambleSkin: Equatable {",
     "    let name: String",
     ...colorFields(mixes).map((field) => `    let ${field}: Color`),
     "}",
     "",
     "extension BrambleSkin {",
-    skinValue(defaultSkin, "daylight", mixes),
+    skinValue(defaultSkin, "daylight", mixes, rules),
     "",
-    skinValue(darkSkin, "midnight", mixes),
+    skinValue(darkSkin, "midnight", mixes, rules),
     "}",
     "",
     "/// Scale tokens from `ui-kit/src/theme/tokens.ts`.",
@@ -140,6 +150,7 @@ export const renderSwift = (mixes: Mixes): string =>
     }),
     "}",
     "",
+
     swiftIconEnum(),
     "",
     "/// Bundled token logos from `portfolio/src/tokens/token-logos.ts`, keyed by 64-digit address.",
@@ -151,4 +162,18 @@ export const renderSwift = (mixes: Mixes): string =>
     "    ]",
     "}",
     "",
+  ].join("\n");
+
+/**
+ * The Swift layout file: breakpoints, per-component elevation and press scales, layout metrics
+ * read from the side panel stylesheet, and the toast behaviour read from `shared/dom.ts`.
+ */
+export const renderSwiftLayout = (rules: readonly CssRule[], toastSource: string): string =>
+  [
+    `// ${HEADER}`,
+    "import SwiftUI",
+    "",
+    ...renderSwiftElevation(rules),
+    ...renderSwiftMetrics(rules),
+    ...renderSwiftToast(toastSource),
   ].join("\n");

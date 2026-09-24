@@ -2,7 +2,8 @@
 import SwiftUI
 
 /// Skin contract from `ui-kit/src/theme/skin.ts`, plus the side panel's derived `color-mix`
-/// surfaces evaluated per skin (`styles-base.ts`, `styles-tokens.ts`).
+/// surfaces evaluated per skin (`styles-base.ts`, `styles-tokens.ts`), then the inline
+/// component mixes (`component-colors.ts`).
 struct BrambleSkin: Equatable {
     let name: String
     let accent: Color
@@ -33,6 +34,15 @@ struct BrambleSkin: Equatable {
     let dangerSoft: Color
     let hairline: Color
     let hairlineStrong: Color
+    let actionTilePress: Color
+    let tokenMark0Fill: Color
+    let tokenMark0Ink: Color
+    let tokenMark1Fill: Color
+    let tokenMark1Ink: Color
+    let tokenMark2Fill: Color
+    let tokenMark2Ink: Color
+    let tokenMark3Fill: Color
+    let tokenMark3Ink: Color
 }
 
 extension BrambleSkin {
@@ -65,7 +75,16 @@ extension BrambleSkin {
         positiveSoft: Color(argb: 0xFFE7EBE0),
         dangerSoft: Color(argb: 0xFFF4E6E6),
         hairline: Color(argb: 0x1F0E0F16),
-        hairlineStrong: Color(argb: 0x2E0E0F16)
+        hairlineStrong: Color(argb: 0x2E0E0F16),
+        actionTilePress: Color(argb: 0xFFD1D5F4),
+        tokenMark0Fill: Color(argb: 0xFFD7D8DB),
+        tokenMark0Ink: Color(argb: 0xFF58595A),
+        tokenMark1Fill: Color(argb: 0xFFDCDDE0),
+        tokenMark1Ink: Color(argb: 0xFF6D6D6E),
+        tokenMark2Fill: Color(argb: 0xFFE1E2E5),
+        tokenMark2Ink: Color(argb: 0xFF818183),
+        tokenMark3Fill: Color(argb: 0xFFE6E7EA),
+        tokenMark3Ink: Color(argb: 0xFF969697)
     )
 
     static let midnight = BrambleSkin(
@@ -97,7 +116,16 @@ extension BrambleSkin {
         positiveSoft: Color(argb: 0xFF1C2F23),
         dangerSoft: Color(argb: 0xFF312020),
         hairline: Color(argb: 0x1FF5F5F5),
-        hairlineStrong: Color(argb: 0x2EF5F5F5)
+        hairlineStrong: Color(argb: 0x2EF5F5F5),
+        actionTilePress: Color(argb: 0xFF484848),
+        tokenMark0Fill: Color(argb: 0xFF222222),
+        tokenMark0Ink: Color(argb: 0xFF878787),
+        tokenMark1Fill: Color(argb: 0xFF272727),
+        tokenMark1Ink: Color(argb: 0xFF9B9B9B),
+        tokenMark2Fill: Color(argb: 0xFF2C2C2C),
+        tokenMark2Ink: Color(argb: 0xFFAFAFAF),
+        tokenMark3Fill: Color(argb: 0xFF323232),
+        tokenMark3Ink: Color(argb: 0xFFC4C4C4)
     )
 }
 

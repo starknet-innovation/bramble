@@ -7,6 +7,12 @@ import Foundation
 struct RpcClient {
     enum Failure: Error { case unreachable }
 
+    #if DEBUG
+    /// Debug-only offline seam for UI tests (design-mobile.md section 6): set once by `BrambleApp`
+    /// when launched with `-uiTestOfflineFixtures`, before any client exists. Absent from Release.
+    nonisolated(unsafe) static var transportOverride: (any RpcTransport)?
+    #endif
+
     private let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 10
@@ -39,6 +45,9 @@ struct RpcClient {
     }
 
     private func post(_ body: String, to url: URL) async throws -> String {
+        #if DEBUG
+        if let transport = Self.transportOverride { return try await transport.post(body, to: url) }
+        #endif
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

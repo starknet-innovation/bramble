@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// `Unlock & auto-lock`: the extension's settings-flow layout (flow header, eyebrow sections, a
-/// status line). Biometric unlock is an Off/On segmented control, as Appearance uses, because the
+/// status line) in the `.shell` padding with the `.section` gap, like the other settings flows. Biometric unlock is an Off/On segmented control, as Appearance uses, because the
 /// ui-kit has no switch. Turning it on re-checks the passphrase in the core first; turning it off
 /// needs no key. Auto-lock is the extension's fixed policy, shown read-only.
 struct SecurityView: View {
@@ -21,24 +21,31 @@ struct SecurityView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: BrambleSpace.md) {
+            VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
                 FlowHeader(title: BrambleCopy.securityTitle, subtitle: BrambleCopy.securitySubtitle, network: store.networkLabel) { dismiss() }
-                Eyebrow(text: BrambleCopy.biometricEyebrow)
-                SegmentedControl(options: [("Off", false), ("On", true)], selection: $choice)
-                    .disabled(!BiometricKeychain.available && !store.security.biometricEnabled)
-                    .accessibilityIdentifier("biometric-choice")
-                if confirming {
-                    BrambleField(label: "Confirm vault passphrase", placeholder: "", text: $passphrase, secure: true)
-                    PillButton(fill(BrambleCopy.biometricEnable), icon: .lockKeyhole, busy: store.busy, action: enable)
-                        .disabled(passphrase.isEmpty || store.retryAt != nil)
+                // `.section`: each eyebrow sits over its controls at the section gap.
+                VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
+                    Eyebrow(text: BrambleCopy.biometricEyebrow)
+                    SegmentedControl(options: [("Off", false), ("On", true)], selection: $choice)
+                        .disabled(!BiometricKeychain.available && !store.security.biometricEnabled)
+                        .accessibilityIdentifier("biometric-choice")
+                    if confirming {
+                        BrambleField(label: "Confirm vault passphrase", placeholder: "", text: $passphrase, secure: true)
+                        PillButton(fill(BrambleCopy.biometricEnable), icon: .lockKeyhole, busy: store.busy, action: enable)
+                            .disabled(passphrase.isEmpty || store.retryAt != nil)
+                    }
+                    StatusLine(text: status, tone: !BiometricKeychain.available && !store.security.biometricEnabled ? .danger : .muted)
                 }
-                StatusLine(text: status, tone: !BiometricKeychain.available && !store.security.biometricEnabled ? .danger : .muted)
-                Eyebrow(text: BrambleCopy.autoLockEyebrow).padding(.top, BrambleSpace.sm)
-                DetailRow(icon: .lockKeyhole, text: fill(BrambleCopy.autoLockIdle))
-                DetailRow(icon: .lock, text: BrambleCopy.autoLockBackground)
+                VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
+                    Eyebrow(text: BrambleCopy.autoLockEyebrow)
+                    DetailRow(icon: .lockKeyhole, text: fill(BrambleCopy.autoLockIdle))
+                    DetailRow(icon: .lock, text: BrambleCopy.autoLockBackground)
+                }
             }
-            .padding(.horizontal, BrambleSpace.lg)
+            .padding(BrambleMetrics.Screen.shellPadding)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .scrollBounceBehavior(.basedOnSize)
         .onAppear {
             store.refreshSecurity()
             choice = store.security.biometricEnabled

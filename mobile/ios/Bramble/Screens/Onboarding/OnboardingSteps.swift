@@ -7,34 +7,42 @@ import SwiftUI
 /// `.onboarding-welcome`: wordmark lockup, two actions, the local-encryption note.
 struct WelcomeStep: View {
     @Environment(\.skin) private var skin
+    @Environment(\.deviceClass) private var device
     let create: () -> Void
     let recover: () -> Void
 
     var body: some View {
-        VStack(spacing: BrambleSpace.lg) {
-            Spacer()
-            Image("BrandWordmark")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 220)
-                .foregroundStyle(skin.text)
-                .accessibilityLabel("Bramble")
-            Spacer()
-            VStack(spacing: BrambleSpace.sm) {
-                PillButton("Create a new wallet", action: create)
-                PillButton("Add an existing wallet", kind: .secondary, action: recover)
+        let m = BrambleMetrics.Welcome.self
+        let insets = OnboardingInsets(device)
+        GeometryReader { proxy in
+            VStack(spacing: BrambleMetrics.Onboarding.gap) {
+                Image("BrandWordmark")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    // `width: min(60%, 220px)` of the step's content box.
+                    .frame(width: min((proxy.size.width - 2 * insets.inline) * m.wordmarkFraction, m.wordmarkWidth))
+                    .foregroundStyle(skin.text)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(minHeight: device.short ? m.lockupHeightShort : m.lockupHeight)
+                    .accessibilityLabel("Bramble")
+                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: m.actionsGap) {
+                    PillButton("Create a new wallet", action: create)
+                    PillButton("Add an existing wallet", kind: .secondary, action: recover)
+                }
+                HStack(spacing: m.noteGap) {
+                    BrambleIcon(.lock, size: m.noteGlyph)
+                    Text("Encrypted locally on this device").brambleText(BrambleTypeScale.caption.sized(m.noteSize))
+                }
+                .foregroundStyle(skin.muted)
+                .padding(.top, m.noteTop)
+                .accessibilityElement(children: .combine)
             }
-            HStack(spacing: 6) {
-                BrambleIcon(.lock, size: 13)
-                Text("Encrypted locally on this device").brambleText(BrambleTypeScale.caption)
-            }
-            .foregroundStyle(skin.muted)
-            .padding(.top, BrambleSpace.sm)
+            .padding(.horizontal, insets.inline)
+            .padding(.top, m.paddingTop)
+            .padding(.bottom, insets.bottom)
         }
-        .padding(.horizontal, 28)
-        .padding(.top, 26)
-        .padding(.bottom, 30)
     }
 }
 
@@ -44,7 +52,7 @@ struct ImportMethodStep: View {
 
     var body: some View {
         OnboardingStep(back: back, icon: .wallet, title: "Choose how to add your wallet", lede: "Bring an existing Starknet wallet into Bramble.") {
-            VStack(spacing: BrambleSpace.md) {
+            VStack(spacing: BrambleMetrics.Onboarding.fieldsGap) {
                 OptionCard(icon: .book, title: "Recovery phrase", detail: "Import 12 or 24 recovery words from another wallet.", action: recoveryPhrase)
                 OptionCard(icon: .shield, title: "Ledger hardware wallet", detail: "Coming to Bramble mobile.") {}
                     .disabled(true)
@@ -71,6 +79,7 @@ struct RecoveryPhraseStep: View {
                 words = Array(repeating: "", count: words.count == 12 ? 24 : 12)
             }
             .buttonStyle(InlineActionStyle())
+            .hitTarget(height: BrambleMetrics.InlineAction.height)
         } cta: {
             PillButton("Continue") {
                 let phrase = words.joined(separator: " ")
@@ -88,10 +97,11 @@ struct InlineActionStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .brambleText(BrambleTypeScale.caption, weight: BrambleWeight.semibold)
+            .brambleText(BrambleTypeScale.caption.sized(BrambleMetrics.InlineAction.fontSize), weight: BrambleMetrics.Button.weight, tracking: BrambleMetrics.Button.tracking)
             .foregroundStyle(configuration.isPressed ? skin.text : skin.muted)
-            .frame(minHeight: 36)
-            .padding(.horizontal, BrambleSpace.md)
+            .padding(BrambleMetrics.InlineAction.padding)
+            .frame(minHeight: BrambleMetrics.InlineAction.height)
+            .background(configuration.isPressed ? skin.hover : .clear, in: Capsule())
     }
 }
 
@@ -104,15 +114,23 @@ struct PassphraseStep: View {
     @State private var passphrase = ""
     @State private var confirmation = ""
     @State private var weakAcknowledged = false
+    @FocusState private var focus: Field?
+
+    private enum Field { case passphrase, confirmation }
 
     var body: some View {
         let strength = passphraseStrength(passphrase: passphrase)
         let matches = strength.acceptable && !confirmation.isEmpty && passphrase == confirmation
         OnboardingStep(back: back, icon: .lock, title: "Create your vault passphrase", lede: "You will use this to unlock Bramble on this device.") {
-            VStack(spacing: BrambleSpace.md) {
+            VStack(spacing: BrambleMetrics.Onboarding.fieldsGap) {
                 BrambleField(label: "Vault passphrase", placeholder: "At least 8 characters", text: $passphrase, secure: true,
                              hint: "Use at least 8 characters; 12 or more is safer. This unlocks the encrypted vault on this device.")
+                    .focused($focus, equals: .passphrase)
+                    .submitLabel(.next)
+                    .onSubmit { focus = .confirmation }
                 BrambleField(label: "Confirm passphrase", placeholder: "Enter it again", text: $confirmation, secure: true)
+                    .focused($focus, equals: .confirmation)
+                    .submitLabel(.done)
                 PassphraseMeter(strength: strength, status: meterStatus(strength, matches: matches), ready: matches)
                 if strength.needsAcknowledgement {
                     CheckRow(text: "This passphrase is weak. I understand it is all that protects this wallet on this device.", isOn: $weakAcknowledged)
@@ -142,6 +160,7 @@ struct PassphraseStep: View {
 /// `.password-requirement`: a 4pt track filled by the meter ratio in the band's colour.
 struct PassphraseMeter: View {
     @Environment(\.skin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let strength: PassphraseStrength
     let status: String
     let ready: Bool
@@ -156,16 +175,21 @@ struct PassphraseMeter: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: BrambleMetrics.Meter.gap) {
             GeometryReader { proxy in
                 Capsule().fill(skin.elevated)
                     .overlay(alignment: .leading) {
                         Capsule().fill(fill).frame(width: proxy.size.width * strength.ratio)
                     }
             }
-            .frame(height: 4)
-            .animation(BrambleEase.out.animation(ms: BrambleMotion.enterMs), value: strength.ratio)
-            Text(status).brambleText(BrambleTypeScale.caption).foregroundStyle(ready ? skin.positive : skin.muted)
+            .frame(height: BrambleMetrics.Meter.barHeight)
+            .animation(BrambleMotionPolicy.animation(BrambleEase.out.animation(ms: BrambleMotion.enterMs), reduceMotion: reduceMotion), value: strength.ratio)
+            .accessibilityHidden(true)
+            Text(status)
+                .brambleText(BrambleTypeScale.caption.sized(BrambleMetrics.Meter.fontSize))
+                .foregroundStyle(ready ? skin.positive : skin.muted)
+                .accessibilityLabel("Passphrase strength: \(status)")
+                .accessibilityAddTraits(.updatesFrequently)
         }
     }
 }
@@ -173,6 +197,7 @@ struct PassphraseMeter: View {
 /// `#account-preview` with the Mainnet acknowledgement: confirm the derived public address.
 struct ReviewAccountStep: View {
     @Environment(\.skin) private var skin
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(WalletStore.self) private var store
     let network: NetworkId
     let next: () -> Void
@@ -182,28 +207,36 @@ struct ReviewAccountStep: View {
 
     var body: some View {
         OnboardingStep(icon: .wallet, title: "Review your account", lede: "Confirm the derived public address, then add it to this wallet.") {
-            VStack(spacing: BrambleSpace.md) {
+            VStack(spacing: BrambleMetrics.Onboarding.fieldsGap) {
+                let option = BrambleMetrics.OnboardingOption.self
                 Button { selected.toggle() } label: {
-                    HStack(spacing: BrambleSpace.md) {
-                        if let address = account?.address {
-                            AccountAvatarView(address: address, size: 40)
-                        } else {
-                            Circle().fill(skin.panel).frame(width: 40, height: 40)
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Primary Bramble account").brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
+                    HStack(spacing: option.gap) {
+                        // `.onboarding-account-avatar`: the account's two-digit position.
+                        Text(String(format: "%02d", Int(account?.index ?? 0) + 1))
+                            .brambleText(BrambleTypeScale.caption, weight: BrambleWeight.bold)
+                            .frame(width: option.iconSize, height: option.iconSize)
+                            .background(skin.panel, in: Circle())
+                        VStack(alignment: .leading, spacing: option.copyGap) {
+                            Text("Primary Bramble account").brambleText(BrambleTypeScale.body.sized(option.titleSize), weight: option.titleWeight)
                             Text(account.map { shortAddress($0.address) } ?? "Deriving account…")
-                                .brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
+                                .brambleText(BrambleTypeStyle(size: option.detailSize, lineHeight: option.detailLineHeight), weight: BrambleMetrics.Button.weight)
+                                .foregroundStyle(selected ? skin.text : skin.muted)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        BrambleIcon(.check, size: 17).foregroundStyle(skin.bg)
-                            .frame(width: 40, height: 40).background(skin.text, in: Circle())
-                            .opacity(selected ? 1 : 0).scaleEffect(selected ? 1 : 0.92)
+                        BrambleIcon(.check, size: BrambleMetrics.OnboardingAccount.checkGlyph).foregroundStyle(skin.bg)
+                            .frame(width: option.iconSize, height: option.iconSize).background(skin.text, in: Circle())
+                            .opacity(selected ? 1 : 0).scaleEffect(reduceMotion || selected ? 1 : 0.92)
                     }
-                    .padding(BrambleSpace.md)
-                    .frame(minHeight: 76)
+                    .padding(option.padding)
+                    .frame(minHeight: BrambleMetrics.OnboardingAccount.height)
                 }
-                .buttonStyle(FillPressStyle(fill: selected ? skin.softPress : skin.elevated, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous)))
+                .buttonStyle(FillPressStyle(fill: selected ? skin.softPress : skin.elevated, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: option.radius, style: .continuous)))
+                .elevation(selected ? BrambleElevation.onboardingAccountSelected : nil)
+                .animation(BrambleMotionPolicy.animation(BrambleEase.out.animation(ms: BrambleMotion.liftMs), reduceMotion: reduceMotion), value: selected)
+                .accessibilityLabel("Primary Bramble account, \(account.map { shortAddress($0.address) } ?? "deriving account")")
+                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                .accessibilityHint("Selects this account to add")
+                .brambleHaptic(.selection, trigger: selected)
                 if network == .mainnet {
                     CheckRow(text: "I understand this wallet can hold real funds on Starknet Mainnet.", isOn: $acknowledged)
                 }
@@ -227,7 +260,7 @@ struct SavePhraseStep: View {
 
     var body: some View {
         OnboardingStep(icon: .book, title: "Save your recovery phrase", lede: "Write these words down in order and keep them offline.") {
-            VStack(alignment: .leading, spacing: BrambleSpace.md) {
+            VStack(alignment: .leading, spacing: BrambleMetrics.Onboarding.fieldsGap) {
                 ProtectedWordGrid(words: words, masked: !revealed || captured)
                 PillButton(revealed ? "Hide recovery phrase" : "Show recovery phrase", kind: .secondary, icon: .book) { revealed.toggle() }
                 Text("Anyone with these words controls the wallet. Bramble cannot recover them for you.")
@@ -251,6 +284,7 @@ struct ConfirmBackupStep: View {
     let back: () -> Void
     let next: () -> Void
     @State private var answers = ["", "", ""]
+    @FocusState private var focus: Int?
 
     /// `verifyBackupWords`: trimmed, case-insensitive, every checked position.
     private var confirmed: Bool {
@@ -262,10 +296,13 @@ struct ConfirmBackupStep: View {
 
     var body: some View {
         OnboardingStep(back: back, icon: .shield, title: "Confirm your backup", lede: "Enter the requested words to make sure your offline copy is accurate.") {
-            VStack(alignment: .leading, spacing: BrambleSpace.md) {
-                HStack(spacing: BrambleSpace.sm) {
+            VStack(alignment: .leading, spacing: BrambleMetrics.Onboarding.fieldsGap) {
+                HStack(spacing: BrambleMetrics.Recovery.gridGap) {
                     ForEach(Array(backupVerifyPositions.enumerated()), id: \.offset) { index, position in
                         BrambleField(label: "Word \(position)", placeholder: "", text: $answers[index])
+                            .focused($focus, equals: index)
+                            .submitLabel(index == backupVerifyPositions.count - 1 ? .done : .next)
+                            .onSubmit { focus = index + 1 < backupVerifyPositions.count ? index + 1 : nil }
                     }
                 }
                 StatusLine(text: confirmed ? "Backup confirmed." : "Enter the requested words to continue.")
@@ -276,29 +313,41 @@ struct ConfirmBackupStep: View {
     }
 }
 
-/// `onboardingComplete()`: check mark, eyebrow, heading, the two custody details, one action.
+/// `onboardingComplete()`: check mark, eyebrow, heading, the two custody details, one action,
+/// centred on the full-bleed complete card (`.onboarding-complete`).
 struct CompleteStep: View {
     @Environment(\.skin) private var skin
     let open: () -> Void
 
     var body: some View {
-        VStack(spacing: BrambleSpace.lg) {
-            Spacer()
-            BrambleIcon(.check, size: 28).foregroundStyle(skin.accentText)
-                .frame(width: 64, height: 64).background(skin.positive, in: Circle())
-            VStack(spacing: BrambleSpace.sm) {
-                Eyebrow(text: "Setup complete")
-                Text("You’re all set").brambleText(BrambleTypeScale.headline, weight: BrambleWeight.heavy, tracking: -0.035)
-                Text("Your account is ready in Bramble. Receive assets, or deploy when you’re ready.")
-                    .brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted).multilineTextAlignment(.center)
+        let gate = BrambleMetrics.Gate.self
+        let complete = BrambleMetrics.Complete.self
+        GeometryReader { proxy in
+        ScrollView {
+            VStack(spacing: gate.gap) {
+                BrambleIcon(.check, size: gate.brandGlyph).foregroundStyle(skin.accentText)
+                    .frame(width: gate.brandSize, height: gate.brandSize).background(skin.positive, in: Circle())
+                    .accessibilityHidden(true)
+                VStack(spacing: gate.headGap) {
+                    Eyebrow(text: "Setup complete")
+                    Text("You’re all set")
+                        .brambleText(BrambleTypeStyle(size: gate.titleSize, lineHeight: gate.titleLineHeight), weight: gate.titleWeight, tracking: BrambleMetrics.Onboarding.titleTracking)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Your account is ready in Bramble. Receive assets, or deploy when you’re ready.")
+                        .brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted).multilineTextAlignment(.center)
+                }
+                VStack(spacing: complete.detailsGap) {
+                    DetailRow(icon: .lock, text: "Vault encrypted locally on this device")
+                    DetailRow(icon: .shield, text: "Recovery and signing material stay behind the wallet boundary")
+                }
+                .frame(maxWidth: complete.detailsWidth)
+                PillButton("Open Bramble", action: open).frame(maxWidth: complete.actionsWidth)
             }
-            VStack(spacing: BrambleSpace.sm) {
-                DetailRow(icon: .lock, text: "Vault encrypted locally on this device")
-                DetailRow(icon: .shield, text: "Recovery and signing material stay behind the wallet boundary")
-            }
-            PillButton("Open Bramble", action: open)
-            Spacer()
+            .padding(complete.padding)
+            .frame(maxWidth: .infinity, minHeight: proxy.size.height)
         }
-        .padding(.horizontal, 32)
+        .scrollBounceBehavior(.basedOnSize)
+        }
+        .elevation(BrambleElevation.onboardingCompletePhone)
     }
 }

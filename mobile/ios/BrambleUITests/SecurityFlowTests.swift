@@ -11,12 +11,11 @@ import XCTest
 /// runner (it shares the simulator's notification centre). Sign the build ad hoc
 /// (`CODE_SIGN_IDENTITY=-`): an unsigned app cannot use the data-protection Keychain.
 final class SecurityFlowTests: XCTestCase {
-    private let phrase = "habit hope tip crystal because grunt nation idea electric witness alert like"
-    private let passphrase = "ui test passphrase"
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
-    override func setUp() {
+    override func setUpWithError() throws {
         continueAfterFailure = false
+        try UITest.refuseRealPhrase()
     }
 
     // MARK: Simulator biometrics
@@ -44,28 +43,11 @@ final class SecurityFlowTests: XCTestCase {
         add(attachment)
     }
 
-    private func type(_ text: String, into field: XCUIElement) {
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "\(field) exists")
-        field.tap()
-        field.typeText(text)
-    }
-
-    private func tap(_ element: XCUIElement, timeout: TimeInterval = 10) {
-        XCTAssertTrue(element.waitForExistence(timeout: timeout), "\(element) exists")
-        element.tap()
-    }
-
-    private func launch(_ app: XCUIApplication = XCUIApplication()) -> XCUIApplication {
-        app.launchArguments = ["-network", "sepolia"]
-        app.launch()
-        return app
-    }
-
     /// Brings the app back to first run. A wallet left behind by another UI suite (they all use
     /// the same test passphrase) is unlocked and removed through the real removal path, so this
     /// suite passes whether it runs alone or after OnboardingFlowTests.
     private func launchAtFirstRun() -> XCUIApplication {
-        let app = launch()
+        let app = UITest.launch()
         let fresh = app.buttons["Create a new wallet"]
         let locked = app.secureTextFields["Enter your passphrase"]
         let deadline = Date().addingTimeInterval(15)
@@ -76,12 +58,12 @@ final class SecurityFlowTests: XCTestCase {
         let cancel = springboard.buttons["Cancel"]
         if cancel.waitForExistence(timeout: 3) { cancel.tap() }
         let unlock = app.buttons["Unlock"]
-        type(passphrase, into: locked)
+        UITest.type(UITest.passphrase, into: locked)
         waitUntilEnabled(unlock, timeout: 90)
         unlock.tap()
         XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20),
                       "a leftover wallet uses a passphrase other than the suite's; uninstall Bramble from Bramble Workflow")
-        removeWallet(app)
+        UITest.removeWallet(app)
         return app
     }
 
@@ -89,46 +71,31 @@ final class SecurityFlowTests: XCTestCase {
     private func onboardByPaste() -> XCUIApplication {
         let app = launchAtFirstRun()
         XCTAssertTrue(app.buttons["Create a new wallet"].waitForExistence(timeout: 10), "first run")
-        tap(app.buttons["Add an existing wallet"])
-        tap(app.buttons["Recovery phrase"])
-        UIPasteboard.general.string = phrase
+        UITest.tap(app.buttons["Add an existing wallet"])
+        UITest.tap(app.buttons["Recovery phrase"])
+        UIPasteboard.general.string = UITest.publicPhrase
         let first = app.textFields["Word 1"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         first.tap()
         first.press(forDuration: 1.2)
-        tap(app.menuItems["Paste"].firstMatch, timeout: 5)
+        UITest.tap(app.menuItems["Paste"].firstMatch)
         XCTAssertTrue(app.staticTexts["Clipboard cleared"].waitForExistence(timeout: 5))
         XCTAssertFalse(UIPasteboard.general.hasStrings, "the pasted phrase no longer sits on the clipboard")
         snapshot(app, "import-pasted")
-        tap(app.buttons["Continue"])
-        type(passphrase, into: app.secureTextFields["Vault passphrase"])
-        type(passphrase, into: app.secureTextFields["Confirm passphrase"])
-        tap(app.buttons["Find your accounts"])
+        UITest.tap(app.buttons["Continue"])
+        UITest.type(UITest.passphrase, into: app.secureTextFields["Vault passphrase"])
+        UITest.type(UITest.passphrase, into: app.secureTextFields["Confirm passphrase"])
+        UITest.tap(app.buttons["Find your accounts"])
         XCTAssertTrue(app.staticTexts["Review your account"].waitForExistence(timeout: 20))
-        tap(app.buttons["Add selected account"])
-        tap(app.buttons["Open Bramble"])
+        UITest.tap(app.buttons["Add selected account"])
+        UITest.tap(app.buttons["Open Bramble"])
         XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20))
         return app
     }
 
     private func openSecurity(_ app: XCUIApplication) {
-        tap(app.buttons["Settings"])
-        tap(app.buttons["Unlock & auto-lock"])
-    }
-
-    private func removeWallet(_ app: XCUIApplication) {
-        tap(app.buttons["Settings"])
-        app.swipeUp()
-        tap(app.buttons["Remove wallet from this device"])
-        type(passphrase, into: app.secureTextFields["Confirm vault passphrase"])
-        tap(app.buttons["Remove wallet"])
-        XCTAssertTrue(app.buttons["Create a new wallet"].waitForExistence(timeout: 10), "back to first run")
-    }
-
-    private func unlockWithPassphrase(_ app: XCUIApplication) {
-        type(passphrase, into: app.secureTextFields["Enter your passphrase"])
-        tap(app.buttons["Unlock"])
-        XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20))
+        UITest.tap(app.buttons["Settings"])
+        UITest.tap(app.buttons["Unlock & auto-lock"])
     }
 
     private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval = 20) {
@@ -143,17 +110,17 @@ final class SecurityFlowTests: XCTestCase {
         let app = onboardByPaste()
 
         // Dark is the default on a fresh install.
-        tap(app.buttons["Settings"])
-        tap(app.buttons["Appearance"])
+        UITest.tap(app.buttons["Settings"])
+        UITest.tap(app.buttons["Appearance"])
         XCTAssertTrue(app.buttons["Dark"].isSelected)
-        tap(app.buttons["Back"])
+        UITest.tap(app.buttons["Back"])
 
         // Turn Face ID on: the passphrase is re-checked first.
-        tap(app.buttons["Unlock & auto-lock"])
+        UITest.tap(app.buttons["Unlock & auto-lock"])
         XCTAssertTrue(app.staticTexts["After 30 minutes idle"].exists)
-        tap(app.buttons["On"])
-        type(passphrase, into: app.secureTextFields["Confirm vault passphrase"])
-        tap(app.buttons["Turn on Face ID"])
+        UITest.tap(app.buttons["On"])
+        UITest.type(UITest.passphrase, into: app.secureTextFields["Confirm vault passphrase"])
+        UITest.tap(app.buttons["Turn on Face ID"])
         // First use asks for the Face ID permission, then the face itself.
         let allow = springboard.alerts.buttons["Allow"].exists ? springboard.alerts.buttons["Allow"] : app.alerts.buttons["Allow"]
         if allow.waitForExistence(timeout: 5) { allow.tap() } else if springboard.buttons["Allow"].exists { springboard.buttons["Allow"].tap() }
@@ -161,36 +128,36 @@ final class SecurityFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Face ID will unlock this wallet. Your passphrase still works and is still needed to reveal secrets."]
             .waitForExistence(timeout: 20))
         snapshot(app, "security-on")
-        tap(app.buttons["Back"])
+        UITest.tap(app.buttons["Back"])
 
         // 1. A matching face unlocks.
-        tap(app.buttons["Lock wallet"].firstMatch)
+        UITest.tap(app.buttons["Lock wallet"].firstMatch)
         XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
         face(matching: true)
         XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20), "Face ID opened the wallet")
 
         // 2. A non-matching face leaves the passphrase usable and keeps the slot.
-        tap(app.buttons["Lock wallet"].firstMatch)
+        UITest.tap(app.buttons["Lock wallet"].firstMatch)
         XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
         face(matching: false)
         let cancel = springboard.buttons["Cancel"]
         if cancel.waitForExistence(timeout: 5) { cancel.tap() }
         XCTAssertTrue(app.buttons["Unlock with Face ID"].waitForExistence(timeout: 5), "the slot is kept")
         snapshot(app, "unlock-after-no-match")
-        unlockWithPassphrase(app)
-        tap(app.buttons["Settings"])
+        UITest.unlock(app)
+        UITest.tap(app.buttons["Settings"])
         XCTAssertEqual(app.buttons["Unlock & auto-lock"].value as? String, "Face ID on")
 
         // 5. Reveal still needs the passphrase and offers no copy.
-        tap(app.buttons["Reveal recovery secrets"])
+        UITest.tap(app.buttons["Reveal recovery secrets"])
         XCTAssertTrue(app.secureTextFields["Confirm vault passphrase"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Copy recovery phrase"].exists)
-        type(passphrase, into: app.secureTextFields["Confirm vault passphrase"])
-        tap(app.buttons["Reveal secrets"])
+        UITest.type(UITest.passphrase, into: app.secureTextFields["Confirm vault passphrase"])
+        UITest.tap(app.buttons["Reveal secrets"])
         XCTAssertTrue(app.staticTexts.matching(identifier: "recovery-word-1").firstMatch.waitForExistence(timeout: 20))
         snapshot(app, "reveal-shielded")
-        tap(app.buttons["Hide secrets"])
-        tap(app.buttons["Back"])
+        UITest.tap(app.buttons["Hide secrets"])
+        UITest.tap(app.buttons["Back"])
 
         // 4. Removing every face while away invalidates the slot and locks.
         XCUIDevice.shared.press(.home)
@@ -201,23 +168,25 @@ final class SecurityFlowTests: XCTestCase {
         XCTAssertFalse(app.buttons["Unlock with Face ID"].exists)
         snapshot(app, "biometric-invalidated")
         setFaceIDEnrolled(true)
-        unlockWithPassphrase(app)
-        tap(app.buttons["Settings"])
+        UITest.unlock(app)
+        UITest.tap(app.buttons["Settings"])
         XCTAssertEqual(app.buttons["Unlock & auto-lock"].value as? String, "Passphrase only")
-        tap(app.buttons["Home"])
-        removeWallet(app)
+        UITest.tap(app.buttons["Home"])
+        UITest.removeWallet(app)
     }
 
     func testBackoffSurvivesRelaunch() {
         let app = onboardByPaste()
-        tap(app.buttons["Lock wallet"].firstMatch)
+        UITest.tap(app.buttons["Lock wallet"].firstMatch)
         XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
-        type("wrong passphrase", into: app.secureTextFields["Enter your passphrase"])
+        UITest.type("wrong passphrase", into: app.secureTextFields["Enter your passphrase"])
         let unlock = app.buttons["Unlock"]
         for _ in 1...5 {
             waitUntilEnabled(unlock)
             unlock.tap()
-            XCTAssertTrue(app.staticTexts["Incorrect passphrase"].firstMatch.waitForExistence(timeout: 10))
+            // The status line, or on the attempt that starts the delay the error toast
+            // ("Error: Incorrect passphrase") while the status line counts down.
+            XCTAssertTrue(UITest.labelled(app, containing: "Incorrect passphrase").waitForExistence(timeout: 10))
         }
         let throttled = app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Too many attempts. Try again in 0:'")).firstMatch
         XCTAssertTrue(throttled.waitForExistence(timeout: 5))
@@ -225,17 +194,17 @@ final class SecurityFlowTests: XCTestCase {
         snapshot(app, "throttled")
 
         app.terminate()
-        let relaunched = launch()
+        let relaunched = UITest.launch()
         let countdown = relaunched.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Too many attempts. Try again in 0:'")).firstMatch
         XCTAssertTrue(countdown.waitForExistence(timeout: 10), "the delay survived the relaunch")
         snapshot(relaunched, "throttled-after-relaunch")
 
         // Wait out the delay, then unlock and leave the simulator clean.
         let ready = relaunched.buttons["Unlock"]
-        type(passphrase, into: relaunched.secureTextFields["Enter your passphrase"])
+        UITest.type(UITest.passphrase, into: relaunched.secureTextFields["Enter your passphrase"])
         waitUntilEnabled(ready, timeout: 40)
         ready.tap()
         XCTAssertTrue(relaunched.staticTexts["Account 1"].waitForExistence(timeout: 20))
-        removeWallet(relaunched)
+        UITest.removeWallet(relaunched)
     }
 }

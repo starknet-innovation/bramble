@@ -15,25 +15,23 @@ struct SettingsHubView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: BrambleSpace.md) {
-            Text("Settings").brambleText(BrambleTypeScale.title, weight: BrambleWeight.bold)
-            Eyebrow(text: "Accounts & networks")
-            MenuGroup {
+        VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
+            Text("Settings")
+                .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.H2.size), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
+                .accessibilityAddTraits(.isHeader)
+            SettingsSection(title: "Accounts & networks") {
                 MenuRow(icon: .globe, title: "Network", value: store.networkInfo.name) { open(.network) }
             }
-            Eyebrow(text: "Preferences")
-            MenuGroup {
+            SettingsSection(title: "Preferences") {
                 MenuRow(icon: .settings, title: "Appearance", value: theme == .light ? "Light" : "Dark") { open(.appearance) }
             }
-            Eyebrow(text: "Backup & recovery")
-            MenuGroup {
-                MenuRow(icon: .lock, title: "Reveal recovery secrets") { open(.reveal) }
+            SettingsSection(title: "Backup & recovery") {
+                MenuRow(icon: .lock, title: "Reveal recovery secrets", hint: "Asks for your passphrase first") { open(.reveal) }
             }
-            Eyebrow(text: "Security")
-            MenuGroup {
+            SettingsSection(title: "Security") {
                 MenuRow(icon: .shield, title: BrambleCopy.securityTitle, value: securityValue) { open(.security) }
                 MenuRow(icon: .lockKeyhole, title: "Lock wallet", chevron: false) { store.lock() }
-                MenuRow(icon: .alert, title: "Remove wallet from this device", tone: skin.danger) { open(.remove) }
+                MenuRow(icon: .alert, title: "Remove wallet from this device", tone: skin.danger, hint: "Asks for your passphrase first") { open(.remove) }
             }
             let info = coreInfo()
             Text("Bramble core \(info.coreVersion) · Krusty KMS \(info.krustyVersion)")
@@ -45,6 +43,19 @@ struct SettingsHubView: View {
     }
 }
 
+/// `.section`: an eyebrow over one menu group.
+struct SettingsSection<Rows: View>: View {
+    let title: String
+    @ViewBuilder let rows: () -> Rows
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
+            Eyebrow(text: title)
+            MenuGroup { rows() }
+        }
+    }
+}
+
 /// `network`: the supported networks as an option list, the active one selected.
 struct NetworkView: View {
     @Environment(WalletStore.self) private var store
@@ -52,7 +63,7 @@ struct NetworkView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: BrambleSpace.md) {
+        VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             FlowHeader(title: "Network", subtitle: "Choose where the wallet operates", network: store.networkLabel) { dismiss() }
             MenuGroup {
                 ForEach(supportedNetworks(), id: \.chainId) { network in
@@ -60,27 +71,30 @@ struct NetworkView: View {
                     Button {
                         Task { await store.switchNetwork(network.network) }
                     } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(network.name).brambleText(BrambleTypeScale.row, weight: BrambleWeight.medium)
+                        HStack(spacing: BrambleMetrics.MenuRow.gap) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(network.name).brambleText(BrambleTypeScale.body.sized(BrambleMetrics.MenuRow.titleSize), weight: BrambleMetrics.MenuRow.titleWeight)
                                 Text(network.network == .mainnet ? "SN_MAIN" : "SN_SEPOLIA")
-                                    .brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold, mono: true)
+                                    .brambleText(BrambleTypeScale.mono, mono: true)
                                     .foregroundStyle(skin.muted)
                             }
                             Spacer()
                             if selected { BrambleIcon(.check).foregroundStyle(skin.accent) }
                         }
-                        .padding(.horizontal, BrambleSpace.lg)
-                        .frame(minHeight: 64)
+                        .padding(BrambleMetrics.MenuRow.padding)
+                        .padding(.vertical, BrambleSpace.md)
+                        .frame(minHeight: BrambleMetrics.MenuRow.height)
                     }
-                    .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: BrambleRadius.lg, style: .continuous), scale: 1))
+                    .buttonStyle(FillPressStyle(fill: selected ? skin.accentSoft : .clear, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: BrambleMetrics.MenuRow.radius, style: .continuous), scale: 1))
+                    .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityHint(selected ? "" : "Switches the wallet to \(network.name)")
                 }
             }
             Text("Switching selects or derives an account on the target network.")
-                .brambleText(BrambleTypeScale.label).foregroundStyle(skin.muted)
+                .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
             Spacer()
         }
-        .padding(.horizontal, BrambleSpace.lg)
+        .padding(BrambleMetrics.Screen.shellPadding)
     }
 }
 
@@ -118,10 +132,11 @@ struct RevealSecretsView: View {
                     .disabled(passphrase.isEmpty)
                 } else {
                     ProtectedWordGrid(words: words, masked: captured)
+                        .accessibilityIdentifier("reveal-grid")
                     PillButton("Hide secrets", kind: .secondary) { words = [] }
                 }
             }
-            .padding(.horizontal, BrambleSpace.lg)
+            .padding(BrambleMetrics.Screen.shellPadding)
         }
         .onDisappear { words = []; passphrase = "" }
         .trackingScreenCapture($captured)
@@ -150,7 +165,7 @@ struct RemoveWalletView: View {
             .disabled(passphrase.isEmpty)
             Spacer()
         }
-        .padding(.horizontal, BrambleSpace.lg)
+        .padding(BrambleMetrics.Screen.shellPadding)
     }
 }
 
@@ -165,8 +180,9 @@ struct AppearanceView: View {
             FlowHeader(title: "Appearance", subtitle: "How the wallet looks", network: store.networkLabel) { dismiss() }
             Eyebrow(text: "Theme")
             SegmentedControl(options: [("Dark", ThemeChoice.dark), ("Light", ThemeChoice.light)], selection: $theme)
+                .accessibilityIdentifier("theme-control")
             Spacer()
         }
-        .padding(.horizontal, BrambleSpace.lg)
+        .padding(BrambleMetrics.Screen.shellPadding)
     }
 }

@@ -85,6 +85,15 @@ lands mid-PBKDF2, and dropping onboarding input typed before a vault exists), an
 the network and account they were read for. It is still uncompiled: no JDK or Android SDK was
 available where it was written (see `docs/android-parity.md`).
 
+**Phase 0.1 — iOS design parity (done, presentation only).** Generated elevation, press,
+breakpoint and per-component metrics read from the extension's side-panel stylesheet; Dynamic
+Type from the type tokens, 44pt hit targets, haptics, SPRING presses with reduced motion,
+edge swipe-back, sheet detents, SE short-height rules; shared callout / empty / error / pill /
+toast / skeleton components; VoiceOver labels and generated-skin contrast tests; a Debug-only
+offline RPC fixture transport and snapshot XCUITests in both themes. Parity tables in
+`docs/design-mobile-parity.md`. Still open: SE / Pro Max device runs, large Dynamic Type and
+Reduce Motion snapshot passes, Android.
+
 **Phase 1 — sendable wallet.**
 1. Android in CI: NDK build via `build-core-android.sh`, then the JVM unit and instrumented
    suites (`:app:testDebugUnitTest`, `:app:connectedDebugAndroidTest`). The pinned Gradle 8.11.1
