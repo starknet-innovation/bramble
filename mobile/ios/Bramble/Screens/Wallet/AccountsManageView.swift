@@ -8,6 +8,7 @@ struct AccountsManageView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openCoordinationFlow) private var openCoordination
     @State private var choosing = false
     @State private var label = ""
     @State private var labelResult: String?
@@ -31,7 +32,10 @@ struct AccountsManageView: View {
         .scrollDismissesKeyboard(.interactively)
         .sheet(isPresented: $choosing) {
             SkinProvider {
-                AddAccountChooser(close: { choosing = false }, added: { choosing = false })
+                AddAccountChooser(close: { choosing = false }, added: { choosing = false }, multisig: {
+                    choosing = false
+                    openCoordination(.readyMultisig)
+                })
                     .padding(BrambleMetrics.Drawer.padding)
                     .padding(.top, BrambleSpace.sm)
                     .background { SheetBackground() }

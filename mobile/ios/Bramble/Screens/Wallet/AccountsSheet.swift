@@ -14,6 +14,8 @@ struct AccountsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let openManage: () -> Void
+    /// Pushes the Ready Multisig gateway (`multisig-add`) onto the wallet's stack.
+    var openMultisig: () -> Void = {}
     @State private var groupFilter: String?
     @State private var openAssignId: String?
     @State private var choosing = false
@@ -21,7 +23,10 @@ struct AccountsSheet: View {
     var body: some View {
         Group {
             if choosing {
-                AddAccountChooser(close: { choosing = false }, added: { dismiss() })
+                AddAccountChooser(close: { choosing = false }, added: { dismiss() }, multisig: {
+                    dismiss()
+                    openMultisig()
+                })
             } else {
                 drawer
             }
@@ -205,13 +210,15 @@ struct FolderPicker: View {
     }
 }
 
-/// `addAccountChooser`: "Add a new account" with the options this app offers today. Ledger and
-/// multisig are left out (other workstreams); importing is shown as coming, like onboarding does.
+/// `addAccountChooser`: "Add a new account" with the options this app offers today: a regular
+/// account, and a multisig through the Ready Multisig gateway. Ledger is left out (another
+/// workstream); importing is shown as coming, like onboarding does.
 struct AddAccountChooser: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let close: () -> Void
     let added: () -> Void
+    let multisig: () -> Void
     @State private var busy = false
 
     var body: some View {
@@ -235,6 +242,7 @@ struct AddAccountChooser: View {
                         busy = false
                     }
                 }
+                OptionCard(icon: .users, title: "Multisig account", detail: "Create a Ready Multisig or add a shared address.", action: multisig)
                 OptionCard(icon: .link, title: "Import an existing account", detail: "Coming to Bramble mobile.") {}
                     .disabled(true)
             }

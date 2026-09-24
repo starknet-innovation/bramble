@@ -22,6 +22,8 @@ struct SettingsHubView: View {
             SettingsSection(title: "Accounts & networks") {
                 MenuRow(icon: .wallet, title: "Accounts & groups") { open(.accounts) }
                 MenuRow(icon: .globe, title: "Network", value: store.networkInfo.name) { open(.network) }
+                MenuRow(icon: .book, title: "Address book") { open(.coordination(.addressBook)) }
+                MenuRow(icon: .users, title: "Shared accounts") { open(.coordination(.sharedAccounts)) }
             }
             SettingsSection(title: "Preferences") {
                 MenuRow(icon: .settings, title: "Appearance", value: theme == .light ? "Light" : "Dark") { open(.appearance) }
@@ -93,6 +95,7 @@ struct NetworkView: View {
             }
             Text("Switching selects or derives an account on the target network.")
                 .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+            CoordinationRelayDisclosure()
             Spacer()
         }
         .padding(BrambleMetrics.Screen.shellPadding)

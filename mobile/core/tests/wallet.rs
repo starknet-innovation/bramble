@@ -177,3 +177,16 @@ fn bip39_passphrase_changes_every_account() {
         protected.accounts(NetworkId::Sepolia).unwrap()
     );
 }
+
+#[test]
+fn a_new_wallet_never_inherits_metadata_left_without_a_vault() {
+    let (dir, core) = core();
+    for file in ["contacts.json", "multisigs.json", "coordination.json"] {
+        std::fs::write(dir.path().join(file), "{\"version\":1}").unwrap();
+    }
+    core.import_wallet(PASSWORD.into(), PHRASE.into(), None)
+        .unwrap();
+    for file in ["contacts.json", "multisigs.json", "coordination.json"] {
+        assert!(!dir.path().join(file).exists(), "{file}");
+    }
+}

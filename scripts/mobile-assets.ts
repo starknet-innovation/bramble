@@ -18,6 +18,7 @@ import { DERIVED_COLOR_SOURCES, parseDerivedColors } from "./mobile-assets/color
 import { parseCss } from "./mobile-assets/css";
 import { TOAST_SOURCE } from "./mobile-assets/feedback";
 import { renderKotlin } from "./mobile-assets/kotlin";
+import { MULTISIG_JSON_PATH, renderMultisigConstants } from "./mobile-assets/multisig";
 import { RPC_FIXTURES_PATH, renderRpcFixtures } from "./mobile-assets/rpc-fixtures";
 import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
@@ -138,6 +139,7 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [KOTLIN_COPY_PATH, renderKotlinCopy()],
     [RPC_FIXTURES_PATH, renderRpcFixtures()],
     [ACCOUNTS_JSON_PATH, renderAccountsCatalog()],
+    [MULTISIG_JSON_PATH, renderMultisigConstants()],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],

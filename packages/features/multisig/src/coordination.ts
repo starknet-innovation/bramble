@@ -8,9 +8,12 @@ import { isNostrEventId, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
 /** Browser-local key for non-secret relay sync metadata. */
 export const NOSTR_COORDINATION_STORE_KEY = "bramble:nostr-coordination:v1";
 
-const MAX_CHECKPOINTS = 20;
-const MAX_SEEN_EVENT_IDS = 200;
-const MAX_SYNC_SECONDS = 4_102_444_800;
+/** Checkpoints kept across all shared accounts; mirrored by the mobile core. */
+export const MAX_CHECKPOINTS = 20;
+/** Authenticated event ids remembered per checkpoint; mirrored by the mobile core. */
+export const MAX_SEEN_EVENT_IDS = 200;
+/** Latest accepted checkpoint time (2100-01-01), rejecting far-future clocks. */
+export const MAX_SYNC_SECONDS = 4_102_444_800;
 
 /** Last successful relay scan and bounded event receipts for one multisig account. */
 export type NostrSyncCheckpoint = {

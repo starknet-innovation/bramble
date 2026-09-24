@@ -1,5 +1,7 @@
 package org.bramble.wallet
 
+import org.bramble.core.AccountGroup
+import org.bramble.core.AccountRecord
 import org.bramble.core.NetworkId
 
 /**
@@ -29,4 +31,13 @@ object NetworkPreference {
 
     /** The chain id shown under each network name (iOS `NetworkView`). */
     fun chainLabel(network: NetworkId): String = if (network == NetworkId.MAINNET) "SN_MAIN" else "SN_SEPOLIA"
+}
+
+/** One consistent read of the account state, taken off the main thread (`WalletStore`). */
+internal class AccountsSnapshot(
+    val records: List<AccountRecord> = emptyList(),
+    val allRecords: List<AccountRecord> = emptyList(),
+    val groups: List<AccountGroup> = emptyList(),
+) {
+    val active: AccountRecord? = records.firstOrNull { it.active }
 }

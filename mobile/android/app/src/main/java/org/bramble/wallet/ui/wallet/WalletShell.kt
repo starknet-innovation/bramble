@@ -57,7 +57,7 @@ import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.send.SendScreen
 
 /** Screens pushed over the shell, without the dock. */
-enum class Flow { RECEIVE, SEND, MANAGE_ACCOUNTS, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE }
+enum class Flow { RECEIVE, SEND, MANAGE_ACCOUNTS, NETWORK, APPEARANCE, SECURITY, REVEAL, REMOVE, ADDRESS_BOOK, SHARED_ACCOUNTS, READY_MULTISIG }
 
 /**
  * The wallet frame from `wallet-shell.ts` / `styles-dock.ts`, port of the iOS `WalletShell`:
@@ -87,6 +87,9 @@ fun WalletShell(store: WalletStore) {
                 Flow.SECURITY -> SecurityScreen(store, back = pop)
                 Flow.REVEAL -> RevealScreen(store, back = pop)
                 Flow.REMOVE -> RemoveWalletScreen(store, back = pop)
+                Flow.ADDRESS_BOOK -> org.bramble.wallet.coordination.AddressBookScreen(store, back = pop)
+                Flow.SHARED_ACCOUNTS -> org.bramble.wallet.coordination.SharedAccountsScreen(store, back = pop)
+                Flow.READY_MULTISIG -> org.bramble.wallet.coordination.ReadyMultisigScreen(store, back = pop)
             }
         }
         return
@@ -136,7 +139,12 @@ fun WalletShell(store: WalletStore) {
         )
     }
     if (accountsOpen) {
-        AccountsSheet(store, onDismiss = { accountsOpen = false }, openManage = { flows = flows + Flow.MANAGE_ACCOUNTS })
+        AccountsSheet(
+            store,
+            onDismiss = { accountsOpen = false },
+            openManage = { flows = flows + Flow.MANAGE_ACCOUNTS },
+            openMultisig = { flows = flows + Flow.READY_MULTISIG },
+        )
     }
 }
 

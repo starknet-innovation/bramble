@@ -13,16 +13,29 @@ mod account_catalog;
 mod account_names;
 mod account_store;
 mod activity;
+mod argent_multisig;
 mod biometric;
+mod class_declared;
 mod clock;
+mod contact_card;
+mod contacts;
 mod container;
+mod coordination;
 mod felt;
+mod ffi_coordination;
+mod ffi_nostr_multisig;
 mod files;
 mod groups;
 mod kms;
 mod kms_accounts;
 mod migrations;
+mod multisig_constants;
+mod multisig_rpc;
+mod multisig_store;
 mod networks;
+mod nostr;
+mod nostr_relay;
+mod public_store;
 mod records;
 mod recovery;
 mod recovery_scan;
@@ -42,12 +55,25 @@ pub use account_names::{
     account_display_name, account_label, account_preview_label, friendly_account_name,
     is_account_label,
 };
+pub use argent_multisig::{ArgentMultisigConfig, ArgentMultisigPrediction};
 pub use biometric::BiometricDomain;
+pub use class_declared::ClassDeclaredRead;
 pub use clock::HostClock;
+pub use contact_card::{ContactCardParse, WalletContactCard};
+pub use contacts::Contact;
+pub use ffi_coordination::{CoordinationSyncOutcome, NostrSyncPlan, RelayPolicy};
+pub use ffi_nostr_multisig::{
+    argent_multisig_normalize, argent_multisig_predict, argent_signer_guid, multisig_limits,
+    nostr_relay_url_normalize, wallet_contact_card_encode, wallet_contact_card_parse,
+    MultisigLimits, MultisigRecord,
+};
 pub use groups::AccountGroup;
+pub use multisig_rpc::{MultisigAuthorityRead, MultisigAuthorityStatus};
 pub use networks::{NetworkId, NetworkInfo, TokenInfo};
+pub use nostr_relay::RelayStep;
 pub use recovery::{RecoveryCandidate, RecoverySelection};
-pub use recovery_scan::{RecoveryScanStep, RpcRequest, RpcResponse};
+pub use recovery_scan::RecoveryScanStep;
+pub use rpc::{RpcRequest, RpcResponse};
 pub use send::plan::TransferPlan;
 pub use send::types::{
     ActivityKind, ActivityRecord, DeploymentState, FeeAffordability, FeeAmount, FeeUnit,
@@ -94,6 +120,9 @@ pub enum CoreError {
     /// Enrolment changed or the slot no longer opens; the slot has been removed.
     #[error("biometric unlock was invalidated")]
     BiometricInvalidated,
+    /// Nostr coordination failed; `reason` is a fixed operation name, never input text.
+    #[error("coordination failure: {reason}")]
+    Coordination { reason: String },
 }
 
 /// Versions compiled into this core, for the About screen and bug reports.
@@ -326,5 +355,35 @@ pub mod testing {
             deployed,
             funded,
         })
+    }
+
+    /// The coordination public key at Nostr address `index`. Parity suites use the published
+    /// test phrase's address 1 as the co-signer, so no second phrase appears in the repository.
+    pub fn nostr_public_key_at(mnemonic: &str, index: u32) -> Result<String, crate::CoreError> {
+        crate::nostr::public_key_at(mnemonic, index)
+    }
+
+    /// Opens a gift wrap for the coordination key at Nostr address `index`:
+    /// `(content, identifier, sender)`.
+    pub fn open_gift_wrap(
+        mnemonic: &str,
+        index: u32,
+        event_json: &str,
+    ) -> Option<(String, String, String)> {
+        let event = crate::nostr::parse_event_json(event_json)?;
+        let opened = crate::nostr::open_at(mnemonic, index, &event)?;
+        Some((opened.content, opened.identifier, opened.sender_public_key))
+    }
+
+    /// Wraps application data from the coordination key at Nostr address `index`.
+    pub fn wrap_gift(
+        mnemonic: &str,
+        index: u32,
+        recipient: &str,
+        identifier: &str,
+        content: &str,
+        now: u64,
+    ) -> Result<String, crate::CoreError> {
+        crate::nostr::wrap(mnemonic, index, recipient, identifier, content, now)
     }
 }

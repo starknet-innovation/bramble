@@ -11,6 +11,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { encryptJson } from "@bramble/vault/encrypted-store";
+import { writeNostrMultisigParity } from "./mobile-assets/write-nostr-multisig-parity";
 import {
   computeParityAccounts,
   computeUiParity,
@@ -79,3 +80,5 @@ for (const part of ["families", "rules"] as const) {
 
 // The transaction fixture and Send copy tables are part of the same `bun run mobile:parity` run.
 await import("./generate-mobile-transaction-vectors");
+
+console.log(`wrote ${await writeNostrMultisigParity()}`);

@@ -203,6 +203,26 @@ impl WalletCore {
         Ok(())
     }
 
+    /// The app-private directory the vault and the public metadata files live in.
+    pub(crate) fn data_dir(&self) -> &std::path::Path {
+        &self.data_dir
+    }
+
+    /// Runs `f` with the unlocked phrase and its BIP-39 passphrase under the session lock,
+    /// without renewing the idle window. For modules that derive non-account keys (Nostr);
+    /// nothing escapes `f`.
+    pub(crate) fn with_phrase<T>(
+        &self,
+        f: impl FnOnce(&str, Option<&str>) -> Result<T, CoreError>,
+    ) -> Result<T, CoreError> {
+        self.with_session(false, |session| {
+            f(
+                &session.payload.mnemonic,
+                session.payload.mnemonic_passphrase.as_deref(),
+            )
+        })
+    }
+
     /// After a migrating open: writes the current-version file if the file it was built from is
     /// still what is on disk. Returns the file to keep pending when that write did not happen;
     /// the next payload write commits it. Call with no file lock held.
@@ -244,6 +264,9 @@ impl WalletCore {
         }
         // A new wallet starts with a clean counter; a leftover one belonged to a deleted vault.
         security::remove(&self.data_dir)?;
+        // Metadata without a vault belongs to no wallet (an interrupted delete); a new wallet
+        // must never inherit its contacts, shared accounts, or relay choice.
+        crate::public_store::remove_all(&self.data_dir)?;
         let opened = Opened {
             payload,
             dek,
@@ -423,6 +446,9 @@ impl WalletCore {
             self.lock_epoch.fetch_add(1, Ordering::SeqCst);
             *session = None;
             let _file = self.lock_file();
+            // Public metadata goes first: a failure here leaves the wallet intact and retryable,
+            // never a deleted vault beside another wallet's trusted contacts and shared accounts.
+            crate::public_store::remove_all(&self.data_dir)?;
             fs::remove_file(self.vault_path()).map_err(|_| storage("remove vault"))?;
             crate::activity::store::remove(&self.data_dir);
             security::remove(&self.data_dir)

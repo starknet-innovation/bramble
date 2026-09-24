@@ -43,12 +43,13 @@ class RpcClient {
         private const val TIMEOUT_MS = 15_000
 
         /**
-         * POSTs one JSON-RPC [body] and returns the reply, bounded to [MAX_RESPONSE_BYTES]. Throws
+         * POSTs one JSON-RPC [body] and returns the reply, bounded to [maxBytes] (the core's
+         * `RpcRequest.maxResponseBytes` for a sans-IO read; [MAX_RESPONSE_BYTES] otherwise). Throws
          * on any transport failure or non-200 status. A [write] (a signed transaction) is posted
          * once and never follows a redirect, which would hand it to an endpoint that never proved
          * its chain; retrying is the caller's (the core plan's) decision, never this function's.
          */
-        fun post(url: URL, body: String, write: Boolean = false): String {
+        fun post(url: URL, body: String, write: Boolean = false, maxBytes: Int = MAX_RESPONSE_BYTES): String {
             val connection = url.openConnection() as HttpsURLConnection
             try {
                 connection.requestMethod = "POST"
@@ -60,8 +61,8 @@ class RpcClient {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.outputStream.use { it.write(body.toByteArray()) }
                 check(connection.responseCode == 200) { "http ${connection.responseCode}" }
-                check(connection.contentLengthLong <= MAX_RESPONSE_BYTES) { "reply too large" }
-                return connection.inputStream.use { readBounded(it, MAX_RESPONSE_BYTES) }
+                check(connection.contentLengthLong <= maxBytes) { "reply too large" }
+                return connection.inputStream.use { readBounded(it, maxBytes) }
             } finally {
                 connection.disconnect()
             }

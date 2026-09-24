@@ -64,7 +64,7 @@ import org.bramble.wallet.setGroup
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountsSheet(store: WalletStore, onDismiss: () -> Unit, openManage: () -> Unit) {
+fun AccountsSheet(store: WalletStore, onDismiss: () -> Unit, openManage: () -> Unit, openMultisig: () -> Unit = {}) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState()
@@ -85,7 +85,7 @@ fun AccountsSheet(store: WalletStore, onDismiss: () -> Unit, openManage: () -> U
             verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
         ) {
             if (choosing) {
-                AddAccountChooser(store, close = { choosing = false }, added = close)
+                AddAccountChooser(store, close = { choosing = false }, added = close, multisig = { close(); openMultisig() })
             } else {
                 DrawerContent(store, close, openManage = { close(); openManage() }, add = { choosing = true })
             }

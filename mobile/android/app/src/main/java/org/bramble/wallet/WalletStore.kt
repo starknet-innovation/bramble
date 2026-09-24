@@ -111,6 +111,9 @@ class WalletStore(
         applySecurity(security)
     }
 
+    /** Wallet card, contacts, shared accounts, and Nostr coordination (public state only). */
+    val coordination = org.bramble.wallet.coordination.CoordinationStore(core) { networkInfo }
+
     val networkInfo: NetworkInfo get() = supportedNetworks().first { it.network == network }
     val networkLabel: String get() = NetworkPreference.label(network)
     /** Whether a strong biometric is enrolled and usable on this device now. */
@@ -228,6 +231,7 @@ class WalletStore(
         plans.clear()
         idleTimer?.cancel()
         idleTimer = null
+        coordination.reset()
         pendingBackup = emptyList()
         accountState = AccountsSnapshot()
         clearBalances()
@@ -486,13 +490,4 @@ class WalletStore(
 
     /** Core lifecycle state, for tests and diagnostics. Takes the core's session mutex. */
     internal fun coreStatus(): WalletStatus = core.status()
-}
-
-/** One consistent read of the account state, taken off the main thread. */
-private class AccountsSnapshot(
-    val records: List<AccountRecord> = emptyList(),
-    val allRecords: List<AccountRecord> = emptyList(),
-    val groups: List<AccountGroup> = emptyList(),
-) {
-    val active: AccountRecord? = records.firstOrNull { it.active }
 }

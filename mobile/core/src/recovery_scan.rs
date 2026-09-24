@@ -17,27 +17,13 @@ use crate::account_store::{VaultPayload, MAX_ACCOUNT_INDEX};
 use crate::kms_accounts::family_address;
 use crate::networks::{self, NetworkId};
 use crate::recovery::{candidate, keep, scan_shapes, Found, RecoveryCandidate};
-use crate::rpc::{self, rpc_error, MAX_RESPONSE_BYTES};
+use crate::rpc::{self, rpc_error, RpcRequest, RpcResponse, MAX_RESPONSE_BYTES};
 use crate::{felt, CoreError};
 
 /// Candidates one scan may accumulate (manual checks add up to six each).
 const MAX_CANDIDATES: usize = 512;
 /// JSON-RPC error code for "contract not found".
 const CONTRACT_NOT_FOUND: i64 = 20;
-
-/// A JSON-RPC body for the host to POST.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct RpcRequest {
-    pub id: u64,
-    pub body: String,
-}
-
-/// A response body the host received for one request.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct RpcResponse {
-    pub id: u64,
-    pub body: String,
-}
 
 /// Where the scan stands after a call.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -223,10 +209,10 @@ pub(crate) fn next(
     for (position, probe) in probes.iter().enumerate() {
         let id = scan.allocate_id();
         outstanding.insert(id, Pending::ClassHash(position));
-        requests.push(RpcRequest {
+        requests.push(RpcRequest::new(
             id,
-            body: class_hash_request(id, &probe.found.address),
-        });
+            class_hash_request(id, &probe.found.address),
+        ));
     }
     scan.batch = Some(Batch {
         end,
@@ -306,7 +292,7 @@ pub(crate) fn submit(
                 let account = felt::canonical(&batch.probes[position].found.address);
                 let body = rpc::balance_of_request(id, &token.address, &account)?;
                 batch.outstanding.insert(id, Pending::Balance(position));
-                requests.push(RpcRequest { id, body });
+                requests.push(RpcRequest::new(id, body));
             }
         }
         if !requests.is_empty() {

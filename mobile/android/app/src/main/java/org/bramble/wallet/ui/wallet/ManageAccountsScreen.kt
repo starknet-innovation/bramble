@@ -214,11 +214,12 @@ private fun GroupFields(name: String, setName: (String) -> Unit, icon: String, s
 }
 
 /**
- * "Add a new account" (`flows.ts`, `docs/accounts.md` §2.3): "Regular account" today; Ledger and
- * multisig are hidden, and importing an existing account is shown as coming.
+ * "Add a new account" (`flows.ts`, `docs/accounts.md` §2.3): "Regular account", and a multisig
+ * through the Ready Multisig gateway when [multisig] is given; Ledger is hidden, and importing an
+ * existing account is shown as coming.
  */
 @Composable
-fun AddAccountChooser(store: WalletStore, close: () -> Unit, added: () -> Unit) {
+fun AddAccountChooser(store: WalletStore, close: () -> Unit, added: () -> Unit, multisig: (() -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         FlowHeader("Add a new account", network = store.networkLabel, back = close)
@@ -228,6 +229,9 @@ fun AddAccountChooser(store: WalletStore, close: () -> Unit, added: () -> Unit) 
                     .onSuccess { added() }
                     .onFailure(store::showError)
             }
+        }
+        if (multisig != null) {
+            OptionCard(BrambleIconName.USERS, "Multisig account", "Create a Ready Multisig or add a shared address.", onClick = multisig)
         }
         OptionCard(BrambleIconName.KEY_ROUND, "Import an existing account", "Coming to Bramble mobile.", enabled = false) {}
     }

@@ -6,6 +6,17 @@ import Foundation
 /// posted once, is never retried by a transport, and never follows a redirect.
 protocol RpcTransport: Sendable {
     func post(_ body: String, to url: URL, write: Bool) async throws -> String
+    /// Posts a read whose reply the core bounds at `maxBytes` (`RpcRequest.maxResponseBytes`), for
+    /// the core's sans-IO reads that allow more or less than the default (a class definition).
+    func post(_ body: String, to url: URL, write: Bool, maxBytes: UInt64) async throws -> String
+}
+
+extension RpcTransport {
+    /// In-memory transports (fixtures, stubs, test doubles) hold their replies already, so the
+    /// bound only matters for a transport that reads from the network.
+    func post(_ body: String, to url: URL, write: Bool, maxBytes: UInt64) async throws -> String {
+        try await post(body, to: url, write: write)
+    }
 }
 
 enum RpcTransportFailure: Error { case unreachable, tooLarge }
@@ -21,6 +32,10 @@ struct URLSessionRpcTransport: RpcTransport {
     }()
 
     func post(_ body: String, to url: URL, write: Bool) async throws -> String {
+        try await post(body, to: url, write: write, maxBytes: UInt64(maxRpcResponseBytes()))
+    }
+
+    func post(_ body: String, to url: URL, write: Bool, maxBytes: UInt64) async throws -> String {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -32,13 +47,14 @@ struct URLSessionRpcTransport: RpcTransport {
             ? try await session.bytes(for: request, delegate: RefuseRedirects.shared)
             : try await session.bytes(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw RpcTransportFailure.unreachable }
-        return try await Self.bounded(bytes, expected: response.expectedContentLength)
+        return try await Self.bounded(bytes, expected: response.expectedContentLength, limit: Int(clamping: maxBytes))
     }
 
-    /// Reads a reply up to the core's parse limit and refuses anything longer, so an untrusted
-    /// endpoint cannot make the app buffer an unbounded body before the core would refuse it.
-    static func bounded(_ bytes: URLSession.AsyncBytes, expected: Int64) async throws -> String {
-        let limit = Int(maxRpcResponseBytes())
+    /// Reads a reply up to the core's limit for this request and refuses anything longer, so an
+    /// untrusted endpoint cannot make the app buffer an unbounded body before the core would
+    /// refuse it.
+    static func bounded(_ bytes: URLSession.AsyncBytes, expected: Int64, limit: Int) async throws -> String {
+        defer { bytes.task.cancel() }
         guard expected <= Int64(limit) else { throw RpcTransportFailure.tooLarge }
         var data = Data()
         data.reserveCapacity(expected > 0 ? Int(expected) : 4096)

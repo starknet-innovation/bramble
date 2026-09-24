@@ -135,6 +135,17 @@ Braavos signing.
 multisig, WalletConnect in place of the injected provider, STRK20 privacy (viewing keys stay in
 the core, as the extension's AGENTS.md rules require), Ledger over BLE.
 
+*Phase 2 — delivered on `mobile/nostr-multisig`* (design and status: `docs/nostr-multisig.md`,
+`docs/nostr-multisig-status.md`). Nostr coordination key derived in the core (private key never
+crosses FFI), gift-wrap open/wrap with the extension's bounds, the Receive "Address / Bramble contact
+card" switch with wallet identity and Copy wallet card, an address book, the coordination relay
+setting, and Argent Multisig 0.2 shared accounts: create (participants, approval, fund), join by
+address over a chain-id-proven pinned-block authority read, and co-signer update checks judged by
+the core over the extension's relay protocol. Parity fixtures come from the extension's TypeScript.
+Still deferred: deploying the multisig, importing/signing/submitting intents (Krusty 0.11.0 exports
+no Stark signature verification), `SignerLinked` discovery, and the opt-in live relay/Sepolia
+checks. Android is written but uncompiled.
+
 **Phase 3 — release.** Store listings, App Store privacy labels / Play data safety, external
 audit of the core and FFI surface, reproducible builds, crash reporting without PII.
 

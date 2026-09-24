@@ -17,7 +17,8 @@ use crate::account_store::{StoredAccount, VaultPayload, MAX_ACCOUNT_INDEX, MAX_A
 use crate::groups::{self, AccountGroup};
 use crate::networks::NetworkId;
 use crate::recovery::{derive_selections, RecoverySelection};
-use crate::recovery_scan::{self, RecoveryScanStep, RpcResponse};
+use crate::recovery_scan::{self, RecoveryScanStep};
+use crate::rpc::RpcResponse;
 use crate::wallet::{Session, StarkSignature, WalletCore};
 use crate::{kms, CoreError};
 

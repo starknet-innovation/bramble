@@ -53,6 +53,10 @@ fun SettingsHubScreen(store: WalletStore, open: (Flow) -> Unit) {
         Eyebrow("Accounts & networks")
         MenuGroup {
             MenuRow(BrambleIconName.GLOBE, "Network", value = store.networkInfo.name) { open(Flow.NETWORK) }
+            MenuDivider()
+            MenuRow(BrambleIconName.BOOK, "Address book") { open(Flow.ADDRESS_BOOK) }
+            MenuDivider()
+            MenuRow(BrambleIconName.USERS, "Shared accounts") { open(Flow.SHARED_ACCOUNTS) }
         }
         Eyebrow("Preferences")
         MenuGroup {
@@ -124,6 +128,7 @@ fun NetworkScreen(store: WalletStore, back: () -> Unit) {
             }
         }
         Text("Switching selects or derives an account on the target network.", color = skin.muted, style = textStyle(BrambleTypeScale.label))
+        org.bramble.wallet.coordination.CoordinationRelaySettings(store)
     }
 }
 

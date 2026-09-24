@@ -90,6 +90,8 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/accounts-parity-rules.json
         buildPhase: resources
+      - path: ../core/tests/fixtures/nostr-multisig-parity.json
+        buildPhase: resources
     dependencies:
       # Hosted in the app so `@testable import Bramble` reaches the Keychain, clock and copy code,
       # and the host-side account code (Clipboard, the discovery driver, routing).
@@ -105,6 +107,8 @@ targets:
     platform: iOS
     sources:
       - path: BrambleUITests
+      - path: ../core/tests/fixtures/ui-coordination.json
+        buildPhase: resources
     dependencies:
       - target: Bramble
     settings:

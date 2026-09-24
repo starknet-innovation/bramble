@@ -16,6 +16,40 @@ const BALANCE_OF_SELECTOR: &str =
 /// Longest response body the core will parse.
 pub(crate) const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
+/// One JSON-RPC body for the host to POST, with the largest reply the core will judge for it.
+/// The host's one transport stops reading and reports a transport failure past
+/// `max_response_bytes`, so a hostile endpoint cannot make the app buffer an unbounded body
+/// before the core's own size check runs.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RpcRequest {
+    pub id: u64,
+    pub body: String,
+    pub max_response_bytes: u64,
+}
+
+impl RpcRequest {
+    /// A request whose reply is bounded by the core's default `MAX_RESPONSE_BYTES`.
+    pub(crate) fn new(id: u64, body: String) -> Self {
+        Self::bounded(id, body, MAX_RESPONSE_BYTES)
+    }
+
+    /// A request whose reply may be up to `max_bytes` (a class definition, for example).
+    pub(crate) fn bounded(id: u64, body: String, max_bytes: usize) -> Self {
+        Self {
+            id,
+            body,
+            max_response_bytes: max_bytes as u64,
+        }
+    }
+}
+
+/// A response body the host received for one request.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct RpcResponse {
+    pub id: u64,
+    pub body: String,
+}
+
 pub(crate) fn rpc_error(reason: &str) -> CoreError {
     CoreError::Rpc {
         reason: reason.into(),

@@ -4,7 +4,7 @@ import SwiftUI
 /// The wallet frame from `wallet-shell.ts` / `styles-dock.ts`: persistent account header, the
 /// active dock screen, and the floating dock. Flow screens push over it without the dock.
 struct WalletShell: View {
-    enum Flow: Hashable { case receive, network, appearance, security, reveal, remove, send, deploy, accounts }
+    enum Flow: Hashable { case receive, network, appearance, security, reveal, remove, send, deploy, accounts, coordination(CoordinationFlow) }
 
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -46,6 +46,7 @@ struct WalletShell: View {
                     case .send: SendFlowView()
                     case .deploy: DeployAccountView()
                     case .accounts: AccountsManageView()
+                    case .coordination(let flow): CoordinationDestination(flow: flow)
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)
@@ -55,8 +56,10 @@ struct WalletShell: View {
             }
         }
         .brambleHaptic(.selection, trigger: store.activeRecord?.id)
+        .environment(\.openCoordinationFlow, CoordinationNavigator { flows.append(.coordination($0)) })
         .sheet(isPresented: $accountsOpen) {
-            SkinProvider { AccountsSheet(openManage: { flows.append(.accounts) }) }.environment(store)
+            SkinProvider { AccountsSheet(openManage: { flows.append(.accounts) },
+                                         openMultisig: { flows.append(.coordination(.readyMultisig)) }) }.environment(store)
         }
     }
 }
