@@ -23,7 +23,10 @@ final class SecurityTests: XCTestCase {
     }
 
     func testTheCoreThrottlesAfterFiveWrongPassphrases() throws {
-        let core = try core()
+        // A frozen clock: the delay is measured in monotonic time, so a slow machine (the key
+        // derivation runs six times here) must not eat into the 30 s the assertions expect.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let core = try WalletCore(dataDir: dir.path, clock: FrozenClock())
         _ = try core.createWallet(password: "a strong password", wordCount: 12)
         core.lock()
         for _ in 0..<5 {
@@ -33,7 +36,7 @@ final class SecurityTests: XCTestCase {
             guard case .Throttled(let retry) = error as? CoreError else {
                 return XCTFail("expected Throttled, got \(error)")
             }
-            XCTAssertGreaterThan(retry, 29_000)
+            XCTAssertEqual(retry, 30_000)
             XCTAssertEqual(describe(error), "Too many attempts. Try again in 0:30.")
         }
         XCTAssertEqual(core.securityStatus().failedAttempts, 5)
@@ -111,4 +114,12 @@ final class SecurityTests: XCTestCase {
         // iOS the suite runs on.
         XCTAssertTrue(ScreenshotShield<EmptyView>.isAvailable)
     }
+}
+
+/// A monotonic clock that never advances, for exact backoff assertions.
+private final class FrozenClock: HostClock, @unchecked Sendable {
+    private static let frozenMs: UInt64 = 1_000_000
+
+    func monotonicMs() -> UInt64 { Self.frozenMs }
+    func bootId() -> String { "frozen-boot" }
 }
