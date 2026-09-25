@@ -9,6 +9,8 @@ enum EdgeSwipe {
     /// …and travel this far, or be flicked so its predicted end travels `flick`.
     static let travel: CGFloat = 80
     static let flick: CGFloat = 160
+    /// Movement before the drag is recognised at all.
+    static let minimumDistance: CGFloat = 12
 
     /// Whether a finished drag is a back swipe. Vertical drags (scrolling) never are.
     static func isBack(start: CGPoint, translation: CGSize, predicted: CGSize) -> Bool {
@@ -22,11 +24,18 @@ extension View {
     /// Adds the back swipe when `enabled`. Simultaneous, so taps and scrolling are untouched.
     func edgeSwipeBack(enabled: Bool = true, action: @escaping () -> Void) -> some View {
         simultaneousGesture(
-            DragGesture(minimumDistance: 12, coordinateSpace: .global).onEnded { value in
-                if enabled, EdgeSwipe.isBack(start: value.startLocation, translation: value.translation, predicted: value.predictedEndTranslation) {
-                    action()
-                }
-            },
+            DragGesture(minimumDistance: EdgeSwipe.minimumDistance, coordinateSpace: .global)
+                .onEnded { value in
+                    guard enabled else { return }
+                    let isBack = EdgeSwipe.isBack(
+                        start: value.startLocation,
+                        translation: value.translation,
+                        predicted: value.predictedEndTranslation
+                    )
+                    if isBack {
+                        action()
+                    }
+                },
             including: enabled ? .all : .subviews
         )
     }

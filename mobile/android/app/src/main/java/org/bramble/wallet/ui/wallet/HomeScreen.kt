@@ -1,14 +1,10 @@
 package org.bramble.wallet.ui.wallet
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -16,27 +12,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.style.TextAlign
-import org.bramble.core.TokenInfo
 import org.bramble.wallet.WalletStore
-import org.bramble.wallet.sendRefusal
-import org.bramble.wallet.strkFunded
 import org.bramble.wallet.design.BrambleControl
 import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.BrambleIconName
-import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleRadius
 import org.bramble.wallet.design.BrambleSize
 import org.bramble.wallet.design.BrambleSpace
-import org.bramble.wallet.design.BrambleTracking
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.LocalSkin
-import org.bramble.wallet.design.TokenMark
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.sendRefusal
+import org.bramble.wallet.strkFunded
 
 /**
  * `homeView()` from `portfolio/home-view.ts`, port of the iOS `HomeView`: hero total, the four
@@ -44,10 +33,16 @@ import org.bramble.wallet.design.textStyle
  * all from the portfolio store (prices, tracked tokens, the one balance read).
  */
 @Composable
-fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit, privacy: () -> Unit = {}) {
+fun HomeScreen(
+    store: WalletStore,
+    receive: () -> Unit,
+    send: () -> Unit,
+    privacy: () -> Unit = {},
+) {
     val skin = LocalSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xl)) {
-        org.bramble.wallet.portfolio.PortfolioHeroSection(store.portfolio)
+        org.bramble.wallet.portfolio
+            .PortfolioHeroSection(store.portfolio)
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
             val active = store.activeRecord
             ActionTile("Send", BrambleIconName.SEND, enabled = active != null, modifier = Modifier.weight(1f)) {
@@ -59,7 +54,12 @@ fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit, privac
             ActionTile("Receive", BrambleIconName.QR_CODE, modifier = Modifier.weight(1f), onClick = receive)
             // The core's Shield gate; this app does not read deployment yet, so it passes Unknown.
             org.bramble.wallet.privacy.ShieldActionTile(
-                org.bramble.core.shieldTile(store.network, org.bramble.core.DeploymentState.UNKNOWN, store.strkFunded, store.privacy.reading),
+                org.bramble.core.shieldTile(
+                    store.network,
+                    org.bramble.core.DeploymentState.UNKNOWN,
+                    store.strkFunded,
+                    store.privacy.reading,
+                ),
                 modifier = Modifier.weight(1f),
                 receive = receive,
                 journey = privacy,
@@ -67,24 +67,46 @@ fun HomeScreen(store: WalletStore, receive: () -> Unit, send: () -> Unit, privac
         }
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Tokens", color = skin.text, style = textStyle(BrambleTypeScale.title, BrambleWeight.bold), modifier = Modifier.weight(1f))
+                Text(
+                    "Tokens",
+                    color = skin.text,
+                    style = textStyle(BrambleTypeScale.title, BrambleWeight.bold),
+                    modifier = Modifier.weight(1f),
+                )
                 Box(Modifier.size(BrambleControl.hit), contentAlignment = Alignment.Center) {
                     BrambleIcon(BrambleIconName.MORE_HORIZONTAL, skin.muted)
                 }
             }
-            org.bramble.wallet.portfolio.PortfolioTokenList(store.portfolio)
+            org.bramble.wallet.portfolio
+                .PortfolioTokenList(store.portfolio)
         }
     }
 }
 
+/** A disabled action tile's opacity. */
+private const val DISABLED_TILE_ALPHA = 0.4f
+
 /** `.action-tile`: accent-soft ground, 22.5dp icon over a caption label. */
 @Composable
-private fun ActionTile(title: String, icon: BrambleIconName, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+private fun ActionTile(
+    title: String,
+    icon: BrambleIconName,
+    modifier: Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     val skin = LocalSkin.current
     Column(
-        modifier.alpha(if (enabled) 1f else 0.4f)
-            .fillPress(skin.accentSoft, skin.accentSoft.copy(alpha = 0.8f), RoundedCornerShape(BrambleRadius.lg), pressedScale = 0.97f, enabled = enabled, onClick = onClick)
-            .heightIn(min = BrambleSize.actionTile),
+        modifier
+            .alpha(if (enabled) 1f else DISABLED_TILE_ALPHA)
+            .fillPress(
+                skin.accentSoft,
+                skin.accentSoft.copy(alpha = 0.8f),
+                RoundedCornerShape(BrambleRadius.lg),
+                pressedScale = 0.97f,
+                enabled = enabled,
+                onClick = onClick,
+            ).heightIn(min = BrambleSize.actionTile),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs, Alignment.CenterVertically),
     ) {
@@ -102,6 +124,7 @@ fun ActivityScreen(store: WalletStore) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         Text("Activity", color = skin.text, style = textStyle(BrambleTypeScale.title, BrambleWeight.bold))
-        org.bramble.wallet.portfolio.PortfolioActivity(store.portfolio)
+        org.bramble.wallet.portfolio
+            .PortfolioActivity(store.portfolio)
     }
 }

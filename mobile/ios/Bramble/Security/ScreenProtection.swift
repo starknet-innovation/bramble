@@ -36,7 +36,9 @@ private struct ScreenshotWarning: ViewModifier {
     @Environment(WalletStore.self) private var store
 
     func body(content: Content) -> some View {
-        content.onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
+        content.onReceive(
+            NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)
+        ) { _ in
             store.toast = BrambleCopy.screenshotWarning
         }
     }
@@ -66,15 +68,15 @@ struct ScreenshotShield<Content: View>: UIViewRepresentable {
 
     @MainActor static var isAvailable: Bool { ShieldProbe.available }
 
-    func makeUIView(context: Context) -> ShieldView<Content> {
+    func makeUIView(context _: Context) -> ShieldView<Content> {
         ShieldView(content: content)
     }
 
-    func updateUIView(_ view: ShieldView<Content>, context: Context) {
+    func updateUIView(_ view: ShieldView<Content>, context _: Context) {
         view.host.rootView = content
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ShieldView<Content>, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ShieldView<Content>, context _: Context) -> CGSize? {
         let width = proposal.width ?? UIView.layoutFittingExpandedSize.width
         let size = uiView.host.sizeThatFits(in: CGSize(width: width, height: UIView.layoutFittingExpandedSize.height))
         return CGSize(width: width, height: size.height)
@@ -114,8 +116,10 @@ final class ShieldView<Content: View>: UIView {
         field.translatesAutoresizingMaskIntoConstraints = false
         addSubview(field)
         NSLayoutConstraint.activate([
-            field.topAnchor.constraint(equalTo: topAnchor), field.bottomAnchor.constraint(equalTo: bottomAnchor),
-            field.leadingAnchor.constraint(equalTo: leadingAnchor), field.trailingAnchor.constraint(equalTo: trailingAnchor),
+            field.topAnchor.constraint(equalTo: topAnchor),
+            field.bottomAnchor.constraint(equalTo: bottomAnchor),
+            field.leadingAnchor.constraint(equalTo: leadingAnchor),
+            field.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
         // Fail closed: without the secure canvas nothing is attached, so nothing is drawn.
         guard let canvas = secureCanvas(in: field) else { return }
@@ -125,13 +129,15 @@ final class ShieldView<Content: View>: UIView {
         field.isAccessibilityElement = false
         accessibilityElements = [host.view as Any]
         NSLayoutConstraint.activate([
-            host.view.topAnchor.constraint(equalTo: topAnchor), host.view.bottomAnchor.constraint(equalTo: bottomAnchor),
-            host.view.leadingAnchor.constraint(equalTo: leadingAnchor), host.view.trailingAnchor.constraint(equalTo: trailingAnchor),
+            host.view.topAnchor.constraint(equalTo: topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: bottomAnchor),
+            host.view.leadingAnchor.constraint(equalTo: leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) { nil }
+    required init?(coder _: NSCoder) { nil }
 }
 
 /// A recovery-word grid shielded from screenshots, masked when the shield is unavailable or the

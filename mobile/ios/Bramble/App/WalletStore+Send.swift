@@ -1,6 +1,9 @@
 import BrambleCore
 import Foundation
 
+/// Milliseconds per second, for the wall-clock time observation periods are measured in.
+private let millisecondsPerSecond: Double = 1_000
+
 /// Send, deploy and local activity on top of `WalletStore`. Kept in its own file so the store
 /// itself only gained the few stored properties these need.
 extension WalletStore {
@@ -22,16 +25,20 @@ extension WalletStore {
             account: account,
             otherAccounts: records.filter { $0.id != account.id },
             balances: balances,
-            transport: rpc.transport,
-            track: { [weak self] plan in self?.plans.append(plan) }
-        )
+            transport: rpc.transport
+        ) { [weak self] plan in self?.plans.append(plan) }
     }
 
     /// The standalone Deploy account flow for the active account (OpenZeppelin only: the core
     /// builds no other family's deployment).
     func makeDeployModel() -> DeployFlowModel? {
         guard let account = activeRecord, sendRefusal == nil else { return nil }
-        return DeployFlowModel(core: core, network: networkInfo, accountId: account.id, transport: rpc.transport) { [weak self] plan in
+        return DeployFlowModel(
+            core: core,
+            network: networkInfo,
+            accountId: account.id,
+            transport: rpc.transport
+        ) { [weak self] plan in
             self?.plans.append(plan)
         }
     }
@@ -48,7 +55,7 @@ extension WalletStore {
         // The deploy notice is for accounts this core can deploy; others never show it.
         deployment = sendRefusal == nil ? await rpc.deploymentState(of: account.address, on: network) : .unknown
         portfolio.reloadActivity()
-        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        let now = UInt64(Date().timeIntervalSince1970 * millisecondsPerSecond)
         let period = activityObservationPeriodMs()
         for record in activity where activityNeedsObservation(record: record, nowMs: now) {
             if let last = observedAtMs[record.hash], now &- last < period { continue }

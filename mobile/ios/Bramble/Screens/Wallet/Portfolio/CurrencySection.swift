@@ -14,8 +14,13 @@ struct CurrencySection: View {
         )
         VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
             Eyebrow(text: "Values")
-            Text("Display currency").brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold).foregroundStyle(skin.muted)
-            SegmentedControl(options: [("USD", DisplayCurrency.usd), ("EUR", .eur), ("GBP", .gbp)], selection: selection)
+            Text("Display currency")
+                .brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
+                .foregroundStyle(skin.muted)
+            SegmentedControl(
+                options: [("USD", DisplayCurrency.usd), ("EUR", .eur), ("GBP", .gbp)],
+                selection: selection
+            )
                 .accessibilityIdentifier("display-currency")
             Text("Prices and portfolio totals use this display currency. Token balances remain unchanged.")
                 .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
@@ -27,9 +32,14 @@ extension DisplayCurrency {
     /// The settings row value: the currency code uppercased.
     var code: String {
         switch self {
-        case .usd: "USD"
-        case .eur: "EUR"
-        case .gbp: "GBP"
+        case .usd:
+            "USD"
+
+        case .eur:
+            "EUR"
+
+        case .gbp:
+            "GBP"
         }
     }
 }

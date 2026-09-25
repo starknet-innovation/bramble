@@ -9,6 +9,8 @@ struct PortfolioEndpoints: Sendable {
     let transport: any PortfolioTransport
     /// `RPC_REQUEST_TIMEOUT_MS`, from the core; each request carries its own body bound.
     private let limits = rpcLimits()
+    /// The extension's read concurrency: calls in flight at once against one endpoint.
+    private static let readConcurrency = 4
 
     /// Runs `attempt` on each verified endpoint until one returns a value; `nil` from `attempt`
     /// means "transport failure here, try the next". `nil` overall: every endpoint failed.
@@ -32,14 +34,18 @@ struct PortfolioEndpoints: Sendable {
             maxBodyBytes: call.maxResponseBytes,
             deadlineMs: limits.deadlineMs
         ))
-        return RpcReply(id: call.id, status: outcome.status, body: outcome.body.map { String(decoding: $0, as: UTF8.self) })
+        return RpcReply(
+            id: call.id,
+            status: outcome.status,
+            body: outcome.body.map { String(decoding: $0, as: UTF8.self) }
+        )
     }
 
     /// Sends calls at most four at a time (the extension's read concurrency), replies in call order.
     func send(_ calls: [RpcRequest], to url: URL) async -> [RpcReply] {
         var replies: [RpcReply] = []
-        for start in stride(from: 0, to: calls.count, by: 4) {
-            let batch = Array(calls[start..<min(start + 4, calls.count)])
+        for start in stride(from: 0, to: calls.count, by: Self.readConcurrency) {
+            let batch = Array(calls[start..<min(start + Self.readConcurrency, calls.count)])
             let answered = await withTaskGroup(of: RpcReply.self) { group in
                 for call in batch {
                     group.addTask { await send(call, to: url) }
@@ -56,7 +62,8 @@ struct PortfolioEndpoints: Sendable {
     }
 
     private func verify(_ url: URL, network: NetworkId) async -> Bool {
-        let reply = await send(RpcRequest(id: 0, body: rpcChainIdRequest(id: 0), maxResponseBytes: limits.maxBodyBytes), to: url)
+        let probe = RpcRequest(id: 0, body: rpcChainIdRequest(id: 0), maxResponseBytes: limits.maxBodyBytes)
+        let reply = await send(probe, to: url)
         guard let body = reply.body else { return false }
         return (try? rpcVerifyChainId(body: body, id: 0, network: network)) == true
     }

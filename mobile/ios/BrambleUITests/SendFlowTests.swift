@@ -15,6 +15,12 @@ final class SendFlowTests: XCTestCase {
         try UITest.refuseRealPhrase()
     }
 
+    override func tearDownWithError() throws {
+        // Restores the XCTest default that setUp changed; nothing else is shared between tests.
+        continueAfterFailure = true
+        try super.tearDownWithError()
+    }
+
     private func snapshot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
@@ -98,7 +104,8 @@ final class SendFlowTests: XCTestCase {
         type("1.5", into: app.textFields["Amount to send"])
         tap(app.buttons["Review send"])
         XCTAssertTrue(app.staticTexts["Estimated transaction fee: 0.008053 STRK"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Estimated account deployment fee: ")).firstMatch.exists)
+        let deploymentFee = NSPredicate(format: "label BEGINSWITH %@", "Estimated account deployment fee: ")
+        XCTAssertTrue(app.staticTexts.matching(deploymentFee).firstMatch.exists)
         XCTAssertTrue(app.buttons["Confirm and send"].isEnabled)
         snapshot(app, "send-review-undeployed")
         assertNoWrites(app)
@@ -115,7 +122,10 @@ final class SendFlowTests: XCTestCase {
         openSendDetails(app, to: recipient)
         type("1", into: app.textFields["Amount to send"])
         tap(app.buttons["Review send"])
-        XCTAssertTrue(app.staticTexts["Couldn't estimate the network fee right now. Check your connection and retry before sending."].waitForExistence(timeout: 15))
+        let feeFailure = app.staticTexts[
+            "Couldn't estimate the network fee right now. Check your connection and retry before sending."
+        ]
+        XCTAssertTrue(feeFailure.waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["Retry fee estimate"].exists)
         XCTAssertTrue(app.staticTexts["Fee estimate unavailable. Retry before authorizing this transaction."].exists)
         XCTAssertFalse(app.buttons["Confirm and send"].isEnabled)
@@ -128,7 +138,8 @@ final class SendFlowTests: XCTestCase {
         tap(app.buttons["Continue with address"])
         type("1", into: app.textFields["Amount to send"])
         tap(app.buttons["Review send"])
-        XCTAssertTrue(app.staticTexts["This recipient closely mimics a saved address. Change it and review again."].waitForExistence(timeout: 15))
+        let poisoned = app.staticTexts["This recipient closely mimics a saved address. Change it and review again."]
+        XCTAssertTrue(poisoned.waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["Confirm and send"].isEnabled)
         snapshot(app, "send-review-poisoned")
         assertNoWrites(app)

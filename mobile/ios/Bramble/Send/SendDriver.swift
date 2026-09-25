@@ -9,6 +9,9 @@ import Foundation
 /// step of the plan goes to that same endpoint, with no failover; a write is sent exactly once,
 /// never retried, never redirected.
 actor SendDriver {
+    /// Milliseconds per second, for the host clock the plan reads.
+    private static let millisecondsPerSecond: Double = 1_000
+
     let plan: TransferPlan
     private let urls: [URL]
     private let network: NetworkId
@@ -31,24 +34,29 @@ actor SendDriver {
 
     /// Advances the plan from `reply` until it needs the user (`Review`, `Broadcast`, `Finished`,
     /// `Failed`). `onStep` sees every RPC step before it is sent, so the UI can follow progress.
-    func run(from reply: StepReply, onStep: @escaping @Sendable (SendStep) async -> Void = { _ in }) async throws -> SendStep {
-        var reply = reply
+    func run(
+        from initial: StepReply,
+        onStep: @Sendable (SendStep) async -> Void = { _ in /* No progress to follow. */ }
+    ) async throws -> SendStep {
+        var reply = initial
         while true {
             let step = try plan.advance(reply: reply)
             switch step {
             case let .rpc(id, body, purpose, isWrite):
                 await onStep(step)
                 reply = await exchange(id: id, body: body, purpose: purpose, write: isWrite)
+
             case let .wait(delayMs):
                 try await Task.sleep(for: .milliseconds(Int(delayMs)))
                 reply = .waitElapsed
+
             default:
                 return step
             }
         }
     }
 
-    private func now() -> UInt64 { UInt64(Date().timeIntervalSince1970 * 1000) }
+    private func now() -> UInt64 { UInt64(Date().timeIntervalSince1970 * Self.millisecondsPerSecond) }
 
     private func exchange(id: UInt64, body: String, purpose: RpcPurpose, write: Bool) async -> StepReply {
         if endpoint == nil, purpose == .chainId, !write {

@@ -32,6 +32,10 @@ import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.ui.onboarding.RecoveryWordGrid
 
+private const val REVEAL_WARNING =
+    "Reveal only in private. Bramble will never ask you for them. They are shown once here and " +
+        "never leave this screen."
+
 /**
  * `reveal-software`, port of the iOS `RevealSecretsView`: warning, re-entered passphrase (the core
  * re-checks it; an unlocked session alone is not enough), then the words. "Hide secrets", leaving
@@ -39,7 +43,10 @@ import org.bramble.wallet.ui.onboarding.RecoveryWordGrid
  * the store and never reaches this screen.
  */
 @Composable
-fun RevealScreen(store: WalletStore, back: () -> Unit) {
+fun RevealScreen(
+    store: WalletStore,
+    back: () -> Unit,
+) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     var passphrase by remember { mutableStateOf("") }
@@ -52,10 +59,14 @@ fun RevealScreen(store: WalletStore, back: () -> Unit) {
         FlowHeader("Reveal secrets", subtitle = "Recovery phrase", network = store.networkLabel, back = back)
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleLayout.pillGap)) {
             BrambleIcon(BrambleIconName.ALERT, skin.danger, BrambleLayout.revealAlertIcon)
-            Text("Anyone who sees these can take your funds.", color = skin.danger, style = textStyle(BrambleTypeScale.title, BrambleWeight.bold))
+            Text(
+                "Anyone who sees these can take your funds.",
+                color = skin.danger,
+                style = textStyle(BrambleTypeScale.title, BrambleWeight.bold),
+            )
         }
         Text(
-            "Reveal only in private. Bramble will never ask you for them. They are shown once here and never leave this screen.",
+            REVEAL_WARNING,
             color = skin.muted,
             style = textStyle(BrambleTypeScale.body),
         )
@@ -67,7 +78,12 @@ fun RevealScreen(store: WalletStore, back: () -> Unit) {
                 onValueChange = { passphrase = it },
                 hint = "Re-enter it to reveal. An unlocked session alone is not enough.",
             )
-            PillButton("Reveal secrets", icon = BrambleIconName.LOCK, busy = store.busy, enabled = passphrase.isNotEmpty()) {
+            PillButton(
+                "Reveal secrets",
+                icon = BrambleIconName.LOCK,
+                busy = store.busy,
+                enabled = passphrase.isNotEmpty(),
+            ) {
                 val attempt = passphrase
                 passphrase = ""
                 scope.launch {
@@ -85,18 +101,27 @@ fun RevealScreen(store: WalletStore, back: () -> Unit) {
 
 /** Removing the wallet re-checks the passphrase in the core before the vault is deleted. */
 @Composable
-fun RemoveWalletScreen(store: WalletStore, back: () -> Unit) {
+fun RemoveWalletScreen(
+    store: WalletStore,
+    back: () -> Unit,
+) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     var passphrase by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg), verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = BrambleSpace.lg),
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.md),
+    ) {
         FlowHeader("Remove wallet", subtitle = "From this device only", network = store.networkLabel, back = back)
         Text(
             "Your funds stay on Starknet, but you will need your recovery phrase to restore this wallet.",
             color = skin.muted,
             style = textStyle(BrambleTypeScale.body),
         )
-        BrambleField(label = "Confirm vault passphrase", placeholder = "", value = passphrase, onValueChange = { passphrase = it })
+        BrambleField(label = "Confirm vault passphrase", placeholder = "", value = passphrase, onValueChange = {
+            passphrase =
+                it
+        })
         PillButton("Remove wallet", kind = PillKind.DANGER, busy = store.busy, enabled = passphrase.isNotEmpty()) {
             val attempt = passphrase
             passphrase = ""

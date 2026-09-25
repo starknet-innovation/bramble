@@ -32,7 +32,19 @@ import androidx.compose.ui.viewinterop.AndroidView
  * not secrets, but they go through the same field so no second input path exists and no
  * suggestion strip or keyboard dictionary learns an address or an amount either.
  */
-enum class SecretKind { PASSPHRASE, WORD, ADDRESS, AMOUNT }
+enum class SecretKind {
+    /** A vault passphrase: masked. */
+    PASSPHRASE,
+
+    /** One recovery-phrase word: readable. */
+    WORD,
+
+    /** A recipient address: readable and pasteable. */
+    ADDRESS,
+
+    /** A token amount: the decimal keypad. */
+    AMOUNT,
+}
 
 /**
  * Keyboard and autofill policy for every secret input (threat T4/T5 in `docs/android-parity.md`,
@@ -43,23 +55,31 @@ enum class SecretKind { PASSPHRASE, WORD, ADDRESS, AMOUNT }
  * what is typed; passphrases are masked, phrase words stay readable.
  */
 object SecretInput {
-    const val PASSPHRASE_TYPE: Int = InputType.TYPE_CLASS_TEXT or
-        InputType.TYPE_TEXT_VARIATION_PASSWORD or
-        InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-    const val WORD_TYPE: Int = InputType.TYPE_CLASS_TEXT or
-        InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
-        InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+    /** Masked text with no suggestions. */
+    const val PASSPHRASE_TYPE: Int =
+        InputType.TYPE_CLASS_TEXT or
+            InputType.TYPE_TEXT_VARIATION_PASSWORD or
+            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+
+    /** Readable text with no suggestions (a visible-password variation, so no dictionary). */
+    const val WORD_TYPE: Int =
+        InputType.TYPE_CLASS_TEXT or
+            InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
+            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+
     /** No learning from what is typed, and no full-screen extract editor that copies the text. */
     const val IME_FLAGS: Int = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING or EditorInfo.IME_FLAG_NO_EXTRACT_UI
 
     /** Digits and one decimal separator; a number class carries no suggestions by definition. */
     const val AMOUNT_TYPE: Int = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
 
-    fun inputType(kind: SecretKind): Int = when (kind) {
-        SecretKind.PASSPHRASE -> PASSPHRASE_TYPE
-        SecretKind.WORD, SecretKind.ADDRESS -> WORD_TYPE
-        SecretKind.AMOUNT -> AMOUNT_TYPE
-    }
+    /** The input type for [kind]: addresses share the word policy. */
+    fun inputType(kind: SecretKind): Int =
+        when (kind) {
+            SecretKind.PASSPHRASE -> PASSPHRASE_TYPE
+            SecretKind.WORD, SecretKind.ADDRESS -> WORD_TYPE
+            SecretKind.AMOUNT -> AMOUNT_TYPE
+        }
 }
 
 /**
@@ -73,7 +93,9 @@ object SecretInput {
  *   `onSaveInstanceState` returns the empty state even if called directly.
  * Copy, cut, and share are removed from its selection menu; paste stays, for importing a phrase.
  */
-class SecretEditText(context: Context) : EditText(context) {
+class SecretEditText(
+    context: Context,
+) : EditText(context) {
     internal var syncing = false
     internal var onChange: (String) -> Unit = {}
     internal var onFocus: (Boolean) -> Unit = {}
@@ -88,16 +110,31 @@ class SecretEditText(context: Context) : EditText(context) {
         background = null
         setPadding(0, 0, 0, 0)
         maxLines = 1
-        addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-            override fun afterTextChanged(s: Editable?) {
-                if (!syncing) onChange(s?.toString().orEmpty())
-            }
-        })
+        addTextChangedListener(
+            object : TextWatcher {
+                override fun beforeTextChanged(
+                    s: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int,
+                ) = Unit
+
+                override fun onTextChanged(
+                    s: CharSequence?,
+                    start: Int,
+                    before: Int,
+                    count: Int,
+                ) = Unit
+
+                override fun afterTextChanged(s: Editable?) {
+                    if (!syncing) onChange(s?.toString().orEmpty())
+                }
+            },
+        )
         setOnFocusChangeListener { _, focused -> onFocus(focused) }
         setOnKeyListener { _, keyCode, event ->
-            val emptyDelete = keyCode == KeyEvent.KEYCODE_DEL && event.action == KeyEvent.ACTION_DOWN && text.isNullOrEmpty()
+            val emptyDelete =
+                keyCode == KeyEvent.KEYCODE_DEL && event.action == KeyEvent.ACTION_DOWN && text.isNullOrEmpty()
             if (emptyDelete) onBackspaceWhenEmpty()
             emptyDelete
         }
@@ -106,17 +143,30 @@ class SecretEditText(context: Context) : EditText(context) {
             handler?.invoke()
             handler != null
         }
-        val noCopy = object : ActionMode.Callback {
-            override fun onCreateActionMode(mode: ActionMode?, menu: Menu?) = true
-            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-                menu?.removeItem(android.R.id.copy)
-                menu?.removeItem(android.R.id.cut)
-                menu?.removeItem(android.R.id.shareText)
-                return true
+        val noCopy =
+            object : ActionMode.Callback {
+                override fun onCreateActionMode(
+                    mode: ActionMode?,
+                    menu: Menu?,
+                ) = true
+
+                override fun onPrepareActionMode(
+                    mode: ActionMode?,
+                    menu: Menu?,
+                ): Boolean {
+                    menu?.removeItem(android.R.id.copy)
+                    menu?.removeItem(android.R.id.cut)
+                    menu?.removeItem(android.R.id.shareText)
+                    return true
+                }
+
+                override fun onActionItemClicked(
+                    mode: ActionMode?,
+                    item: MenuItem?,
+                ) = false
+
+                override fun onDestroyActionMode(mode: ActionMode?) = Unit
             }
-            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?) = false
-            override fun onDestroyActionMode(mode: ActionMode?) = Unit
-        }
         customSelectionActionModeCallback = noCopy
         customInsertionActionModeCallback = noCopy
     }
@@ -129,7 +179,10 @@ class SecretEditText(context: Context) : EditText(context) {
     }
 
     /** Applies [SecretInput] for [kind]; [imeAction] is an `EditorInfo.IME_ACTION_*` value. */
-    fun configure(kind: SecretKind, imeAction: Int) {
+    fun configure(
+        kind: SecretKind,
+        imeAction: Int,
+    ) {
         inputType = SecretInput.inputType(kind)
         // setInputType swaps password fields to monospace; words keep the body face, as on iOS.
         typeface = Typeface.DEFAULT
@@ -147,7 +200,10 @@ class SecretEditText(context: Context) : EditText(context) {
     internal fun focusAndShowKeyboard() {
         post {
             requestFocus()
-            context.getSystemService(InputMethodManager::class.java)?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+            context
+                .getSystemService(
+                    InputMethodManager::class.java,
+                )?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
         }
     }
 }
@@ -191,7 +247,8 @@ fun SecretField(
             edit.onFocus = onFocusChange
             edit.onBackspaceWhenEmpty = onBackspaceWhenEmpty
             edit.onImeAction = onImeAction
-            if (edit.imeOptions != (imeAction or SecretInput.IME_FLAGS)) edit.imeOptions = imeAction or SecretInput.IME_FLAGS
+            val imeOptions = imeAction or SecretInput.IME_FLAGS
+            if (edit.imeOptions != imeOptions) edit.imeOptions = imeOptions
             edit.contentDescription = accessibilityLabel
             edit.hint = placeholder
             edit.setTextColor((textColor ?: skin.text).toArgb())
@@ -199,10 +256,11 @@ fun SecretField(
             edit.highlightColor = skin.accentSoft.toArgb()
             edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, style.size.value)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                edit.textCursorDrawable = GradientDrawable().apply {
-                    setColor(skin.accent.toArgb())
-                    setSize((edit.resources.displayMetrics.density * 2).toInt(), 0)
-                }
+                edit.textCursorDrawable =
+                    GradientDrawable().apply {
+                        setColor(skin.accent.toArgb())
+                        setSize((edit.resources.displayMetrics.density * 2).toInt(), 0)
+                    }
             }
             edit.setValue(value)
             if (requestFocus) {

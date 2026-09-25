@@ -8,6 +8,12 @@ final class SwipeBackTests: XCTestCase {
         try UITest.refuseRealPhrase()
     }
 
+    override func tearDownWithError() throws {
+        // Restores the XCTest default that setUp changed; nothing else is shared between tests.
+        continueAfterFailure = true
+        try super.tearDownWithError()
+    }
+
     private func assertSwipeReturns(_ app: XCUIApplication, from here: String, to previous: XCUIElement) {
         UITest.wait(app.staticTexts[here])
         UITest.edgeSwipe(app)
@@ -30,7 +36,11 @@ final class SwipeBackTests: XCTestCase {
 
         UITest.tap(app.buttons["Add an existing wallet"])
         UITest.tap(app.buttons["Recovery phrase"])
-        assertSwipeReturns(app, from: "Enter your recovery phrase", to: app.staticTexts["Choose how to add your wallet"])
+        assertSwipeReturns(
+            app,
+            from: "Enter your recovery phrase",
+            to: app.staticTexts["Choose how to add your wallet"]
+        )
 
         UITest.tap(app.buttons["Recovery phrase"])
         UITest.enterPublicPhrase(app)

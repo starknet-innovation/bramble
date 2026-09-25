@@ -66,9 +66,9 @@ final class CoordinationStore {
 
     func loadNostrKey() async {
         guard nostrKey == nil else { return }
-        let core = core, started = generation
+        let walletCore = core, started = generation
         do {
-            let key = try await work { try core.nostrPublicKey() }
+            let key = try await work { try walletCore.nostrPublicKey() }
             guard started == generation else { return }
             nostrKey = key
             nostrUnavailable = false
@@ -80,10 +80,10 @@ final class CoordinationStore {
 
     /// Reloads contacts, shared accounts, and the relay choice for the active network.
     func refresh() async {
-        let core = core, network = wallet.network, started = generation
-        let nextContacts = (try? await work { try core.contacts(network: network) }) ?? []
-        let nextMultisigs = (try? await work { try core.multisigs(network: network) }) ?? []
-        let nextPolicy = try? await work { try core.relayPolicy() }
+        let walletCore = core, network = wallet.network, started = generation
+        let nextContacts = (try? await work { try walletCore.contacts(network: network) }) ?? []
+        let nextMultisigs = (try? await work { try walletCore.multisigs(network: network) }) ?? []
+        let nextPolicy = try? await work { try walletCore.relayPolicy() }
         guard started == generation else { return }
         contacts = nextContacts
         multisigs = nextMultisigs
@@ -91,16 +91,22 @@ final class CoordinationStore {
     }
 
     func saveContact(label: String, address: String, publicKeyX: String?, nostrPublicKey: String?) async throws {
-        let core = core, network = wallet.network
+        let walletCore = core, network = wallet.network
         _ = try await work {
-            try core.saveContact(network: network, label: label, address: address, publicKeyX: publicKeyX, nostrPublicKey: nostrPublicKey)
+            try walletCore.saveContact(
+                network: network,
+                label: label,
+                address: address,
+                publicKeyX: publicKeyX,
+                nostrPublicKey: nostrPublicKey
+            )
         }
         await refresh()
     }
 
     func removeContact(_ id: String) async throws {
-        let core = core
-        try await work { try core.removeContact(id: id) }
+        let walletCore = core
+        try await work { try walletCore.removeContact(id: id) }
         await refresh()
     }
 
@@ -108,82 +114,106 @@ final class CoordinationStore {
     /// Returns the status-line copy; throws `Refusal` with the extension's error copy.
     func addShared(address raw: String) async throws -> String {
         let address = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let network = wallet.networkInfo, rpc = rpc, core = core
+        let network = wallet.networkInfo, transport = rpc, walletCore = core
         let read: MultisigAuthorityRead
         do {
-            read = try await ChainReads.authority(of: address, on: network, via: rpc)
+            read = try await ChainReads.authority(of: address, on: network, via: transport)
         } catch {
             throw Refusal(message: "Enter a valid non-zero Starknet account address.")
         }
         switch read.status() {
-        case .available?, .undeployed?: break
-        case .invalidConfig?: throw Refusal(message: "This Argent multisig returned an invalid signer configuration")
-        case .unsupportedClass?: throw Refusal(message: "This address is not the pinned Argent Multisig 0.2 account")
-        case .networkUnavailable?, nil:
-            throw Refusal(message: "Argent multisig authority could not be verified. Check the network and retry")
+        case .available, .undeployed:
+            break
+
+        case .invalidConfig:
+            throw Refusal(message: "This Argent multisig returned an invalid signer configuration")
+
+        case .unsupportedClass:
+            throw Refusal(message: "This address is not the pinned Argent Multisig 0.2 account")
+
+        case .networkUnavailable, nil:
+            throw Refusal(message: Self.authorityUnverified)
         }
-        let record = try await work { try core.addMultisig(read: read) }
+        let record = try await work { try walletCore.addMultisig(read: read) }
         await refresh()
         if read.status() == .undeployed { return "Undeployed multisig added · complete setup to deploy" }
         let matched = record.localSignerAccountIds.count
-        return matched == 0 ? "Multisig synced · watch-only" : "Multisig synced · \(matched) wallet signer\(matched == 1 ? "" : "s") found"
+        guard matched != 0 else { return "Multisig synced · watch-only" }
+        return "Multisig synced · \(matched) wallet signer\(matched == 1 ? "" : "s") found"
     }
 
     /// `deployer` is the account record id that signs and pays for deployment.
-    func saveSetup(name: String, signerKeys: [String], threshold: UInt32, salt: String, deployer: String) async throws -> MultisigRecord {
-        let core = core, network = wallet.network
+    func saveSetup(
+        name: String,
+        signerKeys: [String],
+        threshold: UInt32,
+        salt: String,
+        deployer: String
+    ) async throws -> MultisigRecord {
+        let walletCore = core, network = wallet.network
         let config = ArgentMultisigConfig(threshold: threshold, signerPublicKeys: signerKeys)
         let record = try await work {
-            try core.saveMultisigSetup(network: network, name: name, config: config, salt: salt, deployerAccountId: deployer)
+            try walletCore.saveMultisigSetup(
+                network: network,
+                name: name,
+                config: config,
+                salt: salt,
+                deployerAccountId: deployer
+            )
         }
         await refresh()
         return record
     }
 
     func removeShared(_ id: String) async throws {
-        let core = core
-        try await work { try core.removeMultisig(id: id) }
+        let walletCore = core
+        try await work { try walletCore.removeMultisig(id: id) }
         await refresh()
     }
 
-    func classDeclared() async -> Bool? {
+    func classDeclared() async -> ClassDeclaration {
         await ChainReads.classDeclared(on: wallet.networkInfo, via: rpc)
     }
 
     /// Saves the custom relay (empty restores the defaults); returns the extension's toast copy.
     func setRelay(_ raw: String) async throws -> String {
-        let core = core, started = generation
-        let saved = try await work { try core.setNostrRelayUrl(raw: raw) }
-        let nextPolicy = try? await work { try core.relayPolicy() }
+        let walletCore = core, started = generation
+        let saved = try await work { try walletCore.setNostrRelayUrl(raw: raw) }
+        let nextPolicy = try? await work { try walletCore.relayPolicy() }
         if started == generation { relayPolicy = nextPolicy }
         return saved == nil ? "Coordination relay reset" : "Coordination relay saved"
     }
 
     /// One "Check for updates": the core plans, the transport moves frames, the core judges.
     func sync(_ multisigId: String) async throws -> CoordinationSyncOutcome {
-        let core = core, relays = relays
+        let walletCore = core, relayTransport = relays
         let now = UInt64(Date().timeIntervalSince1970)
         let task = Task.detached(priority: .userInitiated) { () throws -> CoordinationSyncOutcome in
-            let plan = try core.coordinationSyncBegin(multisigId: multisigId, now: now)
-            let policy = try core.relayPolicy()
-            await relays.sync(plan, policy: policy)
+            let plan = try walletCore.coordinationSyncBegin(multisigId: multisigId, now: now)
+            let policy = try walletCore.relayPolicy()
+            await relayTransport.sync(plan, policy: policy)
             try Task.checkCancellation()
-            return try core.coordinationSyncFinish(plan: plan)
+            return try walletCore.coordinationSyncFinish(plan: plan)
         }
         syncTask = task
         defer { syncTask = nil }
         return try await task.value
     }
 
-    /// STRK and ETH balances of a shared account, through the existing balance reader.
-    func balances(of address: String) async -> [String: String]? {
+    /// STRK and ETH balances of a shared account, through the existing balance reader. Throws when
+    /// no endpoint could read them.
+    func balances(of address: String) async throws -> [String: String] {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "BrambleStubNetwork") {
             return Dictionary(uniqueKeysWithValues: wallet.networkInfo.tokens.map { ($0.symbol, "0") })
         }
         #endif
-        return try? await wallet.rpc.balances(of: address, on: wallet.networkInfo)
+        return try await wallet.rpc.balances(of: address, on: wallet.networkInfo)
     }
+
+    /// The extension's copy when no endpoint could read the multisig's authority.
+    private static let authorityUnverified =
+        "Argent multisig authority could not be verified. Check the network and retry"
 
     /// A refusal carrying the extension's user-facing copy.
     struct Refusal: LocalizedError {

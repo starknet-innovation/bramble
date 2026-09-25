@@ -12,6 +12,7 @@ import org.bramble.core.SendFailureCode
 import org.bramble.core.SendStep
 import org.bramble.core.StepReply
 import org.bramble.core.TokenInfo
+import org.bramble.core.TransferPlan
 import org.bramble.core.TransferRequest
 import org.bramble.core.TransferReview
 import org.bramble.core.TxStatus
@@ -25,63 +26,122 @@ import org.bramble.wallet.design.BrambleCopy
  * The Send journey's UI state, mirroring iOS `SendFlowModel`: every protocol decision is the
  * core plan's; this tracks the screen and the typed input. An edit drops the plan.
  *
- * [notice] carries the outcome toast: `true` for a confirmation (the store's success tone),
- * `false` for a transaction that was not confirmed (an error).
+ * [SendHooks.notice] carries the outcome toast: `true` for a confirmation (the store's success
+ * tone), `false` for a transaction that was not confirmed (an error).
  *
  * Uncompiled: this machine has no Android SDK; checked by reading against the generated bindings.
  */
 class SendFlowModel(
     private val core: WalletCore,
+    /** The network the journey sends on; its tokens are the ones offered. */
     val network: NetworkInfo,
     /** The sending account; the core signs by its id and refuses Braavos and Ready records. */
     val account: AccountRecord,
     /** This network's other accounts, offered as recipients. */
     val otherAccounts: List<AccountRecord>,
     private val balances: Map<String, String>,
-    private val track: (org.bramble.core.TransferPlan) -> Unit = {},
-    private val notice: (message: String, success: Boolean) -> Unit = { _, _ -> },
+    private val hooks: SendHooks = SendHooks(),
 ) {
-    enum class Stage { RECIPIENT, ASSET, DETAILS, REVIEWING, REVIEW, AUTHORIZING, BROADCASTING, CONFIRMING, PENDING, SUBMITTED, FAILED }
+    /** The screen the journey shows, in the extension's order. */
+    enum class Stage {
+        /** Typing or picking the recipient. */
+        RECIPIENT,
 
+        /** Choosing the token. */
+        ASSET,
+
+        /** Entering the amount. */
+        DETAILS,
+
+        /** The core plan is estimating the fee for review. */
+        REVIEWING,
+
+        /** The plan's review, waiting for Confirm. */
+        REVIEW,
+
+        /** Confirmed; the plan is signing. */
+        AUTHORIZING,
+
+        /** The signed write is being posted. */
+        BROADCASTING,
+
+        /** Sent; waiting for the chain to accept it. */
+        CONFIRMING,
+
+        /** Sent, but not yet confirmed when the plan stopped checking. */
+        PENDING,
+
+        /** Accepted or pre-confirmed by the chain. */
+        SUBMITTED,
+
+        /** Refused, rejected, reverted or interrupted; [failureMessage] says which. */
+        FAILED,
+    }
+
+    /** The current screen. */
     var stage by mutableStateOf(Stage.RECIPIENT)
         private set
+
+    /** The recipient field's text, as typed (untrusted until the core validates it). */
     var recipientInput by mutableStateOf("")
         private set
+
+    /** Why the typed recipient was refused, or null. */
     var recipientError by mutableStateOf<String?>(null)
         private set
+
+    /** The core-canonicalised recipient address, once accepted. */
     var recipient by mutableStateOf<String?>(null)
         private set
+
+    /** The token to send: STRK by default, else the network's first token. */
     var token by mutableStateOf(network.tokens.firstOrNull { it.symbol == "STRK" } ?: network.tokens.first())
         private set
+
+    /** The amount field's text, with a decimal comma turned into a point. */
     var amount by mutableStateOf("")
         private set
+
+    /** Why the amount was refused, or null. */
     var amountError by mutableStateOf<String?>(null)
         private set
+
+    /** The core plan's review of the transfer, while one is open. */
     var review by mutableStateOf<TransferReview?>(null)
         private set
+
+    /** Why the review cannot be confirmed (a poisoned address, no fee), or null. */
     var reviewBlock by mutableStateOf<String?>(null)
         private set
+
+    /** The transaction hash once a write has been sent (or the core reports one). */
     var hash by mutableStateOf<String?>(null)
         private set
+
+    /** The explorer link for [hash] from the finished plan, or null. */
     var explorerUrl by mutableStateOf<String?>(null)
         private set
+
+    /** The failure copy shown on [Stage.FAILED]. */
     var failureMessage by mutableStateOf<String?>(null)
         private set
 
     private var driver: SendDriver? = null
 
-    val title: String get() = when (stage) {
-        Stage.RECIPIENT -> SendCopy.titleRecipient
-        Stage.ASSET -> SendCopy.titleAsset
-        Stage.DETAILS, Stage.REVIEWING -> SendCopy.titleDetails
-        Stage.REVIEW -> SendCopy.titleReview
-        Stage.AUTHORIZING -> SendCopy.titleAuthorizing
-        Stage.BROADCASTING -> SendCopy.titleBroadcasting
-        Stage.CONFIRMING -> SendCopy.titleConfirming
-        Stage.PENDING -> SendCopy.titlePending
-        Stage.SUBMITTED -> SendCopy.titleSubmitted
-        Stage.FAILED -> SendCopy.titleFailed
-    }
+    /** The flow header's title for [stage]. */
+    val title: String get() =
+        when (stage) {
+            Stage.RECIPIENT -> SendCopy.titleRecipient
+            Stage.ASSET -> SendCopy.titleAsset
+            Stage.DETAILS, Stage.REVIEWING -> SendCopy.titleDetails
+            Stage.REVIEW -> SendCopy.titleReview
+            Stage.AUTHORIZING -> SendCopy.titleAuthorizing
+            Stage.BROADCASTING -> SendCopy.titleBroadcasting
+            Stage.CONFIRMING -> SendCopy.titleConfirming
+            Stage.PENDING -> SendCopy.titlePending
+            Stage.SUBMITTED -> SendCopy.titleSubmitted
+            Stage.FAILED -> SendCopy.titleFailed
+        }
 
     /** Base-unit balance of the selected token, or null while unread. */
     val rawBalance: String? get() = balances[token.symbol]
@@ -89,7 +149,8 @@ class SendFlowModel(
     /** "Balance <amount> SYMBOL", or "Balance unavailable" while unread. */
     val balanceLine: String get() {
         val raw = rawBalance ?: return SendCopy.balanceUnavailable
-        val text = runCatching { formatTokenAmount(raw, token.decimals, 4u) }.getOrNull() ?: return SendCopy.balanceUnavailable
+        val text =
+            runCatching { formatTokenAmount(raw, token.decimals, 4u) }.getOrNull() ?: return SendCopy.balanceUnavailable
         return "${SendCopy.balancePrefix}$text ${token.symbol}"
     }
 
@@ -108,21 +169,30 @@ class SendFlowModel(
         dropPlan()
     }
 
+    /** Picks one of the person's own accounts as the recipient, then continues as typed input would. */
     fun useRecipient(address: String) {
         recipientInput = address
         continueWithRecipient()
     }
 
+    /** Has the core validate the typed recipient; on success moves to the amount, else shows why. */
     fun continueWithRecipient() {
         val canonical = validateRecipient(recipientInput)
-        if (canonical == null) { recipientError = SendCopy.invalidRecipient; return }
+        if (canonical == null) {
+            recipientError = SendCopy.invalidRecipient
+            return
+        }
         recipient = canonical
         dropPlan()
         stage = Stage.DETAILS
     }
 
-    fun pickAsset() { stage = Stage.ASSET }
+    /** Opens the token list. */
+    fun pickAsset() {
+        stage = Stage.ASSET
+    }
 
+    /** Selects [next] as the token, clears the amount, and drops any plan. */
     fun choose(next: TokenInfo) {
         token = next
         amount = ""
@@ -138,47 +208,75 @@ class SendFlowModel(
     fun fill(half: Boolean) {
         val raw = rawBalance ?: return
         val selected = if (half) halve(raw) else raw
-        if (selected.all { it == '0' }) return
-        amount = runCatching { formatTokenAmount(selected, token.decimals, token.decimals) }.getOrNull() ?: return
-        amountError = null
-        dropPlan()
-    }
-
-    suspend fun reviewSend() {
-        try {
-            parseTokenAmount(amount, token.decimals)
-        } catch (error: SendException.InvalidAmount) {
-            amountError = when (error.reason) {
-                org.bramble.core.SendAmountError.NOT_POSITIVE -> SendCopy.amountGate
-                org.bramble.core.SendAmountError.TOO_MANY_DECIMALS -> SendCopy.amountTooManyDecimals
-                else -> SendCopy.amountInvalid
+        val formatted =
+            if (selected.all { it == '0' }) {
+                null
+            } else {
+                runCatching { formatTokenAmount(selected, token.decimals, token.decimals) }.getOrNull()
             }
-            return
+        if (formatted != null) {
+            amount = formatted
+            amountError = null
+            dropPlan()
         }
-        val to = recipient ?: run { stage = Stage.RECIPIENT; return }
-        dropPlan()
-        val plan = try {
-            core.prepareTransfer(TransferRequest(network.network, account.id, token.address, to, amount, balances["STRK"]))
-        } catch (error: SendException.InvalidRecipient) {
-            recipientError = SendCopy.invalidRecipient
-            stage = Stage.RECIPIENT
-            return
-        } catch (error: SendException.ViewOnlyAccount) {
-            notice(BrambleCopy.sendViewOnlyAccount, false)
-            return
-        } catch (error: SendException.UnsupportedAccount) {
-            notice(BrambleCopy.sendUnsupportedAccount, false)
-            return
-        } catch (error: SendException) {
-            amountError = SendCopy.amountInvalid
-            return
-        }
-        track(plan)
-        val driver = SendDriver(plan, network).also { this.driver = it }
-        stage = Stage.REVIEWING
-        settle { driver.run(StepReply.Start) }
     }
 
+    /**
+     * Checks the amount, has the core prepare a transfer plan, and runs it to its review. A
+     * refused amount, recipient or account shows why and opens no plan.
+     */
+    suspend fun reviewSend() {
+        val invalidAmount = amountProblem(amount, token.decimals)
+        val to = recipient
+        when {
+            invalidAmount != null -> {
+                amountError = invalidAmount
+            }
+
+            to == null -> {
+                stage = Stage.RECIPIENT
+            }
+
+            else -> {
+                dropPlan()
+                val plan = prepare(to) ?: return
+                hooks.track(plan)
+                val driver = SendDriver(plan, network).also { this.driver = it }
+                stage = Stage.REVIEWING
+                settle { driver.run(StepReply.Start) }
+            }
+        }
+    }
+
+    /** A new core plan for sending [amount] to [to], or null after showing why the core refused. */
+    private fun prepare(to: String): TransferPlan? =
+        try {
+            core.prepareTransfer(
+                TransferRequest(network.network, account.id, token.address, to, amount, balances["STRK"]),
+            )
+        } catch (error: SendException) {
+            when (error) {
+                is SendException.InvalidRecipient -> {
+                    recipientError = SendCopy.invalidRecipient
+                    stage = Stage.RECIPIENT
+                }
+
+                is SendException.ViewOnlyAccount -> {
+                    hooks.notice(BrambleCopy.sendViewOnlyAccount, false)
+                }
+
+                is SendException.UnsupportedAccount -> {
+                    hooks.notice(BrambleCopy.sendUnsupportedAccount, false)
+                }
+
+                else -> {
+                    amountError = SendCopy.amountInvalid
+                }
+            }
+            null
+        }
+
+    /** Re-probes the endpoints and asks the plan for a new fee estimate. */
     suspend fun retryFee() {
         val driver = driver ?: return
         driver.releaseEndpoint()
@@ -186,6 +284,7 @@ class SendFlowModel(
         settle { driver.run(StepReply.RetryEstimate) }
     }
 
+    /** Confirms the reviewed transfer: the plan signs and posts it once, then watches it. */
     suspend fun confirm() {
         val driver = driver ?: return
         if (stage != Stage.REVIEW || review?.canConfirm != true) return
@@ -197,21 +296,40 @@ class SendFlowModel(
         }
     }
 
+    /** Asks the plan to check a pending transaction's status again. */
     suspend fun checkAgain() {
         val driver = driver ?: return
         stage = Stage.CONFIRMING
         settle { driver.run(StepReply.CheckAgain) }
     }
 
-    fun edit() { dropPlan(); stage = Stage.DETAILS }
+    /** Drops the plan and returns to the amount. */
+    fun edit() {
+        dropPlan()
+        stage = Stage.DETAILS
+    }
 
     /** Back from a stage: recipient ← details ← review/failure. */
     fun back() {
         when (stage) {
-            Stage.REVIEW, Stage.FAILED -> { dropPlan(); stage = if (recipient == null) Stage.RECIPIENT else Stage.DETAILS }
-            Stage.ASSET -> stage = if (recipient == null) Stage.RECIPIENT else Stage.DETAILS
-            Stage.DETAILS -> { dropPlan(); stage = Stage.RECIPIENT }
-            else -> Unit
+            Stage.REVIEW, Stage.FAILED -> {
+                dropPlan()
+                stage =
+                    if (recipient == null) Stage.RECIPIENT else Stage.DETAILS
+            }
+
+            Stage.ASSET -> {
+                stage = if (recipient == null) Stage.RECIPIENT else Stage.DETAILS
+            }
+
+            Stage.DETAILS -> {
+                dropPlan()
+                stage = Stage.RECIPIENT
+            }
+
+            else -> {
+                // No step back inside the flow from here; the screen decides whether to leave.
+            }
         }
     }
 
@@ -240,41 +358,67 @@ class SendFlowModel(
     private suspend fun handle(step: SendStep) {
         when (step) {
             is SendStep.Review -> {
-                val current = driver?.plan?.currentReview() ?: return fail(SendFailure(SendFailureCode.NODE_ERROR, null))
+                val current =
+                    driver?.plan?.currentReview() ?: return fail(SendFailure(SendFailureCode.NODE_ERROR, null))
                 review = current
-                reviewBlock = when {
-                    current.flags.contains(ReviewFlag.ADDRESS_POISONING) -> SendCopy.poisonedBlock
-                    !current.canConfirm -> SendCopy.feeUnavailableBlock
-                    else -> null
-                }
+                reviewBlock =
+                    when {
+                        current.flags.contains(ReviewFlag.ADDRESS_POISONING) -> SendCopy.poisonedBlock
+                        !current.canConfirm -> SendCopy.feeUnavailableBlock
+                        else -> null
+                    }
                 stage = Stage.REVIEW
             }
+
             is SendStep.Broadcast -> {
                 hash = step.hash
                 stage = Stage.CONFIRMING
                 driver?.let { handle(it.run(StepReply.Proceed)) }
             }
+
             is SendStep.Finished -> {
-                hash = step.hash
-                explorerUrl = step.explorerUrl
-                when (step.status) {
-                    TxStatus.ACCEPTED -> { stage = Stage.SUBMITTED; notice(SendCopy.toastConfirmed, true) }
-                    TxStatus.PRECONFIRMED -> { stage = Stage.SUBMITTED; notice(SendCopy.toastPreconfirmed, true) }
-                    TxStatus.PENDING -> stage = Stage.PENDING
-                    TxStatus.REJECTED -> {
-                        failureMessage = SendCopy.rejectedMessage
-                        stage = Stage.FAILED
-                        notice(SendCopy.toastNotConfirmed, false)
-                    }
-                    TxStatus.REVERTED -> {
-                        failureMessage = SendCopy.revertedMessage
-                        stage = Stage.FAILED
-                        notice(SendCopy.toastNotConfirmed, false)
-                    }
-                }
+                finish(step)
             }
-            is SendStep.Failed -> fail(step.failure)
-            else -> Unit
+
+            is SendStep.Failed -> {
+                fail(step.failure)
+            }
+
+            else -> {
+                // Rpc and Wait steps never reach here: the driver handles them.
+            }
+        }
+    }
+
+    private fun finish(step: SendStep.Finished) {
+        hash = step.hash
+        explorerUrl = step.explorerUrl
+        when (step.status) {
+            TxStatus.ACCEPTED -> {
+                stage = Stage.SUBMITTED
+                hooks.notice(SendCopy.toastConfirmed, true)
+            }
+
+            TxStatus.PRECONFIRMED -> {
+                stage = Stage.SUBMITTED
+                hooks.notice(SendCopy.toastPreconfirmed, true)
+            }
+
+            TxStatus.PENDING -> {
+                stage = Stage.PENDING
+            }
+
+            TxStatus.REJECTED -> {
+                failureMessage = SendCopy.rejectedMessage
+                stage = Stage.FAILED
+                hooks.notice(SendCopy.toastNotConfirmed, false)
+            }
+
+            TxStatus.REVERTED -> {
+                failureMessage = SendCopy.revertedMessage
+                stage = Stage.FAILED
+                hooks.notice(SendCopy.toastNotConfirmed, false)
+            }
         }
     }
 
@@ -286,40 +430,32 @@ class SendFlowModel(
     }
 }
 
-/** The extension's wording per failure code (`SendCopy`, generated). */
-object SendFailureText {
-    fun message(failure: SendFailure): String {
-        val reason = when (failure.code) {
-            SendFailureCode.REVIEWED_FEE_EXCEEDED -> SendCopy.reviewedFeeExceeded
-            SendFailureCode.REVIEWED_FEE_REQUIRED -> SendCopy.reviewedFeeRequired
-            SendFailureCode.REVIEWED_DEPLOYMENT_FEE_EXCEEDED -> SendCopy.reviewedDeploymentFeeExceeded
-            SendFailureCode.REVIEWED_DEPLOYMENT_FEE_REQUIRED -> SendCopy.reviewedDeploymentFeeRequired
-            SendFailureCode.POISONED_RECIPIENT -> SendCopy.poisonedRecipient
-            SendFailureCode.WRONG_CHAIN -> SendCopy.failureWrongChain
-            SendFailureCode.PREPARATION_UNAVAILABLE -> SendCopy.failurePreparationUnavailable
-            SendFailureCode.HASH_MISMATCH -> SendCopy.failureHashMismatch
-            SendFailureCode.SUBMISSION_INDETERMINATE -> SendCopy.failureIndeterminate
-            SendFailureCode.DEPLOYMENT_STATUS_UNKNOWN -> SendCopy.failureDeploymentStatusUnknown
-            SendFailureCode.DEPLOYMENT_UNCONFIRMED -> SendCopy.failureDeploymentUnconfirmed
-            SendFailureCode.DEPLOYMENT_THEN_INVOKE_UNCONFIRMED -> SendCopy.failureDeploymentThenInvokeUnconfirmed
-            SendFailureCode.AUTO_DEPLOYMENT_FAILED -> SendCopy.failureAutoDeploymentFailed
-            SendFailureCode.ALREADY_DEPLOYED -> SendCopy.failureAlreadyDeployed
-            SendFailureCode.UNRECOGNISED_FEE_UNIT -> SendCopy.failureUnrecognisedUnit
-            else -> return SendCopy.failureDefault
+/**
+ * Why [amount] is not a sendable amount of a token with [decimals], or null when the core parses
+ * it. Only `InvalidAmount` is mapped; any other core refusal propagates.
+ */
+private fun amountProblem(
+    amount: String,
+    decimals: UByte,
+): String? =
+    try {
+        parseTokenAmount(amount, decimals)
+        null
+    } catch (error: SendException.InvalidAmount) {
+        when (error.reason) {
+            org.bramble.core.SendAmountError.NOT_POSITIVE -> SendCopy.amountGate
+            org.bramble.core.SendAmountError.TOO_MANY_DECIMALS -> SendCopy.amountTooManyDecimals
+            else -> SendCopy.amountInvalid
         }
-        return SendCopy.failurePrefix + reason.replace("{hash}", failure.hash ?: "")
     }
-}
 
-/** Integer halving of a base-10 string (floor), as the extension's `raw / 2n`. */
-internal fun halve(decimal: String): String {
-    var remainder = 0
-    val digits = StringBuilder()
-    for (character in decimal) {
-        val digit = character.digitToIntOrNull() ?: return "0"
-        val current = remainder * 10 + digit
-        digits.append(current / 2)
-        remainder = current % 2
-    }
-    return digits.trimStart('0').toString().ifEmpty { "0" }
-}
+/**
+ * What a Send journey reports back to its owner (the store).
+ *
+ * @property track receives every plan the journey opens, so a lock can close it.
+ * @property notice shows the outcome toast: `true` for a confirmation, `false` for an error.
+ */
+data class SendHooks(
+    val track: (TransferPlan) -> Unit = {},
+    val notice: (message: String, success: Boolean) -> Unit = { _, _ -> },
+)

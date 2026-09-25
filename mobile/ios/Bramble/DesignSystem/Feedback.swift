@@ -21,11 +21,17 @@ struct Callout: View {
             BrambleIcon(icon)
                 .foregroundStyle(skin.accent)
                 .frame(width: metrics.iconSize, height: metrics.iconSize)
-                .background(skin.accentSoft, in: RoundedRectangle(cornerRadius: metrics.iconRadius, style: .continuous))
+                .background(
+                    skin.accentSoft,
+                    in: RoundedRectangle(cornerRadius: metrics.iconRadius, style: .continuous)
+                )
             VStack(alignment: .leading, spacing: metrics.copyGap) {
-                Text(title).brambleText(BrambleTypeScale.body.sized(metrics.titleSize), weight: BrambleWeight.bold)
+                Text(title)
+                    .brambleText(BrambleTypeScale.body.sized(metrics.titleSize), weight: BrambleWeight.bold)
                 if let message {
-                    Text(message).brambleText(BrambleTypeScale.caption.sized(metrics.bodySize)).foregroundStyle(skin.muted)
+                    Text(message)
+                        .brambleText(BrambleTypeScale.caption.sized(metrics.bodySize))
+                        .foregroundStyle(skin.muted)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -38,7 +44,10 @@ struct Callout: View {
         .padding(metrics.padding)
         .background(skin.panel, in: RoundedRectangle(cornerRadius: metrics.radius, style: .continuous))
         .onAppear {
-            if role == .alert { AccessibilityNotification.Announcement([title, message].compactMap { $0 }.joined(separator: ". ")).post() }
+            if role == .alert {
+                let announcement = [title, message].compactMap(\.self).joined(separator: ". ")
+                AccessibilityNotification.Announcement(announcement).post()
+            }
         }
     }
 }
@@ -75,7 +84,12 @@ struct ErrorPanel: View {
             Button(action: retry) {
                 HStack(spacing: BrambleMetrics.ErrorPanel.buttonGap) {
                     BusyRefreshIcon(spinning: busy)
-                    Text(retryLabel).brambleText(BrambleTypeScale.body.sized(BrambleMetrics.ButtonSmall.fontSize), weight: BrambleMetrics.Button.weight, tracking: BrambleMetrics.Button.tracking)
+                    Text(retryLabel)
+                        .brambleText(
+                            BrambleTypeScale.body.sized(BrambleMetrics.ButtonSmall.fontSize),
+                            weight: BrambleMetrics.Button.weight,
+                            tracking: BrambleMetrics.Button.tracking
+                        )
                 }
                 .padding(BrambleMetrics.ButtonSmall.padding)
                 .frame(minHeight: BrambleMetrics.ButtonSmall.height)
@@ -100,19 +114,23 @@ private struct GhostSmallStyle: ButtonStyle {
 /// `.pill`: a compact elevated capsule with an optional status dot or icon.
 struct Pill: View {
     enum Tone { case neutral, accent }
+    /// The optional leading network dot: hidden, or a `StatusDot` that is healthy or degraded.
+    enum Dot { case hidden, healthy, degraded }
 
     @Environment(\.skin) private var skin
     let label: String
-    var dot: Bool? = nil
+    var dot: Dot = .hidden
     var icon: BrambleIconName?
     var tone: Tone = .neutral
 
     var body: some View {
         let metrics = BrambleMetrics.Pill.self
         HStack(spacing: metrics.gap) {
-            if let dot { StatusDot(healthy: dot) }
+            if dot != .hidden { StatusDot(healthy: dot == .healthy) }
             if let icon { BrambleIcon(icon, size: BrambleMetrics.HardwarePill.glyph) }
-            Text(label).brambleText(BrambleTypeScale.caption.sized(metrics.fontSize), weight: metrics.weight).lineLimit(1)
+            Text(label)
+                .brambleText(BrambleTypeScale.caption.sized(metrics.fontSize), weight: metrics.weight)
+                .lineLimit(1)
         }
         .foregroundStyle(tone == .accent ? skin.accent : skin.text)
         .padding(metrics.padding)
@@ -131,7 +149,11 @@ struct HardwarePill: View {
         let metrics = BrambleMetrics.HardwarePill.self
         HStack(spacing: BrambleMetrics.Pill.gap) {
             BrambleIcon(.shield, size: metrics.glyph)
-            Text(label).brambleText(BrambleTypeScale.caption.sized(BrambleMetrics.Pill.fontSize), weight: BrambleMetrics.Pill.weight)
+            Text(label)
+                .brambleText(
+                    BrambleTypeScale.caption.sized(BrambleMetrics.Pill.fontSize),
+                    weight: BrambleMetrics.Pill.weight
+                )
         }
         .foregroundStyle(skin.accent)
         .padding(metrics.padding)
@@ -145,20 +167,24 @@ struct HardwarePill: View {
 /// programming error in Debug and a hidden badge in Release.
 struct CountBadge: View {
     @Environment(\.skin) private var skin
-    let count: Int
+    let pendingCount: Int
+
+    init(count: Int) {
+        pendingCount = count
+    }
 
     var body: some View {
         let metrics = BrambleMetrics.Badge.self
-        let _ = assert(count >= 0, "CountBadge count must not be negative")
-        if count > 0 {
-            Text("\(count)")
+        let _ = assert(pendingCount >= 0, "CountBadge count must not be negative")
+        if pendingCount > 0 {
+            Text("\(pendingCount)")
                 .brambleText(BrambleTypeStyle(size: metrics.fontSize, lineHeight: 1), weight: metrics.weight)
                 .monospacedDigit()
                 .foregroundStyle(skin.bg)
                 .padding(metrics.padding)
                 .frame(minWidth: metrics.minWidth)
                 .background(skin.danger, in: Capsule())
-                .accessibilityLabel("\(count) pending")
+                .accessibilityLabel("\(pendingCount) pending")
         }
     }
 }

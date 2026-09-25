@@ -45,9 +45,12 @@ fun Root(store: WalletStore) {
         when (store.route) {
             // Keyed so a lock before the vault exists disposes the flow and its typed secrets.
             Route.ONBOARDING -> key(store.onboardingGeneration) { OnboardingFlow(store) }
+
             Route.LOCKED -> UnlockScreen(store)
+
             // An imported vault still recovery pending resumes at "Find your accounts".
             Route.DISCOVERY -> OnboardingFlow(store, resumingDiscovery = true)
+
             Route.WALLET -> WalletShell(store)
         }
         ToastHost(store, Modifier.align(Alignment.BottomCenter))
@@ -55,7 +58,10 @@ fun Root(store: WalletStore) {
 }
 
 @Composable
-private fun ToastHost(store: WalletStore, modifier: Modifier) {
+private fun ToastHost(
+    store: WalletStore,
+    modifier: Modifier,
+) {
     val message = store.toast
     var shown by remember { mutableStateOf("") }
     var positive by remember { mutableStateOf(false) }
@@ -71,10 +77,16 @@ private fun ToastHost(store: WalletStore, modifier: Modifier) {
     }
     AnimatedVisibility(
         visible = message != null,
-        modifier = modifier.navigationBarsPadding().imePadding()
-            .padding(start = BrambleSpace.md, end = BrambleSpace.md, bottom = BrambleLayout.toastBottom),
-        enter = slideInVertically(brambleTween(BrambleMotion.toastMs)) { it } + fadeIn(brambleTween(BrambleMotion.toastMs)),
-        exit = slideOutVertically(brambleTween(BrambleMotion.toastMs)) { it } + fadeOut(brambleTween(BrambleMotion.toastMs)),
+        modifier =
+            modifier
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(start = BrambleSpace.md, end = BrambleSpace.md, bottom = BrambleLayout.toastBottom),
+        enter =
+            slideInVertically(brambleTween(BrambleMotion.toastMs)) { it } + fadeIn(brambleTween(BrambleMotion.toastMs)),
+        exit =
+            slideOutVertically(brambleTween(BrambleMotion.toastMs)) { it } +
+                fadeOut(brambleTween(BrambleMotion.toastMs)),
     ) {
         Toast(shown, positive)
     }

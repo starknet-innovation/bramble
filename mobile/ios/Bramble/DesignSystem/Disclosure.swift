@@ -19,11 +19,14 @@ struct Disclosure<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             Button { isOpen.toggle() } label: {
                 HStack(spacing: row.gap) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title).brambleText(BrambleTypeScale.body.sized(row.titleSize), weight: row.titleWeight)
+                    VStack(alignment: .leading, spacing: DisclosureLayout.summaryGap) {
+                        Text(title)
+                            .brambleText(BrambleTypeScale.body.sized(row.titleSize), weight: row.titleWeight)
                             .foregroundStyle(skin.text)
                         if let summary {
-                            Text(summary).brambleText(BrambleTypeScale.caption.sized(row.valueSize)).foregroundStyle(skin.muted)
+                            Text(summary)
+                                .brambleText(BrambleTypeScale.caption.sized(row.valueSize))
+                                .foregroundStyle(skin.muted)
                         }
                     }
                     Spacer(minLength: row.gap)
@@ -46,17 +49,28 @@ struct Disclosure<Content: View>: View {
     }
 }
 
+/// `Disclosure` is generic, so its fixed metrics live outside it.
+private enum DisclosureLayout {
+    /// Gap between the header title and its summary line.
+    static let summaryGap: CGFloat = 2
+}
+
 /// `input[type=checkbox]` in the accent colour, at the generated checkbox size.
 struct CheckBox: View {
     @Environment(\.skin) private var skin
     let isOn: Bool
 
+    private static let cornerRadius: CGFloat = 4
+    private static let borderWidth: CGFloat = 1.5
+    private static let checkGlyph: CGFloat = 13
+
     var body: some View {
         let size = BrambleMetrics.Checkbox.size
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
+        let box = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        box
             .fill(isOn ? skin.accent : Color.clear)
-            .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).stroke(isOn ? skin.accent : skin.border, lineWidth: 1.5))
-            .overlay { if isOn { BrambleIcon(.check, size: 13).foregroundStyle(skin.accentText) } }
+            .overlay(box.stroke(isOn ? skin.accent : skin.border, lineWidth: Self.borderWidth))
+            .overlay { if isOn { BrambleIcon(.check, size: Self.checkGlyph).foregroundStyle(skin.accentText) } }
             .frame(width: size, height: size)
             .accessibilityHidden(true)
     }

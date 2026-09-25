@@ -7,29 +7,36 @@ struct PortfolioHeroView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
 
+    /// Gap between the 24h magnitude and its window text.
+    private static let deltaGap: CGFloat = 6
+
     var body: some View {
         let hero = store.portfolio.hero
-        let m = BrambleMetrics.Hero.self
-        VStack(spacing: m.gap) {
+        let heroMetrics = BrambleMetrics.Hero.self
+        VStack(spacing: heroMetrics.gap) {
             Text(hero.totalText ?? "—")
-                .brambleText(BrambleTypeStyle(size: m.totalSize, lineHeight: m.totalLineHeight), weight: m.totalWeight, tracking: m.totalTracking)
+                .brambleText(
+                    BrambleTypeStyle(size: heroMetrics.totalSize, lineHeight: heroMetrics.totalLineHeight),
+                    weight: heroMetrics.totalWeight,
+                    tracking: heroMetrics.totalTracking
+                )
                 .monospacedDigit()
                 .accessibilityLabel("Portfolio total")
                 .accessibilityValue(hero.totalText ?? "Unavailable")
                 .accessibilityIdentifier("portfolio-total")
             if let delta = hero.delta {
-                HStack(spacing: 6) {
+                HStack(spacing: Self.deltaGap) {
                     Text(delta.amountText).foregroundStyle(delta.down ? skin.danger : skin.positive)
                     Text(delta.windowText).fontWeight(.medium).foregroundStyle(skin.muted)
                 }
-                .brambleText(BrambleTypeScale.label, weight: 650)
+                .brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
                 .monospacedDigit()
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("portfolio-change")
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(m.padding)
+        .padding(heroMetrics.padding)
     }
 }
 
@@ -41,36 +48,18 @@ struct PortfolioTokens: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let open: (WalletShell.Flow) -> Void
-    var receive: () -> Void = {}
-    var privacy: () -> Void = {}
+    var receive: () -> Void = { /* No action unless the shell wires the receive flow. */ }
+    var privacy: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
     @State private var retrying = false
 
     var body: some View {
         let portfolio = store.portfolio
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Tokens")
-                    .brambleText(BrambleTypeScale.title.sized(BrambleMetrics.HomeTab.fontSize), weight: BrambleMetrics.HomeTab.weight)
-                    .frame(minHeight: BrambleMetrics.HomeTab.height)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Menu {
-                    // Menu rows are rendered by UIKit: the icon is the generated asset by name.
-                    Button { open(.tokens) } label: { Label("Manage tokens", image: BrambleIconName.coins.rawValue) }
-                    Button { store.tab = .settings } label: { Label("Wallet settings", image: BrambleIconName.settings.rawValue) }
-                    Button {
-                        Task { await store.portfolio.refresh(force: true) }
-                    } label: { Label("Refresh portfolio", image: BrambleIconName.refresh.rawValue) }
-                } label: {
-                    BrambleIcon(.moreHorizontal).foregroundStyle(skin.muted)
-                        .frame(width: BrambleMetrics.IconButton.size, height: BrambleMetrics.IconButton.size)
-                        .hitTarget(width: BrambleMetrics.IconButton.size, height: BrambleMetrics.IconButton.size)
-                }
-                .accessibilityLabel("Portfolio actions")
-            }
+            header
             switch portfolio.balances {
             case .loading:
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, BrambleSpace.lg)
+
             case let .failed(message):
                 ErrorPanel(message: message, retryHint: "Retry loading balances", busy: retrying) {
                     Task {
@@ -80,28 +69,72 @@ struct PortfolioTokens: View {
                     }
                 }
                 .padding(.top, BrambleSpace.sm)
+
             case .loaded:
                 let rows = portfolio.unified.map(\.balance)
                 if rows.isEmpty {
                     EmptyState(message: "No tracked balances yet. Add or detect tokens to see them here.")
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.element.token.id) { offset, balance in
-                            Button { open(.token(balance.token.id)) } label: {
-                                PortfolioTokenRow(balance: balance, prices: portfolio.priceView ?? portfolio.emptyPrices)
-                            }
-                            .buttonStyle(FillPressStyle(fill: .clear, pressed: skin.softPress, shape: RoundedRectangle(cornerRadius: BrambleMetrics.TokenRow.radius, style: .continuous), scale: 1))
-                            .overlay(alignment: .top) {
-                                if offset > 0 { Rectangle().fill(skin.hairline).frame(height: 1) }
-                            }
-                        }
-                    }
+                    tokenRows(rows)
                 }
             }
             PrivacyRetryRow()
             if let notShown = portfolio.home?.notShown, notShown > 0 {
                 MenuGroup {
                     MenuRow(icon: .coins, title: "Manage tokens", value: "\(notShown) not shown") { open(.tokens) }
+                }
+            }
+        }
+    }
+
+    /// The heading with the portfolio overflow menu.
+    private var header: some View {
+        HStack {
+            Text("Tokens")
+                .brambleText(
+                    BrambleTypeScale.title.sized(BrambleMetrics.HomeTab.fontSize),
+                    weight: BrambleMetrics.HomeTab.weight
+                )
+                .frame(minHeight: BrambleMetrics.HomeTab.height)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            Menu {
+                // Menu rows are rendered by UIKit: the icon is the generated asset by name.
+                Button { open(.tokens) } label: { Label("Manage tokens", image: BrambleIconName.coins.rawValue) }
+                Button { store.tab = .settings } label: {
+                    Label("Wallet settings", image: BrambleIconName.settings.rawValue)
+                }
+                Button {
+                    Task { await store.portfolio.refresh(force: true) }
+                } label: { Label("Refresh portfolio", image: BrambleIconName.refresh.rawValue) }
+            } label: {
+                BrambleIcon(.moreHorizontal)
+                    .foregroundStyle(skin.muted)
+                    .frame(width: BrambleMetrics.IconButton.size, height: BrambleMetrics.IconButton.size)
+                    .hitTarget(width: BrambleMetrics.IconButton.size, height: BrambleMetrics.IconButton.size)
+            }
+            .accessibilityLabel("Portfolio actions")
+        }
+    }
+
+    /// The visible token rows, each opening its detail, divided by hairlines.
+    private func tokenRows(_ rows: [TokenBalance]) -> some View {
+        let portfolio = store.portfolio
+        return VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.token.id) { offset, balance in
+                Button { open(.token(balance.token.id)) } label: {
+                    PortfolioTokenRow(balance: balance, prices: portfolio.priceView ?? portfolio.emptyPrices)
+                }
+                .buttonStyle(
+                    FillPressStyle(
+                        fill: .clear,
+                        pressed: skin.softPress,
+                        shape: RoundedRectangle(cornerRadius: BrambleMetrics.TokenRow.radius, style: .continuous),
+                        scale: 1
+                    )
+                )
+                .overlay(alignment: .top) {
+                    if offset > 0 { Rectangle().fill(skin.hairline).frame(height: 1) }
                 }
             }
         }
@@ -117,26 +150,33 @@ struct PortfolioTokenRow: View {
     var body: some View {
         let fiat = tokenRowFiat(balance: balance, prices: prices)
         let amount = portfolioAmount(formatted: balance.formatted)
-        let m = BrambleMetrics.TokenRow.self
-        HStack(spacing: m.gap) {
+        let tokenRow = BrambleMetrics.TokenRow.self
+        HStack(spacing: tokenRow.gap) {
             TokenGlyphView(glyph: tokenGlyph(address: balance.token.address, symbol: balance.token.symbol))
-            VStack(alignment: .leading, spacing: m.copyGap) {
-                Text(balance.token.symbol).brambleText(BrambleTypeScale.body.sized(m.symbolSize), weight: m.symbolWeight)
-                Text(amount).brambleText(BrambleTypeScale.caption.sized(m.amountSize)).monospacedDigit().foregroundStyle(skin.muted).lineLimit(1)
+            VStack(alignment: .leading, spacing: tokenRow.copyGap) {
+                Text(balance.token.symbol)
+                    .brambleText(BrambleTypeScale.body.sized(tokenRow.symbolSize), weight: tokenRow.symbolWeight)
+                Text(amount)
+                    .brambleText(BrambleTypeScale.caption.sized(tokenRow.amountSize))
+                    .monospacedDigit()
+                    .foregroundStyle(skin.muted)
+                    .lineLimit(1)
             }
-            Spacer(minLength: m.gap)
-            VStack(alignment: .trailing, spacing: m.copyGap) {
-                Text(fiat.valueText ?? "—").brambleText(BrambleTypeScale.body, weight: m.valueWeight).monospacedDigit()
+            Spacer(minLength: tokenRow.gap)
+            VStack(alignment: .trailing, spacing: tokenRow.copyGap) {
+                Text(fiat.valueText ?? "—")
+                    .brambleText(BrambleTypeScale.body, weight: tokenRow.valueWeight)
+                    .monospacedDigit()
                 if let change = fiat.change {
                     Text(change.text)
-                        .brambleText(BrambleTypeScale.caption.sized(m.fiatSize), weight: BrambleWeight.semibold)
+                        .brambleText(BrambleTypeScale.caption.sized(tokenRow.fiatSize), weight: BrambleWeight.semibold)
                         .monospacedDigit()
                         .foregroundStyle(change.up ? skin.positive : skin.danger)
                 }
             }
         }
         .foregroundStyle(skin.text)
-        .padding(m.padding)
+        .padding(tokenRow.padding)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("token-row-\(balance.token.symbol)")

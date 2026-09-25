@@ -19,7 +19,7 @@ class AddressTextTest {
     }
 
     @Test
-    fun appliesTheSameRuleToShortValues() {
+    fun sameRuleForShortValues() {
         assertEquals("0x0…0x0", accountLabel("0x0"))
     }
 

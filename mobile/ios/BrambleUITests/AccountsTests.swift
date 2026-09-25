@@ -14,13 +14,22 @@ final class AccountsTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    override func tearDown() {
+        // Restores the XCTest default that setUp changed; nothing else is shared between tests.
+        continueAfterFailure = true
+        super.tearDown()
+    }
+
     private func launch(fresh: Bool) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-network", "sepolia", "-uiTestOfflineFixtures", "unfunded"] + (fresh ? ["-BrambleUITestReset"] : [])
+        app.launchArguments = ["-network", "sepolia", "-uiTestOfflineFixtures", "unfunded"]
+            + (fresh ? ["-BrambleUITestReset"] : [])
         app.launch()
         if fresh {
-            XCTAssertTrue(app.buttons["Create a new wallet"].waitForExistence(timeout: 10),
-                          "Uninstall Bramble from the Bramble accounts simulator before running this suite")
+            XCTAssertTrue(
+                app.buttons["Create a new wallet"].waitForExistence(timeout: 10),
+                "Uninstall Bramble from the Bramble accounts simulator before running this suite"
+            )
         }
         return app
     }
@@ -43,7 +52,7 @@ final class AccountsTests: XCTestCase {
         UITest.dismissKeyboardTip(app)
         let query = app.buttons.matching(identifier: label)
         let deadline = Date().addingTimeInterval(10)
-        while query.count != 1 && Date() < deadline { usleep(200_000) }
+        while query.count != 1, Date() < deadline { usleep(200_000) }
         tap(query.firstMatch)
     }
 
@@ -81,6 +90,14 @@ final class AccountsTests: XCTestCase {
     /// Create → friendly name (never "Account 1") → add → rename and clear → copy → groups.
     func testCreateNameAddRenameCopyAndGroup() {
         let app = launch(fresh: true)
+        createAndConfirmBackup(app)
+        let second = nameAndAddAccount(app)
+        renameCopyAndClear(app)
+        groupActiveAccount(app, named: second)
+    }
+
+    /// Create → review → reveal → confirm the backup → open the wallet.
+    private func createAndConfirmBackup(_ app: XCUIApplication) {
         tap(app.buttons["Create a new wallet"])
         setPassphrase(app, cta: "Continue")
         XCTAssertTrue(app.staticTexts["Primary Bramble account"].waitForExistence(timeout: 20))
@@ -95,7 +112,11 @@ final class AccountsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Backup confirmed."].waitForExistence(timeout: 5))
         tapSettled(app, "Continue")
         tap(app.buttons["Open Bramble"])
+    }
 
+    /// The friendly name, the drawer without copy controls, and Add account. Returns the added
+    /// account's name.
+    private func nameAndAddAccount(_ app: XCUIApplication) -> String {
         let first = headerName(app)
         XCTAssertFalse(first.hasPrefix("Account"), "the extension's nickname, not \(first)")
         XCTAssertEqual(first.split(separator: " ").count, 2)
@@ -113,8 +134,11 @@ final class AccountsTests: XCTestCase {
         toast(app, "Account added")
         let second = headerName(app)
         XCTAssertNotEqual(second, first, "the new account is active")
+        return second
+    }
 
-        // Manage: rename, then clear back to the nickname.
+    /// Manage: rename, copy the address, then clear back to the nickname.
+    private func renameCopyAndClear(_ app: XCUIApplication) {
         tap(app.buttons["Accounts"])
         tap(app.buttons["Manage accounts & groups"])
         XCTAssertTrue(app.staticTexts["Accounts & groups"].waitForExistence(timeout: 5))
@@ -132,8 +156,10 @@ final class AccountsTests: XCTestCase {
         name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 10) + "\n")
         tap(app.buttons["Save name"])
         toast(app, "Label cleared")
+    }
 
-        // Groups: create one, file the active account through the drawer's folder picker.
+    /// Groups: create one, file the active account through the drawer's folder picker.
+    private func groupActiveAccount(_ app: XCUIApplication, named second: String) {
         app.swipeDown()
         type("Long term\n", into: app.textFields["New group name"])
         tap(app.buttons["piggyBank"])
@@ -143,7 +169,10 @@ final class AccountsTests: XCTestCase {
         XCTAssertEqual(headerName(app), second, "clearing the label restores the nickname")
         tap(app.buttons["Accounts"])
         tap(app.buttons["Long term"])
-        XCTAssertTrue(app.staticTexts["No accounts in this group yet. Open an account's folder button to add it."].waitForExistence(timeout: 5))
+        let emptyGroup = app.staticTexts[
+            "No accounts in this group yet. Open an account's folder button to add it."
+        ]
+        XCTAssertTrue(emptyGroup.waitForExistence(timeout: 5))
         tap(app.buttons["All"])
         tap(app.buttons["No folder — choose one for \(second)"])
         tap(app.buttons.matching(identifier: "folder-option-long-term").firstMatch)
@@ -182,7 +211,8 @@ final class AccountsTests: XCTestCase {
         tap(app.buttons["Advanced manual index"])
         type("5", into: app.textFields["Account index"])
         tap(app.buttons["Check this index"])
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Account 5,'")).firstMatch.waitForExistence(timeout: 20))
+        let account5 = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Account 5,'")).firstMatch
+        XCTAssertTrue(account5.waitForExistence(timeout: 20))
         snapshot(app, "find-accounts")
 
         // Killed before restoring: unlocking resumes discovery; there is no way into the wallet.
@@ -195,7 +225,7 @@ final class AccountsTests: XCTestCase {
         tap(app.buttons["Bramble accounts"])
         tap(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Account 0,'")).firstMatch)
         app.swipeUp()
-        tap(app.buttons["I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet."])
+        tap(app.buttons[UITest.restoreAcknowledgement])
         XCTAssertTrue(restore.isEnabled)
         tap(restore)
         toast(app, "1 account restored")
@@ -210,7 +240,8 @@ final class AccountsTests: XCTestCase {
         tap(app.buttons["Back"])
         tap(app.buttons["Home"])
         tap(app.buttons["Accounts"])
-        XCTAssertFalse(app.staticTexts["No accounts on this network yet. Add one below."].waitForExistence(timeout: 3))
+        let emptyNetwork = app.staticTexts["No accounts on this network yet. Add one below."]
+        XCTAssertFalse(emptyNetwork.waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Starknet Mainnet"].exists)
         snapshot(app, "drawer-mainnet-projected")
         app.swipeDown(velocity: .fast)

@@ -28,14 +28,20 @@ import org.bramble.wallet.design.textStyle
  * keeps them out of screenshots and recordings, so there is no separate capture state as on iOS.
  */
 @Composable
-fun SavePhraseStep(words: List<String>, next: () -> Unit) {
+fun SavePhraseStep(
+    words: List<String>,
+    next: () -> Unit,
+) {
     val skin = LocalSkin.current
     var revealed by remember { mutableStateOf(false) }
     OnboardingStep(
         back = null,
-        icon = BrambleIconName.BOOK,
-        title = "Save your recovery phrase",
-        lede = "Write these words down in order and keep them offline.",
+        heading =
+            StepHeading(
+                icon = BrambleIconName.BOOK,
+                title = "Save your recovery phrase",
+                lede = "Write these words down in order and keep them offline.",
+            ),
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
                 RecoveryWordGrid(words, masked = !revealed)
@@ -58,15 +64,22 @@ fun SavePhraseStep(words: List<String>, next: () -> Unit) {
 
 /** Port of the iOS `ConfirmBackupStep`: three requested words, checked by [BackupVerify]. */
 @Composable
-fun ConfirmBackupStep(words: List<String>, back: () -> Unit, next: () -> Unit) {
+fun ConfirmBackupStep(
+    words: List<String>,
+    back: () -> Unit,
+    next: () -> Unit,
+) {
     var answers by remember { mutableStateOf(List(BackupVerify.POSITIONS.size) { "" }) }
     DisposableEffect(Unit) { onDispose { answers = emptyList() } }
     val confirmed = BackupVerify.confirmed(words, answers)
     OnboardingStep(
         back = back,
-        icon = BrambleIconName.SHIELD,
-        title = "Confirm your backup",
-        lede = "Enter the requested words to make sure your offline copy is accurate.",
+        heading =
+            StepHeading(
+                icon = BrambleIconName.SHIELD,
+                title = "Confirm your backup",
+                lede = "Enter the requested words to make sure your offline copy is accurate.",
+            ),
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {

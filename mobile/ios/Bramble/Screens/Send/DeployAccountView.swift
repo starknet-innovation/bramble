@@ -33,35 +33,50 @@ struct DeployAccountView: View {
             Eyebrow(text: SendCopy.whatWillHappen)
             Text(SendCopy.deployOutcome).brambleText(BrambleTypeScale.body)
             SendReceipt(rows: [
-                (SendCopy.deployAccountRow, account.displayName, false),
-                (SendCopy.deployAddressRow, account.shortAddress, true),
-                (SendCopy.deployContractRow, SendCopy.deployContractValue, false),
-                (SendCopy.deployNetworkRow, store.networkLabel, false),
+                SendReceipt.Row(SendCopy.deployAccountRow, account.displayName),
+                SendReceipt.Row(SendCopy.deployAddressRow, account.shortAddress, mono: true),
+                SendReceipt.Row(SendCopy.deployContractRow, SendCopy.deployContractValue),
+                SendReceipt.Row(SendCopy.deployNetworkRow, store.networkLabel)
             ])
             Eyebrow(text: SendCopy.riskAndRecovery)
             Text(SendCopy.deployRisk).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
             if let fee = model.fee {
                 VStack(alignment: .leading, spacing: BrambleMetrics.SendReview.feeGap) {
                     Eyebrow(text: SendCopy.maximumCost)
-                    Text(SendCopy.maximumFeePrefix + fee.display).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold).monospacedDigit()
+                    Text(SendCopy.maximumFeePrefix + fee.display)
+                        .brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
+                        .monospacedDigit()
                 }
                 .padding(BrambleMetrics.SendReview.feePadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(skin.panel, in: RoundedRectangle(cornerRadius: BrambleMetrics.SendReview.feeRadius, style: .continuous))
+                .background(
+                    skin.panel,
+                    in: RoundedRectangle(cornerRadius: BrambleMetrics.SendReview.feeRadius, style: .continuous)
+                )
             }
             StatusLine(text: model.stage == .failed ? model.failureMessage : nil, tone: .danger)
             action(model)
         }
     }
 
-    @ViewBuilder private func action(_ model: DeployFlowModel) -> some View {
+    @ViewBuilder
+    private func action(_ model: DeployFlowModel) -> some View {
         switch model.stage {
         case .reviewed, .submitting:
-            PillButton(SendCopy.confirmDeploymentPrefix + (model.fee?.display ?? ""), icon: .check, busy: model.stage == .submitting) {
+            PillButton(
+                SendCopy.confirmDeploymentPrefix + (model.fee?.display ?? ""),
+                icon: .check,
+                busy: model.stage == .submitting
+            ) {
                 Task { await model.confirm() }
             }
+
         case .alreadyDeployed:
-            PillButton(SendCopy.alreadyDeployed, icon: .check) {}.disabled(true)
+            PillButton(SendCopy.alreadyDeployed, icon: .check) {
+                // No action: the account is already deployed, so this is a disabled status button.
+            }
+            .disabled(true)
+
         default:
             PillButton(SendCopy.reviewDeployment, icon: .check, busy: model.stage == .reviewing) {
                 Task { await model.review() }
@@ -70,8 +85,14 @@ struct DeployAccountView: View {
     }
 
     private func submitted(_ model: DeployFlowModel) -> some View {
-        SendOutcomeLayout(icon: .check, tint: skin.positive, kicker: SendCopy.deploySuccessKicker, title: SendCopy.deploySuccessTitle,
-                          message: SendCopy.deploySuccessBody, hash: model.hash) {
+        SendOutcomeLayout(
+            icon: .check,
+            tint: skin.positive,
+            kicker: SendCopy.deploySuccessKicker,
+            title: SendCopy.deploySuccessTitle,
+            message: SendCopy.deploySuccessBody,
+            hash: model.hash
+        ) {
             PillButton(SendCopy.backToHome, icon: .home) {
                 Task { await store.refreshBalances() }
                 dismiss()
@@ -92,9 +113,14 @@ struct DeployNoticeView: View {
             let unfunded = store.balances["STRK"].map { $0 == "0" } ?? false
             // The extension's notice is a chip whose explanation is its title (tooltip); here the
             // explanation is the accessibility hint.
-            PillButton(unfunded ? SendCopy.fundChip : SendCopy.deployChip, kind: .secondary, icon: unfunded ? .qrCode : .rocket, small: true,
-                       action: unfunded ? receive : deploy)
-                .accessibilityHint(unfunded ? SendCopy.fundChipTitle : SendCopy.deployChipTitle)
+            PillButton(
+                unfunded ? SendCopy.fundChip : SendCopy.deployChip,
+                kind: .secondary,
+                icon: unfunded ? .qrCode : .rocket,
+                small: true,
+                action: unfunded ? receive : deploy
+            )
+            .accessibilityHint(unfunded ? SendCopy.fundChipTitle : SendCopy.deployChipTitle)
         }
     }
 }

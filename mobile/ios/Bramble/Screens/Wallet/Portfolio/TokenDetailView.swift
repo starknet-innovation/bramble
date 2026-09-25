@@ -7,17 +7,24 @@ struct TokenDetailView: View {
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
     let tokenId: String
-    var receive: () -> Void = {}
+    var receive: () -> Void = { /* No action unless the shell wires the receive flow. */ }
     /// Opens the privacy journey (Shield, Go private, Deploy and enable).
-    var journey: () -> Void = {}
+    var journey: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
     @State private var points: [Double] = []
+
+    /// Stroke width of the price sparkline.
+    private static let sparklineLineWidth: CGFloat = 1.5
 
     var body: some View {
         let portfolio = store.portfolio
         ScrollView {
             if let token = portfolio.tracked.first(where: { $0.token.id == tokenId })?.token {
                 VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-                    FlowHeader(title: token.symbol, subtitle: token.name, network: store.networkLabel) { dismiss() }
+                    FlowHeader(
+                        title: token.symbol,
+                        subtitle: token.name,
+                        network: store.networkLabel
+                    ) { dismiss() }
                     price(token, portfolio: portfolio)
                     balance(token, portfolio: portfolio)
                     // The private half of this token (`tokenDetailPrivacy`): amount, retry, actions.
@@ -33,13 +40,18 @@ struct TokenDetailView: View {
     private func price(_ token: TokenConfig, portfolio: PortfolioStore) -> some View {
         VStack(alignment: .leading, spacing: BrambleSpace.sm) {
             Eyebrow(text: "Price")
-            Text(portfolio.price(of: token).map { formatFiat(amount: $0, currency: portfolio.currency) } ?? "Unavailable")
+            Text(
+                portfolio.price(of: token).map { formatFiat(amount: $0, currency: portfolio.currency) }
+                    ?? "Unavailable"
+            )
                 .brambleText(BrambleTypeScale.amount, weight: BrambleWeight.heavy, tracking: BrambleTracking.display)
                 .monospacedDigit()
             if let line = tokenSparkline(values: points) {
                 SparklineShape(points: line.points)
-                    .stroke(line.trend == .up ? skin.positive : line.trend == .down ? skin.danger : skin.muted,
-                            style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    .stroke(
+                        line.trend == .up ? skin.positive : line.trend == .down ? skin.danger : skin.muted,
+                        style: StrokeStyle(lineWidth: Self.sparklineLineWidth, lineCap: .round, lineJoin: .round)
+                    )
                     .frame(height: BrambleSize.sparkline)
                     .accessibilityHidden(true)
             } else {
@@ -52,10 +64,19 @@ struct TokenDetailView: View {
 
     private func balance(_ token: TokenConfig, portfolio: PortfolioStore) -> some View {
         let held = portfolio.balance(of: token)
-        let fiat = held.flatMap { fiatValueText(formatted: $0.formatted, price: portfolio.price(of: token), currency: portfolio.currency) }
+        let fiat = held.flatMap { heldBalance in
+            fiatValueText(
+                formatted: heldBalance.formatted,
+                price: portfolio.price(of: token),
+                currency: portfolio.currency
+            )
+        }
         return VStack(alignment: .leading, spacing: BrambleSpace.xs) {
             Eyebrow(text: "Your balance")
-            Text(held.map { "\(compactAmount(formatted: $0.formatted, places: nil)) \(token.symbol)" } ?? "0 \(token.symbol)")
+            Text(
+                held.map { "\(compactAmount(formatted: $0.formatted, places: nil)) \(token.symbol)" }
+                    ?? "0 \(token.symbol)"
+            )
                 .brambleText(BrambleTypeScale.row, weight: BrambleWeight.bold).monospacedDigit()
             if let fiat {
                 Text(fiat).brambleText(BrambleTypeScale.caption).monospacedDigit().foregroundStyle(skin.muted)
@@ -67,7 +88,12 @@ struct TokenDetailView: View {
         VStack(alignment: .leading, spacing: BrambleSpace.sm) {
             Eyebrow(text: "Contract")
             MenuGroup {
-                ReceiptRow(label: "Address", value: shortAddress(token.address), copy: token.address, copyLabel: "Copy token address")
+                ReceiptRow(
+                    label: "Address",
+                    value: shortAddress(token.address),
+                    copy: token.address,
+                    copyLabel: "Copy token address"
+                )
                 ReceiptRow(label: "Symbol", value: token.symbol)
                 ReceiptRow(label: "Decimals", value: String(token.decimals))
                 ReceiptRow(label: "Network", value: store.networkLabel)
@@ -80,10 +106,17 @@ struct TokenDetailView: View {
 struct SparklineShape: Shape {
     let points: [SparklinePoint]
 
+    /// The core's sparkline view box.
+    private static let viewBoxWidth: Double = 100
+    private static let viewBoxHeight: Double = 32
+
     func path(in rect: CGRect) -> Path {
         var path = Path()
         for (index, point) in points.enumerated() {
-            let location = CGPoint(x: rect.minX + point.x / 100 * rect.width, y: rect.minY + point.y / 32 * rect.height)
+            let location = CGPoint(
+                x: rect.minX + point.x / Self.viewBoxWidth * rect.width,
+                y: rect.minY + point.y / Self.viewBoxHeight * rect.height
+            )
             if index == 0 { path.move(to: location) } else { path.addLine(to: location) }
         }
         return path

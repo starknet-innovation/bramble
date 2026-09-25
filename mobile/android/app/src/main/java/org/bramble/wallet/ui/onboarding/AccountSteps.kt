@@ -30,6 +30,7 @@ import org.bramble.core.NetworkId
 import org.bramble.core.accountPreviewLabel
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.AccountAvatar
+import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleMotion
@@ -39,7 +40,6 @@ import org.bramble.wallet.design.BrambleSize
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.BrambleWeight
-import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.CheckRow
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
@@ -49,6 +49,9 @@ import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.previewAccount
 
+/** The check mark's scale while the card is deselected; it grows to full size when selected. */
+private const val DESELECTED_CHECK_SCALE = 0.92f
+
 /**
  * `#account-preview` with the Mainnet acknowledgement, port of the iOS `ReviewAccountStep`:
  * confirm the derived public address (the new vault's active record, OpenZeppelin index 0 on this
@@ -56,58 +59,31 @@ import org.bramble.wallet.previewAccount
  * import goes to "Find your accounts". The card starts selected.
  */
 @Composable
-fun ReviewAccountStep(store: WalletStore, network: NetworkId, next: () -> Unit) {
-    val skin = LocalSkin.current
+fun ReviewAccountStep(
+    store: WalletStore,
+    network: NetworkId,
+    next: () -> Unit,
+) {
     var account by remember { mutableStateOf<AccountRecord?>(null) }
     var selected by remember { mutableStateOf(true) }
     var acknowledged by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { account = runCatching { store.previewAccount() }.getOrNull() }
-    val cardShape = RoundedCornerShape(BrambleRadius.lg)
-    val checkScale by animateFloatAsState(if (selected) 1f else 0.92f, brambleTween(BrambleMotion.pressMs), label = "check")
+    val checkScale by animateFloatAsState(
+        if (selected) 1f else DESELECTED_CHECK_SCALE,
+        brambleTween(BrambleMotion.pressMs),
+        label = "check",
+    )
     OnboardingStep(
         back = null,
-        icon = BrambleIconName.WALLET,
-        title = "Review your account",
-        lede = "Confirm the derived public address, then add it to this wallet.",
+        heading =
+            StepHeading(
+                icon = BrambleIconName.WALLET,
+                title = "Review your account",
+                lede = "Confirm the derived public address, then add it to this wallet.",
+            ),
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .semantics(mergeDescendants = true) { this.selected = selected }
-                        .then(if (selected) Modifier.brambleShadow(BrambleShadow.sm, cardShape) else Modifier)
-                        .fillPress(if (selected) skin.softPress else skin.elevated, skin.softPress, cardShape, role = Role.Checkbox) { selected = !selected }
-                        .heightIn(min = BrambleLayout.reviewCardMin)
-                        .padding(BrambleSpace.md),
-                    horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val address = account?.address
-                    if (address != null) {
-                        AccountAvatar(address, BrambleSize.mark)
-                    } else {
-                        Box(Modifier.size(BrambleSize.mark).background(skin.panel, CircleShape))
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-                        Text("Primary Bramble account", color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold))
-                        Text(
-                            address?.let(::accountPreviewLabel) ?: "Deriving account…",
-                            color = skin.muted,
-                            style = textStyle(BrambleTypeScale.caption, mono = true),
-                        )
-                    }
-                    Box(
-                        Modifier.size(BrambleSize.mark)
-                            .graphicsLayer {
-                                alpha = if (selected) 1f else 0f
-                                scaleX = checkScale
-                                scaleY = checkScale
-                            }
-                            .background(skin.text, CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        BrambleIcon(BrambleIconName.CHECK, skin.bg, BrambleLayout.reviewCheckIcon)
-                    }
-                }
+                ReviewCard(account, selected, checkScale) { selected = !selected }
                 if (network == NetworkId.MAINNET) {
                     CheckRow(
                         "I understand this wallet can hold real funds on Starknet Mainnet.",
@@ -125,4 +101,64 @@ fun ReviewAccountStep(store: WalletStore, network: NetworkId, next: () -> Unit) 
             )
         },
     )
+}
+
+/** The selectable account card: avatar, title, the core's preview label, and the check mark. */
+@Composable
+private fun ReviewCard(
+    account: AccountRecord?,
+    selected: Boolean,
+    checkScale: Float,
+    onToggle: () -> Unit,
+) {
+    val skin = LocalSkin.current
+    val cardShape = RoundedCornerShape(BrambleRadius.lg)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) { this.selected = selected }
+            .then(if (selected) Modifier.brambleShadow(BrambleShadow.sm, cardShape) else Modifier)
+            .fillPress(
+                if (selected) skin.softPress else skin.elevated,
+                skin.softPress,
+                cardShape,
+                role = Role.Checkbox,
+            ) {
+                onToggle()
+            }.heightIn(min = BrambleLayout.reviewCardMin)
+            .padding(BrambleSpace.md),
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val address = account?.address
+        if (address != null) {
+            AccountAvatar(address, BrambleSize.mark)
+        } else {
+            Box(Modifier.size(BrambleSize.mark).background(skin.panel, CircleShape))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
+            Text(
+                "Primary Bramble account",
+                color = skin.text,
+                style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold),
+            )
+            Text(
+                address?.let(::accountPreviewLabel) ?: "Deriving account…",
+                color = skin.muted,
+                style = textStyle(BrambleTypeScale.caption, mono = true),
+            )
+        }
+        Box(
+            Modifier
+                .size(BrambleSize.mark)
+                .graphicsLayer {
+                    alpha = if (selected) 1f else 0f
+                    scaleX = checkScale
+                    scaleY = checkScale
+                }.background(skin.text, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            BrambleIcon(BrambleIconName.CHECK, skin.bg, BrambleLayout.reviewCheckIcon)
+        }
+    }
 }

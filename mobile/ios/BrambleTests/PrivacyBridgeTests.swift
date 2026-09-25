@@ -1,3 +1,4 @@
+@testable import Bramble
 import BrambleCore
 import XCTest
 
@@ -13,40 +14,68 @@ final class PrivacyBridgeTests: XCTestCase {
         let service = ScriptedPrivacyService(script: script)
         let core = try unlockedCore()
         let model = PrivacyModel()
-        await model.refresh(core: core, network: mainnet(), accountIndex: 0, rpc: service, transports: (service, service))
+        try await model.refresh(
+            core: core,
+            network: mainnet(),
+            accountId: mainnetAccountId(core),
+            rpc: service,
+            transports: (service, service)
+        )
         XCTAssertEqual(service.bodies.count, capture.count)
         for ((url, body), expected) in zip(service.bodies, capture) {
             XCTAssertEqual(url.absoluteString, expected["url"] as? String)
-            XCTAssertEqual(String(decoding: body, as: UTF8.self), expected["body"] as? String)
+            XCTAssertEqual(String(bytes: body, encoding: .utf8), expected["body"] as? String)
         }
-        guard case .settled(.registered) = model.reading else { return XCTFail("\(model.reading)") }
+        guard case .settled(.registered) = model.reading else {
+            XCTFail("\(model.reading)")
+            return
+        }
         XCTAssertEqual(model.state?.balances.first?.balance, "3000000000000000")
     }
 
     func testGateAnswersRenderTheExtensionStrings() throws {
         let rules = try privacyFixture("rules", rows: ["static"])
+        let eth = PrivateBalance(
+            tokenAddress: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+            symbol: "ETH",
+            decimals: 18,
+            balance: "1234567890000000000",
+            formatted: "1.23456789"
+        )
         let state = PrivacyState(
-            network: .mainnet, accountIndex: 0, registration: .registered,
-            balances: [PrivateBalance(tokenAddress: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7", symbol: "ETH", decimals: 18, balance: "1234567890000000000", formatted: "1.23456789")],
-            poolFeeFri: "0x1", poolAddress: "0x1"
+            network: .mainnet,
+            accountId: "mainnet-account",
+            registration: .registered,
+            balances: [eth],
+            poolFeeFri: "0x1",
+            poolAddress: "0x1"
         )
         for row in try XCTUnwrap(rules["static"] as? [[String: Any]]) {
             let (network, reading) = Self.reading(row["reading"] as? String ?? "")
             let deployment: DeploymentState = switch row["deployment"] as? String {
-            case "deployed": .deployed
-            case "undeployed": .undeployed
-            default: .unknown
+            case "deployed":
+                .deployed
+
+            case "undeployed":
+                .undeployed
+
+            default:
+                .unknown
             }
-            let funded: Bool? = switch row["strk"] as? String {
-            case "zero": false
-            case "funded": true
-            default: nil
-            }
+            // "zero" is unfunded, "funded" is funded, anything else is not yet known (nil).
+            let funded = ["zero": false, "funded": true][row["strk"] as? String ?? ""]
             let tile = try XCTUnwrap(row["tile"] as? [String: Any])
             let answer = shieldTile(network: network, deployment: deployment, strkFunded: funded, reading: reading)
             XCTAssertEqual(answer.copy.label, tile["label"] as? String, "\(row)")
             XCTAssertEqual(answer.copy.accessibility, tile["aria"] as? String, "\(row)")
-            let line = privateLine(network: network, deployment: deployment, strkFunded: funded, reading: reading, tokenAddress: state.balances[0].tokenAddress, state: state)
+            let line = privateLine(
+                network: network,
+                deployment: deployment,
+                strkFunded: funded,
+                reading: reading,
+                tokenAddress: state.balances[0].tokenAddress,
+                state: state
+            )
             XCTAssertEqual(line.text, (row["privateLine"] as? [String: Any])?["text"] as? String, "\(row)")
             let notice = receivePoolNotice(deployment: deployment, strkFunded: funded, reading: reading)
             XCTAssertEqual(notice == .hidden, row["notice"] as? String == "hidden", "\(row)")
@@ -63,17 +92,31 @@ final class PrivacyBridgeTests: XCTestCase {
         XCTAssertEqual(PrivacyCopy.preparingBody, strings["preparingBody"])
         XCTAssertEqual(PrivacyBlocker.network.copy.title, strings["blockedNetworkTitle"])
         XCTAssertFalse(strings.values.contains(PrivacyCopy.unsupportedTitle))
-        XCTAssertEqual(privacyCapabilities(), PrivacyCapabilities(canRegister: false, canShield: false, canSendPrivately: false, canUnshield: false))
+        XCTAssertEqual(
+            privacyCapabilities(),
+            PrivacyCapabilities(canRegister: false, canShield: false, canSendPrivately: false, canUnshield: false)
+        )
     }
 
-    static func reading(_ name: String) -> (NetworkId, PrivacyReading) {
+    private static func reading(_ name: String) -> (NetworkId, PrivacyReading) {
         switch name {
-        case "idle": (.mainnet, .idle)
-        case "loading": (.mainnet, .loading)
-        case "failed": (.mainnet, .failed)
-        case "unconfigured": (.sepolia, .unconfigured)
-        case "unregistered": (.mainnet, .settled(registration: .unregistered))
-        default: (.mainnet, .settled(registration: .registered))
+        case "idle":
+            (.mainnet, .idle)
+
+        case "loading":
+            (.mainnet, .loading)
+
+        case "failed":
+            (.mainnet, .failed)
+
+        case "unconfigured":
+            (.sepolia, .unconfigured)
+
+        case "unregistered":
+            (.mainnet, .settled(registration: .unregistered))
+
+        default:
+            (.mainnet, .settled(registration: .registered))
         }
     }
 }

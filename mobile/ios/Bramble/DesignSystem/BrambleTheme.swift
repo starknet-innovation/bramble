@@ -9,12 +9,27 @@ extension Color {
     init(argb: UInt32) {
         self.init(
             .sRGB,
-            red: Double((argb >> 16) & 0xFF) / 255,
-            green: Double((argb >> 8) & 0xFF) / 255,
-            blue: Double(argb & 0xFF) / 255,
-            opacity: Double((argb >> 24) & 0xFF) / 255
+            red: Self.channel(argb, shift: ARGBLayout.redShift),
+            green: Self.channel(argb, shift: ARGBLayout.greenShift),
+            blue: Self.channel(argb, shift: ARGBLayout.blueShift),
+            opacity: Self.channel(argb, shift: ARGBLayout.alphaShift)
         )
     }
+
+    /// One 8-bit channel of a packed `0xAARRGGBB` value, as a 0…1 component.
+    private static func channel(_ argb: UInt32, shift: UInt32) -> Double {
+        Double((argb >> shift) & ARGBLayout.channelMask) / ARGBLayout.channelMax
+    }
+}
+
+/// Bit layout of a packed `0xAARRGGBB` colour token.
+private enum ARGBLayout {
+    static let alphaShift: UInt32 = 24
+    static let redShift: UInt32 = 16
+    static let greenShift: UInt32 = 8
+    static let blueShift: UInt32 = 0
+    static let channelMask: UInt32 = 0xFF
+    static let channelMax: Double = 255
 }
 
 extension BrambleSkin {
@@ -26,24 +41,34 @@ struct BrambleTypeStyle {
     let lineHeight: CGFloat
 
     /// The same line height at another size, for a stylesheet rule that only changes the size.
-    func sized(_ size: CGFloat) -> BrambleTypeStyle { BrambleTypeStyle(size: size, lineHeight: lineHeight) }
+    func sized(_ size: CGFloat) -> Self { Self(size: size, lineHeight: lineHeight) }
 }
 
 struct BrambleBezier {
     let c0x: Double, c0y: Double, c1x: Double, c1y: Double
+
     init(_ c0x: Double, _ c0y: Double, _ c1x: Double, _ c1y: Double) {
         (self.c0x, self.c0y, self.c1x, self.c1y) = (c0x, c0y, c1x, c1y)
     }
 
-    func animation(ms: Double) -> Animation {
-        .timingCurve(c0x, c0y, c1x, c1y, duration: ms / 1000)
+    private static let millisecondsPerSecond: Double = 1_000
+
+    func animation(ms milliseconds: Double) -> Animation {
+        .timingCurve(c0x, c0y, c1x, c1y, duration: milliseconds / Self.millisecondsPerSecond)
     }
 }
 
 struct BrambleShadowStyle: Equatable {
-    let y: CGFloat
+    let offsetY: CGFloat
     let blur: CGFloat
     let alpha: Double
+
+    /// The generated tokens' shape (`y`, `blur`, `alpha`), as the extension's `box-shadow` values.
+    init(y offsetY: CGFloat, blur: CGFloat, alpha: Double) {
+        self.offsetY = offsetY
+        self.blur = blur
+        self.alpha = alpha
+    }
 }
 
 private struct SkinKey: EnvironmentKey {
@@ -58,11 +83,19 @@ extension EnvironmentValues {
     }
 }
 
+/// A CSS blur radius spans two Gaussian standard deviations; SwiftUI's shadow radius is one.
+private let cssBlurSigmas: CGFloat = 2
+
 extension View {
     /// Casts a component's generated elevation (`BrambleElevation.*`); nil casts nothing. CSS blur
     /// is two Gaussian sigmas, so the SwiftUI radius is half the token's blur.
     func elevation(_ style: BrambleShadowStyle?) -> some View {
-        shadow(color: .black.opacity(style?.alpha ?? 0), radius: (style?.blur ?? 0) / 2, x: 0, y: style?.y ?? 0)
+        shadow(
+            color: .black.opacity(style?.alpha ?? 0),
+            radius: (style?.blur ?? 0) / cssBlurSigmas,
+            x: 0,
+            y: style?.offsetY ?? 0
+        )
     }
 }
 
@@ -93,12 +126,12 @@ enum ThemeChoice: String {
     case dark, light
 
     static let storageKey = "theme"
-    static let `default` = ThemeChoice.dark
+    static let `default` = Self.dark
 
     /// A stored value as a choice: unset, legacy `system`, or anything unknown is dark, as the
     /// extension resolves it. `@AppStorage` applies the same rule through its default.
-    static func resolve(_ raw: String?) -> ThemeChoice {
-        raw.flatMap(ThemeChoice.init(rawValue:)) ?? .default
+    static func resolve(_ raw: String?) -> Self {
+        raw.flatMap(Self.init(rawValue:)) ?? .default
     }
 }
 

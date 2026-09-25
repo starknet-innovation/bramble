@@ -34,11 +34,16 @@ import org.bramble.wallet.design.fillPress
 
 /** `.wallet-dock`: a floating pill of three 44dp items; the active one sits on accent-soft. */
 @Composable
-fun FloatingDock(tab: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) {
+fun FloatingDock(
+    tab: Tab,
+    onSelect: (Tab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val skin = LocalSkin.current
     val pill = RoundedCornerShape(percent = 50)
     Row(
-        modifier.brambleShadow(BrambleShadow.md, pill)
+        modifier
+            .brambleShadow(BrambleShadow.md, pill)
             .background(skin.panel, pill)
             .padding(vertical = BrambleLayout.dockPaddingVertical, horizontal = BrambleSpace.md),
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
@@ -50,7 +55,13 @@ fun FloatingDock(tab: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifie
 }
 
 @Composable
-private fun DockItem(target: Tab, icon: BrambleIconName, label: String, tab: Tab, onSelect: (Tab) -> Unit) {
+private fun DockItem(
+    target: Tab,
+    icon: BrambleIconName,
+    label: String,
+    tab: Tab,
+    onSelect: (Tab) -> Unit,
+) {
     val skin = LocalSkin.current
     val selected = tab == target
     val fill by animateColorAsState(
@@ -58,13 +69,17 @@ private fun DockItem(target: Tab, icon: BrambleIconName, label: String, tab: Tab
         brambleTween(BrambleMotion.tabMs, BrambleEase.standard),
         label = "dock",
     )
-    val ink by animateColorAsState(if (selected) skin.accent else skin.muted, brambleTween(BrambleMotion.tabMs, BrambleEase.standard), label = "dock-ink")
+    val ink by animateColorAsState(
+        if (selected) skin.accent else skin.muted,
+        brambleTween(BrambleMotion.tabMs, BrambleEase.standard),
+        label = "dock-ink",
+    )
     Box(
-        Modifier.semantics {
-            contentDescription = label
-            this.selected = selected
-        }
-            .fillPress(fill, skin.softPress, CircleShape, pressedScale = 0.96f, role = Role.Tab) { onSelect(target) }
+        Modifier
+            .semantics {
+                contentDescription = label
+                this.selected = selected
+            }.fillPress(fill, skin.softPress, CircleShape, pressedScale = 0.96f, role = Role.Tab) { onSelect(target) }
             .size(BrambleControl.dockItem),
         contentAlignment = Alignment.Center,
     ) {

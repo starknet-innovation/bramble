@@ -10,7 +10,9 @@ import org.bramble.core.HostClock
  * sleep and cannot be set by the user; `BOOT_COUNT` changes on every boot. There is no wall clock,
  * so changing the date cannot shorten a backoff delay or extend a session.
  */
-class DeviceClock(resolver: ContentResolver) : HostClock {
+class DeviceClock(
+    resolver: ContentResolver,
+) : HostClock {
     private val boot: String =
         runCatching { Settings.Global.getInt(resolver, Settings.Global.BOOT_COUNT).toString() }
             .getOrDefault("")

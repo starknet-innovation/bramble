@@ -22,7 +22,11 @@ import org.bramble.wallet.design.LocalSkin
  * clip toasts "Copy failed". [label] names the action ("Copy signer public key").
  */
 @Composable
-fun CopyButton(store: WalletStore, value: String, label: String) {
+fun CopyButton(
+    store: WalletStore,
+    value: String,
+    label: String,
+) {
     val context = LocalContext.current
     val skin = LocalSkin.current
     var confirmed by remember { mutableStateOf(false) }

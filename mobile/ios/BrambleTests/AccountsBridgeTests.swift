@@ -1,7 +1,7 @@
+@testable import Bramble
 import BrambleCore
 import UIKit
 import XCTest
-@testable import Bramble
 
 /// Account rules through the generated Swift bindings, against the same `accounts-parity-*.json`
 /// the Rust suite reads (written from the extension's own code), plus the host pieces that sit on
@@ -10,6 +10,7 @@ final class AccountsBridgeTests: XCTestCase {
     private struct Rules: Decodable {
         struct Name: Decodable { let address: String; let name: String; let short: String }
         struct Label: Decodable { let value: String; let valid: Bool; let stored: String? }
+
         let names: [Name]
         let labels: [Label]
     }
@@ -23,6 +24,7 @@ final class AccountsBridgeTests: XCTestCase {
             let passphrase: String?
             let requestedClassHash: String?
         }
+
         let vectors: [Family]
         let mnemonic: String
     }
@@ -55,13 +57,20 @@ final class AccountsBridgeTests: XCTestCase {
 
     func testRestoredFamiliesDeriveTheExtensionsAddresses() throws {
         let fixture = try fixture()
-        let vectors = fixture.vectors.filter { $0.networkId == "SN_SEPOLIA" && $0.passphrase == nil && $0.accountIndex == 3 }
+        let vectors = fixture.vectors.filter { vector in
+            vector.networkId == "SN_SEPOLIA" && vector.passphrase == nil && vector.accountIndex == 3
+        }
         let core = try WalletCore(dataDir: directory(), clock: DeviceClock())
         try core.importWallet(password: "parity password", phrase: fixture.mnemonic, passphrase: nil)
         let families: [String: AccountFamily] = ["openzeppelin": .openZeppelin, "argent": .argent, "braavos": .braavos]
-        let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: vectors.map {
-            RecoverySelection(family: families[$0.accountContractType]!, accountIndex: $0.accountIndex, classHash: $0.requestedClassHash)
-        })
+        let selections = try vectors.map { vector in
+            RecoverySelection(
+                family: try XCTUnwrap(families[vector.accountContractType]),
+                accountIndex: vector.accountIndex,
+                classHash: vector.requestedClassHash
+            )
+        }
+        let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: selections)
         XCTAssertEqual(restored.map(\.address), vectors.map(\.address))
         XCTAssertEqual(restored.filter(\.viewOnly).map(\.family), [.braavos, .braavos])
     }
@@ -82,12 +91,13 @@ final class AccountsBridgeTests: XCTestCase {
         private let lock = NSLock()
         private var isOffline: Bool
         private let node = FixtureTransport(state: .unfunded)
+
         init(offline: Bool) { isOffline = offline }
         func setOffline(_ value: Bool) { lock.withLock { isOffline = value } }
 
-        func post(_ body: String, to url: URL, write: Bool) async throws -> String {
+        func post(_ body: String, to url: URL, write: Bool) throws -> String {
             if lock.withLock({ isOffline }) { throw RpcTransportFailure.unreachable }
-            return try await node.post(body, to: url, write: write)
+            return try node.post(body, to: url, write: write)
         }
     }
 
@@ -116,9 +126,10 @@ final class AccountsBridgeTests: XCTestCase {
     /// Cancels the scan (as leaving the screen or locking does) while its first batch is in flight.
     private struct CancellingTransport: RpcTransport {
         let cancel: @Sendable () async -> Void
+
         func post(_ body: String, to url: URL, write: Bool) async throws -> String {
             await cancel()
-            return try await FixtureTransport(state: .unfunded).post(body, to: url, write: write)
+            return try FixtureTransport(state: .unfunded).post(body, to: url, write: write)
         }
     }
 
@@ -144,7 +155,7 @@ final class AccountsBridgeTests: XCTestCase {
         try await store.unlock(password: "a strong password")
         XCTAssertEqual(store.route, .discovery)
         _ = try core.restoreRecoveredAccounts(network: store.network, selections: [
-            RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil),
+            RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil)
         ])
         await store.finishOnboarding()
         XCTAssertEqual(store.route, .wallet)

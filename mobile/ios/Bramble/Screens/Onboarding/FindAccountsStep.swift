@@ -19,26 +19,33 @@ struct FindAccountsStep: View {
     @State private var restoring = false
     @State private var opened: Set<AccountFamily> = []
 
+    private static let lede = "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. "
+        + "Accounts with on-chain activity are selected automatically."
+    private static let acknowledgement = "I checked these account types and indices and want to restore the "
+        + "selected accounts on Starknet Mainnet."
+
     var body: some View {
-        OnboardingStep(icon: .wallet, title: "Find your accounts",
-                       lede: "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. Accounts with on-chain activity are selected automatically.") {
+        OnboardingStep(icon: .wallet, title: "Find your accounts", lede: Self.lede) {
             VStack(alignment: .leading, spacing: BrambleMetrics.Onboarding.fieldsGap) {
                 HStack(spacing: BrambleSpace.sm) {
-                    StatusLine(text: (driver?.status ?? "Ready to search.") + (driver?.selectionNote ?? ""),
-                               tone: driver?.failed == true ? .danger : .muted)
-                        .accessibilityIdentifier("recovery-scan-status")
+                    StatusLine(
+                        text: (driver?.status ?? "Ready to search.") + (driver?.selectionNote ?? ""),
+                        tone: driver?.failed == true ? .danger : .muted
+                    )
+                    .accessibilityIdentifier("recovery-scan-status")
                     IconButton(icon: .refresh, label: "Retry account search", tint: skin.muted) {
                         Task { await driver?.start(on: store.networkInfo) }
                     }
                     .disabled(driver?.scanning == true)
                 }
-                StatusLine(text: "The search asks \(store.networkInfo.name)’s RPC endpoint about each derived address.")
+                StatusLine(
+                    text: "The search asks \(store.networkInfo.name)’s RPC endpoint about each derived address."
+                )
                 group(.openZeppelin, "Bramble accounts")
                 group(.argent, "Ready accounts")
                 group(.braavos, "Braavos accounts")
                 Disclosure(title: "Advanced manual index", isOpen: $manualOpen) { manual }
-                CheckRow(text: "I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.",
-                         isOn: $acknowledged)
+                CheckRow(text: Self.acknowledgement, isOn: $acknowledged)
                 StatusLine(text: result)
             }
         } cta: {
@@ -56,7 +63,9 @@ struct FindAccountsStep: View {
     }
 
     private func rows(_ family: AccountFamily) -> [RecoveryCandidate] {
-        (driver?.candidates ?? []).filter { $0.family == family }.enumerated()
+        (driver?.candidates ?? [])
+            .filter { $0.family == family }
+            .enumerated()
             .sorted { ($0.element.accountIndex, $0.offset) < ($1.element.accountIndex, $1.offset) }
             .map(\.element)
     }
@@ -69,13 +78,14 @@ struct FindAccountsStep: View {
             get: { opened.contains(family) },
             set: { if $0 { opened.insert(family) } else { opened.remove(family) } }
         )
-        return Disclosure(title: title, summary: detected > 0 ? "\(detected) \(detected == 1 ? "account" : "accounts") detected" : nil, isOpen: isOpen) {
+        let summary = detected > 0 ? "\(detected) \(detected == 1 ? "account" : "accounts") detected" : nil
+        return Disclosure(title: title, summary: summary, isOpen: isOpen) {
             VStack(alignment: .leading, spacing: BrambleSpace.xs) {
                 ForEach(rows, id: \.key) { candidate in CandidateRow(candidate: candidate, driver: driver) }
             }
         }
         .onChange(of: detected) { _, count in
-            if count > 0 && !opened.contains(family) { opened.insert(family) }
+            if count > 0, !opened.contains(family) { opened.insert(family) }
         }
     }
 
@@ -121,6 +131,14 @@ private struct CandidateRow: View {
     let candidate: RecoveryCandidate
     let driver: RecoveryScanDriver?
 
+    private enum Layout {
+        /// Drops the checkbox to the title's first baseline.
+        static let checkBoxTop: CGFloat = 2
+        static let copyGap: CGFloat = 2
+        /// A row that cannot be selected is shown dimmed.
+        static let unselectableOpacity = 0.5
+    }
+
     var body: some View {
         let checked = driver?.selected.contains(candidate.key) == true
         Button {
@@ -128,10 +146,12 @@ private struct CandidateRow: View {
             store.toast = "Choose at most \(recoveryLimits().maxSelections) accounts. Uncheck one to add another."
         } label: {
             HStack(alignment: .top, spacing: BrambleSpace.sm) {
-                CheckBox(isOn: checked).padding(.top, 2)
-                VStack(alignment: .leading, spacing: 2) {
+                CheckBox(isOn: checked).padding(.top, Layout.checkBoxTop)
+                VStack(alignment: .leading, spacing: Layout.copyGap) {
                     Text(candidate.title).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
-                    Text(candidate.shortAddress).brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
+                    Text(candidate.shortAddress)
+                        .brambleText(BrambleTypeScale.caption, mono: true)
+                        .foregroundStyle(skin.muted)
                     Text(candidate.hint).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
                 }
                 Spacer(minLength: 0)
@@ -141,7 +161,7 @@ private struct CandidateRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!candidate.selectable)
-        .opacity(candidate.selectable ? 1 : 0.5)
+        .opacity(candidate.selectable ? 1 : Layout.unselectableOpacity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(candidate.title), \(candidate.shortAddress)")
         .accessibilityValue(candidate.hint)

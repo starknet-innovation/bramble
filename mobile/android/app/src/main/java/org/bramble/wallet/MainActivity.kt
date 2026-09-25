@@ -26,7 +26,7 @@ class MainActivity : ComponentActivity() {
         // the phrase, balances, and addresses never leave the device through the display.
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         // Android 13+: no Recents thumbnail at all, on top of FLAG_SECURE's blank one.
-        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setHideOverlayWindows(true)
         window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         window.decorView.filterTouchesWhenObscured = true
@@ -35,7 +35,14 @@ class MainActivity : ComponentActivity() {
             val theme = store.theme
             DisposableEffect(theme) {
                 val transparent = android.graphics.Color.TRANSPARENT
-                val bars = if (theme == ThemeChoice.LIGHT) SystemBarStyle.light(transparent, transparent) else SystemBarStyle.dark(transparent)
+                val bars =
+                    if (theme ==
+                        ThemeChoice.LIGHT
+                    ) {
+                        SystemBarStyle.light(transparent, transparent)
+                    } else {
+                        SystemBarStyle.dark(transparent)
+                    }
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
                 onDispose {}
             }

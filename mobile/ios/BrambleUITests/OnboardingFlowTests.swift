@@ -15,8 +15,12 @@ final class OnboardingFlowTests: XCTestCase {
     private let publicAddress = "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9"
     private let passphrase = "ui test passphrase"
 
-    private var phrase: String { ProcessInfo.processInfo.environment["BRAMBLE_MOBILE_MAINNET_MNEMONIC"] ?? publicPhrase }
-    private var address: String { ProcessInfo.processInfo.environment["BRAMBLE_MOBILE_MAINNET_ADDRESS"] ?? publicAddress }
+    private var phrase: String {
+        ProcessInfo.processInfo.environment["BRAMBLE_MOBILE_MAINNET_MNEMONIC"] ?? publicPhrase
+    }
+    private var address: String {
+        ProcessInfo.processInfo.environment["BRAMBLE_MOBILE_MAINNET_ADDRESS"] ?? publicAddress
+    }
 
     private func short(_ value: String) -> String {
         let canonical = "0x" + value.lowercased().dropFirst(2).drop { $0 == "0" }
@@ -48,8 +52,10 @@ final class OnboardingFlowTests: XCTestCase {
         // offline (no viewing key leaves the simulator from a test; docs/privacy.md §7).
         app.launchArguments = ["-network", "mainnet", "-BrambleUITestReset", "-BramblePrivacyFixture", "offline"]
         app.launch()
-        XCTAssertTrue(app.buttons["Create a new wallet"].waitForExistence(timeout: 10),
-                      "Uninstall Bramble from the simulator before running the UI suite")
+        XCTAssertTrue(
+            app.buttons["Create a new wallet"].waitForExistence(timeout: 10),
+            "Uninstall Bramble from the simulator before running the UI suite"
+        )
         return app
     }
 
@@ -102,7 +108,7 @@ final class OnboardingFlowTests: XCTestCase {
         if !row.isSelected { row.tap() }
         snapshot(app, "find-accounts")
         app.swipeUp()
-        tap(app.buttons["I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet."])
+        tap(app.buttons[UITest.restoreAcknowledgement])
         tap(app.buttons["Restore selected accounts"])
     }
 
@@ -195,7 +201,8 @@ final class OnboardingFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Incorrect passphrase"].firstMatch.waitForExistence(timeout: 10))
         snapshot(app, "unlock-failed")
         app.secureTextFields["Enter your passphrase"].tap()
-        app.secureTextFields["Enter your passphrase"].typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + passphrase)
+        let clearField = String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20)
+        app.secureTextFields["Enter your passphrase"].typeText(clearField + passphrase)
         tap(app.buttons["Unlock"])
         checkHeader(app)
 

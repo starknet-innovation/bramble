@@ -21,7 +21,7 @@ class SessionGuardTest {
     }
 
     @Test
-    fun sessionEndedIsACancellationSoItIsNeverShown() {
+    fun sessionEndedIsACancellation() {
         assertTrue(SessionEndedException() is kotlinx.coroutines.CancellationException)
     }
 }

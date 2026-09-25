@@ -10,7 +10,7 @@ import org.junit.Test
  */
 class WeakAckStateTest {
     @Test
-    fun keepsATickWhileTheValueStaysWeak() {
+    fun keepsATickWhileStillWeak() {
         assertTrue(WeakAck.sync(needs = true, ticked = true))
     }
 
@@ -19,13 +19,13 @@ class WeakAckStateTest {
         val afterImproving = WeakAck.sync(needs = false, ticked = true)
         assertFalse(afterImproving)
         // The value turns weak again: the earlier tick does not carry over.
-        assertFalse(WeakAck.ok(needs = true, ticked = WeakAck.sync(needs = true, ticked = afterImproving)))
+        assertFalse(WeakAck.accepts(needs = true, ticked = WeakAck.sync(needs = true, ticked = afterImproving)))
     }
 
     @Test
     fun gatesOnlyWeakValues() {
-        assertTrue(WeakAck.ok(needs = false, ticked = false))
-        assertFalse(WeakAck.ok(needs = true, ticked = false))
-        assertTrue(WeakAck.ok(needs = true, ticked = true))
+        assertTrue(WeakAck.accepts(needs = false, ticked = false))
+        assertFalse(WeakAck.accepts(needs = true, ticked = false))
+        assertTrue(WeakAck.accepts(needs = true, ticked = true))
     }
 }

@@ -24,11 +24,16 @@ const val TOAST_LIFETIME_MS = 3_000L
  * `Popup`), so it inherits `FLAG_SECURE` without extra work; announced as a polite live region.
  */
 @Composable
-fun Toast(message: String, positive: Boolean = false, modifier: Modifier = Modifier) {
+fun Toast(
+    message: String,
+    positive: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
     val skin = LocalSkin.current
     val shape = RoundedCornerShape(BrambleRadius.lg)
     Row(
-        modifier.fillMaxWidth()
+        modifier
+            .fillMaxWidth()
             .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }
             .brambleShadow(BrambleShadow.lg, shape)
             .background(skin.panel, shape)
@@ -37,12 +42,21 @@ fun Toast(message: String, positive: Boolean = false, modifier: Modifier = Modif
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(BrambleLayout.toastChip)
+            Modifier
+                .size(BrambleLayout.toastChip)
                 .background(if (positive) skin.positiveSoft else skin.dangerSoft, RoundedCornerShape(BrambleRadius.sm)),
             contentAlignment = Alignment.Center,
         ) {
-            BrambleIcon(if (positive) BrambleIconName.CHECK else BrambleIconName.ALERT, if (positive) skin.positive else skin.danger)
+            BrambleIcon(
+                if (positive) BrambleIconName.CHECK else BrambleIconName.ALERT,
+                if (positive) skin.positive else skin.danger,
+            )
         }
-        Text(message, color = skin.text, style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold), modifier = Modifier.weight(1f))
+        Text(
+            message,
+            color = skin.text,
+            style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold),
+            modifier = Modifier.weight(1f),
+        )
     }
 }

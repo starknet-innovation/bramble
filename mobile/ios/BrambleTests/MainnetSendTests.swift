@@ -8,7 +8,7 @@ import XCTest
 /// broadcasts a real transaction. Never run by agents; never commit the phrase.
 @MainActor
 final class MainnetSendTests: XCTestCase {
-    static let acknowledgement = "I understand this broadcasts a real mainnet transaction"
+    private static let acknowledgement = "I understand this broadcasts a real mainnet transaction"
 
     func testSelfTransferOnMainnet() async throws {
         let environment = ProcessInfo.processInfo.environment
@@ -25,11 +25,18 @@ final class MainnetSendTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
         let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
         try core.importWallet(password: "mainnet send test", phrase: phrase, passphrase: nil)
-        let network = supportedNetworks().first { $0.network == .mainnet }!
+        let network = try mainnet()
         let account = try XCTUnwrap(try core.restoreRecoveredAccounts(network: .mainnet, selections: [
-            RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil),
+            RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil)
         ]).first)
-        let model = SendFlowModel(core: core, network: network, account: account, otherAccounts: [], balances: [:], transport: URLSessionRpcTransport())
+        let model = SendFlowModel(
+            core: core,
+            network: network,
+            account: account,
+            otherAccounts: [],
+            balances: [:],
+            transport: URLSessionRpcTransport()
+        )
         model.recipientInput = account.address
         model.continueWithRecipient()
         model.amount = "0.000001"

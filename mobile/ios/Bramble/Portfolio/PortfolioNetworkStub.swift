@@ -17,8 +17,11 @@ final class PortfolioNetworkStub: URLProtocol, @unchecked Sendable {
         config.protocolClasses = [PortfolioNetworkStub.self]
     }
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    /// Bytes read from a streamed request body per pass.
+    private static let drainChunkBytes = 4_096
+
+    override static func canInit(with _: URLRequest) -> Bool { true }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         let body = request.httpBody ?? request.httpBodyStream.map(Self.drain)
@@ -26,8 +29,12 @@ final class PortfolioNetworkStub: URLProtocol, @unchecked Sendable {
             scenario: Self.scenario ?? "ready", url: request.url, body: body
         )
         guard status != 0, let url = request.url,
-              let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1",
-                                             headerFields: ["Content-Type": "application/json"]) else {
+              let response = HTTPURLResponse(
+                url: url,
+                statusCode: status,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+              ) else {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return
         }
@@ -36,13 +43,15 @@ final class PortfolioNetworkStub: URLProtocol, @unchecked Sendable {
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        // Nothing to cancel: `startLoading` answers synchronously.
+    }
 
     private static func drain(_ stream: InputStream) -> Data {
         stream.open()
         defer { stream.close() }
         var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
+        var buffer = [UInt8](repeating: 0, count: drainChunkBytes)
         while stream.hasBytesAvailable {
             let read = stream.read(&buffer, maxLength: buffer.count)
             if read <= 0 { break }
@@ -62,6 +71,13 @@ enum PortfolioStubResponder {
     /// The contract "Add by contract" reads in the UI test: Test Token (TST), 18 decimals.
     static let customToken = "0x0000000000000000000000000000000000000000000000000000000000000abc"
 
+    private static let statusOK = 200
+    private static let statusServerError = 500
+    private static let statusServiceUnavailable = 503
+    /// "saved-data": balances answer this many times, then fail, so the store falls back to the cache.
+    private static let savedDataLiveReads = 2
+    private static let hexPrefix = "0x"
+
     private static let lock = NSLock()
     nonisolated(unsafe) private static var balanceReads = 0
 
@@ -78,35 +94,44 @@ enum PortfolioStubResponder {
 
     // Compares addresses by value: the core sends the canonical (unpadded) spelling.
     private static func felt(_ address: String) -> Substring {
-        address.lowercased().dropFirst(2).drop { $0 == "0" }
+        address.lowercased().dropFirst(hexPrefix.count).drop { $0 == "0" }
     }
 
-    private static func json(_ text: String, status: Int = 200) -> (Int, Data) {
+    private static func json(_ text: String, status: Int = statusOK) -> (Int, Data) {
         (status, Data(text.utf8))
     }
 
     private static func coinGecko(scenario: String, url: URL) -> (Int, Data) {
-        if scenario == "prices-offline" { return json("{}", status: 500) }
+        if scenario == "prices-offline" { return json("{}", status: statusServerError) }
         if url.path.contains("market_chart") {
             return json(#"{"prices":[[0,0.48],[1,0.5],[2,0.47],[3,0.52]]}"#)
         }
         let address = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first { $0.name == "contract_addresses" }?.value ?? ""
         switch address {
-        case strk: return json(#"{"\#(strk)":{"usd":0.5,"eur":0.45,"gbp":0.4,"usd_24h_change":2.5}}"#)
-        case eth: return json(#"{"\#(eth)":{"usd":2500,"eur":2300,"gbp":1990,"usd_24h_change":-1.2}}"#)
-        default: return json("{}")
+        case strk:
+            return json(#"{"\#(strk)":{"usd":0.5,"eur":0.45,"gbp":0.4,"usd_24h_change":2.5}}"#)
+
+        case eth:
+            return json(#"{"\#(eth)":{"usd":2500,"eur":2300,"gbp":1990,"usd_24h_change":-1.2}}"#)
+
+        default:
+            return json("{}")
         }
     }
 
     private static func starkscan(scenario: String) -> (Int, Data) {
-        if scenario == "history-unavailable" { return json("{}", status: 503) }
-        let row = { (from: String, to: String, token: String, amount: String, hash: String, time: String) in
-            #"{"actionContext":null,"amount":"\#(amount)","blockNumber":900,"fromAddress":"\#(from)","logIndex":0,"rawValue":"\#(amount)","sourceTier":"finalized","standard":"erc20","timestampIso":"\#(time)","toAddress":"\#(to)","tokenAddress":"\#(token)","tokenDecimals":18,"tokenId":null,"tokenName":null,"tokenSymbol":null,"transferIndex":0,"txHash":"\#(hash)","txIndex":0}"#
+        if scenario == "history-unavailable" { return json("{}", status: statusServiceUnavailable) }
+        let row = { (sender: String, recipient: String, token: String, amount: String, hash: String, time: String) in
+            #"{"actionContext":null,"amount":"\#(amount)","blockNumber":900,"fromAddress":"\#(sender)","#
+                + #""logIndex":0,"rawValue":"\#(amount)","sourceTier":"finalized","standard":"erc20","#
+                + #""timestampIso":"\#(time)","toAddress":"\#(recipient)","tokenAddress":"\#(token)","#
+                + #""tokenDecimals":18,"tokenId":null,"tokenName":null,"tokenSymbol":null,"transferIndex":0,"#
+                + #""txHash":"\#(hash)","txIndex":0}"#
         }
         let items = [
             row(peer, account, strk, "1500000000000000000", "0x0abc1", "2026-09-20T10:15:30Z"),
-            row(account, peer, eth, "100000000000000000", "0x0abc2", "2026-09-19T08:00:00Z"),
+            row(account, peer, eth, "100000000000000000", "0x0abc2", "2026-09-19T08:00:00Z")
         ]
         return json(#"{"items":[\#(items.joined(separator: ","))],"nextCursor":null}"#)
     }
@@ -119,27 +144,42 @@ enum PortfolioStubResponder {
         let result = { (value: String) in json(#"{"jsonrpc":"2.0","id":\#(id),"result":\#(value)}"#) }
         switch method {
         case "starknet_chainId":
-            return result(url.absoluteString.contains("sepolia") ? #""0x534e5f5345504f4c4941""# : #""0x534e5f4d41494e""#)
+            let sepolia = url.absoluteString.contains("sepolia")
+            return result(sepolia ? #""0x534e5f5345504f4c4941""# : #""0x534e5f4d41494e""#)
+
         case "starknet_call":
             let call = (request["params"] as? [String: Any])?["request"] as? [String: Any]
             let contract = call?["contract_address"] as? String ?? ""
             let selector = call?["entry_point_selector"] as? String ?? ""
             return self.call(scenario: scenario, contract: contract, selector: selector, reply: result)
+
         case "starknet_blockNumber", "starknet_getEvents", "starknet_getBlockWithTxHashes":
             if scenario == "history-unavailable" { return (0, Data()) }
             return method == "starknet_blockNumber" ? result("500000") : result(#"{"events":[]}"#)
+
         default:
             return (0, Data())
         }
     }
 
-    private static func call(scenario: String, contract: String, selector: String,
-                             reply: (String) -> (Int, Data)) -> (Int, Data) {
+    private static func call(
+        scenario: String,
+        contract: String,
+        selector: String,
+        reply: (String) -> (Int, Data)
+    ) -> (Int, Data) {
         switch selector {
-        case "0x361458367e696363fbcc70777d07ebbd2394e89fd0adcaf147faccd1d294d60": return reply(#"["0x5465737420546f6b656e"]"#)
-        case "0x216b05c387bab9ac31918a3e61672f4618601f3c598a2f3f2710f37053e1ea4": return reply(#"["0x545354"]"#)
-        case "0x4c4fb1ab068f6039d5780c68dd0fa2f8742cceb3426d19667778ca7f3518a9": return reply(#"["0x12"]"#)
-        default: break
+        case "0x361458367e696363fbcc70777d07ebbd2394e89fd0adcaf147faccd1d294d60":
+            return reply(#"["0x5465737420546f6b656e"]"#)
+
+        case "0x216b05c387bab9ac31918a3e61672f4618601f3c598a2f3f2710f37053e1ea4":
+            return reply(#"["0x545354"]"#)
+
+        case "0x4c4fb1ab068f6039d5780c68dd0fa2f8742cceb3426d19667778ca7f3518a9":
+            return reply(#"["0x12"]"#)
+
+        default:
+            break
         }
         if scenario == "balance-error" { return (0, Data()) }
         if scenario == "saved-data" {
@@ -147,14 +187,23 @@ enum PortfolioStubResponder {
             balanceReads += 1
             let reads = balanceReads
             lock.unlock()
-            if reads > 2 { return (0, Data()) }
+            if reads > savedDataLiveReads { return (0, Data()) }
         }
         let low = switch felt(contract) {
-        case felt(strk): "0x42ec210956b3ba0000"
-        case felt(eth): "0x3782dace9d90000"
-        case felt(usdc): "0x4c4b40"
-        case felt(customToken): "0x246ddf97976680000"
-        default: "0x0"
+        case felt(strk):
+            "0x42ec210956b3ba0000"
+
+        case felt(eth):
+            "0x3782dace9d90000"
+
+        case felt(usdc):
+            "0x4c4b40"
+
+        case felt(customToken):
+            "0x246ddf97976680000"
+
+        default:
+            "0x0"
         }
         return reply(#"["\#(low)","0x0"]"#)
     }

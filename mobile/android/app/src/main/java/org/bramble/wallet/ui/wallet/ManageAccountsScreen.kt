@@ -64,7 +64,10 @@ private const val NAME_LIMIT = 64
  * design-system field. "Add account" opens the same chooser as the drawer.
  */
 @Composable
-fun ManageAccountsScreen(store: WalletStore, back: () -> Unit) {
+fun ManageAccountsScreen(
+    store: WalletStore,
+    back: () -> Unit,
+) {
     var choosing by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
@@ -116,13 +119,20 @@ private fun ActiveAccountSection(store: WalletStore) {
         kind = SecretKind.ADDRESS,
         hint = "Shown instead of the address. Leave empty to clear.",
     )
-    PillButton("Save name", kind = PillKind.SECONDARY, busy = store.busy) { scope.launch { store.saveLabel(active.id, label) } }
+    PillButton("Save name", kind = PillKind.SECONDARY, busy = store.busy) {
+        scope.launch { store.saveLabel(active.id, label) }
+    }
     MenuGroup {
         ReceiptRow("Address", active.shortAddress) { CopyButton(store, active.address, "Copy address") }
         MenuDivider()
-        ReceiptRow("Signer public key", accountLabel(active.publicKey)) { CopyButton(store, active.publicKey, "Copy signer public key") }
+        ReceiptRow("Signer public key", accountLabel(active.publicKey)) {
+            CopyButton(store, active.publicKey, "Copy signer public key")
+        }
         MenuDivider()
-        ReceiptRow("Class hash", accountLabel(active.classHash)) { CopyButton(store, active.classHash, "Copy class hash") }
+        ReceiptRow(
+            "Class hash",
+            accountLabel(active.classHash),
+        ) { CopyButton(store, active.classHash, "Copy class hash") }
         active.typeLabel?.let { type ->
             MenuDivider()
             ReceiptRow("Type", type, mono = false)
@@ -132,10 +142,19 @@ private fun ActiveAccountSection(store: WalletStore) {
 
 /** One receipt line: label, truncated value, and an optional trailing copy control. */
 @Composable
-internal fun ReceiptRow(label: String, value: String, mono: Boolean = true, trailing: (@Composable () -> Unit)? = null) {
+internal fun ReceiptRow(
+    label: String,
+    value: String,
+    mono: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     val skin = LocalSkin.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = BrambleLayout.menuRowMin).padding(start = BrambleSpace.lg, end = BrambleSpace.xs),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(
+                min = BrambleLayout.menuRowMin,
+            ).padding(start = BrambleSpace.lg, end = BrambleSpace.xs),
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -169,7 +188,10 @@ private fun NewGroupForm(store: WalletStore) {
 
 /** One group: rename and re-icon, its membership across every network, and delete. */
 @Composable
-private fun GroupEditor(store: WalletStore, group: AccountGroup) {
+private fun GroupEditor(
+    store: WalletStore,
+    group: AccountGroup,
+) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     var name by remember(group.id, group.name) { mutableStateOf(group.name) }
@@ -182,7 +204,12 @@ private fun GroupEditor(store: WalletStore, group: AccountGroup) {
             style = textStyle(BrambleTypeScale.row, BrambleWeight.semibold),
         )
         GroupFields(name, { name = it }, icon, { icon = it }, label = "Group name")
-        PillButton("Save group", kind = PillKind.SECONDARY, enabled = name.isNotBlank() && (name != group.name || icon != group.icon)) {
+        PillButton(
+            "Save group",
+            kind = PillKind.SECONDARY,
+            enabled =
+                name.isNotBlank() && (name != group.name || icon != group.icon),
+        ) {
             scope.launch { store.updateGroup(group.id, name, icon) }
         }
         store.allRecords.forEach { record ->
@@ -198,7 +225,13 @@ private fun GroupEditor(store: WalletStore, group: AccountGroup) {
 
 /** The flat name field and the icon picker a group form shares. */
 @Composable
-private fun GroupFields(name: String, setName: (String) -> Unit, icon: String, setIcon: (String) -> Unit, label: String) {
+private fun GroupFields(
+    name: String,
+    setName: (String) -> Unit,
+    icon: String,
+    setIcon: (String) -> Unit,
+    label: String,
+) {
     BrambleField(
         label = label,
         placeholder = "Group name",
@@ -206,7 +239,10 @@ private fun GroupFields(name: String, setName: (String) -> Unit, icon: String, s
         onValueChange = { if (it.length <= NAME_LIMIT) setName(it) },
         kind = SecretKind.ADDRESS,
     )
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
+    Row(
+        Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+    ) {
         groupIcons().forEach { glyph ->
             FilterChip(null, groupIcon(glyph), glyph == icon, description = "Icon $glyph") { setIcon(glyph) }
         }
@@ -219,11 +255,21 @@ private fun GroupFields(name: String, setName: (String) -> Unit, icon: String, s
  * existing account is shown as coming.
  */
 @Composable
-fun AddAccountChooser(store: WalletStore, close: () -> Unit, added: () -> Unit, multisig: (() -> Unit)? = null) {
+fun AddAccountChooser(
+    store: WalletStore,
+    close: () -> Unit,
+    added: () -> Unit,
+    multisig: (() -> Unit)? = null,
+) {
     val scope = rememberCoroutineScope()
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
         FlowHeader("Add a new account", network = store.networkLabel, back = close)
-        OptionCard(BrambleIconName.WALLET, "Regular account", "Create the next account from this wallet’s recovery phrase.", enabled = !store.busy) {
+        OptionCard(
+            BrambleIconName.WALLET,
+            "Regular account",
+            "Create the next account from this wallet’s recovery phrase.",
+            enabled = !store.busy,
+        ) {
             scope.launch {
                 runCatching { store.addRegularAccount() }
                     .onSuccess { added() }
@@ -231,8 +277,18 @@ fun AddAccountChooser(store: WalletStore, close: () -> Unit, added: () -> Unit, 
             }
         }
         if (multisig != null) {
-            OptionCard(BrambleIconName.USERS, "Multisig account", "Create a Ready Multisig or add a shared address.", onClick = multisig)
+            OptionCard(
+                BrambleIconName.USERS,
+                "Multisig account",
+                "Create a Ready Multisig or add a shared address.",
+                onClick = multisig,
+            )
         }
-        OptionCard(BrambleIconName.KEY_ROUND, "Import an existing account", "Coming to Bramble mobile.", enabled = false) {}
+        OptionCard(
+            BrambleIconName.KEY_ROUND,
+            "Import an existing account",
+            "Coming to Bramble mobile.",
+            enabled = false,
+        ) {}
     }
 }

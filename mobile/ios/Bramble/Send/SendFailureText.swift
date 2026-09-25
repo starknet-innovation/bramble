@@ -11,30 +11,67 @@ enum SendFailureText {
 
     static func reason(_ code: SendFailureCode) -> String? {
         switch code {
-        case .reviewedFeeExceeded: SendCopy.reviewedFeeExceeded
-        case .reviewedFeeRequired: SendCopy.reviewedFeeRequired
-        case .reviewedDeploymentFeeExceeded: SendCopy.reviewedDeploymentFeeExceeded
-        case .reviewedDeploymentFeeRequired: SendCopy.reviewedDeploymentFeeRequired
-        case .poisonedRecipient: SendCopy.poisonedRecipient
-        case .wrongChain: SendCopy.failureWrongChain
-        case .preparationUnavailable: SendCopy.failurePreparationUnavailable
-        case .hashMismatch: SendCopy.failureHashMismatch
-        case .submissionIndeterminate: SendCopy.failureIndeterminate
-        case .deploymentStatusUnknown: SendCopy.failureDeploymentStatusUnknown
-        case .deploymentUnconfirmed: SendCopy.failureDeploymentUnconfirmed
-        case .deploymentThenInvokeUnconfirmed: SendCopy.failureDeploymentThenInvokeUnconfirmed
-        case .autoDeploymentFailed: SendCopy.failureAutoDeploymentFailed
-        case .alreadyDeployed: SendCopy.failureAlreadyDeployed
-        case .unrecognisedFeeUnit: SendCopy.failureUnrecognisedUnit
-        case .boundsOutOfRange, .nodeError, .locked, .signingFailed: nil
+        case .reviewedFeeExceeded:
+            SendCopy.reviewedFeeExceeded
+
+        case .reviewedFeeRequired:
+            SendCopy.reviewedFeeRequired
+
+        case .reviewedDeploymentFeeExceeded:
+            SendCopy.reviewedDeploymentFeeExceeded
+
+        case .reviewedDeploymentFeeRequired:
+            SendCopy.reviewedDeploymentFeeRequired
+
+        case .poisonedRecipient:
+            SendCopy.poisonedRecipient
+
+        case .wrongChain:
+            SendCopy.failureWrongChain
+
+        case .preparationUnavailable:
+            SendCopy.failurePreparationUnavailable
+
+        case .hashMismatch:
+            SendCopy.failureHashMismatch
+
+        case .submissionIndeterminate:
+            SendCopy.failureIndeterminate
+
+        case .deploymentStatusUnknown:
+            SendCopy.failureDeploymentStatusUnknown
+
+        case .deploymentUnconfirmed:
+            SendCopy.failureDeploymentUnconfirmed
+
+        case .deploymentThenInvokeUnconfirmed:
+            SendCopy.failureDeploymentThenInvokeUnconfirmed
+
+        case .autoDeploymentFailed:
+            SendCopy.failureAutoDeploymentFailed
+
+        case .alreadyDeployed:
+            SendCopy.failureAlreadyDeployed
+
+        case .unrecognisedFeeUnit:
+            SendCopy.failureUnrecognisedUnit
+
+        case .boundsOutOfRange, .nodeError, .locked, .signingFailed:
+            nil
         }
     }
 
     /// Whether the failure left something on chain the user must check before retrying.
     static func mayHaveReachedChain(_ code: SendFailureCode) -> Bool {
         switch code {
-        case .hashMismatch, .submissionIndeterminate, .deploymentStatusUnknown, .deploymentUnconfirmed, .deploymentThenInvokeUnconfirmed: true
-        default: false
+        case .hashMismatch, .submissionIndeterminate, .deploymentStatusUnknown:
+            true
+
+        case .deploymentUnconfirmed, .deploymentThenInvokeUnconfirmed:
+            true
+
+        default:
+            false
         }
     }
 }

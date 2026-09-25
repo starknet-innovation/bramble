@@ -72,7 +72,7 @@ delay and a correct one is then refused as `Throttled`; the biometric slot opens
 wrap secret and a wrong one drops it) and `SecretFieldTest` (the one secret input's full input
 type, IME flags, autofill exclusion and saved state). JVM: `ErrorTextTest` (incorrect, throttled
 and invalidation copy), `RecoveryEntryTest` (what counts as a phrase paste) and
-`SourceHygieneTest.secretsOnlyGoThroughSecretField`. The biometric prompt, Keystore invalidation
+`SourceHygieneTest.secretsGoThroughSecretField`. The biometric prompt, Keystore invalidation
 and the Security screen have no Android UI test yet; the iOS `SecurityFlowTests` are the model.
 
 ### 8.5 Parity fixtures (`bun run mobile:parity` / `mobile:assets`, checked in `bun run check`)

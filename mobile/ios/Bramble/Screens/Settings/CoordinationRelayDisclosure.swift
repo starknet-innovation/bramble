@@ -12,15 +12,28 @@ struct CoordinationRelayDisclosure: View {
     @State private var busy = false
     @State private var open = false
 
+    /// The field's hint, the extension's copy.
+    private static let relayHint = "Used across networks for encrypted intent handoffs. Every co-signer must "
+        + "select the same relay. Leave empty for the reviewed defaults."
+
     private var policy: RelayPolicy? { store.coordination.relayPolicy }
 
     var body: some View {
-        Disclosure(title: "Multisig coordination relay", summary: policy?.isCustom == true ? "Custom" : "Reviewed defaults", isOpen: $open) {
+        Disclosure(
+            title: "Multisig coordination relay",
+            summary: policy?.isCustom == true ? "Custom" : "Reviewed defaults",
+            isOpen: $open
+        ) {
             VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
-            BrambleField(label: "Custom Nostr relay", placeholder: "wss://relay.example", text: $relay, mono: true,
-                         hint: "Used across networks for encrypted intent handoffs. Every co-signer must select the same relay. Leave empty for the reviewed defaults.")
-            PillButton("Save coordination relay", kind: .secondary, icon: .check, busy: busy) { save() }
-            StatusLine(text: result, tone: .danger)
+                BrambleField(
+                    label: "Custom Nostr relay",
+                    placeholder: "wss://relay.example",
+                    text: $relay,
+                    mono: true,
+                    hint: Self.relayHint
+                )
+                PillButton("Save coordination relay", kind: .secondary, icon: .check, busy: busy) { save() }
+                StatusLine(text: result, tone: .danger)
             }
         }
         .task {

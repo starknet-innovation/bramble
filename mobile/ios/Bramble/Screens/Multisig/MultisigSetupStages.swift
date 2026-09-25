@@ -13,13 +13,21 @@ struct MultisigFundStage: View {
     @State private var balance: String?
     @State private var checking = false
 
+    /// Fraction digits shown for the funding balance.
+    private static let balanceFractionDigits: UInt8 = 4
+
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             HStack {
-                Text("Fund this multisig").brambleText(BrambleTypeScale.title.sized(BrambleMetrics.H2.size), weight: BrambleMetrics.H2.weight, tracking: BrambleMetrics.H2.tracking)
+                Text("Fund this multisig").brambleText(
+                    BrambleTypeScale.title.sized(BrambleMetrics.H2.size),
+                    weight: BrambleMetrics.H2.weight,
+                    tracking: BrambleMetrics.H2.tracking
+                )
                 Spacer()
                 Text("STRK").brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
-                    .padding(.horizontal, BrambleSpace.sm).frame(height: BrambleSize.pill)
+                    .padding(.horizontal, BrambleSpace.sm)
+                    .frame(height: BrambleSize.pill)
                     .background(skin.elevated, in: Capsule())
                     .accessibilityLabel("STRK")
             }
@@ -44,8 +52,12 @@ struct MultisigFundStage: View {
         Task {
             defer { checking = false }
             guard let strk = store.networkInfo.tokens.first(where: { $0.symbol == "STRK" }),
-                  let raw = await store.coordination.balances(of: address)?["STRK"],
-                  let amount = try? formatTokenAmount(raw: raw, decimals: strk.decimals, maxFraction: 4) else {
+                  let raw = (try? await store.coordination.balances(of: address))?["STRK"],
+                  let amount = try? formatTokenAmount(
+                      raw: raw,
+                      decimals: strk.decimals,
+                      maxFraction: Self.balanceFractionDigits
+                  ) else {
                 balance = "Balance could not be checked. Try again shortly."
                 return
             }
@@ -60,21 +72,31 @@ struct MultisigDeployStage: View {
     @Environment(\.skin) private var skin
     let record: MultisigRecord?
 
+    private static let reviewRowMinHeight: CGFloat = 44
+
+    private static let deployUnavailableMessage = "Deployment from mobile arrives with sending. "
+        + "Deploy this saved setup from Bramble for browser, or come back after the update."
+
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             if let deployment = record?.deployment {
                 MenuGroup {
                     reviewRow("Address", shortAddress(deployment.address))
-                    reviewRow("Required", "\(deployment.config.threshold) of \(deployment.config.signerPublicKeys.count)")
+                    reviewRow(
+                        "Required",
+                        "\(deployment.config.threshold) of \(deployment.config.signerPublicKeys.count)"
+                    )
                     ForEach(Array(deployment.config.signerPublicKeys.enumerated()), id: \.offset) { index, key in
                         reviewRow("Signer \(index + 1)", shortAddress(key))
                     }
                     reviewRow("Salt", deployment.salt)
                 }
             }
-            PillButton("Deploy multisig") {}
-                .disabled(true)
-            Text("Deployment from mobile arrives with sending. Deploy this saved setup from Bramble for browser, or come back after the update.")
+            PillButton("Deploy multisig") {
+                // No action: deployment from mobile is not available yet, so the button stays disabled.
+            }
+            .disabled(true)
+            Text(Self.deployUnavailableMessage)
                 .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
         }
     }
@@ -86,7 +108,7 @@ struct MultisigDeployStage: View {
             Text(value).brambleText(BrambleTypeScale.body, mono: true).foregroundStyle(skin.text)
         }
         .padding(BrambleMetrics.MenuRow.padding)
-        .frame(minHeight: 44)
+        .frame(minHeight: Self.reviewRowMinHeight)
         .accessibilityElement(children: .combine)
     }
 }

@@ -1,6 +1,16 @@
 import BrambleCore
 import SwiftUI
 
+/// Metrics shared by the token list rows in this file.
+private enum TokenListLayout {
+    /// Vertical gap between a row's two text lines.
+    static let lineSpacing: CGFloat = 2
+    /// Minimum height of the Show / Hide / Add capsule buttons.
+    static let capsuleButtonHeight: CGFloat = 36
+    /// Opacity of a token row hidden from home.
+    static let hiddenRowOpacity: Double = 0.6
+}
+
 /// `tokensFlow` from `token-flows.ts`: the add and discover tasks, then every token tracked on the
 /// active network with Show/Hide, or the "Likely spam" flag in its place.
 struct TokensView: View {
@@ -15,7 +25,11 @@ struct TokensView: View {
         let tracked = portfolio.tracked
         ScrollView {
             VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-                FlowHeader(title: "Tokens", subtitle: "\(tracked.count) tracked", network: store.networkLabel) { dismiss() }
+                FlowHeader(
+                    title: "Tokens",
+                    subtitle: "\(tracked.count) tracked",
+                    network: store.networkLabel
+                ) { dismiss() }
                 MenuGroup {
                     MenuRow(icon: .plus, title: "Add by contract") { open(.addToken) }
                     MenuRow(icon: .search, title: "Find held tokens") { open(.discoverTokens) }
@@ -26,7 +40,11 @@ struct TokensView: View {
                 } else {
                     VStack(spacing: 0) {
                         ForEach(tracked, id: \.token.id) { item in
-                            row(item, balance: portfolio.balance(of: item.token), price: portfolio.price(of: item.token))
+                            row(
+                                item,
+                                balance: portfolio.balance(of: item.token),
+                                price: portfolio.price(of: item.token)
+                            )
                         }
                     }
                 }
@@ -41,32 +59,38 @@ struct TokensView: View {
         let token = item.token
         return HStack(spacing: BrambleSpace.md) {
             TokenGlyphView(glyph: tokenGlyph(address: token.address, symbol: token.symbol))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: TokenListLayout.lineSpacing) {
                 Text(token.symbol).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
                 Text(token.name).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted).lineLimit(1)
             }
             Spacer(minLength: BrambleSpace.sm)
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: TokenListLayout.lineSpacing) {
                 if let balance {
                     Text(compactAmount(formatted: balance.formatted, places: nil))
                         .brambleText(BrambleTypeScale.body, weight: BrambleWeight.bold).monospacedDigit()
-                    if let fiat = fiatValueText(formatted: balance.formatted, price: price, currency: store.portfolio.currency) {
+                    if let fiat = fiatValueText(
+                        formatted: balance.formatted,
+                        price: price,
+                        currency: store.portfolio.currency
+                    ) {
                         Text(fiat).brambleText(BrambleTypeScale.caption).monospacedDigit().foregroundStyle(skin.muted)
                     }
                 }
             }
             if item.likelySpam {
-                Text("Likely spam").brambleText(BrambleTypeScale.caption, weight: BrambleWeight.semibold).foregroundStyle(skin.warning)
+                Text("Likely spam")
+                    .brambleText(BrambleTypeScale.caption, weight: BrambleWeight.semibold)
+                    .foregroundStyle(skin.warning)
             } else {
                 let hidden = item.hiddenFromHome
                 Button {
-                    Task { await toggle(token, hidden: hidden) }
+                    Task { toggle(token, hidden: hidden) }
                 } label: {
                     Text(hidden ? "Show" : "Hide")
                         .brambleText(BrambleTypeScale.body, weight: BrambleWeight.medium)
                         .foregroundStyle(skin.text)
                         .padding(.horizontal, BrambleSpace.md)
-                        .frame(minHeight: 36)
+                        .frame(minHeight: TokenListLayout.capsuleButtonHeight)
                 }
                 .buttonStyle(FillPressStyle(fill: skin.elevated, pressed: skin.softPress, shape: Capsule()))
                 .disabled(busy == token.id)
@@ -74,15 +98,15 @@ struct TokensView: View {
             }
         }
         .padding(.vertical, BrambleSpace.sm)
-        .opacity(item.hiddenFromHome ? 0.6 : 1)
+        .opacity(item.hiddenFromHome ? TokenListLayout.hiddenRowOpacity : 1)
         .accessibilityIdentifier("tracked-\(token.symbol)")
     }
 
-    private func toggle(_ token: TokenConfig, hidden: Bool) async {
+    private func toggle(_ token: TokenConfig, hidden: Bool) {
         busy = token.id
         defer { busy = nil }
         // `tokens-ui.ts`: success in design-mobile's success tone (`notify`), failure as an error.
-        if await store.portfolio.setHidden(token.id, hidden: !hidden) {
+        if store.portfolio.setHidden(token.id, hidden: !hidden) {
             store.notify(hidden ? "Token shown" : "Token hidden")
         } else {
             store.toast = "Token update failed"
@@ -101,9 +125,18 @@ struct AddTokenView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-            FlowHeader(title: "Add token", subtitle: "Track a token by its contract", network: store.networkLabel) { dismiss() }
-            BrambleField(label: "Contract address", placeholder: "0x…", text: $address, mono: true,
-                         hint: "Name, symbol, and decimals are read from the contract before it is saved.")
+            FlowHeader(
+                title: "Add token",
+                subtitle: "Track a token by its contract",
+                network: store.networkLabel
+            ) { dismiss() }
+            BrambleField(
+                label: "Contract address",
+                placeholder: "0x…",
+                text: $address,
+                mono: true,
+                hint: "Name, symbol, and decimals are read from the contract before it is saved."
+            )
             PillButton("Read and add token", icon: .check, busy: busy) {
                 Task {
                     busy = true
@@ -131,20 +164,29 @@ struct DiscoverTokensView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
-    @State private var found: [TokenBalance]?
+    /// What the last successful scan found; meaningful only once `scanned` is set.
+    @State private var found: [TokenBalance] = []
+    @State private var scanned = false
     @State private var status: String?
     @State private var failed = false
     @State private var busy = false
     @State private var adding: String?
 
+    private static let scanNotice =
+        "Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home."
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-                FlowHeader(title: "Find held tokens", subtitle: "Scan the Starknet token registry", network: store.networkLabel) { dismiss() }
-                Text("Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.")
+                FlowHeader(
+                    title: "Find held tokens",
+                    subtitle: "Scan the Starknet token registry",
+                    network: store.networkLabel
+                ) { dismiss() }
+                Text(Self.scanNotice)
                     .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
                 PillButton("Scan for tokens", icon: .refresh, busy: busy) { Task { await scan() } }
-                if let found {
+                if scanned {
                     if found.isEmpty {
                         EmptyState(message: "No new tokens found in this account.")
                     } else {
@@ -165,8 +207,10 @@ struct DiscoverTokensView: View {
         switch await store.portfolio.discoverTokens() {
         case let .success(tokens):
             found = tokens
+            scanned = true
             failed = false
             status = tokens.isEmpty ? "No new tokens found." : "\(tokens.count) found."
+
         case let .failure(failure):
             failed = true
             status = failure.message
@@ -177,7 +221,7 @@ struct DiscoverTokensView: View {
     private func suggestion(_ balance: TokenBalance) -> some View {
         HStack(spacing: BrambleSpace.md) {
             TokenGlyphView(glyph: tokenGlyph(address: balance.token.address, symbol: balance.token.symbol))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: TokenListLayout.lineSpacing) {
                 Text(balance.token.symbol).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
                 Text("\(compactAmount(formatted: balance.formatted, places: nil)) \(balance.token.symbol)")
                     .brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
@@ -191,13 +235,16 @@ struct DiscoverTokensView: View {
                     if let failure {
                         store.toast = failure
                     } else {
-                        found?.removeAll { $0.token.id == balance.token.id }
+                        found.removeAll { $0.token.id == balance.token.id }
                         store.notify("Token added")
                     }
                 }
             } label: {
-                Text("Add").brambleText(BrambleTypeScale.body, weight: BrambleWeight.medium).foregroundStyle(skin.text)
-                    .padding(.horizontal, BrambleSpace.md).frame(minHeight: 36)
+                Text("Add")
+                    .brambleText(BrambleTypeScale.body, weight: BrambleWeight.medium)
+                    .foregroundStyle(skin.text)
+                    .padding(.horizontal, BrambleSpace.md)
+                    .frame(minHeight: TokenListLayout.capsuleButtonHeight)
             }
             .buttonStyle(FillPressStyle(fill: skin.elevated, pressed: skin.softPress, shape: Capsule()))
             .disabled(adding != nil)

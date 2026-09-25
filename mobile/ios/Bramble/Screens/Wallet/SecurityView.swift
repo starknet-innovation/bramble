@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// `Unlock & auto-lock`: the extension's settings-flow layout (flow header, eyebrow sections, a
-/// status line) in the `.shell` padding with the `.section` gap, like the other settings flows. Biometric unlock is an Off/On segmented control, as Appearance uses, because the
-/// ui-kit has no switch. Turning it on re-checks the passphrase in the core first; turning it off
+/// status line) in the `.shell` padding with the `.section` gap, like the other settings flows.
+/// Biometric unlock is an Off/On segmented control, as Appearance uses, because the ui-kit has no
+/// switch. Turning it on re-checks the passphrase in the core first; turning it off
 /// needs no key. Auto-lock is the extension's fixed policy, shown read-only.
 struct SecurityView: View {
     @Environment(WalletStore.self) private var store
@@ -12,17 +13,24 @@ struct SecurityView: View {
     @State private var confirming = false
     @State private var passphrase = ""
 
+    /// Milliseconds in a minute, to show the idle lock in whole minutes.
+    private static let millisecondsPerMinute: UInt64 = 60_000
+
     private var biometry: String { BiometricKeychain.name }
 
     private func fill(_ text: String) -> String {
         text.replacingOccurrences(of: "{biometry}", with: biometry)
-            .replacingOccurrences(of: "{minutes}", with: "\(BrambleCopy.idleLockMs / 60_000)")
+            .replacingOccurrences(of: "{minutes}", with: "\(BrambleCopy.idleLockMs / Self.millisecondsPerMinute)")
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
-                FlowHeader(title: BrambleCopy.securityTitle, subtitle: BrambleCopy.securitySubtitle, network: store.networkLabel) { dismiss() }
+                FlowHeader(
+                    title: BrambleCopy.securityTitle,
+                    subtitle: BrambleCopy.securitySubtitle,
+                    network: store.networkLabel
+                ) { dismiss() }
                 // `.section`: each eyebrow sits over its controls at the section gap.
                 VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
                     Eyebrow(text: BrambleCopy.biometricEyebrow)
@@ -30,11 +38,24 @@ struct SecurityView: View {
                         .disabled(!BiometricKeychain.available && !store.security.biometricEnabled)
                         .accessibilityIdentifier("biometric-choice")
                     if confirming {
-                        BrambleField(label: "Confirm vault passphrase", placeholder: "", text: $passphrase, secure: true)
-                        PillButton(fill(BrambleCopy.biometricEnable), icon: .lockKeyhole, busy: store.busy, action: enable)
+                        BrambleField(
+                            label: "Confirm vault passphrase",
+                            placeholder: "",
+                            text: $passphrase,
+                            secure: true
+                        )
+                        PillButton(
+                            fill(BrambleCopy.biometricEnable),
+                            icon: .lockKeyhole,
+                            busy: store.busy,
+                            action: enable
+                        )
                             .disabled(passphrase.isEmpty || store.retryAt != nil)
                     }
-                    StatusLine(text: status, tone: !BiometricKeychain.available && !store.security.biometricEnabled ? .danger : .muted)
+                    StatusLine(
+                        text: status,
+                        tone: !BiometricKeychain.available && !store.security.biometricEnabled ? .danger : .muted
+                    )
                 }
                 VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
                     Eyebrow(text: BrambleCopy.autoLockEyebrow)
@@ -50,10 +71,10 @@ struct SecurityView: View {
             store.refreshSecurity()
             choice = store.security.biometricEnabled
         }
-        .onChange(of: choice) { _, on in
-            if on == store.security.biometricEnabled {
+        .onChange(of: choice) { _, turnedOn in
+            if turnedOn == store.security.biometricEnabled {
                 confirming = false
-            } else if on {
+            } else if turnedOn {
                 confirming = true
             } else {
                 store.disableBiometric()
@@ -77,9 +98,14 @@ struct SecurityView: View {
                 confirming = false
             } catch {
                 switch error {
-                case BiometricKeychain.Failure.cancelled: break
-                case is BiometricKeychain.Failure: store.toast = fill(BrambleCopy.biometricUnavailable)
-                default: store.toast = describe(error)
+                case BiometricKeychain.Failure.cancelled:
+                    break
+
+                case is BiometricKeychain.Failure:
+                    store.toast = fill(BrambleCopy.biometricUnavailable)
+
+                default:
+                    store.toast = describe(error)
                 }
                 choice = store.security.biometricEnabled
             }

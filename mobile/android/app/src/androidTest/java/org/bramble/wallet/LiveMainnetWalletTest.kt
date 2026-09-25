@@ -27,10 +27,11 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LiveMainnetWalletTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
+
     @get:Rule val name = TestName()
 
     @Test
-    fun importsTheConfiguredMainnetWallet() {
+    fun importsConfiguredMainnetWallet() {
         val args = InstrumentationRegistry.getArguments()
         val phrase = args.getString("BRAMBLE_MOBILE_MAINNET_MNEMONIC")
         val address = args.getString("BRAMBLE_MOBILE_MAINNET_ADDRESS")

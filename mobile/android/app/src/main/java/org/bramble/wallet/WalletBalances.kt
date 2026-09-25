@@ -2,6 +2,7 @@ package org.bramble.wallet
 
 import org.bramble.core.TokenInfo
 import org.bramble.core.formatTokenAmount
+import org.bramble.wallet.portfolio.rawBalances
 
 // Balances for display, from the portfolio's one balance read (`PortfolioStore`); the store no
 // longer reads STRK/ETH on its own. Uncompiled: checked against the generated Kotlin bindings.

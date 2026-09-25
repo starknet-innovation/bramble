@@ -18,6 +18,13 @@ excluded:
   - DerivedData
   - "**/*.generated.swift"
 
+# Default rules switched off, each because it contradicts what this app must do:
+#   optional_data_string_conversion: the RPC and portfolio transports decode reply bodies lossily
+#   on purpose, as the extension's `fetch().text()` does; the failable initializer it asks for would
+#   turn a reply the extension accepts into a transport failure.
+disabled_rules:
+  - optional_data_string_conversion
+
 # Opt-in rules, listed explicitly so an upgrade never widens the set silently.
 # Deliberately left out, because they contradict an enabled rule or do not apply to this app:
 #   explicit_acl, explicit_top_level_acl, explicit_type_interface (contradict redundant_type_annotation
@@ -156,6 +163,47 @@ analyzer_rules:
   - typesafe_array_init
   - unused_declaration
   - unused_import
+
+# SwiftUI declares property wrappers with arguments on the property's own line
+# (`@Environment(\.skin) private var skin`); the default would split every one of them.
+attributes:
+  attributes_with_arguments_always_on_line_above: false
+
+# `let _ = assert(...)` is the only way to run a statement inside a @ViewBuilder body.
+redundant_discardable_let:
+  ignore_swiftui_view_bodies: true
+
+# Category files group several small declarations and keep the names their Android and extension
+# counterparts, docs and fixture scripts use; every other file must still match a type it declares.
+file_name:
+  excluded:
+    - main.swift
+    - LinuxMain.swift
+    - BrambleTheme.swift
+    - Controls.swift
+    - CoordinationControls.swift
+    - CoordinationNavigation.swift
+    - EdgeSwipeBack.swift
+    - Feedback.swift
+    - HitTarget.swift
+    - Motion.swift
+    - MultisigSetupStages.swift
+    - OnboardingScaffold.swift
+    - OnboardingSteps.swift
+    - PortfolioHome.swift
+    - PrivacyPresentation.swift
+    - PrivacyTestSupport.swift
+    - PrivacyViews.swift
+    - Progress.swift
+    - RecoveryGrid.swift
+    - ScreenProtection.swift
+    - SendProgressView.swift
+    - SendTestSupport.swift
+    - SettingsViews.swift
+    - Surfaces.swift
+    - Toast.swift
+    - Typography.swift
+    - UITestSupport.swift
 
 # Limits. With `strict: true` the warning threshold is the enforced one, so both are set equal.
 # file_length matches the repository's 500-line rule (AGENTS.md), counting every line.

@@ -103,7 +103,7 @@ device" → passphrase → "Remove wallet" → "Create a new wallet" is back. Bu
 text plus a click action (so the "Remove wallet" title never matches), icon controls by content
 description, secret fields as above.
 
-`OnboardingFlowTest.importOnMainnetThenLockAndUnlock` mirrors the iOS import test: public E2E
+`OnboardingFlowTest.importMainnetThenLockUnlock` mirrors the iOS import test: public E2E
 phrase one word per "Word N" → "Find your accounts" → Review shows the short form of
 `0x208361e3…398d9` → add → Receive ("Copy address") → Back → Settings → Network → Back →
 Appearance → Light → Dark → Back → Accounts ("Add account", short address) → Close → "Lock wallet" →

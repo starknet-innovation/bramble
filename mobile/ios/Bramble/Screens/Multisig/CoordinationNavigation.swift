@@ -17,11 +17,14 @@ enum CoordinationFlow: Hashable {
 struct CoordinationNavigator: Sendable {
     let open: @MainActor @Sendable (CoordinationFlow) -> Void
 
-    @MainActor func callAsFunction(_ flow: CoordinationFlow) { open(flow) }
+    @MainActor
+    func callAsFunction(_ flow: CoordinationFlow) { open(flow) }
 }
 
 extension EnvironmentValues {
-    @Entry var openCoordinationFlow = CoordinationNavigator { _ in }
+    @Entry var openCoordinationFlow = CoordinationNavigator { _ in
+        // No action: outside the wallet shell there is no stack to push a coordination screen onto.
+    }
 }
 
 /// Resolves a pushed coordination flow to its screen.
@@ -30,13 +33,26 @@ struct CoordinationDestination: View {
 
     var body: some View {
         switch flow {
-        case .addressBook: AddressBookView()
-        case .sharedAccounts: SharedAccountsView()
-        case .readyMultisig: ReadyMultisigView()
-        case .addShared: AddSharedAccountView()
-        case .createMultisig(let resume): CreateMultisigView(resumeId: resume)
-        case .sharedAccount(let id): SharedAccountHomeView(id: id)
-        case .sharedReceive(let id): SharedReceiveView(id: id)
+        case .addressBook:
+            AddressBookView()
+
+        case .sharedAccounts:
+            SharedAccountsView()
+
+        case .readyMultisig:
+            ReadyMultisigView()
+
+        case .addShared:
+            AddSharedAccountView()
+
+        case .createMultisig(let resume):
+            CreateMultisigView(resumeId: resume)
+
+        case .sharedAccount(let id):
+            SharedAccountHomeView(id: id)
+
+        case .sharedReceive(let id):
+            SharedReceiveView(id: id)
         }
     }
 }

@@ -7,20 +7,35 @@ import XCTest
 /// and write guarantees (one proven endpoint per plan, a write sent once and never retried).
 @MainActor
 final class SendFlowModelTests: XCTestCase {
-    private var core: WalletCore!
-    private var node: MockNode!
+    private var unlocked: WalletCore?
+    private let node = MockNode()
+
+    /// The wallet `setUp` unlocked; reading it before `setUp` (or after `tearDown`) fails the test.
+    private var core: WalletCore {
+        get throws { try XCTUnwrap(unlocked) }
+    }
 
     override func setUp() async throws {
-        core = try unlockedCore()
-        node = MockNode()
-        let core = core!
-        let id = try ozRecord(core, .sepolia).id
-        node.pendingHash = { (try? core.activity(accountId: id))?.first?.hash }
+        let wallet = try unlockedCore()
+        unlocked = wallet
+        let id = try ozRecord(wallet, .sepolia).id
+        node.pendingHash = { (try? wallet.activity(accountId: id))?.first?.hash }
+    }
+
+    override func tearDown() {
+        unlocked = nil
     }
 
     private func model(balances: [String: String] = ["STRK": "100000000000000000000"]) throws -> SendFlowModel {
         let accounts = try core.accountRecords(network: .sepolia)
-        return SendFlowModel(core: core, network: sepolia(), account: accounts[0], otherAccounts: Array(accounts.dropFirst()), balances: balances, transport: node)
+        return try SendFlowModel(
+            core: core,
+            network: sepolia(),
+            account: accounts[0],
+            otherAccounts: Array(accounts.dropFirst()),
+            balances: balances,
+            transport: node
+        )
     }
 
     private func reviewed(_ model: SendFlowModel) async {
@@ -66,7 +81,12 @@ final class SendFlowModelTests: XCTestCase {
         let model = try model()
         model.recipientInput = account1
         model.continueWithRecipient()
-        for (amount, message) in [("0", SendCopy.amountGate), ("1.0000000000000000001", SendCopy.amountTooManyDecimals), ("1e3", SendCopy.amountInvalid)] {
+        let gates = [
+            ("0", SendCopy.amountGate),
+            ("1.0000000000000000001", SendCopy.amountTooManyDecimals),
+            ("1e3", SendCopy.amountInvalid)
+        ]
+        for (amount, message) in gates {
             model.amount = amount
             await model.reviewSend()
             XCTAssertEqual(model.amountError, message, amount)
@@ -89,11 +109,11 @@ final class SendFlowModelTests: XCTestCase {
     func testLockVoidsTheReviewedPlan() async throws {
         let model = try model()
         await reviewed(model)
-        core.lock()
+        try core.lock()
         try core.unlock(password: testPassword)
         await model.confirm()
         XCTAssertEqual(model.stage, .failed)
-        XCTAssertFalse(node.posts.contains { $0.write })
+        XCTAssertFalse(node.posts.contains(where: \.write))
         XCTAssertTrue(try core.activity(accountId: try ozRecord(core, .sepolia).id).isEmpty)
     }
 
@@ -106,7 +126,7 @@ final class SendFlowModelTests: XCTestCase {
         XCTAssertEqual(model.reviewBlock, SendCopy.feeUnavailableBlock)
         await model.confirm()
         XCTAssertEqual(model.stage, .review)
-        XCTAssertFalse(node.posts.contains { $0.write })
+        XCTAssertFalse(node.posts.contains(where: \.write))
     }
 
     func testAWriteIsSentOnceAndNeverRetried() async throws {
@@ -133,7 +153,7 @@ final class SendFlowModelTests: XCTestCase {
     }
 
     func testEveryStepOfAPlanUsesTheEndpointThatProvedTheChain() async throws {
-        let urls = sepolia().rpcUrls.compactMap(URL.init(string:))
+        let urls = try sepolia().rpcUrls.compactMap(URL.init(string:))
         XCTAssertGreaterThanOrEqual(urls.count, 3)
         node.unreachable = [urls[0]]
         node.wrongChain = [urls[1]]
@@ -147,9 +167,21 @@ final class SendFlowModelTests: XCTestCase {
     }
 
     func testFailureCodesMapToTheExtensionCopy() {
-        XCTAssertEqual(SendFailureText.message(SendFailure(code: .reviewedFeeExceeded, hash: nil)), SendCopy.failurePrefix + SendCopy.reviewedFeeExceeded)
-        XCTAssertEqual(SendFailureText.message(SendFailure(code: .poisonedRecipient, hash: nil)), SendCopy.failurePrefix + SendCopy.poisonedRecipient)
-        XCTAssertEqual(SendFailureText.message(SendFailure(code: .wrongChain, hash: nil)), SendCopy.failurePrefix + SendCopy.failureWrongChain)
-        XCTAssertEqual(SendFailureText.message(SendFailure(code: .boundsOutOfRange, hash: nil)), SendCopy.failureDefault)
+        XCTAssertEqual(
+            SendFailureText.message(SendFailure(code: .reviewedFeeExceeded, hash: nil)),
+            SendCopy.failurePrefix + SendCopy.reviewedFeeExceeded
+        )
+        XCTAssertEqual(
+            SendFailureText.message(SendFailure(code: .poisonedRecipient, hash: nil)),
+            SendCopy.failurePrefix + SendCopy.poisonedRecipient
+        )
+        XCTAssertEqual(
+            SendFailureText.message(SendFailure(code: .wrongChain, hash: nil)),
+            SendCopy.failurePrefix + SendCopy.failureWrongChain
+        )
+        XCTAssertEqual(
+            SendFailureText.message(SendFailure(code: .boundsOutOfRange, hash: nil)),
+            SendCopy.failureDefault
+        )
     }
 }

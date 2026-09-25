@@ -35,25 +35,40 @@ import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.brambleTween
 import org.bramble.wallet.design.textStyle
 
+private const val PASSPHRASE_HINT =
+    "Use at least 8 characters; 12 or more is safer. This unlocks the encrypted vault on this device."
+
+private const val WEAK_ACKNOWLEDGEMENT =
+    "This passphrase is weak. I understand it is all that protects this wallet on this device."
+
 /**
  * "Create your vault passphrase", port of the iOS `PassphraseStep`. Strength, acceptability and
  * the weak acknowledgement all come from the core's `passphrase_strength`; nothing is scored here.
  * [submit] writes the vault; the typed values are cleared once it succeeds.
  */
 @Composable
-fun PassphraseStep(store: WalletStore, path: OnboardingPath, back: () -> Unit, submit: suspend (String) -> Unit) {
+fun PassphraseStep(
+    store: WalletStore,
+    path: OnboardingPath,
+    back: () -> Unit,
+    submit: suspend (String) -> Unit,
+) {
     val scope = rememberCoroutineScope()
     var passphrase by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var weakTicked by remember { mutableStateOf(false) }
     val strength = remember(passphrase) { passphraseStrength(passphrase) }
-    LaunchedEffect(strength.needsAcknowledgement) { weakTicked = WeakAck.sync(strength.needsAcknowledgement, weakTicked) }
+    val needsAck = strength.needsAcknowledgement
+    LaunchedEffect(needsAck) { weakTicked = WeakAck.sync(needsAck, weakTicked) }
     val matches = strength.acceptable && confirmation.isNotEmpty() && passphrase == confirmation
     OnboardingStep(
         back = back,
-        icon = BrambleIconName.LOCK,
-        title = "Create your vault passphrase",
-        lede = "You will use this to unlock Bramble on this device.",
+        heading =
+            StepHeading(
+                icon = BrambleIconName.LOCK,
+                title = "Create your vault passphrase",
+                lede = "You will use this to unlock Bramble on this device.",
+            ),
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
                 BrambleField(
@@ -61,13 +76,18 @@ fun PassphraseStep(store: WalletStore, path: OnboardingPath, back: () -> Unit, s
                     placeholder = "At least 8 characters",
                     value = passphrase,
                     onValueChange = { passphrase = it },
-                    hint = "Use at least 8 characters; 12 or more is safer. This unlocks the encrypted vault on this device.",
+                    hint = PASSPHRASE_HINT,
                 )
-                BrambleField(label = "Confirm passphrase", placeholder = "Enter it again", value = confirmation, onValueChange = { confirmation = it })
+                BrambleField(
+                    label = "Confirm passphrase",
+                    placeholder = "Enter it again",
+                    value = confirmation,
+                    onValueChange = { confirmation = it },
+                )
                 PassphraseMeter(strength, meterStatus(strength, confirmation, matches), ready = matches)
                 if (strength.needsAcknowledgement) {
                     CheckRow(
-                        "This passphrase is weak. I understand it is all that protects this wallet on this device.",
+                        WEAK_ACKNOWLEDGEMENT,
                         checked = weakTicked,
                         onCheckedChange = { weakTicked = it },
                     )
@@ -78,15 +98,14 @@ fun PassphraseStep(store: WalletStore, path: OnboardingPath, back: () -> Unit, s
             PillButton(
                 if (path == OnboardingPath.CREATE) "Continue" else "Find your accounts",
                 busy = store.busy,
-                enabled = matches && WeakAck.ok(strength.needsAcknowledgement, weakTicked),
+                enabled = matches && WeakAck.accepts(strength.needsAcknowledgement, weakTicked),
             ) {
                 scope.launch {
                     runCatching { submit(passphrase) }
                         .onSuccess {
                             passphrase = ""
                             confirmation = ""
-                        }
-                        .onFailure(store::showError)
+                        }.onFailure(store::showError)
                 }
             }
         },
@@ -94,23 +113,37 @@ fun PassphraseStep(store: WalletStore, path: OnboardingPath, back: () -> Unit, s
 }
 
 /** `applyPassphraseMeter`'s status line. */
-private fun meterStatus(strength: PassphraseStrength, confirmation: String, matches: Boolean): String = when {
-    !strength.acceptable || confirmation.isEmpty() -> strength.hint
-    matches -> "${strength.hint} · Passphrases match"
-    else -> "Passphrases do not match"
-}
+private fun meterStatus(
+    strength: PassphraseStrength,
+    confirmation: String,
+    matches: Boolean,
+): String =
+    when {
+        !strength.acceptable || confirmation.isEmpty() -> strength.hint
+        matches -> "${strength.hint} · Passphrases match"
+        else -> "Passphrases do not match"
+    }
 
 /** `.password-requirement`: a 4dp track filled by the meter ratio in the band's colour. */
 @Composable
-private fun PassphraseMeter(strength: PassphraseStrength, status: String, ready: Boolean) {
+private fun PassphraseMeter(
+    strength: PassphraseStrength,
+    status: String,
+    ready: Boolean,
+) {
     val skin = LocalSkin.current
-    val fill = when (strength.level) {
-        PassphraseLevel.WEAK -> skin.danger
-        PassphraseLevel.FAIR -> skin.warning
-        PassphraseLevel.STRONG -> skin.positive
-        PassphraseLevel.EMPTY -> skin.muted
-    }
-    val ratio by animateFloatAsState(strength.ratio.toFloat().coerceIn(0f, 1f), brambleTween(BrambleMotion.enterMs), label = "meter")
+    val fill =
+        when (strength.level) {
+            PassphraseLevel.WEAK -> skin.danger
+            PassphraseLevel.FAIR -> skin.warning
+            PassphraseLevel.STRONG -> skin.positive
+            PassphraseLevel.EMPTY -> skin.muted
+        }
+    val ratio by animateFloatAsState(
+        strength.ratio.toFloat().coerceIn(0f, 1f),
+        brambleTween(BrambleMotion.enterMs),
+        label = "meter",
+    )
     val track = RoundedCornerShape(percent = 50)
     Column(verticalArrangement = Arrangement.spacedBy(BrambleLayout.meterGap)) {
         Box(Modifier.fillMaxWidth().height(BrambleLayout.meterTrack).background(skin.elevated, track)) {

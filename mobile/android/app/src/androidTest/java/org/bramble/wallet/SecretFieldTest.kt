@@ -31,70 +31,87 @@ class SecretFieldTest {
         return result!!.getOrThrow()
     }
 
-    private fun field(kind: SecretKind, action: Int = EditorInfo.IME_ACTION_DONE): SecretEditText =
+    private fun field(
+        kind: SecretKind,
+        action: Int = EditorInfo.IME_ACTION_DONE,
+    ): SecretEditText =
         SecretEditText(InstrumentationRegistry.getInstrumentation().targetContext).apply { configure(kind, action) }
 
     private fun editorInfo(edit: SecretEditText): EditorInfo = EditorInfo().also { edit.onCreateInputConnection(it) }
 
     @Test
-    fun passphraseFieldsAreMaskedTextWithoutSuggestionsOrLearning() = onMain {
-        val info = editorInfo(field(SecretKind.PASSPHRASE))
-        assertEquals(SecretInput.PASSPHRASE_TYPE, info.inputType)
-        assertEquals(
-            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
-            info.inputType,
-        )
-        assertEquals(InputType.TYPE_CLASS_TEXT, info.inputType and EditorInfo.TYPE_MASK_CLASS)
-        assertTrue(info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
-        assertTrue(info.imeOptions and EditorInfo.IME_FLAG_NO_EXTRACT_UI != 0)
-    }
-
-    @Test
-    fun wordFieldsAreReadableTextWithoutSuggestionsOrLearning() = onMain {
-        val info = editorInfo(field(SecretKind.WORD, EditorInfo.IME_ACTION_NEXT))
-        assertEquals(SecretInput.WORD_TYPE, info.inputType)
-        assertEquals(
-            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
-            info.inputType,
-        )
-        assertEquals(InputType.TYPE_CLASS_TEXT, info.inputType and EditorInfo.TYPE_MASK_CLASS)
-        assertTrue(info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
-        assertEquals(EditorInfo.IME_ACTION_NEXT, info.imeOptions and EditorInfo.IME_MASK_ACTION)
-    }
-
-    @Test
-    fun sendFieldsNeitherSuggestNorLearn() = onMain {
-        val address = editorInfo(field(SecretKind.ADDRESS, EditorInfo.IME_ACTION_GO))
-        assertEquals(SecretInput.WORD_TYPE, address.inputType)
-        assertTrue(address.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
-        val amount = editorInfo(field(SecretKind.AMOUNT))
-        assertEquals(InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL, amount.inputType)
-        assertTrue(amount.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
-    }
-
-    @Test
-    fun autofillIsExcluded() = onMain {
-        assertEquals(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS, field(SecretKind.PASSPHRASE).importantForAutofill)
-    }
-
-    @Test
-    fun typedTextNeverReachesSavedState() = onMain {
-        val edit = field(SecretKind.WORD)
-        assertFalse(edit.isSaveEnabled)
-        assertFalse(edit.getFreezesText())
-        assertEquals(View.NO_ID, edit.id)
-        edit.setText(secret)
-
-        val own = SparseArray<Parcelable>()
-        edit.saveHierarchyState(own)
-        assertEquals("the field saves nothing", 0, own.size())
-
-        // Inside a parent that does save (as Compose's AndroidView holder does), still nothing.
-        val parent = FrameLayout(edit.context).apply { id = View.generateViewId(); addView(edit) }
-        val tree = SparseArray<Parcelable>()
-        parent.saveHierarchyState(tree)
-        for (index in 0 until tree.size()) {
-            assertFalse("saved state holds the secret", tree.valueAt(index).toString().contains(secret))
+    fun passphraseMaskedNoSuggestions() =
+        onMain {
+            val info = editorInfo(field(SecretKind.PASSPHRASE))
+            assertEquals(SecretInput.PASSPHRASE_TYPE, info.inputType)
+            assertEquals(
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
+                info.inputType,
+            )
+            assertEquals(InputType.TYPE_CLASS_TEXT, info.inputType and EditorInfo.TYPE_MASK_CLASS)
+            assertTrue(info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+            assertTrue(info.imeOptions and EditorInfo.IME_FLAG_NO_EXTRACT_UI != 0)
         }
-    }
+
+    @Test
+    fun wordFieldReadableNoSuggestions() =
+        onMain {
+            val info = editorInfo(field(SecretKind.WORD, EditorInfo.IME_ACTION_NEXT))
+            assertEquals(SecretInput.WORD_TYPE, info.inputType)
+            assertEquals(
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
+                info.inputType,
+            )
+            assertEquals(InputType.TYPE_CLASS_TEXT, info.inputType and EditorInfo.TYPE_MASK_CLASS)
+            assertTrue(info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+            assertEquals(EditorInfo.IME_ACTION_NEXT, info.imeOptions and EditorInfo.IME_MASK_ACTION)
+        }
+
+    @Test
+    fun sendFieldsNeverSuggestOrLearn() =
+        onMain {
+            val address = editorInfo(field(SecretKind.ADDRESS, EditorInfo.IME_ACTION_GO))
+            assertEquals(SecretInput.WORD_TYPE, address.inputType)
+            assertTrue(address.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+            val amount = editorInfo(field(SecretKind.AMOUNT))
+            assertEquals(InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL, amount.inputType)
+            assertTrue(amount.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+        }
+
+    @Test
+    fun autofillIsExcluded() =
+        onMain {
+            assertEquals(
+                View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS,
+                field(SecretKind.PASSPHRASE).importantForAutofill,
+            )
+        }
+
+    @Test
+    fun typedTextStaysOutOfSavedState() =
+        onMain {
+            val edit = field(SecretKind.WORD)
+            assertFalse(edit.isSaveEnabled)
+            assertFalse(edit.getFreezesText())
+            assertEquals(View.NO_ID, edit.id)
+            edit.setText(secret)
+
+            val own = SparseArray<Parcelable>()
+            edit.saveHierarchyState(own)
+            assertEquals("the field saves nothing", 0, own.size())
+
+            // Inside a parent that does save (as Compose's AndroidView holder does), still nothing.
+            val parent =
+                FrameLayout(edit.context).apply {
+                    id = View.generateViewId()
+                    addView(edit)
+                }
+            val tree = SparseArray<Parcelable>()
+            parent.saveHierarchyState(tree)
+            for (index in 0 until tree.size()) {
+                assertFalse("saved state holds the secret", tree.valueAt(index).toString().contains(secret))
+            }
+        }
 }

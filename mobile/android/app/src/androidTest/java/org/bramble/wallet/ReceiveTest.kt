@@ -19,10 +19,11 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ReceiveTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
+
     @get:Rule val name = TestName()
 
     @Test
-    fun copyAddressPutsOnlyThePublicAddressOnTheClipboard() {
+    fun copiesOnlyThePublicAddress() {
         val r = Robot(rule, name.methodName)
         r.waitForButton("Create a new wallet")
         r.importPublicWalletDirectly()
@@ -30,10 +31,11 @@ class ReceiveTest {
         r.waitFor(hasContentDescription("QR code for your Starknet address"))
         r.tap("Copy address")
         r.waitForText("Copied")
-        val clip = r.onMain {
-            val clipboard = rule.activity.getSystemService(ClipboardManager::class.java)
-            clipboard.primaryClip
-        }
+        val clip =
+            r.onMain {
+                val clipboard = rule.activity.getSystemService(ClipboardManager::class.java)
+                clipboard.primaryClip
+            }
         val address = r.onMain { activeRecord?.address }
         assertEquals(ClipboardPolicy.LABEL, clip?.description?.label?.toString())
         assertEquals(address, clip?.getItemAt(0)?.text?.toString())

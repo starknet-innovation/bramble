@@ -64,7 +64,12 @@ import org.bramble.wallet.setGroup
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountsSheet(store: WalletStore, onDismiss: () -> Unit, openManage: () -> Unit, openMultisig: () -> Unit = {}) {
+fun AccountsSheet(
+    store: WalletStore,
+    onDismiss: () -> Unit,
+    openManage: () -> Unit,
+    openMultisig: () -> Unit = {},
+) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState()
@@ -81,13 +86,23 @@ fun AccountsSheet(store: WalletStore, onDismiss: () -> Unit, openManage: () -> U
         properties = ModalBottomSheetProperties(securePolicy = SecureFlagPolicy.Inherit),
     ) {
         Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(start = BrambleSpace.xl, end = BrambleSpace.xl, bottom = BrambleSpace.xl),
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(
+                start = BrambleSpace.xl,
+                end = BrambleSpace.xl,
+                bottom = BrambleSpace.xl,
+            ),
             verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
         ) {
             if (choosing) {
-                AddAccountChooser(store, close = { choosing = false }, added = close, multisig = { close(); openMultisig() })
+                AddAccountChooser(store, close = { choosing = false }, added = close, multisig = {
+                    close()
+                    openMultisig()
+                })
             } else {
-                DrawerContent(store, close, openManage = { close(); openManage() }, add = { choosing = true })
+                DrawerContent(store, close, openManage = {
+                    close()
+                    openManage()
+                }, add = { choosing = true })
             }
         }
     }
@@ -106,30 +121,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.DrawerContent(
     var picking by remember { mutableStateOf<String?>(null) }
     val activeGroup = store.groups.firstOrNull { it.id == filter }
     val visible = activeGroup?.let { group -> store.records.filter { it.id in group.accountIds } } ?: store.records
-    Row(verticalAlignment = Alignment.Top) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
-            Text("Accounts", color = skin.text, style = textStyle(BrambleTypeScale.display, BrambleWeight.bold, BrambleTracking.display))
-            Text(store.networkInfo.name, color = skin.muted, style = textStyle(BrambleTypeScale.body))
-        }
-        IconButton(BrambleIconName.X, "Close accounts", tint = skin.muted, onClick = close)
-    }
-    if (store.groups.isNotEmpty()) {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-            FilterChip("All", BrambleIconName.WALLET, filter == null) { filter = null }
-            store.groups.forEach { group ->
-                FilterChip(group.name, groupIcon(group.icon), filter == group.id) { filter = group.id }
-            }
-        }
-    }
-    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-        if (visible.isEmpty()) {
-            Text(
-                if (activeGroup == null) "No accounts on this network yet. Add one below."
-                else "No accounts in this group yet. Open an account's folder button to add it.",
-                color = skin.muted,
-                style = textStyle(BrambleTypeScale.label),
-            )
-        }
+    DrawerHeader(store, close)
+    if (store.groups.isNotEmpty()) GroupFilters(store, filter) { filter = it }
+    Column(
+        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+    ) {
+        if (visible.isEmpty()) EmptyAccounts(filtered = activeGroup != null)
         visible.forEach { record ->
             val folder = store.groups.firstOrNull { it.id == record.groupId }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -144,17 +142,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.DrawerContent(
                 ) { picking = if (picking == record.id) null else record.id }
             }
             if (picking == record.id) {
-                // Single-select folder picker: every group, then "None".
-                MenuGroup {
-                    val options: List<Triple<String?, String, BrambleIconName>> =
-                        store.groups.map { Triple(it.id, it.name, groupIcon(it.icon)) } + Triple(null, "None", BrambleIconName.FOLDER)
-                    options.forEachIndexed { offset, (id, name, icon) ->
-                        if (offset > 0) MenuDivider()
-                        MenuRow(icon, name, selected = id == folder?.id, chevron = false) {
-                            picking = null
-                            scope.launch { store.setGroup(record.id, id) }
-                        }
-                    }
+                FolderPicker(store, folder?.id) { id ->
+                    picking = null
+                    scope.launch { store.setGroup(record.id, id) }
                 }
             }
         }
@@ -163,18 +153,101 @@ private fun androidx.compose.foundation.layout.ColumnScope.DrawerContent(
     MenuGroup { MenuRow(BrambleIconName.SETTINGS, "Manage accounts & groups", onClick = openManage) }
 }
 
+/** The drawer's title, this network's name, and the close control. */
+@Composable
+private fun DrawerHeader(
+    store: WalletStore,
+    close: () -> Unit,
+) {
+    val skin = LocalSkin.current
+    Row(verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
+            Text(
+                "Accounts",
+                color = skin.text,
+                style = textStyle(BrambleTypeScale.display, BrambleWeight.bold, BrambleTracking.display),
+            )
+            Text(store.networkInfo.name, color = skin.muted, style = textStyle(BrambleTypeScale.body))
+        }
+        IconButton(BrambleIconName.X, "Close accounts", tint = skin.muted, onClick = close)
+    }
+}
+
+/** "All" plus one chip per group; [filter] is the selected group's id, null for all. */
+@Composable
+private fun GroupFilters(
+    store: WalletStore,
+    filter: String?,
+    onFilter: (String?) -> Unit,
+) {
+    Row(
+        Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+    ) {
+        FilterChip("All", BrambleIconName.WALLET, filter == null) { onFilter(null) }
+        store.groups.forEach { group ->
+            FilterChip(group.name, groupIcon(group.icon), filter == group.id) { onFilter(group.id) }
+        }
+    }
+}
+
+/** The empty state: none on this network, or none in the [filtered] group. */
+@Composable
+private fun EmptyAccounts(filtered: Boolean) {
+    Text(
+        if (!filtered) {
+            "No accounts on this network yet. Add one below."
+        } else {
+            "No accounts in this group yet. Open an account's folder button to add it."
+        },
+        color = LocalSkin.current.muted,
+        style = textStyle(BrambleTypeScale.label),
+    )
+}
+
+/**
+ * Single-select folder picker for one account: every group, then "None"; [current] is the
+ * account's group id. [choose] receives the picked group id, or null for "None".
+ */
+@Composable
+private fun FolderPicker(
+    store: WalletStore,
+    current: String?,
+    choose: (String?) -> Unit,
+) {
+    MenuGroup {
+        val options: List<Triple<String?, String, BrambleIconName>> =
+            store.groups.map { Triple(it.id, it.name, groupIcon(it.icon)) } +
+                Triple(null, "None", BrambleIconName.FOLDER)
+        options.forEachIndexed { offset, (id, name, icon) ->
+            if (offset > 0) MenuDivider()
+            MenuRow(icon, name, selected = id == current, chevron = false) { choose(id) }
+        }
+    }
+}
+
 /** `.account-row`: avatar, display name over the 6…4 address; the full address is the a11y value. */
 @Composable
-internal fun AccountRow(record: AccountRecord, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun AccountRow(
+    record: AccountRecord,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val skin = LocalSkin.current
     Row(
-        modifier.fillMaxWidth()
+        modifier
+            .fillMaxWidth()
             .semantics(mergeDescendants = true) {
                 this.selected = selected
                 stateDescription = record.address
-            }
-            .fillPress(if (selected) skin.accentSoft else Color.Transparent, skin.softPress, RoundedCornerShape(BrambleRadius.lg), pressedScale = 1f, onClick = onClick)
-            .heightIn(min = BrambleSize.row)
+            }.fillPress(
+                if (selected) skin.accentSoft else Color.Transparent,
+                skin.softPress,
+                RoundedCornerShape(BrambleRadius.lg),
+                pressedScale = 1f,
+                onClick = onClick,
+            ).heightIn(min = BrambleSize.row)
             .padding(horizontal = BrambleSpace.sm),
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
         verticalAlignment = Alignment.CenterVertically,
@@ -182,7 +255,11 @@ internal fun AccountRow(record: AccountRecord, selected: Boolean, modifier: Modi
         AccountAvatar(record.address)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
             Text(record.displayName, color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.semibold))
-            Text(record.shortAddress, color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold, mono = true))
+            Text(
+                record.shortAddress,
+                color = skin.muted,
+                style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold, mono = true),
+            )
         }
         if (selected) BrambleIcon(BrambleIconName.CHECK, skin.accent)
     }

@@ -6,9 +6,26 @@ import XCTest
 /// breakpoints, the hit-region expansion, the edge back-swipe, and token-mark tones.
 final class DesignSystemTests: XCTestCase {
     func testTypeEqualsTheTokenAtLargeAndGrowsMonotonically() {
-        let sizes: [DynamicTypeSize] = [.xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge, .accessibility1, .accessibility3, .accessibility5]
-        for token in [BrambleTypeScale.caption, BrambleTypeScale.label, BrambleTypeScale.body, BrambleTypeScale.title, BrambleTypeScale.display, BrambleTypeScale.headline, BrambleTypeScale.portfolio] {
-            XCTAssertEqual(BrambleTypography.scaled(token.size, for: .large), token.size, accuracy: 0.01, "\(token.size) at Large")
+        let sizes: [DynamicTypeSize] = [
+            .xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge,
+            .accessibility1, .accessibility3, .accessibility5
+        ]
+        let tokens = [
+            BrambleTypeScale.caption,
+            BrambleTypeScale.label,
+            BrambleTypeScale.body,
+            BrambleTypeScale.title,
+            BrambleTypeScale.display,
+            BrambleTypeScale.headline,
+            BrambleTypeScale.portfolio
+        ]
+        for token in tokens {
+            XCTAssertEqual(
+                BrambleTypography.scaled(token.size, for: .large),
+                token.size,
+                accuracy: 0.01,
+                "\(token.size) at Large"
+            )
             let scaled = sizes.map { BrambleTypography.scaled(token.size, for: $0) }
             XCTAssertEqual(scaled, scaled.sorted(), "\(token.size) grows with the setting")
         }
@@ -24,10 +41,19 @@ final class DesignSystemTests: XCTestCase {
 
     func testDeviceClassUsesTheFullSceneLikeTheUILabViewport() {
         // (scene size inside the safe area, insets) for SE, 16 and 16 Pro Max in portrait.
-        let se = DeviceClass.resolve(size: CGSize(width: 375, height: 647), insets: EdgeInsets(top: 20, leading: 0, bottom: 0, trailing: 0))
-        let sixteen = DeviceClass.resolve(size: CGSize(width: 390, height: 751), insets: EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0))
-        let max = DeviceClass.resolve(size: CGSize(width: 440, height: 863), insets: EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0))
-        XCTAssertEqual(se, DeviceClass(phone: true, short: true))
+        let phoneSE = DeviceClass.resolve(
+            size: CGSize(width: 375, height: 647),
+            insets: EdgeInsets(top: 20, leading: 0, bottom: 0, trailing: 0)
+        )
+        let sixteen = DeviceClass.resolve(
+            size: CGSize(width: 390, height: 751),
+            insets: EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+        )
+        let max = DeviceClass.resolve(
+            size: CGSize(width: 440, height: 863),
+            insets: EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+        )
+        XCTAssertEqual(phoneSE, DeviceClass(phone: true, short: true))
         XCTAssertEqual(sixteen, DeviceClass(phone: true, short: false), "844pt scene takes the base height rules")
         XCTAssertEqual(max, DeviceClass(phone: true, short: false))
     }
@@ -42,11 +68,43 @@ final class DesignSystemTests: XCTestCase {
 
     func testEdgeSwipeRecognition() {
         let edge = CGPoint(x: 4, y: 400)
-        XCTAssertTrue(EdgeSwipe.isBack(start: edge, translation: CGSize(width: 120, height: 10), predicted: CGSize(width: 130, height: 10)))
-        XCTAssertTrue(EdgeSwipe.isBack(start: edge, translation: CGSize(width: 40, height: 0), predicted: CGSize(width: 200, height: 0)), "a flick")
-        XCTAssertFalse(EdgeSwipe.isBack(start: CGPoint(x: 60, y: 400), translation: CGSize(width: 200, height: 0), predicted: CGSize(width: 200, height: 0)), "not from the edge")
-        XCTAssertFalse(EdgeSwipe.isBack(start: edge, translation: CGSize(width: 100, height: 300), predicted: CGSize(width: 100, height: 400)), "a scroll")
-        XCTAssertFalse(EdgeSwipe.isBack(start: edge, translation: CGSize(width: 30, height: 0), predicted: CGSize(width: 60, height: 0)), "too short")
+        XCTAssertTrue(EdgeSwipe.isBack(
+            start: edge,
+            translation: CGSize(width: 120, height: 10),
+            predicted: CGSize(width: 130, height: 10)
+        ))
+        XCTAssertTrue(
+            EdgeSwipe.isBack(
+                start: edge,
+                translation: CGSize(width: 40, height: 0),
+                predicted: CGSize(width: 200, height: 0)
+            ),
+            "a flick"
+        )
+        XCTAssertFalse(
+            EdgeSwipe.isBack(
+                start: CGPoint(x: 60, y: 400),
+                translation: CGSize(width: 200, height: 0),
+                predicted: CGSize(width: 200, height: 0)
+            ),
+            "not from the edge"
+        )
+        XCTAssertFalse(
+            EdgeSwipe.isBack(
+                start: edge,
+                translation: CGSize(width: 100, height: 300),
+                predicted: CGSize(width: 100, height: 400)
+            ),
+            "a scroll"
+        )
+        XCTAssertFalse(
+            EdgeSwipe.isBack(
+                start: edge,
+                translation: CGSize(width: 30, height: 0),
+                predicted: CGSize(width: 60, height: 0)
+            ),
+            "too short"
+        )
     }
 
     func testTokenMarkToneIsAddressModFour() {

@@ -56,7 +56,10 @@ private val fieldShape = RoundedCornerShape(BrambleRadius.md)
 
 /** Rows of three cells. Not lazy: focus must reach any cell, and a phrase is at most 24 cells. */
 @Composable
-private fun ThreeColumnGrid(count: Int, cell: @Composable RowScope.(Int) -> Unit) {
+private fun ThreeColumnGrid(
+    count: Int,
+    cell: @Composable RowScope.(Int) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
         for (row in 0 until count step COLUMNS) {
             Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
@@ -68,9 +71,18 @@ private fun ThreeColumnGrid(count: Int, cell: @Composable RowScope.(Int) -> Unit
 }
 
 @Composable
-private fun WordCell(number: Int, modifier: Modifier, invalid: Boolean = false, content: @Composable () -> Unit) {
+private fun WordCell(
+    number: Int,
+    modifier: Modifier,
+    invalid: Boolean = false,
+    content: @Composable () -> Unit,
+) {
     val skin = LocalSkin.current
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(BrambleLayout.wordCellGap), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(BrambleLayout.wordCellGap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
             "$number",
             color = skin.muted,
@@ -79,7 +91,8 @@ private fun WordCell(number: Int, modifier: Modifier, invalid: Boolean = false, 
             modifier = Modifier.width(BrambleLayout.wordNumberWidth),
         )
         Box(
-            Modifier.weight(1f)
+            Modifier
+                .weight(1f)
                 .heightIn(min = BrambleSize.control)
                 .background(if (invalid) skin.dangerSoft else skin.elevated, fieldShape)
                 .padding(horizontal = BrambleSpace.sm),
@@ -95,69 +108,147 @@ private fun WordCell(number: Int, modifier: Modifier, invalid: Boolean = false, 
  * and [onPaste] lets the caller say so.
  */
 @Composable
-fun RecoveryEntryGrid(words: List<String>, onPaste: () -> Unit = {}, onWordsChange: (List<String>) -> Unit) {
-    val skin = LocalSkin.current
+fun RecoveryEntryGrid(
+    words: List<String>,
+    onPaste: () -> Unit = {},
+    onWordsChange: (List<String>) -> Unit,
+) {
     val context = LocalContext.current
     var focused by remember { mutableStateOf<Int?>(null) }
     var focusTarget by remember { mutableStateOf<Int?>(null) }
+
     fun move(focus: FocusMove) {
-        when (focus) {
-            FocusMove.Stay -> Unit
-            is FocusMove.To -> focusTarget = focus.index
-            FocusMove.Release -> focusTarget = null
-        }
+        focusTarget = targetAfter(focus, focusTarget)
     }
-    fun choose(index: Int, word: String) {
+
+    fun choose(
+        index: Int,
+        word: String,
+    ) {
         onWordsChange(words.toMutableList().also { it[index] = word })
-        move(if (index + 1 < words.size) FocusMove.To(index + 1) else FocusMove.Release)
+        move(focusAfter(index, words.size))
     }
+    val events =
+        CellEvents(
+            edit = { index, value ->
+                if (RecoveryEntry.isPaste(value)) {
+                    clearClipboard(context)
+                    onPaste()
+                }
+                val edit = RecoveryEntry.apply(words, index, value)
+                onWordsChange(edit.words)
+                move(edit.focus)
+            },
+            focusChanged = { index, has ->
+                if (has) {
+                    focused = index
+                } else if (focused == index) {
+                    focused = null
+                }
+            },
+            retarget = { focusTarget = it },
+            submit = { index ->
+                val first = suggestionsFor(words[index]).firstOrNull()
+                if (first != null) {
+                    choose(index, first)
+                } else {
+                    move(focusAfter(index, words.size))
+                }
+            },
+        )
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
         ThreeColumnGrid(words.size) { index ->
-            val word = words[index].trim()
-            val invalid = word.isNotEmpty() && focused != index && !isRecoveryWord(word)
-            WordCell(index + 1, Modifier.weight(1f), invalid) {
-                SecretField(
-                    value = words[index],
-                    onValueChange = { value ->
-                        if (RecoveryEntry.isPaste(value)) {
-                            clearClipboard(context)
-                            onPaste()
-                        }
-                        val edit = RecoveryEntry.apply(words, index, value)
-                        onWordsChange(edit.words)
-                        move(edit.focus)
-                    },
-                    accessibilityLabel = "Word ${index + 1}",
-                    kind = SecretKind.WORD,
-                    textColor = if (invalid) skin.danger else null,
-                    style = BrambleTypeScale.body,
-                    imeAction = if (index == words.size - 1) EditorInfo.IME_ACTION_DONE else EditorInfo.IME_ACTION_NEXT,
-                    requestFocus = focusTarget == index,
-                    onFocusRequestHandled = { focusTarget = null },
-                    onFocusChange = { has -> if (has) focused = index else if (focused == index) focused = null },
-                    onBackspaceWhenEmpty = { if (index > 0) focusTarget = index - 1 },
-                    onImeAction = {
-                        val first = suggestionsFor(words[index]).firstOrNull()
-                        if (first != null) choose(index, first) else move(if (index + 1 < words.size) FocusMove.To(index + 1) else FocusMove.Release)
-                    },
-                )
-            }
+            EntryCell(words, index, focused, focusTarget, events)
         }
-        val index = focused
-        if (index != null && index < words.size) {
-            val options = suggestionsFor(words[index])
-            if (options.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-                    options.forEach { option ->
-                        Box(
-                            Modifier.height(BrambleLayout.suggestionHeight)
-                                .background(skin.elevated, RoundedCornerShape(percent = 50))
-                                .clickable(role = Role.Button) { choose(index, option) }
-                                .padding(horizontal = BrambleSpace.md),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(option, color = skin.text, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
-                        }
+        SuggestionStrip(words, focused, ::choose)
+    }
+}
+
+/** What an [EntryCell] reports back to [RecoveryEntryGrid], each keyed by the cell's index. */
+private data class CellEvents(
+    val edit: (Int, String) -> Unit,
+    val focusChanged: (Int, Boolean) -> Unit,
+    val retarget: (Int?) -> Unit,
+    val submit: (Int) -> Unit,
+)
+
+/** The focus request after [focus]: a move targets its cell, a release clears, staying keeps [current]. */
+private fun targetAfter(
+    focus: FocusMove,
+    current: Int?,
+): Int? =
+    when (focus) {
+        FocusMove.Stay -> current
+        is FocusMove.To -> focus.index
+        FocusMove.Release -> null
+    }
+
+/** The next cell after [index] in a grid of [size] cells, or release after the last one. */
+private fun focusAfter(
+    index: Int,
+    size: Int,
+): FocusMove = if (index + 1 < size) FocusMove.To(index + 1) else FocusMove.Release
+
+/** One editable cell; a word is flagged unknown only while its cell is not focused. */
+@Composable
+private fun RowScope.EntryCell(
+    words: List<String>,
+    index: Int,
+    focused: Int?,
+    focusTarget: Int?,
+    events: CellEvents,
+) {
+    val skin = LocalSkin.current
+    val word = words[index].trim()
+    val invalid = word.isNotEmpty() && focused != index && !isRecoveryWord(word)
+    WordCell(index + 1, Modifier.weight(1f), invalid) {
+        SecretField(
+            value = words[index],
+            onValueChange = { value -> events.edit(index, value) },
+            accessibilityLabel = "Word ${index + 1}",
+            kind = SecretKind.WORD,
+            textColor = if (invalid) skin.danger else null,
+            style = BrambleTypeScale.body,
+            imeAction = if (index == words.size - 1) EditorInfo.IME_ACTION_DONE else EditorInfo.IME_ACTION_NEXT,
+            requestFocus = focusTarget == index,
+            onFocusRequestHandled = { events.retarget(null) },
+            onFocusChange = { has -> events.focusChanged(index, has) },
+            onBackspaceWhenEmpty = { if (index > 0) events.retarget(index - 1) },
+            onImeAction = { events.submit(index) },
+        )
+    }
+}
+
+/** BIP-39 completions for the focused cell, as tappable chips; nothing when none apply. */
+@Composable
+private fun SuggestionStrip(
+    words: List<String>,
+    focused: Int?,
+    choose: (Int, String) -> Unit,
+) {
+    val skin = LocalSkin.current
+    val index = focused
+    if (index != null && index < words.size) {
+        val options = suggestionsFor(words[index])
+        if (options.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+            ) {
+                options.forEach { option ->
+                    Box(
+                        Modifier
+                            .height(BrambleLayout.suggestionHeight)
+                            .background(skin.elevated, RoundedCornerShape(percent = 50))
+                            .clickable(role = Role.Button) { choose(index, option) }
+                            .padding(horizontal = BrambleSpace.md),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            option,
+                            color = skin.text,
+                            style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold),
+                        )
                     }
                 }
             }
@@ -180,7 +271,10 @@ private fun suggestionsFor(typed: String): List<String> = recoveryWordSuggestion
  * carries the test tag `recovery-word-N`, as the iOS accessibility identifier.
  */
 @Composable
-fun RecoveryWordGrid(words: List<String>, masked: Boolean) {
+fun RecoveryWordGrid(
+    words: List<String>,
+    masked: Boolean,
+) {
     val skin = LocalSkin.current
     val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     ThreeColumnGrid(words.size) { index ->
@@ -190,8 +284,10 @@ fun RecoveryWordGrid(words: List<String>, masked: Boolean) {
                     words[index],
                     color = skin.text,
                     style = textStyle(BrambleTypeScale.body),
-                    modifier = Modifier.testTag("recovery-word-${index + 1}")
-                        .then(if (masked && canBlur) Modifier.blur(BrambleLayout.maskBlur) else Modifier),
+                    modifier =
+                        Modifier
+                            .testTag("recovery-word-${index + 1}")
+                            .then(if (masked && canBlur) Modifier.blur(BrambleLayout.maskBlur) else Modifier),
                 )
                 if (masked && !canBlur) Box(Modifier.matchParentSize().background(skin.sunken))
             }

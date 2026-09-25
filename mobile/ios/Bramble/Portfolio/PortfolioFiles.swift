@@ -12,10 +12,15 @@ struct PortfolioFiles: Sendable {
     let directory: URL
 
     /// The app's own location, created on first use.
-    static func standard() -> PortfolioFiles {
-        let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true))
-            ?? FileManager.default.temporaryDirectory
-        let files = PortfolioFiles(directory: base.appendingPathComponent("portfolio", isDirectory: true))
+    static func standard() -> Self {
+        let support = try? FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let base = support ?? FileManager.default.temporaryDirectory
+        let files = Self(directory: base.appendingPathComponent("portfolio", isDirectory: true))
         #if DEBUG
         // UI tests start a degraded story from empty caches (`-BrambleUITestFreshCaches YES`); only
         // honoured together with the fixture network, and compiled out of release builds.
@@ -54,8 +59,11 @@ struct PortfolioFiles: Sendable {
     }
 
     private func prepare() throws {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-                                                attributes: [.protectionKey: FileProtectionType.complete])
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        )
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         var mutable = directory

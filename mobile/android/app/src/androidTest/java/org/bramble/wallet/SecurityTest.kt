@@ -4,13 +4,13 @@ import android.view.View
 import android.view.WindowManager
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 /** Window and storage protections (threats T1, T2, T5, T6). */
 @RunWith(AndroidJUnit4::class)
@@ -31,7 +31,7 @@ class SecurityTest {
     }
 
     @Test
-    fun autofillIsExcludedAndObscuredTouchesAreDropped() {
+    fun blocksAutofillAndObscuredTouch() {
         val decor = rule.activity.window.decorView
         assertEquals(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS, decor.importantForAutofill)
         assertTrue(decor.filterTouchesWhenObscured)

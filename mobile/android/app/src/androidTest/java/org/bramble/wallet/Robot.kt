@@ -21,7 +21,6 @@ import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -29,6 +28,7 @@ import org.bramble.core.AccountFamily
 import org.bramble.core.RecoverySelection
 import org.bramble.core.WalletStatus
 import org.bramble.wallet.design.secretFieldTag
+import java.io.File
 
 /** The repository's published E2E wallet: public, never funded on purpose, safe in a test. */
 object PublicWallet {
@@ -53,19 +53,30 @@ class Robot(
 ) {
     val store: WalletStore get() = (rule.activity.application as BrambleApplication).store
 
-    private fun exists(matcher: SemanticsMatcher): Boolean =
-        rule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+    private fun exists(matcher: SemanticsMatcher): Boolean = rule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
 
-    fun waitFor(matcher: SemanticsMatcher, timeoutMs: Long = 10_000) = rule.waitUntil(timeoutMs) { exists(matcher) }
+    fun waitFor(
+        matcher: SemanticsMatcher,
+        timeoutMs: Long = 10_000,
+    ) = rule.waitUntil(timeoutMs) { exists(matcher) }
 
-    fun waitForText(text: String, timeoutMs: Long = 10_000) = waitFor(hasText(text), timeoutMs)
+    fun waitForText(
+        text: String,
+        timeoutMs: Long = 10_000,
+    ) = waitFor(hasText(text), timeoutMs)
 
-    fun waitForButton(text: String, timeoutMs: Long = 10_000) = waitFor(hasText(text) and hasClickAction(), timeoutMs)
+    fun waitForButton(
+        text: String,
+        timeoutMs: Long = 10_000,
+    ) = waitFor(hasText(text) and hasClickAction(), timeoutMs)
 
     fun hasTextNow(text: String): Boolean = exists(hasText(text))
 
     /** A button by its visible title; must exist, be enabled, and is scrolled into view first. */
-    fun tap(text: String, timeoutMs: Long = 10_000) {
+    fun tap(
+        text: String,
+        timeoutMs: Long = 10_000,
+    ) {
         val matcher = hasText(text) and hasClickAction()
         waitFor(matcher, timeoutMs)
         val node = rule.onAllNodes(matcher)[0]
@@ -75,7 +86,10 @@ class Robot(
     }
 
     /** An icon button or dock item by its content description. */
-    fun tapDescribed(label: String, timeoutMs: Long = 10_000) {
+    fun tapDescribed(
+        label: String,
+        timeoutMs: Long = 10_000,
+    ) {
         val matcher = hasContentDescription(label) and hasClickAction()
         waitFor(matcher, timeoutMs)
         rule.onAllNodes(matcher)[0].assertIsEnabled().performClick()
@@ -83,7 +97,10 @@ class Robot(
     }
 
     /** Types into the secret field labelled [label], replacing what it held. */
-    fun typeSecret(label: String, text: String) {
+    fun typeSecret(
+        label: String,
+        text: String,
+    ) {
         val tag = hasTestTag(secretFieldTag(label))
         waitFor(tag)
         runCatching { rule.onAllNodes(tag)[0].performScrollTo() }
@@ -92,15 +109,27 @@ class Robot(
     }
 
     fun textOfTag(tag: String): String =
-        rule.onAllNodes(hasTestTag(tag))[0].fetchSemanticsNode().config[SemanticsProperties.Text].joinToString("") { it.text }
+        rule
+            .onAllNodes(
+                hasTestTag(tag),
+            )[0]
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.Text]
+            .joinToString("") { it.text }
 
     /** Runs [block] on the main thread, where the store lives. */
-    fun <T> onMain(block: suspend WalletStore.() -> T): T = runBlocking { withContext(Dispatchers.Main) { store.block() } }
+    fun <T> onMain(block: suspend WalletStore.() -> T): T =
+        runBlocking { withContext(Dispatchers.Main) { store.block() } }
 
-    fun awaitCoreStatus(expected: WalletStatus, timeoutMs: Long = 10_000) {
+    fun awaitCoreStatus(
+        expected: WalletStatus,
+        timeoutMs: Long = 10_000,
+    ) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (store.coreStatus() != expected) {
-            check(System.currentTimeMillis() < deadline) { "core status stayed ${store.coreStatus()}, expected $expected" }
+            check(
+                System.currentTimeMillis() < deadline,
+            ) { "core status stayed ${store.coreStatus()}, expected $expected" }
             Thread.sleep(20)
         }
     }
@@ -150,7 +179,10 @@ class Robot(
         waitFor(row)
         val node = rule.onAllNodes(row)[0]
         runCatching { node.performScrollTo() }
-        val state = node.fetchSemanticsNode().config.getOrElse(SemanticsProperties.ToggleableState) { ToggleableState.Off }
+        val state =
+            node.fetchSemanticsNode().config.getOrElse(
+                SemanticsProperties.ToggleableState,
+            ) { ToggleableState.Off }
         if (state != ToggleableState.On) node.performClick()
         tap("I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.")
         tap("Restore selected accounts")

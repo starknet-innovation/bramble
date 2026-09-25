@@ -46,7 +46,10 @@ fun MenuGroup(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 fun MenuDivider() {
     Box(
-        Modifier.fillMaxWidth().padding(start = BrambleSpace.lg).height(BrambleLayout.hairline)
+        Modifier
+            .fillMaxWidth()
+            .padding(start = BrambleSpace.lg)
+            .height(BrambleLayout.hairline)
             .background(LocalSkin.current.hairline),
     )
 }
@@ -64,63 +67,45 @@ fun MenuRow(
 ) {
     val skin = LocalSkin.current
     Row(
-        Modifier.fillMaxWidth()
+        Modifier
+            .fillMaxWidth()
             .semantics(mergeDescendants = true) { this.selected = selected }
-            .fillPress(if (selected) skin.accentSoft else Color.Transparent, skin.softPress, mdShape, pressedScale = 1f, onClick = onClick)
-            .heightIn(min = BrambleLayout.menuRowMin)
+            .fillPress(
+                if (selected) skin.accentSoft else Color.Transparent,
+                skin.softPress,
+                mdShape,
+                pressedScale = 1f,
+                onClick = onClick,
+            ).heightIn(min = BrambleLayout.menuRowMin)
             .padding(horizontal = BrambleSpace.lg),
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Box(Modifier.width(BrambleLayout.menuIconSlot)) { BrambleIcon(icon, tone ?: skin.muted, BrambleLayout.menuIcon) }
+            Box(
+                Modifier.width(BrambleLayout.menuIconSlot),
+            ) { BrambleIcon(icon, tone ?: skin.muted, BrambleLayout.menuIcon) }
         }
-        Text(title, color = tone ?: skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.medium), modifier = Modifier.weight(1f))
+        Text(
+            title,
+            color = tone ?: skin.text,
+            style = textStyle(BrambleTypeScale.row, BrambleWeight.medium),
+            modifier = Modifier.weight(1f),
+        )
         if (value != null) {
-            Text(value, color = skin.muted, style = textStyle(BrambleTypeScale.body, BrambleWeight.medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                value,
+                color = skin.muted,
+                style = textStyle(BrambleTypeScale.body, BrambleWeight.medium),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        if (selected) BrambleIcon(BrambleIconName.CHECK, skin.accent) else if (chevron) BrambleIcon(BrambleIconName.CHEVRON_RIGHT, skin.muted)
-    }
-}
-
-/** `.pill` with the network dot: positive when the network answered, warning while unknown. */
-@Composable
-fun NetworkPill(label: String, healthy: Boolean = true) {
-    val skin = LocalSkin.current
-    Row(
-        Modifier.height(BrambleSize.pill + BrambleLayout.pillExtraHeight)
-            .background(skin.elevated, RoundedCornerShape(percent = 50))
-            .padding(horizontal = BrambleSpace.md),
-        horizontalArrangement = Arrangement.spacedBy(BrambleLayout.pillGap),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StatusDot(healthy)
-        Text(label, color = skin.text, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
-    }
-}
-
-/** The 6dp network-health dot. */
-@Composable
-fun StatusDot(healthy: Boolean) {
-    val skin = LocalSkin.current
-    Box(Modifier.size(BrambleLayout.statusDot).background(if (healthy) skin.positive else skin.warning, CircleShape))
-}
-
-/** `.flow-header`: back control, title and subtitle, network pill. */
-@Composable
-fun FlowHeader(title: String, subtitle: String? = null, network: String? = null, back: () -> Unit) {
-    val skin = LocalSkin.current
-    Row(
-        Modifier.fillMaxWidth().padding(top = BrambleLayout.flowHeaderTop, bottom = BrambleSpace.xs),
-        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(BrambleIconName.CHEVRON_LEFT, "Back", tint = skin.muted, onClick = back)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.subtitleGap)) {
-            Text(title, color = skin.text, style = textStyle(BrambleTypeScale.headline, BrambleWeight.bold, BrambleTracking.display))
-            if (subtitle != null) Text(subtitle, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
+        if (selected) {
+            BrambleIcon(BrambleIconName.CHECK, skin.accent)
+        } else if (chevron) {
+            BrambleIcon(BrambleIconName.CHEVRON_RIGHT, skin.muted)
         }
-        if (network != null) NetworkPill(network)
     }
 }
 
@@ -128,18 +113,28 @@ fun FlowHeader(title: String, subtitle: String? = null, network: String? = null,
 @Composable
 fun Medallion(icon: BrambleIconName) {
     val skin = LocalSkin.current
-    Box(Modifier.size(BrambleLayout.medallion).background(skin.elevated, CircleShape), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier.size(BrambleLayout.medallion).background(skin.elevated, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
         BrambleIcon(icon, skin.text, BrambleLayout.medallionIcon)
     }
 }
 
 /** `.onboarding-option`: elevated card with an icon disc, copy, and chevron. */
 @Composable
-fun OptionCard(icon: BrambleIconName, title: String, detail: String, enabled: Boolean = true, onClick: () -> Unit) {
+fun OptionCard(
+    icon: BrambleIconName,
+    title: String,
+    detail: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     val skin = LocalSkin.current
     Row(
-        Modifier.fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.5f)
+        Modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else DISABLED_CONTROL_ALPHA)
             .semantics(mergeDescendants = true) {}
             .fillPress(skin.elevated, skin.softPress, lgShape, enabled = enabled, onClick = onClick)
             .heightIn(min = BrambleLayout.optionCardMin)
@@ -160,10 +155,15 @@ fun OptionCard(icon: BrambleIconName, title: String, detail: String, enabled: Bo
 
 /** `.onboarding-complete-detail`: an elevated row with an icon and a caption. */
 @Composable
-fun DetailRow(icon: BrambleIconName, text: String) {
+fun DetailRow(
+    icon: BrambleIconName,
+    text: String,
+) {
     val skin = LocalSkin.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = BrambleLayout.detailRowMin)
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = BrambleLayout.detailRowMin)
             .background(skin.elevated, mdShape)
             .padding(horizontal = BrambleSpace.md),
         horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
@@ -176,7 +176,10 @@ fun DetailRow(icon: BrambleIconName, text: String) {
 
 /** Token mark: the bundled logo drawable, or the neutral letter badge the extension falls back to. */
 @Composable
-fun TokenMark(address: String, symbol: String) {
+fun TokenMark(
+    address: String,
+    symbol: String,
+) {
     val skin = LocalSkin.current
     val logo = BrambleTokenLogos.drawables[address.lowercase()]
     Box(Modifier.size(BrambleSize.mark).clip(CircleShape), contentAlignment = Alignment.Center) {
@@ -205,7 +208,8 @@ fun Disclosure(
     val skin = LocalSkin.current
     Column(Modifier.fillMaxWidth().clip(lgShape).background(skin.elevated, lgShape)) {
         Row(
-            Modifier.fillMaxWidth()
+            Modifier
+                .fillMaxWidth()
                 .semantics(mergeDescendants = true) { stateDescription = if (open) "Expanded" else "Collapsed" }
                 .fillPress(Color.Transparent, skin.softPress, lgShape, pressedScale = 1f, onClick = onToggle)
                 .heightIn(min = BrambleLayout.menuRowMin)
@@ -214,12 +218,21 @@ fun Disclosure(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(title, color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.semibold))
-            Text(detail ?: "", color = skin.muted, style = textStyle(BrambleTypeScale.caption), modifier = Modifier.weight(1f))
+            Text(
+                detail ?: "",
+                color = skin.muted,
+                style = textStyle(BrambleTypeScale.caption),
+                modifier = Modifier.weight(1f),
+            )
             BrambleIcon(if (open) BrambleIconName.CHEVRON_DOWN else BrambleIconName.CHEVRON_RIGHT, skin.muted)
         }
         if (open) {
             Column(
-                Modifier.fillMaxWidth().padding(start = BrambleSpace.md, end = BrambleSpace.md, bottom = BrambleSpace.md),
+                Modifier.fillMaxWidth().padding(
+                    start = BrambleSpace.md,
+                    end = BrambleSpace.md,
+                    bottom = BrambleSpace.md,
+                ),
                 verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
                 content = content,
             )

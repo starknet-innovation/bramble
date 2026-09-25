@@ -19,7 +19,7 @@ struct CreateMultisigView: View {
     @State private var salt = "0x0"
     @State private var picking = false
     @State private var saved: MultisigRecord?
-    @State private var declared: Bool??
+    @State private var classAvailability = ClassAvailability.checking
     @State private var result: String?
     @State private var busy = false
     @State private var loaded = false
@@ -27,31 +27,68 @@ struct CreateMultisigView: View {
 
     static let steps = ["Participants", "Approval", "Fund", "Deploy"]
 
+    /// Indexes into `steps` for each stage of the flow.
+    private enum Stage {
+        static let participants = 0
+        static let approval = 1
+        static let fund = 2
+        static let deploy = 3
+    }
+
+    private enum Layout {
+        static let signerTextSpacing: CGFloat = 2
+    }
+
+    /// Whether the pinned Ready Multisig class is declared on the active network.
+    private enum ClassAvailability: Equatable {
+        /// The chain read has not finished yet.
+        case checking
+        /// The chain read failed, so availability is unknown.
+        case unverified
+        case declared
+        case undeclared
+    }
+
+    private static let undeclaredClassMessage = "The pinned Ready Multisig 0.2 class is not declared on this network. "
+        + "Predeclare the audited class before deployment."
+
     private var coordination: CoordinationStore { store.coordination }
     /// This wallet's account records on the network that are in the signer set.
     private var localSigners: [AccountRecord] {
-        store.records.filter { account in participants.contains { $0.publicKeyX == account.publicKey } }
+        store.records.filter { account in
+            participants.contains { $0.publicKeyX == account.publicKey }
+        }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
                 if picking {
-                    ParticipantPickerView(known: knownParticipants(), select: add, close: { picking = false })
+                    ParticipantPickerView(known: knownParticipants(), select: add) { picking = false }
                 } else {
-                    FlowHeader(title: resumeId == nil ? "Create multisig" : "Complete multisig setup",
-                               subtitle: "Multiple signers approve together", network: store.networkLabel) { dismiss() }
-                    if declared == .some(false) {
-                        Text("The pinned Ready Multisig 0.2 class is not declared on this network. Predeclare the audited class before deployment.")
+                    FlowHeader(
+                        title: resumeId == nil ? "Create multisig" : "Complete multisig setup",
+                        subtitle: "Multiple signers approve together",
+                        network: store.networkLabel
+                    ) { dismiss() }
+                    if classAvailability == .undeclared {
+                        Text(Self.undeclaredClassMessage)
                             .brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
                     } else {
                         StepProgress(steps: Self.steps, active: stage)
                         classStatus
                         switch stage {
-                        case 0: participantsStage
-                        case 1: approvalStage
-                        case 2: MultisigFundStage(record: saved) { stage = 3 }
-                        default: MultisigDeployStage(record: saved)
+                        case Stage.participants:
+                            participantsStage
+
+                        case Stage.approval:
+                            approvalStage
+
+                        case Stage.fund:
+                            MultisigFundStage(record: saved) { stage = Stage.deploy }
+
+                        default:
+                            MultisigDeployStage(record: saved)
                         }
                     }
                 }
@@ -63,10 +100,18 @@ struct CreateMultisigView: View {
     }
 
     @ViewBuilder private var classStatus: some View {
-        switch declared {
-        case nil: StatusLine(text: "Checking the pinned class on this network…")
-        case .some(nil): StatusLine(text: "Class availability could not be verified. Deployment remains disabled.", tone: .danger)
-        default: EmptyView()
+        switch classAvailability {
+        case .checking:
+            StatusLine(text: "Checking the pinned class on this network…")
+
+        case .unverified:
+            StatusLine(
+                text: "Class availability could not be verified. Deployment remains disabled.",
+                tone: .danger
+            )
+
+        case .declared, .undeclared:
+            EmptyView()
         }
     }
 
@@ -83,11 +128,13 @@ struct CreateMultisigView: View {
             HStack {
                 Text("Signer set").brambleText(BrambleTypeScale.body, weight: BrambleWeight.bold)
                 Spacer()
-                Text("\(participants.count) signer\(participants.count == 1 ? "" : "s")").brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                Text("\(participants.count) signer\(participants.count == 1 ? "" : "s")")
+                    .brambleText(BrambleTypeScale.caption)
+                    .foregroundStyle(skin.muted)
             }
             MenuGroup { ForEach(participants) { signerRow($0) } }
             PillButton("Add participant", kind: .secondary, icon: .plus) { picking = true }
-            PillButton("Continue to approval") { stage = 1 }
+            PillButton("Continue to approval") { stage = Stage.approval }
                 .disabled(localSigners.isEmpty)
             if localSigners.isEmpty {
                 StatusLine(text: "Add an account from this wallet to the signer set before continuing.")
@@ -98,9 +145,11 @@ struct CreateMultisigView: View {
     private func signerRow(_ participant: MultisigParticipant) -> some View {
         HStack(spacing: BrambleSpace.sm) {
             AccountAvatarView(address: participant.address ?? participant.publicKeyX)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Layout.signerTextSpacing) {
                 Text(participant.label).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
-                Text("\(participant.source) · Key \(shortAddress(participant.publicKeyX))").brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                Text("\(participant.source) · Key \(shortAddress(participant.publicKeyX))")
+                    .brambleText(BrambleTypeScale.caption)
+                    .foregroundStyle(skin.muted)
             }
             Spacer(minLength: 0)
             CopyButton(value: participant.publicKeyX, label: "Copy \(participant.label) signer public key")
@@ -116,28 +165,53 @@ struct CreateMultisigView: View {
     private var approvalStage: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             if localSigners.isEmpty {
-                StatusLine(text: "No saved participant can deploy from this wallet. Go back and add a local account.", tone: .danger)
+                StatusLine(
+                    text: "No saved participant can deploy from this wallet. Go back and add a local account.",
+                    tone: .danger
+                )
             }
-            BrambleField(label: "Signatures required", placeholder: "1", text: $threshold,
-                         hint: "How many signers must approve each transaction?")
-            Text("Deployment signer").brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold).foregroundStyle(skin.muted)
-            MenuGroup {
-                ForEach(localSigners, id: \.id) { account in
-                    MenuRow(icon: nil, title: account.displayName, value: account.shortAddress,
-                            selected: account.id == effectiveDeployer, chevron: false) { deployer = account.id }
-                }
-            }
-            Text("This account signs and pays for deployment.").brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
-            Disclosure(title: "Advanced deployment settings", summary: "Default salt · 0x0", isOpen: $advancedOpen) {
+            BrambleField(
+                label: "Signatures required",
+                placeholder: "1",
+                text: $threshold,
+                hint: "How many signers must approve each transaction?"
+            )
+            deployerPicker
+            Disclosure(
+                title: "Advanced deployment settings",
+                summary: "Default salt · 0x0",
+                isOpen: $advancedOpen
+            ) {
                 BrambleField(label: "Deployment salt", placeholder: "0x0", text: $salt, mono: true)
             }
             HStack(spacing: BrambleSpace.sm) {
-                PillButton("Back", kind: .ghost) { stage = 0 }
+                PillButton("Back", kind: .ghost) { stage = Stage.participants }
                 PillButton("Review deployment", busy: busy) { review() }
-                    .disabled(declared != .some(true) || effectiveDeployer == nil)
+                    .disabled(classAvailability != .declared || effectiveDeployer == nil)
             }
             StatusLine(text: result, tone: .danger)
         }
+    }
+
+    /// The local signer that signs and pays for deployment, as a labelled single-choice list.
+    @ViewBuilder private var deployerPicker: some View {
+        Text("Deployment signer")
+            .brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
+            .foregroundStyle(skin.muted)
+        MenuGroup {
+            ForEach(localSigners, id: \.id) { account in
+                MenuRow(
+                    icon: nil,
+                    title: account.displayName,
+                    value: account.shortAddress,
+                    selected: account.id == effectiveDeployer,
+                    chevron: false
+                ) { deployer = account.id }
+            }
+        }
+        Text("This account signs and pays for deployment.")
+            .brambleText(BrambleTypeScale.caption)
+            .foregroundStyle(skin.muted)
     }
 
     /// The record id that signs and pays for deployment (never an account index).
@@ -147,11 +221,23 @@ struct CreateMultisigView: View {
     }
 
     private func knownParticipants() -> [MultisigParticipant] {
-        let accounts = store.records.map {
-            MultisigParticipant(publicKeyX: $0.publicKey, label: $0.displayName, source: "This wallet", address: $0.address)
+        let accounts = store.records.map { account in
+            MultisigParticipant(
+                publicKeyX: account.publicKey,
+                label: account.displayName,
+                source: "This wallet",
+                address: account.address
+            )
         }
         let contacts = coordination.contacts.compactMap { contact in
-            contact.publicKeyX.map { MultisigParticipant(publicKeyX: $0, label: contact.label, source: "Saved contact", address: contact.address) }
+            contact.publicKeyX.map { key in
+                MultisigParticipant(
+                    publicKeyX: key,
+                    label: contact.label,
+                    source: "Saved contact",
+                    address: contact.address
+                )
+            }
         }
         return accounts + contacts
     }
@@ -168,19 +254,25 @@ struct CreateMultisigView: View {
     }
 
     private func review() {
-        guard let count = UInt32(threshold.trimmingCharacters(in: .whitespaces)), (1...UInt32(participants.count)).contains(count) else {
+        guard let count = UInt32(threshold.trimmingCharacters(in: .whitespaces)),
+              (1...UInt32(participants.count)).contains(count) else {
             result = "Enter between 1 and \(participants.count) signatures."
             return
         }
-        guard let deployer = effectiveDeployer else { return }
+        guard let deployerId = effectiveDeployer else { return }
         busy = true
         Task {
             defer { busy = false }
             do {
-                saved = try await coordination.saveSetup(name: name, signerKeys: participants.map(\.publicKeyX), threshold: count,
-                                                         salt: salt.trimmingCharacters(in: .whitespaces), deployer: deployer)
+                saved = try await coordination.saveSetup(
+                    name: name,
+                    signerKeys: participants.map(\.publicKeyX),
+                    threshold: count,
+                    salt: salt.trimmingCharacters(in: .whitespaces),
+                    deployer: deployerId
+                )
                 result = nil
-                stage = 2
+                stage = Stage.fund
             } catch {
                 result = describe(error)
             }
@@ -191,21 +283,43 @@ struct CreateMultisigView: View {
         guard !loaded else { return }
         loaded = true
         await coordination.refresh()
-        if let resumeId, let record = coordination.multisigs.first(where: { $0.id == resumeId }), let deployment = record.deployment {
+        if let resumeId,
+           let record = coordination.multisigs.first(where: { $0.id == resumeId }),
+           let deployment = record.deployment {
             let known = knownParticipants()
             participants = deployment.config.signerPublicKeys.map { key in
                 known.first { $0.publicKeyX == key }
-                    ?? MultisigParticipant(publicKeyX: key, label: "Signer \(shortAddress(key))", source: "Deployment setup")
+                    ?? MultisigParticipant(
+                        publicKeyX: key,
+                        label: "Signer \(shortAddress(key))",
+                        source: "Deployment setup"
+                    )
             }
             name = record.name ?? ""
             threshold = String(deployment.config.threshold)
             salt = deployment.salt
             saved = record
-            stage = 1
+            stage = Stage.approval
         } else if let account = store.activeRecord {
-            participants = [MultisigParticipant(publicKeyX: account.publicKey, label: account.displayName,
-                                                source: "This wallet", address: account.address)]
+            participants = [
+                MultisigParticipant(
+                    publicKeyX: account.publicKey,
+                    label: account.displayName,
+                    source: "This wallet",
+                    address: account.address
+                )
+            ]
         }
-        declared = .some(await coordination.classDeclared())
+        // A failed chain read leaves availability unverified.
+        switch await coordination.classDeclared() {
+        case .declared:
+            classAvailability = .declared
+
+        case .undeclared:
+            classAvailability = .undeclared
+
+        case .unverified:
+            classAvailability = .unverified
+        }
     }
 }

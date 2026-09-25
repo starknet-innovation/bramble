@@ -88,7 +88,8 @@ fun BoxScope.OnboardingCard(content: @Composable BoxScope.() -> Unit) {
     val skin = LocalSkin.current
     val shape = RoundedCornerShape(BrambleRadius.xl)
     Box(
-        Modifier.align(Alignment.Center)
+        Modifier
+            .align(Alignment.Center)
             .safeDrawingPadding()
             .imePadding()
             .padding(horizontal = BrambleSpace.md, vertical = BrambleSpace.sm)
@@ -101,13 +102,24 @@ fun BoxScope.OnboardingCard(content: @Composable BoxScope.() -> Unit) {
     )
 }
 
+/**
+ * `.onboarding-step-head`'s content.
+ *
+ * @property icon The medallion glyph.
+ * @property title The step heading.
+ * @property lede The one-line explanation under the heading.
+ */
+data class StepHeading(
+    val icon: BrambleIconName,
+    val title: String,
+    val lede: String,
+)
+
 /** `.onboarding-step`: back control, `.onboarding-step-head`, body, and `.onboarding-step-cta`. */
 @Composable
 fun OnboardingStep(
     back: (() -> Unit)?,
-    icon: BrambleIconName,
-    title: String,
-    lede: String,
+    heading: StepHeading,
     content: @Composable ColumnScope.() -> Unit,
     cta: @Composable ColumnScope.() -> Unit,
 ) {
@@ -115,8 +127,14 @@ fun OnboardingStep(
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                    .padding(start = BrambleLayout.onboardingGutter, end = BrambleLayout.onboardingGutter, top = BrambleLayout.onboardingTop),
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = BrambleLayout.onboardingGutter,
+                        end = BrambleLayout.onboardingGutter,
+                        top = BrambleLayout.onboardingTop,
+                    ),
                 verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
             ) {
                 Column(
@@ -127,9 +145,19 @@ fun OnboardingStep(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
                 ) {
-                    Box(Modifier.padding(bottom = BrambleSpace.sm)) { Medallion(icon) }
-                    Text(title, color = skin.text, textAlign = TextAlign.Center, style = textStyle(BrambleTypeScale.headline, BrambleWeight.heavy, HEADLINE_TRACKING))
-                    Text(lede, color = skin.muted, textAlign = TextAlign.Center, style = textStyle(BrambleTypeScale.body))
+                    Box(Modifier.padding(bottom = BrambleSpace.sm)) { Medallion(heading.icon) }
+                    Text(
+                        heading.title,
+                        color = skin.text,
+                        textAlign = TextAlign.Center,
+                        style = textStyle(BrambleTypeScale.headline, BrambleWeight.heavy, HEADLINE_TRACKING),
+                    )
+                    Text(
+                        heading.lede,
+                        color = skin.muted,
+                        textAlign = TextAlign.Center,
+                        style = textStyle(BrambleTypeScale.body),
+                    )
                 }
                 content()
             }
@@ -154,13 +182,21 @@ fun OnboardingStep(
 
 /** `.onboarding-inline-action`: a muted caption-sized text button. */
 @Composable
-fun InlineAction(title: String, onClick: () -> Unit) {
+fun InlineAction(
+    title: String,
+    onClick: () -> Unit,
+) {
     Box(
-        Modifier.heightIn(min = BrambleLayout.inlineActionHeight)
+        Modifier
+            .heightIn(min = BrambleLayout.inlineActionHeight)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = BrambleSpace.md),
         contentAlignment = Alignment.Center,
     ) {
-        Text(title, color = LocalSkin.current.muted, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold))
+        Text(
+            title,
+            color = LocalSkin.current.muted,
+            style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold),
+        )
     }
 }

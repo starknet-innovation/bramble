@@ -70,9 +70,9 @@ final class NostrMultisigFlowTests: XCTestCase {
     private func launchAndImport(_ fixture: Fixture) throws -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
-            "-network", "sepolia", "-BrambleUITestReset", "-BrambleStubNetwork", "YES", "-BrambleStubRelay", "YES",
+            "-network", "sepolia", "-BrambleUITestReset", "-BrambleStubNetwork", "YES", "-BrambleStubRelay", "YES"
         ]
-        let events = String(decoding: try JSONEncoder().encode(fixture.relayEvents), as: UTF8.self)
+        let events = try XCTUnwrap(String(bytes: try JSONEncoder().encode(fixture.relayEvents), encoding: .utf8))
         app.launchEnvironment = ["BRAMBLE_STUB_RELAY_EVENTS": events]
         app.launch()
         XCTAssertTrue(app.buttons["Add an existing wallet"].waitForExistence(timeout: 10), "onboarding shown")
@@ -98,8 +98,16 @@ final class NostrMultisigFlowTests: XCTestCase {
     func testCardContactsRelayAndSharedAccounts() throws {
         let fixture = try fixture()
         let app = try launchAndImport(fixture)
+        receiveCard(app)
+        relaySettings(app)
+        addressBook(app, fixture)
+        createMultisig(app, fixture)
+        savedSetupUpdates(app, fixture)
+        addByAddress(app, fixture)
+    }
 
-        // Receive: the address first, then the card once the coordination key is derived.
+    /// Receive: the address first, then the card once the coordination key is derived.
+    private func receiveCard(_ app: XCUIApplication) {
         tap(app.buttons["Receive"], in: app)
         XCTAssertTrue(app.buttons["Address"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.images["QR code for your Starknet address"].exists)
@@ -115,8 +123,10 @@ final class NostrMultisigFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Copy coordination public key"].waitForExistence(timeout: 10))
         snapshot(app, "receive-card")
         tap(app.buttons["Back"].firstMatch, in: app)
+    }
 
-        // Relay settings: ws refused on mobile, a wss relay saved, then the defaults restored.
+    /// Relay settings: ws refused on mobile, a wss relay saved, then the defaults restored.
+    private func relaySettings(_ app: XCUIApplication) {
         tap(app.buttons["Settings"], in: app)
         tap(app.buttons["Network"], in: app)
         tap(app.buttons["Multisig coordination relay"], in: app)
@@ -134,8 +144,10 @@ final class NostrMultisigFlowTests: XCTestCase {
         expect("Coordination relay reset", in: app)
         snapshot(app, "relay-settings")
         tap(app.buttons["Back"].firstMatch, in: app)
+    }
 
-        // Address book: another network's card is refused; a Sepolia card verifies and saves.
+    /// Address book: another network's card is refused; a Sepolia card verifies and saves.
+    private func addressBook(_ app: XCUIApplication, _ fixture: Fixture) {
         tap(app.buttons["Address book"], in: app)
         replace("Wallet card (optional)", with: fixture.cosignerCardMainnet, in: app)
         expect("This wallet card belongs to a different network.", in: app)
@@ -147,8 +159,10 @@ final class NostrMultisigFlowTests: XCTestCase {
         expect("Secure coordination ready", in: app)
         snapshot(app, "address-book")
         tap(app.buttons["Back"].firstMatch, in: app)
+    }
 
-        // Create a 2-of-2 with the co-signer's wallet card; Fund shows the predicted address.
+    /// Create a 2-of-2 with the co-signer's wallet card; Fund shows the predicted address.
+    private func createMultisig(_ app: XCUIApplication, _ fixture: Fixture) {
         tap(app.buttons["Shared accounts"], in: app)
         expect("No shared accounts are saved on this network yet.", in: app)
         tap(app.buttons["Create a multisig"], in: app)
@@ -170,10 +184,16 @@ final class NostrMultisigFlowTests: XCTestCase {
         tap(app.buttons["Continue to deploy"], in: app)
         XCTAssertTrue(app.buttons["Deploy multisig"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Deploy multisig"].isEnabled)
-        expect("Deployment from mobile arrives with sending. Deploy this saved setup from Bramble for browser, or come back after the update.", in: app)
+        expect(
+            "Deployment from mobile arrives with sending. Deploy this saved setup from Bramble for browser, "
+                + "or come back after the update.",
+            in: app
+        )
         tap(app.buttons["Back"].firstMatch, in: app)
+    }
 
-        // The saved setup is listed; its co-signer's gift wrap arrives as one held update.
+    /// The saved setup is listed; its co-signer's gift wrap arrives as one held update.
+    private func savedSetupUpdates(_ app: XCUIApplication, _ fixture: Fixture) {
         let row = app.buttons[short(fixture.predictedAddress)]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         XCTAssertEqual(row.value as? String, "2 of 2 signers")
@@ -186,8 +206,11 @@ final class NostrMultisigFlowTests: XCTestCase {
         expect("Complete multisig setup", in: app)
         tap(app.buttons["Back"].firstMatch, in: app)
         tap(app.buttons["Back"].firstMatch, in: app)
+    }
 
-        // Add by address: a deployed 1-of-1 syncs; another class is refused with the extension's copy.
+    /// Add by address: a deployed 1-of-1 syncs; another class is refused with the extension's copy.
+    /// "Multisigs" then opens the same list.
+    private func addByAddress(_ app: XCUIApplication, _ fixture: Fixture) {
         tap(app.buttons["Add shared account"], in: app)
         replace("Multisig address", with: "0x123", in: app)
         tap(app.buttons["Add shared account"], in: app)

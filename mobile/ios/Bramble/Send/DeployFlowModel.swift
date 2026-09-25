@@ -21,7 +21,13 @@ final class DeployFlowModel {
     private let track: (TransferPlan) -> Void
     private var driver: SendDriver?
 
-    init(core: WalletCore, network: NetworkInfo, accountId: String, transport: RpcTransport, track: @escaping (TransferPlan) -> Void = { _ in }) {
+    init(
+        core: WalletCore,
+        network: NetworkInfo,
+        accountId: String,
+        transport: RpcTransport,
+        track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ }
+    ) {
         self.core = core
         self.network = network
         self.accountId = accountId
@@ -32,22 +38,27 @@ final class DeployFlowModel {
     func review() async {
         close()
         guard let plan = try? core.prepareDeployment(accountId: accountId) else {
-            return fail(SendFailure(code: .locked, hash: nil))
+            fail(SendFailure(code: .locked, hash: nil))
+            return
         }
         track(plan)
-        let driver = SendDriver(plan: plan, network: network, transport: transport)
-        self.driver = driver
+        let started = SendDriver(plan: plan, network: network, transport: transport)
+        driver = started
         stage = .reviewing
         do {
-            let step = try await driver.run(from: .start)
+            let step = try await started.run(from: .start)
             guard case .review = step, let review = plan.currentReview() else {
-                if case let .failed(failure) = step { return fail(failure) }
-                return fail(SendFailure(code: .nodeError, hash: nil))
+                if case let .failed(failure) = step {
+                    fail(failure)
+                    return
+                }
+                fail(SendFailure(code: .nodeError, hash: nil))
+                return
             }
             if review.alreadyDeployed {
                 stage = .alreadyDeployed
-            } else if let fee = review.deploymentFee {
-                self.fee = fee
+            } else if let deploymentFee = review.deploymentFee {
+                fee = deploymentFee
                 stage = .reviewed
             } else {
                 fail(SendFailure(code: .nodeError, hash: nil))
@@ -66,8 +77,10 @@ final class DeployFlowModel {
             case let .broadcast(hash):
                 self.hash = hash
                 stage = .submitted
+
             case let .failed(failure):
                 fail(failure)
+
             default:
                 fail(SendFailure(code: .nodeError, hash: nil))
             }

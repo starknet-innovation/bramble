@@ -12,6 +12,9 @@ struct LiquidDots: View {
     var compact = false
     @State private var swapped = false
 
+    /// One swap is half the loop: the autoreversing animation swaps back over the other half.
+    private static let legsPerLoop: Double = 2
+
     var body: some View {
         let dot = compact ? BrambleSpace.sm : BrambleSpace.xl
         let travel = compact ? BrambleSpace.sm : BrambleSpace.lg
@@ -19,10 +22,16 @@ struct LiquidDots: View {
             Circle().frame(width: dot, height: dot).offset(x: swapped ? travel : -travel)
             Circle().frame(width: dot, height: dot).offset(x: swapped ? -travel : travel)
         }
-        .frame(width: compact ? BrambleSpace.xl : BrambleSize.brand, height: compact ? BrambleSpace.lg : BrambleControl.hitSmall)
+        .frame(
+            width: compact ? BrambleSpace.xl : BrambleSize.brand,
+            height: compact ? BrambleSpace.lg : BrambleControl.hitSmall
+        )
         .onAppear {
             guard !reduceMotion else { return }
-            withAnimation(BrambleEase.inOut.animation(ms: BrambleMotion.waitLoopMs / 2).repeatForever(autoreverses: true)) {
+            let swap = BrambleEase.inOut
+                .animation(ms: BrambleMotion.waitLoopMs / Self.legsPerLoop)
+                .repeatForever(autoreverses: true)
+            withAnimation(swap) {
                 swapped = true
             }
         }
@@ -38,12 +47,18 @@ struct BusyRefreshIcon: View {
     let spinning: Bool
     @State private var angle: Double = 0
 
+    private static let millisecondsPerSecond: Double = 1_000
+    private static let fullTurnDegrees: Double = 360
+
     var body: some View {
         BrambleIcon(.refresh)
             .rotationEffect(.degrees(angle))
             .onChange(of: spinning, initial: true) { _, busy in
-                if busy && !reduceMotion {
-                    withAnimation(.linear(duration: BrambleMetrics.IconButton.busySpinMs / 1000).repeatForever(autoreverses: false)) { angle = 360 }
+                if busy, !reduceMotion {
+                    let spin = Animation
+                        .linear(duration: BrambleMetrics.IconButton.busySpinMs / Self.millisecondsPerSecond)
+                        .repeatForever(autoreverses: false)
+                    withAnimation(spin) { angle = Self.fullTurnDegrees }
                 } else {
                     withAnimation(nil) { angle = 0 }
                 }

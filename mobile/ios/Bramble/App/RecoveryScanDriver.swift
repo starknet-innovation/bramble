@@ -50,14 +50,16 @@ final class RecoveryScanDriver {
         scanning = true
         failed = false
         let active = generation
-        let core = core, rpc = rpc, id = network.network
+        let walletCore = core, client = rpc, id = network.network
         defer { if active == generation { scanning = false } }
         do {
             repeat {
-                var step = try await Task.detached { try core.recoveryScanNext(network: id, manualIndex: manual) }.value
+                var step = try await Task.detached {
+                    try walletCore.recoveryScanNext(network: id, manualIndex: manual)
+                }.value
                 while !step.requests.isEmpty {
-                    let responses = try await rpc.send(step.requests, on: network)
-                    step = try await Task.detached { try core.recoveryScanSubmit(responses: responses) }.value
+                    let responses = try await client.send(step.requests, on: network)
+                    step = try await Task.detached { try walletCore.recoveryScanSubmit(responses: responses) }.value
                 }
                 guard active == generation else { return }
                 apply(step)
@@ -99,20 +101,28 @@ final class RecoveryScanDriver {
     var selectionNote: String {
         guard selected.count >= Int(limits.maxSelections) else { return "" }
         let waiting = candidates.contains { ($0.deployed || $0.funded) && !selected.contains($0.key) }
-        return waiting ? " At most \(limits.maxSelections) accounts can be restored at once. Uncheck one to choose another." : ""
+        guard waiting else { return "" }
+        return " At most \(limits.maxSelections) accounts can be restored at once."
+            + " Uncheck one to choose another."
     }
 
     /// The picked rows as restore coordinates; the class travels with every non-OZ pick.
     var selections: [RecoverySelection] {
-        candidates.filter { selected.contains($0.key) }.map {
-            RecoverySelection(family: $0.family, accountIndex: $0.accountIndex, classHash: $0.family == .openZeppelin ? nil : $0.classHash)
+        candidates.filter { selected.contains($0.key) }.map { candidate in
+            RecoverySelection(
+                family: candidate.family,
+                accountIndex: candidate.accountIndex,
+                classHash: candidate.family == .openZeppelin ? nil : candidate.classHash
+            )
         }
     }
 
     /// Commits the picks in one vault write; returns how many were restored.
     func restore(on network: NetworkId) async throws -> Int {
-        let core = core, picks = selections
-        let restored = try await Task.detached { try core.restoreRecoveredAccounts(network: network, selections: picks) }.value
+        let walletCore = core, picks = selections
+        let restored = try await Task.detached {
+            try walletCore.restoreRecoveredAccounts(network: network, selections: picks)
+        }.value
         return restored.count
     }
 }

@@ -14,7 +14,7 @@ protocol RpcTransport: Sendable {
 extension RpcTransport {
     /// In-memory transports (fixtures, stubs, test doubles) hold their replies already, so the
     /// bound only matters for a transport that reads from the network.
-    func post(_ body: String, to url: URL, write: Bool, maxBytes: UInt64) async throws -> String {
+    func post(_ body: String, to url: URL, write: Bool, maxBytes _: UInt64) async throws -> String {
         try await post(body, to: url, write: write)
     }
 }
@@ -26,13 +26,16 @@ enum RpcTransportFailure: Error { case unreachable, tooLarge }
 /// and the body cut off past its budget). Only a complete HTTP 200 reply is returned; anything else
 /// is a transport failure the core judges (a write is posted once and never retried here).
 struct URLSessionRpcTransport: RpcTransport {
+    /// The only HTTP status whose body is handed to the core.
+    private static let httpOK: UInt16 = 200
+
     var http: any PortfolioTransport = BoundedHttp.shared
 
     func post(_ body: String, to url: URL, write: Bool) async throws -> String {
         try await post(body, to: url, write: write, maxBytes: UInt64(maxRpcResponseBytes()))
     }
 
-    func post(_ body: String, to url: URL, write: Bool, maxBytes: UInt64) async throws -> String {
+    func post(_ body: String, to url: URL, write _: Bool, maxBytes: UInt64) async throws -> String {
         let outcome = await http.perform(HttpRequest(
             method: .post,
             url: url.absoluteString,
@@ -41,7 +44,7 @@ struct URLSessionRpcTransport: RpcTransport {
             maxBodyBytes: maxBytes,
             deadlineMs: rpcLimits().deadlineMs
         ))
-        guard outcome.status == 200 else { throw RpcTransportFailure.unreachable }
+        guard outcome.status == Self.httpOK else { throw RpcTransportFailure.unreachable }
         guard let data = outcome.body else { throw RpcTransportFailure.tooLarge }
         return String(decoding: data, as: UTF8.self)
     }
