@@ -115,9 +115,9 @@ jobs:
       - name: SwiftLint analyzer rules
         run: bash mobile/scripts/lint.sh swift-analyze mobile/ios/build/xcodebuild.log
 
-  # NEVER RUN: the Android app has not yet been compiled anywhere (mobile/README.md, SCOPE.md
-  # Phase 1.1), so this job is expected to need fixes on its first run. It uses macOS because
-  # build-core-android.sh reads the host core as a .dylib for UniFFI's bindgen.
+  # Not yet run on GitHub: the same steps build and pass locally (mobile/README.md, SCOPE.md
+  # Phase 1.1). It uses macOS because build-core-android.sh reads the host core as a .dylib for
+  # UniFFI's bindgen.
   android:
     runs-on: macos-15
     timeout-minutes: 60

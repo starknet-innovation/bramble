@@ -51,8 +51,9 @@ Linux and on machines without a JDK; it runs in `.github/workflows/mobile.yml`.
 `.github/workflows/mobile.yml` runs on PRs touching `mobile/**`: `cargo fmt --check`, clippy
 (`-D warnings`) and `cargo test --locked` on Linux; `bun run mobile:lint` on macOS; the iOS core
 build, XcodeGen, `BrambleTests` on a simulator and SwiftLint's analyzer rules on macOS; and the
-Android core build plus `./gradlew :app:testDebugUnitTest`. The UI tests (`BrambleUITests`) stay
-local. The Android job has never run yet, because the Android app has not been compiled.
+Android core build plus `./gradlew :app:testDebugUnitTest`. The UI tests (`BrambleUITests`) and the
+Android instrumented suite stay local. The Android job has not run on GitHub yet; its steps pass
+locally (see Android below).
 
 ## Rust core
 
@@ -109,8 +110,18 @@ Needs JDK 17, Android SDK platform 35 with an API 35 emulator image, NDK r27+, t
 ```bash
 ANDROID_NDK_HOME=… mobile/scripts/build-core-android.sh debug
 cd mobile/android && ./gradlew installDebug
+./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest                # JVM: QR parity, input rules, source hygiene
 ./gradlew :app:connectedDebugAndroidTest        # emulator only: flows, security, core bridge
+```
+
+Headless emulator for the instrumented suite (an API 35 AVD, here `Bramble_API35`):
+
+```bash
+emulator -avd Bramble_API35 -no-window -no-audio -no-snapshot &
+adb wait-for-device && until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; do sleep 2; done
+cd mobile/android && ./gradlew :app:connectedDebugAndroidTest
+adb emu kill
 ```
 
 The build copies the extension's onboarding landscape and the core's parity fixture into
@@ -120,8 +131,13 @@ with `clearPackageData=true`, so each starts from a fresh install state. The opt
 arguments and is refused with `ci=true`, which the build sets whenever the host's `CI` is set.
 `bun mobile/android/scripts/qr-fixture.ts` regenerates the QR parity fixture. Design and threat model: [docs/android-parity.md](docs/android-parity.md).
 
-The Android app has not yet been compiled (no Android toolchain where it was written) or built in
-CI (SCOPE.md, Phase 1.1).
+Status (2026-09-25, JDK 17, SDK 35, NDK 27.2, API 35 emulator): `:app:assembleDebug` builds;
+`:app:testDebugUnitTest` passes 38 JVM tests; `:app:connectedDebugAndroidTest` passes 36
+instrumented tests, with the opt-in `LiveMainnetWalletTest` skipped. Several instrumented tests
+(onboarding, Home, Activity) read public mainnet data, as the iOS UI suite does; the deploy, token
+detail and deploy-notice tests route the store's chain reads through an offline fixture node
+(`androidTest/.../FixtureNode.kt`) that refuses every write. `bun run mobile:lint` is clean. The
+Android job has not run in CI yet (SCOPE.md, Phase 1.1).
 
 ## Sending
 

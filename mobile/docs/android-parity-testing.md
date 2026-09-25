@@ -22,11 +22,9 @@ from Kotlin:
 
 ## 8. Test plan
 
-Toolchain reality: this machine has no JDK, Android SDK, Gradle, adb or cargo-ndk. **The Android code
-is delivered uncompiled and unrun.** It was written against Kotlin bindings generated from this
-core with the repository's own `uniffi-bindgen` (host library, not committed), and the Compose,
-Material3 and AndroidView signatures it uses were checked against the pinned BOM's source jars. To
-verify it, install: JDK 17; Android SDK platform 35 + build-tools 35 + an API 35 emulator image; NDK
+Toolchain: the Android code was written on a machine without a JDK or Android SDK, and was first
+compiled and run on 2026-09-25: `:app:assembleDebug` builds, and the JVM and instrumented suites
+pass on an API 35 emulator (counts in `mobile/README.md`). To run it, install: JDK 17; Android SDK platform 35 + build-tools 35 + an API 35 emulator image; NDK
 r27+ with `ANDROID_NDK_HOME`; `rustup target add aarch64-linux-android x86_64-linux-android`;
 `cargo install cargo-ndk --version 4.1.2 --locked`.
 
