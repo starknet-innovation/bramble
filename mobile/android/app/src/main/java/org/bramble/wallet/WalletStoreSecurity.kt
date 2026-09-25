@@ -17,6 +17,11 @@ suspend fun WalletStore.unlock(password: String) {
         refreshSecurity()
     }
     biometricNotice = null
+    // A backup still owed resumes at Save phrase with the words revealed by this same, just-checked
+    // passphrase; if that reveal fails, the backup step asks for it again.
+    if (calls.work(ticket) { walletCore.backupPending() }) {
+        pendingBackup = runCatching { revealPhrase(password) }.getOrDefault(emptyList())
+    }
     enterWallet(ticket)
 }
 

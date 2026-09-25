@@ -7,6 +7,7 @@
 //! | 2 | DEK container, `version: 2` | `accountCount` (vault-security) |
 //! | 2 | bare envelope, scope `bramble.mobile.vault.v1` | account records (the accounts branch, before the merge) |
 //! | 3 | DEK container, `version: 3` | account records (`account_store.rs`) |
+//! | 4 | DEK container, `version: 4` | account records and `backupPending` |
 //!
 //! Both branches minted "version 2" independently from version 1, so version 2 has two historical
 //! payload shapes. The step from 2 accepts either; nothing else in the chain branches. The layout
@@ -32,7 +33,9 @@ use crate::vault::{self, SealingKey};
 use crate::{kms, CoreError};
 
 /// The vault version this core writes: the container's `version` and the payload's.
-pub(crate) const VAULT_VERSION: u32 = 3;
+pub(crate) const VAULT_VERSION: u32 = 4;
+/// The first vault version whose payload carries `backupPending`.
+const BACKUP_PENDING_VERSION: u32 = 4;
 /// Accounts an account-count payload (versions 1 and 2) could hold.
 const MAX_COUNTED_ACCOUNTS: u32 = 32;
 
@@ -87,13 +90,19 @@ pub(crate) fn stage(plaintext: &[u8]) -> Result<Staged, CoreError> {
     if staged.version() != probe.version {
         return Err(invalid_payload());
     }
+    // `backupPending` exists from version 4 on; an older payload carrying it was never written.
+    if let Staged::Records(payload) = &staged {
+        if payload.version < BACKUP_PENDING_VERSION && payload.backup_pending.is_some() {
+            return Err(invalid_payload());
+        }
+    }
     Ok(staged)
 }
 
 type Step = fn(Staged) -> Result<Staged, CoreError>;
 
 /// `(from version, step to from + 1)`. The last step ends at `VAULT_VERSION`.
-pub(crate) const VAULT_MIGRATIONS: [(u32, Step); 2] = [(1, v1_to_v2), (2, v2_to_v3)];
+pub(crate) const VAULT_MIGRATIONS: [(u32, Step); 3] = [(1, v1_to_v2), (2, v2_to_v3), (3, v3_to_v4)];
 
 /// 1 → 2 (vault-security): the same account count, phrase and passphrase. The move from the bare
 /// envelope into the DEK container happens when the migrated payload is sealed.
@@ -126,6 +135,9 @@ fn v2_to_v3(staged: Staged) -> Result<Staged, CoreError> {
             }
             payload.active_account_id = payload.accounts.first().map(|record| record.id.clone());
             payload.recovery_pending = false;
+            // `new` builds the current shape; this step ends at version 3, before the flag.
+            payload.version = 3;
+            payload.backup_pending = None;
             Ok(Staged::Records(payload))
         }
         Staged::Records(mut payload) => {
@@ -133,6 +145,18 @@ fn v2_to_v3(staged: Staged) -> Result<Staged, CoreError> {
             Ok(Staged::Records(payload))
         }
     }
+}
+
+/// 3 → 4: the backup-pending flag. A version-3 vault was created before the flag existed, so
+/// whether its backup was confirmed is unknown; it is recorded as not pending, which leaves the
+/// wallet exactly as it behaved before (never re-prompting a user who already confirmed).
+fn v3_to_v4(staged: Staged) -> Result<Staged, CoreError> {
+    let Staged::Records(mut payload) = staged else {
+        return Err(invalid_payload());
+    };
+    payload.backup_pending = Some(false);
+    payload.version = 4;
+    Ok(Staged::Records(payload))
 }
 
 fn check_counted(payload: &CountedPayload) -> Result<(), CoreError> {
@@ -180,7 +204,8 @@ fn container_accepts(staged: &Staged, file_version: u32) -> bool {
     staged.version() == file_version
         && match staged {
             Staged::Counted(_) => file_version == FIRST_CONTAINER_VERSION,
-            Staged::Records(_) => file_version == VAULT_VERSION,
+            // Version 3 containers re-seal in place as version 4, like version 2 did as 3.
+            Staged::Records(_) => (3..=VAULT_VERSION).contains(&file_version),
         }
 }
 

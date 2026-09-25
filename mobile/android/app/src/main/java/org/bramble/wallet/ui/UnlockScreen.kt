@@ -51,6 +51,7 @@ import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.design.toastAnchor
 import org.bramble.wallet.refreshSecurity
 import org.bramble.wallet.retryRemainingMs
 import org.bramble.wallet.securityCopy
@@ -107,8 +108,16 @@ fun UnlockScreen(store: WalletStore) {
         StatusLine(store.biometricNotice, StatusTone.DANGER)
         StatusLine(if (remaining > 0) throttledText(remaining) else failure, StatusTone.DANGER)
         FlexSpacer()
-        if (store.security.biometricEnabled) BiometricUnlockButton(store, scope, activity)
-        PillButton("Unlock", busy = store.busy, enabled = passphrase.isNotEmpty() && remaining == 0L, onClick = unlock)
+        // The foot action: toasts stack above it (`toastAnchor`), never between it and the status.
+        Column(Modifier.toastAnchor(), verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg)) {
+            if (store.security.biometricEnabled) BiometricUnlockButton(store, scope, activity)
+            PillButton(
+                "Unlock",
+                busy = store.busy,
+                enabled = passphrase.isNotEmpty() && remaining == 0L,
+                onClick = unlock,
+            )
+        }
     }
 }
 

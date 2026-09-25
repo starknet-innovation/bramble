@@ -137,6 +137,9 @@ final class OnboardingFlowTests: XCTestCase {
             type(words[position - 1], into: app.textFields[field])
         }
         XCTAssertTrue(app.staticTexts["Backup confirmed."].waitForExistence(timeout: 5))
+        // Done on the last word dismisses a software keyboard, whose return key can also read
+        // "Continue".
+        app.textFields["Word 11"].typeText("\n")
         snapshot(app, "confirm-backup")
         tap(app.buttons["Continue"])
         finishAndCheckHome(app)

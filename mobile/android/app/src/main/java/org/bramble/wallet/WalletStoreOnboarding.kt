@@ -26,6 +26,23 @@ suspend fun WalletStore.importWallet(
     vaultWritten = true
 }
 
+/**
+ * Records that Confirm backup succeeded, so no later unlock returns to Save phrase. Throws the
+ * core's error; the flag then stays set and the step is offered again.
+ */
+suspend fun WalletStore.confirmBackup() {
+    val ticket = session.ticket()
+    calls.work(ticket) { walletCore.confirmBackup() }
+}
+
+/**
+ * Reveals the words of a wallet whose backup is still pending, for Save phrase, after the
+ * passphrase check the core applies to every reveal (throttled and counted).
+ */
+suspend fun WalletStore.revealPendingBackup(password: String) {
+    pendingBackup = revealPhrase(password)
+}
+
 /** Leaves onboarding (or "Find your accounts") for the wallet; the backup words are dropped here. */
 suspend fun WalletStore.finishOnboarding() {
     pendingBackup = emptyList()

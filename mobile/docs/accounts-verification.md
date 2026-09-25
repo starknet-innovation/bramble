@@ -179,9 +179,10 @@ every vault ever written, with exactly one adjacent step per version, as the ext
 | 1 | bare envelope, scope `bramble.mobile.vault.v1` | `accountCount` | the original core (660a538e) |
 | 2 | DEK container, `version: 2` | `accountCount` (payload `version: 2`) | vault-security |
 | 2 | bare envelope, scope `bramble.mobile.vault.v1` | records (payload `version: 2`) | the accounts branch before the merge |
-| 3 | DEK container, `version: 3` | records (payload `version: 3`) | this core |
+| 3 | DEK container, `version: 3` | records (payload `version: 3`) | the accounts merge |
+| 4 | DEK container, `version: 4` | records and `backupPending` (payload `version: 4`) | this core |
 
-`VAULT_MIGRATIONS = [(1, v1_to_v2), (2, v2_to_v3)]`:
+`VAULT_MIGRATIONS = [(1, v1_to_v2), (2, v2_to_v3), (3, v3_to_v4)]`:
 
 - **1 → 2** (vault-security's step): the same account count, phrase and passphrase, re-tagged.
   The move from the bare envelope into a DEK container happens when the migrated payload is
@@ -191,23 +192,30 @@ every vault ever written, with exactly one adjacent step per version, as the ext
   `supported_networks()` order, Mainnet index 0 active, no labels or groups; the accounts
   branch's records payload is already that shape and is only re-tagged. Both results are then
   validated in full, re-deriving every record from the phrase.
+- **3 → 4** (the backup-pending flow, `src/backup.rs`): records gain `backupPending: false`. A
+  version-3 wallet predates the flag, so whether its backup was confirmed is unknown; it is
+  recorded as not pending, which keeps its behaviour unchanged. A created wallet is written
+  with `backupPending: true` and cleared by `confirm_backup`; an import writes `false`. The
+  field is refused before version 4 and required from 4 on.
 
 The steps are pure functions of the decrypted payload. The layout is decided around them:
 
 - A bare envelope (versions 1 and accounts' 2) opens only with the passphrase; its payload is
-  migrated and sealed into a **new** DEK container at version 3 (fresh DEK, the same lineage, the
+  migrated and sealed into a **new** DEK container at the current version (fresh DEK, the same lineage, the
   passphrase slot at today's KDF strength), proven to round-trip, and written atomically. A
   failed write keeps the old file and commits the new one on the next payload write.
-- A version-2 container is migrated **in place**: the payload is re-sealed under the same DEK
+- A version-2 or version-3 container is migrated **in place**: the payload is re-sealed under the same DEK
   with a fresh IV and commit, and the passphrase and biometric slots are kept byte for byte. It
-  needs no KDF, so a biometric unlock of a version-2 vault migrates it too.
+  needs no KDF, so a biometric unlock of an older container migrates it too.
 - Each layout accepts only what it was ever written with: an envelope holds a v1 count payload or
   a v2 records payload; a version-2 container a v2 count payload; a version-3 container a v3
-  records payload. Anything else, including a version below 1 or above 3, fails closed as
+  records payload; a version-4 container a v4 records payload. Anything else, including a
+  version below 1 or above 4, fails closed as
   `Storage("vault payload is invalid")` and leaves the file untouched.
 
 Tests: `src/migrations_tests.rs` (adjacency, determinism against a golden file, each shape,
 layout rules, invalid payloads) and `tests/migration.rs`, which opens a vault file written by
 each branch's own core: `vault-v1.json` (original), `vault-v2-container.json` (vault-security,
 with a biometric slot) and `vault-v2-records.json` (the accounts branch: OZ, Ready and Braavos
-records, a label, a group, a projected Mainnet account).
+records, a label, a group, a projected Mainnet account); and `tests/backup_pending.rs` opens
+`vault-v3-container.json` (the version-3 core: two OZ records and a biometric slot).

@@ -17,7 +17,7 @@ use super::types::{SendError, TransferRequest};
 use super::u256::U256;
 use crate::account_catalog::{self, AccountFamily};
 use crate::account_store::StoredAccount;
-use crate::activity::store;
+use crate::activity::{observation, store};
 use crate::history::activity::ActivityEntry;
 use crate::networks;
 use crate::wallet::WalletCore;
@@ -215,6 +215,30 @@ impl WalletCore {
             &self.data_dir,
             &account.account_id,
         ))
+    }
+
+    /// Retires the account's unresolved records that outlived their hour (`expiredObservations`:
+    /// the status is kept, one notice is owed) and hands out every owed notice once, as the
+    /// extension's `wallet.transactionAlerts`: the copy of `failureNoticeMessage`, at most five
+    /// per call, marked delivered before they are returned. Delivery is at-most-once: a host that
+    /// dies before showing one loses it, and the record keeps its status either way. `now_ms` is
+    /// the host's wall clock, the clock records' `submitted_at` is on. Requires an unlocked wallet.
+    pub fn take_activity_notices(
+        &self,
+        account_id: String,
+        now_ms: u64,
+    ) -> Result<Vec<String>, SendError> {
+        let (account, _) = self.plan_account_for(&account_id, Use::Read)?;
+        store::retire_expired(&self.data_dir, &account.account_id, now_ms);
+        Ok(
+            store::take_failure_notices(&self.data_dir, &account.account_id)
+                .iter()
+                .filter_map(|entry| {
+                    let status = store::parse_status(&entry.status)?;
+                    Some(observation::failure_notice_message(status, &entry.summary))
+                })
+                .collect(),
+        )
     }
 
     /// A plan that reads one recorded transaction's status and settles its record; never signs.

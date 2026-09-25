@@ -133,13 +133,58 @@ fn invalid_entries_are_dropped() {
 }
 
 #[test]
-fn observation_window_matches_the_extension() {
-    let hour = UNRESOLVED_WINDOW_MS;
-    assert!(is_observed(TxStatus::Pending, 1_000, 1_000 + hour - 1));
-    assert!(!is_observed(TxStatus::Pending, 1_000, 1_000 + hour));
-    assert!(is_observed(TxStatus::Preconfirmed, 5, 5));
-    assert!(!is_observed(TxStatus::Accepted, 5, 5));
-    assert!(!is_observed(TxStatus::Rejected, 5, 5));
+fn an_expired_unresolved_entry_is_retired_once_and_its_notice_delivered_once() {
+    use super::observation::UNRESOLVED_WINDOW_MS as HOUR;
+    let dir = tempfile::tempdir().unwrap();
+    record(dir.path(), entry("0xab", 1_000));
+    record(dir.path(), entry("0xcd", 1_000 + HOUR));
+    let mut accepted = entry("0xef", 1_000);
+    accepted.status = "accepted".into();
+    record(dir.path(), accepted);
+
+    assert_eq!(
+        retire_expired(dir.path(), SCOPE, 1_000 + HOUR - 1),
+        0,
+        "inside the hour"
+    );
+    assert!(take_failure_notices(dir.path(), SCOPE).is_empty());
+    assert_eq!(retire_expired(dir.path(), SCOPE, 1_000 + HOUR), 1);
+    assert_eq!(
+        retire_expired(dir.path(), SCOPE, 1_000 + HOUR),
+        0,
+        "retired once"
+    );
+
+    let retired = list(dir.path(), SCOPE);
+    let retired = retired.iter().find(|e| e.hash == "0xab").unwrap();
+    assert_eq!(retired.status, "pending", "the status is never invented");
+    assert_eq!(retired.failure_notice.as_deref(), Some("pending"));
+
+    let taken = take_failure_notices(dir.path(), SCOPE);
+    assert_eq!(taken.len(), 1);
+    assert_eq!(taken[0].hash, "0xab");
+    assert!(
+        take_failure_notices(dir.path(), SCOPE).is_empty(),
+        "delivered once"
+    );
+    assert_eq!(
+        retire_expired(dir.path(), SCOPE, u64::MAX),
+        1,
+        "only 0xcd is left to retire"
+    );
+    assert!(take_failure_notices(dir.path(), "SN_SEPOLIA:0x1").is_empty());
+}
+
+#[test]
+fn notices_are_drained_at_most_five_at_a_time() {
+    let dir = tempfile::tempdir().unwrap();
+    for n in 1..=7u8 {
+        record(dir.path(), entry(&format!("0x{n:x}"), 1));
+    }
+    assert_eq!(retire_expired(dir.path(), SCOPE, u64::MAX), 7);
+    assert_eq!(take_failure_notices(dir.path(), SCOPE).len(), 5);
+    assert_eq!(take_failure_notices(dir.path(), SCOPE).len(), 2);
+    assert!(take_failure_notices(dir.path(), SCOPE).is_empty());
 }
 
 #[test]

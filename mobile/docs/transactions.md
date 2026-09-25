@@ -343,13 +343,24 @@ out: the invoke as `SubmissionIndeterminate`, an automatic deployment as
 confirmation is unknown"), each with its hash. It is `None` while nothing has left, the only
 case in which the journey says "not sent".
 
-**Reconciliation cadence.** Hosts read the status of a recorded transaction only while
-`activity_needs_observation` holds (pending or pre-confirmed and submitted less than
-`UNRESOLVED_WINDOW_MS`, one hour, ago; the extension's fast-tier `isObservedAt`) and at most once
-per `activity_observation_period_ms` (`FAST_OBSERVATION_PERIOD_MINUTES`). Past the window the
-record keeps its status. Both constants are in the status fixture and drift-checked. Status reads
-use the first endpoint that proves the chain, not necessarily the one that took the write, as
-the extension's observer does.
+**Reconciliation cadence.** Observation follows the extension's `tx-observation.ts` in two
+tiers. Hosts read the status of a recorded transaction only while `activity_needs_observation`
+holds (`isObserved`): pending or pre-confirmed and submitted less than `UNRESOLVED_WINDOW_MS`
+(one hour) ago, the fast tier; or L2-accepted, not yet `finalizedOnL1`, and submitted less than
+`L1_FINALITY_WINDOW_MS` (seven days) ago, the slow tier. Each record is read at most once per
+`activity_observation_period_for(record)`: `FAST_OBSERVATION_PERIOD_MINUTES` (1) for the fast
+tier, `SLOW_OBSERVATION_PERIOD_MINUTES` (15) for the slow one. Hosts tick every
+`activity_observation_period_ms()` while the wallet is unlocked and in the foreground (the
+mobile stand-in for the extension's two alarms), and after each pass call
+`take_activity_notices(account_id, now_ms)`, which retires the account's unresolved records that
+outlived their hour (`expiredObservations` + `retiredOutcome`: the status is kept and one
+notice is owed) and hands every owed notice out once, marked delivered before it is returned
+(`takeFailureNotices`, at most `MAX_TRANSACTION_ALERTS_PER_DRAIN` per call), in
+`failureNoticeMessage`'s words. Hosts show each as an error toast, as the side panel does. The
+constants, the tier and retirement decisions over a status × finality × notice × age matrix,
+and the notice copy are in the status and observation fixtures and drift-checked. Status reads use the first
+endpoint that proves the chain, not necessarily the one that took the write, as the extension's
+observer does.
 
 **Session generation (must-fix: lock is enforced in the core).** The generation is
 vault-security's `lock_epoch` (`wallet.rs`), not a second counter: it advances on `lock()`, on

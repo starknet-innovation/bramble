@@ -3,4 +3,5 @@
 //! `store` for the file format and its guarantees and `feed` for the history side.
 
 pub(crate) mod feed;
+pub(crate) mod observation;
 pub(crate) mod store;

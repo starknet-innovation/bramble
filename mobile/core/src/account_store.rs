@@ -1,4 +1,4 @@
-//! The sealed vault payload (vault version 3, `migrations::VAULT_VERSION`): one record per account (family, class, index, salt,
+//! The sealed vault payload (vault version 4, `migrations::VAULT_VERSION`): one record per account (family, class, index, salt,
 //! address, public key), one active account, labels, and groups. Field names follow the
 //! extension's vault records so a later port to its schema stays mechanical.
 //!
@@ -74,6 +74,12 @@ pub(crate) struct VaultPayload {
     pub accounts: Vec<StoredAccount>,
     #[zeroize(skip)]
     pub active_account_id: Option<String>,
+    /// Vault version 4: set when a wallet is created and cleared once its Confirm backup step
+    /// succeeds (`backup.rs`). Not secret. Absent in versions 1 to 3 and required from 4 on, so
+    /// an older payload carrying it, or a current one missing it, fails validation.
+    #[zeroize(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backup_pending: Option<bool>,
     #[zeroize(skip)]
     pub groups: Vec<StoredGroup>,
     #[zeroize(skip)]
@@ -88,6 +94,7 @@ pub(crate) struct VaultPayload {
 pub(crate) struct PublicState {
     accounts: Vec<StoredAccount>,
     active_account_id: Option<String>,
+    backup_pending: Option<bool>,
     groups: Vec<StoredGroup>,
     labels: BTreeMap<String, String>,
     recovery_pending: bool,
@@ -95,7 +102,8 @@ pub(crate) struct PublicState {
 
 impl VaultPayload {
     /// A new vault: OZ index 0 on `network` for a created wallet, or nothing yet (discovery
-    /// pending) for an imported one.
+    /// pending) for an imported one. A created wallet's backup is pending until confirmed; an
+    /// imported phrase is one the user already holds.
     pub(crate) fn new(
         mnemonic: String,
         mnemonic_passphrase: Option<String>,
@@ -104,6 +112,7 @@ impl VaultPayload {
         let mut payload = Self {
             accounts: Vec::new(),
             active_account_id: None,
+            backup_pending: Some(first_account.is_some()),
             groups: Vec::new(),
             labels: BTreeMap::new(),
             mnemonic,
@@ -161,6 +170,7 @@ impl VaultPayload {
         PublicState {
             accounts: self.accounts.clone(),
             active_account_id: self.active_account_id.clone(),
+            backup_pending: self.backup_pending,
             groups: self.groups.clone(),
             labels: self.labels.clone(),
             recovery_pending: self.recovery_pending,
@@ -170,6 +180,7 @@ impl VaultPayload {
     pub(crate) fn restore(&mut self, state: PublicState) {
         self.accounts = state.accounts;
         self.active_account_id = state.active_account_id;
+        self.backup_pending = state.backup_pending;
         self.groups = state.groups;
         self.labels = state.labels;
         self.recovery_pending = state.recovery_pending;
@@ -239,6 +250,7 @@ fn is_well_formed(record: &StoredAccount) -> bool {
 fn is_consistent(payload: &VaultPayload) -> bool {
     let ids: HashSet<&str> = payload.accounts.iter().map(|r| r.id.as_str()).collect();
     payload.version == VAULT_VERSION
+        && payload.backup_pending.is_some()
         && kms::validate_mnemonic(&payload.mnemonic)
         && payload.accounts.len() <= MAX_ACCOUNT_RECORDS
         && ids.len() == payload.accounts.len()
