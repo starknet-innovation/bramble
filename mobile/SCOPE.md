@@ -110,7 +110,8 @@ drawer's Add account ("Regular account", and "Multisig account" into the Ready M
 gateway). Everything that acts for an account names its record id: signing, transfer and
 deployment plans, activity, shared-account signers, and private-balance reads
 (`sign_hash(index)` is removed and `tests/ffi_surface.rs` forbids index-based signing or planning
-exports). Not yet: private-key import, Ready (`argent-signer-array`) and Braavos signing.
+exports). Ready accounts send and deploy with the extension's `argent-signer-array`
+authorization (`docs/accounts.md` §2.7a). Not yet: private-key import and Braavos signing.
 
 **Phase 1 — sendable wallet.**
 1. Android in CI: NDK build via `build-core-android.sh`, then the JVM unit and instrumented

@@ -25,12 +25,22 @@ object SendFailureText {
             SendFailureCode.AUTO_DEPLOYMENT_FAILED to SendCopy.failureAutoDeploymentFailed,
             SendFailureCode.ALREADY_DEPLOYED to SendCopy.failureAlreadyDeployed,
             SendFailureCode.UNRECOGNISED_FEE_UNIT to SendCopy.failureUnrecognisedUnit,
+            SendFailureCode.ACCOUNT_CLASS_UNRECOGNISED to SendCopy.failureAccountClassUnrecognised,
+            SendFailureCode.ACCOUNT_CLASS_UNSUPPORTED to SendCopy.failureAccountClassUnsupported,
+            SendFailureCode.ACCOUNT_NOT_DEPLOYABLE to SendCopy.failureAccountNotDeployable,
+            SendFailureCode.ACCOUNT_OWNER_MISMATCH to SendCopy.failureAccountOwnerMismatch,
+            SendFailureCode.ACCOUNT_OWNER_TYPE_UNSUPPORTED to SendCopy.failureAccountOwnerTypeUnsupported,
+            SendFailureCode.ACCOUNT_GUARDIAN_UNSUPPORTED to SendCopy.failureAccountGuardianUnsupported,
         )
 
-    /** The failure line for [failure], with its hash filled in; the generic line for other codes. */
+    /**
+     * The failure line for [failure], with its hash and (for a Ready refusal) the account class
+     * filled in; the generic line for other codes.
+     */
     fun message(failure: SendFailure): String {
         val reason = reasons[failure.code] ?: return SendCopy.failureDefault
-        return SendCopy.failurePrefix + reason.replace("{hash}", failure.hash ?: "")
+        return SendCopy.failurePrefix +
+            reason.replace("{hash}", failure.hash ?: "").replace("{label}", failure.detail ?: "")
     }
 }
 

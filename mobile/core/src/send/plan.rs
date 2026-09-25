@@ -11,6 +11,7 @@ use starknet_types_core::felt::Felt;
 
 use super::fees::{Bounds, FeeQuote};
 use super::judge;
+use super::plan_probe::Probe;
 use super::types::{
     ReviewFlag, RpcPurpose, SendError, SendFailure, SendFailureCode, SendStep, StepReply,
     TransferReview, TxStatus,
@@ -27,16 +28,64 @@ pub const CONFIRMATION_DELAYS_MS: [u32; 12] = [
 pub const DEPLOY_POLL_INTERVAL_MS: u32 = 5_000;
 pub const DEPLOY_POLL_ATTEMPTS: u32 = 200;
 
-/// The acting account, as stored in the vault when the plan was prepared. Always an
-/// OpenZeppelin record that passed `wallet_accounts::signing_record`.
+/// How the account authorises a transaction: `authorizationShape` in the extension's
+/// `account-families.ts`, decided by the record's family when the plan is prepared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Authorization {
+    /// OpenZeppelin: a bare `[r, s]`; estimates skip validation.
+    StarkPair,
+    /// Ready (Argent 0.4): one `Signer::Starknet` in a signer array, `[1, 0, public_key, r, s]`;
+    /// estimates validate a query signature of the same shape, and the account's class and signer
+    /// are read at one accepted block before anything is estimated or signed.
+    ArgentSignerArray,
+}
+
+/// The DEPLOY_ACCOUNT an account's address commits to (`accountDeployment`), proven against the
+/// stored address when the plan is prepared.
+pub(crate) struct Deployment {
+    pub class_hash: Felt,
+    pub salt: Felt,
+    pub constructor_calldata: Vec<Felt>,
+}
+
+/// The acting account, as stored in the vault when the plan was prepared: an OpenZeppelin or a
+/// Ready (Argent) record that passed `wallet_accounts::signing_record`.
 pub(crate) struct Account {
     pub network: NetworkId,
     pub address: Felt,
     pub public_key: Felt,
-    pub class_hash: Felt,
+    pub authorization: Authorization,
+    /// `None` for a Ready record deployed with an older class: the extension deploys only the
+    /// pinned Argent 0.4.0 release, so such an account can send once deployed and upgraded, but
+    /// is never deployed from here ("Argent account class hash does not match the pinned release").
+    pub deployment: Option<Deployment>,
     /// The vault record's id, `<networkId>:<address>` (the extension's account id). It scopes
     /// activity and is what every signature for this plan is requested by.
     pub account_id: String,
+}
+
+impl Account {
+    pub(crate) fn is_argent(&self) -> bool {
+        self.authorization == Authorization::ArgentSignerArray
+    }
+
+    /// The signature an estimate carries: none for OpenZeppelin (validation skipped), the
+    /// extension's `argentQueryAccount` shape `(r, s) = (1, 1)` for Ready.
+    pub(crate) fn query_signature(&self) -> Vec<Felt> {
+        match self.authorization {
+            Authorization::StarkPair => Vec::new(),
+            Authorization::ArgentSignerArray => self.signature(Felt::ONE, Felt::ONE),
+        }
+    }
+
+    /// `serializeAccountSignature` for this account's family.
+    pub(crate) fn signature(&self, r: Felt, s: Felt) -> Vec<Felt> {
+        match self.authorization {
+            Authorization::StarkPair => vec![r, s],
+            // One signer, `Signer::Starknet` (variant 0), its public key, then `(r, s)`.
+            Authorization::ArgentSignerArray => vec![Felt::ONE, Felt::ZERO, self.public_key, r, s],
+        }
+    }
 }
 
 /// The one stored ERC-20 call every review, hash and record is derived from.
@@ -62,16 +111,19 @@ pub(crate) enum Kind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Expect {
     ReviewChain,
-    ReviewClass,
+    /// The account-state reads (`plan_probe`): the accepted block, the class, and the signer.
+    Block(Probe),
+    Class(Probe),
+    Owner(Probe),
+    OwnerType(Probe),
+    Guardian(Probe),
     ReviewNonce,
     ReviewEstimate,
     ReviewDeployNonce,
     ReviewDeployEstimate,
     SubmitChain,
-    SubmitClass,
     SubmitNonce,
     SubmitEstimate,
-    DeployClass,
     DeployNonce,
     DeployEstimate,
     DeployWrite,
@@ -108,6 +160,10 @@ pub(crate) struct Work {
     /// Review: `Some(deployed)` once `ClassHashAt` answered.
     pub deployed: Option<bool>,
     pub nonce: Felt,
+    /// The accepted block the current account-state reads are pinned to.
+    pub block: Felt,
+    /// `get_owner`, held until `get_owner_type` answers (the extension reads both at once).
+    pub owner: Option<judge::CallAnswer>,
     pub fee: Option<FeeQuote>,
     pub deploy_fee: Option<FeeQuote>,
     pub requires_deployment: bool,
@@ -222,6 +278,7 @@ impl TransferPlan {
         Some(SendFailure {
             code,
             hash: Some(crate::felt::canonical(&hash)),
+            detail: None,
         })
     }
 
@@ -292,8 +349,12 @@ impl PlanState {
         answer: Option<judge::Answer>,
     ) -> SendStep {
         match expect {
+            Expect::Block(_)
+            | Expect::Class(_)
+            | Expect::Owner(_)
+            | Expect::OwnerType(_)
+            | Expect::Guardian(_) => self.on_probe_reply(expect, answer),
             Expect::ReviewChain
-            | Expect::ReviewClass
             | Expect::ReviewNonce
             | Expect::ReviewEstimate
             | Expect::ReviewDeployNonce
@@ -360,6 +421,7 @@ impl PlanState {
             failure: SendFailure {
                 code,
                 hash: hash.map(|h| crate::felt::canonical(&h)),
+                detail: None,
             },
         }
     }

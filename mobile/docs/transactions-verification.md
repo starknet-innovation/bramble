@@ -135,13 +135,14 @@ generated Kotlin bindings. They are **uncompiled** here (no SDK); a JVM parity t
 ## 9. Out of scope, and what Krusty 0.11.0 lacks
 
 **Out of scope (other workstreams):** swap, privacy/shield, multisig, the explorer activity feed,
-Argent/Braavos accounts, Ledger, fiat prices (review shows "Fiat estimate unavailable" until the
+Braavos accounts (Ready/Argent sends: `accounts.md` §2.7a), Ledger, fiat prices (review shows "Fiat estimate unavailable" until the
 portfolio workstream lands), the address book, a per-send biometric gate, hardware-wrapped keys
 and the inactivity lock (vault-security), and a fee-speed control (the extension has none).
 
 **Krusty 0.11.0 gaps.** None blocks this work; none needs fallback crypto.
-1. **No query-version (2^128+3) hash.** OZ estimates need none (SKIP_VALIDATE, empty signature).
-   Argent validated estimates would need a version parameter on `compute_invoke_v3_hash` upstream.
+1. **No query-version (2^128+3) hash.** None is needed: OZ estimates skip validation with an
+   empty signature, and Ready estimates carry the extension's fixed query signature
+   (`argentQueryAccount`: `[1, 0, public_key, 1, 1]`), which signs no hash.
 2. **No sans-IO selector helper or Cairo-1 `__execute__` encoder.** They live only in
    `krusty-kms-client`, which pulls tokio and reqwest and must not be linked. The core writes the
    ~15-line encoder, pinned by fixture item 4. Optional upstream: move `encode_execute_calldata`

@@ -3,10 +3,13 @@ import BrambleCore
 /// The extension's wording for each way a send can end without a confirmed transaction
 /// (`SendCopy`, generated from the extension). Node text is never shown.
 enum SendFailureText {
-    /// The failure screen's body: "The transaction was not sent. <reason>".
+    /// The failure screen's body: "The transaction was not sent. <reason>". `{hash}` is the
+    /// failure's hash and `{label}` the account class a Ready refusal names.
     static func message(_ failure: SendFailure) -> String {
         guard let reason = reason(failure.code) else { return SendCopy.failureDefault }
-        return SendCopy.failurePrefix + reason.replacingOccurrences(of: "{hash}", with: failure.hash ?? "")
+        return SendCopy.failurePrefix + reason
+            .replacingOccurrences(of: "{hash}", with: failure.hash ?? "")
+            .replacingOccurrences(of: "{label}", with: failure.detail ?? "")
     }
 
     static func reason(_ code: SendFailureCode) -> String? {
@@ -55,6 +58,24 @@ enum SendFailureText {
 
         case .unrecognisedFeeUnit:
             SendCopy.failureUnrecognisedUnit
+
+        case .accountClassUnrecognised:
+            SendCopy.failureAccountClassUnrecognised
+
+        case .accountClassUnsupported:
+            SendCopy.failureAccountClassUnsupported
+
+        case .accountNotDeployable:
+            SendCopy.failureAccountNotDeployable
+
+        case .accountOwnerMismatch:
+            SendCopy.failureAccountOwnerMismatch
+
+        case .accountOwnerTypeUnsupported:
+            SendCopy.failureAccountOwnerTypeUnsupported
+
+        case .accountGuardianUnsupported:
+            SendCopy.failureAccountGuardianUnsupported
 
         case .boundsOutOfRange, .nodeError, .locked, .signingFailed:
             nil

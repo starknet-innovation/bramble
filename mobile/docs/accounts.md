@@ -169,7 +169,7 @@ keyed only by index cannot stop that. The core enforces view-only in the only wa
 
 - Every signature the core makes for an account passes one gate, `signing_record` in
   `wallet_accounts.rs`: the vault must not be `recovery_pending`, the id must name a stored
-  record, the record must not be `view_only`, and its family must be OpenZeppelin (§2.7a). The
+  record, and the record must not be `view_only` (OpenZeppelin and Ready pass, §2.7a). The
   key is then derived from the record's `account_index`, and the signature's public key must equal
   the record's, or the call fails as `Kms { sign }`.
 - `sign_hash_for_account(account_id, hash)` and the transfer plan's signer (`plan_sign`, which
@@ -179,32 +179,48 @@ keyed only by index cannot stop that. The core enforces view-only in the only wa
 - **Residual risk (narrowed by the merge):** sends and deployments are now hashed inside the core
   over a request the core built (`TransferPlan`), bound to the record's address, so the host no
   longer chooses what a transfer signature commits to. `sign_hash_for_account` still signs a
-  host-supplied hash for an OZ record; a host holding the OZ record at index `i` could ask it to
+  host-supplied hash for an OZ or Ready record; a host holding the OZ record at index `i` could ask it to
   sign a hash for another family's account at index `i` (same key). No UI path calls it; it
   stays for parity tests and is the candidate for removal once nothing needs a raw hash.
 
-### 2.7a Ready (Argent) accounts cannot send on mobile yet (merge decision)
+### 2.7a Ready (Argent) accounts send as the extension does
 
-The transactions workstream builds OpenZeppelin authorization only: a bare `[r, s]` signature,
-the OZ `__execute__` calldata and the OZ deploy-account constructor (`[public_key]`, salt 0).
-Argent 0.4.0 needs the extension's `argent-signer-array` authorization (`authorizationShape` in
-`account-families.ts`), and every Argent class needs its own deploy constructor and salt. Signing
-an Argent transaction in the OZ shape would at best be rejected on chain and at worst be
-mistaken for a valid authorization of something else, so the merge takes the safe option:
+Ready records send and deploy through the same `TransferPlan`, review and Send journey as
+OpenZeppelin ones, with the extension's authorization (`authorizationShape` in
+`account-families.ts`). The core follows `submitInvokeTransaction`, `ensureAccountDeployed`,
+`isCompatibleAccountDeployed` and `account-contracts.ts` step for step:
 
-- The core refuses to plan a transfer or deployment for an Argent record
-  (`SendError::UnsupportedAccount`) and for a Braavos record (`SendError::ViewOnlyAccount`),
-  before any request is built, and refuses again at signing time.
-- The apps check the active record first and show, instead of opening Send,
-  "Sending from Ready accounts is not available on mobile yet. Use the Bramble extension to send
-  from this account." or "Braavos accounts are view only for now." (mobile-only copy, generated
-  from `scripts/mobile-assets/security-copy.ts`). The home deploy notice is shown only for
-  OpenZeppelin records.
-- Receive, balances, labels, groups and activity work for every family.
+- **Signature.** Argent 0.4's `argent-signer-array`: `[1, 0, public_key, r, s]` (one signer,
+  `Signer::Starknet`). The transaction hash is Krusty's `compute_invoke_v3_hash` /
+  `compute_deploy_account_v3_hash`, as for OZ; only the array around `(r, s)` differs.
+- **Account state before estimating or signing** (`send/plan_probe.rs`). The latest accepted
+  block (`starknet_blockHashAndNumber`), then the class at that block. A deployed account must run
+  a class whose authorization is the signer array (Argent 0.4.0; an un-upgraded 0.3.x account is
+  refused, an unknown class too) and must report, at the same block, this wallet's key as a
+  Starknet-signer owner (`get_owner`, `get_owner_type`) and no guardian (`get_guardian`).
+- **Estimates validate.** Ready estimates carry the extension's query signature
+  `[1, 0, public_key, 1, 1]` with no `SKIP_VALIDATE`, so the account's validation cost is included.
+- **Deployment.** Only for records at the pinned Argent 0.4.0 class, with the record's salt and
+  Krusty's constructor calldata `[0, public_key, 1]`, checked to reproduce the stored address. A
+  Ready record deployed with a 0.3.x class sends once deployed and upgraded, and is never
+  deployed from here ("Argent account class hash does not match the pinned release").
+- **One gate.** `signing_record` admits OpenZeppelin and Ready records and refuses Braavos
+  (view-only) and a vault waiting for discovery; there is no second gate. The plan picks the
+  signature layout from the record's family when it is prepared.
+- **Refusals.** At review, a refused account shows the failed fee estimate and cannot be
+  confirmed, as in the extension. At confirmation (the chain changed since review) the plan fails
+  with `AccountClassUnrecognised`, `AccountClassUnsupported` (with the class label),
+  `AccountNotDeployable`, `AccountOwnerMismatch`, `AccountOwnerTypeUnsupported` or
+  `AccountGuardianUnsupported`, whose copy is the extension's own text.
+- **Apps.** The Send action and the home deploy notice now open for Ready accounts; Braavos still
+  shows "Braavos accounts are view only for now.".
 
-Implementing `argent-signer-array` needs a parity fixture generated from the extension's own
-Argent signing path (signature layout, deploy constructor per class, salt) and is left as an open
-item rather than written blind in this merge.
+Parity: `scripts/mobile-transactions-argent.ts` runs the extension's own send path for the
+published phrase's Ready account under each Argent class (0.4.0 deployed, undeployed and
+standalone deployment on both networks; 0.3.0 and 0.3.1 upgraded to 0.4.0) and each refusal, into
+`tests/fixtures/extension-transactions-argent*.json`. `tests/transactions_argent_parity.rs` and
+`BrambleTests/ReadyTransferBridgeTests.swift` replay it request by request and require the same
+bodies, signature arrays and hashes; `bun run check` fails when the fixture drifts.
 
 ### 2.8 Copy affordance (new `DesignSystem/CopyButton.swift`, `App/Clipboard.swift`)
 
