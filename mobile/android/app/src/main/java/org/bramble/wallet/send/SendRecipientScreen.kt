@@ -46,7 +46,7 @@ import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.ui.shortAddress
 
 // The recipient and asset stages of `SendScreen` (split by stage to stay readable; the shapes are
-// `SendScreen.kt`'s). Uncompiled: checked by reading against the generated bindings.
+// `SendScreen.kt`'s).
 
 /** `.send-section-title` (or the muted `.send-stage-kicker`). */
 @Composable

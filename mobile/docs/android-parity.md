@@ -1,6 +1,6 @@
 # Android parity design
 
-Status: implemented, uncompiled (section 8, in `android-parity-testing.md`). Workstream `android-parity`, branch
+Status: implemented; first compiled and tested 2026-09-25 (section 8, in `android-parity-testing.md`). Workstream `android-parity`, branch
 `mobile/android-parity`. Revised after review: every must-fix item is resolved in place and listed
 in section 11.
 Scope: `mobile/android/**` and Android build scripts; iOS, `mobile/core` and the extension do not
@@ -441,7 +441,7 @@ the tokens inside BrambleField's frame.
 
 Since the merge with `vault-security`, Android has the Keystore-held biometric wrap secret, the
 core's persisted back-off and idle lock, and the Security screen (`ui/wallet/SecurityScreen.kt`),
-all uncompiled; see `docs/vault-security.md`. Still open: Kotlin `String`s cannot be wiped (an
+see `docs/vault-security.md`. Still open: Kotlin `String`s cannot be wiped (an
 `EditText`'s `Editable` is cleared, not zeroed), and UniFFI's lowering buffers are freed unwiped.
 - Backgrounding in the middle of onboarding clears `pendingBackup` after the vault exists. The user
   recovers through Reveal secrets. This is the same as iOS, and a test pins it (section 8).
@@ -457,8 +457,7 @@ Biometric unlock moves only the wrap secret W across FFI (host to core); SCOPE.m
 ## 7. Parity fixtures and 8. Test plan
 
 Moved to [android-parity-testing.md](android-parity-testing.md) (same section numbers): the
-fixtures Android checks, the toolchain needed to compile and run it (the code is uncompiled on
-this machine), the pinned Gradle wrapper, test dependencies, JVM unit tests, and the instrumented
+fixtures Android checks, the toolchain needed to compile and run it, the pinned Gradle wrapper, test dependencies, JVM unit tests, and the instrumented
 tests that mirror the iOS XCUITests.
 
 ## 9. Changes outside `mobile/android` (need orchestrator sign-off)

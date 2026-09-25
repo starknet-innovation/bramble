@@ -90,7 +90,7 @@ final class DeployFlowModel {
     }
 
     func close() {
-        driver?.plan.close()
+        driver?.plan.cancel()
         driver = nil
     }
 

@@ -14,6 +14,7 @@ import org.bramble.core.activityNeedsObservation
 import org.bramble.core.activityObservationPeriodFor
 import org.bramble.core.activityObservationPeriodMs
 import org.bramble.wallet.portfolio.rawBalances
+import org.bramble.wallet.privacy.refreshPrivacy
 import org.bramble.wallet.send.SendDriver
 import org.bramble.wallet.send.SendFlowModel
 import org.bramble.wallet.send.SendHooks
@@ -44,20 +45,21 @@ fun WalletStore.makeSendModel(): SendFlowModel? {
 
 /**
  * Balances through the portfolio (the one read; a new scope serves saved figures first), then
- * privacy.
+ * deployment and pending activity ([refreshSendState]), then privacy.
  */
 suspend fun WalletStore.refreshBalances(ticket: Long = session.ticket()) {
-    val account = activeRecord ?: return
-    if (!session.isCurrent(ticket)) return
+    val account = activeRecord?.takeIf { session.isCurrent(ticket) } ?: return
     if (portfolio.scope?.accountId != account.id) {
         portfolio.load(account, networkInfo)
     } else {
         portfolio.refresh(force = true)
     }
-    privacy.retain(network, account.id) // one reading per account record, fed into Home's rows
-    privacy.refresh(walletCore, networkInfo, account.id)
-    portfolio.setPrivacy(privacy.reading, privacy.state)
-    observeActivity(ticket)
+    // Deployment feeds the deploy notice and the privacy gates, so it is read before privacy.
+    refreshSendState(ticket)
+    if (session.isCurrent(ticket) && activeRecord?.id == account.id) {
+        refreshPrivacy() // one reading per account record, fed into Home's rows
+        observeActivity(ticket)
+    }
 }
 
 private fun wallNowMs(): ULong = System.currentTimeMillis().toULong()
@@ -126,11 +128,11 @@ private suspend fun WalletStore.settleRecord(
         }
     plans += plan
     try {
-        SendDriver(plan, network).run(StepReply.Start)
+        SendDriver(plan, network, rpc.transport).run(StepReply.Start)
     } catch (ignored: SendException) {
         // The record keeps its status; the next pass reads it again.
     } finally {
-        plan.close()
+        plan.cancel()
         plans -= plan
     }
 }

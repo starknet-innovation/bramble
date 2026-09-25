@@ -1,7 +1,8 @@
 # Bramble Mobile — Scope
 
 Status: prototype on `feature/mobile-wallet` (2026-09-24). iOS builds and passes its unit and
-mainnet UI suites on the simulator; Android is written but not yet built in CI.
+mainnet UI suites on the simulator. Android compiles and passes its JVM and instrumented suites
+on an API 35 emulator (2026-09-25); its CI job has not run on GitHub yet.
 
 ## Goal
 
@@ -65,7 +66,8 @@ What is reused from the extension, and how drift is prevented:
   (Android: one `SecretField` in `design/SecretField.kt`, a platform `EditText` with a
   `TYPE_CLASS_TEXT` password variation, `TYPE_TEXT_FLAG_NO_SUGGESTIONS`,
   `IME_FLAG_NO_PERSONALIZED_LEARNING`, autofill excluded, no copy/cut/share, and no saved-instance
-  state; uncompiled); the clipboard is cleared after a phrase paste on both platforms.
+  state, covered by `SecretFieldTest`); the clipboard is cleared after a phrase paste on both
+  platforms.
 - **Network.** Sans-IO: no TLS or HTTP code in Rust. HTTPS only (ATS / `usesCleartextTraffic=false`),
   ephemeral URLSession. An endpoint is trusted only after `starknet_chainId` proves the chain;
   responses must answer their request id, are size-bounded, and u256 limbs are range-checked.
@@ -85,9 +87,11 @@ What is reused from the extension, and how drift is prevented:
 
 State of `feature/mobile-wallet` after merging vault-security, android-parity, design-mobile,
 transactions, accounts, nostr-multisig, portfolio-activity and privacy. iOS is built and was
-verified on each branch; every Android change is written against bindings generated from the
-merged core but has never been compiled (no JDK or Android SDK where it was written; see
-`docs/android-parity.md`).
+verified on each branch. Android was first compiled and run on 2026-09-25 (branch
+`mobile/todo-android`): `:app:assembleDebug` builds, 38 JVM unit tests and 36 instrumented tests
+pass on an API 35 emulator (the opt-in `LiveMainnetWalletTest` is skipped), and ktlint/detekt are
+clean. The per-workstream docs under `docs/` record their Android parts as written before that
+first build.
 
 **Phase 0 — prototype (done).** Create/import, backup, unlock/lock, mainnet/Sepolia, receive with
 QR, explorer, reveal phrase, delete wallet. Android matches the iOS screens one for one with
@@ -114,9 +118,16 @@ exports). Ready accounts send and deploy with the extension's `argent-signer-arr
 authorization (`docs/accounts.md` §2.7a). Not yet: private-key import and Braavos signing.
 
 **Phase 1 — sendable wallet.**
-1. Android in CI: NDK build via `build-core-android.sh`, then the JVM unit and instrumented
-   suites. The pinned Gradle wrapper and the Compose/Espresso suites exist; they have never been
-   run. **Open.**
+1. Android build and tests: NDK build via `build-core-android.sh`, `:app:assembleDebug`, the JVM
+   unit suite and the instrumented suite all pass locally — **done**. First-build fixes: the plans'
+   `close` export clashed with Kotlin's generated `AutoCloseable.close()` (now exported as
+   `cancel`, on iOS too), a stale `account?.index` privacy read in `reloadAccounts`, a duplicated
+   `CheckBoxMark`, a nullable multisig authority status, and privacy views that named controls
+   the design system does not have. Android now also has the deploy notice and Deploy account
+   flow (the core's `prepareDeployment` plan), the Activity list over the core's one activity
+   store with explorer links and pending-record reconciliation, token detail with the private
+   balance section, and the real deployment state in every privacy gate and in the journey.
+   Running the `android` job in `.github/workflows/mobile.yml` on GitHub is still **open**.
 2. Transactions in the core — **done** (`docs/transactions.md`). ERC-20 transfer via a core-owned
    `TransferPlan` bound to the session generation (`lock_epoch`), automatic OZ deployment, a
    standalone Deploy flow, and the extension's review, fixture-checked against the extension.
@@ -181,5 +192,8 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
 - The STRK20 viewing key reaches host memory inside each discovery request body; hosts wipe their
   buffer after the send, but HTTP/TLS internals cannot be wiped (docs/privacy.md §1.1, §5). This is
   the owner-approved exemption under Security posture.
-- Send (ERC-20 from an OpenZeppelin account, with automatic deployment) is implemented on iOS;
-  the Android Send sources are written but uncompiled. See docs/transactions.md.
+- Send (ERC-20 from an OpenZeppelin account, with automatic deployment) is implemented on iOS
+  and Android; Android's Send screens compile but have no instrumented send-flow test yet (the
+  deployment plan they share is covered by `DeployFlowTest`). See docs/transactions.md.
+- Android has token detail but not yet the token management screens (add by contract, find held
+  tokens, hide/show) that iOS has.

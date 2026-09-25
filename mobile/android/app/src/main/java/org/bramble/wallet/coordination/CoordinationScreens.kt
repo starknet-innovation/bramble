@@ -54,7 +54,7 @@ import org.bramble.wallet.ui.shortAddress
 // design-mobile components (FlowHeader, menu groups, flat fields, pills, CopyButton). Public
 // fields use `SecretKind.ADDRESS` (no suggestions, readable). Success is a positive toast
 // (`showNotice`); errors stay on the screen's status line. The Receive card and identity live in
-// `ui/wallet/ReceiveScreen.kt`. Uncompiled: there is no Android SDK on the authoring machine.
+// `ui/wallet/ReceiveScreen.kt`.
 
 /** A muted caption line. */
 @Composable

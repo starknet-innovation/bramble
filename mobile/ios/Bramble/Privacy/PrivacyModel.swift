@@ -29,7 +29,7 @@ final class PrivacyModel {
 
     /// Closes any read in flight and forgets the last reading.
     func reset() {
-        plan?.close()
+        plan?.cancel()
         plan = nil
         task?.cancel()
         task = nil

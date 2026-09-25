@@ -14,14 +14,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import org.bramble.core.ActivityRow
 import org.bramble.core.TokenBalance
-import org.bramble.core.activityEmptyCopy
-import org.bramble.core.activityUnavailableNotice
 import org.bramble.core.portfolioAmount
 import org.bramble.core.tokenRowFiat
 import org.bramble.wallet.design.BrambleLayout
@@ -37,9 +34,8 @@ import org.bramble.wallet.design.TokenMark
 import org.bramble.wallet.design.textStyle
 
 /**
- * Compose renderings of the portfolio hero, token list and Activity feed over [PortfolioStore], in
- * the design-mobile tokens (UNCOMPILED: checked against the generated Kotlin bindings). All text
- * comes from the core.
+ * Compose renderings of the portfolio hero and token list over [PortfolioStore], in the
+ * design-mobile tokens. All text comes from the core. The Activity feed is `ActivityScreen.kt`.
  */
 @Composable
 fun PortfolioHeroSection(store: PortfolioStore) {
@@ -73,9 +69,15 @@ fun PortfolioHeroSection(store: PortfolioStore) {
     }
 }
 
-/** The visible token rows (STRK first, hidden and likely-spam off), the failure line, the count. */
+/**
+ * The visible token rows (STRK first, hidden and likely-spam off), the failure line, the count.
+ * Tapping a row opens its detail through [open] with the row's token id.
+ */
 @Composable
-fun PortfolioTokenList(store: PortfolioStore) {
+fun PortfolioTokenList(
+    store: PortfolioStore,
+    open: (String) -> Unit,
+) {
     val skin = LocalSkin.current
     val prices = store.priceView ?: store.emptyPrices
     Column {
@@ -83,7 +85,7 @@ fun PortfolioTokenList(store: PortfolioStore) {
         // Public and private summed per token (`unifiedHomeBalances`, docs/privacy.md §2.2).
         store.unified.forEachIndexed { offset, row ->
             if (offset > 0) Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
-            PortfolioTokenRow(row.balance, prices)
+            PortfolioTokenRow(row.balance, prices) { open(row.balance.token.id) }
         }
         store.home
             ?.notShown
@@ -96,12 +98,14 @@ fun PortfolioTokenList(store: PortfolioStore) {
 private fun PortfolioTokenRow(
     balance: TokenBalance,
     prices: org.bramble.core.PriceView,
+    open: () -> Unit,
 ) {
     val skin = LocalSkin.current
     val fiat = tokenRowFiat(balance, prices)
     Row(
         Modifier
             .fillMaxWidth()
+            .clickable(onClickLabel = "Open ${balance.token.symbol}", role = Role.Button, onClick = open)
             .heightIn(
                 min = BrambleSize.rowCompact,
             ).padding(horizontal = BrambleSpace.sm, vertical = BrambleSpace.md),
@@ -133,61 +137,6 @@ private fun PortfolioTokenRow(
                     style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold),
                 )
             }
-        }
-    }
-}
-
-/** The account's one activity list (submitted and on-chain rows), grouped by UTC day. */
-@Composable
-fun PortfolioActivity(store: PortfolioStore) {
-    val skin = LocalSkin.current
-    val unavailable = store.activityView?.historyUnavailable == true
-    Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-        if (unavailable) StatusLine(activityUnavailableNotice())
-        if (store.groups.isEmpty()) {
-            Text(
-                activityEmptyCopy(unavailable),
-                color = skin.muted,
-                textAlign = TextAlign.Center,
-                style = textStyle(BrambleTypeScale.label),
-                modifier = Modifier.fillMaxWidth().padding(vertical = BrambleSpace.lg, horizontal = BrambleSpace.md),
-            )
-        }
-        store.groups.forEach { group ->
-            Text(group.heading, color = skin.muted, style = textStyle(BrambleTypeScale.body, BrambleWeight.medium))
-            group.rows.forEach { ActivityRowItem(it) }
-        }
-    }
-}
-
-@Composable
-private fun ActivityRowItem(row: ActivityRow) {
-    val skin = LocalSkin.current
-    val uri = LocalUriHandler.current
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = BrambleSpace.sm).semantics {
-            contentDescription =
-                row.accessibilityLabel
-        },
-        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
-            // The explorer opens in the system browser (ACTION_VIEW through the URI handler).
-            val link = row.explorerUrl
-            Text(
-                row.title,
-                color = skin.text,
-                style = textStyle(BrambleTypeScale.row, BrambleWeight.medium),
-                modifier = if (link != null) Modifier.clickable { uri.openUri(link) } else Modifier,
-            )
-            row.detail?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption)) }
-            row.statusWord?.let {
-                Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold))
-            }
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(row.fiatText ?: "—", color = skin.text, style = textStyle(BrambleTypeScale.row, BrambleWeight.medium))
-            Text(row.amountText ?: "—", color = skin.muted, style = textStyle(BrambleTypeScale.body))
         }
     }
 }

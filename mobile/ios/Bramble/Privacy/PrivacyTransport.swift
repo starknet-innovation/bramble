@@ -84,7 +84,7 @@ actor PrivacyDriver {
         var reply = PrivacyReply.start(nowMs: now())
         while true {
             if Task.isCancelled {
-                plan.close()
+                plan.cancel()
                 throw CancellationError()
             }
             let step = try plan.advance(reply: reply)

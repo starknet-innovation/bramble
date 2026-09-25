@@ -115,6 +115,10 @@ impl PrivacyReadPlan {
     }
 
     /// Stops the plan and drops its cursor and totals. Idempotent.
+    ///
+    /// Exported as `cancel`: Kotlin's generated `AutoCloseable.close()` (which frees the handle)
+    /// would otherwise clash with it.
+    #[uniffi::method(name = "cancel")]
     pub fn close(&self) {
         let mut state = self.lock_state();
         state.stage = Stage::Closed;

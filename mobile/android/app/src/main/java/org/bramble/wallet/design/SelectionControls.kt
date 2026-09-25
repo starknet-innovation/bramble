@@ -81,23 +81,6 @@ fun CheckRow(
     }
 }
 
-/** The check row's box: accent-filled with a check mark when [checked], outlined otherwise. */
-@Composable
-private fun CheckBoxMark(checked: Boolean) {
-    val skin = LocalSkin.current
-    val box = RoundedCornerShape(BrambleLayout.checkRadius)
-    Box(
-        Modifier
-            .padding(top = BrambleLayout.checkNudge)
-            .size(BrambleLayout.checkBox)
-            .background(if (checked) skin.accent else Color.Transparent, box)
-            .border(BrambleLayout.checkStroke, if (checked) skin.accent else skin.border, box),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (checked) BrambleIcon(BrambleIconName.CHECK, skin.accentText, BrambleLayout.checkIcon)
-    }
-}
-
 /**
  * `.account-filter-chip` / the group icon picker: a capsule toggle on the elevated fill, accent-soft
  * when [selected] (the extension's `aria-pressed`). An icon-only chip is named by [description].

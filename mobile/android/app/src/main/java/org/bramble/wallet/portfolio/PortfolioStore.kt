@@ -25,7 +25,10 @@ import org.bramble.core.PricePlan
 import org.bramble.core.PriceView
 import org.bramble.core.PrivacyReading
 import org.bramble.core.PrivacyState
+import org.bramble.core.TokenBalance
+import org.bramble.core.TokenConfig
 import org.bramble.core.TokenPreferences
+import org.bramble.core.TrackedToken
 import org.bramble.core.UnifiedBalance
 import org.bramble.core.activityGroups
 import org.bramble.core.balanceFailureCopy
@@ -37,8 +40,7 @@ import org.bramble.core.unifiedHomeBalances
 import java.io.File
 
 /**
- * Android counterpart of iOS `PortfolioStore` (UNCOMPILED: written against the generated Kotlin
- * bindings, not built here). The Rust core decides every rule and judges every response; this
+ * Android counterpart of iOS `PortfolioStore`. The Rust core decides every rule and judges every response; this
  * class sequences reads, fails over across chain-id-verified endpoints ([PortfolioReads]), and
  * writes the documents the core produces into `noBackupFilesDir/portfolio/`. Activity is the
  * exception: the core owns the wallet's one activity log (submitted transactions and on-chain
@@ -50,7 +52,8 @@ class PortfolioStore(
     private val directory: File,
     /** The core's `activityBook()`: the one activity log. */
     private val activity: ActivityBook,
-    private val transport: PortfolioTransport = BoundedHttp,
+    /** Moves the portfolio's HTTP reads (prices, charts, explorer); never throws for a failure. */
+    internal val transport: PortfolioTransport = BoundedHttp,
     private val clock: () -> Double = { System.currentTimeMillis().toDouble() },
 ) {
     /**
@@ -108,6 +111,10 @@ class PortfolioStore(
     var groups by mutableStateOf(emptyList<ActivityDayGroup>())
         private set
 
+    /** True while an Activity history read is in flight; the Activity header shows a spinner. */
+    var historyLoading by mutableStateOf(false)
+        private set
+
     /** Home rows with private value summed in (`unifiedHomeBalances` over the visible rows). */
     var unified by mutableStateOf(emptyList<UnifiedBalance>())
         private set
@@ -115,11 +122,19 @@ class PortfolioStore(
     private var privacyState: PrivacyState? = null
     private var generation = 0
 
+    /** The scope generation; a read that finishes under a different one is dropped. */
+    internal val readGeneration: Int get() = generation
+
+    /** The core's price and chart cache, for the chart read (`PortfolioCharts.kt`). */
+    internal val priceBook: PriceBook get() = prices
+
     private val reads = PortfolioReads(transport, rpcLimits())
 
     /** No prices yet, in the display currency. */
     val emptyPrices get() = PriceView(currency, emptyList(), emptyList(), null, false)
-    private val tracked get() = scope?.let { preferences.tracked(it.network.network) } ?: emptyList()
+
+    /** The scope's tracked tokens (Home, token detail, Send); empty while locked. */
+    val tracked: List<TrackedToken> get() = scope?.let { preferences.tracked(it.network.network) } ?: emptyList()
     private val addresses get() = tracked.map { it.token.address }
 
     /** Tokens hidden from Home, whose private balances Home must not count either. */
@@ -225,7 +240,13 @@ class PortfolioStore(
         val current = scope?.takeIf { activity.historyDue(it.accountId, it.network.network, force, now) } ?: return
         val gen = generation
         val target = ActivityTarget(current.accountId, current.network, tracked.map { it.token }, now)
-        val view = reads.activityView(activity, preferences, target) { gen == generation }
+        historyLoading = true
+        val view =
+            try {
+                reads.activityView(activity, preferences, target) { gen == generation }
+            } finally {
+                if (gen == generation) historyLoading = false
+            }
         if (view == null || gen != generation) return
         activityView = view
         persistDocuments(directory, preferences, prices, snapshots)
@@ -254,6 +275,7 @@ class PortfolioStore(
         hero = PortfolioHero(null, null, null)
         activityView = null
         groups = emptyList()
+        historyLoading = false
     }
 
     /** Re-reads the scope's activity from the core's log (after a send was recorded or settled). */
@@ -319,6 +341,17 @@ fun PortfolioStore.rawBalances(network: NetworkInfo): Map<String, String> {
             loaded.balances.firstOrNull { it.token.id == id }?.let { token.symbol to it.balance }
         }.toMap()
 }
+
+/** The current fiat price of [token] in the display currency, or null when unpriced. */
+fun PortfolioStore.price(token: TokenConfig): Double? =
+    priceView?.prices?.firstOrNull { it.address == token.address }?.value
+
+/** The loaded balance of [token], or null until balances have loaded. */
+fun PortfolioStore.balance(token: TokenConfig): TokenBalance? =
+    balances?.balances?.firstOrNull {
+        it.token.id ==
+            token.id
+    }
 
 /** A stored document's text, or null when it is missing or unreadable (the core then starts empty). */
 private fun readDocument(

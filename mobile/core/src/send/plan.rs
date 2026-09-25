@@ -285,6 +285,10 @@ impl TransferPlan {
     /// Stops the plan: no further step, and so no further signing point, can be reached.
     /// Idempotent. It never erases the pending activity record of a write the plan already
     /// handed out; that record is settled by status reconciliation.
+    ///
+    /// Exported as `cancel`: Kotlin's generated `AutoCloseable.close()` (which frees the handle)
+    /// would otherwise clash with it.
+    #[uniffi::method(name = "cancel")]
     pub fn close(&self) {
         self.lock_state().stage = Stage::Closed;
     }

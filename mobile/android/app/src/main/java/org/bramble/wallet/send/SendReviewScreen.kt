@@ -58,7 +58,7 @@ import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.ui.AddressClipboard
 
 // The review, working and outcome stages of `SendScreen` (split by stage to stay readable; the
-// shapes are `SendScreen.kt`'s). Uncompiled: checked by reading against the generated bindings.
+// shapes are `SendScreen.kt`'s).
 
 /** The review stage: the plan's summary, fee, technical details, and Confirm. */
 @Composable

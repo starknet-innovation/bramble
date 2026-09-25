@@ -11,6 +11,7 @@ import org.bramble.core.TransferPlan
 import org.bramble.core.rpcChainIdRequest
 import org.bramble.core.rpcVerifyChainId
 import org.bramble.wallet.RpcClient
+import org.bramble.wallet.RpcPost
 import java.net.URL
 
 /**
@@ -21,13 +22,13 @@ import java.net.URL
  * proves the chain serves every later step of the plan, with no failover; a write is posted
  * exactly once, never retried, and never follows a redirect.
  * HTTP goes through [RpcClient.post], the app's one bounded, redirect-refusing-for-writes path.
- *
- * Uncompiled: this machine has no Android SDK; checked by reading against the generated bindings.
  */
 class SendDriver(
     /** The core plan this relays; closed by the owner (`SendFlowModel`), never here. */
     val plan: TransferPlan,
     network: NetworkInfo,
+    /** How each step's bytes move: [RpcClient.https] unless a test passes a fixture node. */
+    private val transport: RpcPost = RpcClient.https,
 ) {
     private val urls = network.rpcUrls.map(::URL)
     private val networkId = network.network
@@ -135,5 +136,5 @@ class SendDriver(
         url: URL,
         body: String,
         write: Boolean,
-    ): String = RpcClient.post(url, body, write)
+    ): String = transport.post(url, body, write)
 }

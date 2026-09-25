@@ -89,7 +89,7 @@ class OnboardingFlowTest {
         r.tap("Network")
         r.snapshot("network")
         r.tapDescribed("Back")
-        r.tap("Appearance")
+        r.tap("Appearance & currency")
         r.tap("Light")
         r.snapshot("appearance-light")
         r.tap("Dark")

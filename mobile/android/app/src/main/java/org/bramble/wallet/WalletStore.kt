@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import org.bramble.core.AccountGroup
 import org.bramble.core.AccountRecord
 import org.bramble.core.CoreException
+import org.bramble.core.DeploymentState
 import org.bramble.core.InternalException
 import org.bramble.core.NetworkInfo
 import org.bramble.core.SecurityStatus
@@ -75,12 +76,24 @@ class WalletStore(
     /** Open transfer plans, closed on lock (defence in depth: the core voids them on any lock). */
     internal val plans = mutableListOf<TransferPlan>()
 
+    /**
+     * Chain reads for deployment state, deployment and activity observation. HTTPS in the app;
+     * instrumented tests swap in an offline fixture node before the wallet opens.
+     */
+    internal var rpc = RpcClient()
+
+    /**
+     * The core's judgement of the active account's deployment (`WalletStoreDeploy.kt`), for the
+     * deploy notice and the privacy gates. `UNKNOWN` until read, after a lock and on account switch.
+     */
+    var deployment by mutableStateOf(DeploymentState.UNKNOWN)
+        internal set
+
     /** When each observed activity record was last read (wall ms), for the extension's cadence. */
     internal val observedAtMs = mutableMapOf<String, ULong>()
 
     /** Ticks [observeActivity] while the wallet is open (WalletStoreSend.kt); cancelled on lock. */
     internal var observationTicker: Job? = null
-
     /** The top-level screen; in memory only, and back to [Route.LOCKED] on every lock. */
     var route by mutableStateOf(if (vaultWritten) Route.LOCKED else Route.ONBOARDING)
         private set
@@ -229,8 +242,9 @@ class WalletStore(
      */
     fun lock() {
         session.end()
-        plans.forEach { it.close() }
+        plans.forEach { it.cancel() }
         plans.clear()
+        deployment = DeploymentState.UNKNOWN
         observationTicker?.cancel()
         observationTicker = null
         observedAtMs.clear()
@@ -270,6 +284,7 @@ class WalletStore(
         if (!reload) return result
         reloadAccounts(ticket, ensure = false)
         if (activeRecord?.id != before) {
+            deployment = DeploymentState.UNKNOWN
             portfolio.lock()
             refreshBalances(ticket)
         }
@@ -287,7 +302,9 @@ class WalletStore(
                 if (ensure) core.ensureNetworkAccount(network)
                 AccountsSnapshot(core.accountRecords(network), core.allAccountRecords(), core.accountGroups())
             }
-        account?.let { privacy.refresh(core, networkInfo, it.index) }
+        // A private reading belongs to one account record on one network; any other is dropped.
+        // The read itself runs in `refreshBalances`, after deployment, never while entering.
+        privacy.retain(network, accountState.active?.id)
     }
 
     /**
@@ -296,6 +313,7 @@ class WalletStore(
      */
     internal suspend fun enterWallet(ticket: Long) {
         accountState = AccountsSnapshot()
+        deployment = DeploymentState.UNKNOWN
         if (calls.work(ticket) { core.recoveryPending() }) {
             route = Route.DISCOVERY
             scheduleIdleLock()

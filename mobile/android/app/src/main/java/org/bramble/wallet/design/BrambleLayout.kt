@@ -80,6 +80,9 @@ object BrambleLayout {
     /** Size of a detail row or chip icon. */
     val detailIcon = 16.dp
 
+    /** Stroke width of a token's price sparkline (iOS `TokenDetailView.sparklineLineWidth`). */
+    val sparklineStroke = 1.5.dp
+
     /** Size of the icon chip inside a toast. */
     val toastChip = 30.dp
 

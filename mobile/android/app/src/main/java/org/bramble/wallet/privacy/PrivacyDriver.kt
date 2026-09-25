@@ -34,8 +34,6 @@ private const val READ_CHUNK_BYTES = 8 * 1024
  * crosses FFI; docs/privacy.md §1.1): it is written once to the configured HTTPS URL, never read,
  * logged or kept, no redirect is followed, and the array is zeroed as soon as the exchange ends.
  * The zeroing is best effort: the TLS stack may hold copies Kotlin cannot reach.
- *
- * Uncompiled: this machine has no Android SDK; written against the generated Kotlin bindings.
  */
 class PrivacyDriver(
     private val plan: PrivacyReadPlan,
@@ -75,7 +73,7 @@ class PrivacyDriver(
                     }
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            plan.close()
+            plan.cancel()
             throw cancelled
         }
     }

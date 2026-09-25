@@ -2,7 +2,10 @@ package org.bramble.wallet
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.bramble.core.DeploymentState
 import org.bramble.core.NetworkInfo
+import org.bramble.core.deploymentStatusRequest
+import org.bramble.core.judgeDeploymentStatus
 import org.bramble.core.rpcBalanceRequest
 import org.bramble.core.rpcChainIdRequest
 import org.bramble.core.rpcParseBalance
@@ -15,6 +18,20 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 /**
+ * Moves one JSON-RPC body to an endpoint and returns the reply, throwing on any transport failure.
+ * The app uses [RpcClient.https]; instrumented tests pass an offline fixture node, so the core
+ * judges fixture replies exactly as live ones. Implementations must post a [write] at most once.
+ */
+fun interface RpcPost {
+    /** Posts [body] to [url]; a [write] is a signed transaction and is never retried here. */
+    fun post(
+        url: URL,
+        body: String,
+        write: Boolean,
+    ): String
+}
+
+/**
  * Moves JSON-RPC bytes for the Rust core, which builds every request and judges every response.
  * HTTPS only (the manifest also forbids cleartext); an endpoint is trusted only after it proves
  * it serves the expected chain, and failures fall through to the next bundled endpoint. A response
@@ -22,7 +39,10 @@ import javax.net.ssl.HttpsURLConnection
  * the app buffer an unbounded body before the core judges it. [post] is the one HTTP path: the
  * send driver (`send/SendDriver.kt`) moves every plan step through it too.
  */
-class RpcClient {
+class RpcClient(
+    /** How bytes move: HTTPS in the app ([https]), a fixture node in instrumented tests. */
+    val transport: RpcPost = https,
+) {
     /**
      * Base-unit balances of [network]'s tokens for [account], by symbol, from the first bundled
      * endpoint that proves the chain and answers every read. Throws when no endpoint does.
@@ -42,12 +62,47 @@ class RpcClient {
         account: String,
         network: NetworkInfo,
     ): Map<String, String> {
-        check(rpcVerifyChainId(post(url, rpcChainIdRequest(1u)), 1u, network.network)) { "wrong chain" }
+        check(rpcVerifyChainId(transport.post(url, rpcChainIdRequest(1u), false), 1u, network.network)) {
+            "wrong chain"
+        }
         return network.tokens
             .mapIndexed { offset, token ->
                 val id = (offset + 2).toULong()
-                token.symbol to rpcParseBalance(post(url, rpcBalanceRequest(id, token.address, account)), id)
+                val body = transport.post(url, rpcBalanceRequest(id, token.address, account), false)
+                token.symbol to rpcParseBalance(body, id)
             }.toMap()
+    }
+
+    /**
+     * The core's judgement of whether [account] is deployed, from the first endpoint that proves
+     * [network]'s chain; `UNKNOWN` when none answers, so the deploy notice then shows nothing and
+     * the privacy gates ask again. Never throws.
+     */
+    suspend fun deploymentState(
+        account: String,
+        network: NetworkInfo,
+    ): DeploymentState =
+        withContext(Dispatchers.IO) {
+            val request = deploymentStatusRequest(DEPLOYMENT_REQUEST_ID, account)
+            val judged =
+                request?.let { body ->
+                    network.rpcUrls.firstNotNullOfOrNull { url ->
+                        runCatching { deploymentAt(URL(url), body, network) }.getOrNull()
+                    }
+                }
+            judged ?: DeploymentState.UNKNOWN
+        }
+
+    /** Proves [url] serves [network]'s chain, then has the core judge its deployment-status reply. */
+    private fun deploymentAt(
+        url: URL,
+        request: String,
+        network: NetworkInfo,
+    ): DeploymentState {
+        check(rpcVerifyChainId(transport.post(url, rpcChainIdRequest(1u), false), 1u, network.network)) {
+            "wrong chain"
+        }
+        return judgeDeploymentStatus(transport.post(url, request, false), DEPLOYMENT_REQUEST_ID)
     }
 
     /** The one bounded HTTPS path every JSON-RPC byte in the app goes through. */
@@ -55,6 +110,12 @@ class RpcClient {
         /** 64 KiB, the core's `MAX_RESPONSE_BYTES` (`maxRpcResponseBytes()`): far above any reply. */
         const val MAX_RESPONSE_BYTES = 64 * 1024
         private const val TIMEOUT_MS = 15_000
+
+        /** The deployment-status read's id, after the chain-id request's id 1. */
+        private const val DEPLOYMENT_REQUEST_ID: ULong = 2u
+
+        /** The app's transport: [post] over HTTPS, bounded to [MAX_RESPONSE_BYTES]. */
+        val https: RpcPost = RpcPost { url, body, write -> post(url, body, write) }
         private const val READ_CHUNK_BYTES = 8 * 1024
 
         /**

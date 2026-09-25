@@ -26,8 +26,6 @@ import org.bramble.wallet.design.BrambleCopy
  *
  * [SendHooks.notice] carries the outcome toast: `true` for a confirmation (the store's success
  * tone), `false` for a transaction that was not confirmed (an error).
- *
- * Uncompiled: this machine has no Android SDK; checked by reading against the generated bindings.
  */
 class SendFlowModel(
     private val core: WalletCore,
@@ -232,7 +230,7 @@ class SendFlowModel(
 
     /** Closes and forgets the open plan and its review; the next Review opens a new one. */
     internal fun dropPlan() {
-        driver?.plan?.close()
+        driver?.plan?.cancel()
         driver = null
         review = null
         reviewBlock = null
