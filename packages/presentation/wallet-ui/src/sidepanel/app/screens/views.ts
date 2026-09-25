@@ -369,6 +369,7 @@ export const dashboard = (
     prices,
     selectedMultisigId,
     privacy,
+    selectedTokenId,
     ...(sendIntent ? { sendIntent } : {}),
     status,
   });

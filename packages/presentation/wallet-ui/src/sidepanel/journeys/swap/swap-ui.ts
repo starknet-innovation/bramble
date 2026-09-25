@@ -31,6 +31,7 @@ import {
   swapValueDeltaPercent,
 } from "./swap-client";
 import { bindSwapTokenDropdowns } from "./swap-picker";
+import { swapPresetPair } from "./swap-preset";
 import { type SwapStage, transitionSwapStage } from "./swap-transition";
 import { swapConfirmReceipt, swapQuoteDetails } from "./swap-views";
 
@@ -63,6 +64,14 @@ let stage: SwapStage = "edit";
 let successSummary = "";
 const SUCCESS_HOLD_MS = 1900;
 let successTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Opens the swap on a chosen sell token, clearing any in-flight quote. */
+export const presetSwapPair = (sellId: string, tokens: readonly TokenConfig[]): void => {
+  const pair = swapPresetPair(sellId, tokens);
+  if (!pair) return;
+  [sellTokenId, buyTokenId, amountText] = [pair.sellId, pair.buyId, ""];
+  [quote, preparation, pendingBuyAmount, stage] = [null, null, null, "edit"];
+};
 
 const tradableTokens = (deps: SwapUiDeps): readonly TokenConfig[] =>
   (deps.preferences()?.tokens ?? []).filter(
