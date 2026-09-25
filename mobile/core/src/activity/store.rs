@@ -6,7 +6,7 @@
 //! reads or writes it.
 //!
 //! Rules mirror `packages/features/transactions/src/activity/activity.ts` and
-//! `tx-observation.ts`: entries are validated on read (invalid ones are dropped), at most 200
+//! `tx-observation.ts` (whose policy is `observation.rs`): entries are validated on read (invalid ones are dropped), at most 200
 //! per scope (oldest dropped), de-duplicated by numeric hash, status moves forward only
 //! (`monotonicTxStatus`), and three consecutive not-found answers make an entry
 //! `rejected`. A file that cannot be read as version 1 is never overwritten blind: it is renamed
@@ -20,6 +20,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use starknet_types_core::felt::Felt;
 
+use super::observation;
 use crate::felt;
 use crate::files::write_atomic;
 use crate::send::judge::Observation;
@@ -31,19 +32,6 @@ const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_TEXT: usize = 200;
 /// `NOT_FOUND_FAILURE_THRESHOLD` in `tx-observation.ts`.
 pub(crate) const NOT_FOUND_FAILURE_THRESHOLD: u32 = 3;
-
-/// `UNRESOLVED_WINDOW_MS`: how long a pending or pre-confirmed entry stays under observation.
-pub(crate) const UNRESOLVED_WINDOW_MS: u64 = 60 * 60 * 1_000;
-/// `FAST_OBSERVATION_PERIOD_MINUTES`, in milliseconds: the least time between two status reads
-/// of one unresolved entry.
-pub(crate) const FAST_OBSERVATION_PERIOD_MS: u64 = 60 * 1_000;
-
-/// `isObservedAt(entry, "fast", now)`: an unresolved entry still inside its window. Past it the
-/// wallet stops polling and keeps the status it has, rather than claiming an outcome.
-pub(crate) fn is_observed(status: TxStatus, submitted_at_ms: u64, now_ms: u64) -> bool {
-    matches!(status, TxStatus::Pending | TxStatus::Preconfirmed)
-        && now_ms.saturating_sub(submitted_at_ms) < UNRESOLVED_WINDOW_MS
-}
 
 /// Serialises every read-modify-write of the file within the process.
 static FILE_LOCK: Mutex<()> = Mutex::new(());
@@ -374,6 +362,63 @@ pub(crate) fn discard(dir: &Path, account_id: &str, hash: &Felt) {
             save_log(dir, &log);
         }
     });
+}
+
+/// Retires the scope's unresolved entries that outlived their observation window
+/// (`expiredObservations` + `retiredOutcome`): each keeps its status and gains one pending
+/// notice. Returns how many were retired.
+pub(crate) fn retire_expired(dir: &Path, account_id: &str, now_ms: u64) -> usize {
+    locked(|| {
+        let mut log = load_log(dir);
+        let Some(entries) = log.scopes.get_mut(account_id) else {
+            return 0;
+        };
+        let mut retired = 0;
+        for entry in entries.iter_mut() {
+            let Some(status) = parse_status(&entry.status) else {
+                continue;
+            };
+            if observation::is_expired(
+                status,
+                entry.failure_notice.is_some(),
+                entry.submitted_at,
+                now_ms,
+            ) {
+                entry.failure_notice = Some("pending".into());
+                retired += 1;
+            }
+        }
+        if retired > 0 && !save_log(dir, &log) {
+            return 0;
+        }
+        retired
+    })
+}
+
+/// `takeFailureNotices`: the scope's entries owing a notice (at most `MAX_ALERTS_PER_DRAIN`),
+/// marked delivered in the same write so each notice is handed out once. Nothing is returned
+/// unless that write lands.
+pub(crate) fn take_failure_notices(dir: &Path, account_id: &str) -> Vec<Entry> {
+    locked(|| {
+        let mut log = load_log(dir);
+        let Some(entries) = log.scopes.get_mut(account_id) else {
+            return Vec::new();
+        };
+        let mut taken = Vec::new();
+        for entry in entries.iter_mut() {
+            if taken.len() == observation::MAX_ALERTS_PER_DRAIN {
+                break;
+            }
+            if entry.failure_notice.as_deref() == Some("pending") {
+                taken.push(entry.clone());
+                entry.failure_notice = Some("delivered".into());
+            }
+        }
+        if taken.is_empty() || !save_log(dir, &log) {
+            return Vec::new();
+        }
+        taken
+    })
 }
 
 /// Entries for one account scope, newest first.

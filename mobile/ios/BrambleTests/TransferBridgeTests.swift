@@ -182,7 +182,19 @@ final class TransferBridgeTests: XCTestCase {
         }
         XCTAssertTrue(activityNeedsObservation(record: record(.pending), nowMs: 1_000 + window - 1))
         XCTAssertFalse(activityNeedsObservation(record: record(.pending), nowMs: 1_000 + window))
-        XCTAssertFalse(activityNeedsObservation(record: record(.accepted), nowMs: 1_000))
+        XCTAssertEqual(activityObservationPeriodFor(record: record(.pending)), UInt64(fastMinutes) * 60_000)
+
+        // The slow tier: accepted and awaiting L1, read every quarter hour for seven days.
+        let l1WindowMs: Int = try fixtureValue(status, "l1FinalityWindowMs")
+        let l1Window = UInt64(l1WindowMs)
+        let slowMinutes: Int = try fixtureValue(status, "slowObservationPeriodMinutes")
+        XCTAssertTrue(activityNeedsObservation(record: record(.accepted), nowMs: 1_000 + l1Window - 1))
+        XCTAssertFalse(activityNeedsObservation(record: record(.accepted), nowMs: 1_000 + l1Window))
+        XCTAssertEqual(activityObservationPeriodFor(record: record(.accepted)), UInt64(slowMinutes) * 60_000)
+        var final = record(.accepted)
+        final.finalizedOnL1 = true
+        XCTAssertFalse(activityNeedsObservation(record: final, nowMs: 1_000))
+        XCTAssertFalse(activityNeedsObservation(record: record(.reverted), nowMs: 1_000))
     }
 
     func testZeroRecipientIsRefusedByTheCore() throws {

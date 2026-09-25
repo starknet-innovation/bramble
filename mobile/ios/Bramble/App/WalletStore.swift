@@ -51,8 +51,10 @@ final class WalletStore {
     var deployment: DeploymentState = .unknown
     /// Open transfer plans, closed on lock (defence in depth: the core refuses them anyway).
     var plans: [TransferPlan] = []
-    /// When each pending record was last read (ms), so reconciliation keeps the extension's cadence.
+    /// When each observed record was last read (ms), so reconciliation keeps the extension's cadence.
     var observedAtMs: [String: UInt64] = [:]
+    /// Ticks `observeActivity` while the wallet is open (WalletStore+Send.swift); cancelled on lock.
+    @ObservationIgnored var observationTicker: Task<Void, Never>?
     /// The selected account's private-balance reading (WalletStore+Privacy.swift); never persisted.
     let privacy = PrivacyModel()
 
@@ -151,6 +153,8 @@ final class WalletStore {
 
     func lock() {
         idleTimer?.cancel()
+        observationTicker?.cancel()
+        observationTicker = nil
         privacy.reset()
         plans.forEach { $0.close() }
         plans = []
@@ -206,6 +210,7 @@ final class WalletStore {
         await reloadAccounts(ensure: true)
         route = .wallet
         scheduleIdleLock()
+        startActivityObservation()
         await refreshBalances(reset: true)
     }
 
