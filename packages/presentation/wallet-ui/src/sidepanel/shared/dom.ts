@@ -261,12 +261,23 @@ const confirmCopyGlyph = (button: HTMLButtonElement): void => {
   }, 1400);
 };
 
+// Controls already wired to the clipboard. Sub-regions re-bind their own root
+// (a deployment funding review binds its whole form on every check), so
+// without this a control gains one more listener per pass and copies, toasts,
+// and flips its glyph that many times per click.
+const boundCopyButtons = new WeakSet<HTMLButtonElement>();
+
 /**
  * Binds every `[data-copy]` control under the app root to the clipboard with
- * scoped-status or toast feedback and a transient check glyph.
+ * scoped-status or toast feedback and a transient check glyph. Idempotent: a
+ * control that is already bound is skipped, so any caller may re-bind a root.
  */
 export const bindCopyButtons = (app: Element | null): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
+    if (boundCopyButtons.has(button)) {
+      return;
+    }
+    boundCopyButtons.add(button);
     button.addEventListener("click", () => {
       const value = button.dataset["copy"];
       if (!value) {

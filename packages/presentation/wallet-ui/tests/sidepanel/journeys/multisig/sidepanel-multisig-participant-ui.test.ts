@@ -4,6 +4,7 @@ import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { canonicalAddress } from "@bramble/wallet-model/networks";
 import { walletContactCard } from "@bramble/wallet-model/preferences";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
+import { multisigSignersFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import type { MultisigUiDeps } from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -50,6 +51,57 @@ describe("multisig participant selection", () => {
     expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
       `${signer.publicKeyX} 0x789`,
     );
+    // The added row names the resolved address, and its copy control works
+    // although the row was cloned after the shell bound its copy buttons.
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+    const copy = app.querySelector<HTMLButtonElement>(
+      '[data-signer-public-key="0x789"] [data-manual-signer-copy]',
+    );
+    expect(copy?.hidden).toBe(false);
+    copy?.click();
+    await flush();
+    expect(copied).toEqual(["0xabc"]);
+  });
+
+  test("a signer change offers the chosen participant's address for copying", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const app = mount(
+      multisigSignersFlow(
+        fixture.status,
+        fixture.status.accounts[0] ?? null,
+        fixture.view,
+        defaultWalletPreferences(),
+      ),
+      await testClient(),
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>('[data-ms-manage="add"]');
+    const copy = (): HTMLButtonElement | null | undefined =>
+      form?.querySelector<HTMLButtonElement>("[data-participant-selection-copy]");
+    expect(copy()?.hidden).toBe(true);
+
+    form?.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    const address = app.querySelector<HTMLInputElement>("[data-participant-address-input]");
+    if (!address) throw new Error("participant address unavailable");
+    address.value = "0xabc";
+    app.querySelector<HTMLButtonElement>("[data-confirm-participant]")?.click();
+    await flush();
+    expect(copy()?.hidden).toBe(false);
+    expect(copy()?.dataset["copy"]).toBe("0xabc");
+
+    // A participant given only by public key has no address to copy.
+    form?.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    app.querySelector<HTMLButtonElement>('[data-participant-method="public-key"]')?.click();
+    const key = app.querySelector<HTMLInputElement>("[data-participant-key-input]");
+    if (!key) throw new Error("participant key unavailable");
+    key.value = "0x999";
+    app.querySelector<HTMLButtonElement>("[data-confirm-participant]")?.click();
+    await flush();
+    expect(copy()?.hidden).toBe(true);
   });
 
   test("adds and saves one complete wallet-card participant", async () => {
