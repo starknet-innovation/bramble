@@ -158,7 +158,7 @@ describe("design system", () => {
     // The private-key import keeps the contract choice for existing accounts.
     expect(markup).toContain('id="key-method-button"');
     expect(markup).toContain("Ready Account");
-    expect(markup).toContain("Bramble Account — Recommended");
+    expect(markup).toContain("Bramble Account");
     expect(markup).toContain("Starknet Mainnet");
   });
 });

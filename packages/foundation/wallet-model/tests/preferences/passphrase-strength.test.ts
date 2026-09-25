@@ -42,13 +42,14 @@ describe("estimatePassphraseStrength", () => {
     expect(estimatePassphraseStrength("aaaaaaaaaaaa").level).toBe("weak");
   });
 
-  test("advises a longer passphrase below the recommended length without refusing it", () => {
-    // Accepted, so the user is never blocked — but the hint names the cheapest
-    // way to improve it. At or above the recommended length the advice stops.
-    expect(estimatePassphraseStrength("Tr0ub4dor&3").hint).toContain(
-      `${RECOMMENDED_VAULT_PASSPHRASE_LENGTH}+ characters is safer`,
-    );
-    expect(estimatePassphraseStrength("Tr0ub4dor&3xyz9!").hint).toBe("Strong passphrase");
+  test("names the band it reached and nothing else", () => {
+    // The hint is the band. Length advice used to ride along with it, which put
+    // a third sentence on a screen whose bar already showed the same thing;
+    // accepting a short passphrase is still not blocked.
+    expect(estimatePassphraseStrength("Tr0ub4dor&3").hint).toBe("Strong");
+    expect(estimatePassphraseStrength("Tr0ub4dor&3xyz9!").hint).toBe("Strong");
+    expect(estimatePassphraseStrength("correcthorse").hint).toBe("Fair");
+    expect(estimatePassphraseStrength("aaaaaaaaaaaa").hint).toBe("Weak");
   });
 
   test("bands a valid passphrase by estimated entropy", () => {

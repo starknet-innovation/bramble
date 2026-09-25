@@ -13,10 +13,7 @@ import {
   textareaField,
   textField,
 } from "@bramble/ui-kit/fields";
-import {
-  MIN_VAULT_PASSPHRASE_LENGTH,
-  RECOMMENDED_VAULT_PASSPHRASE_LENGTH,
-} from "@bramble/wallet-model/passphrase";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -31,11 +28,15 @@ const flowBack = (label: string): string =>
     variant: "ghost",
   });
 
-const stepHead = (iconName: "book" | "lock" | "shield" | "wallet", title: string, lede: string) => `
+const stepHead = (
+  iconName: "book" | "lock" | "shield" | "wallet",
+  title: string,
+  lede?: string,
+) => `
   <div class="onboarding-step-head">
     <div class="onboarding-step-icon">${icon(iconName)}</div>
     <h1>${title}</h1>
-    <p class="lede">${lede}</p>
+    ${lede ? `<p class="lede">${lede}</p>` : ""}
   </div>`;
 
 const mainnetAcknowledgement = (name: string, id: string, text: string): string =>
@@ -49,13 +50,13 @@ const option = (
   id: string,
   iconName: "book" | "link" | "shield",
   title: string,
-  description: string,
+  description?: string,
 ): string => `
   <button class="onboarding-option" id="${id}" type="button">
     <span class="onboarding-option-icon">${icon(iconName)}</span>
     <span class="onboarding-option-copy">
       <strong>${title}</strong>
-      <span>${description}</span>
+      ${description ? `<span>${description}</span>` : ""}
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -127,7 +128,7 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   return `
   ${textField({
     autocomplete: "new-password",
-    hint: `Use at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters; ${RECOMMENDED_VAULT_PASSPHRASE_LENGTH} or more is safer. This unlocks the encrypted vault on this device.`,
+    hint: `${MIN_VAULT_PASSPHRASE_LENGTH} characters minimum`,
     label: "Vault passphrase",
     minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: passphraseName,
@@ -148,7 +149,7 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
     <span class="password-requirement-bar"><span></span></span>
     <span data-password-result>Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters</span>
   </div>
-  ${weakPassphraseAcknowledgement(prefix)}`;
+  ${prefix === "ledger" ? "" : weakPassphraseAcknowledgement(prefix)}`;
 };
 
 const welcomeStep = (ready: boolean): string => `
@@ -172,20 +173,15 @@ const welcomeStep = (ready: boolean): string => `
 const methodStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="method" hidden>
     ${flowBack("Back to welcome")}
-    ${stepHead("wallet", "Choose how to add your wallet", "Bring an existing Starknet wallet into Bramble.")}
+    ${stepHead("wallet", "Import wallet")}
     <div class="onboarding-options">
       ${option(
         "recovery-method-button",
         "book",
         "Recovery phrase",
-        "Import 12 or 24 recovery words from another wallet.",
+        "Import a recovery phrase from a Bramble, Ready or Braavos wallet.",
       )}
-      ${option(
-        "ledger-method-button",
-        "shield",
-        "Ledger hardware wallet",
-        "Connect a Ledger and choose accounts without exposing keys.",
-      )}
+      ${option("ledger-method-button", "shield", "Ledger hardware wallet")}
       ${option(
         "key-method-button",
         "link",
@@ -198,7 +194,7 @@ const methodStep = (): string => `
 const recoveryStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery" hidden>
     ${flowBack("Back to wallet methods")}
-    ${stepHead("book", "Enter your recovery phrase", "Type each word, or paste the complete phrase into the first field. Unknown words are flagged as you go.")}
+    ${stepHead("book", "Enter your recovery phrase")}
     <div class="onboarding-fields recovery-fields">
       <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
       <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
@@ -280,33 +276,40 @@ const passwordStep = (): string => `
 const importKeyStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="import-key" hidden>
     ${flowBack("Back to wallet methods")}
-    ${stepHead("wallet", "Import from a private key", "Add one existing account from its raw Starknet key. The key is validated and stored only inside the encrypted vault.")}
+    ${stepHead("wallet", "Import from a private key")}
     <div class="onboarding-fields">
       <p class="review-flag" role="note">Anyone with this key controls the account. Paste it only on a device you trust.</p>
       ${selectField({
-        hint: "Choose the contract that already owns this key. A different choice derives a different address.",
-        label: "Account contract",
+        label: "Account type",
         name: "importKeyContractType",
         options: [
-          { label: "Bramble Account — Recommended", value: "openzeppelin" },
+          { label: "Bramble Account", value: "openzeppelin" },
           { label: "Ready Account", value: "argent" },
         ],
         selected: "openzeppelin",
       })}
       ${textareaField({
         autocomplete: "off",
-        hint: "The key never leaves this device unencrypted.",
+        hint: "This key is stored encrypted in Bramble's key store.",
         label: "Raw Starknet private key",
         name: "importKeyRaw",
         placeholder: "0x…",
         required: true,
         spellcheck: false,
       })}
+      <div id="import-key-salt-field" hidden>
+        ${textField({
+          autocomplete: "off",
+          label: "Ready deployment salt (optional)",
+          name: "importKeySalt",
+          placeholder: "0x…",
+          spellcheck: false,
+        })}
+      </div>
       ${textField({
         autocomplete: "off",
-        hint: "Ready accounts only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
-        label: "Ready deployment salt (optional)",
-        name: "importKeySalt",
+        label: "Account address (optional)",
+        name: "importKeyAddress",
         placeholder: "0x…",
         spellcheck: false,
       })}
@@ -423,7 +426,7 @@ const accountStep = (): string => `
 const ledgerStep = (status: WalletStatus): string => `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
     ${flowBack("Back to wallet methods")}
-    ${stepHead("lock", "Protect the Ledger registry", "Create the local vault passphrase used to unlock account labels and settings on this device.")}
+    ${stepHead("lock", "Choose a password")}
     <form id="ledger-setup-form" class="onboarding-fields">
       ${passwordFields("ledger")}
       <p id="ledger-passphrase-result" role="status"></p>

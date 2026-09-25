@@ -66,6 +66,15 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
     refreshGate();
     deps.showStep("import-key");
   });
+  // The salt belongs to a Ready account: it is the DEPLOY_ACCOUNT salt that
+  // recovers an externally created one. Shown only when that contract is chosen,
+  // so the field is not a question the other account type has to read past.
+  const saltField = form.querySelector<HTMLElement>("#import-key-salt-field");
+  const syncSaltField = (): void => {
+    saltField?.toggleAttribute("hidden", contractSelect?.value !== "argent");
+  };
+  contractSelect?.addEventListener("change", syncSaltField);
+  syncSaltField();
   rawInput?.addEventListener("input", refreshGate);
   ackInput?.addEventListener("change", refreshGate);
   continueButton?.addEventListener("click", () => {
