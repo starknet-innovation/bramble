@@ -4,7 +4,11 @@ import SwiftUI
 // leading tone chip, the message, and on errors a copy control for the full details. It springs
 // in with the momentum spring, can be swiped away, and stays for the tone's lifetime.
 
-enum ToastTone: Equatable { case success, error }
+/// `ToastTone` is `"error" | "success"` in the extension, which has no warning tone. `neutral` is
+/// its untoned `.toast`: the `.toast-icon` chip with no tone fill and the panel's text colour, for
+/// a caution that is neither a failure nor a confirmation. Like success it has no copy control,
+/// no error haptic, and the non-error lifetime.
+enum ToastTone: Equatable { case success, error, neutral }
 
 struct ToastView: View {
     @Environment(\.skin) private var skin
@@ -17,13 +21,10 @@ struct ToastView: View {
     var body: some View {
         let metrics = BrambleMetrics.Toast.self
         HStack(spacing: metrics.gap) {
-            BrambleIcon(tone == .error ? .alert : .check, size: metrics.glyph)
-                .foregroundStyle(tone == .error ? skin.danger : skin.positive)
+            BrambleIcon(tone == .success ? .check : .alert, size: metrics.glyph)
+                .foregroundStyle(chipInk)
                 .frame(width: metrics.iconSize, height: metrics.iconSize)
-                .background(
-                    tone == .error ? skin.dangerSoft : skin.positiveSoft,
-                    in: RoundedRectangle(cornerRadius: metrics.iconRadius, style: .continuous)
-                )
+                .background(chipFill, in: RoundedRectangle(cornerRadius: metrics.iconRadius, style: .continuous))
             Text(message)
                 .brambleText(BrambleTypeScale.label.sized(metrics.fontSize), weight: metrics.weight)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -60,14 +61,64 @@ struct ToastView: View {
         .elevation(BrambleElevation.toast)
         .accessibilityElement(children: .contain)
     }
+
+    /// `.toast.success|error .toast-icon { color }`; the untoned chip inherits `.toast`'s text.
+    private var chipInk: Color {
+        switch tone {
+        case .success:
+            skin.positive
+
+        case .error:
+            skin.danger
+
+        case .neutral:
+            skin.text
+        }
+    }
+
+    /// `.toast.success|error .toast-icon { background }`; the untoned chip has none.
+    private var chipFill: Color {
+        switch tone {
+        case .success:
+            skin.positiveSoft
+
+        case .error:
+            skin.dangerSoft
+
+        case .neutral:
+            .clear
+        }
+    }
 }
 
-/// Pins one toast above the dock (`.toast-stack`), springs it in, dismisses it after its tone's
-/// lifetime or on a swipe past the extension's distance/velocity thresholds.
+/// Where the current screen's foot action begins. `.toast-stack` sits `SPACE.md` above the dock; a
+/// screen with no dock (unlock, onboarding) offers its primary action instead with `toastAnchor()`,
+/// so the toast stacks just above that action rather than at the dock's offset, which on those
+/// screens (and above the keyboard) falls between the action and the content over it.
+struct ToastAnchorKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
+    }
+}
+
+extension View {
+    /// Marks this view as the screen's foot action: toasts stack `.toast-stack`'s inset above it.
+    func toastAnchor() -> some View {
+        anchorPreference(key: ToastAnchorKey.self, value: .bounds) { $0 }
+    }
+}
+
+/// Pins one toast above the dock (`.toast-stack`), or above the screen's foot action when it marks
+/// one (`toastAnchor()`), springs it in, dismisses it after its tone's lifetime or on a swipe past
+/// the extension's distance/velocity thresholds.
 struct ToastHost: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let message: String?
     var tone: ToastTone = .error
+    /// Distance from the host's bottom edge to the toast; nil for the dock offset (`stackBottom`).
+    var bottom: CGFloat?
     let dismiss: () -> Void
     @State private var dragOffsetX: CGFloat = 0
     @State private var swiped = 0
@@ -100,10 +151,15 @@ struct ToastHost: View {
             }
         }
         .padding(.horizontal, metrics.stackInset)
-        .padding(.bottom, metrics.stackBottom)
+        .padding(.bottom, bottom ?? metrics.stackBottom)
         .animation(BrambleMotionPolicy.animation(BrambleSpring.momentum, reduceMotion: reduceMotion), value: message)
         .brambleHaptic(.error, trigger: message) { _, new in new != nil && tone == .error }
         .brambleHaptic(.dismiss, trigger: swiped)
+    }
+
+    /// The bottom offset that stacks the toast `stackInset` above `anchor` in `proxy`'s space.
+    static func offset(above anchor: Anchor<CGRect>?, in proxy: GeometryProxy) -> CGFloat? {
+        anchor.map { max(0, proxy.size.height - proxy[$0].minY) + BrambleMetrics.Toast.stackInset }
     }
 
     /// `translateY(18px) scale(0.95)` and transparent, springing to rest; a fade under Reduce Motion.

@@ -108,9 +108,18 @@ struct RootView: View {
                 case .wallet:
                     WalletShell()
                 }
-                // Errors, plus the few confirmations raised through `store.notify`; other success is
-                // shown in place by each screen.
-                ToastHost(message: store.toast, tone: store.toastTone) { store.toast = nil }
+            }
+            // Errors, plus the few confirmations raised through `store.notify`; other success is
+            // shown in place by each screen. Stacked above the screen's foot action when it marks
+            // one, else at the dock offset.
+            .overlayPreferenceValue(ToastAnchorKey.self) { anchor in
+                GeometryReader { proxy in
+                    ToastHost(
+                        message: store.toast,
+                        tone: store.toastTone,
+                        bottom: ToastHost.offset(above: anchor, in: proxy)
+                    ) { store.toast = nil }
+                }
             }
         }
         .animation(

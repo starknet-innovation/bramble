@@ -49,6 +49,7 @@ struct UnlockView: View {
                     PillButton("Unlock", busy: store.busy, action: unlock)
                         .disabled(passphrase.isEmpty || remaining > 0)
                 }
+                .toastAnchor()
             }
             .padding(.top, gate.ctaTop)
             .padding(BrambleMetrics.Screen.shellPadding)

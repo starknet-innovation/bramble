@@ -39,7 +39,7 @@ private struct ScreenshotWarning: ViewModifier {
         content.onReceive(
             NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)
         ) { _ in
-            store.toast = BrambleCopy.screenshotWarning
+            store.warn(BrambleCopy.screenshotWarning)
         }
     }
 }

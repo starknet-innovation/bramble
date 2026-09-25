@@ -41,7 +41,13 @@ final class WalletStore {
     /// The message `notify` raised last. Only while it is still the toast does the toast take the
     /// success tone, so an error assigned over a notice is always shown as an error.
     @ObservationIgnored private var notice: String?
-    var toastTone: ToastTone { toast != nil && toast == notice ? .success : .error }
+    /// The message `warn` raised last; while it is still the toast, the toast is neutral.
+    @ObservationIgnored private var caution: String?
+    var toastTone: ToastTone {
+        guard let toast else { return .error }
+        if toast == notice { return .success }
+        return toast == caution ? .neutral : .error
+    }
     /// Lock, backoff and biometric state from the core (passive; never renews the session).
     private(set) var security: SecurityStatus
     /// When the next passphrase attempt is allowed, on the monotonic clock; nil when it is now.
@@ -86,6 +92,13 @@ final class WalletStore {
     /// Shows a confirmation (not an error) as the toast, in the success tone.
     func notify(_ message: String) {
         notice = message
+        toast = message
+    }
+
+    /// Shows a caution that is neither an error nor a confirmation (the screenshot warning) in the
+    /// neutral tone: the extension's toast has no warning tone, so this is its untoned `.toast`.
+    func warn(_ message: String) {
+        caution = message
         toast = message
     }
 
