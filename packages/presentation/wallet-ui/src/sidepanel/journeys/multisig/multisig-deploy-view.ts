@@ -274,6 +274,7 @@ export const multisigDeployFlow = (
               <div class="multisig-selected-signer" data-manual-signer role="listitem">
                 <span class="option-avatar">${icon("user")}</span>
                 <span class="option-copy"><strong data-manual-signer-name>Participant</strong><span class="option-sub" data-manual-signer-label></span></span>
+                ${inlineCopyButton("", "Copy participant address", { "data-manual-signer-copy": true, hidden: true })}
                 ${iconButton({
                   attributes: { "data-remove-signer-public-key": true },
                   icon: "x",

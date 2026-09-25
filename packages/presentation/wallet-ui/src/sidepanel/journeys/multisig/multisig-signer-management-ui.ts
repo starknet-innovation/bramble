@@ -60,6 +60,13 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         selectedKey.value = participant.publicKeyX;
         selectionName.textContent = participant.label;
         selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(participant.publicKeyX)}`;
+        const copy = selection.querySelector<HTMLButtonElement>(
+          "[data-participant-selection-copy]",
+        );
+        if (copy) {
+          copy.dataset["copy"] = participant.address ?? "";
+          copy.hidden = !participant.address;
+        }
         selection.hidden = false;
         button.disabled = false;
         return null;

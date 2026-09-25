@@ -25,6 +25,7 @@ import {
   accountLabel,
   flowHeader,
   flowScreen,
+  inlineCopyButton,
   noAccountEmpty,
   walletMenuRow,
 } from "../../shared/parts";
@@ -205,7 +206,7 @@ const hiddenRow = (nft: WatchedNft): string => `
   <li class="address-line">
     <div class="stack-tight">
       <strong>${escapeHtml(watchedTitle(nft))}</strong>
-      <code>${escapeHtml(accountLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>
+      <span class="copy-line"><code title="${escapeHtml(nft.contract)}">${escapeHtml(accountLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>${inlineCopyButton(nft.contract, "Copy collection contract address")}</span>
     </div>
     ${button({
       attributes: { "data-nft-spam": nft.id, "data-nft-spam-value": "false" },
