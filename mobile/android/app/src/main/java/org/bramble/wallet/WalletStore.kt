@@ -116,7 +116,10 @@ class WalletStore(
     /** True while a core call runs ([CoreCalls]); the screens disable their actions on it. */
     val busy: Boolean get() = calls.busy
 
-    /** Words of a just-created wallet; never persisted, cleared on finish or lock. */
+    /**
+     * Words of a just-created wallet, or of one whose backup is still pending (revealed through
+     * the core's password-checked path); never persisted, cleared on finish or lock.
+     */
     var pendingBackup by mutableStateOf(emptyList<String>())
         internal set
 
@@ -295,6 +298,11 @@ class WalletStore(
         accountState = AccountsSnapshot()
         if (calls.work(ticket) { core.recoveryPending() }) {
             route = Route.DISCOVERY
+            scheduleIdleLock()
+            return
+        }
+        if (calls.work(ticket) { core.backupPending() }) {
+            route = Route.BACKUP
             scheduleIdleLock()
             return
         }

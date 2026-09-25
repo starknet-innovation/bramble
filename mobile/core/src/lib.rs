@@ -14,6 +14,7 @@ mod account_names;
 mod account_store;
 mod activity;
 mod argent_multisig;
+mod backup;
 mod biometric;
 mod class_declared;
 mod clock;

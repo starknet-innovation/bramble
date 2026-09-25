@@ -17,7 +17,9 @@ private enum WalletDefaults {
 @Observable
 final class WalletStore {
     /// `discovery`: an imported vault still waiting for "Find your accounts" (recovery pending).
-    enum Route: Equatable { case onboarding, locked, discovery, wallet }
+    /// `backup`: a created wallet whose Confirm backup step is still owed (the core's
+    /// `backupPending`), resumed at Save phrase after every unlock until it is confirmed.
+    enum Route: Equatable { case onboarding, locked, discovery, backup, wallet }
     enum Tab: Equatable { case home, activity, settings }
 
     private(set) var route: Route = .onboarding
@@ -31,7 +33,8 @@ final class WalletStore {
     /// an account (send, deploy, activity) names it by `activeRecord.id`, never by index.
     var activeRecord: AccountRecord?
     private(set) var busy = false
-    /// Words of a just-created wallet; never persisted, cleared on finish or lock.
+    /// Words of a just-created wallet, or of one whose backup is still pending (revealed through
+    /// the core's password-checked path); never persisted, cleared on finish or lock.
     private(set) var pendingBackup: [String] = []
     /// A transient message shown as a toast: an error unless it was raised through `notify`.
     var toast: String?
@@ -130,6 +133,19 @@ final class WalletStore {
         return try await work { try walletCore.activeAccount() }
     }
 
+    /// Records that Confirm backup succeeded, so no later unlock returns to Save phrase. Throws
+    /// the core's error; the flag then stays set and the step is offered again.
+    func confirmBackup() async throws {
+        let walletCore = core
+        try await work { try walletCore.confirmBackup() }
+    }
+
+    /// Reveals the words of a wallet whose backup is still pending, for Save phrase, after the
+    /// passphrase check the core applies to every reveal (throttled and counted).
+    func revealPendingBackup(password: String) async throws {
+        pendingBackup = try await revealPhrase(password: password)
+    }
+
     /// Leaves onboarding for the wallet; the backup words are dropped here.
     func finishOnboarding() async {
         pendingBackup = []
@@ -148,6 +164,11 @@ final class WalletStore {
         }
         biometricNotice = nil
         refreshSecurity()
+        // A backup still owed resumes at Save phrase with the words revealed by this same,
+        // just-checked passphrase; if that reveal fails, the backup step asks for it again.
+        if (try? walletCore.backupPending()) == true {
+            pendingBackup = (try? await revealPhrase(password: password)) ?? []
+        }
         await enterWallet()
     }
 
@@ -207,6 +228,11 @@ final class WalletStore {
             scheduleIdleLock()
             return
         }
+        if (try? core.backupPending()) == true {
+            route = .backup
+            scheduleIdleLock()
+            return
+        }
         await reloadAccounts(ensure: true)
         route = .wallet
         scheduleIdleLock()
@@ -227,7 +253,7 @@ final class WalletStore {
     func scheduleIdleLock() {
         idleTimer?.cancel()
         guard let remaining = core.sessionRemainingMs() else {
-            if route == .wallet || route == .discovery { lock() }
+            if route == .wallet || route == .discovery || route == .backup { lock() }
             return
         }
         idleTimer = Task { [weak self] in
@@ -251,7 +277,7 @@ final class WalletStore {
         } catch {
             // Any other failure leaves the biometric slot as it is; the core still guards unlock.
         }
-        if route == .wallet || route == .discovery, core.status() != .unlocked { lock() }
+        if route == .wallet || route == .discovery || route == .backup, core.status() != .unlocked { lock() }
         refreshSecurity()
     }
 

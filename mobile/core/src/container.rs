@@ -1,10 +1,11 @@
-//! The vault container (vault versions 2 and 3): a random data-encryption key (DEK) seals the
+//! The vault container (vault versions 2 to 4): a random data-encryption key (DEK) seals the
 //! payload, and the DEK is wrapped by a passphrase slot (the extension's EncryptedEnvelope v3,
 //! unchanged) and, optionally, by a biometric slot keyed by a host-held wrap secret W.
 //!
 //! The container's `version` is the vault version (`migrations::VAULT_VERSION`), and it must
 //! equal the `version` of the payload it seals: a version-2 container holds vault-security's
-//! account-count payload, a version-3 container the account records (`account_store.rs`). The
+//! account-count payload, a version-3 or -4 container the account records (`account_store.rs`;
+//! version 4 adds `backupPending`). The
 //! payload is opaque bytes here; `migrations.rs` parses and upgrades it.
 //!
 //! The DEK is generated, wrapped, unwrapped and zeroized here and never crosses the FFI. Every
@@ -329,7 +330,7 @@ mod tests {
     fn only_known_container_versions_parse() {
         let key = SealingKey::fixed("fixture passphrase", [1; 16], &"ef".repeat(16));
         let file = seal_new(&key, &[3u8; 32], b"{}", &Randomness::draw().unwrap()).unwrap();
-        for (version, ok) in [(1, false), (2, true), (3, true), (4, false)] {
+        for (version, ok) in [(1, false), (2, true), (3, true), (4, true), (5, false)] {
             let text = serde_json::to_string(&VaultFile {
                 version,
                 ..file.clone()

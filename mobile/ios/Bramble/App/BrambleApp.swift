@@ -102,6 +102,9 @@ struct RootView: View {
                 case .discovery:
                     OnboardingFlow(resumingDiscovery: true)
 
+                case .backup:
+                    OnboardingFlow(resumingBackup: store.pendingBackup.isEmpty ? .revealBackup : .savePhrase)
+
                 case .wallet:
                     WalletShell()
                 }

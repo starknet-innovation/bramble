@@ -178,7 +178,7 @@ fn push_active(payload: &mut VaultPayload, record: StoredAccount) -> Result<(), 
 
 impl WalletCore {
     /// Applies `change` to the payload and re-seals it; on any failure the session is restored.
-    fn commit<T>(
+    pub(crate) fn commit<T>(
         &self,
         session: &mut Session,
         change: impl FnOnce(&mut VaultPayload) -> Result<T, CoreError>,

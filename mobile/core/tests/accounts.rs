@@ -277,7 +277,7 @@ fn a_version_one_vault_migrates_to_records_on_every_network() {
         NetworkId::Mainnet
     );
     let payload: Value = serde_json::from_str(&open_vault(&path, PASSWORD).unwrap()).unwrap();
-    assert_eq!(payload["version"], 3, "the migration was written back");
+    assert_eq!(payload["version"], 4, "the migration was written back");
     assert_eq!(payload["accounts"].as_array().unwrap().len(), 4);
 
     let (bad, _clock, core) = common::core();

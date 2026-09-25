@@ -51,6 +51,9 @@ fun Root(store: WalletStore) {
             // An imported vault still recovery pending resumes at "Find your accounts".
             Route.DISCOVERY -> OnboardingFlow(store, resumingDiscovery = true)
 
+            // A created vault whose backup is still owed resumes at Save phrase.
+            Route.BACKUP -> OnboardingFlow(store, resumingBackup = true)
+
             Route.WALLET -> WalletShell(store)
         }
         ToastHost(store, Modifier.align(Alignment.BottomCenter))
