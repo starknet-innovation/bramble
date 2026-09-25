@@ -123,17 +123,3 @@ export const estimatePassphraseStrength = (value: string): PassphraseStrength =>
   }
   return { hint: "Weak", level: "weak", ratio };
 };
-
-/**
- * Whether a passphrase is accepted but weak enough that the user should say so
- * deliberately before it protects a vault. Lowering the length floor means a
- * genuinely poor passphrase can now clear the validator, so the speed bump
- * moves from the validator to an explicit acknowledgement: nothing is refused,
- * but nothing poor is accepted silently either.
- *
- * False for a value that is not acceptable at all — that case is already
- * blocked, and asking someone to acknowledge a passphrase they cannot use
- * would be nonsense.
- */
-export const requiresWeakPassphraseAcknowledgement = (value: string): boolean =>
-  isVaultPassphrase(value) && estimatePassphraseStrength(value).level === "weak";

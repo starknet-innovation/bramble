@@ -139,7 +139,7 @@ export const startWalletUi = async (
       void guardedCopyPendingClear().then(() => globalThis.close());
     });
     bindOnboardingLaunch(app, () => globalThis.close());
-    bindOnboarding({ app, render, wallet });
+    bindOnboarding({ app, now, render, wallet });
     bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });
     bindUnlock({ app, render, wallet }, () => {
       activeView = "home";

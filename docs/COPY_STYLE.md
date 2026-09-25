@@ -48,7 +48,29 @@ the job; keep it that way.
 don't track". Spell it out when the sentence carries a security or irreversibility warning, where
 the full form lands harder and reads more deliberate:
 
-> Anyone with these words controls the wallet. Bramble cannot recover them for you.
+> Anyone with these words controls the wallet and its funds. Bramble cannot recover them for you.
+
+**State the consequence; do not collect consent.** First-run carried four "I understand this
+wallet can hold real funds on Starknet Mainnet" tickboxes and a fifth for a weak passphrase. A
+tickbox nobody can proceed without is not a decision, it is a click, and five of them taught the
+user to click past exactly the sentences that matter. The consequence goes in the copy, once, on
+the screen it belongs to; the button is the confirmation. This does not apply to a per-transaction
+choice the user really can decline — those stay.
+
+**Warn where the wallet hands over a secret, not where the user brings one.** "Save your recovery
+phrase" keeps its line, because Bramble just created something the user does not yet understand
+the weight of:
+
+> Anyone with these words controls the wallet and its funds. Bramble cannot recover them for you.
+
+The import screens do not. "Anyone with this key controls the account. Paste it only on a device
+you trust" arrives as the user is already pasting a key they already own onto a device they
+already chose — too late to be advice, so it reads as scolding. Both private-key import screens
+and the in-wallet phrase import carried a version of it; all three are gone.
+
+**A heading is not repeated by its lede.** A step that says "Create your vault passphrase" over a
+field labelled "Vault passphrase" does not also need "You will use this to unlock Bramble on this
+device". Drop the lede unless it carries a fact the heading and the controls do not.
 
 **Empty states open with what is absent**, then what to do about it if there is anything to do.
 "No tracked balances yet. Add or detect tokens to see them here."
@@ -86,6 +108,10 @@ does not restore — keeps every fact. Cut the words around the facts, not the f
 
 Before changing any string longer than about 25 words, list the facts it currently conveys, then
 check the rewrite still conveys each one.
+
+Cutting a disclosure outright is a separate, deliberate decision about whether the screen is the
+right place for it at all — see "Warn where the wallet hands over a secret" above — not something
+a tightening pass does on its way past.
 
 ## Copy that is not copy
 

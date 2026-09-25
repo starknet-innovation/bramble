@@ -133,7 +133,7 @@ describe("onboarding views", () => {
     expect(html).not.toContain("Ready accounts");
     expect(html).toContain("Select accounts");
     // Only the active Bramble candidate counts as detected.
-    expect(html).toContain("1 account detected");
+    expect(html).toContain("1 found");
     expect(html).toContain("Account 0");
     expect(html).toContain("Deployed");
     expect(html).toContain("1.5 STRK");
@@ -173,7 +173,7 @@ describe("onboarding views", () => {
     expect(html).not.toContain("data-account-group");
     expect(html).not.toContain("Bramble accounts");
     expect(html).not.toContain("<details");
-    expect(html).toContain("1 account detected");
+    expect(html).toContain("1 found");
     expect(html).toContain("Account 12");
     expect(html).toContain(`data-ledger-toggle="${ready(12).id}"`);
     // An idle Ready index is listed but not selectable, as on the Ledger route.

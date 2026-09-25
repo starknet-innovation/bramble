@@ -171,13 +171,12 @@ export const accountIdAddress = (accountId: string): string =>
   accountId.slice(accountId.indexOf(":") + 1);
 
 /**
- * Light summary text for an account-group disclosure: "N accounts detected"
- * when the scan found active (deployed or funded) accounts, empty otherwise.
- * Plain text (callers own the markup) shared by the recovery-phrase and Ledger
- * import pickers so the two flows describe detection identically.
+ * Count text for an account-group disclosure: how many active (deployed or
+ * funded) accounts the scan found in that family. Plain text (callers own the
+ * markup, and whether a zero is worth showing) shared by the recovery-phrase
+ * and Ledger import pickers so the two flows describe detection identically.
  */
-export const accountsDetectedText = (detected: number): string =>
-  detected === 0 ? "" : `${detected} ${detected === 1 ? "account" : "accounts"} detected`;
+export const accountsDetectedText = (detected: number): string => `${detected} found`;
 
 /**
  * Renders a native, repaint-persistent explanation for protocol concepts. The

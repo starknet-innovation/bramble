@@ -166,9 +166,16 @@ describe("onboarding phrase copy", () => {
     expect(copied).toEqual([SECOND]);
   });
 
-  test("shows the Reveal screen's warning and keeps the words out of the markup", async () => {
+  test("states the consequence once and keeps the words out of the markup", async () => {
     const app = await mountAtGenerated();
-    expect(app.querySelector("#generated-copy-note")?.textContent).toBe(GUARDED_COPY_NOTE);
+    // This screen states what holding the words means, not what the clipboard
+    // does; the clipboard note (GUARDED_COPY_NOTE) stays on the Reveal screen,
+    // which is where someone copies an existing wallet's phrase.
+    const note = app.querySelector("#generated-copy-note")?.textContent;
+    expect(note).toBe(
+      "Anyone with these words controls the wallet and its funds. Bramble cannot recover them for you.",
+    );
+    expect(note).not.toBe(GUARDED_COPY_NOTE);
     click(app, "#phrase-toggle");
     const html = copyButton(app)?.outerHTML ?? "";
     expect(html).not.toContain("data-copy");

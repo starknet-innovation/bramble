@@ -6,19 +6,12 @@
 
 import { BRAMBLE_WORDMARK } from "@bramble/ui-kit/brand-mark";
 import { button, iconButton } from "@bramble/ui-kit/controls";
-import {
-  checkboxField,
-  inputControl,
-  selectField,
-  textareaField,
-  textField,
-} from "@bramble/ui-kit/fields";
+import { inputControl, selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { GUARDED_COPY_NOTE } from "../../shared/guarded-copy";
 import { icon } from "../../shared/icons";
-import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
+import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 
 const flowBack = (label: string): string =>
   iconButton({
@@ -39,13 +32,6 @@ const stepHead = (
     <h1>${title}</h1>
     ${lede ? `<p class="lede">${lede}</p>` : ""}
   </div>`;
-
-const mainnetAcknowledgement = (name: string, id: string, text: string): string =>
-  checkboxField({
-    containerAttributes: { id },
-    name,
-    text,
-  });
 
 const option = (
   id: string,
@@ -94,8 +80,11 @@ export const recoveryWordInputs = (kind: "generated" | "import"): string =>
       )}</label>`,
   ).join("");
 
+// Labelled from the default positions so the static markup is coherent on its
+// own; `bindOnboarding` relabels each field to the positions actually asked as
+// soon as a phrase is generated.
 const backupVerifyInputs = (): string =>
-  BACKUP_VERIFY_POSITIONS.map((position, index) =>
+  DEFAULT_BACKUP_VERIFY_POSITIONS.map((position, index) =>
     textField({
       autocomplete: "off",
       autocapitalize: "off",
@@ -105,22 +94,6 @@ const backupVerifyInputs = (): string =>
       spellcheck: false,
     }),
   ).join("");
-
-/**
- * Acknowledgement shown only when the typed passphrase clears the length floor
- * but the meter still bands it weak. Rendered hidden; the binder reveals it and
- * folds it into the submit gate, so a weak passphrase is never refused and
- * never accepted without the user saying so.
- */
-const weakPassphraseAcknowledgement = (prefix: "" | "ledger"): string =>
-  checkboxField({
-    containerAttributes: {
-      hidden: true,
-      id: prefix === "ledger" ? "ledger-weak-passphrase-ack" : "weak-passphrase-ack",
-    },
-    name: prefix === "ledger" ? "ledgerWeakPassphraseAck" : "weakPassphraseAck",
-    text: "This passphrase is weak. I understand it is all that protects this wallet on this device.",
-  });
 
 const passwordFields = (prefix: "" | "ledger" = ""): string => {
   const passphraseName = prefix === "ledger" ? "ledgerVaultPassphrase" : "vaultPassphrase";
@@ -149,8 +122,7 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   <div class="password-requirement" aria-live="polite">
     <span class="password-requirement-bar"><span></span></span>
     <span data-password-result>Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters</span>
-  </div>
-  ${prefix === "ledger" ? "" : weakPassphraseAcknowledgement(prefix)}`;
+  </div>`;
 };
 
 const welcomeStep = (ready: boolean): string => `
@@ -236,8 +208,7 @@ const generatedStep = (): string => `
           variant: "ghost",
         })}
       </div>
-      <p class="hint" id="generated-copy-note">${GUARDED_COPY_NOTE}</p>
-      <p class="hint">Anyone with these words controls the wallet. Bramble cannot recover them for you.</p>
+      <p class="hint" id="generated-copy-note">Anyone with these words controls the wallet and its funds. Bramble cannot recover them for you.</p>
       <p id="generate-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -252,7 +223,7 @@ const generatedStep = (): string => `
 const verifyStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="verify" hidden>
     ${flowBack("Back to recovery phrase")}
-    ${stepHead("shield", "Confirm your backup", "Enter the requested words to make sure your offline copy is accurate.")}
+    ${stepHead("shield", "Confirm your backup")}
     <div class="onboarding-fields">
       <div class="verify-grid">${backupVerifyInputs()}</div>
       <p id="verify-result" role="status"></p>
@@ -271,7 +242,7 @@ const verifyStep = (): string => `
 const passwordStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="password" hidden>
     ${flowBack("Back")}
-    ${stepHead("lock", "Create your vault passphrase", "You will use this to unlock Bramble on this device.")}
+    ${stepHead("lock", "Create your vault passphrase")}
     <div class="onboarding-fields">
       <input name="accountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields()}
@@ -291,7 +262,6 @@ const importKeyStep = (): string => `
     ${flowBack("Back to wallet methods")}
     ${stepHead("wallet", "Import from a private key")}
     <div class="onboarding-fields">
-      <p class="review-flag" role="note">Anyone with this key controls the account. Paste it only on a device you trust.</p>
       ${selectField({
         label: "Account type",
         name: "importKeyContractType",
@@ -326,11 +296,6 @@ const importKeyStep = (): string => `
         placeholder: "0x…",
         spellcheck: false,
       })}
-      ${mainnetAcknowledgement(
-        "importKeyMainnetAck",
-        "import-key-mainnet-ack",
-        "I understand this wallet can hold real funds on Starknet Mainnet.",
-      )}
       <p id="import-key-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -345,28 +310,28 @@ const importKeyStep = (): string => `
 /**
  * The grouped account-scan controls shared by first-run recovery and the
  * in-wallet "Import a recovery phrase" flow, so both surfaces render the same
- * detection, selection, and acknowledgement semantics for one binder
- * (`bindRecoveryAccountUi`).
+ * detection and selection semantics for one binder (`bindRecoveryAccountUi`).
+ * Each family's count is filled in by that binder, never rendered here.
  */
-export const recoveryScanFields = (restoreLabel: string): string => `
+export const recoveryScanFields = (): string => `
       <div class="section-head">
         <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
         ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: "Retry account search" })}
       </div>
       <details class="disclosure account-group" data-recovery-group="openzeppelin">
-        <summary>Bramble accounts<span data-detected></span></summary>
+        <summary>Bramble accounts<span class="eyebrow" data-detected></span></summary>
         <div class="disclosure-body">
           <ul class="allowance-list" aria-label="Recovered Bramble accounts"></ul>
         </div>
       </details>
       <details class="disclosure account-group" data-recovery-group="argent">
-        <summary>Ready accounts<span data-detected></span></summary>
+        <summary>Ready accounts<span class="eyebrow" data-detected></span></summary>
         <div class="disclosure-body">
           <ul class="allowance-list" aria-label="Recovered Ready accounts"></ul>
         </div>
       </details>
       <details class="disclosure account-group" data-recovery-group="braavos">
-        <summary>Braavos accounts<span data-detected></span></summary>
+        <summary>Braavos accounts<span class="eyebrow" data-detected></span></summary>
         <div class="disclosure-body">
           <ul class="allowance-list" aria-label="Recovered Braavos accounts"></ul>
         </div>
@@ -378,19 +343,14 @@ export const recoveryScanFields = (restoreLabel: string): string => `
           ${button({ attributes: { id: "recovery-manual-search" }, label: "Check this index", variant: "secondary" })}
         </div>
       </details>
-      ${mainnetAcknowledgement(
-        "recoveryMainnetAck",
-        "recovery-mainnet-ack",
-        `I checked these account types and indices and want to ${restoreLabel} on Starknet Mainnet.`,
-      )}
       <p id="recovery-accounts-result" role="status"></p>`;
 
 const recoveryAccountsStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
     ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts", "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. Accounts with on-chain activity are selected automatically.")}
+    ${stepHead("wallet", "Find your accounts")}
     <div class="onboarding-fields">
-${recoveryScanFields("restore the selected accounts")}
+${recoveryScanFields()}
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -404,7 +364,7 @@ ${recoveryScanFields("restore the selected accounts")}
 const accountStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="accounts" hidden>
     ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Review your account", "Confirm the derived public address, then add it to this wallet.")}
+    ${stepHead("wallet", "Review your account")}
     <div class="onboarding-fields">
       <button
         class="onboarding-account"
@@ -419,11 +379,6 @@ const accountStep = (): string => `
         </span>
         <span class="onboarding-account-check">${icon("check")}</span>
       </button>
-      ${mainnetAcknowledgement(
-        "mainnetAck",
-        "mainnet-ack",
-        "I understand this wallet can hold real funds on Starknet Mainnet.",
-      )}
       <p id="form-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -443,11 +398,6 @@ const ledgerStep = (status: WalletStatus): string => `
     <form id="ledger-setup-form" class="onboarding-fields">
       ${passwordFields("ledger")}
       <p id="ledger-passphrase-result" role="status"></p>
-      ${mainnetAcknowledgement(
-        "ledgerMainnetAck",
-        "ledger-mainnet-ack",
-        "I understand this wallet can hold real funds on Starknet Mainnet.",
-      )}
       <div class="onboarding-step-cta">
         ${button({
           attributes: { "data-ledger-first-run": true, id: "ledger-setup-button" },

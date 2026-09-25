@@ -29,7 +29,6 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
     ${gateBrand()}
     <div class="gate-head">
       <h1>Welcome back</h1>
-      ${request ? '<p class="lede">Unlock to review the wallet request waiting for you.</p>' : ""}
     </div>
     ${
       request

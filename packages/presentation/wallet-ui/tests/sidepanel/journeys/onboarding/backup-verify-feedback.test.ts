@@ -9,7 +9,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import {
   BACKUP_VERIFY_COPY,
-  BACKUP_VERIFY_POSITIONS,
+  backupVerifyPositions,
+  DEFAULT_BACKUP_VERIFY_POSITIONS,
 } from "../../../../src/sidepanel/journeys/onboarding/backup-verify";
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
@@ -23,7 +24,7 @@ afterAll(unregisterDom);
 // Positional placeholders stand in for generated words: the step only compares
 // what is typed against the words at the requested positions.
 const PLACEHOLDER = Array.from({ length: 12 }, (_, index) => `w${index + 1}`).join(" ");
-const MATCHING = BACKUP_VERIFY_POSITIONS.map((position) => `w${position}`);
+const MATCHING = DEFAULT_BACKUP_VERIFY_POSITIONS.map((position) => `w${position}`);
 
 const status: WalletStatus = {
   accountCount: 0,
@@ -69,13 +70,20 @@ const statusLine = (app: Element): HTMLElement | null => app.querySelector("#ver
 const continueDisabled = (app: Element): boolean | undefined =>
   app.querySelector<HTMLButtonElement>("#verify-continue")?.disabled;
 
-const mountAtVerify = async (): Promise<Element> => {
+/** The visible label of each confirmation field, which is its accessible name. */
+const verifyLabels = (app: Element): readonly string[] =>
+  [...app.querySelectorAll(".verify-grid label > span:first-child")].map(
+    (span) => span.textContent ?? "",
+  );
+
+const mountAtVerify = async (now?: () => number): Promise<Element> => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
   bindOnboarding({
     app,
+    ...(now ? { now } : {}),
     render: () => Promise.resolve(),
     wallet: {
       generateMnemonic: () => Promise.resolve(PLACEHOLDER),
@@ -92,6 +100,29 @@ const mountAtVerify = async (): Promise<Element> => {
 describe("backup verification feedback", () => {
   beforeEach(() => {
     document.body.replaceChildren();
+  });
+
+  test("asks for the clock's positions and names them on the fields", async () => {
+    // Two wallets created at different moments are confirmed at different
+    // positions, so the three words of the first are not the answer to the
+    // second. The label is the field's accessible name, so it has to move with
+    // the predicate or the form would ask for one word and check another.
+    const reading = 2 + 4 * 2 + 16 * 2;
+    const app = await mountAtVerify(() => reading);
+    expect(backupVerifyPositions(12, reading)).toEqual([3, 7, 11]);
+    expect(verifyLabels(app)).toEqual(["Word 3", "Word 7", "Word 11"]);
+    type(app, 0, "w3");
+    type(app, 1, "w7");
+    type(app, 2, "w11");
+    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.confirmed);
+    expect(continueDisabled(app)).toBe(false);
+  });
+
+  test("falls back to the default positions with no clock injected", async () => {
+    const app = await mountAtVerify();
+    expect(verifyLabels(app)).toEqual(
+      DEFAULT_BACKUP_VERIFY_POSITIONS.map((position) => `Word ${position}`),
+    );
   });
 
   test("an untouched form asks for the words, in the neutral tone", async () => {

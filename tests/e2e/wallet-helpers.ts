@@ -2,7 +2,6 @@
  * Shared side-panel helpers for extension E2E tests.
  */
 
-import { BACKUP_VERIFY_POSITIONS } from "@bramble/wallet-ui/lab";
 import type { Page, Route } from "@playwright/test";
 import { expect } from "@playwright/test";
 
@@ -48,21 +47,18 @@ const fullScreenSetup = async (
   };
 };
 
-const acknowledgeMainnetIfPresent = async (sidepanel: Page): Promise<void> => {
-  const checkbox = sidepanel.locator('input[name="mainnetAck"]');
-  if ((await checkbox.count()) === 0 || !(await checkbox.isVisible())) {
-    return;
-  }
-  await checkbox.check();
-};
-
 /**
- * Fills backup-verification inputs using the same positions as onboarding UI.
+ * Fills the backup-verification inputs. Which words are asked varies per wallet,
+ * so the positions are read off the field labels rather than assumed — which
+ * also proves the labels name the words the predicate actually checks.
  */
 const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> => {
   const words = phraseWords(phrase);
   await expect(sidepanel.getByRole("heading", { name: "Confirm your backup" })).toBeVisible();
-  for (const [index, position] of BACKUP_VERIFY_POSITIONS.entries()) {
+  const labels = await sidepanel.locator(".verify-grid label > span:first-child").allTextContents();
+  expect(labels.length).toBeGreaterThan(0);
+  for (const [index, label] of labels.entries()) {
+    const position = Number(label.replace(/\D+/g, ""));
     await sidepanel.locator(`input[name="verify-${index}"]`).fill(words[position - 1] ?? "");
   }
   await expect(sidepanel.locator("#verify-result")).toHaveText("Backup confirmed.");
@@ -77,7 +73,6 @@ const protectAndSelectAccount = async (
   await sidepanel.getByRole("button", { name: "Review account" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Review your account" })).toBeVisible();
   await sidepanel.locator("#account-preview").click();
-  await acknowledgeMainnetIfPresent(sidepanel);
   await expect(sidepanel.getByRole("button", { name: "Add selected account" })).toBeEnabled();
   await sidepanel.getByRole("button", { name: "Add selected account" }).click();
 };
@@ -145,7 +140,6 @@ const protectAndRecoverAccounts = async (onboarding: Page, passphrase: string): 
   const brambleGroup = onboarding.locator('[data-recovery-group="openzeppelin"]');
   await brambleGroup.locator("summary").click();
   await brambleGroup.locator('input[type="checkbox"]').first().check();
-  await onboarding.locator('input[name="recoveryMainnetAck"]').check();
   await onboarding.getByRole("button", { name: "Restore selected accounts" }).click();
 };
 
