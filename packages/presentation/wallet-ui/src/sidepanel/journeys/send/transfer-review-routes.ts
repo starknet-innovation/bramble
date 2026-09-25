@@ -93,12 +93,12 @@ const networkFeeHtml = (route: SendRoute, state: RouteFeeState, poolFee: string)
     if (total !== undefined && cut === null) {
       // The withdrawal does not decompose against the known pool fee, so it is
       // reported whole rather than split into parts that were guessed.
-      return `${feeLine("Fee taken from your private balance", formatFri(total))}${relayFee ? feeLine("Relay fee recipient", `${relayFee.recipient} (${relayFee.token})`) : ""}${poolFee}`;
+      return `${feeLine("Fee taken from your private balance", formatFri(total))}${poolFee}`;
     }
     return `${feeLine(
       "Estimated fee",
       cut === null || cut === 0n ? "Sponsored" : formatFri(`0x${cut.toString(16)}`),
-    )}${relayFee ? feeLine("Relay fee recipient", `${relayFee.recipient} (${relayFee.token})`) : ""}${poolFee}`;
+    )}${poolFee}`;
   }
   const estimate = state.review
     ? reviewFeeSection(state.review, { id: "review-retry-fee" }, { extra: poolFee, rule: false })

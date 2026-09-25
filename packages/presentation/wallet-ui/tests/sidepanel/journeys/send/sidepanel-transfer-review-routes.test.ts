@@ -160,7 +160,8 @@ describe("route fee lines", () => {
     // Gas is the paymaster's; the pool's charge is named as such rather than
     // billed as network gas.
     expect(html).toContain("Estimated fee: Sponsored");
-    expect(html).toContain("Relay fee recipient: 0x2 (0x3)");
+    // The relay's recipient address is not a cost the reader decides on.
+    expect(html).not.toContain("Relay fee recipient");
     expect(html).toContain("Pool fee: 6 STRK");
   });
 
