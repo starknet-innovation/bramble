@@ -108,7 +108,7 @@ final class OnboardingFlowTests: XCTestCase {
         if !row.isSelected { row.tap() }
         snapshot(app, "find-accounts")
         app.swipeUp()
-        tap(app.buttons[UITest.restoreAcknowledgement])
+        tap(UITest.restoreAcknowledgementButton(app))
         tap(app.buttons["Restore selected accounts"])
     }
 

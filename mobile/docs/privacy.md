@@ -421,14 +421,16 @@ reset, a locked core never posts, Swift state never holds the key, cleartext ref
 acknowledgement and no CI marker is set; read-only; sends that wallet's viewing key to the Mainnet
 discovery service, as the extension would. Run only with the wallet owner's authorisation.
 
-**XCUITest** (`BrambleUITests/PrivacyFlowTests.swift`), only on the run-owned "Bramble privacy"
-simulator, with the DEBUG-only `-BramblePrivacyFixture <scenario>` beside `-BrambleRpcFixture`:
-registered (unified "100.50", "0.50 ETH", "Includes shielded balances", tile → Unsupported),
-unregistered (row, Receive notice, "Enable privacy" → Unsupported), service-failed (retry row,
-service blocker), undeployed-funded (deploy blocker, **no** deploy button), undeployed-unfunded
-(tile → Receive), Sepolia (network blocker). A launch with only `-BrambleRpcFixture` (Send's
-suite) gets an `offline` privacy fixture, and the live onboarding suite passes `offline`, so no
-UI test sends a viewing key anywhere.
+**XCUITest** (`BrambleUITests/PrivacyFlowTests.swift`), with the DEBUG-only
+`-BramblePrivacyFixture <scenario>` beside the offline node `-uiTestOfflineFixtures <state>` (which
+also answers the portfolio's balance reads): registered (unified ETH row, "Includes shielded
+balances", token detail's "Private balance" with Shield and Unshield disabled, tile → Unsupported),
+unregistered (token detail's "Register to start shielding" and "Go private", Receive notice,
+"Enable privacy" → Unsupported), service-failed (retry row, service blocker), undeployed-funded
+(token detail and tile → deploy blocker, **no** deploy button), undeployed-unfunded (tile →
+Receive), Sepolia (network blocker). A launch with only `-uiTestOfflineFixtures` (Send's suite)
+gets an `offline` privacy fixture, and the live onboarding suite passes `offline`, so no UI test
+sends a viewing key anywhere.
 
 ## 8. Files
 

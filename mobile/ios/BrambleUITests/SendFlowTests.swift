@@ -40,10 +40,7 @@ final class SendFlowTests: XCTestCase {
     /// fresh install or unlocking the wallet an earlier test left.
     private func launch(_ state: String) -> XCUIApplication {
         let app = UITest.launch(fixtures: state)
-        let welcome = app.buttons["Add an existing wallet"]
-        let locked = app.staticTexts["Welcome back"]
-        _ = welcome.waitForExistence(timeout: 10) || locked.waitForExistence(timeout: 5)
-        if locked.exists { UITest.unlock(app) } else { UITest.importPublicWallet(app) }
+        UITest.openWallet(app)
         return app
     }
 

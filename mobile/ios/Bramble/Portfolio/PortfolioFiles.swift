@@ -23,8 +23,13 @@ struct PortfolioFiles: Sendable {
         let files = Self(directory: base.appendingPathComponent("portfolio", isDirectory: true))
         #if DEBUG
         // UI tests start a degraded story from empty caches (`-BrambleUITestFreshCaches YES`); only
-        // honoured together with the fixture network, and compiled out of release builds.
-        if PortfolioNetworkStub.scenario != nil, UserDefaults.standard.bool(forKey: "BrambleUITestFreshCaches") {
+        // honoured together with the fixture network, and compiled out of release builds. The
+        // offline suites (`-uiTestOfflineFixtures <state>` alone) always start empty: they switch the
+        // node's state between launches, and saved figures from another state would stand in for it.
+        let fresh = PortfolioNetworkStub.scenario != nil
+            ? UserDefaults.standard.bool(forKey: "BrambleUITestFreshCaches")
+            : FixtureTransport.requested() != nil
+        if fresh {
             files.removeAll()
         }
         #endif

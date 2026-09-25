@@ -3,9 +3,9 @@ import UIKit
 
 /// The app-switcher cover in a window of its own above everything, including sheets (which the
 /// root view's overlay cannot reach). Shown whenever the scene leaves `.active`, removed on return.
+/// The app delegate owns the one instance.
 @MainActor
 final class PrivacyWindow {
-    static let shared = PrivacyWindow()
     private var window: UIWindow?
 
     func update(covered: Bool) {

@@ -23,7 +23,7 @@ final class HitTargetTests: XCTestCase {
         UITest.importPublicWallet(app)
 
         UITest.tap(app.buttons["Settings"])
-        UITest.tap(app.buttons["Appearance"])
+        UITest.tap(app.buttons["Appearance & currency"])
         let light = app.buttons["Light"], dark = app.buttons["Dark"]
         UITest.wait(light)
         if light.isSelected { dark.tap() }

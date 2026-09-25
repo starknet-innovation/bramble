@@ -8,9 +8,10 @@ import XCTest
 /// wiping, the Keychain item's protection attributes, and the dark default.
 @MainActor
 final class SecurityTests: XCTestCase {
-    private func core() throws -> WalletCore {
+    /// A wallet core over a fresh temporary directory, driven by `clock`.
+    private func core(clock: HostClock) throws -> WalletCore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        return try WalletCore(dataDir: dir.path, clock: DeviceClock())
+        return try WalletCore(dataDir: dir.path, clock: clock)
     }
 
     func testTheClockIsMonotonicAndBootScoped() {
@@ -25,21 +26,20 @@ final class SecurityTests: XCTestCase {
     func testTheCoreThrottlesAfterFiveWrongPassphrases() throws {
         // A frozen clock: the delay is measured in monotonic time, so a slow machine (the key
         // derivation runs six times here) must not eat into the 30 s the assertions expect.
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let core = try WalletCore(dataDir: dir.path, clock: FrozenClock())
-        _ = try core.createWallet(password: "a strong password", wordCount: 12)
-        core.lock()
+        let wallet = try core(clock: FrozenClock())
+        _ = try wallet.createWallet(password: "a strong password", wordCount: 12)
+        wallet.lock()
         for _ in 0..<5 {
-            XCTAssertThrowsError(try core.unlock(password: "wrong password"))
+            XCTAssertThrowsError(try wallet.unlock(password: "wrong password"))
         }
-        XCTAssertThrowsError(try core.unlock(password: "a strong password")) { error in
+        XCTAssertThrowsError(try wallet.unlock(password: "a strong password")) { error in
             guard case .Throttled(let retry) = error as? CoreError else {
                 return XCTFail("expected Throttled, got \(error)")
             }
             XCTAssertEqual(retry, 30_000)
             XCTAssertEqual(describe(error), "Too many attempts. Try again in 0:30.")
         }
-        XCTAssertEqual(core.securityStatus().failedAttempts, 5)
+        XCTAssertEqual(wallet.securityStatus().failedAttempts, 5)
     }
 
     func testThrottleCountdownText() {

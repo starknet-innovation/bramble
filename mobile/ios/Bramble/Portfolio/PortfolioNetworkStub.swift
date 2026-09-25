@@ -4,16 +4,20 @@ import Foundation
 /// Debug-only fixture network for the portfolio UI tests (`-BrambleUITestNetworkStub <scenario>`)
 /// and the store's unit tests. It answers the exact requests the core builds — JSON-RPC reads,
 /// CoinGecko prices and charts, Starkscan transfers — from fixed public data, so a scenario mirrors
-/// one of the extension's portfolio stories without touching a real endpoint. Compiled out of
-/// release builds, so a shipped app can never be pointed at fake data.
+/// one of the extension's portfolio stories without touching a real endpoint. A launch with only
+/// `-uiTestOfflineFixtures <state>` (the offline suites) routes the portfolio's JSON-RPC reads to
+/// that fixture node instead, so Home shows the node's balances, and fails every other request, so
+/// no price or history read leaves the simulator either. Compiled out of release builds, so a
+/// shipped app can never be pointed at fake data.
 final class PortfolioNetworkStub: URLProtocol, @unchecked Sendable {
     static let defaultsKey = "BrambleUITestNetworkStub"
 
     static var scenario: String? { UserDefaults.standard.string(forKey: defaultsKey) }
 
-    /// Routes a session through the stub when a scenario was requested at launch.
+    /// Routes a session through the stub when a scenario or the offline fixture node was requested
+    /// at launch.
     static func install(on config: URLSessionConfiguration) {
-        guard scenario != nil else { return }
+        guard scenario != nil || FixtureTransport.requested() != nil else { return }
         config.protocolClasses = [PortfolioNetworkStub.self]
     }
 
@@ -25,9 +29,9 @@ final class PortfolioNetworkStub: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         let body = request.httpBody ?? request.httpBodyStream.map(Self.drain)
-        let (status, data) = PortfolioStubResponder.respond(
-            scenario: Self.scenario ?? "ready", url: request.url, body: body
-        )
+        let (status, data) = Self.scenario.map { scenario in
+            PortfolioStubResponder.respond(scenario: scenario, url: request.url, body: body)
+        } ?? Self.offlineNode(url: request.url, body: body)
         guard status != 0, let url = request.url,
               let response = HTTPURLResponse(
                 url: url,
@@ -45,6 +49,14 @@ final class PortfolioNetworkStub: URLProtocol, @unchecked Sendable {
 
     override func stopLoading() {
         // Nothing to cancel: `startLoading` answers synchronously.
+    }
+
+    /// The offline fixture node's answer to a JSON-RPC read; status 0 (no answer) for anything else.
+    private static func offlineNode(url: URL?, body: Data?) -> (Int, Data) {
+        guard let url, let body, let node = FixtureTransport.requested(),
+              let reply = try? node.post(String(decoding: body, as: UTF8.self), to: url, write: false)
+        else { return (0, Data()) }
+        return (PortfolioStubResponder.statusOK, Data(reply.utf8))
     }
 
     private static func drain(_ stream: InputStream) -> Data {
@@ -71,7 +83,7 @@ enum PortfolioStubResponder {
     /// The contract "Add by contract" reads in the UI test: Test Token (TST), 18 decimals.
     static let customToken = "0x0000000000000000000000000000000000000000000000000000000000000abc"
 
-    private static let statusOK = 200
+    static let statusOK = 200
     private static let statusServerError = 500
     private static let statusServiceUnavailable = 503
     /// "saved-data": balances answer this many times, then fail, so the store falls back to the cache.

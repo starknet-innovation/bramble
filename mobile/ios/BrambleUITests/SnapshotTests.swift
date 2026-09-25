@@ -90,7 +90,7 @@ final class SnapshotTests: XCTestCase {
         UITest.tap(app.buttons["Network"])
         shot(app, "network", theme)
         UITest.tap(app.buttons["Back"])
-        UITest.tap(app.buttons["Appearance"])
+        UITest.tap(app.buttons["Appearance & currency"])
         shot(app, "appearance", theme)
         UITest.tap(app.buttons["Back"])
         UITest.tap(app.buttons["Reveal recovery secrets"])
@@ -120,9 +120,9 @@ final class SnapshotTests: XCTestCase {
             app = UITest.launch(theme: theme, fixtures: state)
             UITest.unlock(app)
             if state == "empty" {
-                UITest.wait(UITest.labelled(app, containing: "STRK, 0,"))
+                UITest.wait(UITest.labelled(app, containing: "STRK, 0.00,"))
             } else {
-                UITest.wait(app.staticTexts["RPC endpoints unavailable"])
+                UITest.wait(app.staticTexts["Couldn't reach the network. Check your connection or RPC endpoint."])
                 XCTAssertTrue(app.buttons["Try again"].exists)
             }
             shot(app, "home-\(state)", theme)

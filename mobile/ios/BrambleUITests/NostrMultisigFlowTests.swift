@@ -3,14 +3,12 @@ import XCTest
 /// Drives the wallet card, contacts, relay settings, shared accounts, and co-signer updates on a
 /// fresh install with the public parity phrase on Sepolia. `-BrambleStubNetwork` and
 /// `-BrambleStubRelay` (DEBUG only) swap in recorded multisig RPC answers and a scripted relay, so
-/// no multisig read or relay socket reaches the network. The relay delivers the gift wrap in
+/// no multisig read or relay socket reaches the network; `-uiTestOfflineFixtures ready` answers the
+/// onboarding account search the same way. The relay delivers the gift wrap in
 /// `ui-coordination.json`, which the Rust suite writes and verifies (`ui_coordination_fixture.rs`).
 /// `-BrambleUITestReset` (DEBUG only, `UITestHooks`) empties the app's vault directory at launch, so every run
 /// starts from onboarding whether or not an earlier run left a wallet installed.
 final class NostrMultisigFlowTests: XCTestCase {
-    private let phrase = "habit hope tip crystal because grunt nation idea electric witness alert like"
-    private let passphrase = "ui test passphrase"
-
     private struct Fixture: Decodable {
         let cosignerCardMainnet: String
         let cosignerCardSepolia: String
@@ -32,22 +30,23 @@ final class NostrMultisigFlowTests: XCTestCase {
         add(attachment)
     }
 
+    /// Toasts stack at the bottom, above the keyboard, where they can cover the next control:
+    /// waits (at most one error toast's lifetime) until none is showing.
+    private func waitForToastsToClear(_ app: XCUIApplication) {
+        let successes = ["Copied", "Coordination relay saved", "Coordination relay reset", "Address saved"]
+        let toasts = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH 'Error: ' OR label IN %@", successes))
+        let cleared = expectation(for: NSPredicate(format: "count == 0"), evaluatedWith: toasts)
+        wait(for: [cleared], timeout: 15)
+    }
+
     private func tap(_ element: XCUIElement, in app: XCUIApplication) {
+        waitForToastsToClear(app)
         XCTAssertTrue(element.waitForExistence(timeout: 15), "\(element) exists")
         let enabled = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: element)
         wait(for: [enabled], timeout: 20)
         for _ in 0..<4 where !element.isHittable { app.swipeUp() }
         element.tap()
-    }
-
-    /// Taps the app's own button when the keyboard offers a key with the same label.
-    private func tapOutsideKeyboard(_ label: String, in app: XCUIApplication) {
-        let matches = app.buttons.matching(identifier: label)
-        XCTAssertTrue(matches.firstMatch.waitForExistence(timeout: 10), "\(label) exists")
-        let keyboard = app.keyboards.firstMatch
-        let own = (0..<matches.count).map { matches.element(boundBy: $0) }
-            .first { !keyboard.exists || !keyboard.frame.intersects($0.frame) }
-        (own ?? matches.firstMatch).tap()
     }
 
     /// A text field or, for multi-line fields, a text view with this accessibility label.
@@ -70,28 +69,14 @@ final class NostrMultisigFlowTests: XCTestCase {
     private func launchAndImport(_ fixture: Fixture) throws -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
-            "-network", "sepolia", "-BrambleUITestReset", "-BrambleStubNetwork", "YES", "-BrambleStubRelay", "YES"
+            "-network", "sepolia", "-uiTestOfflineFixtures", "ready", "-BrambleUITestReset",
+            "-BrambleStubNetwork", "YES", "-BrambleStubRelay", "YES"
         ]
         let events = try XCTUnwrap(String(bytes: try JSONEncoder().encode(fixture.relayEvents), encoding: .utf8))
         app.launchEnvironment = ["BRAMBLE_STUB_RELAY_EVENTS": events]
         app.launch()
         XCTAssertTrue(app.buttons["Add an existing wallet"].waitForExistence(timeout: 10), "onboarding shown")
-        tap(app.buttons["Add an existing wallet"], in: app)
-        tap(app.buttons["Recovery phrase"], in: app)
-        for (index, word) in phrase.split(separator: " ").enumerated() {
-            let field = app.textFields["Word \(index + 1)"]
-            tap(field, in: app)
-            field.typeText(String(word))
-        }
-        tapOutsideKeyboard("Continue", in: app)
-        tap(app.secureTextFields["Vault passphrase"], in: app)
-        app.secureTextFields["Vault passphrase"].typeText(passphrase)
-        tap(app.secureTextFields["Confirm passphrase"], in: app)
-        app.secureTextFields["Confirm passphrase"].typeText(passphrase)
-        tap(app.buttons["Find your accounts"], in: app)
-        tap(app.buttons["Add selected account"], in: app)
-        tap(app.buttons["Open Bramble"], in: app)
-        XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20))
+        UITest.importPublicWallet(app)
         return app
     }
 
@@ -110,14 +95,14 @@ final class NostrMultisigFlowTests: XCTestCase {
     private func receiveCard(_ app: XCUIApplication) {
         tap(app.buttons["Receive"], in: app)
         XCTAssertTrue(app.buttons["Address"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.images["QR code for your Starknet address"].exists)
+        XCTAssertTrue(app.images["QR code of the address"].exists)
         let copyCard = app.buttons["Copy wallet card"]
         XCTAssertTrue(copyCard.waitForExistence(timeout: 15), "the card is prepared")
         tap(app.buttons["Bramble contact card"], in: app)
         XCTAssertTrue(app.images["QR code for wallet contact card"].waitForExistence(timeout: 5))
         tap(copyCard, in: app)
-        // The runner may not read the app's local-only pasteboard; the control confirms the copy.
-        XCTAssertTrue(app.buttons["Copied"].waitForExistence(timeout: 5), "the card was copied")
+        // The runner may not read the app's local-only pasteboard; the app confirms the copy.
+        XCTAssertTrue(app.staticTexts["Copied"].firstMatch.waitForExistence(timeout: 5), "the card was copied")
         tap(app.buttons["Wallet identity"], in: app)
         expect("Signer public key", in: app)
         XCTAssertTrue(app.buttons["Copy coordination public key"].waitForExistence(timeout: 10))
@@ -209,7 +194,7 @@ final class NostrMultisigFlowTests: XCTestCase {
     }
 
     /// Add by address: a deployed 1-of-1 syncs; another class is refused with the extension's copy.
-    /// "Multisigs" then opens the same list.
+    /// Settings' "Shared accounts" then reopens the list, which keeps the saved setup.
     private func addByAddress(_ app: XCUIApplication, _ fixture: Fixture) {
         tap(app.buttons["Add shared account"], in: app)
         replace("Multisig address", with: "0x123", in: app)
@@ -221,8 +206,8 @@ final class NostrMultisigFlowTests: XCTestCase {
         tap(app.buttons["Back"].firstMatch, in: app)
         tap(app.buttons["Back"].firstMatch, in: app)
 
-        // Reachability: "Multisigs" opens the same list.
-        tap(app.buttons["Multisigs"], in: app)
+        // Reachability: back on Settings, "Shared accounts" reopens the same list.
+        tap(app.buttons["Shared accounts"], in: app)
         expect("Shared accounts", in: app)
         XCTAssertTrue(app.buttons[short(fixture.predictedAddress)].waitForExistence(timeout: 10))
     }

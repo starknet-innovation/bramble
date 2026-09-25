@@ -225,7 +225,7 @@ final class AccountsTests: XCTestCase {
         tap(app.buttons["Bramble accounts"])
         tap(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Account 0,'")).firstMatch)
         app.swipeUp()
-        tap(app.buttons[UITest.restoreAcknowledgement])
+        tap(UITest.restoreAcknowledgementButton(app))
         XCTAssertTrue(restore.isEnabled)
         tap(restore)
         toast(app, "1 account restored")

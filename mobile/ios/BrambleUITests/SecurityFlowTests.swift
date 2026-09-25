@@ -68,11 +68,10 @@ final class SecurityFlowTests: XCTestCase {
         UITest.type(UITest.passphrase, into: locked)
         waitUntilEnabled(unlock, timeout: 90)
         unlock.tap()
-        XCTAssertTrue(
-            app.buttons["Accounts"].waitForExistence(timeout: 20),
-            "a leftover wallet uses a passphrase other than the suite's; uninstall Bramble from Bramble Workflow"
-        )
-        UITest.removeWallet(app)
+        // A leftover wallet that never reaches Home uses a passphrase other than the suite's
+        // (uninstall Bramble from the simulator), or is a created wallet still pending its backup,
+        // which the shared helper completes first.
+        UITest.removeUnlockedWallet(app)
         return app
     }
 
@@ -142,7 +141,7 @@ final class SecurityFlowTests: XCTestCase {
 
         // Dark is the default on a fresh install.
         UITest.tap(app.buttons["Settings"])
-        UITest.tap(app.buttons["Appearance"])
+        UITest.tap(app.buttons["Appearance & currency"])
         XCTAssertTrue(app.buttons["Dark"].isSelected)
         UITest.tap(app.buttons["Back"])
 

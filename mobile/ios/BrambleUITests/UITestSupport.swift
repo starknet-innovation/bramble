@@ -36,13 +36,40 @@ enum UITest {
         }
     }
 
-    /// Launches offline on Sepolia; `theme` pins the skin through the argument domain.
-    static func launch(theme: String? = nil, fixtures: String = "ready") -> XCUIApplication {
+    /// Launches offline (Sepolia unless `network` says otherwise) against the fixture node in state
+    /// `fixtures`; `theme` pins the skin through the argument domain, and `extra` adds a suite's own
+    /// DEBUG fixtures (the privacy service's, for one).
+    static func launch(
+        theme: String? = nil,
+        fixtures: String = "ready",
+        network: String = "sepolia",
+        extra: [String] = []
+    ) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-network", "sepolia", "-uiTestOfflineFixtures", fixtures]
+        app.launchArguments = ["-network", network, "-uiTestOfflineFixtures", fixtures] + extra
         if let theme { app.launchArguments += ["-theme", theme] }
         app.launch()
         return app
+    }
+
+    /// Opens the wallet a suite shares between its tests: unlocks the one an earlier test left, or
+    /// imports the published phrase on a fresh install. A created wallet another suite left behind
+    /// (still pending its backup) is removed first, so the fixtures always see the published wallet.
+    static func openWallet(_ app: XCUIApplication) {
+        let welcome = app.buttons["Add an existing wallet"]
+        let locked = app.staticTexts["Welcome back"]
+        _ = welcome.waitForExistence(timeout: Timeout.firstScreen)
+            || locked.waitForExistence(timeout: Timeout.lockedScreen)
+        if locked.exists {
+            type(passphrase, into: app.secureTextFields["Enter your passphrase"])
+            tap(app.buttons["Unlock"])
+            if awaitUnlocked(app) == .home {
+                waitForWallet(app)
+                return
+            }
+            removeUnlockedWallet(app)
+        }
+        importPublicWallet(app)
     }
 
     static func wait(
@@ -93,11 +120,73 @@ enum UITest {
         _ = create.waitForExistence(timeout: Timeout.firstScreen)
             || locked.waitForExistence(timeout: Timeout.lockedScreen)
         if locked.exists {
-            unlock(app)
-            removeWallet(app)
+            type(passphrase, into: app.secureTextFields["Enter your passphrase"])
+            tap(app.buttons["Unlock"])
+            removeUnlockedWallet(app)
         }
         wait(create)
     }
+
+    /// Where an unlock lands.
+    enum Unlocked {
+        case home
+        /// A created wallet whose backup is still pending (vault v4) resumes at "Save your recovery
+        /// phrase" after every unlock and never reaches Home until the backup is confirmed.
+        case pendingBackup
+    }
+
+    /// Waits after Unlock for Home or the resumed backup.
+    static func awaitUnlocked(_ app: XCUIApplication) -> Unlocked {
+        let header = app.buttons["Accounts"]
+        let savePhrase = app.staticTexts["Save your recovery phrase"]
+        let deadline = Date().addingTimeInterval(Timeout.element)
+        while !header.exists, !savePhrase.exists, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(pollInterval))
+        }
+        return savePhrase.exists ? .pendingBackup : .home
+    }
+
+    /// Removes the wallet just unlocked through the real removal path, completing a pending backup
+    /// first, as a user would.
+    static func removeUnlockedWallet(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        if awaitUnlocked(app) == .pendingBackup { completePendingBackup(app) }
+        waitForWallet(app, file: file, line: line)
+        removeWallet(app)
+    }
+
+    /// Save phrase → Confirm your backup → complete → Home for a created (throwaway) wallet: reveals
+    /// the phrase, reads the words back from the grid, and types the ones the confirm step asks for.
+    /// Nothing is captured while the phrase is shown.
+    static func completePendingBackup(_ app: XCUIApplication) {
+        tap(app.buttons["Show recovery phrase"])
+        let cells = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", recoveryWordPrefix))
+        wait(cells.firstMatch, Timeout.onScreen)
+        var words: [String: String] = [:]
+        for index in 0..<cells.count {
+            let cell = cells.element(boundBy: index)
+            words[String(cell.identifier.dropFirst(recoveryWordPrefix.count))] = cell.label
+        }
+        tap(app.buttons["I saved my phrase"])
+        wait(app.staticTexts["Confirm your backup"])
+        let fields = app.textFields.matching(NSPredicate(format: "label BEGINSWITH %@", confirmWordPrefix))
+        for index in 0..<fields.count {
+            let field = fields.element(boundBy: index)
+            field.tap()
+            field.typeText(words[String(field.label.dropFirst(confirmWordPrefix.count))] ?? "")
+            dismissKeyboardTip(app)
+        }
+        wait(app.staticTexts["Backup confirmed."], Timeout.onScreen)
+        tap(app.windows.element(boundBy: 0).buttons["Continue"])
+        wait(app.staticTexts["You’re all set"])
+        tap(app.buttons["Open Bramble"])
+    }
+
+    /// The identifier prefix of a revealed recovery-grid word ("recovery-word-3").
+    private static let recoveryWordPrefix = "recovery-word-"
+    /// The label prefix of a confirm-backup field ("Word 3").
+    private static let confirmWordPrefix = "Word "
+    /// How often a wait for one of several screens re-reads the tree, in seconds.
+    private static let pollInterval: TimeInterval = 0.25
 
     static func unlock(_ app: XCUIApplication) {
         type(passphrase, into: app.secureTextFields["Enter your passphrase"])
@@ -114,9 +203,15 @@ enum UITest {
         XCTAssertFalse(name.isEmpty || name.hasPrefix("Account "), "header shows \(name)", file: file, line: line)
     }
 
-    /// The restore acknowledgement's label, exactly as "Find your accounts" shows it.
+    /// The restore acknowledgement's label up to the network name, which varies with the network
+    /// the test runs on ("…on Starknet Mainnet." / "…on Starknet Sepolia.").
     static let restoreAcknowledgement = "I checked these account types and indices and want to restore the "
-        + "selected accounts on Starknet Mainnet."
+        + "selected accounts on Starknet "
+
+    /// The restore acknowledgement checkbox on whichever network the test runs.
+    static func restoreAcknowledgementButton(_ app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", restoreAcknowledgement)).firstMatch
+    }
 
     /// The published wallet's primary account as "Find your accounts" titles it.
     static let primaryCandidate = "Account 0, 0x2083…98d9"
@@ -134,7 +229,7 @@ enum UITest {
         wait(row, Timeout.onScreen)
         if !row.isSelected { row.tap() }
         shot?()
-        let acknowledge = app.buttons[restoreAcknowledgement]
+        let acknowledge = restoreAcknowledgementButton(app)
         if !acknowledge.isHittable { app.swipeUp() }
         tap(acknowledge)
         tap(app.buttons["Restore selected accounts"])

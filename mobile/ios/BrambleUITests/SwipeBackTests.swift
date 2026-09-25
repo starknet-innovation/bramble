@@ -62,7 +62,7 @@ final class SwipeBackTests: XCTestCase {
 
         UITest.tap(app.buttons["Settings"])
         UITest.tap(app.buttons["Network"])
-        assertSwipeReturns(app, from: "Choose where the wallet operates", to: app.buttons["Appearance"])
+        assertSwipeReturns(app, from: "Choose where the wallet operates", to: app.buttons["Appearance & currency"])
         UITest.removeWallet(app)
     }
 

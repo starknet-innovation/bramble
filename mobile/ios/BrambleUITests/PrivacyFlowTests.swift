@@ -1,14 +1,23 @@
 import XCTest
 
 /// Walks the private-balance surfaces on a simulator against the DEBUG fixtures
-/// (`-BrambleRpcFixture` for the node, `-BramblePrivacyFixture` for the privacy service), so
-/// nothing touches a network: the Home tile, hero label and unified rows, Receive's
-/// "Public transfers only" notice, and every journey stop, mirroring the UI Lab stories under
-/// "Wallet journeys/04 Private balances". Nothing is ever submitted: the fixture node must
-/// report zero writes wherever Send's marker is reachable, and no privacy write path exists.
+/// (`-uiTestOfflineFixtures <state>` for the node, `-BramblePrivacyFixture <scenario>` for the
+/// privacy service), so nothing touches a network: the Home Shield tile, hero label, unified rows
+/// and "Private balances · Try again", token detail's private-balance section, Receive's "Public
+/// transfers only" notice, and every journey stop (mobile/docs/privacy.md §2), mirroring the UI Lab
+/// stories under "Wallet journeys/04 Private balances". Nothing is ever submitted, and no privacy
+/// write path exists.
 final class PrivacyFlowTests: XCTestCase {
-    private let phrase = "habit hope tip crystal because grunt nation idea electric witness alert like"
-    private let passphrase = "ui test passphrase"
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        try UITest.refuseRealPhrase()
+    }
+
+    override func tearDownWithError() throws {
+        // Restores the XCTest default that setUp changed; nothing else is shared between tests.
+        continueAfterFailure = true
+        try super.tearDownWithError()
+    }
 
     private func snapshot(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -18,52 +27,21 @@ final class PrivacyFlowTests: XCTestCase {
     }
 
     private func tap(_ element: XCUIElement) {
-        XCTAssertTrue(element.waitForExistence(timeout: 15), "\(element) exists")
-        element.tap()
-    }
-
-    private func type(_ text: String, into field: XCUIElement) {
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "\(field) exists")
-        field.tap()
-        field.typeText(text)
-    }
-
-    private func tapScreenButton(_ app: XCUIApplication, _ label: String) {
-        let keys = app.keyboards.buttons.allElementsBoundByIndex.map(\.frame)
-        let button = app.buttons.matching(identifier: label).allElementsBoundByIndex.first { !keys.contains($0.frame) }
-        tap(button ?? app.buttons[label])
+        UITest.tap(element)
     }
 
     /// Launches against both fixtures, importing the published phrase on a fresh install or
-    /// unlocking an existing one.
+    /// unlocking the wallet an earlier test left.
     private func launch(node: String, privacy: String, network: String = "mainnet") -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-network", network, "-BrambleRpcFixture", node, "-BramblePrivacyFixture", privacy]
-        app.launch()
-        if app.buttons["Add an existing wallet"].waitForExistence(timeout: 8) {
-            tap(app.buttons["Add an existing wallet"])
-            tap(app.buttons["Recovery phrase"])
-            for (index, word) in phrase.split(separator: " ").enumerated() {
-                let field = app.textFields["Word \(index + 1)"]
-                XCTAssertTrue(field.waitForExistence(timeout: 5))
-                if !field.isHittable { app.swipeUp() }
-                field.tap()
-                field.typeText(String(word))
-            }
-            tapScreenButton(app, "Continue")
-            type(passphrase, into: app.secureTextFields["Vault passphrase"])
-            type(passphrase, into: app.secureTextFields["Confirm passphrase"])
-            tap(app.buttons["Find your accounts"])
-            let mainnetRisk = app.buttons["I understand this wallet can hold real funds on Starknet Mainnet."]
-            if mainnetRisk.waitForExistence(timeout: 5) { mainnetRisk.tap() }
-            tap(app.buttons["Add selected account"])
-            tap(app.buttons["Open Bramble"])
-        } else {
-            type(passphrase, into: app.secureTextFields["Enter your passphrase"])
-            tap(app.buttons["Unlock"])
-        }
-        XCTAssertTrue(app.staticTexts["Account 1"].waitForExistence(timeout: 20))
+        let app = UITest.launch(fixtures: node, network: network, extra: ["-BramblePrivacyFixture", privacy])
+        UITest.openWallet(app)
         return app
+    }
+
+    /// Opens a token's detail screen from its unified Home row.
+    private func openToken(_ app: XCUIApplication, _ symbol: String) {
+        tap(app.descendants(matching: .any)["token-row-\(symbol)"].firstMatch)
+        UITest.wait(app.staticTexts["Your balance"])
     }
 
     private func assertUnsupported(_ app: XCUIApplication) {
@@ -73,22 +51,31 @@ final class PrivacyFlowTests: XCTestCase {
     }
 
     func testRegisteredPortfolioIncludesPrivateValueAndShieldIsUnsupported() {
-        let app = launch(node: "transfer-deployed", privacy: "registered")
+        let app = launch(node: "ready", privacy: "registered")
         XCTAssertTrue(app.staticTexts["Includes shielded balances"].waitForExistence(timeout: 20))
-        // 100 public ETH plus 0.5 private, summed as the extension's unified row does.
-        XCTAssertTrue(app.staticTexts["100.50"].waitForExistence(timeout: 5))
-        tap(app.buttons["Show ETH balance breakdown"])
-        XCTAssertTrue(app.staticTexts["0.50 ETH"].waitForExistence(timeout: 5))
+        // 0.042 public ETH plus 0.5 private, summed into one row as the extension's unified row does.
+        UITest.wait(UITest.labelled(app, containing: "ETH, 0.54"))
         snapshot(app, "privacy-private-portfolio")
+        // Token detail carries the private half and the (disabled) Shield and Unshield actions.
+        openToken(app, "ETH")
+        UITest.wait(UITest.labelled(app, containing: "Private balance, 0.5 ETH"))
+        XCTAssertFalse(app.buttons["Shield"].isEnabled, "shielding is not built on mobile")
+        XCTAssertFalse(app.buttons["Unshield"].isEnabled, "unshielding is not built on mobile")
+        XCTAssertTrue(app.staticTexts["Not available in the mobile app yet"].exists)
+        snapshot(app, "privacy-token-detail")
+        tap(app.buttons["Back"].firstMatch)
         tap(app.buttons["Shield public value into your private balance"])
         assertUnsupported(app)
         snapshot(app, "privacy-unsupported")
     }
 
     func testUnregisteredOffersRegistrationThatStopsAtUnsupported() {
-        let app = launch(node: "transfer-deployed", privacy: "unregistered")
-        tap(app.buttons["Show STRK balance breakdown"])
-        XCTAssertTrue(app.staticTexts["Register to start shielding"].waitForExistence(timeout: 20))
+        let app = launch(node: "ready", privacy: "unregistered")
+        openToken(app, "STRK")
+        UITest.wait(UITest.labelled(app, containing: "Register to start shielding"))
+        XCTAssertTrue(app.buttons["Go private"].exists)
+        snapshot(app, "privacy-public-token-detail")
+        tap(app.buttons["Back"].firstMatch)
         XCTAssertFalse(app.staticTexts["Includes shielded balances"].exists)
         snapshot(app, "privacy-public-portfolio")
         tap(app.buttons["Receive"])
@@ -99,7 +86,7 @@ final class PrivacyFlowTests: XCTestCase {
     }
 
     func testServiceFailureOffersARetry() {
-        let app = launch(node: "transfer-deployed", privacy: "service-failed")
+        let app = launch(node: "ready", privacy: "service-failed")
         XCTAssertTrue(app.buttons["Private balances, Try again"].waitForExistence(timeout: 20))
         snapshot(app, "privacy-service-failed")
         tap(app.buttons["Activate private balances"])
@@ -108,7 +95,13 @@ final class PrivacyFlowTests: XCTestCase {
     }
 
     func testUndeployedAndFundedStopsAtTheDeployBlockerWithoutADeployButton() {
-        let app = launch(node: "transfer-undeployed", privacy: "unregistered")
+        let app = launch(node: "undeployed", privacy: "unregistered")
+        // Token detail's action and the Shield tile both reach the deploy blocker, never a deploy.
+        openToken(app, "STRK")
+        tap(app.buttons["Deploy and enable"])
+        XCTAssertTrue(app.staticTexts["Deploy this account first"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["Deploy and enable"].exists, "deployment is never offered from privacy")
+        tap(app.buttons["Back to wallet"])
         tap(app.buttons["Deploy and enable"])
         XCTAssertTrue(app.staticTexts["Deploy this account first"].waitForExistence(timeout: 15))
         XCTAssertFalse(app.buttons["Deploy and enable"].exists, "deployment is never offered from privacy")
@@ -116,13 +109,13 @@ final class PrivacyFlowTests: XCTestCase {
     }
 
     func testUndeployedAndUnfundedSendsToReceive() {
-        let app = launch(node: "transfer-unfunded", privacy: "unregistered")
+        let app = launch(node: "unfunded", privacy: "unregistered")
         tap(app.buttons["Receive STRK before deploying this account"])
         XCTAssertTrue(app.staticTexts["Your Starknet address"].waitForExistence(timeout: 10))
     }
 
     func testSepoliaIsNotAvailableOnThisNetwork() {
-        let app = launch(node: "transfer-deployed", privacy: "registered", network: "sepolia")
+        let app = launch(node: "ready", privacy: "registered", network: "sepolia")
         tap(app.buttons["Activate private balances"])
         XCTAssertTrue(app.staticTexts["Not available on this network"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["Choose a network"].exists)

@@ -7,7 +7,7 @@ import Foundation
 /// privacy read plan has none; a write would be refused and counted).
 ///
 /// Scenarios: `registered` (0.5 ETH private), `unregistered`, `service-failed` (HTTP 500), and
-/// `offline` (every request fails; used whenever only `-BrambleRpcFixture` is given).
+/// `offline` (every request fails; used whenever only `-uiTestOfflineFixtures` is given).
 struct FixturePrivacyTransport: PrivacyTransport, RpcTransport {
     /// HTTP statuses the canned service answers with.
     private static let statusOK = 200

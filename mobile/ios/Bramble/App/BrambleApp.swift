@@ -37,7 +37,7 @@ struct BrambleApp: App {
             }
             .onChange(of: phase) { _, next in
                 // Sheets present above the overlay, so the cover also goes up in its own window.
-                PrivacyWindow.shared.update(covered: next != .active)
+                delegate.privacyWindow.update(covered: next != .active)
                 // Leaving the foreground ends the session: the core zeroizes the phrase.
                 if next == .background { store.lock() }
                 // Coming back: biometric enrolment and the idle deadline are re-checked.
@@ -47,9 +47,14 @@ struct BrambleApp: App {
     }
 }
 
-/// Blocks third-party keyboards app-wide, so no keyboard extension sees a passphrase or a phrase
-/// word, and none can learn from them.
+/// App-lifetime hooks: blocks third-party keyboards app-wide, so no keyboard extension sees a
+/// passphrase or a phrase word, and none can learn from them; and owns the app-switcher cover
+/// window, which must outlive any one view.
+@MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    /// The cover the scene raises whenever it leaves `.active`.
+    let privacyWindow = PrivacyWindow()
+
     func application(
         _: UIApplication,
         shouldAllowExtensionPointIdentifier identifier: UIApplication.ExtensionPointIdentifier
