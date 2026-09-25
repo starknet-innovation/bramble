@@ -22,8 +22,7 @@ import javax.crypto.spec.GCMParameterSpec
 import kotlin.coroutines.resume
 
 /**
- * Holds the biometric wrap secret W (vault-security.md §2.4). UNCOMPILED: this machine has no
- * Android SDK; written against the generated Kotlin bindings and the platform APIs only.
+ * Holds the biometric wrap secret W (vault-security.md §2.4), over the platform APIs only.
  *
  * W is 32 bytes from `SecureRandom`, encrypted by an AES-256-GCM Keystore key that needs a strong
  * biometric for every use, prefers StrongBox, and is invalidated by any enrolment change. Only the

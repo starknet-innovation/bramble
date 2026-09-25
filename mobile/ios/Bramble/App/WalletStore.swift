@@ -152,7 +152,7 @@ final class WalletStore {
     func lock() {
         idleTimer?.cancel()
         privacy.reset()
-        plans.forEach { $0.close() }
+        plans.forEach { $0.cancel() }
         plans = []
         observedAtMs = [:]
         deployment = .unknown

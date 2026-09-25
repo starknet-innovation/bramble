@@ -286,7 +286,7 @@ final class SendFlowModel {
     private func markBroadcasting() { if stage == .authorizing { stage = .broadcasting } }
 
     private func dropPlan() {
-        driver?.plan.close()
+        driver?.plan.cancel()
         driver = nil
         review = nil
         reviewBlock = nil

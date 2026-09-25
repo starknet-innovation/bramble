@@ -17,8 +17,6 @@ import org.bramble.core.privacyConfigured
  * [PrivacyDriver] sends and then zeroes (docs/privacy.md §1.1, §5: the owner-approved
  * exemption). Nothing is persisted. [reset] runs on lock, account switch and network switch, a read
  * that finishes after a reset is dropped, and the core ignores a reading from another network.
- *
- * Uncompiled: this machine has no Android SDK; written against the generated Kotlin bindings.
  */
 class PrivacyModel {
     /** The reading's phase for the UI (idle, loading, settled, failed, or unconfigured). */
@@ -42,7 +40,7 @@ class PrivacyModel {
 
     /** Closes any running plan and drops the reading; a read still in flight is then discarded. */
     fun reset() {
-        plan?.close()
+        plan?.cancel()
         plan = null
         generation += 1
         reading = PrivacyReading.Idle

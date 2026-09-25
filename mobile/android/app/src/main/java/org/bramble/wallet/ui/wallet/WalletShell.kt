@@ -69,6 +69,8 @@ fun WalletShell(store: WalletStore) {
     var flows by remember { mutableStateOf(listOf<Flow>()) }
     var accountsOpen by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
+    // The token a pushed Flow.TOKEN_DETAIL shows (the flow stack holds screens, not arguments).
+    var tokenId by remember { mutableStateOf("") }
     val pop = { flows = flows.dropLast(1) }
     val push = { next: Flow -> flows = flows + next }
     BackHandler(enabled = flows.isNotEmpty()) { pop() }
@@ -76,7 +78,7 @@ fun WalletShell(store: WalletStore) {
     val flow = flows.lastOrNull()
     if (flow != null) {
         Box(Modifier.fillMaxSize().background(skin.bg).safeDrawingPadding()) {
-            FlowScreen(flow, store, pop, push)
+            FlowScreen(flow, store, tokenId, pop, push)
         }
         return
     }
@@ -93,7 +95,10 @@ fun WalletShell(store: WalletStore) {
         },
     ) {
         WalletHeader(store, openAccounts = { accountsOpen = true })
-        DockScreen(store, push)
+        DockScreen(store, push) { id ->
+            tokenId = id
+            push(Flow.TOKEN_DETAIL)
+        }
     }
     if (accountsOpen) {
         AccountsSheet(
@@ -105,11 +110,15 @@ fun WalletShell(store: WalletStore) {
     }
 }
 
-/** The pushed [flow]'s screen; [pop] returns to the one below it, [push] opens another. */
+/**
+ * The pushed [flow]'s screen; [pop] returns to the one below it, [push] opens another. [tokenId]
+ * is the tracked token a [Flow.TOKEN_DETAIL] shows.
+ */
 @Composable
 private fun FlowScreen(
     flow: Flow,
     store: WalletStore,
+    tokenId: String,
     pop: () -> Unit,
     push: (Flow) -> Unit,
 ) {
@@ -161,44 +170,62 @@ private fun FlowScreen(
                 .ReadyMultisigScreen(store, back = pop)
         }
 
-        Flow.PRIVACY -> {
-            org.bramble.wallet.privacy.PrivacyBlockedScreen(
-                privacyBlocker(store),
-                null,
-                chooseNetwork = { push(Flow.NETWORK) },
-                retry = pop,
-                back = pop,
-            )
+        Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL -> {
+            PortfolioFlowScreen(flow, store, tokenId, pop, push)
         }
     }
 }
 
-/** Mobile writes nothing yet (docs/privacy.md §1): the journey's answer is a blocker. */
-private fun privacyBlocker(store: WalletStore): org.bramble.core.PrivacyBlocker {
-    val entry =
-        org.bramble.core.privacyEntry(
-            store.network,
-            org.bramble.core.DeploymentState.UNKNOWN,
-            store.privacy.reading,
-            true,
-        )
-    return (entry as? org.bramble.core.PrivacyEntry.Blocked)?.blocker
-        ?: org.bramble.core.PrivacyBlocker.SERVICE
+/** The flows that act on the active account's portfolio: privacy, deployment, token detail. */
+@Composable
+private fun PortfolioFlowScreen(
+    flow: Flow,
+    store: WalletStore,
+    tokenId: String,
+    pop: () -> Unit,
+    push: (Flow) -> Unit,
+) {
+    when (flow) {
+        Flow.DEPLOY -> {
+            org.bramble.wallet.send
+                .DeployAccountScreen(store, back = pop)
+        }
+
+        Flow.TOKEN_DETAIL -> {
+            org.bramble.wallet.portfolio.TokenDetailScreen(
+                store,
+                tokenId,
+                back = pop,
+                receive = { push(Flow.RECEIVE) },
+                journey = { push(Flow.PRIVACY) },
+            )
+        }
+
+        else -> {
+            org.bramble.wallet.privacy
+                .PrivacyJourneyScreen(store, chooseNetwork = { push(Flow.NETWORK) }, back = pop)
+        }
+    }
 }
 
-/** The dock screen for the selected tab. */
+/** The dock screen for the selected tab; [openToken] opens a tracked token's detail by id. */
 @Composable
 private fun DockScreen(
     store: WalletStore,
     push: (Flow) -> Unit,
+    openToken: (String) -> Unit,
 ) {
     when (store.tab) {
         Tab.HOME -> {
             HomeScreen(
                 store,
-                receive = { push(Flow.RECEIVE) },
-                send = { push(Flow.SEND) },
-                privacy = { push(Flow.PRIVACY) },
+                HomeActions(
+                    receive = { push(Flow.RECEIVE) },
+                    send = { push(Flow.SEND) },
+                    deploy = { push(Flow.DEPLOY) },
+                    privacy = { push(Flow.PRIVACY) },
+                    openToken = openToken,
+                ),
             )
         }
 

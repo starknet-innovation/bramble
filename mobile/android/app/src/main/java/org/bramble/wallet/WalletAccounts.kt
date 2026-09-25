@@ -6,7 +6,6 @@ import org.bramble.core.AccountRecord
 // Account management over the core (docs/accounts.md §2–3.3), twin of iOS WalletStore+Accounts.swift.
 // The core owns every rule; these only run one call through the store's session
 // ([WalletStore.accountCall]), refresh what is rendered, and report in the extension's words.
-// Uncompiled: checked by reading against the generated Kotlin bindings (no Android SDK here).
 
 /** "Regular account": OpenZeppelin at the next free index on this network, made active. */
 suspend fun WalletStore.addRegularAccount() {

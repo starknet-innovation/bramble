@@ -29,7 +29,7 @@ import java.net.URL
 
 // "Find your accounts" over the core's sans-IO scan, twin of iOS RecoveryScanDriver.swift and
 // RpcTransport.swift. The core derives every address and judges every answer; this layer moves
-// bytes and keeps the user's picks. UNCOMPILED (no Android SDK on the authoring machine).
+// bytes and keeps the user's picks.
 
 /** Moves a batch of core-built JSON-RPC bodies. */
 fun interface RpcTransport {

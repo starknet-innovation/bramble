@@ -16,20 +16,20 @@ import org.bramble.core.PoolNotice
 import org.bramble.core.PrivacyBlocker
 import org.bramble.core.PrivateLine
 import org.bramble.core.ShieldTile
+import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleRadius
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.LocalSkin
+import org.bramble.wallet.design.PillButton
+import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.textStyle
-import org.bramble.wallet.ui.ActionTile
-import org.bramble.wallet.ui.SecondaryButton
+import org.bramble.wallet.ui.wallet.ActionTile
 
 /*
  * Privacy surfaces for the Compose app, twins of the iOS PrivacyViews / PrivacyJourneyView. Every
  * decision is the core's; these only spell its answers in the extension's copy.
- *
- * Uncompiled: this machine has no Android SDK; written against the generated Kotlin bindings.
  */
 
 /** The tile's label and accessibility label (`shieldTile`). */
@@ -104,7 +104,7 @@ fun ShieldActionTile(
     val (label, accessibility) = tile.copy()
     ActionTile(
         label,
-        "⛨",
+        BrambleIconName.SHIELD,
         enabled = tile != ShieldTile.NO_STRK_TOKEN,
         modifier = modifier.semantics { contentDescription = accessibility },
     ) {
@@ -166,10 +166,10 @@ fun PrivacyBlockedScreen(
         Text(body, color = skin.muted, style = textStyle(BrambleTypeScale.body))
         if (hint != null) Text(hint, color = skin.muted, style = textStyle(BrambleTypeScale.label))
         when (blocker) {
-            PrivacyBlocker.NETWORK -> SecondaryButton(action, onClick = chooseNetwork)
-            PrivacyBlocker.SERVICE -> SecondaryButton(action, onClick = retry)
+            PrivacyBlocker.NETWORK -> PillButton(action, kind = PillKind.SECONDARY, onClick = chooseNetwork)
+            PrivacyBlocker.SERVICE -> PillButton(action, kind = PillKind.SECONDARY, onClick = retry)
             else -> Unit
         }
-        SecondaryButton(PrivacyCopy.backToWallet, onClick = back)
+        PillButton(PrivacyCopy.backToWallet, kind = PillKind.SECONDARY, onClick = back)
     }
 }

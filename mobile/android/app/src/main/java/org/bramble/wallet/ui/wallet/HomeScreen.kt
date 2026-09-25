@@ -24,45 +24,45 @@ import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.send.DeployNoticeChip
 import org.bramble.wallet.sendRefusal
 import org.bramble.wallet.strkFunded
 
 /**
- * `homeView()` from `portfolio/home-view.ts`, port of the iOS `HomeView`: hero total, the four
- * major actions (Send opens `SendScreen` for an OpenZeppelin account only), and the token list,
- * all from the portfolio store (prices, tracked tokens, the one balance read).
+ * `homeView()` from `portfolio/home-view.ts`, port of the iOS `HomeView`: hero total, the deploy
+ * notice, the four major actions (Send opens `SendScreen` for an OpenZeppelin account only), and
+ * the token list, all from the portfolio store (prices, tracked tokens, the one balance read). The
+ * deploy notice and the Shield gate take the core's judgement of the account's deployment.
  */
 @Composable
 fun HomeScreen(
     store: WalletStore,
-    receive: () -> Unit,
-    send: () -> Unit,
-    privacy: () -> Unit = {},
+    actions: HomeActions,
 ) {
     val skin = LocalSkin.current
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xl)) {
         org.bramble.wallet.portfolio
             .PortfolioHeroSection(store.portfolio)
+        DeployNoticeChip(store, receive = actions.receive, deploy = actions.deploy)
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
             val active = store.activeRecord
             ActionTile("Send", BrambleIconName.SEND, enabled = active != null, modifier = Modifier.weight(1f)) {
                 // Braavos (view only) and Ready accounts never open the send flow; the core would refuse them.
                 val refusal = active?.let(::sendRefusal)
-                if (refusal != null) store.showToast(refusal) else send()
+                if (refusal != null) store.showToast(refusal) else actions.send()
             }
             ActionTile("Swap", BrambleIconName.SHUFFLE, enabled = false, modifier = Modifier.weight(1f)) {}
-            ActionTile("Receive", BrambleIconName.QR_CODE, modifier = Modifier.weight(1f), onClick = receive)
-            // The core's Shield gate; this app does not read deployment yet, so it passes Unknown.
+            ActionTile("Receive", BrambleIconName.QR_CODE, modifier = Modifier.weight(1f), onClick = actions.receive)
             org.bramble.wallet.privacy.ShieldActionTile(
                 org.bramble.core.shieldTile(
                     store.network,
-                    org.bramble.core.DeploymentState.UNKNOWN,
+                    store.deployment,
                     store.strkFunded,
                     store.privacy.reading,
                 ),
                 modifier = Modifier.weight(1f),
-                receive = receive,
-                journey = privacy,
+                receive = actions.receive,
+                journey = actions.privacy,
             )
         }
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
@@ -78,17 +78,34 @@ fun HomeScreen(
                 }
             }
             org.bramble.wallet.portfolio
-                .PortfolioTokenList(store.portfolio)
+                .PortfolioTokenList(store.portfolio, open = actions.openToken)
         }
     }
 }
+
+/**
+ * Where Home's controls lead, wired by the shell: the flows it pushes and a token's detail by id.
+ *
+ * @property receive opens Receive (also the Fund with STRK notice and Shield tile).
+ * @property send opens the Send journey (OpenZeppelin accounts only).
+ * @property deploy opens the Deploy account flow from the deploy notice.
+ * @property privacy opens the privacy journey.
+ * @property openToken opens a tracked token's detail by its token id.
+ */
+data class HomeActions(
+    val receive: () -> Unit,
+    val send: () -> Unit,
+    val deploy: () -> Unit,
+    val privacy: () -> Unit,
+    val openToken: (String) -> Unit,
+)
 
 /** A disabled action tile's opacity. */
 private const val DISABLED_TILE_ALPHA = 0.4f
 
 /** `.action-tile`: accent-soft ground, 22.5dp icon over a caption label. */
 @Composable
-private fun ActionTile(
+internal fun ActionTile(
     title: String,
     icon: BrambleIconName,
     modifier: Modifier,
@@ -112,19 +129,5 @@ private fun ActionTile(
     ) {
         BrambleIcon(icon, skin.accent, BrambleControl.majorIcon)
         Text(title, color = skin.accent, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold))
-    }
-}
-
-/** Activity dock screen: the account's one activity list, read when due and while visible. */
-@Composable
-fun ActivityScreen(store: WalletStore) {
-    val skin = LocalSkin.current
-    androidx.compose.runtime.LaunchedEffect(store.portfolio.scope?.accountId) {
-        store.portfolio.refreshActivity(force = false)
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-        Text("Activity", color = skin.text, style = textStyle(BrambleTypeScale.title, BrambleWeight.bold))
-        org.bramble.wallet.portfolio
-            .PortfolioActivity(store.portfolio)
     }
 }

@@ -23,10 +23,7 @@ import org.bramble.core.WalletCore
  * iOS `CoordinationStore`. The core keeps the coordination private key, gift-wrap plaintext, and
  * raw relay events; this class holds public values, and `CoordinationTransport.kt` moves bytes
  * (chain reads through `RpcClient.post`, one OkHttp WebSocket per relay for a sync). `reset()`
- * runs on lock and cancels any sync.
- *
- * Uncompiled: there is no Android SDK on the machine this was written on
- * (mobile/docs/nostr-multisig.md §10).
+ * runs on lock and cancels any sync (mobile/docs/nostr-multisig.md §10).
  */
 class CoordinationStore(
     private val core: WalletCore,
@@ -202,7 +199,7 @@ private const val MILLIS_PER_SECOND = 1000
 private suspend fun <T> work(body: () -> T): T = withContext(Dispatchers.Default) { body() }
 
 /** `addMultisig`'s refusal for an authority read that cannot be added; null when it can. */
-private fun authorityRefusal(status: MultisigAuthorityStatus): CoordinationStore.Refusal? =
+private fun authorityRefusal(status: MultisigAuthorityStatus?): CoordinationStore.Refusal? =
     when (status) {
         MultisigAuthorityStatus.AVAILABLE, MultisigAuthorityStatus.UNDEPLOYED -> {
             null
@@ -229,7 +226,7 @@ private fun authorityRefusal(status: MultisigAuthorityStatus): CoordinationStore
 
 /** `addMultisig`'s status copy once [record] is stored. */
 private fun addedStatus(
-    status: MultisigAuthorityStatus,
+    status: MultisigAuthorityStatus?,
     record: MultisigRecord,
 ): String {
     if (status == MultisigAuthorityStatus.UNDEPLOYED) {

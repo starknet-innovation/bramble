@@ -27,10 +27,10 @@ private const val HTTP_ERROR_MIN = 400
 private const val READ_CHUNK_BYTES = 8192
 
 /**
- * The Android counterpart of iOS `BoundedHttp` (UNCOMPILED: no Android SDK on the authoring
- * machine). HTTPS only, redirects refused, no cookies or cache, a declared `Content-Length` over
- * budget refused before reading, the streamed body cut off past `maxBodyBytes` (a truncated body is
- * never passed on), and one deadline over the whole exchange.
+ * The Android counterpart of iOS `BoundedHttp`. HTTPS only, redirects refused, no cookies or
+ * cache, a declared `Content-Length` over budget refused before reading, the streamed body cut off
+ * past `maxBodyBytes` (a truncated body is never passed on), and one deadline over the whole
+ * exchange.
  */
 object BoundedHttp : PortfolioTransport {
     private fun unanswered(timedOut: Boolean = false) = HttpOutcome(0u, null, null, timedOut)

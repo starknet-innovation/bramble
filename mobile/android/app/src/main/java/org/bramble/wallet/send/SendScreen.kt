@@ -65,8 +65,6 @@ internal val capsule = RoundedCornerShape(percent = 50)
  * panels) with the send stylesheet's geometry. All copy comes from the generated `SendCopy`; every
  * value shown is the core plan's. Routed from Home's Send tile (`WalletShell`, `Flow.SEND`); the
  * plan is closed when the screen leaves, and on lock by `WalletStore`.
- *
- * Uncompiled: this machine has no Android SDK; checked by reading against the generated bindings.
  */
 @Composable
 fun SendScreen(
@@ -206,7 +204,7 @@ private fun OutcomeStage(
 
 /** `.send-context-receipt`: `label · value` rows on a panel, split by full-width hairlines. */
 @Composable
-private fun Receipt(
+internal fun Receipt(
     rows: List<Pair<String, String>>,
     trailing: (@Composable (Int) -> Unit)? = null,
 ) {

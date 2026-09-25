@@ -35,6 +35,12 @@ enum class Flow {
     /** The Ready Multisig gateway. */
     READY_MULTISIG,
 
-    /** The privacy journey (currently its blocker screen). */
+    /** The privacy journey: the preparing wait, then the core's blocker. */
     PRIVACY,
+
+    /** The standalone Deploy account flow, from Home's deploy notice. */
+    DEPLOY,
+
+    /** A tracked token's detail: price, balance, private balance and contract. */
+    TOKEN_DETAIL,
 }

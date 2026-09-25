@@ -102,7 +102,7 @@ fun ReceiveScreen(
         if (offersCard) ContactCardOptions(store, card, showCard) { showCard = it }
         org.bramble.wallet.privacy.PoolNoticeCard(
             org.bramble.core.receivePoolNotice(
-                org.bramble.core.DeploymentState.UNKNOWN,
+                store.deployment,
                 store.strkFunded,
                 store.privacy.reading,
             ),
