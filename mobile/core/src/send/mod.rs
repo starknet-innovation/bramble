@@ -20,6 +20,7 @@ pub(crate) mod types;
 pub(crate) mod u256;
 mod wallet_ext;
 
+use crate::activity::observation;
 use crate::felt;
 use types::{DeploymentState, SendError};
 
@@ -40,17 +41,36 @@ pub fn parse_token_amount(amount: String, decimals: u8) -> Result<String, SendEr
 }
 
 /// Whether a recorded transaction is still due a status read at `now_ms` (the extension's
-/// fast-tier `isObservedAt`): pending or pre-confirmed and submitted less than an hour ago. Hosts
-/// reconcile only these, and at most once per `activity_observation_period_ms`.
+/// `isObserved`, either cadence): pending or pre-confirmed and submitted less than an hour ago
+/// (the fast tier), or L2-accepted, not yet final on L1, and submitted less than seven days ago
+/// (the slow tier). Hosts reconcile only these, and at most once per
+/// `activity_observation_period_for(record)`.
 #[uniffi::export]
 pub fn activity_needs_observation(record: crate::ActivityEntry, now_ms: u64) -> bool {
-    crate::activity::store::is_observed(record.status, record.submitted_at, now_ms)
+    observation::is_observed(
+        record.status,
+        record.finalized_on_l1 == Some(true),
+        record.submitted_at,
+        now_ms,
+    )
 }
 
-/// The extension's `FAST_OBSERVATION_PERIOD_MINUTES`, in milliseconds.
+/// The extension's `FAST_OBSERVATION_PERIOD_MINUTES`, in milliseconds: the shortest period any
+/// record is read at, so the host's observation tick.
 #[uniffi::export]
 pub fn activity_observation_period_ms() -> u64 {
-    crate::activity::store::FAST_OBSERVATION_PERIOD_MS
+    observation::FAST_OBSERVATION_PERIOD_MS
+}
+
+/// The least time between two status reads of `record`: the fast period for an unresolved one,
+/// `SLOW_OBSERVATION_PERIOD_MINUTES` for an accepted one still awaiting L1. A record on neither
+/// tier gets the slow period (it is not observed at all; see `activity_needs_observation`).
+#[uniffi::export]
+pub fn activity_observation_period_for(record: crate::ActivityEntry) -> u64 {
+    match observation::tier(record.status, record.finalized_on_l1 == Some(true)) {
+        Some(tier) => observation::period_ms(tier),
+        None => observation::SLOW_OBSERVATION_PERIOD_MS,
+    }
 }
 
 /// Longest node reply the core parses. Hosts stop reading a reply at this many bytes (and treat

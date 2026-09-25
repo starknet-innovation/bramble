@@ -270,3 +270,71 @@ fn submitted_and_on_chain_rows_share_one_log() {
         .any(|e| e.hash == hash && e.status == TxStatus::Pending));
     assert_eq!(book.cached(id, NetworkId::Sepolia).entries, listed);
 }
+
+/// The extension's two observation tiers and its one-time "retired" notice, through the exported
+/// surface the hosts use: a record whose write reply was lost stays observed for an hour, is then
+/// retired with its status kept, and its notice is handed out exactly once. An accepted record
+/// waiting on L1 stays on the slow tier for seven days.
+#[test]
+fn an_unresolved_record_is_retired_after_an_hour_with_one_notice() {
+    use bramble_core::{
+        activity_needs_observation, activity_observation_period_for,
+        activity_observation_period_ms, NetworkId,
+    };
+    let (_dir, core) = wallet();
+    let mut node = sepolia(true);
+    let plan = reviewed(&core, &mut node, ACCOUNT_1);
+    let step = plan.advance(StepReply::Confirm).unwrap();
+    run_until(&plan, &core, &mut node, step, |_, write| write);
+    plan.close();
+    let id = oz_id(&core, NetworkId::Sepolia, 0);
+    let record = core.activity(id.clone()).unwrap().remove(0);
+    let hour = 60 * 60 * 1_000;
+    let at = record.submitted_at;
+    assert!(activity_needs_observation(record.clone(), at + hour - 1));
+    assert!(!activity_needs_observation(record.clone(), at + hour));
+    assert_eq!(activity_observation_period_for(record.clone()), 60_000);
+    assert_eq!(activity_observation_period_ms(), 60_000);
+
+    assert!(core
+        .take_activity_notices(id.clone(), at + hour - 1)
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        core.take_activity_notices(id.clone(), at + hour).unwrap(),
+        vec![format!(
+            "Bramble could not confirm \"{}\". Check it on an explorer before retrying.",
+            record.summary
+        )]
+    );
+    assert!(core
+        .take_activity_notices(id.clone(), at + 2 * hour)
+        .unwrap()
+        .is_empty());
+    let retired = core.activity(id.clone()).unwrap().remove(0);
+    assert_eq!(
+        retired.status,
+        TxStatus::Pending,
+        "the outcome is never invented"
+    );
+
+    let week = 7 * 24 * hour;
+    let accepted = bramble_core::ActivityEntry {
+        status: TxStatus::Accepted,
+        failure_notice: None,
+        ..record
+    };
+    assert!(activity_needs_observation(accepted.clone(), at + week - 1));
+    assert!(!activity_needs_observation(accepted.clone(), at + week));
+    assert_eq!(
+        activity_observation_period_for(accepted.clone()),
+        15 * 60_000
+    );
+    let final_on_l1 = bramble_core::ActivityEntry {
+        finalized_on_l1: Some(true),
+        ..accepted
+    };
+    assert!(!activity_needs_observation(final_on_l1, at));
+    core.lock();
+    assert!(core.take_activity_notices(id, at).is_err(), "locked");
+}

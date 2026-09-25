@@ -17,7 +17,9 @@ private enum WalletDefaults {
 @Observable
 final class WalletStore {
     /// `discovery`: an imported vault still waiting for "Find your accounts" (recovery pending).
-    enum Route: Equatable { case onboarding, locked, discovery, wallet }
+    /// `backup`: a created wallet whose Confirm backup step is still owed (the core's
+    /// `backupPending`), resumed at Save phrase after every unlock until it is confirmed.
+    enum Route: Equatable { case onboarding, locked, discovery, backup, wallet }
     enum Tab: Equatable { case home, activity, settings }
 
     private(set) var route: Route = .onboarding
@@ -31,14 +33,21 @@ final class WalletStore {
     /// an account (send, deploy, activity) names it by `activeRecord.id`, never by index.
     var activeRecord: AccountRecord?
     private(set) var busy = false
-    /// Words of a just-created wallet; never persisted, cleared on finish or lock.
+    /// Words of a just-created wallet, or of one whose backup is still pending (revealed through
+    /// the core's password-checked path); never persisted, cleared on finish or lock.
     private(set) var pendingBackup: [String] = []
     /// A transient message shown as a toast: an error unless it was raised through `notify`.
     var toast: String?
     /// The message `notify` raised last. Only while it is still the toast does the toast take the
     /// success tone, so an error assigned over a notice is always shown as an error.
     @ObservationIgnored private var notice: String?
-    var toastTone: ToastTone { toast != nil && toast == notice ? .success : .error }
+    /// The message `warn` raised last; while it is still the toast, the toast is neutral.
+    @ObservationIgnored private var caution: String?
+    var toastTone: ToastTone {
+        guard let toast else { return .error }
+        if toast == notice { return .success }
+        return toast == caution ? .neutral : .error
+    }
     /// Lock, backoff and biometric state from the core (passive; never renews the session).
     private(set) var security: SecurityStatus
     /// When the next passphrase attempt is allowed, on the monotonic clock; nil when it is now.
@@ -51,8 +60,10 @@ final class WalletStore {
     var deployment: DeploymentState = .unknown
     /// Open transfer plans, closed on lock (defence in depth: the core refuses them anyway).
     var plans: [TransferPlan] = []
-    /// When each pending record was last read (ms), so reconciliation keeps the extension's cadence.
+    /// When each observed record was last read (ms), so reconciliation keeps the extension's cadence.
     var observedAtMs: [String: UInt64] = [:]
+    /// Ticks `observeActivity` while the wallet is open (WalletStore+Send.swift); cancelled on lock.
+    @ObservationIgnored var observationTicker: Task<Void, Never>?
     /// The selected account's private-balance reading (WalletStore+Privacy.swift); never persisted.
     let privacy = PrivacyModel()
 
@@ -81,6 +92,13 @@ final class WalletStore {
     /// Shows a confirmation (not an error) as the toast, in the success tone.
     func notify(_ message: String) {
         notice = message
+        toast = message
+    }
+
+    /// Shows a caution that is neither an error nor a confirmation (the screenshot warning) in the
+    /// neutral tone: the extension's toast has no warning tone, so this is its untoned `.toast`.
+    func warn(_ message: String) {
+        caution = message
         toast = message
     }
 
@@ -128,6 +146,19 @@ final class WalletStore {
         return try await work { try walletCore.activeAccount() }
     }
 
+    /// Records that Confirm backup succeeded, so no later unlock returns to Save phrase. Throws
+    /// the core's error; the flag then stays set and the step is offered again.
+    func confirmBackup() async throws {
+        let walletCore = core
+        try await work { try walletCore.confirmBackup() }
+    }
+
+    /// Reveals the words of a wallet whose backup is still pending, for Save phrase, after the
+    /// passphrase check the core applies to every reveal (throttled and counted).
+    func revealPendingBackup(password: String) async throws {
+        pendingBackup = try await revealPhrase(password: password)
+    }
+
     /// Leaves onboarding for the wallet; the backup words are dropped here.
     func finishOnboarding() async {
         pendingBackup = []
@@ -146,11 +177,18 @@ final class WalletStore {
         }
         biometricNotice = nil
         refreshSecurity()
+        // A backup still owed resumes at Save phrase with the words revealed by this same,
+        // just-checked passphrase; if that reveal fails, the backup step asks for it again.
+        if (try? walletCore.backupPending()) == true {
+            pendingBackup = (try? await revealPhrase(password: password)) ?? []
+        }
         await enterWallet()
     }
 
     func lock() {
         idleTimer?.cancel()
+        observationTicker?.cancel()
+        observationTicker = nil
         privacy.reset()
         plans.forEach { $0.close() }
         plans = []
@@ -203,9 +241,15 @@ final class WalletStore {
             scheduleIdleLock()
             return
         }
+        if (try? core.backupPending()) == true {
+            route = .backup
+            scheduleIdleLock()
+            return
+        }
         await reloadAccounts(ensure: true)
         route = .wallet
         scheduleIdleLock()
+        startActivityObservation()
         await refreshBalances(reset: true)
     }
 
@@ -222,7 +266,7 @@ final class WalletStore {
     func scheduleIdleLock() {
         idleTimer?.cancel()
         guard let remaining = core.sessionRemainingMs() else {
-            if route == .wallet || route == .discovery { lock() }
+            if route == .wallet || route == .discovery || route == .backup { lock() }
             return
         }
         idleTimer = Task { [weak self] in
@@ -246,7 +290,7 @@ final class WalletStore {
         } catch {
             // Any other failure leaves the biometric slot as it is; the core still guards unlock.
         }
-        if route == .wallet || route == .discovery, core.status() != .unlocked { lock() }
+        if route == .wallet || route == .discovery || route == .backup, core.status() != .unlocked { lock() }
         refreshSecurity()
     }
 

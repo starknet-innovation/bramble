@@ -8,12 +8,14 @@ import SwiftUI
 /// The vault is written when the passphrase is accepted (the core generates or imports the phrase
 /// and seals it in one call); later steps only read public data or the words kept for backup. An
 /// imported vault stays "recovery pending" until discovery restores its accounts, so unlocking one
-/// resumes at "Find your accounts" (`resumingDiscovery`).
+/// resumes at "Find your accounts" (`resumingDiscovery`). Likewise a created vault stays "backup
+/// pending" until Confirm backup succeeds, so unlocking one resumes at Save phrase
+/// (`resumingBackup`), after a passphrase check when the unlock did not already reveal the words.
 struct OnboardingFlow: View {
     enum Path: Equatable { case create, recover }
     enum Step: Equatable {
         case welcome, importMethod, recoveryPhrase, passphrase
-        case reviewAccount, findAccounts, savePhrase, confirmBackup, complete
+        case reviewAccount, findAccounts, revealBackup, savePhrase, confirmBackup, complete
 
         /// The edge back-swipe runs only on the steps before the vault is written. `welcome` is
         /// the root, and every step from `reviewAccount` / `findAccounts` on comes after
@@ -23,7 +25,7 @@ struct OnboardingFlow: View {
             case .importMethod, .recoveryPhrase, .passphrase:
                 true
 
-            case .welcome, .reviewAccount, .findAccounts, .savePhrase, .confirmBackup, .complete:
+            case .welcome, .reviewAccount, .findAccounts, .revealBackup, .savePhrase, .confirmBackup, .complete:
                 false
             }
         }
@@ -39,6 +41,13 @@ struct OnboardingFlow: View {
     init(resumingDiscovery: Bool = false) {
         _steps = State(initialValue: [resumingDiscovery ? .findAccounts : .welcome])
         _path = State(initialValue: resumingDiscovery ? .recover : .create)
+    }
+
+    /// `resumingBackup`: a created vault unlocked while its backup is still pending re-enters at
+    /// `.savePhrase` when the words are already revealed, else at `.revealBackup`.
+    init(resumingBackup step: Step) {
+        _steps = State(initialValue: [step])
+        _path = State(initialValue: .create)
     }
 
     @State private var forward = true
@@ -117,11 +126,24 @@ struct OnboardingFlow: View {
         case .findAccounts:
             FindAccountsStep { replace(with: .complete) }
 
+        case .revealBackup:
+            RevealBackupStep { password in
+                try await store.revealPendingBackup(password: password)
+                replace(with: .savePhrase)
+            }
+
         case .savePhrase:
             SavePhraseStep(words: store.pendingBackup) { push(.confirmBackup) }
 
         case .confirmBackup:
-            ConfirmBackupStep(words: store.pendingBackup, back: pop) { replace(with: .complete) }
+            ConfirmBackupStep(words: store.pendingBackup, back: pop) {
+                Task {
+                    do {
+                        try await store.confirmBackup()
+                        replace(with: .complete)
+                    } catch { store.toast = describe(error) }
+                }
+            }
 
         case .complete:
             CompleteStep { Task { await store.finishOnboarding() } }

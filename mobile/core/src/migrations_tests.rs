@@ -22,7 +22,15 @@ fn fixed_randomness() -> Randomness {
 fn records_json(version: u32) -> Vec<u8> {
     let mut payload = VaultPayload::new(PHRASE.into(), None, Some(NetworkId::Sepolia)).unwrap();
     payload.version = version;
+    if version < 4 {
+        // `backupPending` exists from version 4 on.
+        payload.backup_pending = None;
+    }
     payload.to_json().unwrap().to_vec()
+}
+
+fn records_value(version: u32) -> serde_json::Value {
+    serde_json::from_slice(&records_json(version)).unwrap()
 }
 
 #[test]
@@ -56,6 +64,7 @@ fn a_count_payload_becomes_one_oz_record_per_index_per_network() {
             Some(payload.accounts[0].id.as_str())
         );
         assert!(!payload.recovery_pending);
+        assert_eq!(payload.backup_pending, Some(false));
         assert!(payload.labels.is_empty() && payload.groups.is_empty());
     }
 }
@@ -67,6 +76,43 @@ fn the_accounts_branch_records_payload_is_retagged_unchanged() {
     let (current, _) = migrate(stage(&records_json(VAULT_VERSION)).unwrap()).unwrap();
     assert_eq!(payload.accounts, current.accounts);
     assert_eq!(payload.active_account_id, current.active_account_id);
+}
+
+#[test]
+fn a_version_three_payload_gains_a_clear_backup_flag_and_nothing_else() {
+    let (payload, migrated) = migrate(stage(&records_json(3)).unwrap()).unwrap();
+    assert!(migrated);
+    assert_eq!(payload.version, 4);
+    assert_eq!(
+        payload.backup_pending,
+        Some(false),
+        "a v3 wallet is never re-prompted"
+    );
+    let v3 = records_value(3);
+    let v4: serde_json::Value = serde_json::from_slice(&payload.to_json().unwrap()).unwrap();
+    assert!(v3.get("backupPending").is_none());
+    assert_eq!(v4["backupPending"], false);
+    for key in [
+        "accounts",
+        "activeAccountId",
+        "groups",
+        "labels",
+        "mnemonic",
+        "recoveryPending",
+    ] {
+        assert_eq!(v3[key], v4[key], "{key} is carried over unchanged");
+    }
+}
+
+#[test]
+fn a_created_payload_is_backup_pending_and_an_imported_one_is_not() {
+    let created = VaultPayload::new(PHRASE.into(), None, Some(NetworkId::Sepolia)).unwrap();
+    assert_eq!(created.backup_pending, Some(true));
+    let imported = VaultPayload::new(PHRASE.into(), None, None).unwrap();
+    assert_eq!(imported.backup_pending, Some(false));
+    let (reopened, migrated) = migrate(stage(&created.to_json().unwrap()).unwrap()).unwrap();
+    assert!(!migrated);
+    assert_eq!(reopened.backup_pending, Some(true), "the flag round-trips");
 }
 
 #[test]
@@ -86,16 +132,38 @@ fn invalid_payloads_fail_closed() {
     for bad in [
         counted_json(0, 1, PHRASE).to_vec(),  // no such version
         counted_json(3, 1, PHRASE).to_vec(),  // a count payload is never version 3
-        counted_json(4, 1, PHRASE).to_vec(),  // from the future
+        counted_json(4, 1, PHRASE).to_vec(),  // a count payload is never version 4
+        counted_json(5, 1, PHRASE).to_vec(),  // from the future
         counted_json(1, 0, PHRASE).to_vec(),  // no accounts
         counted_json(1, 33, PHRASE).to_vec(), // above the old cap
         counted_json(1, 1, "not a phrase").to_vec(),
         records_json(1), // records were never version 1
-        records_json(4),
+        records_json(5),
         b"{\"version\":2}".to_vec(),
         b"[]".to_vec(),
     ] {
         assert!(matches!(refused(&bad), CoreError::Storage { .. }));
+    }
+    // `backupPending` before version 4, or missing or mistyped from version 4 on.
+    for version in [2, 3] {
+        let mut early = records_value(version);
+        early["backupPending"] = false.into();
+        assert!(matches!(
+            refused(&serde_json::to_vec(&early).unwrap()),
+            CoreError::Storage { .. }
+        ));
+    }
+    for missing in [serde_json::Value::Null, "yes".into(), 1.into()] {
+        let mut current = records_value(4);
+        if missing.is_null() {
+            current.as_object_mut().unwrap().remove("backupPending");
+        } else {
+            current["backupPending"] = missing;
+        }
+        assert!(matches!(
+            refused(&serde_json::to_vec(&current).unwrap()),
+            CoreError::Storage { .. }
+        ));
     }
     // A stored record that does not re-derive from the phrase is tampering.
     let mut tampered: serde_json::Value = serde_json::from_slice(&records_json(2)).unwrap();
@@ -116,6 +184,11 @@ fn each_layout_accepts_only_the_versions_it_was_written_with() {
     assert!(!envelope_accepts(&records(3)));
     assert!(container_accepts(&counted(2), 2));
     assert!(container_accepts(&records(3), 3));
+    assert!(container_accepts(&records(4), 4));
+    assert!(
+        !container_accepts(&records(4), 3),
+        "payload and container versions are bound"
+    );
     assert!(!container_accepts(&counted(1), 1));
     assert!(
         !container_accepts(&records(2), 2),
@@ -126,6 +199,7 @@ fn each_layout_accepts_only_the_versions_it_was_written_with() {
         "payload and container versions are bound"
     );
     assert!(!container_accepts(&records(3), 2));
+    assert!(!container_accepts(&counted(2), 4));
 }
 
 #[test]
@@ -142,7 +216,7 @@ fn sealing_a_migrated_vault_is_deterministic_given_its_randomness() {
     assert_eq!(first, seal());
     // Golden: the exact file this input must produce. A change here changes stored bytes.
     let golden: serde_json::Value = serde_json::from_str(include_str!(
-        "../tests/fixtures/migration-v1-to-v3.golden.json"
+        "../tests/fixtures/migration-v1-to-v4.golden.json"
     ))
     .unwrap();
     assert_eq!(

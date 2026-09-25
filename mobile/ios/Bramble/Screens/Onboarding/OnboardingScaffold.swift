@@ -119,6 +119,7 @@ struct OnboardingStep<Body: View, CTA: View>: View {
             // `.onboarding-step-cta` (`margin-top: auto`): pinned to the foot of the step, and so
             // above the keyboard while it is up.
             VStack(spacing: metrics.ctaGap) { cta() }
+                .toastAnchor()
                 .padding(.horizontal, insets.inline)
                 .padding(.top, metrics.ctaTop)
                 .padding(.bottom, insets.bottom)

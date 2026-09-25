@@ -75,6 +75,12 @@ class WalletStore(
     /** Open transfer plans, closed on lock (defence in depth: the core voids them on any lock). */
     internal val plans = mutableListOf<TransferPlan>()
 
+    /** When each observed activity record was last read (wall ms), for the extension's cadence. */
+    internal val observedAtMs = mutableMapOf<String, ULong>()
+
+    /** Ticks [observeActivity] while the wallet is open (WalletStoreSend.kt); cancelled on lock. */
+    internal var observationTicker: Job? = null
+
     /** The top-level screen; in memory only, and back to [Route.LOCKED] on every lock. */
     var route by mutableStateOf(if (vaultWritten) Route.LOCKED else Route.ONBOARDING)
         private set
@@ -110,7 +116,10 @@ class WalletStore(
     /** True while a core call runs ([CoreCalls]); the screens disable their actions on it. */
     val busy: Boolean get() = calls.busy
 
-    /** Words of a just-created wallet; never persisted, cleared on finish or lock. */
+    /**
+     * Words of a just-created wallet, or of one whose backup is still pending (revealed through
+     * the core's password-checked path); never persisted, cleared on finish or lock.
+     */
     var pendingBackup by mutableStateOf(emptyList<String>())
         internal set
 
@@ -222,6 +231,9 @@ class WalletStore(
         session.end()
         plans.forEach { it.close() }
         plans.clear()
+        observationTicker?.cancel()
+        observationTicker = null
+        observedAtMs.clear()
         idleTimer?.cancel()
         idleTimer = null
         coordination.reset()
@@ -289,6 +301,11 @@ class WalletStore(
             scheduleIdleLock()
             return
         }
+        if (calls.work(ticket) { core.backupPending() }) {
+            route = Route.BACKUP
+            scheduleIdleLock()
+            return
+        }
         try {
             reloadAccounts(ticket, ensure = true)
         } catch (error: CoreException) {
@@ -298,6 +315,7 @@ class WalletStore(
         }
         route = Route.WALLET
         scheduleIdleLock()
+        startActivityObservation()
         refreshBalances(ticket)
     }
 

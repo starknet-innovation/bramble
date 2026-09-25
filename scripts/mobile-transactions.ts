@@ -19,7 +19,8 @@ import {
   getTransactionStatuses,
   parseTokenAmount,
 } from "@bramble/starknet/rpc";
-import { monotonicActivityStatus } from "@bramble/transactions/activity";
+import { type ActivityEntry, monotonicActivityStatus } from "@bramble/transactions/activity";
+import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@bramble/transactions/alerts";
 import { verifyCalls } from "@bramble/transactions/verify";
 import { shortAddress } from "@bramble/transactions/verify-decode";
 import {
@@ -32,8 +33,14 @@ import { config, hash, stark, transaction } from "starknet";
 // Not package exports: the send journey's copy and formatters are side-panel modules, read here
 // only to pin the mobile port, exactly as `./mobile-parity` reads the avatar renderer.
 import {
+  expiredObservations,
   FAST_OBSERVATION_PERIOD_MINUTES,
+  failureNoticeMessage,
+  isObservedAt,
+  L1_FINALITY_WINDOW_MS,
   NOT_FOUND_FAILURE_THRESHOLD,
+  retiredOutcome,
+  SLOW_OBSERVATION_PERIOD_MINUTES,
   UNRESOLVED_WINDOW_MS,
 } from "../apps/extension/src/background/transactions/tx-observation";
 import {
@@ -364,6 +371,73 @@ export const computeStatusVectors = async () => {
     notFoundThreshold: NOT_FOUND_FAILURE_THRESHOLD,
     fastObservationPeriodMinutes: FAST_OBSERVATION_PERIOD_MINUTES,
     unresolvedWindowMs: UNRESOLVED_WINDOW_MS,
+    l1FinalityWindowMs: L1_FINALITY_WINDOW_MS,
+    maxAlertsPerDrain: MAX_TRANSACTION_ALERTS_PER_DRAIN,
+    notices: statuses.map((status) => ({
+      message: failureNoticeMessage(observedEntry(status)),
+      status,
+      summary: observedEntry(status).summary,
+    })),
+    slowObservationPeriodMinutes: SLOW_OBSERVATION_PERIOD_MINUTES,
+  };
+};
+
+const OBSERVED_AT = 1_000;
+
+const observedEntry = (
+  status: ActivityEntry["status"],
+  extra: Partial<ActivityEntry> = {},
+): ActivityEntry => ({
+  accountId: "SN_SEPOLIA:0x1",
+  hash: "0xabc",
+  kind: "transfer",
+  networkId: "SN_SEPOLIA",
+  status,
+  submittedAt: OBSERVED_AT,
+  summary: "Send 1.5 STRK to 0x1…0x1",
+  ...extra,
+});
+
+/**
+ * The observation tiers (`isObservedAt`) and retirement (`expiredObservations` +
+ * `retiredOutcome`) from `tx-observation.ts`, over status × `finalizedOnL1` × `failureNotice` ×
+ * age. One compact row per case (see `columns`) keeps the file within the 500-line limit.
+ */
+export const computeObservationVectors = () => {
+  const statuses = ["pending", "preconfirmed", "accepted", "rejected", "reverted"] as const;
+  const ages = [
+    0,
+    UNRESOLVED_WINDOW_MS - 1,
+    UNRESOLVED_WINDOW_MS,
+    L1_FINALITY_WINDOW_MS - 1,
+    L1_FINALITY_WINDOW_MS,
+  ];
+  const cases = statuses.flatMap((status) =>
+    [undefined, false, true].flatMap((finalizedOnL1) =>
+      [undefined, "pending" as const].flatMap((failureNotice) =>
+        ages.map((ageMs) => {
+          const stored = observedEntry(status, {
+            ...(finalizedOnL1 === undefined ? {} : { finalizedOnL1 }),
+            ...(failureNotice === undefined ? {} : { failureNotice }),
+          });
+          const now = OBSERVED_AT + ageMs;
+          return [
+            status,
+            finalizedOnL1 ?? null,
+            failureNotice ?? null,
+            ageMs,
+            isObservedAt(stored, "fast", now),
+            isObservedAt(stored, "slow", now),
+            expiredObservations([stored], now).length === 1,
+          ];
+        }),
+      ),
+    ),
+  );
+  return {
+    cases,
+    columns: ["status", "finalizedOnL1", "failureNotice", "ageMs", "fast", "slow", "expired"],
+    retired: statuses.map((status) => retiredOutcome(observedEntry(status))),
   };
 };
 

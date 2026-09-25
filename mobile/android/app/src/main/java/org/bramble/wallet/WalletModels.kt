@@ -18,12 +18,15 @@ enum class Route {
     /** Unlocked with recovery pending: "Find your accounts". */
     DISCOVERY,
 
+    /** Unlocked with a created wallet's backup still owed: Save phrase, then Confirm backup. */
+    BACKUP,
+
     /** Unlocked with accounts: the wallet shell. */
     WALLET,
     ;
 
     /** The routes shown only while the core holds an unlocked session. */
-    val unlocked: Boolean get() = this == DISCOVERY || this == WALLET
+    val unlocked: Boolean get() = this == DISCOVERY || this == BACKUP || this == WALLET
 }
 
 /** Dock tabs, as iOS `WalletStore.Tab`. */

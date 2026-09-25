@@ -18,12 +18,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import org.bramble.wallet.WalletStore
+import org.bramble.wallet.confirmBackup
 import org.bramble.wallet.create
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.BrambleMotion
 import org.bramble.wallet.design.brambleTween
 import org.bramble.wallet.finishOnboarding
 import org.bramble.wallet.importWallet
+import org.bramble.wallet.revealPendingBackup
 
 private enum class Step {
     WELCOME,
@@ -32,6 +34,7 @@ private enum class Step {
     PASSPHRASE,
     REVIEW_ACCOUNT,
     FIND_ACCOUNTS,
+    REVEAL_BACKUP,
     SAVE_PHRASE,
     CONFIRM_BACKUP,
     COMPLETE,
@@ -45,6 +48,8 @@ private data class StepActions(
     val choose: (OnboardingPath) -> Unit,
     val phraseEntered: (String) -> Unit,
     val passphraseAccepted: suspend (String) -> Unit,
+    /** Runs [body] in the flow's scope; a failure is shown as the store's error toast. */
+    val launch: (suspend () -> Unit) -> Unit,
 )
 
 /**
@@ -56,7 +61,10 @@ private data class StepActions(
  * The vault is written when the passphrase is accepted; after that the stack is replaced, so
  * neither the back control nor the system back gesture returns past it. An imported vault stays
  * recovery pending until discovery restores its accounts, so unlocking one resumes at "Find your
- * accounts" ([resumingDiscovery], `Route.DISCOVERY`). Steps slide and fade on
+ * accounts" ([resumingDiscovery], `Route.DISCOVERY`). Likewise a created vault stays backup
+ * pending until Confirm backup succeeds, so unlocking one resumes at Save phrase
+ * ([resumingBackup], `Route.BACKUP`), after a passphrase check when the unlock did not already
+ * reveal the words. Steps slide and fade on
  * the out ease over `drawerMs`; Compose scales that by the system animator setting, so it is a
  * cut when animations are off.
  */
@@ -64,9 +72,10 @@ private data class StepActions(
 fun OnboardingFlow(
     store: WalletStore,
     resumingDiscovery: Boolean = false,
+    resumingBackup: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
-    var steps by remember { mutableStateOf(listOf(if (resumingDiscovery) Step.FIND_ACCOUNTS else Step.WELCOME)) }
+    var steps by remember { mutableStateOf(listOf(firstStep(store, resumingDiscovery, resumingBackup))) }
     var path by remember { mutableStateOf(if (resumingDiscovery) OnboardingPath.RECOVER else OnboardingPath.CREATE) }
     var forward by remember { mutableStateOf(true) }
     // Typed on the recovery step, handed to the core at the passphrase step, then cleared.
@@ -98,6 +107,7 @@ fun OnboardingFlow(
                 writeVault(store, path, passphrase, importedPhrase) { importedPhrase = "" }
                 replace(stepAfterVault(path))
             },
+            launch = { body -> scope.launch { runCatching { body() }.onFailure(store::showError) } },
         )
 
     BackHandler(enabled = steps.size > 1) { pop() }
@@ -142,6 +152,19 @@ private suspend fun writeVault(
         consumed()
     }
 }
+
+/** The step the flow opens at: first run, resumed discovery, or a resumed backup. */
+private fun firstStep(
+    store: WalletStore,
+    resumingDiscovery: Boolean,
+    resumingBackup: Boolean,
+): Step =
+    when {
+        resumingDiscovery -> Step.FIND_ACCOUNTS
+        resumingBackup && store.pendingBackup.isEmpty() -> Step.REVEAL_BACKUP
+        resumingBackup -> Step.SAVE_PHRASE
+        else -> Step.WELCOME
+    }
 
 /** Where the flow goes once the vault is written; the stack is replaced so back cannot undo it. */
 private fun stepAfterVault(path: OnboardingPath): Step =
@@ -199,12 +222,24 @@ private fun StepContent(
             FindAccountsStep(store) { actions.replace(Step.COMPLETE) }
         }
 
+        Step.REVEAL_BACKUP -> {
+            RevealBackupStep(store) { password ->
+                store.revealPendingBackup(password)
+                actions.replace(Step.SAVE_PHRASE)
+            }
+        }
+
         Step.SAVE_PHRASE -> {
             SavePhraseStep(store.pendingBackup) { actions.push(Step.CONFIRM_BACKUP) }
         }
 
         Step.CONFIRM_BACKUP -> {
-            ConfirmBackupStep(store.pendingBackup, back = actions.pop) { actions.replace(Step.COMPLETE) }
+            ConfirmBackupStep(store.pendingBackup, back = actions.pop) {
+                actions.launch {
+                    store.confirmBackup()
+                    actions.replace(Step.COMPLETE)
+                }
+            }
         }
 
         Step.COMPLETE -> {

@@ -14,6 +14,7 @@ mod account_names;
 mod account_store;
 mod activity;
 mod argent_multisig;
+mod backup;
 mod biometric;
 mod class_declared;
 mod clock;
@@ -100,6 +101,7 @@ pub use send::types::{
     TransferReview, TxStatus,
 };
 pub use send::{
+    activity_needs_observation, activity_observation_period_for, activity_observation_period_ms,
     confirmation_checkpoints_ms, deployment_status_request, judge_deployment_status,
     parse_token_amount, validate_recipient,
 };

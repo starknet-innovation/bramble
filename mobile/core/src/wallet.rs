@@ -309,7 +309,8 @@ impl WalletCore {
 
     /// Creates a wallet from fresh entropy with its first account (OZ index 0) on `network` and
     /// leaves it unlocked. The returned phrase is the only copy the UI ever receives unprompted;
-    /// it must be shown once for backup and dropped.
+    /// it must be shown once for backup and dropped. The vault records the backup as pending
+    /// (`backup_pending`) until `confirm_backup`.
     pub fn create_wallet_on_network(
         &self,
         password: String,

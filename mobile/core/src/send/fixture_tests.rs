@@ -11,6 +11,7 @@ use super::judge::{self, Observation};
 use super::plan::{CONFIRMATION_DELAYS_MS, DEPLOY_POLL_ATTEMPTS, DEPLOY_POLL_INTERVAL_MS};
 use super::types::{FeeUnit, ReviewFlag, SendAmountError, TxStatus};
 use super::u256::U256;
+use crate::activity::observation::{self, Tier};
 use crate::activity::store;
 use crate::felt;
 use crate::networks::NetworkId;
@@ -21,6 +22,7 @@ fn fixture() -> Value {
         include_str!("../../tests/fixtures/extension-transactions-rules.json"),
         include_str!("../../tests/fixtures/extension-transactions-presentation.json"),
         include_str!("../../tests/fixtures/extension-transactions-status.json"),
+        include_str!("../../tests/fixtures/extension-transactions-observation.json"),
     ] {
         let part: Value = serde_json::from_str(text).unwrap();
         whole.extend(part.as_object().unwrap().clone());
@@ -277,16 +279,86 @@ fn status_judgement_matches_the_extension() {
     );
     assert_eq!(
         status_json["unresolvedWindowMs"],
-        store::UNRESOLVED_WINDOW_MS
+        observation::UNRESOLVED_WINDOW_MS
     );
     assert_eq!(
-        status_json["fastObservationPeriodMinutes"]
-            .as_u64()
-            .unwrap()
-            * 60_000,
-        store::FAST_OBSERVATION_PERIOD_MS
+        status_json["l1FinalityWindowMs"],
+        observation::L1_FINALITY_WINDOW_MS
+    );
+    let minutes = |key: &str| status_json[key].as_u64().unwrap() * 60_000;
+    assert_eq!(
+        minutes("fastObservationPeriodMinutes"),
+        observation::period_ms(Tier::Fast)
+    );
+    assert_eq!(
+        minutes("slowObservationPeriodMinutes"),
+        observation::period_ms(Tier::Slow)
+    );
+    assert_eq!(
+        status_json["maxAlertsPerDrain"],
+        observation::MAX_ALERTS_PER_DRAIN
     );
     let _ = TxStatus::Pending;
+}
+
+#[test]
+fn observation_tiers_retirement_and_notices_match_the_extension() {
+    let whole = fixture();
+    let status_json = &whole["status"];
+    let observed = &whole["observation"];
+    let columns: Vec<&str> = observed["columns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_str().unwrap())
+        .collect();
+    assert_eq!(
+        columns,
+        [
+            "status",
+            "finalizedOnL1",
+            "failureNotice",
+            "ageMs",
+            "fast",
+            "slow",
+            "expired"
+        ]
+    );
+    let cases = observed["cases"].as_array().unwrap();
+    assert!(!cases.is_empty());
+    for case in cases {
+        let status = store::parse_status(case[0].as_str().unwrap()).unwrap();
+        let finalized = case[1].as_bool() == Some(true);
+        let has_notice = !case[2].is_null();
+        let (at, now) = (1_000, 1_000 + case[3].as_u64().unwrap());
+        let fast = observation::is_observed_at(status, finalized, at, Tier::Fast, now);
+        let slow = observation::is_observed_at(status, finalized, at, Tier::Slow, now);
+        assert_eq!(fast, case[4].as_bool().unwrap(), "{case}");
+        assert_eq!(slow, case[5].as_bool().unwrap(), "{case}");
+        assert_eq!(
+            observation::is_observed(status, finalized, at, now),
+            fast || slow
+        );
+        let expired = observation::is_expired(status, has_notice, at, now);
+        assert_eq!(expired, case[6].as_bool().unwrap(), "{case}");
+    }
+    // `retiredOutcome`: one pending notice, the status untouched (`store::retire_expired`).
+    for retired in observed["retired"].as_array().unwrap() {
+        assert_eq!(retired["failureNotice"], "pending");
+        assert!(store::parse_status(retired["status"].as_str().unwrap()).is_some());
+        assert_eq!(
+            retired.as_object().unwrap().len(),
+            2,
+            "nothing else changes"
+        );
+    }
+    for notice in status_json["notices"].as_array().unwrap() {
+        let status = store::parse_status(notice["status"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            observation::failure_notice_message(status, notice["summary"].as_str().unwrap()),
+            notice["message"].as_str().unwrap()
+        );
+    }
 }
 
 #[test]

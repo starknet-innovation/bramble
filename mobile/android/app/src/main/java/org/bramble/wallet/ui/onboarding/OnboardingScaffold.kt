@@ -45,6 +45,7 @@ import org.bramble.wallet.design.Medallion
 import org.bramble.wallet.design.ThemeChoice
 import org.bramble.wallet.design.brambleShadow
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.design.toastAnchor
 import org.bramble.wallet.ui.HEADLINE_TRACKING
 
 // The onboarding surface from `styles-onboarding.ts`, ported from the iOS OnboardingScaffold:
@@ -168,12 +169,14 @@ fun OnboardingStep(
             }
         }
         Column(
-            Modifier.fillMaxWidth().padding(
-                start = BrambleLayout.onboardingGutter,
-                end = BrambleLayout.onboardingGutter,
-                top = BrambleSpace.lg,
-                bottom = BrambleLayout.onboardingFoot,
-            ),
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = BrambleLayout.onboardingGutter,
+                    end = BrambleLayout.onboardingGutter,
+                    top = BrambleSpace.lg,
+                    bottom = BrambleLayout.onboardingFoot,
+                ).toastAnchor(), // toasts stack above the step's foot action
             verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
             content = cta,
         )
