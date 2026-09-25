@@ -11,6 +11,7 @@ pub(crate) mod fees;
 pub(crate) mod judge;
 pub(crate) mod plan;
 mod plan_deploy;
+mod plan_probe;
 mod plan_review;
 mod plan_submit;
 pub(crate) mod rpc_bodies;

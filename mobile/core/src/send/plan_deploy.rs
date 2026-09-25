@@ -1,6 +1,7 @@
 //! The automatic (and standalone) account deployment inside a plan, as the extension's
 //! `ensureAccountDeployed` / `submitAccountDeployment`: re-estimate against the separately
-//! reviewed deployment fee, sign `compute_deploy_account_v3_hash`, persist the pending record,
+//! reviewed deployment fee, sign `compute_deploy_account_v3_hash` over the account's own
+//! deployment (OpenZeppelin or Ready), persist the pending record,
 //! broadcast once, then wait for ACCEPTED_ON_L2/L1 and the receipt like starknet.js
 //! `waitForTransaction` (bounded at 200 attempts).
 
@@ -49,13 +50,10 @@ impl PlanState {
             Settled::Refused(code) => return self.fail(code, None),
         };
         let account = &self.account;
-        let hash = match sign::deploy_hash(
-            account.network,
-            &account.address,
-            &account.class_hash,
-            &account.public_key,
-            &bounds,
-        ) {
+        let Some(deployment) = account.deployment.as_ref() else {
+            return self.fail(Code::AccountNotDeployable, None);
+        };
+        let hash = match sign::deploy_hash(account.network, &account.address, deployment, &bounds) {
             Ok(hash) => hash,
             Err(refusal) => return self.fail(refusal_code(refusal), None),
         };
@@ -71,12 +69,14 @@ impl PlanState {
             true,
             |s, id| {
                 let zero = Felt::ZERO;
+                let unsigned = s
+                    .deploy_tx(&zero, &signature)
+                    .expect("a signed deployment has its parameters");
                 rpc_bodies::add_deploy(
                     id,
                     &DeployTx {
                         bounds: Some(&bounds),
-                        signature: Some(&signature),
-                        ..s.deploy_tx(&zero)
+                        ..unsigned
                     },
                 )
             },

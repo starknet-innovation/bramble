@@ -10,7 +10,7 @@ import org.bramble.wallet.send.SendHooks
 
 /**
  * A Send journey for the active account, with balances of this view only. Null while locked
- * and for an account the core will not sign for ([sendRefusal]: Braavos, Ready).
+ * and for an account the core will not sign for ([sendRefusal]: Braavos).
  */
 fun WalletStore.makeSendModel(): SendFlowModel? {
     val account = activeRecord?.takeIf { sendRefusal(it) == null } ?: return null

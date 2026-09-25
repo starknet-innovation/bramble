@@ -38,18 +38,46 @@ pub fn fixture() -> Value {
         let part: Value = serde_json::from_str(text).unwrap();
         whole.extend(part.as_object().unwrap().clone());
     }
-    for scenario in whole["scenarios"].as_array_mut().unwrap() {
-        for phase in ["reviewInvoke", "reviewDeployment", "submit"] {
-            let decoded: Vec<Value> = scenario[phase]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|line| serde_json::from_str(line.as_str().unwrap()).unwrap())
-                .collect();
-            scenario[phase] = Value::Array(decoded);
-        }
-    }
+    whole["scenarios"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .for_each(decode_wire);
     Value::Object(whole)
+}
+
+/// Decodes a scenario's wire phases, stored as one JSON string per exchange.
+fn decode_wire(scenario: &mut Value) {
+    for phase in ["reviewInvoke", "reviewDeployment", "submit"] {
+        let decoded: Vec<Value> = scenario[phase]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|line| serde_json::from_str(line.as_str().unwrap()).unwrap())
+            .collect();
+        scenario[phase] = Value::Array(decoded);
+    }
+}
+
+/// The Ready (Argent) capture: `(scenarios, refusals)` from the extension's own send path
+/// (`scripts/mobile-transactions-argent.ts`), wire phases decoded.
+pub fn argent_fixture() -> (Vec<Value>, Vec<Value>) {
+    let mut scenarios = Vec::new();
+    for text in [
+        include_str!("../fixtures/extension-transactions-argent.json"),
+        include_str!("../fixtures/extension-transactions-argent-upgraded.json"),
+    ] {
+        let part: Value = serde_json::from_str(text).unwrap();
+        scenarios.extend(part["scenarios"].as_array().unwrap().iter().cloned());
+    }
+    let refusals: Value = serde_json::from_str(include_str!(
+        "../fixtures/extension-transactions-argent-refusals.json"
+    ))
+    .unwrap();
+    let mut refusals = refusals["refusals"].as_array().unwrap().clone();
+    scenarios.iter_mut().for_each(decode_wire);
+    refusals.iter_mut().for_each(decode_wire);
+    (scenarios, refusals)
 }
 
 pub fn network(id: &str) -> NetworkId {

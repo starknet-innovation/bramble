@@ -89,6 +89,67 @@ pub fn class_hash(answer: Option<Answer>) -> ClassHashAnswer {
     }
 }
 
+/// A block-pinned `starknet_getClassHashAt` reply as `isCompatibleAccountDeployed` reads it for a
+/// Ready (Argent) account: the class matters, and a zero class hash reads as undeployed.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClassValue {
+    Class(Felt),
+    Undeployed,
+    NodeError,
+    Unreadable,
+}
+
+pub fn class_value(answer: Option<Answer>) -> ClassValue {
+    match answer {
+        Some(Answer::Result(Value::String(text))) => match felt::parse(&text) {
+            Some(class) if class == Felt::ZERO => ClassValue::Undeployed,
+            Some(class) => ClassValue::Class(class),
+            None => ClassValue::Unreadable,
+        },
+        Some(Answer::Result(_)) | None => ClassValue::Unreadable,
+        answer => match class_hash(answer) {
+            ClassHashAnswer::Undeployed => ClassValue::Undeployed,
+            _ => ClassValue::NodeError,
+        },
+    }
+}
+
+/// A `starknet_blockHashAndNumber` reply (`acceptedBlockIdentifier`): the non-zero hash of the
+/// latest accepted block. `Err(true)` for a JSON-RPC error, `Err(false)` for anything unusable.
+pub fn accepted_block(answer: Option<Answer>) -> Result<Felt, bool> {
+    match answer {
+        Some(Answer::Result(result)) => result
+            .get("block_hash")
+            .and_then(Value::as_str)
+            .and_then(felt::parse_non_zero)
+            .ok_or(false),
+        Some(Answer::Error { .. }) => Err(true),
+        None => Err(false),
+    }
+}
+
+/// A `starknet_call` reply to a one-felt view (`get_owner`, `get_owner_type`, `get_guardian`).
+#[derive(Debug, PartialEq, Eq)]
+pub enum CallAnswer {
+    /// The felt when the result is exactly one felt; `None` for any other result, which the
+    /// extension's `length !== 1` checks refuse.
+    Value(Option<Felt>),
+    NodeError,
+    Unreadable,
+}
+
+pub fn single_felt(answer: Option<Answer>) -> CallAnswer {
+    match answer {
+        Some(Answer::Result(Value::Array(values))) => CallAnswer::Value(match values.as_slice() {
+            [Value::String(text)] => felt::parse(text),
+            _ => None,
+        }),
+        Some(Answer::Result(_)) => CallAnswer::Value(None),
+        Some(Answer::Error { .. }) => CallAnswer::NodeError,
+        None => CallAnswer::Unreadable,
+    }
+}
+
 /// A `starknet_getNonce` reply through `getNonceSafe`: a JSON-RPC error reads as 0 (how an
 /// undeployed account answers). A missing or malformed reply is `None`: the core does not sign
 /// on a nonce it could not read, which is stricter than starknet.js.

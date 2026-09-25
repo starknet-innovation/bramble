@@ -180,7 +180,13 @@
       "autoDeploymentFailed": "This account is not deployed on-chain yet and automatic deployment failed. Fund the account address with STRK to cover fees, then retry.",
       "deploymentUnconfirmed": "Account deployment was broadcast as {hash}, but confirmation is unknown. The following transaction was not submitted; check the deployment on-chain before retrying.",
       "deploymentThenInvokeUnconfirmed": "Account deployment {hash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.",
-      "alreadyDeployed": "Account is already deployed"
+      "alreadyDeployed": "Account is already deployed",
+      "accountClassUnsupported": "Deployed Argent account class ({label}) expects an authorization format this wallet does not produce",
+      "accountClassUnrecognised": "Deployed Argent account class is not a release this wallet recognizes",
+      "accountNotDeployable": "Argent account class hash does not match the pinned release",
+      "accountOwnerMismatch": "Deployed Argent account owner does not match the wallet signer",
+      "accountOwnerTypeUnsupported": "Deployed Argent account owner type is not supported by this wallet",
+      "accountGuardianUnsupported": "Deployed Argent account guardian is not supported by this wallet"
     },
     "screens": {
       "activityRow": {

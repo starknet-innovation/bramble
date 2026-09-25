@@ -364,10 +364,11 @@ as defence in depth.
 
 **Signing inside the core.** At a signing point the core runs `with_session(renew = true)`, which
 applies the idle lock first, checks the generation, passes the plan's record through the one
-signing gate (`signing_record`: no pending discovery, no view-only record, OpenZeppelin only;
-accounts.md §2.7a), derives the key for the record's `account_index` as `kms::sign_hash` does (a per-call
+signing gate (`signing_record`: no pending discovery, no view-only record; OpenZeppelin and
+Ready, accounts.md §2.7a), derives the key for the record's `account_index` as `kms::sign_hash` does (a per-call
 zeroizing `SecretFelt`), checks that the returned public key equals the plan's stored
-`public_key`, signs, serialises the OZ signature as `[r, s]`, and drops the key.
+`public_key`, signs, serialises the signature for the record's family (OZ `[r, s]`; Ready
+`[1, 0, public_key, r, s]`), and drops the key.
 
 **Endpoint binding (must-fix: stated as host-enforced).** The core cannot see endpoints, so it
 does not claim to. What the core enforces: each plan starts with a `ChainId` step, and the

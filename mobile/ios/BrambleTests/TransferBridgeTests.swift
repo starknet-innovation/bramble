@@ -6,36 +6,8 @@ import XCTest
 /// recorded wire traffic (`extension-transactions-*.json`) and checks the shared presentation
 /// rules, so a binding or linking fault shows up as a wrong body or hash here.
 final class TransferBridgeTests: XCTestCase {
-    private func json(_ text: String) -> [String: Any] {
-        (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] ?? [:]
-    }
-
     private func network(_ scenario: [String: Any]) -> NetworkId {
         scenario["networkId"] as? String == "SN_MAIN" ? .mainnet : .sepolia
-    }
-
-    /// The reply to one request the plan sent: the chain id when the recording skipped it,
-    /// otherwise the next recorded exchange, whose method and params must match what was sent.
-    private func reply(
-        to body: String,
-        expected: inout ArraySlice<[String: Any]>,
-        chain: String
-    ) throws -> [String: Any] {
-        let sent = json(body)
-        let method: String = try fixtureValue(sent, "method")
-        if method == "starknet_chainId", (expected.first?["method"] as? String) != method {
-            return ["result": chain]
-        }
-        let exchange = try XCTUnwrap(expected.popFirst(), "mobile sent an extra \(method)")
-        XCTAssertEqual(method, exchange["method"] as? String)
-        if method != "starknet_chainId" {
-            XCTAssertEqual(
-                sent["params"] as? [String: AnyHashable],
-                exchange["params"] as? [String: AnyHashable],
-                method
-            )
-        }
-        return try fixtureValue(exchange, "reply")
     }
 
     /// Replays one recorded scenario request by request; returns the broadcast hash.
@@ -49,44 +21,17 @@ final class TransferBridgeTests: XCTestCase {
             amount: try fixtureValue(scenario, "amount"),
             feeBalance: nil
         ))
-        let chain = network == .mainnet ? "0x534e5f4d41494e" : "0x534e5f5345504f4c4941"
-        let reviewInvoke: [[String: Any]] = try fixtureValue(scenario, "reviewInvoke")
-        let reviewDeployment: [[String: Any]] = try fixtureValue(scenario, "reviewDeployment")
-        let review = (reviewInvoke + reviewDeployment).filter { $0["method"] as? String != "starknet_chainId" }
-        let submit: [[String: Any]] = try fixtureValue(scenario, "submit")
-        var expected = review[...]
-        var step = try plan.advance(reply: .start)
-        var confirmed = false
-        while true {
-            switch step {
-            case let .rpc(id, body, _, _):
-                var envelope = try reply(to: body, expected: &expected, chain: chain)
-                envelope["jsonrpc"] = "2.0"
-                envelope["id"] = id
-                let data = try JSONSerialization.data(withJSONObject: envelope)
-                let text = try XCTUnwrap(String(bytes: data, encoding: .utf8))
-                step = try plan.advance(reply: .rpc(id: id, body: text, nowMs: 1))
-
-            case .wait:
-                step = try plan.advance(reply: .waitElapsed)
-
-            case .review:
-                XCTAssertTrue(expected.isEmpty)
-                XCTAssertFalse(confirmed)
-                XCTAssertEqual(plan.currentReview()?.canConfirm, true)
-                expected = submit[...]
-                confirmed = true
-                step = try plan.advance(reply: .confirm)
-
-            case let .broadcast(hash):
-                XCTAssertTrue(expected.isEmpty)
-                return hash
-
-            default:
-                XCTFail("unexpected step \(step)")
-                return ""
-            }
+        let step = try RecordedWire.replay(
+            plan,
+            network: network,
+            review: RecordedWire.review(scenario),
+            submit: try fixtureValue(scenario, "submit")
+        )
+        guard case let .broadcast(hash) = step else {
+            XCTFail("unexpected step \(step)")
+            return ""
         }
+        return hash
     }
 
     func testRecordedSendsReplayToTheExtensionHash() throws {

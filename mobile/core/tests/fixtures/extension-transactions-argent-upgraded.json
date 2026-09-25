@@ -1,0 +1,156 @@
+{
+  "scenarios": [
+    {
+      "flow": "transfer",
+      "name": "argent-0.3.1-upgraded-SN_MAIN",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.3.1",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+      },
+      "account": {
+        "address": "0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1",
+        "classHash": "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
+        "deploymentSalt": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+        "publicKey": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"
+      },
+      "amount": "1.5",
+      "call": {
+        "calldata": [
+          "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+          "1500000000000000000",
+          "0"
+        ],
+        "contractAddress": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+      },
+      "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "reviewDeployment": [],
+      "reviewedDeploymentFee": null,
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\"},\"reply\":{\"result\":\"0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "signatures": [
+        {
+          "hash": "0x31e5ef701570b8fb264f8c713e2ba1318bdd7b59641f8dec7ee194fc4b32495",
+          "r": "0x708ce1615f51fe42dfe4c9d947bdb6c8c2ea09e90cb8c7e1230cc80cc809f26",
+          "s": "0x5904150f8d2b1e68019d239115ac274a62e9d89c9f0ec707d3def8e0c64787b",
+          "array": [
+            "0x1",
+            "0x0",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x708ce1615f51fe42dfe4c9d947bdb6c8c2ea09e90cb8c7e1230cc80cc809f26",
+            "0x5904150f8d2b1e68019d239115ac274a62e9d89c9f0ec707d3def8e0c64787b"
+          ]
+        }
+      ],
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\"},\"reply\":{\"result\":\"0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_addInvokeTransaction\",\"params\":{\"invoke_transaction\":{\"type\":\"INVOKE\",\"sender_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x708ce1615f51fe42dfe4c9d947bdb6c8c2ea09e90cb8c7e1230cc80cc809f26\",\"0x5904150f8d2b1e68019d239115ac274a62e9d89c9f0ec707d3def8e0c64787b\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x1b4ef0\",\"max_price_per_unit\":\"0x10c388d00\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x440aa0ad2e6\"},\"l1_data_gas\":{\"max_amount\":\"0x240\",\"max_price_per_unit\":\"0x870\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x3\"}},\"reply\":{\"result\":{\"transaction_hash\":\"0x31e5ef701570b8fb264f8c713e2ba1318bdd7b59641f8dec7ee194fc4b32495\"}}}"
+      ],
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "transactionHash": "0x31e5ef701570b8fb264f8c713e2ba1318bdd7b59641f8dec7ee194fc4b32495"
+    },
+    {
+      "flow": "transfer",
+      "name": "argent-0.3.0-upgraded-SN_MAIN",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.3.0",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+      },
+      "account": {
+        "address": "0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1",
+        "classHash": "0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+        "deploymentSalt": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+        "publicKey": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e"
+      },
+      "amount": "1.5",
+      "call": {
+        "calldata": [
+          "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+          "1500000000000000000",
+          "0"
+        ],
+        "contractAddress": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d"
+      },
+      "recipient": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "reviewDeployment": [],
+      "reviewedDeploymentFee": null,
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\"},\"reply\":{\"result\":\"0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "signatures": [
+        {
+          "hash": "0x30adb3d36e33cacf27ef7db179bc611f7e768fd1c24b678fc7a691cf3dd9bbd",
+          "r": "0x46dafe9b60cef0fd98619ee769540ee24aafc786c9317c4d573f62bf0309476",
+          "s": "0x1fc39393a60b8fb10a7ad96e9ff6c0399879a8f216ac4652ef55df6f8672da9",
+          "array": [
+            "0x1",
+            "0x0",
+            "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+            "0x46dafe9b60cef0fd98619ee769540ee24aafc786c9317c4d573f62bf0309476",
+            "0x1fc39393a60b8fb10a7ad96e9ff6c0399879a8f216ac4652ef55df6f8672da9"
+          ]
+        }
+      ],
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\"},\"reply\":{\"result\":\"0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_addInvokeTransaction\",\"params\":{\"invoke_transaction\":{\"type\":\"INVOKE\",\"sender_address\":\"0x989d11cacbc2aafa052cfe4e75a6f3fea1e15cf939984fb048e000d9e320a1\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x46dafe9b60cef0fd98619ee769540ee24aafc786c9317c4d573f62bf0309476\",\"0x1fc39393a60b8fb10a7ad96e9ff6c0399879a8f216ac4652ef55df6f8672da9\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x1b4ef0\",\"max_price_per_unit\":\"0x10c388d00\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x440aa0ad2e6\"},\"l1_data_gas\":{\"max_amount\":\"0x240\",\"max_price_per_unit\":\"0x870\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x3\"}},\"reply\":{\"result\":{\"transaction_hash\":\"0x30adb3d36e33cacf27ef7db179bc611f7e768fd1c24b678fc7a691cf3dd9bbd\"}}}"
+      ],
+      "token": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      "transactionHash": "0x30adb3d36e33cacf27ef7db179bc611f7e768fd1c24b678fc7a691cf3dd9bbd"
+    }
+  ]
+}

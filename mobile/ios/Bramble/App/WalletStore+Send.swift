@@ -8,12 +8,11 @@ private let millisecondsPerSecond: Double = 1_000
 /// itself only gained the few stored properties these need.
 extension WalletStore {
     /// Why the active account cannot send, in the words the Send action shows instead of opening
-    /// the journey; nil for an account the core signs for. The core refuses the same records
-    /// (`SendError.ViewOnlyAccount` / `.UnsupportedAccount`), so this only saves a dead end.
+    /// the journey; nil for an account the core signs for (OpenZeppelin and Ready). The core
+    /// refuses the same records (`SendError.ViewOnlyAccount`), so this only saves a dead end.
     var sendRefusal: String? {
         guard let account = activeRecord else { return nil }
-        if account.viewOnly { return BrambleCopy.sendViewOnlyAccount }
-        return account.family == .openZeppelin ? nil : BrambleCopy.sendUnsupportedAccount
+        return account.viewOnly || account.family == .braavos ? BrambleCopy.sendViewOnlyAccount : nil
     }
 
     /// A Send journey for the active account, or nil while locked or when it cannot send.
@@ -29,8 +28,8 @@ extension WalletStore {
         ) { [weak self] plan in self?.plans.append(plan) }
     }
 
-    /// The standalone Deploy account flow for the active account (OpenZeppelin only: the core
-    /// builds no other family's deployment).
+    /// The standalone Deploy account flow for the active account (OpenZeppelin or Ready; the core
+    /// refuses a Ready class it does not deploy, as the extension does).
     func makeDeployModel() -> DeployFlowModel? {
         guard let account = activeRecord, sendRefusal == nil else { return nil }
         return DeployFlowModel(

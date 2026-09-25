@@ -49,5 +49,16 @@ export const writeNostrMultisigParity = async (): Promise<string> => {
     ([key, value]) => `  ${JSON.stringify(key)}: ${JSON.stringify(value)}`,
   );
   await writeFile(NOSTR_MULTISIG_FIXTURE_PATH, `{\n${sections.join(",\n")}\n}\n`);
+  // Biome owns JSON style here, as for the transaction fixture; without this pass every
+  // `bun run mobile:parity` rewrote the committed (formatted) file.
+  const formatted = Bun.spawnSync([
+    "bunx",
+    "biome",
+    "format",
+    "--write",
+    NOSTR_MULTISIG_FIXTURE_PATH,
+  ]);
+  if (formatted.exitCode !== 0)
+    throw new Error("biome could not format the Nostr multisig fixture");
   return NOSTR_MULTISIG_FIXTURE_PATH;
 };

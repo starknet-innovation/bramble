@@ -93,6 +93,10 @@ pub enum RpcPurpose {
     AddInvoke,
     TransactionStatus,
     TransactionReceipt,
+    /// Ready: `starknet_blockHashAndNumber`, the block the account-state reads are pinned to.
+    AcceptedBlock,
+    /// Ready: `starknet_call` of `get_owner`, `get_owner_type` or `get_guardian`.
+    AccountSigner,
 }
 
 /// A transaction's chain status as the wallet reports it: the extension's `TxStatus`, the one
@@ -175,9 +179,6 @@ pub enum SendError {
     /// A Braavos record: restored to be seen, never signed for.
     #[error("view-only account")]
     ViewOnlyAccount,
-    /// An Argent (Ready) record: this core does not build its authorization yet.
-    #[error("unsupported account type")]
-    UnsupportedAccount,
     #[error("reply out of order")]
     OutOfOrder,
     #[error("plan closed")]
@@ -210,6 +211,19 @@ pub enum SendFailureCode {
     Locked,
     /// Krusty failed to sign, or signed under a key that is not the account's.
     SigningFailed,
+    /// Ready: the account runs an Argent class this wallet does not recognise.
+    AccountClassUnrecognised,
+    /// Ready: the account runs an Argent class whose authorization this wallet does not produce
+    /// (an un-upgraded 0.3.x account); `detail` names the class.
+    AccountClassUnsupported,
+    /// Ready: the account is not deployed and its class is not the release this wallet deploys.
+    AccountNotDeployable,
+    /// Ready: the deployed account's owner is not this wallet's signer.
+    AccountOwnerMismatch,
+    /// Ready: the deployed account's owner is not a Starknet signer.
+    AccountOwnerTypeUnsupported,
+    /// Ready: the deployed account has a guardian, a second approver the phrase cannot supply.
+    AccountGuardianUnsupported,
 }
 
 /// A failure, with the hash of anything already accepted (a deployment, or an ambiguous write).
@@ -217,6 +231,10 @@ pub enum SendFailureCode {
 pub struct SendFailure {
     pub code: SendFailureCode,
     pub hash: Option<String>,
+    /// The class label an `AccountClassUnsupported` refusal names (the extension's `{label}`,
+    /// e.g. "argent 0.3.1"); public catalog text, never node text.
+    #[uniffi(default = None)]
+    pub detail: Option<String>,
 }
 
 /// What an activity row's transaction did: the extension's `ActivityEntry.kind`. The one kind

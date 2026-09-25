@@ -39,7 +39,7 @@ export type CapturedExchange = {
 export type CapturedSignature = { readonly hash: string; readonly r: string; readonly s: string };
 
 /** Node state a scenario's canned replies are drawn from. */
-type NodeState = {
+export type NodeState = {
   deployed: boolean;
   nonce: string;
 };
@@ -72,7 +72,7 @@ export type CapturedScenario = ScenarioSpec & {
 };
 
 /** Canned estimate for an INVOKE entry (RPC 0.10 `FEE_ESTIMATE`, hex quantities). */
-const INVOKE_ESTIMATE = {
+export const INVOKE_ESTIMATE = {
   l1_data_gas_consumed: "0x180",
   l1_data_gas_price: "0x5a0",
   l1_gas_consumed: "0x0",
@@ -84,7 +84,7 @@ const INVOKE_ESTIMATE = {
 };
 
 /** Canned estimate for a DEPLOY_ACCOUNT entry; distinct so the two are never confused. */
-const DEPLOY_ESTIMATE = {
+export const DEPLOY_ESTIMATE = {
   l1_data_gas_consumed: "0x1e0",
   l1_data_gas_price: "0x5a0",
   l1_gas_consumed: "0x0",
@@ -95,7 +95,8 @@ const DEPLOY_ESTIMATE = {
   unit: "FRI",
 };
 
-const CONTRACT_NOT_FOUND = { code: 20, message: "Contract not found" };
+/** The node's reply for an address with no contract. */
+export const CONTRACT_NOT_FOUND = { code: 20, message: "Contract not found" };
 
 /** Published E2E phrase (tests/e2e/wallet-helpers.ts); never holds funds. */
 export const TRANSACTION_MNEMONIC =
@@ -104,7 +105,8 @@ export const TRANSACTION_MNEMONIC =
 /** Amount the Send scenarios transfer, as typed. */
 export const TRANSACTION_AMOUNT = "1.5";
 
-const STRK = (networkId: MobileNetworkId) => {
+/** The bundled STRK token as the extension's preferences hold it. */
+export const STRK = (networkId: MobileNetworkId) => {
   const token = DEFAULT_TOKENS.find(
     (entry) => entry.networkId === networkId && entry.symbol === "STRK",
   );
@@ -114,12 +116,13 @@ const STRK = (networkId: MobileNetworkId) => {
 };
 
 /** A fault injected into the node: a replacement reply, or a transport failure. */
-type Injection = (
+export type Injection = (
   method: string,
   params: Record<string, unknown> | undefined,
 ) => { readonly result: unknown } | { readonly error: unknown } | "transport" | undefined;
 
-type Recorder = {
+/** Everything one capture recorded, and the node state it answers from. */
+export type Recorder = {
   readonly exchanges: CapturedExchange[];
   readonly signatures: CapturedSignature[];
   state: NodeState;
@@ -128,7 +131,8 @@ type Recorder = {
   inject?: Injection;
 };
 
-const reply = (
+/** The canned node's reply to one request (an OpenZeppelin account's view of the chain). */
+export const reply = (
   recorder: Recorder,
   method: string,
   params: Record<string, unknown> | undefined,
@@ -184,8 +188,14 @@ const reply = (
   }
 };
 
-const providerFactory =
-  (recorder: Recorder, account: DerivedAccountRef, chainId: string) =>
+/** A starknet.js provider whose transport records every exchange and answers with `answer`. */
+export const providerFactory =
+  (
+    recorder: Recorder,
+    account: DerivedAccountRef,
+    chainId: string,
+    respond: typeof reply = reply,
+  ) =>
   (nodeUrl: string): RpcProvider =>
     createRpcProvider(nodeUrl, {
       baseFetch: (async (_input: unknown, init?: RequestInit) => {
@@ -199,7 +209,7 @@ const providerFactory =
           throw new TypeError("fetch failed");
         }
         const answer =
-          injected ?? reply(recorder, request.method, request.params, account, chainId);
+          injected ?? respond(recorder, request.method, request.params, account, chainId);
         recorder.exchanges.push({
           method: request.method,
           params: request.params ?? null,
@@ -215,7 +225,8 @@ const providerFactory =
       transactionRetryIntervalFallback: 1,
     });
 
-const PLACEHOLDER_URLS = ["https://capture.invalid/rpc"];
+/** The endpoint every capture names; never resolved. */
+export const PLACEHOLDER_URLS = ["https://capture.invalid/rpc"];
 
 /**
  * Runs one scenario through the extension's real send path and returns its recorded traffic.

@@ -86,6 +86,13 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/extension-transactions-copy.json
         buildPhase: resources
+      # The Ready (Argent) send capture (scripts/mobile-transactions-argent.ts).
+      - path: ../core/tests/fixtures/extension-transactions-argent.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-argent-upgraded.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/extension-transactions-argent-refusals.json
+        buildPhase: resources
       - path: ../core/tests/fixtures/accounts-parity-families.json
         buildPhase: resources
       - path: ../core/tests/fixtures/accounts-parity-rules.json
