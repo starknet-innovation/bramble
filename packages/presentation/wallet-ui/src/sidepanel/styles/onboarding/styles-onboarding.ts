@@ -136,6 +136,10 @@ export const ONBOARDING_STYLES = `
     width: 100%;
   }
   .onboarding-step-cta button, .onboarding-welcome-actions button { width: 100%; }
+  /* The hit shell is only the button's box. A disabled Continue lets the click
+     fall through to that shell, not into the CTA padding above it. */
+  .verify-continue-hit { display: grid; }
+  #verify-continue:disabled { pointer-events: none; }
 
   .onboarding-gate {
     justify-content: center;

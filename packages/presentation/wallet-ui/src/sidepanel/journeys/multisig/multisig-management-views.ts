@@ -370,6 +370,7 @@ export const multisigSignersFlow = (
                     <div class="multisig-participant-selection" data-participant-selection hidden>
                       <span class="option-avatar">${icon("user")}</span>
                       <span class="option-copy"><strong data-participant-selection-name></strong><span class="option-sub" data-participant-selection-detail></span></span>
+                      ${inlineCopyButton("", "Copy participant address", { "data-participant-selection-copy": true, hidden: true })}
                     </div>
                     ${button({ attributes: { "data-open-participant-picker": true }, icon: "plus", label: "Choose participant", variant: "secondary" })}
                     ${selectField({

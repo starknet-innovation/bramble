@@ -31,6 +31,12 @@ export const DECISION_STYLES = `
   }
   .decision-seal .icon { height: 17px; width: 17px; }
   .decision-boundary { box-shadow: inset 0 1px 0 var(--bramble-hairline); padding-top: ${SPACE.md}; }
+  /* The rule separates the cost ceiling from what precedes it; opening the
+     send fee card, there is nothing above it inside the card to separate from. */
+  .send-review-fee > .decision-boundary:first-child { box-shadow: none; padding-top: 0; }
+  /* What will happen is the sentence the decision rests on: primary ink, not
+     the muted voice of supporting copy. */
+  .decision-outcome > p:not(.decision-label) { color: var(--bramble-text); }
   .decision-technical .disclosure-body { display: grid; gap: ${SPACE.md}; }
   .decision-layer { display: grid; gap: ${SPACE.sm}; min-width: 0; }
   .review-call { align-items: center; display: flex; gap: ${SPACE.sm}; }

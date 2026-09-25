@@ -316,7 +316,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       activeView !== "activity",
     );
   }
-  if (activeView === "account") {
+  if (activeView === "receive") {
     fill(wallet.loadClassHashVerification(), (value) => {
       cache.classHashVerification = value;
     });

@@ -34,7 +34,7 @@ export const reviewSummaryHtml = (
 ): string => `
   <dl class="send-review-facts">
     <div><dt>From</dt><dd><strong>${escapeHtml(sender.label || accountLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(sender.address)}">${escapeHtml(accountLabel(sender.address))}</code></span></dd></div>
-    <div><dt>${mode === "send" ? "To" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><span class="send-review-address"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(accountLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, mode === "send" ? "Copy recipient address" : "Copy account address")}</span></dd></div>
+    <div><dt>${mode === "send" ? "To" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><span class="send-review-address copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(accountLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, mode === "send" ? "Copy recipient address" : "Copy account address")}</span></dd></div>
     <div><dt>Amount</dt><dd><span class="send-review-amount">${tokenGlyph(fields.tokenAddress, fields.tokenSymbol)}<strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong></span><small>${escapeHtml(fields.fiatEstimate || "Fiat estimate unavailable")}</small></dd></div>
     ${mode === "send" ? "" : `<div><dt>Movement</dt><dd><strong>${BUCKET_NAMES[fields.source]} → ${BUCKET_NAMES[fields.destination]}</strong></dd></div>`}
   </dl>`;

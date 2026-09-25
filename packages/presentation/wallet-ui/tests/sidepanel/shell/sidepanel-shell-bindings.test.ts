@@ -304,7 +304,6 @@ describe("bindPickers", () => {
   const pickerMarkup = `
     <button data-network-id="SN_SEPOLIA" aria-pressed="false" type="button">Sepolia</button>
     <button data-network-id="SN_MAIN" aria-pressed="true" type="button">Mainnet</button>
-    <button data-account-id="${secondAccount.id}" aria-pressed="false" type="button">acct</button>
     <p id="picker-result" role="status"></p>`;
 
   const makeDeps = (
@@ -427,34 +426,6 @@ describe("bindPickers", () => {
     expect(sinks.views).toEqual([]);
     expect(container.querySelector("#picker-result")?.textContent).toBe("switch failed");
     expect(errorToasts()).toContain("switch failed");
-    expect(button?.disabled).toBe(false);
-  });
-
-  test("reports an account switch failure on the picker result line", async () => {
-    const container = mount(pickerMarkup);
-    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
-    const button = container.querySelector<HTMLButtonElement>(
-      `[data-account-id="${secondAccount.id}"]`,
-    );
-    bindPickers(
-      makeDeps(
-        container,
-        {
-          loadStatus: async () => status,
-          setActiveAccount: async () => {
-            throw new Error("account switch failed");
-          },
-        },
-        sinks,
-      ),
-    );
-
-    click(button);
-    await tick();
-
-    expect(sinks.views).toEqual([]);
-    expect(container.querySelector("#picker-result")?.textContent).toBe("account switch failed");
-    expect(errorToasts()).toContain("account switch failed");
     expect(button?.disabled).toBe(false);
   });
 });

@@ -272,12 +272,17 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       const name = fragment.querySelector<HTMLElement>("[data-manual-signer-name]");
       const label = fragment.querySelector<HTMLElement>("[data-manual-signer-label]");
       const remove = fragment.querySelector<HTMLButtonElement>("[data-remove-signer-public-key]");
-      if (!row || !name || !label || !remove) return "Signer setup is unavailable.";
+      const copy = fragment.querySelector<HTMLButtonElement>("[data-manual-signer-copy]");
+      if (!row || !name || !label || !remove || !copy) return "Signer setup is unavailable.";
       row.dataset["signerPublicKey"] = publicKey;
       name.textContent = participant.label;
       label.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(publicKey)}`;
       remove.dataset["removeSignerPublicKey"] = publicKey;
+      copy.dataset["copy"] = participant.address ?? "";
+      copy.hidden = !participant.address;
       signerList.append(fragment);
+      // Cloned after the shell bound its copy controls, so bind this one here.
+      bindCopyButtons(row);
     }
     syncSignerSet();
     return null;
@@ -451,7 +456,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
               </summary>
               <div class="disclosure-body">
                 <dl class="request-detail">
-                  <div><dt>Address</dt><dd><code>${escapeHtml(next.address)}</code></dd></div>
+                  <div><dt>Address</dt><dd><code>${escapeHtml(next.address)}</code>${copyButton(next.address, "Copy multisig address")}</dd></div>
                   <div><dt>Contract</dt><dd>Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
                   <div><dt>Class hash</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, "Copy Ready Multisig class hash")}</dd></div>
                   <div><dt>Network</dt><dd><code>${escapeHtml(next.networkId)}</code></dd></div>

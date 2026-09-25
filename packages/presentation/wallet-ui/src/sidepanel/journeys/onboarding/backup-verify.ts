@@ -34,3 +34,39 @@ export const verifyBackupWords = (phrase: string, answers: readonly string[]): b
     return answer.length > 0 && answer === expected?.toLowerCase();
   });
 };
+
+/**
+ * Where the confirmation stands: `incomplete` while any requested word is
+ * blank, `mismatch` once every word is entered but they do not all match,
+ * `confirmed` when {@link verifyBackupWords} passes. It adds no check of its
+ * own and never says which word differs.
+ */
+export type BackupVerifyState = "confirmed" | "incomplete" | "mismatch";
+
+/**
+ * Classifies the confirmation answers against the phrase. Pure; the phrase and
+ * answers are only compared, never retained or returned.
+ */
+export const backupVerifyState = (
+  phrase: string,
+  answers: readonly string[],
+): BackupVerifyState => {
+  if (verifyBackupWords(phrase, answers)) {
+    return "confirmed";
+  }
+  const complete = BACKUP_VERIFY_POSITIONS.every(
+    (_, index) => (answers[index] ?? "").trim().length > 0,
+  );
+  return complete ? "mismatch" : "incomplete";
+};
+
+/**
+ * Status line under the confirmation fields for each state. A mismatch is
+ * reported as such, so a mistyped word reads as an error to fix rather than
+ * as the same prompt shown to an empty form.
+ */
+export const BACKUP_VERIFY_COPY: Readonly<Record<BackupVerifyState, string>> = {
+  confirmed: "Backup confirmed.",
+  incomplete: "Enter the requested words to continue.",
+  mismatch: "These words don't match your recovery phrase. Check your copy.",
+};

@@ -128,14 +128,17 @@ describe("sidepanel views", () => {
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("account flow lists network accounts and shows active identifiers", () => {
+  test("account flow lists every network account as an editable name", () => {
     const html = dashboard("account", status, [], preferences, { balances: [] });
 
-    expect(html).toMatch(new RegExp(`data-account-id="${account.id}"[^>]*aria-pressed="true"`));
-    expect(html).toMatch(
-      new RegExp(`data-account-id="${secondAccount.id}"[^>]*aria-pressed="false"`),
-    );
-    expect(html).toContain(account.classHash);
+    for (const stored of [account, secondAccount]) {
+      expect(html).toContain(`data-account-name-form="${stored.id}"`);
+      expect(html).toContain(`data-account-name="${stored.id}"`);
+    }
+    // Switching accounts and inspecting identifiers both moved off this screen —
+    // to the drawer and to Receive respectively.
+    expect(html).not.toContain("data-account-id=");
+    expect(html).not.toContain(account.classHash);
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
@@ -160,9 +163,7 @@ describe("sidepanel views", () => {
     const html = dashboard("swap", status, [], preferences, { balances: [] });
 
     // The rail names the three steps; the route is not the header's business.
-    expect(html).toContain('data-swap-step="edit"');
-    expect(html).toContain('data-swap-step="confirm"');
-    expect(html).toContain('data-swap-step="success"');
+    expect(html).toMatch(/data-swap-step="edit"[\s\S]*"confirm"[\s\S]*"success"/);
     expect(html).not.toContain("Best route via avnu");
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
@@ -324,9 +325,16 @@ describe("sidepanel views", () => {
     expect(home).toContain('class="avatar"');
 
     const accountFlowHtml = dashboard("account", status, [], labeled, { balances: [] });
-    expect(accountFlowHtml).toContain('id="label-form"');
+    expect(accountFlowHtml).toContain(`data-account-name-form="${account.id}"`);
     expect(accountFlowHtml).toContain('value="Savings"');
     expect(accountFlowHtml).toContain('class="option-avatar"');
+    // An unnamed account shows the generated name it falls back to, rather than
+    // an empty box that hides what the wallet calls it.
+    expect(accountFlowHtml).toMatch(
+      new RegExp(
+        `placeholder="[A-Z][a-z]+ [A-Z][a-z]+" value="" data-account-name="${secondAccount.id}"`,
+      ),
+    );
   });
 
   test("avatars are deterministic Beam characters from the identity palette", () => {
@@ -409,8 +417,6 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="new-account"');
     expect(html).toContain("Add account");
-    expect(html).toContain("Signer public key");
-    expect(html).toContain(`data-copy="${account.publicKeyX}"`);
   });
 
   test("reveal flow re-authenticates and masks secrets until tapped", () => {

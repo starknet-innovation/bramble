@@ -5,7 +5,9 @@ import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { verifyBackupWords } from "./backup-verify";
+import { BACKUP_VERIFY_COPY, backupVerifyState } from "./backup-verify";
+import { bindBackupVerification } from "./backup-verify-bind";
+import { bindGeneratedPhrase } from "./generated-phrase-ui";
 import { bindKeyImport } from "./import-key-ui";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
@@ -13,12 +15,7 @@ import { applyPassphraseMeter } from "./passphrase-meter";
 import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
 import { bindRecoveryWordAssist } from "./recovery-word-assist";
-import {
-  fillRecoveryWords,
-  recoveryWordsFrom,
-  setGeneratedPhraseMasked,
-  setRecoveryWordCount,
-} from "./recovery-word-state";
+import { fillRecoveryWords, recoveryWordsFrom, setRecoveryWordCount } from "./recovery-word-state";
 import { createWeakPassphraseAck } from "./weak-passphrase-ack";
 
 /** Dependencies the onboarding binding closes over. */
@@ -70,13 +67,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   );
   const previewAddress = form.querySelector<HTMLElement>("[data-preview-address]");
   const previewLabel = form.querySelector<HTMLElement>("[data-preview-label]");
-  const phraseToggle = form.querySelector<HTMLButtonElement>("#phrase-toggle");
-  const generatedGrid = form.querySelector<HTMLElement>('[data-recovery-grid="generated"]');
   const walletReady = form.dataset["walletReady"] === "true";
   const history: string[] = ["welcome"];
   let mnemonic = "";
   let importWordCount: 12 | 24 = 12;
-  let generatedWasRevealed = false;
   let requiresVerification = false;
   let accountSelected = false;
   let previewMatchesInput = false;
@@ -194,21 +188,18 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     invalidatePreview();
   };
 
-  const verificationSatisfied = (): boolean =>
-    verifyBackupWords(
-      mnemonic,
-      verifyInputs.map((input) => input.value),
-    );
+  const verifyAnswers = () => verifyInputs.map((input) => input.value);
+  const verificationState = () => backupVerifyState(mnemonic, verifyAnswers());
+  const verificationSatisfied = () => verificationState() === "confirmed";
 
-  const refreshVerification = (): void => {
-    const satisfied = verificationSatisfied();
-    if (verifyContinue) {
-      verifyContinue.disabled = !satisfied;
-    }
+  // A mismatch shows on commit (blur/Enter) or a Continue attempt, never mid-typing.
+  const refreshVerification = (reportMismatch = false): void => {
+    const state = verificationState();
+    const shown = state === "mismatch" && !reportMismatch ? "incomplete" : state;
+    verifyContinue?.toggleAttribute("disabled", state !== "confirmed");
     if (verifyResult) {
-      verifyResult.textContent = satisfied
-        ? "Backup confirmed."
-        : "Enter the requested words to continue.";
+      verifyResult.textContent = BACKUP_VERIFY_COPY[shown];
+      verifyResult.classList.toggle("is-invalid", shown === "mismatch");
     }
   };
 
@@ -300,6 +291,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     wordAssist,
   }));
 
+  const generatedPhrase = bindGeneratedPhrase(form, () => mnemonic);
   const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");
   createNew?.addEventListener("click", () => {
     const generation = ++mnemonicGeneration;
@@ -314,14 +306,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         keyImport.deactivate();
         passwordContinue?.lastChild?.replaceWith("Review account");
         requiresVerification = true;
-        generatedWasRevealed = false;
-        setGeneratedPhraseMasked(generatedGrid, generatedInputs, true);
+        generatedPhrase.reset();
         fillWords(generatedInputs, mnemonic.split(/\s+/), "generated");
         for (const input of verifyInputs) {
           input.value = "";
-        }
-        if (generatedContinue) {
-          generatedContinue.disabled = true;
         }
         if (generateResult) {
           generateResult.textContent = "Reveal the phrase, save it offline, then continue.";
@@ -341,30 +329,19 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     );
   });
 
-  phraseToggle?.addEventListener("click", () => {
-    const masked = !(generatedGrid?.classList.contains("is-masked") ?? false);
-    setGeneratedPhraseMasked(generatedGrid, generatedInputs, masked);
-    phraseToggle.lastChild?.replaceWith(masked ? "Show recovery phrase" : "Hide recovery phrase");
-    if (!masked) {
-      generatedWasRevealed = true;
-    }
-    if (generatedContinue) {
-      generatedContinue.disabled = !generatedWasRevealed;
-    }
-  });
-
   generatedContinue?.addEventListener("click", () => {
     showStep("verify");
     refreshVerification();
   });
-  for (const input of verifyInputs) {
-    input.addEventListener("input", refreshVerification);
-  }
-  verifyContinue?.addEventListener("click", () => {
-    if (verificationSatisfied()) {
+  bindBackupVerification({
+    continueButton: verifyContinue,
+    inputs: verifyInputs,
+    onConfirmed: () => {
       showStep("password");
       refreshPassword();
-    }
+    },
+    refresh: refreshVerification,
+    satisfied: verificationSatisfied,
   });
 
   passphraseInput?.addEventListener("input", refreshPassword);

@@ -192,6 +192,23 @@ const sparkline = (points: readonly number[]): string => {
   return `<svg class="sparkline sparkline-${sparklineTrend(points)}" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}" /></svg>`;
 };
 
+// Send and Swap for the token on screen, above the privacy pair. Both are
+// always offered: an empty balance is discovered on the amount step, exactly as
+// it is when Send is opened from Home. Send seeds the asset and nothing else —
+// the recipient is still chosen on the first step — while Shield and Unshield
+// below carry a recipient and open on the amount.
+const tokenActions = (tokenId: string): string =>
+  `<div class="token-privacy-actions">${button({
+    attributes: { "data-send-token": tokenId },
+    icon: "send",
+    label: "Send",
+  })}${button({
+    attributes: { "data-swap-token": tokenId },
+    icon: "swap",
+    label: "Swap",
+    variant: "secondary",
+  })}</div>`;
+
 const privacyActions = (
   tokenId: string,
   privacy: PrivacyDisclosureState,
@@ -287,6 +304,7 @@ export const tokenDetailFlow = (
               </div>`
                 : ""
         }
+        ${tokenActions(token.id)}
         ${privacyActions(token.id, privacy, deployment, fundedForFees)}
       </section>
       <section class="section">

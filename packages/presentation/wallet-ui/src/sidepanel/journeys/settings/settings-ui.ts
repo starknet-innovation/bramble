@@ -12,7 +12,6 @@ import { bindGroupControls } from "./group-ui";
  * Dependencies the settings bindings close over.
  */
 export type SettingsUiDeps = {
-  readonly activeAccountId: () => string | null;
   readonly app: Element | null;
   /** Ids of accounts already in the vault; phrase-import scan rows matching them lock. */
   readonly existingAccountIds?: () => ReadonlySet<string>;
@@ -30,34 +29,40 @@ const rerender = async (deps: SettingsUiDeps): Promise<void> => {
 };
 
 /**
- * Binds the account label form on the account flow.
+ * Binds every account-name form in the account flow's "Account names" section.
+ * Each form carries the account it renames (`data-account-name-form`), so the
+ * write targets the row the user submitted rather than whichever account is
+ * active — the screen lists them all. An empty name clears the stored label and
+ * the account falls back to its generated name.
  */
 export const bindAccountLabel = (deps: SettingsUiDeps): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#label-form");
   const result = deps.app?.querySelector<HTMLElement>("#label-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
 
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const accountId = deps.activeAccountId();
-    if (!accountId) {
-      return;
-    }
-    const label = String(new FormData(form).get("label") ?? "").trim();
-    buttonBusy(submitButton, true);
-    void deps.wallet.setAccountLabel(accountId, label).then(
-      async () => {
-        showToast(label ? "Label saved" : "Label cleared", "success", form);
-        await rerender(deps);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Label update failed"), "error", form);
-        if (result) {
-          result.textContent = errorMessage(error, "Label update failed");
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
+  deps.app?.querySelectorAll<HTMLFormElement>("[data-account-name-form]").forEach((form) => {
+    const accountId = form.dataset["accountNameForm"];
+    const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!accountId) {
+        return;
+      }
+      const label = String(new FormData(form).get("label") ?? "").trim();
+      buttonBusy(submitButton, true);
+      void deps.wallet.setAccountLabel(accountId, label).then(
+        async () => {
+          showToast(label ? "Name saved" : "Name cleared", "success", form);
+          await rerender(deps);
+        },
+        (error: unknown) => {
+          showToast(errorMessage(error, "Name update failed"), "error", form);
+          if (result) {
+            result.textContent = errorMessage(error, "Name update failed");
+          }
+          buttonBusy(submitButton, false);
+        },
+      );
+    });
   });
 };
 

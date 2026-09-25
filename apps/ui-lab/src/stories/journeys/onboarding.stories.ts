@@ -70,6 +70,11 @@ export const BackupConfirmed = checkpointStory(
   "onboarding",
   "backup-confirmed",
 );
+export const BackupMismatch = checkpointStory(
+  "Generated phrase · words don't match",
+  "onboarding",
+  "backup-mismatch",
+);
 export const LedgerPassword = checkpointStory(
   "Ledger wallet · local passphrase",
   "onboarding",

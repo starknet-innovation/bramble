@@ -16,6 +16,7 @@ import {
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import { GUARDED_COPY_NOTE } from "../../shared/guarded-copy";
 import { icon } from "../../shared/icons";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 
@@ -220,12 +221,22 @@ const generatedStep = (): string => `
         aria-hidden="true"
         inert
       >${recoveryWordInputs("generated")}</div>
-      ${button({
-        attributes: { id: "phrase-toggle" },
-        icon: "book",
-        label: "Show recovery phrase",
-        variant: "secondary",
-      })}
+      <div class="button-row">
+        ${button({
+          attributes: { id: "phrase-toggle" },
+          icon: "book",
+          label: "Show recovery phrase",
+          variant: "secondary",
+        })}
+        ${button({
+          attributes: { id: "generated-copy-phrase" },
+          disabled: true,
+          icon: "copy",
+          label: "Copy recovery phrase",
+          variant: "ghost",
+        })}
+      </div>
+      <p class="hint" id="generated-copy-note">${GUARDED_COPY_NOTE}</p>
       <p class="hint">Anyone with these words controls the wallet. Bramble cannot recover them for you.</p>
       <p id="generate-result" role="status"></p>
     </div>
@@ -247,11 +258,13 @@ const verifyStep = (): string => `
       <p id="verify-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
-      ${button({
-        attributes: { id: "verify-continue" },
-        disabled: true,
-        label: "Continue",
-      })}
+      <div class="verify-continue-hit">
+        ${button({
+          attributes: { id: "verify-continue" },
+          disabled: true,
+          label: "Continue",
+        })}
+      </div>
     </div>
   </section>`;
 

@@ -4,17 +4,7 @@
  * outcome stage with its reduced-motion fallbacks. Split from the compose
  * layer (./styles-send-compose.ts) by stage so each file stays readable.
  */
-import {
-  CONTROL,
-  EASE,
-  MOTION,
-  RADIUS,
-  SHADOW,
-  SIZE,
-  SPACE,
-  TYPE,
-  WEIGHT,
-} from "@bramble/ui-kit/tokens";
+import { CONTROL, EASE, RADIUS, SHADOW, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Send review/outcome stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -22,7 +12,7 @@ import {
 export const SEND_OUTCOME_STYLES = `
   .send-review-summary {
     background: var(--bramble-panel);
-    border-radius: ${RADIUS.xl};
+    border-radius: ${RADIUS.lg};
     display: grid;
     padding: ${SPACE.lg};
   }
@@ -50,34 +40,6 @@ export const SEND_OUTCOME_STYLES = `
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     padding: ${SPACE.md} ${SPACE.lg};
-  }
-  .send-review-disclosure {
-    background: var(--bramble-panel);
-    border-radius: ${RADIUS.lg};
-    overflow: hidden;
-  }
-  .send-review-disclosure summary {
-    align-items: center;
-    cursor: pointer;
-    display: flex;
-    font-size: ${TYPE.body.size};
-    font-weight: ${WEIGHT.semibold};
-    justify-content: space-between;
-    list-style: none;
-    min-height: ${SIZE.rowCompact};
-    padding: 0 ${SPACE.lg};
-  }
-  .send-review-disclosure summary::-webkit-details-marker { display: none; }
-  .send-review-disclosure summary .icon {
-    color: var(--bramble-muted);
-    transition: transform ${MOTION.tabMs}ms ${EASE.out};
-  }
-  .send-review-disclosure[open] summary .icon { transform: rotate(180deg); }
-  .send-review-disclosure-body {
-    border-top: 1px solid var(--bramble-hairline);
-    display: grid;
-    gap: ${SPACE.md};
-    padding: ${SPACE.md};
   }
   .send-review-note { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; }
 
@@ -149,7 +111,6 @@ export const SEND_OUTCOME_STYLES = `
   .send-outcome .send-actions { width: 100%; }
 
   @media (prefers-reduced-motion: reduce) {
-    .send-review-disclosure summary .icon { transition: none; }
     .send-failure-ring, .send-failure-mark { animation: none; stroke-dashoffset: 0; }
   }
 `;

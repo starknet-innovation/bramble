@@ -201,7 +201,7 @@ describe("group control focus restoration", () => {
   const drawer = (groups: AccountGroups) =>
     accountDrawer(status, acctA, { ...preferences, groups });
   const manage = (groups: AccountGroups, expanded: string | null) =>
-    accountFlow(status, acctA, { ...preferences, groups }, expanded);
+    accountFlow(status, { ...preferences, groups }, expanded);
 
   test("reclaims focus on the acted-on membership toggle after a repaint", () => {
     const groups = [group("briefcase", "work", "Work")];

@@ -357,7 +357,7 @@ export const mount = (
         wallet,
       });
     } else {
-      paint(container, accountFlow(status, acctA, prefs(), state.expandedGroupId));
+      paint(container, accountFlow(status, prefs(), state.expandedGroupId));
       bindGroupControls(container, groupDeps);
     }
   };

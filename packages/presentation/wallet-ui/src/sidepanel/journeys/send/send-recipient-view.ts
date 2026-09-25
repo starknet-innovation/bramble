@@ -21,7 +21,12 @@ import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountAvatar, accountDisplayName, accountLabel } from "../../shared/parts";
+import {
+  accountAvatar,
+  accountDisplayName,
+  accountLabel,
+  inlineCopyButton,
+} from "../../shared/parts";
 import {
   type FolderSection,
   folderSections,
@@ -124,7 +129,7 @@ export const recipientStage = (
         <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
         <span class="send-recipient-copy">
           <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-          <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
+          ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
         </span>
       </div>
     </div>

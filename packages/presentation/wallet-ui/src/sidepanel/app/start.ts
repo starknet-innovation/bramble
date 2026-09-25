@@ -27,10 +27,12 @@ import { healTransientGroupState } from "../journeys/settings/group-state";
 import { bindReveal } from "../journeys/settings/reveal-ui";
 import { bindSettingsSurface } from "../journeys/settings/settings-surface";
 import { createSwapClient } from "../journeys/swap/swap-client";
+import { presetSwapPair } from "../journeys/swap/swap-ui";
 import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, hiddenOverlayMount, showToast } from "../shared/dom";
+import { guardedCopyClearIsPending, guardedCopyPendingClear } from "../shared/guarded-copy";
 import { isParkedCollectibleView } from "../shared/parts";
 import { utcDayKey } from "../shared/timestamp";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
@@ -81,7 +83,6 @@ export const startWalletUi = async (
   const selectedNftId: string | null = null;
   let selectedMultisigId: string | null = null;
   let selectedMultisigIntentId: string | null = null;
-  let lastAccountId: string | null = null;
   let lastNetworkId = "SN_MAIN";
   let lastScene = "";
   let lastContent = "";
@@ -127,7 +128,16 @@ export const startWalletUi = async (
   const bindAll = (): void => {
     bindEntryNavigation(app, navigate, goBack);
     bindCopyButtons(app);
-    bindOnboardingCompletion(app, extensionApi, () => globalThis.close());
+    bindOnboardingCompletion(app, extensionApi, () => {
+      if (guardedCopyClearIsPending()) {
+        const result = app?.querySelector<HTMLElement>("#onboarding-complete-result");
+        if (result) {
+          result.textContent =
+            "Opening the wallet… This tab stays open until the clipboard clear finishes.";
+        }
+      }
+      void guardedCopyPendingClear().then(() => globalThis.close());
+    });
     bindOnboardingLaunch(app, () => globalThis.close());
     bindOnboarding({ app, render, wallet });
     bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });
@@ -198,7 +208,6 @@ export const startWalletUi = async (
       wallet,
     });
     bindSettingsSurface({
-      activeAccountId: () => lastAccountId,
       app,
       existingAccountIds: () => new Set(cache.status.accounts.map((account) => account.id)),
       expandedGroup: () => expandedGroupId,
@@ -228,6 +237,11 @@ export const startWalletUi = async (
       cache,
       navigateHome: () => {
         if (activeView === "swap") navigate("home");
+      },
+      openWithToken: (view, tokenId) => {
+        [sendIntent, selectedTokenId] = [null, tokenId];
+        if (view === "swap") presetSwapPair(tokenId, cache.preferences?.tokens ?? []);
+        navigate(view);
       },
       openToken: (tokenId) => {
         selectedTokenId = tokenId;
@@ -276,7 +290,6 @@ export const startWalletUi = async (
   const paint = (): void => {
     const { status } = cache;
     lastNetworkId = status.networkId;
-    lastAccountId = status.activeAccountId;
     if (activeView !== "send") {
       sendIntent = null;
     }

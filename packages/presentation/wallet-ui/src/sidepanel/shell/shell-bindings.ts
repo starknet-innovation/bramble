@@ -221,11 +221,9 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
 };
 
 /**
- * Binds the network and account pickers. A network switch returns to Settings;
- * selecting an account means "use this account", so it lands on Home showing the
- * now-active account (matching the drawer's account tap) rather than returning to
- * the entry point. The flow header's back control still pops the nav history, so
- * Back returns to wherever the manage view was opened from.
+ * Binds the network picker. A network switch returns to Settings. Accounts are
+ * switched in the drawer, which carries its own binding — the manage view lists
+ * accounts to name and to file into folders, never to select.
  */
 export const bindPickers = (deps: ShellBindingDeps): void => {
   const { app, wallet, render, setActiveView } = deps;
@@ -254,35 +252,6 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
           showToast(errorMessage(error, "Network switch failed"), "error", button);
           if (result) {
             result.textContent = errorMessage(error, "Network switch failed");
-          }
-          buttonBusy(button, false);
-        },
-      );
-    });
-  });
-
-  app?.querySelectorAll<HTMLButtonElement>("[data-account-id]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const accountId = button.dataset["accountId"];
-      if (!accountId || button.getAttribute("aria-pressed") === "true") {
-        return;
-      }
-      buttonBusy(button, true);
-      if (result) {
-        result.textContent = "Switching account...";
-      }
-      void wallet.setActiveAccount(accountId).then(
-        async () => {
-          // Picking an account is "use this account": land on Home showing the
-          // now-active account instead of returning to the entry point.
-          setActiveView("home");
-          showToast("Account switched", "success", button);
-          await render(await wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Account switch failed"), "error", button);
-          if (result) {
-            result.textContent = errorMessage(error, "Account switch failed");
           }
           buttonBusy(button, false);
         },

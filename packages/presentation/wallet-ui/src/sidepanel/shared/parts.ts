@@ -7,6 +7,7 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState, pill } from "@bramble/ui-kit/content";
 import { iconButton } from "@bramble/ui-kit/controls";
+import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
 import { type IconName, icon } from "@bramble/ui-kit/icons";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountContractType, AccountRef } from "@bramble/wallet-model/accounts";
@@ -260,9 +261,12 @@ const NAME_ANIMALS = [
 /**
  * Deterministic two-word account nickname (adjective + animal) derived from the
  * address, so an account without a user label still reads as a friendly name
- * rather than a raw hex string.
+ * rather than a raw hex string. Exported so a rename field can show the name an
+ * account falls back to when its label is empty — the same string
+ * {@link accountDisplayName} resolves to — instead of inventing a second
+ * fallback. Presentational only: it never identifies an account.
  */
-const friendlyAccountName = (address: string): string => {
+export const friendlyAccountName = (address: string): string => {
   let bits: bigint;
   try {
     bits = BigInt(address);
@@ -359,11 +363,17 @@ export const copyButton = (value: string, label: string): string =>
  * list row's address, a review fact, an activity counterparty, a signer key.
  * Ghost, and sized like a receipt row's copy action (`.copy-inline`), so every
  * inline copy affordance reads the same. Copies `value` in full; the visible
- * text stays the caller's truncated label.
+ * text stays the caller's truncated label. `attributes` lets a surface that
+ * repaints the identifier in place (Send's chosen recipient) address and hide
+ * the control until it has a value.
  */
-export const inlineCopyButton = (value: string, label: string): string =>
+export const inlineCopyButton = (
+  value: string,
+  label: string,
+  attributes: UiAttributes = {},
+): string =>
   iconButton({
-    attributes: { "data-copy": value },
+    attributes: { ...attributes, "data-copy": value },
     className: "copy-inline",
     icon: "copy",
     label,

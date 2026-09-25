@@ -107,7 +107,7 @@ const amountStage = (
         <dd>
           <span class="send-context-account">
             <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-            <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
+            ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
           </span>
           ${routeSwitch("source", "Send from the private balance")}
         </dd>
@@ -117,7 +117,7 @@ const amountStage = (
         <dd>
           <span class="send-context-account">
             <strong id="send-recipient-name">Not selected</strong>
-            <code id="send-recipient-label">—</code>
+            <span class="copy-line"><code id="send-recipient-label">—</code>${inlineCopyButton("", "Copy recipient address", { hidden: true, id: "send-recipient-copy" })}</span>
           </span>
           ${routeSwitch("destination", "Receive into the private balance")}
         </dd>
@@ -244,6 +244,24 @@ const pendingStage = (): string => `
     </div>
   </section>`;
 
+// Which asset the screen opens on. A shortcut names its exact asset and must
+// not silently fall back to the first token — that would turn a shield into a
+// send of something else. A preset asset is a preference rather than a promise:
+// it came from a screen about that token, and the first tracked asset is a fine
+// answer when it is no longer tracked.
+const openingAsset = (
+  assets: readonly SendAsset[],
+  intent: SendIntent | null,
+  seedTokenId: string | null,
+): SendAsset | undefined => {
+  if (intent) {
+    return assets.find((candidate) => candidate.id === intent.tokenId);
+  }
+  const seeded =
+    seedTokenId === null ? undefined : assets.find((candidate) => candidate.id === seedTokenId);
+  return seeded ?? assets[0];
+};
+
 /**
  * Renders the recipient-first Send flow and every deterministic checkpoint.
  * Fixture/cached prices are shown only as estimates; the reviewed token amount
@@ -259,6 +277,12 @@ export const sendFlow = (
   currency: DisplayCurrency = preferences?.displayCurrency ?? "usd",
   multisigs: readonly ArgentMultisigRecord[] = [],
   intent: SendIntent | null = null,
+  /**
+   * Opens on this asset without seeding a recipient, so the flow still starts
+   * on the recipient step. A shortcut's own `intent` wins: it names a recipient
+   * as well and opens further along.
+   */
+  seedTokenId: string | null = null,
 ): string => {
   const assets = sendAssets(status.networkId, preferences, balances, prices, changes);
   const scopedIntent =
@@ -267,9 +291,7 @@ export const sendFlow = (
       : null;
   // A shortcut names its exact asset. If it disappeared while navigating, do
   // not silently turn the shield/unshield into a send of the first token.
-  const asset = scopedIntent
-    ? assets.find((candidate) => candidate.id === scopedIntent.tokenId)
-    : assets[0];
+  const asset = openingAsset(assets, scopedIntent, seedTokenId);
   const missingIntentAsset = scopedIntent !== null && asset === undefined;
   const canSend = account !== null && asset !== undefined;
   const signer = account?.derivation.kind === "ledger" ? "ledger" : "software";

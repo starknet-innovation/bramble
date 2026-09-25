@@ -7,11 +7,11 @@
 import { CONTROL, MOTION, RADIUS, SPACE } from "@bramble/ui-kit/tokens";
 
 /**
- * Vertical inner padding of the dock pill around its 44px roots; the ends of
- * the pill carry more so the three roots have air between them.
+ * Inner padding of the dock pill around its 44px roots, equal on every side so
+ * the selected disc sits concentric in the pill's rounded ends. Air between the
+ * roots comes from the gap, not from extra padding at the ends.
  */
 export const DOCK_PADDING = "6px";
-const DOCK_PADDING_INLINE = SPACE.md;
 const DOCK_GAP = SPACE.md;
 
 /**
@@ -32,7 +32,7 @@ export const DOCK_STYLES = `
     gap: ${DOCK_GAP};
     left: 0;
     margin: 0 auto;
-    padding: ${DOCK_PADDING} ${DOCK_PADDING_INLINE};
+    padding: ${DOCK_PADDING};
     position: fixed;
     right: 0;
     width: max-content;
