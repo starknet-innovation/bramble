@@ -14,6 +14,7 @@ import {
   accountLabel,
   flowHeader,
   flowScreen,
+  inlineCopyButton,
 } from "../../shared/parts";
 import { tokenGlyph } from "../portfolio/token-row";
 import { type SendAsset, sendAssets, sendBalanceLabel } from "../send/send-model";
@@ -139,7 +140,7 @@ const transferComposer = (
         <span class="send-recipient-avatar">${accountAvatar(view.record.address)}</span>
         <span class="send-recipient-copy">
           <strong>${escapeHtml(multisigDisplayName(view.record))}</strong>
-          <code>${escapeHtml(accountLabel(view.record.address))}</code>
+          <span class="copy-line"><code title="${escapeHtml(view.record.address)}">${escapeHtml(accountLabel(view.record.address))}</code>${inlineCopyButton(view.record.address, "Copy multisig address")}</span>
         </span>
       </div>
     </div>
