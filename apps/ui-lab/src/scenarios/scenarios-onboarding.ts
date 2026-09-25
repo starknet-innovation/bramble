@@ -5,6 +5,7 @@ import {
   addAccountChooser,
   bindOnboarding,
   createSidepanelRuntime,
+  DEFAULT_BACKUP_VERIFY_POSITIONS,
   importAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
@@ -22,6 +23,12 @@ import type { FrameContext, WalletScenario } from "../runtime/types";
 const FIXTURE_WORDS =
   "habit hope tip crystal because grunt nation idea electric witness alert like";
 const FIXTURE_PASSPHRASE = "fixture vault passphrase";
+// The lab binds onboarding without a clock, so the confirmation asks for the
+// default positions; reading the answers back out of the fixture keeps these
+// checkpoints correct if those positions ever change.
+const FIXTURE_VERIFY_ANSWERS = DEFAULT_BACKUP_VERIFY_POSITIONS.map(
+  (position) => FIXTURE_WORDS.split(" ")[position - 1] ?? "",
+);
 
 const onboardingWallet = (context: FrameContext) =>
   createSidepanelRuntime({
@@ -108,18 +115,13 @@ const prepareImportKey = (context: FrameContext): void => {
   press(context, "#key-method-button");
 };
 
-const prepareRecoveryAccounts =
-  (acknowledged: boolean) =>
-  async (context: FrameContext): Promise<void> => {
-    await preparePassword(context);
-    updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
-    updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
-    press(context, "#password-continue-button");
-    await nextTurn();
-    if (acknowledged) {
-      context.app.querySelector<HTMLInputElement>('input[name="recoveryMainnetAck"]')?.click();
-    }
-  };
+const prepareRecoveryAccounts = async (context: FrameContext): Promise<void> => {
+  await preparePassword(context);
+  updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
+  updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
+  press(context, "#password-continue-button");
+  await nextTurn();
+};
 
 const prepareAccountSelection =
   (selected: boolean) =>
@@ -134,7 +136,6 @@ const prepareAccountSelection =
       return;
     }
     press(context, "#account-preview");
-    context.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]')?.click();
   };
 
 const prepareGenerated =
@@ -150,10 +151,20 @@ const prepareGenerated =
       return;
     }
     press(context, "#generated-continue");
-    updateForm(context, 'input[name="verify-0"]', "tip");
-    updateForm(context, 'input[name="verify-1"]', "nation");
-    updateForm(context, 'input[name="verify-2"]', "alert");
+    FIXTURE_VERIFY_ANSWERS.forEach((answer, index) => {
+      updateForm(context, `input[name="verify-${index}"]`, answer);
+    });
   };
+
+// Placeholder answers that cannot match the fixture, the last one committed as
+// a user leaving the field would, so the step reports the mismatch.
+const prepareMismatchedBackup = async (context: FrameContext): Promise<void> => {
+  await prepareGenerated(true, false)(context);
+  press(context, "#generated-continue");
+  updateForm(context, 'input[name="verify-0"]', "one");
+  updateForm(context, 'input[name="verify-1"]', "two");
+  updateForm(context, 'input[name="verify-2"]', "three", true);
+};
 
 const prepareLedger = (context: FrameContext): void => {
   prepareMethod(context);
@@ -201,17 +212,8 @@ export const onboardingScenario: WalletScenario = {
       label: "Review discovered accounts",
       narrative:
         "Both supported account contracts are searched together; deployed and funded accounts are selected automatically.",
-      prepare: prepareRecoveryAccounts(false),
+      prepare: prepareRecoveryAccounts,
       state: { accountContracts: 2, discovered: 2, scan: "complete" },
-    },
-    {
-      content: () => onboarding(emptyWalletStatus),
-      id: "recovery-accounts-confirmed",
-      label: "Confirm recovered accounts",
-      narrative:
-        "The user confirms the exact discovered set before one atomic encrypted-vault restoration.",
-      prepare: prepareRecoveryAccounts(true),
-      state: { mainnetAcknowledged: true, selected: 2 },
     },
     {
       content: () => onboarding(emptyWalletStatus),
@@ -235,9 +237,9 @@ export const onboardingScenario: WalletScenario = {
       content: () => onboarding(emptyWalletStatus),
       id: "account-selected",
       label: "Account selected",
-      narrative: "Selection and real-funds acknowledgement visibly activate the final action.",
+      narrative: "Selecting the derived account visibly activates the final action.",
       prepare: prepareAccountSelection(true),
-      state: { mainnetAcknowledged: true, selected: 1 },
+      state: { selected: 1 },
     },
     {
       content: () => onboarding(emptyWalletStatus),
@@ -255,6 +257,15 @@ export const onboardingScenario: WalletScenario = {
         "Requested fixture words prove the offline backup before password setup can continue.",
       prepare: prepareGenerated(true, true),
       state: { phrase: "visible fixture", verification: "passed" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "backup-mismatch",
+      label: "Backup words don't match",
+      narrative:
+        "A committed word that does not match reads as an error to fix, not the empty-form prompt.",
+      prepare: prepareMismatchedBackup,
+      state: { phrase: "visible fixture", verification: "mismatch" },
     },
     {
       content: () => onboarding(emptyWalletStatus),

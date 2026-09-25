@@ -5,7 +5,7 @@
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
 
 const REVIEWED_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
@@ -48,8 +48,8 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
       if (review) {
         review.hidden = false;
         review.textContent = REVIEWED_FEES.has(button)
-          ? "Submitting the reviewed revoke…"
-          : "Preparing the revoke and estimating its maximum fee…";
+          ? "Submitting…"
+          : "Estimating the maximum fee…";
       }
       if (result) {
         result.textContent = "";
@@ -71,16 +71,15 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
           if (result) {
             result.textContent = `Submitted ${response}`;
           }
-          if (review)
-            review.textContent = "Revoke submitted. Activity will show its network status.";
+          if (review) review.textContent = "Revoke submitted. Follow it in Activity.";
         },
         (error: unknown) => {
           REVIEWED_FEES.delete(button);
           showToast(errorMessage(error, "Revoke failed"), "error", button);
           if (result) {
-            result.textContent = errorMessage(error, "Revoke failed");
+            result.textContent = errorLine(error, "Revoke failed");
           }
-          if (review) review.textContent = errorMessage(error, "Revoke failed");
+          if (review) review.textContent = errorLine(error, "Revoke failed");
           buttonBusy(button, false);
         },
       );

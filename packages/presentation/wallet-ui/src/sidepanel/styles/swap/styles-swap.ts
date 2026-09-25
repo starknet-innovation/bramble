@@ -200,96 +200,14 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     padding: ${SPACE.sm} ${SPACE.md};
   }
   button#swap-review.swap-risk { background: var(--bramble-danger); color: var(--bramble-bg); }
-  /* Token picker sheet: a full-screen chooser over the swap screen — search,
-     quick chips for the majors, then the verified catalog as a grouped list.
-     Solid page ground so the sheet reads as its own place, not a popover. */
-  .swap-sheet {
-    background: var(--bramble-bg);
-    display: flex;
-    flex-direction: column;
-    gap: ${SPACE.md};
-    inset: 0;
-    overflow-y: auto;
-    padding: ${SPACE.md} ${SPACE.lg} ${SPACE.lg};
-    position: fixed;
-    z-index: 15;
-  }
-  .swap-sheet[data-closing="true"] { pointer-events: none; }
-  .swap-sheet-head { align-items: center; display: flex; justify-content: space-between; }
-  .swap-sheet-head h2 { flex: 1; text-align: center; }
-  /* Symmetry spacer: the close button sits right, so the title centre-line
-     needs matching space on the left. */
-  .swap-sheet-head::before { content: ""; flex: none; width: 40px; }
-  input.swap-search { flex: none; }
-  .swap-chips { display: flex; flex-wrap: wrap; gap: ${SPACE.sm}; }
-  button.swap-chip {
-    background: var(--bramble-elevated);
-    border-radius: ${RADIUS.full};
-    color: var(--bramble-text);
-    font-size: ${TYPE.label.size};
+  /* The swap receipt is the Send outcome component (.send-outcome .send-success),
+     so the mark, the heading size, the receipt card and the actions are one
+     definition rather than two that drifted — a swap used to end on a smaller
+     heading than a send did. Only the figures below are swap's own. */
+  .swap-success .send-receipt-summary {
+    font-variant-numeric: tabular-nums;
     font-weight: ${WEIGHT.semibold};
-    gap: 6px;
-    min-height: ${CONTROL.hit};
-    padding: 0 ${SPACE.md} 0 ${SPACE.sm};
   }
-  button.swap-chip .token-mark, button.swap-chip .token-logo { height: 20px; width: 20px; }
-  button.swap-chip .token-mark { font-size: 8px; }
-  .swap-sheet-list { display: grid; gap: ${SPACE.sm}; }
-  .swap-sheet-label { padding: ${SPACE.xs} ${SPACE.sm} 0; }
-  .swap-sheet-group {
-    background: var(--bramble-panel);
-    border-radius: ${RADIUS.lg};
-    display: grid;
-  }
-  .swap-sheet-group > * + * { position: relative; }
-  .swap-sheet-group > * + *::before {
-    background: var(--bramble-hairline);
-    content: "";
-    height: 1px;
-    left: ${SPACE.lg};
-    position: absolute;
-    right: 0;
-    top: 0;
-  }
-  .swap-sheet-group .option-row { min-height: 60px; }
-  .swap-sheet-group .token-mark, .swap-sheet-group .token-logo { height: 32px; width: 32px; }
-  .swap-sheet-group .token-mark { font-size: 10px; }
-  .swap-sheet-group .option-sub code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
-  /* Verified mark: catalog entries are AVNU-verified; the check reads in the
-     success voice beside the name. */
-  .swap-verified { color: var(--bramble-positive); display: inline-flex; vertical-align: middle; }
-  .swap-verified .icon { height: 13px; width: 13px; }
-  /* Success moment: the ring draws itself, the check follows, the copy rises
-     beneath — a felt confirmation, held briefly before the flow returns home
-     on its own. Stroke-draw keyframes settle to their end state (forwards) and
-     collapse to static marks under reduced motion via the home layer. */
-  .swap-success { gap: ${SPACE.sm}; justify-items: center; padding-top: 56px; text-align: center; }
-  .swap-success-mark { color: var(--bramble-positive); display: inline-flex; height: 72px; width: 72px; }
-  .swap-success-mark svg {
-    fill: none;
-    height: 100%;
-    stroke: currentColor;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 3.2;
-    width: 100%;
-  }
-  .swap-success-ring {
-    animation: swap-draw 480ms var(--ease-out) 60ms forwards;
-    stroke-dasharray: 158;
-    stroke-dashoffset: 158;
-  }
-  .swap-success-check {
-    animation: swap-draw 300ms var(--ease-out) 460ms forwards;
-    stroke-dasharray: 32;
-    stroke-dashoffset: 32;
-  }
-  @keyframes swap-draw { to { stroke-dashoffset: 0; } }
-  .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint {
-    animation: rise-in 260ms var(--ease-out) both;
-  }
-  .swap-success .swap-success-summary { animation-delay: 60ms; font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.semibold}; }
-  .swap-success .hint { animation-delay: 120ms; }
   @media (prefers-reduced-motion: reduce) {
     html[data-swap-transition]::view-transition-group(swap-stage),
     html[data-swap-transition]::view-transition-old(swap-stage),

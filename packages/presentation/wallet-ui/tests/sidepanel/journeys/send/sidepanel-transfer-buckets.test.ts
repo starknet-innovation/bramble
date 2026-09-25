@@ -81,8 +81,8 @@ const mountForm = (recipient = RECIPIENT): HTMLFormElement => {
     <input name="tokenId" type="hidden" value="${TOKEN_ID}" />
     <input name="tokenSymbol" type="hidden" value="STRK" />
     <div id="send-route-controls">
-      <button class="send-route-toggle" data-send-bucket="source" data-bucket="public" type="button">Public</button>
-      <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button">Public</button>
+      <button class="send-route-toggle" data-send-bucket="source" data-bucket="public" type="button" role="switch" aria-checked="false"><span class="send-route-copy"><span>Private</span></span><span class="send-route-track"><span class="send-route-knob"></span></span></button>
+      <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button" role="switch" aria-checked="false"><span class="send-route-copy"><span>Private</span></span><span class="send-route-track"><span class="send-route-knob"></span></span></button>
     </div>
     <span id="send-route-reason" hidden></span>
     <button id="send-route-retry" type="button" hidden>Retry</button>
@@ -178,16 +178,21 @@ describe("bucket controls", () => {
     expect(form.querySelector<HTMLInputElement>('[name="tokenBalance"]')?.value).toBe("");
   });
 
-  test("names the balance in use on the toggle itself", () => {
+  test("reports each leg's balance as the switch's own checked state", () => {
     const form = mountForm();
     bind(form);
     pick(form, "source", "private");
 
     const state = [...form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")].map(
       (button) =>
-        `${button.dataset["sendBucket"]}:${button.textContent}:${button.dataset["bucket"]}`,
+        `${button.dataset["sendBucket"]}:${button.getAttribute("aria-checked")}:${button.dataset["bucket"]}`,
     );
-    expect(state).toEqual(["source:Private:private", "destination:Public:public"]);
+    expect(state).toEqual(["source:true:private", "destination:false:public"]);
+    // The label names what the switch turns on, so it never renames itself.
+    for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
+      expect(button.textContent).toContain("Private");
+      expect(button.querySelector(".send-route-track")).not.toBeNull();
+    }
   });
 
   test("toggles back to public on a second press", () => {
@@ -198,7 +203,7 @@ describe("bucket controls", () => {
     expect(transferFields(form).source).toBe("private");
     button?.click();
     expect(transferFields(form).source).toBe("public");
-    expect(button?.textContent).toBe("Public");
+    expect(button?.getAttribute("aria-checked")).toBe("false");
   });
 
   test("says what pressing it will do, since it cannot show both states", () => {
@@ -330,6 +335,31 @@ describe("bucket controls", () => {
     expect(counter.changes).toBe(2);
   });
 
+  test("re-measures the balance after a pick from the token dropdown", () => {
+    // The dropdown reports a pick from its option, not from the hidden fact
+    // row; both must re-measure, or a private send keeps the public figure the
+    // compose binding just wrote after the asset changes.
+    const form = mountForm();
+    form.insertAdjacentHTML(
+      "beforeend",
+      `<button type="button" data-token-option="${TOKEN_ID}" data-token-symbol="STRK">STRK</button>`,
+    );
+    const counter = bind(form);
+    pick(form, "source", "private");
+
+    const balance = form.querySelector<HTMLInputElement>('[name="tokenBalance"]');
+    const formatted = form.querySelector<HTMLInputElement>('[name="tokenFormatted"]');
+    if (balance) balance.value = "100000000000000000000";
+    if (formatted) formatted.value = "100";
+    form
+      .querySelector<HTMLButtonElement>("[data-token-option]")
+      ?.dispatchEvent(new Event("click", { bubbles: true }));
+
+    expect(form.querySelector("#send-balance-label")?.textContent).toBe("Private balance 20 STRK");
+    expect(balance?.value).toBe("20000000000000000000");
+    expect(counter.changes).toBe(2);
+  });
+
   test("clears the reason once the route resolves", () => {
     const form = mountForm();
     bind(form);
@@ -361,7 +391,7 @@ describe("private send fee lines", () => {
     // Gas is the paymaster's, so the sender's own broadcast cost is nil.
     expect(html).toContain("Estimated fee: Sponsored");
     // The pool's charge is named as such rather than billed as network gas.
-    expect(html).toContain("Pool fee: 6 STRK from your private balance");
+    expect(html).toContain("Pool fee: 6 STRK");
   });
 
   test("charges the relay's own cut as the network fee when it keeps one", () => {
@@ -369,7 +399,7 @@ describe("private send fee lines", () => {
     const html = relayFeeHtml("0x5a34a38fc00a0000", POOL_FEE);
 
     expect(html).toContain("Estimated fee: 0.5 STRK");
-    expect(html).toContain("Pool fee: 6 STRK from your private balance");
+    expect(html).toContain("Pool fee: 6 STRK");
   });
 
   test("falls back to one unattributed line rather than inventing a split", () => {

@@ -6,6 +6,7 @@
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
+import { strkAvailableForFees } from "../portfolio/home-view";
 import type { SendIntent } from "../send/send-model";
 import { loadPrivacyDisclosure, type PrivacyUiDeps } from "./privacy-disclosure";
 import {
@@ -47,6 +48,7 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
       return "balances" in state ? state.balances : [];
     },
     disclosure: () => disclosure,
+    fundedForFees: () => strkAvailableForFees(options.balances()),
     generation: () => generation,
     journey: () => journey,
     setDisclosure: (state) => {

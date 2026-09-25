@@ -49,24 +49,24 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
     "Turn on Blind signing in the Starknet app settings on your Ledger, then retry.",
   "chain-failed": "Your transaction was submitted but failed on-chain.",
   "dashboard-restore-failed":
-    "Your Ledger didn't return to its home screen for a compatibility check. Unlock it, leave it on the Starknet app, then try again.",
+    "Your Ledger didn't return to its home screen. Unlock it, leave it on the Starknet app, then try again.",
   "deploy-unfunded":
-    "This account isn't deployed yet, and there's no STRK to cover the first transaction. Fund it with STRK, then try again.",
+    "This account isn't deployed yet and has no STRK for the first transaction. Add STRK, then try again.",
   "device-busy":
-    "Your Ledger is being used by another app. Close Ledger Live (or any other tab or window using it), then try again.",
+    "Another app is using your Ledger. Close Ledger Live and any other tab using it, then try again.",
   "device-locked": "Unlock your Ledger, then try again.",
   "disconnected-mid-sign": "Your Ledger disconnected. Nothing was submitted.",
   "locked-mid-sign":
-    "Your Ledger locked itself. Unlock it, then press Confirm again - you'll see the same request.",
+    "Your Ledger locked itself. Unlock it, then press Confirm again — you'll see the same request.",
   "management-refused":
-    "Your Ledger refused a standard compatibility check. Unlock it, make sure the Starknet app is open and no other app (Ledger Live) is using it, then try again.",
+    "Your Ledger refused a compatibility check. Unlock it, open the Starknet app, close Ledger Live, then try again.",
   "management-unreadable":
-    "Your Ledger replied to a compatibility check in a format this wallet doesn't recognize yet - most likely a device or app version newer than this build. Nothing was signed. Please report this so we can add support.",
+    "Your Ledger's app or firmware is newer than this wallet supports. Nothing was signed.",
   "multiple-devices": "Select the Ledger for this account.",
   "network-mismatch":
     "This Ledger account was set up for another network. Switch networks or pick a matching account.",
   "no-app-open":
-    "Open the Starknet app on your Ledger. If Ledger Live can't find or install it, update your device firmware first (Ledger Live > My Ledger), then open the app.",
+    "Open the Starknet app on your Ledger. If Ledger Live can't install it, update your firmware first (My Ledger), then open the app.",
   "firmware-below-minimum":
     "Your Ledger firmware needs an update. Update it in Ledger Live (My Ledger), then reconnect and open the Starknet app.",
   "panel-context-lost": "The Ledger tab closed before you confirmed. Nothing was submitted.",
@@ -76,17 +76,17 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   replug: "Reconnect your Ledger, then try again.",
   "sign-timeout": "Still waiting for you to confirm on your Ledger.",
   "starknet-reopen-failed":
-    "Your Ledger left the Starknet app for a compatibility check and couldn't reopen it. Open the Starknet app on your device, then try again. Nothing was signed.",
+    "Your Ledger couldn't reopen the Starknet app. Open it on your device, then try again. Nothing was signed.",
   "signature-verify-failed":
-    "We couldn't verify the signature from your Ledger, so nothing was submitted. Try again.",
+    "Couldn't verify the signature from your Ledger, so nothing was submitted. Try again.",
   "unexpected-device-error":
-    "Something went wrong talking to your Ledger. Make sure the Starknet app is open and no other app is using it, then try again.",
+    "Something went wrong talking to your Ledger. Open the Starknet app, close other apps using it, then try again.",
   "unsupported-ledger-device":
     "This Ledger device or firmware isn't supported yet. Update it in Ledger Live, then reconnect and open the Starknet app.",
   "webhid-unavailable": "Ledger support needs a Chromium-based browser (Chrome, Brave, or Edge).",
   "worker-evicted": "The wallet restarted mid-sign. Reconnect your Ledger and try again.",
   "wrong-device":
-    "This isn't the Ledger this account was set up on. Connect the device you originally used. If you have more than one Ledger, make sure the right one is plugged in.",
+    "This isn't the Ledger this account was set up on. Connect the one you originally used.",
 };
 
 /**

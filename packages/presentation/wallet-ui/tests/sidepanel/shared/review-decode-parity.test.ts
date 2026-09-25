@@ -185,8 +185,11 @@ describe("Send review vs dApp invoke card decode/risk parity (#19)", () => {
     expect(reviewPanel(riskFlagMessages(flags))).toBe("");
     expect(dappCard(summaries, flags)).toContain(reviewCallsList(summaries));
     expect(sendReview(summaries, flags)).toContain(reviewCallsList(summaries));
+    // "Risk and recovery" labels the flag list. With nothing flagged, Send
+    // still carries its all-clear guidance, but not under that heading.
     expect(dappCard(summaries, flags)).not.toContain("Risk and recovery");
-    expect(sendReview(summaries, flags)).toContain("Risk and recovery");
+    expect(sendReview(summaries, flags)).not.toContain("Risk and recovery");
+    expect(sendReview(summaries, flags)).toContain("No additional wallet warnings were detected.");
   });
 
   test("a multicall renders every decoded summary in order on both surfaces", () => {

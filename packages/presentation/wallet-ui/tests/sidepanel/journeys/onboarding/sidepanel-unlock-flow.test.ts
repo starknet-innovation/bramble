@@ -70,7 +70,9 @@ describe("locked vault handoff", () => {
     setPassphrase("wrong passphrase");
     document.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
     await tick();
-    expect(document.querySelector("#form-result")?.textContent).toBe("Incorrect passphrase");
+    // The background still throws "Incorrect passphrase"; the status line
+    // shows what a reader is told.
+    expect(document.querySelector("#form-result")?.textContent).toBe("That passphrase is wrong.");
     expect(
       document.querySelector<HTMLButtonElement>('#unlock-form button[type="submit"]')?.disabled,
     ).toBe(false);

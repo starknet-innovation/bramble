@@ -76,7 +76,7 @@ describe("onboarding gate view", () => {
     expect(html).toContain('data-recovery-grid="generated"');
     expect(html).toContain("recovery-grid is-masked");
     expect(html).toContain('id="phrase-toggle"');
-    expect(html).toContain("Show recovery phrase");
+    expect(html).toContain("Show");
   });
 
   test("keeps Ledger as a separate keyless path with passphrase confirmation", () => {

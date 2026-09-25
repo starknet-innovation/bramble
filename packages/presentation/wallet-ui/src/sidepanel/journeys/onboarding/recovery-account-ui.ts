@@ -125,9 +125,6 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const restore = deps.form.querySelector<HTMLButtonElement>("#recover-accounts-button");
   const manual = deps.form.querySelector<HTMLInputElement>('input[name="recoveryManualIndex"]');
   const manualSearch = deps.form.querySelector<HTMLButtonElement>("#recovery-manual-search");
-  const acknowledgement = deps.form.querySelector<HTMLInputElement>(
-    'input[name="recoveryMainnetAck"]',
-  );
   let candidates: readonly RecoveryAccountCandidate[] = [];
   let complete = false;
   let scanStatus = "";
@@ -161,7 +158,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   };
 
   const refreshGate = (): void => {
-    if (restore) restore.disabled = selected.size === 0 || !acknowledgement?.checked;
+    if (restore) restore.disabled = selected.size === 0;
   };
 
   const candidateRow = (candidate: RecoveryAccountCandidate): HTMLLIElement => {
@@ -226,7 +223,6 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       const detected = rows.filter((candidate) => candidate.deployed || candidate.funded).length;
       const detectedSlot = group.querySelector<HTMLElement>("[data-detected]");
       if (detectedSlot) {
-        detectedSlot.className = "hint";
         detectedSlot.textContent = accountsDetectedText(detected);
       }
       if (detected > 0 && !autoOpened.has(contractType)) {
@@ -307,12 +303,11 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     }
     void scan(index);
   });
-  acknowledgement?.addEventListener("change", refreshGate);
   restore?.addEventListener("click", () => {
     const selections = candidates
       .map(selectionFor)
       .filter((selection) => selected.has(selectionKey(selection)));
-    if (selections.length === 0 || !acknowledgement?.checked) return;
+    if (selections.length === 0) return;
     buttonBusy(restore, true);
     if (result) result.textContent = "Restoring the selected accounts into your encrypted vault…";
     const commit =
@@ -343,7 +338,6 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       complete = false;
       selected.clear();
       seen.clear();
-      if (acknowledgement) acknowledgement.checked = false;
       if (status) status.textContent = "Searching every account type…";
       if (result) result.textContent = "";
       renderCandidates();

@@ -47,7 +47,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-origin-account {
     align-items: center;
     background: var(--bramble-elevated);
-    border-radius: ${RADIUS.lg};
+    border-radius: ${RADIUS.md};
     display: flex;
     min-height: ${SIZE.control};
     padding-left: ${SPACE.md};
@@ -88,19 +88,28 @@ export const SEND_COMPOSE_STYLES = `
     line-height: ${TYPE.title.line};
     margin: 0;
   }
+  /* The search box is one field made of an icon and an input, so the box, not
+     the input, carries the field's radius and its bottom edge. Left on the
+     input, the edge stopped short of the icon and curled up at the input's
+     own corner, reading as a broken underline. */
   .send-search-control {
     align-items: center;
     background: var(--bramble-elevated);
-    border-radius: ${RADIUS.lg};
+    border-bottom: 1px solid var(--bramble-border);
+    border-radius: ${RADIUS.md};
     display: flex;
     gap: ${SPACE.sm};
     min-height: ${SIZE.control};
+    overflow: hidden;
     padding-left: ${SPACE.md};
   }
   .send-search-control > .icon { color: var(--bramble-muted); flex: none; }
   .send-search-control input {
+    align-self: stretch;
     background: transparent;
-    border-radius: 0 ${RADIUS.lg} ${RADIUS.lg} 0;
+    border-bottom: 0;
+    border-radius: 0;
+    min-height: 0;
     padding-left: 0;
   }
   .send-search-control input:focus-visible { outline: 0; }
@@ -116,39 +125,6 @@ export const SEND_COMPOSE_STYLES = `
     .send-search-control input:not(:disabled):hover,
     .send-amount-field input:not(:disabled):hover { background: transparent; }
   }
-  .send-recipient-tabs {
-    border-bottom: 1px solid var(--bramble-hairline);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-  .send-recipient-tabs button {
-    background: transparent;
-    border-radius: ${RADIUS.sm} ${RADIUS.sm} 0 0;
-    color: var(--bramble-muted);
-    min-height: ${CONTROL.hit};
-    padding: 0 ${SPACE.sm};
-    position: relative;
-  }
-  .send-recipient-tabs button[aria-selected="true"] { color: var(--bramble-text); }
-  .send-recipient-tabs button[aria-selected="true"]::after {
-    background: var(--bramble-text);
-    border-radius: ${RADIUS.full};
-    bottom: -1px;
-    content: "";
-    height: 2px;
-    inset-inline: ${SPACE.sm};
-    position: absolute;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .send-recipient-tabs button:not(:disabled):hover {
-      background: transparent;
-      color: var(--bramble-text);
-    }
-  }
-  .send-recipient-tabs button:not(:disabled):active {
-    background: transparent;
-    color: var(--bramble-text);
-  }
   .send-recipient-list, .send-asset-list { display: grid; gap: ${SPACE.sm}; }
   .send-list-heading {
     align-items: center;
@@ -160,6 +136,26 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-list-heading > .icon { height: ${CONTROL.icon}; width: ${CONTROL.icon}; }
   .send-list-heading > strong:first-of-type { color: var(--bramble-text); margin-right: auto; }
+  /* Recipient folders: the same grouping the account drawer shows, so an
+     account is found under the folder the user filed it into. */
+  .send-recipient-folder { display: grid; gap: ${SPACE.sm}; }
+  button.send-folder-head {
+    background: transparent;
+    padding: 0;
+    text-align: start;
+    width: 100%;
+  }
+  .send-folder-count {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.micro.size};
+    font-variant-numeric: tabular-nums;
+  }
+  /* The mark is chevronRight. An open folder rotates it to point down, the
+     same way a disclosure mark does, so the glyph follows data-collapsed. */
+  .send-folder-mark { display: inline-flex; }
+  .send-folder-mark .icon { height: 14px; width: 14px; }
+  .send-recipient-folder[data-collapsed="false"] .send-folder-mark { transform: rotate(90deg); }
+  .send-folder-empty { margin: 0; }
   .send-recipient-row, .send-asset-row {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
@@ -214,7 +210,7 @@ export const SEND_COMPOSE_STYLES = `
   #send-recipient-continue { width: 100%; }
   .send-amount-card {
     background: var(--bramble-panel);
-    border-radius: ${RADIUS.xl};
+    border-radius: ${RADIUS.lg};
     display: grid;
     gap: ${SPACE.md};
     padding: ${SPACE.lg};
@@ -355,12 +351,19 @@ export const SEND_COMPOSE_STYLES = `
   .send-context-receipt dt,
   .send-review-facts dt { color: var(--bramble-muted); font-size: ${TYPE.label.size}; }
   /* An account row in the receipt: identity on the left, and for the two
-     accounts, the balance that account's value moves through on the right. */
+     accounts, the balance that account's value moves through on the right.
+     Its label is one short word, so the row gives the value everything the
+     label leaves rather than the generic 70% cap. On a panel too narrow for
+     the address, its copy control, and the toggle side by side, the toggle
+     wraps under the identity instead of the address being clipped. */
   .send-context-receipt dd:has(.send-route-toggle) {
     align-items: center;
     display: flex;
-    gap: ${SPACE.md};
+    flex-wrap: wrap;
+    gap: ${SPACE.xs} ${SPACE.md};
     justify-content: flex-end;
+    max-width: none;
+    padding-block: ${SPACE.xs};
   }
   /* The identity column is repainted with the chosen account's own name; a
      long single word must clip beside its toggle, not push the receipt out. */
@@ -391,9 +394,9 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-context-receipt code,
   .send-review-facts code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
-  /* The reviewed recipient: truncated address and its copy control on one
-     line, the address clipping first so the control never leaves the fact. */
-  .send-review-address { align-items: center; display: flex; gap: 2px; max-width: 100%; min-width: 0; }
+  /* The reviewed recipient sits on the shared .copy-line (address and copy
+     control on one line); the address clips first so the control never
+     leaves the fact. */
   .send-review-address code { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   #send-review-button { margin-top: auto; width: 100%; }
   /* The busy review button swaps its send glyph for the shared Liquid Dots

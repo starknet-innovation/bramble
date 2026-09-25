@@ -1,5 +1,5 @@
 import { bindSwap, createSidepanelRuntime, createSwapClient } from "@bramble/wallet-ui/lab";
-import { statusFor } from "../fixtures/fixtures";
+import { softwareAccount, statusFor } from "../fixtures/fixtures";
 import {
   ETH_TOKEN,
   journeyBalances,
@@ -40,6 +40,39 @@ const quoteResponse = (highRisk: boolean, reversed = false) => ({
   },
 });
 
+// The receipt waits for the chain, so the fixture chain reports the swap the
+// moment it is asked: the lab shows the confirmed receipt, not a spinner.
+const preconfirmedSwapActivity = {
+  activity: [
+    {
+      accountId: softwareAccount.id,
+      hash: SWAP_HASH,
+      kind: "swap" as const,
+      networkId: "SN_MAIN" as const,
+      status: "preconfirmed" as const,
+      submittedAt: 1,
+      summary: "Swap 1.25 ETH for STRK",
+    },
+  ],
+  historyUnavailable: false,
+  ok: true,
+};
+
+// Requests whose fixture answer does not depend on the checkpoint's mode.
+const FIXED_SWAP_RESPONSES: Readonly<Record<string, () => unknown>> = {
+  "wallet.activity": () => preconfirmedSwapActivity,
+  "wallet.status": () => statusFor(),
+  "wallet.swapTokens": () => ({
+    ok: true,
+    swapTokens: [ETH_TOKEN, STRK_TOKEN].map(({ address, decimals, name, symbol }) => ({
+      address,
+      decimals,
+      name,
+      symbol,
+    })),
+  }),
+};
+
 const prepareSwap =
   (mode: SwapMode) =>
   async (context: FrameContext): Promise<void> => {
@@ -48,19 +81,9 @@ const prepareSwap =
       sendMessage: async (message: unknown): Promise<unknown> => {
         const type = messageType(message);
         context.emit({ detail: type ?? "invalid request", kind: "action" });
-        if (type === "wallet.status") {
-          return statusFor();
-        }
-        if (type === "wallet.swapTokens") {
-          return {
-            ok: true,
-            swapTokens: [ETH_TOKEN, STRK_TOKEN].map(({ address, decimals, name, symbol }) => ({
-              address,
-              decimals,
-              name,
-              symbol,
-            })),
-          };
+        const fixed = type ? FIXED_SWAP_RESPONSES[type] : undefined;
+        if (fixed) {
+          return fixed();
         }
         if (type === "wallet.swapQuote") {
           if (mode === "loading") {
@@ -104,7 +127,10 @@ const prepareSwap =
     const deps = {
       app: context.app,
       balances: () => ({ balances: journeyBalances }) as const,
+      // The lab has no wall clock to spend: the fixture chain answers at once.
+      confirmationDelaysMs: [0],
       currency: () => "usd" as const,
+      navigateActivity: () => context.emit({ detail: "navigate activity", kind: "state" }),
       navigateHome: () => context.emit({ detail: "navigate home", kind: "state" }),
       preferences: () => journeyPreferences,
       render: async () => undefined,
@@ -118,7 +144,9 @@ const prepareSwap =
       context.app.querySelector<HTMLButtonElement>("#swap-sell-token")?.click();
       await nextTurn();
       context.app
-        .querySelector<HTMLButtonElement>(`[data-swap-pick-address="${ETH_TOKEN.address}"]`)
+        .querySelector<HTMLButtonElement>(
+          `#swap-sell-options [data-token-option="${ETH_TOKEN.id}"]`,
+        )
         ?.click();
       await nextTurn();
     }
@@ -172,7 +200,7 @@ export const swapScenario: WalletScenario = {
     checkpoint(
       "picker",
       "Token picker",
-      "Tracked and verified catalog tokens share one searchable sheet.",
+      "Tracked and verified catalog tokens share one searchable dropdown.",
     ),
     checkpoint(
       "loading",
@@ -206,8 +234,8 @@ export const swapScenario: WalletScenario = {
     ),
     checkpoint(
       "submitted",
-      "Swap submitted",
-      "The submitted state acknowledges the handoff before returning to account-scoped Activity.",
+      "Swap complete",
+      "The same receipt a send ends on: what moved, the identifier, and two ways on.",
     ),
   ],
   description:

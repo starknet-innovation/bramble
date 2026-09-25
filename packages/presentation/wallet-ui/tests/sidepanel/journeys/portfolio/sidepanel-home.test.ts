@@ -74,7 +74,7 @@ describe("sidepanel home", () => {
     const html = walletHeader(status, account, preferences, multisig);
     const network = html.slice(html.indexOf('class="account-net'), html.indexOf("</header>"));
 
-    expect(network).toContain('class="account-network-label">Starknet</span>');
+    expect(network).toContain('class="account-network-label">Mainnet</span>');
     expect(network).not.toContain("Argent Multisig");
   });
 
@@ -134,7 +134,8 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="portfolio-menu" role="menu"');
     expect(html).toContain('data-view="tokens" role="menuitem"');
     expect(html).not.toContain('data-view="nfts"');
-    expect(html).toContain('data-view="settings" role="menuitem"');
+    // Settings has its own dock button, so the menu does not repeat it.
+    expect(html).not.toContain('data-view="settings" role="menuitem"');
     expect(html).toContain('id="refresh-button" role="menuitem"');
   });
 
@@ -158,6 +159,9 @@ describe("sidepanel home", () => {
     expect(html).toContain("Manage tokens");
     expect(html).toContain("1 not shown");
     expect(html).not.toContain("Hidden tokens");
+    // Every balance is hidden, so the panel has no list for the row to follow.
+    expect(html).not.toContain('class="token-list"');
+    expect(html).toContain('<button class="menu-row" data-view="tokens"');
   });
 
   test("Activity stays a top-level dock destination instead of a portfolio tab", () => {
@@ -173,7 +177,7 @@ describe("sidepanel home", () => {
       },
     ]);
     expect(html).not.toContain('data-home-tab="activity"');
-    expect(html).not.toContain("Send 1.5 ETH to");
+    expect(html).not.toContain("Sent 1.5 ETH");
     expect(html).toMatch(/class="nav-item" data-view="activity"/);
 
     const activity = dashboard("activity", status, [], preferences, { balances: [] }, null, [
@@ -187,7 +191,7 @@ describe("sidepanel home", () => {
         summary: "Send 1.5 ETH to 0x777a…bbcc",
       },
     ]);
-    expect(activity).toContain("Send 1.5 ETH to");
+    expect(activity).toContain("Sent 1.5 ETH");
   });
 
   // Positional args after expandedGroupId(20): priceStale(21), priceAsOf(22).
@@ -216,7 +220,7 @@ describe("sidepanel home", () => {
       [],
       null,
       null,
-      null,
+      [],
       null,
       priceStale,
       priceAsOf,

@@ -26,7 +26,7 @@ const intentAction = (
   if (!hasFreshAuthority) {
     return {
       canSign: false,
-      note: "Current signer authority differs from this frozen intent. Signing and submission remain blocked.",
+      note: "The signers changed since this transaction was frozen. Signing and submission stay blocked.",
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-view": "multisig-signers" },
@@ -53,7 +53,7 @@ const intentAction = (
         ? hasReplacement
           ? `Nothing was sent. Network fees rose above this signed transaction's limit. Continue the fee-updated transaction and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
           : `Nothing was sent. Network fees rose above this signed transaction's limit. Update the network fee and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
-        : "Nothing was sent. This version is no longer current. Create a current transaction to continue.",
+        : "Nothing was sent. This version is out of date — create a new transaction to continue.",
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-ms-refresh-intent": intent.id },
@@ -94,13 +94,13 @@ const intentAction = (
       packageIsPrimary: true,
       primary: button({
         attributes: { "data-ms-copy-package": intent.id },
-        label: "Copy intent package",
+        label: "Copy transaction package",
       }),
     };
   }
   return {
     canSign: false,
-    note: "This intent has no further wallet action.",
+    note: "Nothing left to do here.",
     packageIsPrimary: false,
     primary: "",
   };
@@ -155,7 +155,7 @@ const collaborationTools = (
                 ${button({
                   attributes: { "data-ms-copy-package": intent.id },
                   icon: "copy",
-                  label: "Copy full intent package",
+                  label: "Copy full transaction package",
                   size: "small",
                   variant: "secondary",
                 })}

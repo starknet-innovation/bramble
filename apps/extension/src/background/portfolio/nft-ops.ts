@@ -319,6 +319,9 @@ const handleReviewNftTransfer = async (
       // remain intact, including the submission-blocking poisoning check.
       flags: report.flags.filter((flag) => flag.code !== "unknown-contract"),
       requiresDeployment: fees.requiresDeployment,
+      // Same DTO and renderer as the ERC-20 review: when the send also deploys
+      // the account, a Ledger signs both, and the review says so here too.
+      signsTwice: fees.requiresDeployment && context.account.derivation.kind === "ledger",
       summaries: report.calls.map((decoded) => decoded.summary),
     },
   };

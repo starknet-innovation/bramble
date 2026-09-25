@@ -1,4 +1,4 @@
-import { expect } from "storybook/test";
+import { expect, userEvent } from "storybook/test";
 import {
   assertCheckpointReady,
   checkpointStory,
@@ -37,9 +37,9 @@ export const Receive: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     // Address first: the plain address is shown whole and is the default QR;
     // the contact card is the second, switchable payload (spec item 3).
-    await expect(body?.querySelector(".receive-address-line code")).toHaveTextContent(
-      /^0x[0-9a-f]+$/,
-    );
+    await expect(
+      body?.querySelector(".receive-address-copy [data-receive-address-text]"),
+    ).toHaveTextContent(/^0x[0-9a-f]+$/);
     await expect(body?.querySelector("[data-receive-qr]")).toHaveAttribute(
       "data-qr-payload",
       "address",
@@ -53,8 +53,14 @@ export const Receive: LabStory = {
       "true",
     );
     await expect(body?.querySelector('[data-receive-payload="card"]')).toBeEnabled();
-    await expect(body?.querySelector(".receive-identity")).not.toHaveAttribute("open");
-    await expect(body?.querySelector(".receive-public-key")).toBeInTheDocument();
+    // The contact card, the keys, and the payload switch wait behind Advanced; the
+    // QR stays on the address until the user asks for the card.
+    const advanced = body?.querySelector<HTMLButtonElement>("#advanced-receive");
+    if (!advanced) throw new Error("Missing receive Advanced switch");
+    await expect(advanced).toHaveAttribute("aria-checked", "false");
+    await expect(body?.querySelector("#receive-advanced-fields")).not.toBeVisible();
+    await userEvent.click(advanced);
+    await expect(body?.querySelector("#receive-advanced-fields")).toBeVisible();
     await expect(body?.querySelector(".receive-public-key [data-copy]")).toHaveAttribute(
       "data-copy",
     );
@@ -122,6 +128,7 @@ export const DiscoverTokens = checkpointStory(
   "assets",
   "token-discover",
 );
+export const TokenCatalog = checkpointStory("Assets · AVNU token list", "assets", "token-catalog");
 export const TokensEmpty = checkpointStory("Assets · tokens empty", "assets", "tokens-empty");
 export const TokenDetail = checkpointStory("Assets · token detail", "assets", "token-detail");
 export const TokenOffline = checkpointStory("Assets · token offline", "assets", "token-offline");
@@ -132,6 +139,13 @@ export const AddressBook: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // Label and address are the whole form; the wallet card and the keys wait
+    // behind Advanced, so saving a contact never reads as a five-field task.
+    const advanced = body?.querySelector<HTMLButtonElement>("#advanced-address");
+    if (!advanced) throw new Error("Missing address book Advanced switch");
+    await expect(body?.querySelector('input[name="address"]')).toBeVisible();
+    await expect(body?.querySelector('textarea[name="walletCard"]')).not.toBeVisible();
+    await userEvent.click(advanced);
     await expect(body?.querySelector('textarea[name="walletCard"]')).toBeVisible();
     await expect(body?.querySelector('input[name="nostrPublicKey"]')).toBeVisible();
     await expect(body?.querySelector(".address-book")).toHaveTextContent(

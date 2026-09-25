@@ -9,6 +9,7 @@ import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { LedgerCandidate } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
 import {
   addAccountChooser,
+  importAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
   ledgerDevicePicker,
@@ -37,36 +38,42 @@ const candidateAccount = (
 });
 
 describe("onboarding views", () => {
-  test("the chooser offers exactly the five account routes", () => {
+  test("the chooser offers exactly the four ways to make an account", () => {
     const html = addAccountChooser();
     expect(html).toContain('data-add-kind="regular"');
     expect(html).toContain('data-add-kind="ledger"');
-    expect(html).toContain('data-add-kind="restore-ready-ledger"');
     expect(html).toContain('data-add-kind="multisig"');
     expect(html).toContain('data-add-kind="import"');
     expect(html).toContain("Regular account");
     expect(html).toContain("Ledger account");
-    expect(html).toContain("Restore a Ready Ledger account");
-    expect(html).toContain("Ready’s derivation path");
     expect(html).toContain("Multisig account");
+    // Bringing over a Ready Ledger account is importing one you already own,
+    // so it sits with the other imports rather than beside the create routes.
+    expect(html).not.toContain('data-add-kind="restore-ready-ledger"');
     expect(html).toContain("Import an existing account");
     // Contract choice is gone: every creation route is the Bramble account.
     expect(html).not.toContain("argent ");
     expect(html).not.toContain("openzeppelin");
-    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(5);
+    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(4);
     expect(html.indexOf('data-add-kind="regular"')).toBeLessThan(
       html.indexOf('data-add-kind="import"'),
-    );
-    // The Ready restore sits right after the Ledger route it complements.
-    expect(html.indexOf('data-add-kind="ledger"')).toBeLessThan(
-      html.indexOf('data-add-kind="restore-ready-ledger"'),
-    );
-    expect(html.indexOf('data-add-kind="restore-ready-ledger"')).toBeLessThan(
-      html.indexOf('data-add-kind="multisig"'),
     );
     // Tiles route on their own click: no confirm step and no selection state.
     expect(html).not.toContain("data-add-continue");
     expect(html).not.toContain("aria-pressed");
+  });
+
+  test("importing an existing account offers the phrase, a key, and a Ready Ledger", () => {
+    const html = importAccountChooser();
+
+    expect(html).toContain('data-add-kind="import-phrase"');
+    expect(html).toContain('data-add-kind="import-key"');
+    expect(html).toContain('data-add-kind="restore-ready-ledger"');
+    // The option names the wallet the account came from; where on the device
+    // it is read from is the wallet's business, not the reader's.
+    expect(html).toContain("Ready (Argent X)");
+    expect(html).not.toContain("derivation path");
+    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(3);
   });
 
   test("connect, reading, and error device states render their controls", () => {
@@ -129,7 +136,7 @@ describe("onboarding views", () => {
     expect(html).not.toContain("Ready accounts");
     expect(html).toContain("Select accounts");
     // Only the active Bramble candidate counts as detected.
-    expect(html).toContain("1 account detected");
+    expect(html).toContain("1 found");
     expect(html).toContain("Account 0");
     expect(html).toContain("Deployed");
     expect(html).toContain("1.5 STRK");
@@ -160,7 +167,7 @@ describe("onboarding views", () => {
     const html = ledgerAccountPicker(candidates, [ready(12).id], undefined, "argentx");
     expect(html).toContain("Select Ready accounts");
     expect(html).toContain("Ready accounts");
-    expect(html).toContain("Ready’s derivation path");
+    expect(html).not.toContain("derivation path");
     // Ready numbers Ledger accounts after the wallet's other accounts.
     expect(html).toContain("Show more");
     expect(html).toContain("a few pages in");
@@ -169,7 +176,7 @@ describe("onboarding views", () => {
     expect(html).not.toContain("data-account-group");
     expect(html).not.toContain("Bramble accounts");
     expect(html).not.toContain("<details");
-    expect(html).toContain("1 account detected");
+    expect(html).toContain("1 found");
     expect(html).toContain("Account 12");
     expect(html).toContain(`data-ledger-toggle="${ready(12).id}"`);
     // An idle Ready index is listed but not selectable, as on the Ledger route.

@@ -6,7 +6,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState } from "@bramble/ui-kit/content";
-import { button, iconButton } from "@bramble/ui-kit/controls";
+import { button, iconButton, switchControl } from "@bramble/ui-kit/controls";
 import { textareaField, textField } from "@bramble/ui-kit/fields";
 import type { ConnectedSite, WalletStatus } from "../../../popup/responses/responses";
 import { accountLabel, copyButton, flowHeader, flowScreen } from "../../shared/parts";
@@ -62,16 +62,6 @@ export const addressBookFlow = (
       `<section class="section">
         <form id="address-form">
           <input name="networkId" type="hidden" value="${escapeHtml(status.networkId)}" />
-          ${textareaField({
-            autocomplete: "off",
-            className: "mono",
-            hint: "Paste a shared Bramble card to fill the address, signer key, and coordination identity together.",
-            label: "Wallet card (optional)",
-            name: "walletCard",
-            placeholder: "mcw:contact:1:…",
-            rows: 3,
-            spellcheck: false,
-          })}
           ${textField({
             autocomplete: "off",
             label: "Label",
@@ -87,25 +77,41 @@ export const addressBookFlow = (
             required: true,
             spellcheck: false,
           })}
-          ${textField({
-            autocomplete: "off",
-            className: "mono",
-            hint: "Authenticates encrypted multisig intent handoffs from this contact.",
-            label: "Coordination public key (optional)",
-            name: "nostrPublicKey",
-            placeholder: "64-character Nostr public key",
-            spellcheck: false,
-          })}
-          ${textField({
-            autocomplete: "off",
-            className: "mono",
-            hint: "Lets this contact appear in multisig signer pickers.",
-            label: "Signer public key (optional)",
-            name: "publicKeyX",
-            placeholder: "0x…",
-            spellcheck: false,
-          })}
           <span class="hint">Saving an existing address updates its label.</span>
+          ${switchControl({
+            attributes: { id: "advanced-address" },
+            label: "Advanced",
+          })}
+          <div class="address-advanced-fields" id="address-advanced-fields" hidden>
+            ${textareaField({
+              autocomplete: "off",
+              className: "mono",
+              hint: "Paste a shared Bramble card to fill the address, signer key, and coordination identity together.",
+              label: "Wallet card",
+              name: "walletCard",
+              placeholder: "mcw:contact:1:…",
+              rows: 3,
+              spellcheck: false,
+            })}
+            ${textField({
+              autocomplete: "off",
+              className: "mono",
+              hint: "Authenticates encrypted multisig transaction handoffs from this contact.",
+              label: "Coordination public key",
+              name: "nostrPublicKey",
+              placeholder: "64-character Nostr public key",
+              spellcheck: false,
+            })}
+            ${textField({
+              autocomplete: "off",
+              className: "mono",
+              hint: "Lets this contact appear in multisig signer pickers.",
+              label: "Signer public key",
+              name: "publicKeyX",
+              placeholder: "0x…",
+              spellcheck: false,
+            })}
+          </div>
           ${button({
             icon: "check",
             label: "Save address",
@@ -119,7 +125,7 @@ export const addressBookFlow = (
         <p class="eyebrow">Saved addresses</p>
         ${
           addresses.length === 0
-            ? emptyState("No saved addresses yet. Save one to reuse it when sending.")
+            ? emptyState("No saved address yet")
             : `<ul class="address-book">${addresses
                 .map(
                   (entry) => `<li>

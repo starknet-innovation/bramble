@@ -23,6 +23,17 @@ export const errorDetails = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
 
 /**
+ * What a status line under a control shows.
+ *
+ * An error toast hands the raw string to `showToast`, which displays the
+ * friendly form and keeps the raw one behind its copy control. A status line
+ * has no copy control and no second chance, so it takes the reader-facing
+ * sentence directly — without this it printed "add token failed" in the page.
+ */
+export const errorLine = (error: unknown, fallback: string): string =>
+  friendlyError(errorMessage(error, fallback)).message;
+
+/**
  * Marks a button busy so repeated submits are impossible while work runs.
  */
 export const buttonBusy = (button: HTMLButtonElement | null | undefined, busy: boolean): void => {
@@ -265,12 +276,23 @@ const confirmCopyGlyph = (button: HTMLButtonElement): void => {
   }, COPY_CONFIRM_MS);
 };
 
+// Controls already wired to the clipboard. Sub-regions re-bind their own root
+// (a deployment funding review binds its whole form on every check), so
+// without this a control gains one more listener per pass and copies, toasts,
+// and flips its glyph that many times per click.
+const boundCopyButtons = new WeakSet<HTMLButtonElement>();
+
 /**
  * Binds every `[data-copy]` control under the app root to the clipboard with
- * scoped-status or toast feedback and a transient check glyph.
+ * scoped-status or toast feedback and a transient check glyph. Idempotent: a
+ * control that is already bound is skipped, so any caller may re-bind a root.
  */
 export const bindCopyButtons = (app: Element | null): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
+    if (boundCopyButtons.has(button)) {
+      return;
+    }
+    boundCopyButtons.add(button);
     button.addEventListener("click", () => {
       const value = button.dataset["copy"];
       if (!value) {

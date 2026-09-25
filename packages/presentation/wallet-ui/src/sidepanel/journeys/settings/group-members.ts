@@ -16,7 +16,13 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import type { AccountGroup, AccountGroups } from "@bramble/settings/groups";
+import {
+  type AccountGroup,
+  type AccountGroups,
+  DEFAULT_GROUP_IDS,
+  displayedAccountGroup,
+  isDefaultGroup,
+} from "@bramble/settings/groups";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -36,7 +42,7 @@ const createGroupRow = (open: boolean): string => `
   <li class="group-manage-row">
     <button class="group-expand" type="button" data-group-expand="${CREATE_GROUP_PANEL}" aria-expanded="${open}" aria-controls="group-create-panel">
       <span class="group-manage-icon">${icon("plus")}</span>
-      <span class="group-manage-copy"><strong>Create a group</strong></span>
+      <span class="group-manage-copy"><strong>Create a folder</strong></span>
       <span class="group-expand-mark">${icon(open ? "chevronDown" : "chevronRight")}</span>
     </button>
     <div class="group-members" id="group-create-panel"${open ? "" : " hidden"}>
@@ -52,11 +58,16 @@ const createGroupRow = (open: boolean): string => `
 const accountChecklistRow = (
   account: AccountRef,
   group: AccountGroup,
+  groups: AccountGroups,
   preferences: WalletPreferences | null,
   networkName: string | null,
 ): string => {
-  const member = group.accountIds.includes(account.id);
-  return `<button class="account-check" type="button" data-group-toggle="${escapeHtml(group.id)}" data-account="${escapeHtml(account.id)}" aria-pressed="${member}">
+  const member = displayedAccountGroup(groups, account.id)?.id === group.id;
+  // An account shown in My accounts stays there until it is filed elsewhere.
+  // Clearing that row would leave the account on screen, so the control is
+  // not offered.
+  const staysInHome = member && group.id === DEFAULT_GROUP_IDS.home;
+  return `<button class="account-check" type="button" data-group-toggle="${escapeHtml(group.id)}" data-account="${escapeHtml(account.id)}" aria-pressed="${member}"${staysInHome ? ' disabled title="File this account into another folder to move it."' : ""}>
     <span class="option-avatar">${accountAvatar(account.address)}</span>
     <span class="account-check-copy">
       <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
@@ -73,12 +84,15 @@ const accountChecklistRow = (
 // persisted across re-renders by ./group-ui.ts.
 const groupMembersEditor = (
   group: AccountGroup,
+  groups: AccountGroups,
   accounts: readonly AccountRef[],
   preferences: WalletPreferences | null,
   networkNameFor: (account: AccountRef) => string | null,
   expanded: boolean,
 ): string => {
-  const count = group.accountIds.length;
+  const count = accounts.filter(
+    (account) => displayedAccountGroup(groups, account.id)?.id === group.id,
+  ).length;
   const plural = count === 1 ? "" : "s";
   return `<li class="group-manage-row">
     <button class="group-expand" type="button" data-group-expand="${escapeHtml(group.id)}" aria-expanded="${expanded}" aria-controls="group-editor-${escapeHtml(group.id)}">
@@ -92,12 +106,16 @@ const groupMembersEditor = (
     <div class="group-members" id="group-editor-${escapeHtml(group.id)}"${expanded ? "" : " hidden"}>
       <div class="group-members-head">
         <p class="eyebrow">${count} member${plural}</p>
-        ${iconButton({
-          attributes: { "data-remove-group": group.id },
-          icon: "x",
-          label: `Delete ${group.name}`,
-          tone: "danger",
-        })}
+        ${
+          isDefaultGroup(group.id)
+            ? ""
+            : iconButton({
+                attributes: { "data-remove-group": group.id },
+                icon: "x",
+                label: `Delete ${group.name}`,
+                tone: "danger",
+              })
+        }
       </div>
       ${editGroupForm(group)}
       ${
@@ -105,7 +123,7 @@ const groupMembersEditor = (
           ? '<p class="hint">No accounts yet. Add one above to start bucketing.</p>'
           : `<div class="account-check-list">${accounts
               .map((account) =>
-                accountChecklistRow(account, group, preferences, networkNameFor(account)),
+                accountChecklistRow(account, group, groups, preferences, networkNameFor(account)),
               )
               .join("")}</div>`
       }
@@ -115,11 +133,13 @@ const groupMembersEditor = (
 
 /**
  * Renders the manage-accounts "Groups" section: the one home for group
- * management — creating a group, renaming/re-iconing/deleting each, and bucketing
+ * management — creating a group, renaming/re-iconing each, deleting a folder
+ * the user made (the two default folders have no delete control), and bucketing
  * accounts into it — as a single accordion. A "Create a group" panel leads, then
  * one row per group; each group expands into a members checklist listing every
  * wallet account (across networks) with the group's rename/icon/delete controls
- * in its header. `expandedGroupId` selects the single open panel — a group id,
+ * in its header. An account in no folder counts as a member of My accounts,
+ * matching the drawer, and that row cannot be cleared. `expandedGroupId` selects the single open panel — a group id,
  * the {@link CREATE_GROUP_PANEL} sentinel, or null (all collapsed) — so opening
  * one panel collapses the previously open one and never piles up. With no groups
  * yet the create panel starts open so the first group is one step away. A
@@ -142,13 +162,14 @@ export const groupsSection = (
   const createOpen = expandedGroupId === CREATE_GROUP_PANEL || groups.length === 0;
   return `
   <section class="section">
-    <p class="eyebrow">Groups</p>
+    <p class="eyebrow">Folders</p>
     <ul class="group-manage-list">
       ${createGroupRow(createOpen)}
       ${groups
         .map((group) =>
           groupMembersEditor(
             group,
+            groups,
             accounts,
             preferences,
             networkNameFor,

@@ -83,20 +83,6 @@ export const LEDGER_GRANT_STYLES = `
     font-weight: ${WEIGHT.bold};
     letter-spacing: ${TRACKING.label};
   }
-  .grant-once {
-    align-items: center;
-    color: var(--bramble-muted);
-    display: inline-flex;
-    font-size: ${TYPE.caption.size};
-    font-weight: ${WEIGHT.medium};
-    gap: 7px;
-  }
-  .grant-once-dot {
-    background: var(--bramble-positive);
-    border-radius: ${RADIUS.full};
-    height: 7px;
-    width: 7px;
-  }
 
   .grant-hero {
     align-items: center;
@@ -404,7 +390,6 @@ export const LEDGER_GRANT_STYLES = `
     .grant-hero { grid-template-columns: 82px minmax(0, 1fr); }
     .grant-method-options { grid-template-columns: 1fr; }
     .ledger-visual { transform: scale(0.86); }
-    .grant-once { display: none; }
   }
   @media (max-height: 520px) {
     .grant-shell { gap: ${SPACE.md}; padding-block: ${SPACE.md}; }

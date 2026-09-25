@@ -14,6 +14,7 @@ import {
   accountLabel,
   flowHeader,
   flowScreen,
+  inlineCopyButton,
 } from "../../shared/parts";
 import { tokenGlyph } from "../portfolio/token-row";
 import { type SendAsset, sendAssets, sendBalanceLabel } from "../send/send-model";
@@ -86,7 +87,7 @@ const assetRow = (asset: SendAsset): string => `
   </button>`;
 
 const assetPicker = (assets: readonly SendAsset[], selected: SendAsset | undefined): string => {
-  if (!selected) return emptyState("No tracked tokens are available for this shared account.");
+  if (!selected) return emptyState("No tracked tokens are available for this multisig.");
   return `<details class="multisig-asset-picker" data-disclosure="multisig-transfer-asset">
     <summary class="send-token-trigger">
       <span id="multisig-selected-token-glyph">${tokenGlyph(selected.address, selected.symbol)}</span>
@@ -105,7 +106,7 @@ const assetPicker = (assets: readonly SendAsset[], selected: SendAsset | undefin
           type: "search",
         })}</span>
       </label>
-      <div class="send-list-heading"><strong>Your tokens</strong><span>Shared balance</span></div>
+      <div class="send-list-heading"><strong>Your tokens</strong><span>Multisig balance</span></div>
       <div class="send-asset-list">${assets.map(assetRow).join("")}</div>
       <p class="send-asset-empty" id="multisig-asset-empty" hidden>No matching token.</p>
     </div>
@@ -139,7 +140,7 @@ const transferComposer = (
         <span class="send-recipient-avatar">${accountAvatar(view.record.address)}</span>
         <span class="send-recipient-copy">
           <strong>${escapeHtml(multisigDisplayName(view.record))}</strong>
-          <code>${escapeHtml(accountLabel(view.record.address))}</code>
+          <span class="copy-line"><code title="${escapeHtml(view.record.address)}">${escapeHtml(accountLabel(view.record.address))}</code>${inlineCopyButton(view.record.address, "Copy multisig address")}</span>
         </span>
       </div>
     </div>
@@ -226,7 +227,7 @@ export const multisigProposeFlow = (
   if (!view) {
     return (
       flowHeader("New transaction", status) +
-      flowScreen("multisig-propose", emptyState("This Ready multisig is no longer watched."))
+      flowScreen("multisig-propose", emptyState("This multisig is no longer watched."))
     );
   }
   if (!view.config || view.authorityStatus !== "available") {
@@ -246,7 +247,7 @@ export const multisigProposeFlow = (
     );
   }
   const data = portfolio ?? {
-    balances: { error: "Shared balances are loading." },
+    balances: { error: "Multisig balances are loading." },
     changes: {},
     currency: preferences?.displayCurrency ?? "usd",
     prices: {},

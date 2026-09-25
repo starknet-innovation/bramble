@@ -111,8 +111,9 @@ preconfirmed, accepted, or failed network status in **Activity**.
 ### Private balances and STRK20
 
 Private-balance discovery is opt-in. Activating it publishes a one-time
-viewing-key commitment for the account so Bramble can discover private notes;
-it does **not** publish the viewing key or private balance. Activation may need a
+viewing-key commitment for the account so Bramble can discover private notes,
+and opens the account's own private channel; it does **not** publish the
+viewing key or private balance. Activation may need a
 proof, account authorization, network fee, and time for the indexer to catch up.
 The wallet keeps **submitted** and **discoverable** as separate states.
 

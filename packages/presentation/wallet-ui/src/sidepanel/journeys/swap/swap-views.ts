@@ -1,5 +1,5 @@
 /**
- * Swap flow screen template (AVNU aggregator): a Sell panel and a Buy panel
+ * Swap flow screen template (avnu aggregator): a Sell panel and a Buy panel
  * stacked around a flip control, a rate/fee meta line, and the staged
  * confirm/receipt sections. Pure skeleton — every dynamic region (token
  * chips, balances, USD figures, quote, receipts) is populated by
@@ -9,18 +9,18 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { receipt } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
-import { flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
+import { outcomeHashRow } from "../../shared/outcome-hash";
+import { flowScreen, flowSteps, noAccountEmpty } from "../../shared/parts";
 import { formatFeeEstimate } from "../../shared/review-render";
+import { tokenDropdownShell } from "../../shared/token-dropdown";
 import { compactAmount, tokenGlyph } from "../portfolio/token-row";
 import type { SwapPreparationView } from "./swap-client";
-import { SWAP_LOSS_WARN_PERCENT } from "./swap-client";
 
 // One tradable panel: label, amount region, token chip, and the USD/balance
 // line. The sell side carries a real input plus Max; the buy side is output.
@@ -42,9 +42,12 @@ const swapPanel = (side: "buy" | "sell", disabled: boolean): string => `
             })
           : `<output id="swap-buy-amount" class="swap-amount is-output" aria-live="polite">0</output>`
       }
-      <button id="swap-${side}-token" class="swap-token" type="button" aria-haspopup="listbox" aria-label="Choose ${side} token" ${disabled ? "disabled" : ""}>
-        <span class="swap-token-copy">—</span>${icon("chevronDown")}
-      </button>
+      <div class="token-dropdown" data-align="end">
+        <button id="swap-${side}-token" class="swap-token" type="button" aria-haspopup="listbox" aria-label="Choose ${side} token" ${disabled ? "disabled" : ""}>
+          <span class="swap-token-copy">—</span>${icon("chevronDown")}
+        </button>
+        ${tokenDropdownShell(`swap-${side}-options`, side === "sell" ? "Tokens you can pay with" : "Tokens you can receive")}
+      </div>
     </div>
     <div class="swap-sub">
       <span id="swap-${side}-usd" class="swap-usd"></span>
@@ -55,6 +58,20 @@ const swapPanel = (side: "buy" | "sell", disabled: boolean): string => `
     </div>
   </div>`;
 
+// Swap owns its header so the back arrow can step from the review to the quote
+// rather than leaving the flow, which is what the review stage needs now that
+// it carries no Back button of its own.
+const swapHeader = (): string => `
+  <header class="flow-header">
+    ${iconButton({
+      attributes: { id: "swap-header-back" },
+      icon: "chevronLeft",
+      label: "Back",
+      variant: "ghost",
+    })}
+    <div class="flow-title"><h1>Swap</h1></div>
+  </header>`;
+
 /**
  * Renders the swap flow screen. `account` gates the controls; everything else
  * arrives through the swap bindings after render.
@@ -62,10 +79,15 @@ const swapPanel = (side: "buy" | "sell", disabled: boolean): string => `
 export const swapFlow = (status: WalletStatus, account: AccountRef | null): string => {
   const disabled = account === null;
   return (
-    flowHeader("Swap", status, "Best route via AVNU") +
+    swapHeader() +
     flowScreen(
       "swap",
       `${disabled ? noAccountEmpty(status) : ""}
+      ${flowSteps("data-swap-step", "Swap progress", [
+        ["edit", "Quote"],
+        ["confirm", "Review"],
+        ["success", "Execute"],
+      ])}
       <section class="swap-stage" id="swap-edit">
         <div class="swap-card">
           ${swapPanel("sell", disabled)}
@@ -74,68 +96,39 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
         </div>
         <div class="swap-meta"><span id="swap-rate"></span><span id="swap-gas"></span></div>
         <p id="swap-warning" class="swap-warning" role="alert" hidden></p>
-        <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">Swap</span></button>
+        <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">Review swap</span></button>
       </section>
-      <div id="swap-picker" class="swap-sheet" role="dialog" aria-modal="true" aria-labelledby="swap-picker-title" hidden>
-        <header class="swap-sheet-head">
-          <h2 id="swap-picker-title">Receive</h2>
-          ${iconButton({
-            attributes: { id: "swap-picker-close" },
-            icon: "x",
-            label: "Close token picker",
-            variant: "ghost",
-          })}
-        </header>
-        ${inputControl({
-          ariaLabel: "Token name or address",
-          attributes: { id: "swap-picker-search" },
-          autocomplete: "off",
-          className: "swap-search",
-          placeholder: "Token name or address",
-          spellcheck: false,
-          type: "search",
-        })}
-        <div id="swap-picker-chips" class="swap-chips"></div>
-        <div id="swap-picker-list" class="swap-sheet-list" role="listbox" aria-label="Tokens"></div>
-        ${emptyState("", "status", { hidden: true, id: "swap-picker-status" })}
-      </div>
       <section class="swap-stage" id="swap-confirm" hidden>
-        <header class="decision-head">
-          <span class="decision-seal">${icon("shield")}</span>
-          <span><p class="decision-label">Reviewed intent</p><h2>Confirm this swap</h2></span>
-        </header>
+        <h2 class="swap-review-title">Review swap</h2>
         <div id="swap-confirm-receipt"></div>
         <div id="swap-risk-review"></div>
-        <details class="disclosure decision-technical" data-disclosure="swap-technical-details">
-          <summary>
-            <span class="menu-copy"><strong>Technical details</strong><small>Frozen calls and review digest</small></span>
-            <span class="disclosure-mark">${icon("chevronRight")}</span>
-          </summary>
-          <div class="disclosure-body">
-            <div id="swap-quote-details"></div>
-            <div id="swap-call-review"></div>
-          </div>
-        </details>
         <div class="swap-actions">
           ${button({
             attributes: { id: "swap-confirm-button" },
             icon: "check",
             label: "Confirm swap",
           })}
-          ${button({
-            attributes: { id: "swap-back-button" },
-            label: "Back",
-            variant: "secondary",
-          })}
         </div>
       </section>
-      <section class="swap-stage swap-success" id="swap-success" role="status" hidden>
-        <span class="swap-success-mark" aria-hidden="true">
-          <svg viewBox="0 0 56 56"><circle class="swap-success-ring" cx="28" cy="28" r="25" /><path class="swap-success-check" d="M18 29.5l7 7 14-15" /></svg>
+      <section class="swap-stage swap-success send-outcome send-success" id="swap-success" role="status" hidden>
+        <span class="send-outcome-mark" aria-hidden="true">
+          <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
         </span>
-        <h2>Swap submitted</h2>
-        <p class="swap-success-summary" id="swap-success-summary"></p>
-        <p class="hint">Taking you home — track it under Activity.</p>
+        <div class="send-outcome-copy">
+          <h2 id="swap-success-title">Swap complete</h2>
+          <p id="swap-success-note" hidden></p>
+        </div>
+        <div class="send-receipt">
+          <p class="send-receipt-summary" id="swap-success-summary"></p>
+          <div class="send-receipt-tx">
+            <span class="send-receipt-label">Transaction</span>
+            ${outcomeHashRow("swap-success-hash")}
+          </div>
+        </div>
+        <div class="send-actions">
+          ${button({ attributes: { id: "swap-view-activity" }, icon: "activity", label: "View in Activity tab" })}
+          ${button({ attributes: { id: "swap-home" }, label: "Back", variant: "secondary" })}
+        </div>
       </section>
       <p id="swap-result" role="status"></p>`,
     )
@@ -182,36 +175,12 @@ export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
     </div>
   </div>
   <div class="receipt-group">
-    <p class="decision-label">Maximum cost and constraints</p>
+    <p class="decision-label">Cost</p>
     ${receipt([
       {
         label: "Minimum received",
-        value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol} (wallet-enforced)`,
+        value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol}`,
       },
-      { label: "Maximum network fee", value: formatFeeEstimate(figures.networkFee) },
+      { label: "Estimated fee", value: formatFeeEstimate(figures.networkFee) },
     ])}
   </div>`;
-
-/**
- * Renders secondary quote facts behind the technical disclosure.
- */
-export const swapQuoteDetails = (figures: SwapConfirmFigures): string =>
-  receipt([
-    ...(figures.valueDelta === null
-      ? []
-      : [
-          {
-            label: "Value change",
-            value: `${figures.valueDelta > 0 ? "+" : ""}${figures.valueDelta.toFixed(2)}%`,
-            valueTone:
-              figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
-                ? ("danger" as const)
-                : ("default" as const),
-          },
-        ]),
-    {
-      label: "Aggregator fee estimate",
-      value: `≈ ${formatFiat(figures.gasFeesInUsd, "usd")} (not wallet-enforced)`,
-    },
-    { label: "Route", value: "AVNU aggregator" },
-  ]);

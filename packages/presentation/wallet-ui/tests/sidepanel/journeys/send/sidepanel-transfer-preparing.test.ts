@@ -17,7 +17,6 @@ import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import { PREPARATION_CHANNEL_LOST } from "../../../../src/sidepanel/journeys/privacy/privacy-preparation-job";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
-import { PROVING_HINT } from "../../../../src/sidepanel/journeys/privacy/privacy-views";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -127,9 +126,6 @@ const hidden = (app: HTMLElement, selector: string): boolean =>
 const disabled = (app: HTMLElement, selector: string): boolean =>
   app.querySelector<HTMLButtonElement | HTMLInputElement>(selector)?.disabled ?? false;
 
-const taskState = (app: HTMLElement, task: string): string | undefined =>
-  app.querySelector<HTMLElement>(`[data-send-task="${task}"]`)?.dataset["state"];
-
 const stepState = (app: HTMLElement, step: string): string | undefined =>
   app.querySelector<HTMLElement>(`[data-send-step="${step}"]`)?.dataset["state"];
 
@@ -188,14 +184,10 @@ describe("Review shield", () => {
     expect(hidden(app, "#send-details")).toBe(true);
     expect(hidden(app, "#send-review-stage")).toBe(true);
     expect(app.querySelector("#transfer-form")?.hasAttribute("aria-busy")).toBe(true);
-    expect(text(app, "#send-working-title")).toBe("Preparing shield");
-    expect(text(app, "#send-working-copy")).toContain("Building the private proof");
-    expect(text(app, "#send-working-copy")).toContain("Nothing is signed or sent");
-    expect(text(app, "#send-working-copy")).toContain("going back discards this preparation");
-    expect(text(app, "#send-task-review-label")).toBe("Build private proof");
-    expect(taskState(app, "review")).toBe("active");
-    expect(taskState(app, "authorize")).toBe("pending");
-    expect(text(app, "#send-liveness")).toBe(PROVING_HINT);
+    expect(text(app, "#send-working-title")).toBe("Preparing private transfer…");
+    // The preparing screen says only what is running.
+    expect(text(app, "#send-working-copy")).toBe("");
+    expect(hidden(app, "#send-working-copy")).toBe(true);
     // The step rail has moved off Amount: the review is what is in progress.
     expect(stepState(app, "details")).toBe("done");
     expect(stepState(app, "review")).toBe("active");
@@ -279,7 +271,6 @@ describe("Review shield", () => {
     await flush();
     expect(stage(app)).toBe("reviewing");
     expect(hidden(app, "#send-working")).toBe(false);
-    expect(text(app, "#send-task-review-label")).toBe("Build private proof");
 
     pending.resolve(preparation);
     await flush();

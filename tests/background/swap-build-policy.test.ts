@@ -57,7 +57,7 @@ describe("swap build policy covers the whole call set", () => {
       { calldata: ["0x1"], contractAddress: ATTACKER_ADDRESS, entrypoint: "drain" },
     ]);
     await expect(response).resolves.toEqual({
-      error: "swap build called a contract that is not the AVNU router",
+      error: "swap build called a contract that is not the avnu router",
     });
     expect(submitted).toHaveLength(0);
   });
@@ -115,7 +115,7 @@ describe("swap build policy covers the whole call set", () => {
         { calldata: ["0x1"], contractAddress: ROUTER_ADDRESS, entrypoint },
       ]);
       await expect(response).resolves.toEqual({
-        error: "swap build called an entrypoint that is not an AVNU swap",
+        error: "swap build called an entrypoint that is not an avnu swap",
       });
       expect(submitted).toHaveLength(0);
     }
@@ -135,7 +135,7 @@ describe("swap build policy covers the whole call set", () => {
       },
     ]);
     await expect(response).resolves.toEqual({
-      error: "swap build called an entrypoint that is not an AVNU swap",
+      error: "swap build called an entrypoint that is not an avnu swap",
     });
     expect(submitted).toHaveLength(0);
   });

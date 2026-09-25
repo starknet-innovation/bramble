@@ -10,7 +10,7 @@
  * messages directly.
  */
 import { escapeHtml } from "@bramble/core/html";
-import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
@@ -26,6 +26,12 @@ import { formatFri } from "./parts";
 export type ReviewFeeState = {
   readonly deploymentFee?: FeeEstimate | null;
   readonly deploymentFeeEstimateFailed?: boolean;
+  /**
+   * Set when the account signs on a device: deployment and the transaction are
+   * two transactions, so the device prompts twice. Said here rather than left
+   * as a surprise between the confirm press and the second prompt.
+   */
+  readonly signsTwice?: boolean;
   readonly fee: FeeEstimate | null;
   /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
@@ -46,11 +52,42 @@ const shortfallHtml = (state: ReviewFeeState): string =>
     ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
     : "";
 
-const reviewBoundary = (content: string): string =>
-  `<section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-    <p class="decision-label">Maximum cost and constraints</p>
+/**
+ * Whether this review has no single figure the user can consent to.
+ *
+ * A failed component, or two estimates that cannot be added (unlike units, a
+ * malformed amount), fails closed. Callers withhold the reviewed key and
+ * disable Confirm so the next click re-estimates instead of sending a figure
+ * the review did not quote. A deployment whose fee is simply not ready yet
+ * (no failure flag, no deployment estimate) is not blocked: that screen says
+ * the fee comes after deployment.
+ */
+export const reviewFeeBlocked = (state: ReviewFeeState): boolean =>
+  state.feeEstimateFailed === true ||
+  state.deploymentFeeEstimateFailed === true ||
+  (state.requiresDeployment === true &&
+    state.fee != null &&
+    state.deploymentFee != null &&
+    sumFeeEstimates(state.fee, state.deploymentFee) === null);
+
+// `rule: false` drops the hairline above the section, for a surface that already
+// separates its own blocks and does not want a divider drawn inside them.
+const reviewBoundary = (content: string, rule = true): string =>
+  `<section class="decision-layer${rule ? " decision-boundary" : ""}" aria-label="Cost">
+    <p class="decision-label">Cost</p>
     ${content}
   </section>`;
+
+/**
+ * Wraps already-composed fee markup in the Cost box.
+ *
+ * `reviewFeeSection` builds and boxes its own lines, but the Send review also
+ * composes fee lines for routes with no estimate to section — a relay's
+ * sponsored gas, a deposit priced at submission. Those were the ones left
+ * outside a box, beside a Visibility section that had one.
+ */
+export const reviewCostSection = (trustedMarkup: string): string =>
+  reviewBoundary(trustedMarkup, false);
 
 /**
  * Renders a plain-language consequence for decisions that do not carry decoded
@@ -86,14 +123,67 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
  * surface. Escapes everything; a missing estimate is always a named state,
  * never a fabricated amount.
  */
-export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttributes): string => {
+export const reviewFeeSection = (
+  state: ReviewFeeState,
+  retryAttributes: UiAttributes,
+  options: {
+    readonly extra?: string;
+    /**
+     * The pool's own charge, in FRI. Given it, the section adds the total of
+     * what will actually leave the account — the arithmetic belongs here
+     * because only this function knows which network figure it printed.
+     */
+    readonly poolFeeFri?: string;
+    readonly rule?: boolean;
+  } = {},
+): string => {
+  const { extra = "", poolFeeFri, rule = true } = options;
+  // Two fees on one screen is two numbers to add up. Stated only when both are
+  // known and share a denomination; an unlike pair fails closed rather than
+  // printing a total that means nothing.
+  const totalLine = (network: FeeEstimate): string => {
+    // Unlike denominations fail closed: a total that adds FRI to anything else
+    // would understate the cost exactly as a missing half does.
+    if (poolFeeFri === undefined || network.unit !== "FRI") {
+      return "";
+    }
+    try {
+      // Both figures reach here as base units, but the pool quotes hex and an
+      // estimate may be decimal, so each is parsed rather than compared as text.
+      const total = BigInt(network.overallFee) + BigInt(poolFeeFri);
+      return `<p class="review-fee review-fee-total">Total: ${escapeHtml(
+        formatFri(`0x${total.toString(16)}`),
+      )}</p>`;
+    } catch {
+      return "";
+    }
+  };
+  // Every branch closes the same way, so a caller's extra cost line lands
+  // inside the section rather than orphaned under it.
+  const boundary = (content: string, network?: FeeEstimate): string =>
+    reviewBoundary(`${content}${extra}${network ? totalLine(network) : ""}`, rule);
   if (state.feeEstimatePending === true) {
-    return reviewBoundary('<p class="review-fee" role="status">Estimating network fee…</p>');
+    return boundary('<p class="review-fee" role="status">Estimating network fee…</p>');
   }
   if (state.requiresDeployment === true && state.fee && state.deploymentFee) {
-    return reviewBoundary(
-      `<div class="review-fee"><p>Estimated transaction fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p><p>Estimated account deployment fee: ${escapeHtml(formatFeeEstimate(state.deploymentFee))}</p></div>${shortfallHtml(state)}`,
-    );
+    // One action, one figure. Creating the account and sending are two
+    // transactions on chain and the user pays for both, so the total leads and
+    // the deployment share is named under it — quoting the transaction alone
+    // understates what leaves the account, and quoting two figures asks the
+    // user to add them up.
+    const total = sumFeeEstimates(state.fee, state.deploymentFee);
+    // Unlike units or a malformed estimate fail closed: quoting one component
+    // as the total would understate the cost the same way a missing half does.
+    if (total) {
+      return boundary(
+        `<div class="review-fee"><p>Estimated fee: ${escapeHtml(
+          formatFeeEstimate(total),
+        )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
+          formatFeeEstimate(state.deploymentFee),
+        )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
+        total,
+      );
+    }
   }
   if (
     state.requiresDeployment === true &&
@@ -101,12 +191,12 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     state.deploymentFeeEstimateFailed === undefined &&
     state.feeEstimateFailed !== true
   ) {
-    return reviewBoundary(
+    return boundary(
       '<p class="review-fee">The network fee is estimated once this account is deployed.</p>',
     );
   }
   if (state.requiresDeployment === true) {
-    return reviewBoundary(
+    return boundary(
       `<p class="review-flag" role="alert">Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.</p>${button(
         {
           attributes: retryAttributes,
@@ -117,12 +207,13 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     );
   }
   if (state.fee) {
-    return reviewBoundary(
+    return boundary(
       `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`,
+      state.fee,
     );
   }
   if (state.feeEstimateFailed === true) {
-    return reviewBoundary(
+    return boundary(
       `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${button(
         {
           attributes: retryAttributes,
@@ -165,12 +256,16 @@ export const reviewCallsList = (
  * Renders risk-flag and insight lines inside the shared review panel. Returns an
  * empty string when there is nothing to surface, so an absent panel leaves no
  * empty box behind rather than an empty bordered region.
+ *
+ * The "Risk and recovery" label belongs to the flag list. `clearCopy` is the
+ * opposite of a flag — a neutral statement about what the action does, shown
+ * when nothing was flagged — so it renders unlabelled rather than under a
+ * heading announcing a risk the panel is not reporting.
  */
 export const reviewPanel = (items: readonly string[], clearCopy?: string): string =>
   items.length === 0
     ? clearCopy
       ? `<div class="review-panel decision-layer decision-risk" role="note">
-          <p class="decision-label">Risk and recovery</p>
           <p>${escapeHtml(clearCopy)}</p>
         </div>`
       : ""

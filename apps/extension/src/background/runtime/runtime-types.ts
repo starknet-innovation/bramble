@@ -16,7 +16,6 @@ import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { SwapCatalogToken } from "@bramble/transactions/avnu";
-import type { RiskFlag } from "@bramble/transactions/verify";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
@@ -40,6 +39,11 @@ import type {
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
+import type {
+  FeeReviewResponse,
+  TransferResponse,
+  TransferReviewResponse,
+} from "./runtime-review-types";
 
 /** Successful account-import response. */
 type CreateAccountResponse = {
@@ -235,41 +239,6 @@ type SwapQuoteResponse = {
 type SwapPreparationResponse = {
   readonly ok: true;
   readonly swapPreparation: SwapPreparationReview;
-};
-
-/**
- * Transfer submission response returned to extension pages.
- */
-type TransferResponse = {
-  readonly ok: true;
-  readonly transactionHash: string;
-};
-
-/**
- * Pre-sign transfer review returned to extension pages.
- */
-type TransferReviewResponse = {
-  readonly ok: true;
-  readonly review: {
-    readonly deploymentFee?: FeeEstimate | null;
-    readonly deploymentFeeEstimateFailed?: boolean;
-    readonly fee: FeeEstimate | null;
-    /**
-     * Warn-only fee-affordability verdict from the shared predicate (issue
-     * 191); "unknown" means no claim was possible and must never block.
-     */
-    readonly feeAffordability: "insufficient" | "ok" | "unknown";
-    readonly feeEstimateFailed: boolean;
-    readonly flags: readonly RiskFlag[];
-    readonly requiresDeployment: boolean;
-    readonly summaries: readonly string[];
-  };
-};
-
-/** Fee a wallet-initiated operation must display before its confirmation. */
-type FeeReviewResponse = {
-  readonly feeReview: FeeEstimate;
-  readonly ok: true;
 };
 
 /**

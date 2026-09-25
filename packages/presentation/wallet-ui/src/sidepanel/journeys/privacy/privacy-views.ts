@@ -42,21 +42,24 @@ type PreparingStep = Extract<PrivacyJourneyState, { readonly stage: "preparing" 
 
 // The wait before the review. Discovery and the activation proof are the two
 // legs a click on "Go private" may have to sit through, and the second can take
-// minutes: the screen names what it is doing and for how long, and offers the
-// way back, because a bare busy button was exactly what read as a dead click.
-// Backing out is safe — nothing is signed or sent before the review is
-// confirmed; the background finishes the proof it started and never executes an
-// abandoned preparation.
+// minutes: the screen shows how far it has got, how long to expect, and the way
+// back, because a bare busy button was exactly what read as a dead click.
+//
+// The task list below already names the step in progress, so `body` says only
+// what the list cannot and is empty when there is nothing to add. Backing out
+// is safe — the background finishes the proof it started and never executes an
+// abandoned preparation — but the proof is discarded, which is worth a line
+// before someone spends minutes on it twice.
 const PREPARING_COPY: Readonly<
   Record<PreparingStep, { readonly body: string; readonly hint: string; readonly title: string }>
 > = {
   discovering: {
-    body: "Reading this account's registration and private notes before anything is prepared.",
+    body: "",
     hint: "Keep the wallet open.",
     title: "Checking private balances",
   },
   proving: {
-    body: "Building the registration proof and estimating the network fee. Nothing is signed or sent until you confirm the review; going back discards this preparation.",
+    body: "Going back discards this preparation.",
     hint: PROVING_HINT,
     title: "Preparing to go private",
   },
@@ -71,7 +74,7 @@ const preparing = (
   <section class="privacy-working" role="status" aria-live="polite" data-privacy-preparing="${journey.step}">
     ${liquidDots("privacy")}${liquidDotsFilter("privacy")}
     <h2>${escapeHtml(copy.title)}</h2>
-    <p>${escapeHtml(copy.body)}</p>
+    ${copy.body === "" ? "" : `<p>${escapeHtml(copy.body)}</p>`}
     <ol class="privacy-task-list">
       <li data-state="${proving ? "done" : "active"}"><span></span>Check registration</li>
       <li data-state="${proving ? "active" : "pending"}"><span></span>Build registration proof</li>
@@ -103,10 +106,10 @@ const preparationDetails = (
       <p>This one-time registration lets this account discover and use its private notes.</p>
     </section>
     ${reviewPanel([
-      "Registration is public. It stores this account's viewing-key commitment on-chain; it does not reveal the viewing key or private balance.",
+      "Registration is public. It stores this account's viewing-key commitment on-chain and opens its private channel. It does not reveal the viewing key or your private balance.",
     ])}
-    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-      <p class="decision-label">Maximum cost and constraints</p>
+    <section class="decision-layer decision-boundary" aria-label="Cost">
+      <p class="decision-label">Cost</p>
       ${receipt([
         {
           label: "Maximum network fee",
@@ -230,7 +233,7 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
     action: button({
       attributes: { "data-privacy-deploy-register": "" },
       icon: "shield",
-      label: "Deploy and enable",
+      label: "Shield",
     }),
     body: "Registration is a transaction sent by this account, so its contract has to exist on Starknet first. Deploying and registering are two transactions, each with a network fee.",
     title: "Deploy this account first",
@@ -241,8 +244,8 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
       icon: "qrCode",
       label: "Fund with STRK",
     }),
-    body: "Going private is a one-time registration paid in STRK: the pool fee plus a network fee. This account does not hold enough STRK for it yet.",
-    title: "Add STRK to go private",
+    body: "Going private requires your account to be funded and activated.",
+    title: "Initialize your account",
   },
   ledger: {
     action: "",
@@ -255,7 +258,7 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
       icon: "globe",
       label: "Choose a network",
     }),
-    body: "No privacy pool is configured for this network, so nothing can be shielded here. Switch to a network with a pool to go private.",
+    body: "Switch to a network with a privacy pool.",
     title: "Not available on this network",
   },
   pending: {
@@ -264,7 +267,7 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
       icon: "activity",
       label: "View activity",
     }),
-    body: "Your registration is on Starknet and waiting for the privacy indexer to see it. Shielding unlocks by itself once it does; no second registration is needed.",
+    body: "Your registration is on Starknet, waiting to be indexed. Shielding unlocks on its own — don't register again.",
     title: "Registration is on its way",
   },
   service: {

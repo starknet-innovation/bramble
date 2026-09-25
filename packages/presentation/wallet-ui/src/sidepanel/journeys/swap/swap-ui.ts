@@ -17,10 +17,11 @@ import type {
 } from "@bramble/settings/preferences";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { awaitConfirmation } from "../../shared/confirm-submitted";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
-import { reviewPanel } from "../../shared/review-render";
+import { setFlowStep } from "../../shared/parts";
 import { compactAmount, tokenGlyph } from "../portfolio/token-row";
 import {
   SWAP_LOSS_HIGH_RISK_PERCENT,
@@ -30,9 +31,18 @@ import {
   type SwapQuoteView,
   swapValueDeltaPercent,
 } from "./swap-client";
-import { bindSwapPicker, repaintSwapPicker, setPickerSide } from "./swap-picker";
+import { bindSwapTokenDropdowns } from "./swap-picker";
+import { swapPresetPair } from "./swap-preset";
+import type { SwapFigures } from "./swap-receipt";
+import {
+  EMPTY_SWAP_RECEIPT,
+  paintSwapConfirm,
+  paintSwapMeta,
+  paintSwapReceipt,
+  type SwapReceipt,
+  swapReceiptFor,
+} from "./swap-receipt";
 import { type SwapStage, transitionSwapStage } from "./swap-transition";
-import { swapConfirmReceipt, swapQuoteDetails } from "./swap-views";
 
 /**
  * State accessors and services the swap bindings close over.
@@ -40,7 +50,10 @@ import { swapConfirmReceipt, swapQuoteDetails } from "./swap-views";
 export type SwapUiDeps = {
   readonly app: Element | null;
   readonly balances: () => BalanceState;
+  /** Overrides the confirmation checkpoints; tests pass a single zero delay. */
+  readonly confirmationDelaysMs?: readonly number[];
   readonly currency: () => DisplayCurrency;
+  readonly navigateActivity: () => void;
   readonly navigateHome: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly render: (status: WalletStatus) => Promise<void>;
@@ -60,9 +73,16 @@ let preparation: SwapPreparationView | null = null;
 let quoteSeq = 0;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 let stage: SwapStage = "edit";
-let successSummary = "";
-const SUCCESS_HOLD_MS = 1900;
-let successTimer: ReturnType<typeof setTimeout> | null = null;
+let receipt: SwapReceipt = EMPTY_SWAP_RECEIPT;
+let confirmEpoch = 0;
+
+/** Opens the swap on a chosen sell token, clearing any in-flight quote. */
+export const presetSwapPair = (sellId: string, tokens: readonly TokenConfig[]): void => {
+  const pair = swapPresetPair(sellId, tokens);
+  if (!pair) return;
+  [sellTokenId, buyTokenId, amountText] = [pair.sellId, pair.buyId, ""];
+  [quote, preparation, pendingBuyAmount, stage] = [null, null, null, "edit"];
+};
 
 const tradableTokens = (deps: SwapUiDeps): readonly TokenConfig[] =>
   (deps.preferences()?.tokens ?? []).filter(
@@ -109,16 +129,6 @@ const chipMarkup = (token: TokenConfig | null): string =>
 const amountNumber = (): number => {
   const value = Number(amountText);
   return Number.isFinite(value) && value > 0 ? value : 0;
-};
-
-type SwapFigures = {
-  readonly buyToken: TokenConfig | null;
-  readonly highRisk: boolean;
-  readonly insufficient: boolean;
-  readonly lossPercent: number;
-  readonly sellBalance: TokenBalance | null;
-  readonly sellToken: TokenConfig | null;
-  readonly valueDelta: number | null;
 };
 
 const swapFigures = (deps: SwapUiDeps): SwapFigures => {
@@ -177,96 +187,34 @@ const paintSwapPanels = (deps: SwapUiDeps, root: Element, figures: SwapFigures):
   }
 };
 
-const paintSwapMeta = (root: Element, figures: SwapFigures): void => {
-  const sellAmount = Number(quote?.sellAmount ?? "0");
-  const buyAmount = Number(quote?.buyAmount ?? "0");
-  // Sub-unit rates keep enough places for the display policy's significant
-  // digits (0.5 ETH -> STRK reads "1 STRK = 0.000015 ETH", never "0 ETH").
-  const rate = sellAmount > 0 ? buyAmount / sellAmount : 0;
-  setText(
-    root,
-    "swap-rate",
-    quote && rate > 0 && figures.sellToken && figures.buyToken
-      ? `1 ${figures.sellToken.symbol} = ${compactAmount(rate >= 1 ? rate.toFixed(4) : rate.toFixed(10))} ${figures.buyToken.symbol}`
-      : "",
-  );
-  setText(root, "swap-gas", quote ? `Fee ≈ ${formatFiat(quote.gasFeesInUsd, "usd")}` : "");
-  const warning = root.querySelector<HTMLElement>("#swap-warning");
-  if (warning) {
-    const message =
-      quote && figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
-        ? `This route returns ${figures.lossPercent.toFixed(1)}% less value than you pay. Small orders can route poorly — try a larger amount or a different pair.`
-        : "";
-    warning.textContent = message;
-    warning.hidden = message.length === 0;
-  }
-  const review = root.querySelector<HTMLButtonElement>("#swap-review");
-  const reviewLabel = root.querySelector("#swap-review-label");
-  if (review && reviewLabel) {
-    review.disabled = !quote || figures.insufficient || amountNumber() <= 0;
-    review.classList.toggle("swap-risk", figures.highRisk);
-    reviewLabel.textContent = figures.insufficient
-      ? `Insufficient ${figures.sellToken?.symbol ?? "balance"}`
-      : figures.highRisk
-        ? `Swap anyway (−${figures.lossPercent.toFixed(1)}%)`
-        : "Swap";
-  }
-};
+const SWAP_STEP_INDEX: Readonly<Record<SwapStage, number>> = { confirm: 1, edit: 0, success: 2 };
 
-const paintSwapStages = (root: Element, figures: SwapFigures): void => {
+const paintSwapStages = (root: Element, figures: SwapFigures, networkId: string): void => {
+  setFlowStep(root, "data-swap-step", SWAP_STEP_INDEX[stage]);
+  root.querySelector(".send-progress")?.removeAttribute("hidden");
   root.querySelector("#swap-edit")?.toggleAttribute("hidden", stage !== "edit");
   root.querySelector("#swap-confirm")?.toggleAttribute("hidden", stage !== "confirm");
   root.querySelector("#swap-success")?.toggleAttribute("hidden", stage !== "success");
-  setText(root, "swap-success-summary", successSummary);
+  paintSwapReceipt(root, receipt, networkId);
   const { buyToken, sellToken, valueDelta } = figures;
   if (stage !== "confirm" || !quote || !preparation || !sellToken || !buyToken) {
     return;
   }
-  const receipt = root.querySelector("#swap-confirm-receipt");
-  if (!receipt) {
-    return;
-  }
-  // The minimum comes off the FROZEN preparation, where the background decoded
-  // it out of the route calldata it is about to sign. It is never recomputed
-  // here from the quote and a panel-local slippage constant, which is what once
-  // let this card state a minimum the transaction did not carry.
-  const confirmFigures = {
-    buyAddress: buyToken.address,
-    buyAmount: quote.buyAmount,
-    buySymbol: buyToken.symbol,
-    gasFeesInUsd: quote.gasFeesInUsd,
+  paintSwapConfirm(root, {
+    buyToken,
     lossPercent: figures.lossPercent,
-    minBuyAmount: preparation.minBuyAmount,
-    networkFee: preparation.reviewedFee,
-    sellAddress: sellToken.address,
-    sellAmount: quote.sellAmount,
-    sellSymbol: sellToken.symbol,
+    preparation,
+    quote,
+    sellToken,
     valueDelta,
-  };
-  receipt.innerHTML = swapConfirmReceipt(confirmFigures);
-  const quoteDetails = root.querySelector("#swap-quote-details");
-  if (quoteDetails) {
-    quoteDetails.innerHTML = swapQuoteDetails(confirmFigures);
-  }
-  const calls = root.querySelector("#swap-call-review");
-  if (calls) {
-    calls.innerHTML = `<ul class="review-calls">${preparation.summaries
-      .map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`)
-      .join(
-        "",
-      )}</ul><p class="hint">Review digest <code>${escapeHtml(preparation.payloadDigest.slice(0, 23))}…</code></p>`;
-  }
-  const risk = root.querySelector("#swap-risk-review");
-  if (risk) {
-    risk.innerHTML = reviewPanel(preparation.flags.map((flag) => flag.message));
-  }
+  });
 };
 
 const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
   const figures = swapFigures(deps);
   paintSwapPanels(deps, root, figures);
-  paintSwapMeta(root, figures);
-  paintSwapStages(root, figures);
+  paintSwapMeta(root, figures, quote, amountNumber());
+  paintSwapStages(root, figures, deps.status().networkId);
 };
 
 const setResult = (root: Element, text: string): void => setText(root, "swap-result", text);
@@ -298,7 +246,7 @@ const requestQuote = (deps: SwapUiDeps, root: Element): void => {
         return;
       }
       pendingBuyAmount = null;
-      setResult(root, errorMessage(error, "No route available right now."));
+      setResult(root, errorLine(error, "No route available right now."));
       applySwapUi(deps, root);
     },
   );
@@ -334,16 +282,12 @@ export const bindSwap = (deps: SwapUiDeps): void => {
   const root = deps.app?.querySelector("#wallet-screen-swap")?.parentElement;
   if (!root) {
     stage = "edit";
-    setPickerSide(null);
     quote = null;
     preparation = null;
     pendingBuyAmount = null;
     amountText = "";
-    successSummary = "";
-    if (successTimer !== null) {
-      clearTimeout(successTimer);
-      successTimer = null;
-    }
+    receipt = EMPTY_SWAP_RECEIPT;
+    confirmEpoch += 1;
     return;
   }
   healSelection(deps);
@@ -378,17 +322,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     }
     requestQuote(deps, root);
   });
-  root.querySelector("#swap-sell-token")?.addEventListener("click", () => {
-    setPickerSide("sell");
-    repaintSwapPicker(deps, root);
-    root.querySelector<HTMLInputElement>("#swap-picker-search")?.focus();
-  });
-  root.querySelector("#swap-buy-token")?.addEventListener("click", () => {
-    setPickerSide("buy");
-    repaintSwapPicker(deps, root);
-    root.querySelector<HTMLInputElement>("#swap-picker-search")?.focus();
-  });
-  bindSwapPicker(deps, root, applySelection(deps, root));
+  bindSwapTokenDropdowns(deps, root, applySelection(deps, root));
   root.querySelector("#swap-review")?.addEventListener("click", () => {
     const sellToken = tokenById(deps, sellTokenId);
     const buyToken = tokenById(deps, buyTokenId);
@@ -431,13 +365,32 @@ export const bindSwap = (deps: SwapUiDeps): void => {
             buttonBusy(reviewButton, false);
             return;
           }
-          setResult(root, errorMessage(error, "Could not prepare a safe swap route."));
+          setResult(root, errorLine(error, "Could not prepare a safe swap route."));
           buttonBusy(reviewButton, false);
           applySwapUi(deps, root);
         },
       );
   });
-  root.querySelector("#swap-back-button")?.addEventListener("click", () => {
+  // Both ways off the receipt reset the stage first, so returning to Swap opens
+  // on a fresh quote rather than on the transaction that already left.
+  for (const [id, leave] of [
+    ["#swap-view-activity", deps.navigateActivity],
+    ["#swap-home", deps.navigateHome],
+  ] as const) {
+    root.querySelector(id)?.addEventListener("click", () => {
+      stage = "edit";
+      receipt = EMPTY_SWAP_RECEIPT;
+      confirmEpoch += 1;
+      leave();
+    });
+  }
+  // The review stage carries no Back button, so the header's arrow steps back to
+  // the quote from there and leaves the flow from anywhere else.
+  root.ownerDocument.querySelector("#swap-header-back")?.addEventListener("click", () => {
+    if (stage !== "confirm") {
+      deps.navigateHome();
+      return;
+    }
     preparation = null;
     transitionSwapStage(root.ownerDocument, stage, "edit", () => {
       stage = "edit";
@@ -457,35 +410,45 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     const executed = quote;
     const claimedPreparation = preparation;
     deps.swap.execute(claimedPreparation.id).then(
-      async () => {
+      async (transactionHash) => {
         const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
         const buyText = `${compactAmount(executed.buyAmount)} ${buyToken.symbol}`;
-        successSummary = `${sellText} → ~${buyText}`;
+        const summary = `${sellText} → ~${buyText}`;
         quote = null;
         preparation = null;
         amountText = "";
         setResult(root, "");
+        // The hash is a handoff, not an outcome. The screen stays on the
+        // review, saying what it is doing, until the chain answers.
+        const epoch = ++confirmEpoch;
+        confirmButton.innerHTML = `${icon("refresh")}Confirming…`;
+        const outcome = await awaitConfirmation({
+          ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
+          hash: transactionHash,
+          loadActivity: () => deps.wallet.loadActivity(),
+          stillCurrent: () => epoch === confirmEpoch,
+        });
+        if (epoch !== confirmEpoch) return;
+        if (outcome?.kind === "failed") {
+          // Retryable from the review it is already on, with the reason there.
+          setResult(root, outcome.message);
+          showToast(outcome.toast, "error", root);
+          confirmButton.innerHTML = restingContent;
+          buttonBusy(confirmButton, false);
+          await deps.render(await deps.wallet.loadStatus());
+          return;
+        }
+        receipt = swapReceiptFor(outcome, summary, transactionHash);
         transitionSwapStage(root.ownerDocument, stage, "success", () => {
           stage = "success";
           applySwapUi(deps, root);
         });
-        if (successTimer !== null) {
-          clearTimeout(successTimer);
-        }
-        successTimer = setTimeout(() => {
-          successTimer = null;
-          stage = "edit";
-          successSummary = "";
-          deps.navigateHome();
-          // Honest state on landing: the transaction is sent and pending,
-          // not yet final — Activity carries it until it settles.
-          showToast(`Transaction sent — ${sellText} → ~${buyText} pending`, "success", root);
-        }, SUCCESS_HOLD_MS);
+        if (outcome) showToast(outcome.toast, "success", root);
         await deps.render(await deps.wallet.loadStatus());
       },
       (error: unknown) => {
         showToast(errorMessage(error, "Swap failed"), "error", root);
-        setResult(root, errorMessage(error, "Swap failed"));
+        setResult(root, errorLine(error, "Swap failed"));
         confirmButton.innerHTML = restingContent;
         buttonBusy(confirmButton, false);
         preparation = null;

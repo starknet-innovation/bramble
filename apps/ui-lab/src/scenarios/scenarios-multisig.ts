@@ -414,7 +414,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   {
     ...checkpoint(
       "deploy-reviewed",
-      "Review deployment",
+      "Deployment review",
       "The predicted address, irreversible authority, fee ceiling, and exact constructor fit the extension surface before confirmation.",
       { selectedMultisigId: null, view: "multisig-deploy" },
       { class: "declared", funding: "ready", threshold: 2 },

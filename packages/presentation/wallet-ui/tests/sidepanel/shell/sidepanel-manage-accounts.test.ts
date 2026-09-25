@@ -1,13 +1,13 @@
 /**
- * Behavioural coverage for account selection in the "Accounts & groups" manage
- * view (`accountFlow` / the `account` view), driven through the real
- * `bindPickers` binding under happy-dom. Selecting an account row means "use
- * this account", so after the active account switches the view must land on Home
- * (matching the drawer's account tap) rather than returning to the entry point.
- * The suite also guards the two behaviours that must NOT change: the flow
- * header's back control still defers to the nav-history back-stack (it carries
- * `data-nav-back`, not a static target), and tapping a group's folder header
- * opens its members picker without navigating away.
+ * Behavioural coverage for the "Accounts & groups" manage view (`accountFlow` /
+ * the `account` view), driven through the real bindings under happy-dom.
+ * Switching accounts is the drawer's job: this screen lists every account to
+ * name it and to file it into a folder, and offers no select control at all —
+ * the duplicate switcher it used to carry is gone. The suite also guards the two
+ * behaviours that must NOT change: the flow header's back control still defers
+ * to the nav-history back-stack (it carries `data-nav-back`, not a static
+ * target), and tapping a group's folder header opens its members picker without
+ * navigating away.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { AccountGroup } from "@bramble/settings/groups";
@@ -77,9 +77,7 @@ const mount = (groups: AccountGroup[] = []): Harness => {
 
   const paint = (): void => {
     container.replaceChildren(
-      document
-        .createRange()
-        .createContextualFragment(accountFlow(status, account, prefs, expandedGroupId)),
+      document.createRange().createContextualFragment(accountFlow(status, prefs, expandedGroupId)),
     );
     const shellDeps: ShellBindingDeps = {
       app: container,
@@ -93,14 +91,12 @@ const mount = (groups: AccountGroup[] = []): Harness => {
     };
     const groupDeps: GroupControlDeps = {
       expandedGroup: () => expandedGroupId,
-      openAssign: () => null,
       rerender: async () => {
         paint();
       },
       setExpandedGroup: (id) => {
         expandedGroupId = id;
       },
-      setOpenAssign: () => undefined,
       wallet: wallet as unknown as GroupControlDeps["wallet"],
     };
     bindPickers(shellDeps);
@@ -118,32 +114,24 @@ const click = (element: Element | null): void => {
   element.click();
 };
 
-describe("Accounts & groups account selection", () => {
+describe("Accounts & groups manage view", () => {
   beforeEach(() => {
     document.body.replaceChildren();
   });
 
-  test("selecting an account switches it and lands on Home, not Settings", async () => {
+  test("offers no account switcher: every account is here to be named, not selected", () => {
     const harness = mount();
 
-    click(harness.container.querySelector(`[data-account-id="${secondAccount.id}"]`));
-    await harness.tick();
-
-    // The tapped account becomes active...
-    expect(harness.setActiveAccountCalls).toEqual([secondAccount.id]);
-    // ...and the view routes to Home (the now-active account), never back to the
-    // Settings entry point.
-    expect(harness.viewChanges).toContain("home");
-    expect(harness.viewChanges).not.toContain("settings");
-    expect(harness.viewChanges.at(-1)).toBe("home");
-  });
-
-  test("tapping the already-active account is a no-op (no switch, no navigation)", async () => {
-    const harness = mount();
-
-    click(harness.container.querySelector(`[data-account-id="${account.id}"]`));
-    await harness.tick();
-
+    // The old picker rows are gone, so the drawer is the one place an account is
+    // switched and this screen can never race it.
+    expect(harness.container.querySelectorAll("[data-account-id]").length).toBe(0);
+    expect(harness.container.querySelector('[aria-label="Accounts"]')).toBeNull();
+    // Each account is present as an editable name instead.
+    for (const stored of [account, secondAccount]) {
+      expect(
+        harness.container.querySelector(`[data-account-name-form="${stored.id}"]`),
+      ).not.toBeNull();
+    }
     expect(harness.setActiveAccountCalls).toEqual([]);
     expect(harness.viewChanges).toEqual([]);
   });

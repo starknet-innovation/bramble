@@ -7,11 +7,11 @@
  * passphrase; this module never touches the device or the vault directly.
  */
 
+import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
-import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
 import { applyPassphraseMeter } from "../onboarding/passphrase-meter";
-import { createWeakPassphraseAck } from "../onboarding/weak-passphrase-ack";
+import { bindPassphraseReveal } from "../onboarding/passphrase-reveal";
 
 /**
  * Dependencies the first-run Ledger setup binding closes over. `startLedgerSetup`
@@ -25,9 +25,9 @@ export type LedgerFirstRunDeps = {
 
 /**
  * Binds the first-run "Set up with a Ledger" card: gates the button on a valid
- * unlock passphrase and, on Mainnet, the real-funds acknowledgement, then hands
- * the network and passphrase to the owner to drive the device onboarding overlay.
- * No recovery phrase is generated or requested — the vault holds no seed.
+ * unlock passphrase, then hands the network and passphrase to the owner to
+ * drive the device onboarding overlay. No recovery phrase is generated or
+ * requested — the vault holds no seed.
  */
 export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#ledger-setup-form");
@@ -39,23 +39,17 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   );
   const passwordResult = form?.querySelector<HTMLElement>("[data-password-result]");
   const passwordRequirement = passwordResult?.closest<HTMLElement>(".password-requirement");
-  const weakAck = createWeakPassphraseAck(form, "ledger", passphraseInput, () => refreshGate());
-  const ackCheckbox = form?.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
   const button = form?.querySelector<HTMLButtonElement>("#ledger-setup-button");
   const result = form?.querySelector<HTMLElement>("#ledger-passphrase-result");
   const initiallyReady = !(button?.disabled ?? true);
 
   const passphraseOk = (): boolean => {
     const value = passphraseInput?.value ?? "";
-    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "") && weakAck.ok();
+    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
   };
-  const ackOk = (): boolean =>
-    mainnetAckSatisfied(MAINNET_NETWORK_ID, ackCheckbox?.checked ?? false);
-
   const refreshGate = (): void => {
-    weakAck.sync();
     if (button) {
-      button.disabled = !(initiallyReady && passphraseOk() && ackOk());
+      button.disabled = !(initiallyReady && passphraseOk());
     }
     if (result) {
       const value = passphraseInput?.value ?? "";
@@ -79,7 +73,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
 
   passphraseInput?.addEventListener("input", refreshGate);
   confirmationInput?.addEventListener("input", refreshGate);
-  ackCheckbox?.addEventListener("change", refreshGate);
+  bindPassphraseReveal(form);
   refreshGate();
 
   button?.addEventListener("click", () => {
@@ -91,10 +85,6 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
       );
       return;
     }
-    if (!ackOk()) {
-      showToast("Acknowledge the real-funds warning first", "error", form);
-      return;
-    }
-    deps.startLedgerSetup(MAINNET_NETWORK_ID, passphraseInput?.value ?? "");
+    deps.startLedgerSetup(DEFAULT_NETWORK.id, passphraseInput?.value ?? "");
   });
 };

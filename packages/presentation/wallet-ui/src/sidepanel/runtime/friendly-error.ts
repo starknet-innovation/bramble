@@ -1,12 +1,27 @@
 /**
- * Maps raw internal error strings surfaced by the background and runtime layers
- * to friendly, user-facing copy for toasts and status lines. The mapping is a
- * pure lookup with no DOM, clock, or network access so it can be unit-tested in
- * isolation. Error toasts retain the original diagnostic for copying.
+ * Decides which user-facing sentence a raw error string earns.
+ *
+ * Raw diagnostics reach here from two places: the background's own `error`
+ * field, and the runtime client's fallback when a reply is unrecognised. Either
+ * way the string was written for a developer, and an unrecognised one is shown
+ * to the reader verbatim — which is how "add token failed" reached a toast. The
+ * table below is what stands between the two.
+ *
+ * The wording lives in ./friendly-error-copy; this file is only the mapping
+ * from a raw string to one of those. It is a pure lookup with no DOM, clock, or
+ * network access. Error toasts keep the original diagnostic behind their copy
+ * control, so nothing translated here is lost to a bug report.
  */
 
 import { friendlyNetworkError } from "@bramble/core/network-error";
-import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
+import {
+  ERROR_COPY,
+  GENERIC_VALIDATION,
+  RATE_LIMITED,
+  RPC_REJECTED,
+  SERVICE_REJECTED,
+  UNEXPECTED_FALLBACK,
+} from "./friendly-error-copy";
 
 /**
  * The result of classifying a raw error string for display.
@@ -16,45 +31,6 @@ export interface FriendlyError {
   message: string;
 }
 
-const GENERIC_VALIDATION =
-  "Something about that request wasn't right. Check the details and try again.";
-const WALLET_UNAVAILABLE = "The wallet is locked or unavailable. Unlock it and try again.";
-const NETWORK_UNREACHABLE = "Couldn't reach the network. Check your connection and try again.";
-const UNEXPECTED_FALLBACK = "Something went wrong. Please try again.";
-const RPC_REJECTED = "The RPC rejected this request. Copy the error details for the full response.";
-const SERVICE_REJECTED =
-  "A wallet service rejected this request. Copy the error details for the full response.";
-const RATE_LIMITED = "This service is rate limiting requests. Wait a moment and try again.";
-
-// Exact raw strings the background/runtime layers throw for recoverable,
-// user-facing conditions.
-const EXACT: ReadonlyMap<string, string> = new Map([
-  ["wallet unavailable", WALLET_UNAVAILABLE],
-  // Platform fetch/network rejections bubble up with these messages.
-  ["failed to fetch", NETWORK_UNREACHABLE],
-  ["network error", NETWORK_UNREACHABLE],
-  ["load failed", NETWORK_UNREACHABLE],
-  // Swap (AVNU) conditions a user can act on.
-  [
-    "no swap route available for this pair",
-    "No route found for this pair right now. Try a different amount or pair.",
-  ],
-  ["swap quote failed", "Couldn't fetch a quote. Check your connection and try again."],
-  ["swap build failed", "AVNU couldn't prepare this swap. Get a fresh quote and try again."],
-  ["swaps are not available on this network", "Swaps aren't available on this network."],
-  [
-    "swap build touched an unexpected token approval",
-    "Blocked for safety: the swap asked to approve the wrong token. Nothing was signed.",
-  ],
-  ["token list unavailable", "Couldn't load the token list. Check your connection and try again."],
-  // Fires on every network, so the copy stays endpoint-generic; the devnet-only
-  // `--chain-id SN_DEVNET` flag is stated by the network picker instead.
-  [
-    WRONG_CHAIN_MESSAGE.toLowerCase(),
-    "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",
-  ],
-]);
-
 // Every "invalid <...> request" validation string shares one friendly message.
 const VALIDATION_REQUEST = /^invalid .+ request$/;
 const RATE_LIMIT = /(?:\b429\b|rate[- ]?limit|too many requests)/i;
@@ -62,6 +38,10 @@ const RAW_RPC = /(?:^\s*RPC:|\bstarknet_[a-zA-Z0-9_]+\b[\s\S]*\bparams\b|\bwith 
 const RAW_RPC_RESPONSE =
   /(?:^\s*(?:20|24|41|55):|\baccount validation failed\b|\bblock not found(?:: undefined)?\b|\bcontract not found(?:: undefined)?\b|\bresource bounds? (?:were )?not satisfied\b|\btransaction execution error\b)/i;
 const RAW_HTTP = /(?:\bHTTP\s+[45]\d\d\b|\bresponse body\b|\brequest rejected\s*[:{[])/i;
+// A diagnostic no reader was meant to see. Curated copy starts with a capital
+// or a digit; the raw strings the background throws start lowercase.
+const DEVELOPER_VOICE = /^[a-z]/;
+
 const rawServiceDiagnostic = (value: string): boolean =>
   value.length > 240 ||
   /[\r\n]/.test(value) ||
@@ -69,9 +49,17 @@ const rawServiceDiagnostic = (value: string): boolean =>
   /^\s*[[{][\s\S]*[\]}]\s*$/.test(value);
 
 /**
- * Classifies a raw error string into user-facing copy. Unrecognized non-empty
- * strings remain visible while the toast's copy control retains the original
- * diagnostic for a bug report.
+ * Classifies a raw error string into user-facing copy.
+ *
+ * An unmapped string is shown as-is only when it already reads as a sentence.
+ * A lowercase diagnostic is replaced with the generic fallback instead, so a
+ * string nobody wrote for a reader cannot reach one — the failure this module
+ * exists to prevent, closed now that every diagnostic in the repository is
+ * translated and a conformance check keeps it that way.
+ *
+ * This is a backstop, not a substitute for the table: it makes a new
+ * diagnostic read as "Something went wrong" rather than as source code, which
+ * is better but still not an answer.
  */
 export const friendlyError = (raw: string): FriendlyError => {
   const trimmed = raw.trim();
@@ -80,9 +68,9 @@ export const friendlyError = (raw: string): FriendlyError => {
   }
 
   const normalized = trimmed.toLowerCase();
-  const exact = EXACT.get(normalized);
-  if (exact) {
-    return { message: exact };
+  const mapped = ERROR_COPY.get(normalized);
+  if (mapped) {
+    return { message: mapped };
   }
 
   if (VALIDATION_REQUEST.test(normalized)) {
@@ -106,5 +94,5 @@ export const friendlyError = (raw: string): FriendlyError => {
     return { message: SERVICE_REJECTED };
   }
 
-  return { message: trimmed };
+  return { message: DEVELOPER_VOICE.test(trimmed) ? UNEXPECTED_FALLBACK : trimmed };
 };

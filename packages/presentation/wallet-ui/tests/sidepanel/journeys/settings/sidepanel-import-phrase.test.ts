@@ -99,18 +99,15 @@ const mount = (options?: { readonly validate?: boolean }) => {
     validateMnemonic: () => Promise.resolve(options?.validate ?? true),
   } as unknown as SidepanelWallet;
   bindImportPhrase({
-    activeAccountId: () => null,
     app,
     existingAccountIds: () => new Set([accountAt(0, "openzeppelin").id]),
     expandedGroup: () => null,
     networkId: () => "SN_MAIN",
-    openAssign: () => null,
     refresh: () => wallet.loadStatus(),
     render: async () => {
       renders += 1;
     },
     setExpandedGroup: () => undefined,
-    setOpenAssign: () => undefined,
     startAddAccount: () => undefined,
     wallet,
   });
@@ -194,12 +191,12 @@ describe("import-phrase flow", () => {
     expect(rows[1]?.checked).toBe(true);
     expect(flow.app.textContent).toContain("Already in this wallet");
 
-    const ack = flow.app.querySelector<HTMLInputElement>('input[name="recoveryMainnetAck"]');
-    if (!ack) {
-      throw new Error("missing acknowledgement");
-    }
-    ack.checked = true;
-    ack.dispatchEvent(new window.Event("change", { bubbles: true }));
+    // The scan fields are shared with first-run onboarding, so the real-funds
+    // tickbox removed there is gone here too; the selection is the only gate.
+    expect(flow.app.querySelector('input[name="recoveryMainnetAck"]')).toBeNull();
+    expect(flow.app.querySelector<HTMLButtonElement>("#recover-accounts-button")?.disabled).toBe(
+      false,
+    );
     click(flow.app, "#recover-accounts-button");
     await tick();
 

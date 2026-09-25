@@ -146,10 +146,12 @@ describe("NFT send review", () => {
     submit(app);
     await flush();
     expect(calls.transfer).toHaveLength(1);
-    expect(app.querySelector("#nft-send-result")?.textContent).toContain(
-      "Confirmation is tracked in Activity",
+    // Submitted is not delivered: the receipt opens on what the hash proves and
+    // firms up only once the chain reports the transfer.
+    expect(app.querySelector("#nft-success-title")?.textContent).toBe("Transfer submitted");
+    expect(app.querySelector("#nft-success-description")?.textContent).toContain(
+      "Not confirmed yet",
     );
-    expect(app.querySelector("#nft-review-panel")?.textContent).toContain("Submitted to Starknet");
   });
 
   test("echoes separate undeployed-account fee ceilings into NFT submission", async () => {
@@ -168,7 +170,7 @@ describe("NFT send review", () => {
     submit(app);
     await flush();
     expect(app.querySelector("#nft-review-panel")?.textContent).toContain(
-      "Estimated account deployment fee",
+      "Creating this account on Starknet is",
     );
     submit(app);
     await flush();

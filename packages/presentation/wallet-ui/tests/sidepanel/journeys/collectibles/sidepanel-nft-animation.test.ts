@@ -123,6 +123,8 @@ describe("NFT collectibles-tile animation", () => {
     const frame = app.querySelector<HTMLIFrameElement>("iframe.nft-animation--tile");
     expect(play).not.toBeNull();
     expect(frame?.hidden).toBe(true);
+    expect(frame?.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(frame?.referrerPolicy).toBe("no-referrer");
 
     play?.click();
 

@@ -145,10 +145,10 @@ describe("the first paint", () => {
     expect(shield).toContain("Review shield");
     expect(shield).toContain("Confirm and shield");
     expect(shield).toContain("Shield complete");
-    expect(shield).not.toContain("Send to");
+    expect(shield).not.toContain('<h1 id="send-header-title">Send</h1>');
 
     const plain = sendFlow(status, account, preferences);
-    expect(plain).toContain('<h1 id="send-header-title">Send to</h1>');
+    expect(plain).toContain('<h1 id="send-header-title">Send</h1>');
     expect(plain).toContain("Review send");
     expect(plain).toContain("Confirm and send");
   });
@@ -158,7 +158,7 @@ describe("the first paint", () => {
       ...shieldIntent,
       accountId: "SN_MAIN:0xother",
     });
-    expect(foreign).toContain('<h1 id="send-header-title">Send to</h1>');
+    expect(foreign).toContain('<h1 id="send-header-title">Send</h1>');
   });
 });
 
@@ -183,7 +183,6 @@ describe("a shield shortcut", () => {
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("review");
     expect(text(app, "#send-header-title")).toBe("Review shield");
-    expect(text(app, "#send-review-heading")).toBe("Review shield");
     expect(text(app, "#send-confirm-label")).toBe("Confirm and shield");
     // The account on both ends is the user's own, so the summary names the
     // movement rather than a "recipient".
@@ -204,16 +203,18 @@ describe("a shield shortcut", () => {
     expect(text(app, "#send-success-summary")).toBe("1 ETH shielded into your private balance");
   });
 
-  test("the asset picker still works inside the shortcut", () => {
-    // Reported as "clicking an asset does nothing": the picker opens, a row
-    // returns to the amount step with that asset, and the mode is kept.
+  test("the asset dropdown still works inside the shortcut", () => {
+    // Reported as "clicking an asset does nothing": the dropdown opens in place,
+    // an option applies that asset, and the shortcut's mode is kept throughout.
     const { app } = open(shieldIntent);
 
     click(app, "#send-token-trigger");
-    expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("asset");
-    expect(text(app, "#send-header-title")).toBe("Select an asset");
+    // The pick happens on the amount step now: no stage change, no new screen.
+    expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("details");
+    expect(app.querySelector("#send-token-options")?.hasAttribute("hidden")).toBe(false);
+    expect(text(app, "#send-header-title")).toBe("Shield");
 
-    click(app, "[data-send-asset]");
+    click(app, "[data-token-option]");
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("details");
     expect(text(app, "#send-selected-token-symbol")).toBe("ETH");
     expect(text(app, "#send-header-title")).toBe("Shield");

@@ -1,7 +1,7 @@
 /**
  * Staged onboarding interaction checks. The runtime is a fixture-only boundary:
  * generated/imported words enter preview first, account selection is explicit,
- * and persistence happens only after the final Mainnet acknowledgement.
+ * and persistence happens only once a derived account is selected.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type {
@@ -11,6 +11,7 @@ import type {
 } from "@bramble/wallet-model/accounts";
 import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "../../../../src/sidepanel/journeys/onboarding/backup-verify";
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
@@ -21,6 +22,9 @@ afterAll(unregisterDom);
 
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const PASSPHRASE = "fixture vault passphrase";
+// Bound without a clock, so the confirmation asks the default positions.
+const WORDS = MNEMONIC.split(" ");
+const VERIFY_ANSWERS = DEFAULT_BACKUP_VERIFY_POSITIONS.map((at) => WORDS[at - 1] ?? "");
 
 const status: WalletStatus = {
   accountCount: 0,
@@ -203,14 +207,9 @@ describe("staged onboarding", () => {
     expect(activeStep(flow.app)).toBe("recovery-accounts");
     await tick();
 
-    const acknowledgement = flow.app.querySelector<HTMLInputElement>(
-      'input[name="recoveryMainnetAck"]',
-    );
-    if (!acknowledgement) {
-      throw new Error("missing Mainnet acknowledgement");
-    }
-    acknowledgement.checked = true;
-    acknowledgement.dispatchEvent(new window.Event("change", { bubbles: true }));
+    // The real-funds tickbox was removed in the copy review, so the auto-selected
+    // candidate is the only thing standing between the scan and the restore.
+    expect(flow.app.querySelector('input[name="recoveryMainnetAck"]')).toBeNull();
     expect(flow.app.querySelector<HTMLButtonElement>("#recover-accounts-button")?.disabled).toBe(
       false,
     );
@@ -265,9 +264,9 @@ describe("staged onboarding", () => {
     await tick();
     click(flow.app, "#phrase-toggle");
     click(flow.app, "#generated-continue");
-    setValue(flow.app, 'input[name="verify-0"]', "tip");
-    setValue(flow.app, 'input[name="verify-1"]', "nation");
-    setValue(flow.app, 'input[name="verify-2"]', "alert");
+    VERIFY_ANSWERS.forEach((answer, index) => {
+      setValue(flow.app, `input[name="verify-${index}"]`, answer);
+    });
     click(flow.app, "#verify-continue");
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
@@ -320,9 +319,9 @@ describe("staged onboarding", () => {
     click(flow.app, "#generated-continue");
 
     expect(activeStep(flow.app)).toBe("verify");
-    setValue(flow.app, 'input[name="verify-0"]', "tip");
-    setValue(flow.app, 'input[name="verify-1"]', "nation");
-    setValue(flow.app, 'input[name="verify-2"]', "alert");
+    VERIFY_ANSWERS.forEach((answer, index) => {
+      setValue(flow.app, `input[name="verify-${index}"]`, answer);
+    });
     expect(flow.app.querySelector<HTMLButtonElement>("#verify-continue")?.disabled).toBe(false);
     click(flow.app, "#verify-continue");
     expect(activeStep(flow.app)).toBe("password");

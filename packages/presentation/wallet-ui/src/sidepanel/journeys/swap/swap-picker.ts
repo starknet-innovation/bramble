@@ -1,33 +1,32 @@
 /**
- * Token picker sheet for the swap flow: the full AVNU verified catalog for the
- * active network (not just tracked tokens), searchable by name, symbol, or
- * address, with quick chips for the majors. Selecting a token the wallet does
- * not track yet routes through the existing add-token path — which reads the
- * token's name/symbol/decimals from the CONTRACT on-chain — so the swap trust
- * boundary (tokens only ever resolve from the tracked registry) is preserved;
- * the catalog is a directory, never a source of truth. On networks without a
- * catalog (devnet, empty sepolia list) the sheet falls back to tracked tokens.
+ * Token source for Swap's two dropdowns (pay and receive).
  *
- * Module state (open side, search text, cached catalog, pending add) survives
- * shell repaints; ./swap-ui.ts calls {@link bindSwapPicker} on every bind and
- * receives selections through its callback.
+ * The list is the wallet's shared token dropdown: the tokens this account holds
+ * first, then the rest of AVNU's verified catalog for the active network. The
+ * catalog is a directory, never a source of truth — choosing a token the wallet
+ * does not track yet routes through the add-token flow, which reads the token's
+ * facts from the CONTRACT on chain, and the selection is delivered only once it
+ * is tracked.
+ *
+ * Module state (the cached catalog, and a pick waiting on an add) survives shell
+ * repaints; ./swap-ui.ts calls {@link bindSwapTokenDropdowns} on every bind.
  */
 
-import { escapeHtml } from "@bramble/core/html";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { errorMessage, showToast } from "../../shared/dom";
-import { icon } from "../../shared/icons";
-import { animate } from "../../shared/motion";
-import { accountLabel } from "../../shared/parts";
-import { compactAmount, tokenGlyph } from "../portfolio/token-row";
+import {
+  bindTokenDropdown,
+  type TokenDropdownGroup,
+  tokenDropdownOptions,
+} from "../../shared/token-dropdown";
 import type { SwapCatalogTokenView, SwapClient } from "./swap-client";
 
 /**
- * State accessors and services the picker closes over — a structural subset of
- * the swap screen's deps (kept separate so the modules stay cycle-free).
+ * State accessors and services the dropdowns close over — a structural subset
+ * of the swap screen's deps (kept separate so the modules stay cycle-free).
  */
 export type SwapPickerDeps = {
   readonly balances: () => BalanceState;
@@ -38,325 +37,166 @@ export type SwapPickerDeps = {
   readonly wallet: SidepanelWallet;
 };
 
-const QUICK_CHIP_SYMBOLS = ["ETH", "STRK", "USDC"];
+/** Which side of the swap a dropdown fills. */
+export type PickerSide = "buy" | "sell";
 
-/* ─────────────────────────────────────────────────────────
- * TOKEN PICKER STORYBOARD
- *
- *   0ms   open: sheet rises 12px → 0px while opacity reaches 1
- *   0ms   close: sheet settles 0px → 12px while opacity reaches 0
- * 160ms   close: sheet becomes hidden and focus returns to its trigger
- * ───────────────────────────────────────────────────────── */
-const PICKER_TIMING = {
-  enterMs: 200,
-  exitMs: 160,
-} as const;
-const PICKER_FRAME = {
-  offsetY: 12,
-} as const;
-const PICKER_MOTION_ID = "swap-picker-sheet";
-const FOCUSABLE =
-  'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+const SIDES: readonly PickerSide[] = ["sell", "buy"];
 
-type PickerSide = "buy" | "sell";
-
-let picking: PickerSide | null = null;
-let searchText = "";
 let catalog: readonly SwapCatalogTokenView[] | null = null;
 let catalogNetworkId: string | null = null;
 let catalogLoading = false;
-let catalogError: string | null = null;
+// The fetch in flight, and the paint of whichever screen is live when it lands.
+let catalogRequest = 0;
+let repaintLatest: (() => void) | null = null;
 // A selected token that first needs tracking; resolved to a token id on the
 // bind that follows the add-token render.
 let pendingAdd: { readonly address: string; readonly side: PickerSide } | null = null;
-let pickerMotionSerial = 0;
 
 /**
- * Opens the sheet for one side (fetching the catalog on first use) or closes
- * it. Search resets on open so every pick starts from the full list.
+ * Clears the panel-local catalog between isolated tests. Production code keeps
+ * it so opening the dropdown twice does not fetch the list twice. Bumping the
+ * request drops a reply still in flight, so it cannot land in the next case.
  */
-export const setPickerSide = (side: PickerSide | null): void => {
-  if (side !== null) {
-    pickerMotionSerial += 1;
-  }
-  picking = side;
-  searchText = "";
+export const resetSwapCatalogForTests = (): void => {
+  catalog = null;
+  catalogNetworkId = null;
+  catalogLoading = false;
+  pendingAdd = null;
+  catalogRequest += 1;
+  repaintLatest = null;
 };
 
-const isAddressText = (value: string): boolean => /^0x[0-9a-fA-F]{3,64}$/.test(value.trim());
-
-/**
- * Ranks how well a catalog entry matches a text query: exact symbol first,
- * then symbol prefix, name prefix, and finally substring hits — null when it
- * does not match. Ties keep the catalog's volume order, so "usdc" surfaces
- * USDC before Bridged USDC before the long tail.
- */
-export const rankTokenQueryMatch = (
-  entry: { readonly name: string; readonly symbol: string },
-  query: string,
-): number | null => {
-  const symbol = entry.symbol.toLowerCase();
-  const name = entry.name.toLowerCase();
-  if (symbol === query) {
-    return 0;
-  }
-  if (symbol.startsWith(query)) {
-    return 1;
-  }
-  if (name.startsWith(query)) {
-    return 2;
-  }
-  if (symbol.includes(query) || name.includes(query)) {
-    return 3;
-  }
-  return null;
-};
+const trackedTokens = (deps: SwapPickerDeps): readonly TokenConfig[] =>
+  (deps.preferences()?.tokens ?? []).filter((token) => token.networkId === deps.status().networkId);
 
 const trackedByAddress = (deps: SwapPickerDeps, address: string): TokenConfig | undefined =>
-  (deps.preferences()?.tokens ?? []).find(
-    (token) => token.networkId === deps.status().networkId && sameFelt(token.address, address),
-  );
+  trackedTokens(deps).find((token) => sameFelt(token.address, address));
 
-const ensureCatalog = (deps: SwapPickerDeps, repaint: () => void): void => {
+const ensureCatalog = (deps: SwapPickerDeps, root: Element): void => {
   const networkId = deps.status().networkId;
   if (catalogNetworkId !== networkId) {
     catalog = null;
-    catalogError = null;
     catalogNetworkId = networkId;
+    // The fetch still in flight belonged to the previous network. It is no
+    // longer loading this one, and its answer is discarded when it lands.
+    catalogLoading = false;
   }
+  // Always the live screen. A shell refresh while the list is loading rebuilds
+  // the panel, and the paint captured by the first bind would write into the
+  // one that was thrown away.
+  repaintLatest = () => {
+    if (root.isConnected) fillPanels(deps, root);
+  };
   if (catalog !== null || catalogLoading) {
     return;
   }
   catalogLoading = true;
-  deps.swap.tokens().then(
-    (tokens) => {
-      catalogLoading = false;
-      catalog = tokens;
-      repaint();
-    },
-    (error: unknown) => {
-      catalogLoading = false;
-      catalog = [];
-      catalogError = errorMessage(error, "Token list unavailable");
-      repaint();
-    },
-  );
-};
-
-type PickerEntry = SwapCatalogTokenView & {
-  readonly balanceText: string | null;
-  readonly tracked: boolean;
-};
-
-// The sheet's entries in the catalog's volume order (majors first), each
-// annotated with whether the wallet already tracks it and its balance —
-// tracked tokens the catalog misses (hand-added customs) are appended so
-// everything the user owns stays findable, and networks without a catalog
-// fall back to the tracked list alone.
-const pickerEntries = (deps: SwapPickerDeps): readonly PickerEntry[] => {
-  const tracked = (deps.preferences()?.tokens ?? []).filter(
-    (token) => token.networkId === deps.status().networkId,
-  );
-  const state = deps.balances();
-  const annotate = (entry: SwapCatalogTokenView): PickerEntry => {
-    const match = tracked.find((token) => sameFelt(token.address, entry.address));
-    const balance =
-      match && !("error" in state)
-        ? (state.balances.find((item) => item.id === match.id) ?? null)
-        : null;
-    return {
-      ...entry,
-      balanceText: balance ? compactAmount(balance.formatted) : null,
-      tracked: match !== undefined,
-    };
-  };
-  const fromCatalog = (catalog ?? []).map(annotate);
-  const extras = tracked
-    .filter((token) => !fromCatalog.some((entry) => sameFelt(entry.address, token.address)))
-    .map((token) =>
-      annotate({
-        address: token.address,
-        decimals: token.decimals,
-        name: token.name,
-        symbol: token.symbol,
-      }),
-    );
-  return [...fromCatalog, ...extras];
-};
-
-const filteredEntries = (deps: SwapPickerDeps): readonly PickerEntry[] => {
-  const entries = pickerEntries(deps);
-  const query = searchText.trim().toLowerCase();
-  if (query.length === 0) {
-    return entries;
-  }
-  if (isAddressText(query)) {
-    return entries.filter(
-      (entry) => sameFelt(entry.address, query) || entry.address.startsWith(query),
-    );
-  }
-  return entries
-    .map((entry, index) => ({ entry, index, rank: rankTokenQueryMatch(entry, query) }))
-    .filter(
-      (item): item is { entry: PickerEntry; index: number; rank: number } => item.rank !== null,
-    )
-    .sort((a, b) => a.rank - b.rank || a.index - b.index)
-    .map((item) => item.entry);
-};
-
-// One catalog row. The sub-line pairs the symbol with the truncated contract
-// address — the definitive disambiguator when one brand ships twice (native
-// USDC vs the StarkGate-bridged USDC.e share a mark but never an address).
-const entryRow = (
-  entry: PickerEntry,
-): string => `<button class="option-row" role="option" type="button" data-swap-pick-address="${escapeHtml(entry.address)}">
-      ${tokenGlyph(entry.address, entry.symbol)}
-      <span class="option-copy">
-        <strong>${escapeHtml(entry.name)} <span class="swap-verified">${icon("check")}</span></strong>
-        <span class="option-sub">${escapeHtml(entry.symbol)} · <code>${escapeHtml(accountLabel(entry.address))}</code></span>
-      </span>
-      <span class="menu-value">${entry.balanceText ? escapeHtml(entry.balanceText) : ""}</span>
-    </button>`;
-
-// Renders the sheet from module state: title, chips for the majors, the
-// filtered list, and an add-by-address fallback when the search is a valid
-// address with no catalog hit.
-const applyPickerUi = (deps: SwapPickerDeps, root: Element): void => {
-  const sheet = root.querySelector<HTMLElement>("#swap-picker");
-  const edit = root.querySelector<HTMLElement>("#swap-edit");
-  if (!sheet) {
-    return;
-  }
-  if (picking === null) {
-    sheet.hidden = true;
-    delete sheet.dataset["closing"];
-    edit?.removeAttribute("inert");
-    return;
-  }
-  edit?.setAttribute("inert", "");
-  const opening = sheet.hidden;
-  sheet.hidden = false;
-  delete sheet.dataset["closing"];
-  if (opening) {
-    animate(
-      sheet,
-      [
-        { opacity: 0, transform: `translateY(${PICKER_FRAME.offsetY}px)` },
-        { opacity: 1, transform: "translateY(0)" },
-      ],
-      { duration: PICKER_TIMING.enterMs, id: PICKER_MOTION_ID },
-    );
-  }
-  const title = sheet.querySelector("#swap-picker-title");
-  if (title) {
-    title.textContent = picking === "sell" ? "Pay with" : "Receive";
-  }
-  const search = sheet.querySelector<HTMLInputElement>("#swap-picker-search");
-  if (search && search.value !== searchText && search.ownerDocument.activeElement !== search) {
-    search.value = searchText;
-  }
-  const entries = filteredEntries(deps);
-  const chips = sheet.querySelector("#swap-picker-chips");
-  if (chips) {
-    chips.innerHTML = QUICK_CHIP_SYMBOLS.map((symbol) => {
-      const entry = pickerEntries(deps).find((candidate) => candidate.symbol === symbol);
-      return entry
-        ? `<button class="swap-chip" type="button" data-swap-pick-address="${escapeHtml(entry.address)}">${tokenGlyph(entry.address, entry.symbol)}${escapeHtml(entry.symbol)}</button>`
-        : "";
-    }).join("");
-  }
-  const list = sheet.querySelector("#swap-picker-list");
-  if (list) {
-    const addFallback =
-      entries.length === 0 && isAddressText(searchText)
-        ? `<button class="option-row" role="option" type="button" data-swap-pick-address="${escapeHtml(searchText.trim().toLowerCase())}">
-            <span class="option-copy">
-              <strong>Use this address</strong>
-              <span class="option-sub"><code>${escapeHtml(accountLabel(searchText.trim()))}</code></span>
-            </span>
-            <span class="menu-value">Adds the token</span>
-          </button>`
-        : "";
-    const group = (rows: string): string => `<div class="swap-sheet-group">${rows}</div>`;
-    const searching = searchText.trim().length > 0;
-    const mine = entries.filter((entry) => entry.tracked);
-    const rest = entries.filter((entry) => !entry.tracked);
-    // Resting order communicates structure: what you hold first, then the
-    // whole verified catalog in volume order. A search flattens to one ranked
-    // list so the best match is always the first row.
-    list.innerHTML =
-      searching || mine.length === 0 || rest.length === 0
-        ? group(entries.map(entryRow).join("") + addFallback)
-        : `<p class="eyebrow swap-sheet-label">Your tokens</p>${group(mine.map(entryRow).join(""))}
-           <p class="eyebrow swap-sheet-label">All tokens</p>${group(rest.map(entryRow).join(""))}`;
-  }
-  const status = sheet.querySelector<HTMLElement>("#swap-picker-status");
-  if (status) {
-    const message = catalogLoading
-      ? "Loading verified tokens…"
-      : (catalogError ??
-        (entries.length === 0 && !isAddressText(searchText) ? "No tokens match that search." : ""));
-    status.textContent = message;
-    status.hidden = message.length === 0;
-  }
-};
-
-/**
- * Repaints the sheet from module state without (re)attaching listeners — the
- * chip-toggle path uses this so listeners bind exactly once per render.
- */
-export const repaintSwapPicker = (deps: SwapPickerDeps, root: Element): void => {
-  if (picking !== null) {
-    ensureCatalog(deps, () => applyPickerUi(deps, root));
-  }
-  applyPickerUi(deps, root);
-};
-
-const closePicker = (deps: SwapPickerDeps, root: Element, afterClose?: () => void): void => {
-  const side = picking;
-  const sheet = root.querySelector<HTMLElement>("#swap-picker");
-  if (!side || !sheet) {
-    return;
-  }
-  const serial = ++pickerMotionSerial;
-  sheet.dataset["closing"] = "true";
-  const finish = (): void => {
-    if (serial !== pickerMotionSerial) {
+  const request = ++catalogRequest;
+  const settle = (tokens: readonly SwapCatalogTokenView[]): void => {
+    // A later fetch, or a network switch, has already replaced this request;
+    // pinning its list here would show another network's tokens.
+    if (request !== catalogRequest || catalogNetworkId !== networkId) {
       return;
     }
-    picking = null;
-    searchText = "";
-    applyPickerUi(deps, root);
-    root.querySelector<HTMLElement>(`#swap-${side}-token`)?.focus();
-    afterClose?.();
+    catalogLoading = false;
+    catalog = tokens;
+    repaintLatest?.();
   };
-  const motion = animate(
-    sheet,
-    [
-      { opacity: 1, transform: "translateY(0)" },
-      { opacity: 0, transform: `translateY(${PICKER_FRAME.offsetY}px)` },
-    ],
-    { duration: PICKER_TIMING.exitMs, id: PICKER_MOTION_ID },
+  deps.swap.tokens().then(
+    (tokens) => settle(tokens),
+    () => {
+      // A catalog this wallet cannot reach leaves the tracked tokens, which are
+      // enough to swap between; nothing here is worth interrupting the screen.
+      settle([]);
+    },
   );
-  if (!motion) {
-    finish();
-    return;
-  }
-  void motion.finished.then(finish, finish);
 };
 
 /**
- * Binds the picker sheet and repaints it from module state. `onSelect`
- * receives the chosen TRACKED token id for the side being picked; untracked
- * catalog picks are added on-chain first (via the wallet's add-token flow)
- * and delivered on the bind that follows the resulting re-render.
+ * The two groups the dropdown shows: what this account holds, then the rest of
+ * the verified catalog. A tracked token the catalog omits (a hand-added custom)
+ * still appears, so nothing the user owns becomes unreachable.
  */
-export const bindSwapPicker = (
+const dropdownGroups = (deps: SwapPickerDeps): readonly TokenDropdownGroup[] => {
+  const tracked = trackedTokens(deps);
+  const mine = tracked.map((token) => ({
+    address: token.address,
+    id: token.id,
+    name: token.name,
+    symbol: token.symbol,
+  }));
+  const rest = (catalog ?? [])
+    .filter((entry) => !tracked.some((token) => sameFelt(token.address, entry.address)))
+    .map((entry) => ({
+      address: entry.address,
+      // Untracked tokens have no wallet id yet; the address stands in and is
+      // resolved to a tracked id when the pick is applied.
+      id: `address:${entry.address}`,
+      name: entry.name,
+      symbol: entry.symbol,
+    }));
+  return [
+    { label: "Your tokens", options: mine },
+    { label: "More tokens", options: rest, search: true },
+  ];
+};
+
+const panelId = (side: PickerSide): string => `swap-${side}-options`;
+
+const fillPanels = (deps: SwapPickerDeps, root: Element): void => {
+  const groups = dropdownGroups(deps);
+  for (const side of SIDES) {
+    const panel = root.querySelector<HTMLElement>(`#${panelId(side)}`);
+    if (!panel) {
+      continue;
+    }
+    const typed = panel.querySelector<HTMLInputElement>("[data-token-search]")?.value ?? "";
+    panel.innerHTML = tokenDropdownOptions(groups, panelId(side));
+    const search = panel.querySelector<HTMLInputElement>("[data-token-search]");
+    if (search && typed) {
+      search.value = typed;
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+};
+
+const addThenSelect = (
+  deps: SwapPickerDeps,
+  root: Element,
+  side: PickerSide,
+  address: string,
+  onSelect: (side: PickerSide, tokenId: string) => void,
+): void => {
+  pendingAdd = { address, side };
+  deps.wallet
+    .addToken(address)
+    .then(async () => {
+      await deps.render(await deps.wallet.loadStatus());
+      const added = trackedByAddress(deps, address);
+      if (added && pendingAdd && sameFelt(pendingAdd.address, address)) {
+        pendingAdd = null;
+        onSelect(side, added.id);
+      }
+    })
+    .catch((error: unknown) => {
+      pendingAdd = null;
+      showToast(errorMessage(error, "Could not add that token"), "error", root);
+    });
+};
+
+/**
+ * Binds both token dropdowns on the swap screen. `onSelect` receives the chosen
+ * TRACKED token id for its side; an untracked catalog pick is added on-chain
+ * first and delivered once the wallet tracks it.
+ */
+export const bindSwapTokenDropdowns = (
   deps: SwapPickerDeps,
   root: Element,
   onSelect: (side: PickerSide, tokenId: string) => void,
 ): void => {
-  repaintSwapPicker(deps, root);
+  ensureCatalog(deps, root);
+  fillPanels(deps, root);
+
   // Deliver a selection that was waiting on the add-token render.
   if (pendingAdd) {
     const tracked = trackedByAddress(deps, pendingAdd.address);
@@ -367,84 +207,24 @@ export const bindSwapPicker = (
     }
   }
 
-  root.querySelector("#swap-picker-close")?.addEventListener("click", () => {
-    closePicker(deps, root);
-  });
-  root.querySelector<HTMLElement>("#swap-picker")?.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closePicker(deps, root);
-      return;
-    }
-    if (event.key !== "Tab") {
-      return;
-    }
-    const controls = [
-      ...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>(FOCUSABLE),
-    ];
-    const first = controls[0];
-    const last = controls.at(-1);
-    if (!first || !last) {
-      return;
-    }
-    const active = (event.currentTarget as HTMLElement).ownerDocument.activeElement;
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  });
-  root
-    .querySelector<HTMLInputElement>("#swap-picker-search")
-    ?.addEventListener("input", (event) => {
-      searchText = (event.target as HTMLInputElement).value;
-      applyPickerUi(deps, root);
+  for (const side of SIDES) {
+    bindTokenDropdown({
+      onSelect: (optionId) => {
+        const address = optionId.startsWith("address:") ? optionId.slice("address:".length) : null;
+        if (!address) {
+          onSelect(side, optionId);
+          return;
+        }
+        const tracked = trackedByAddress(deps, address);
+        if (tracked) {
+          onSelect(side, tracked.id);
+          return;
+        }
+        addThenSelect(deps, root, side, address, onSelect);
+      },
+      panelId: panelId(side),
+      root: root.querySelector(`#swap-${side}-token`)?.closest(".token-dropdown") ?? null,
+      triggerId: `swap-${side}-token`,
     });
-  root.querySelector("#swap-picker")?.addEventListener("click", (event) => {
-    const row = (event.target as Element).closest<HTMLElement>("[data-swap-pick-address]");
-    const address = row?.dataset["swapPickAddress"];
-    const side = picking;
-    if (!address || !side) {
-      return;
-    }
-    const tracked = trackedByAddress(deps, address);
-    closePicker(deps, root, () => {
-      if (tracked) {
-        onSelect(side, tracked.id);
-        return;
-      }
-      // Untracked pick: add it through the on-chain-validated token flow, then
-      // deliver the selection from the refreshed preferences. Delivery happens
-      // right here — a content-identical repaint can skip re-binding, so the
-      // bind-time pendingAdd path below is only a fallback.
-      pendingAdd = { address, side };
-      setResultText(root, "Adding token…");
-      deps.wallet
-        .addToken(address)
-        .then(async () => {
-          await deps.render(await deps.wallet.loadStatus());
-          const added = trackedByAddress(deps, address);
-          if (added && pendingAdd && sameFelt(pendingAdd.address, address)) {
-            const target = pendingAdd.side;
-            pendingAdd = null;
-            onSelect(target, added.id);
-          }
-        })
-        .catch((error: unknown) => {
-          pendingAdd = null;
-          showToast(errorMessage(error, "Could not add that token"), "error", root);
-          setResultText(root, errorMessage(error, "Could not add that token"));
-          applyPickerUi(deps, root);
-        });
-    });
-  });
-};
-
-const setResultText = (root: Element, text: string): void => {
-  const node = root.querySelector("#swap-result");
-  if (node) {
-    node.textContent = text;
   }
 };

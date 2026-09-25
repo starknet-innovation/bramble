@@ -90,6 +90,13 @@ describe("sidepanel styles", () => {
     );
   });
 
+  test("the send rail sizes itself from its own steps", () => {
+    // A pinned column count outlived the steps it was written for and left an
+    // empty column, which read as the rail sitting off to one side.
+    expect(SIDEPANEL_STYLES).toMatch(/\.send-progress \{[^}]*grid-auto-flow: column/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.send-progress \{[^}]*grid-template-columns/s);
+  });
+
   test("receipts, disclosures, and the segmented control carry structured content", () => {
     // Facts read as receipt rows (label left, value right, divider between),
     // advanced forms collapse behind native details disclosures, and either/or
@@ -298,11 +305,13 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /\.toast-text \{[^}]*overflow-wrap: anywhere[^}]*text-wrap: pretty/s,
     );
-    // The swap success moment draws its ring and check in the semantic green
-    // and collapses to static marks under reduced motion.
-    expect(SIDEPANEL_STYLES).toMatch(/\.swap-success-ring \{[^}]*animation: swap-draw/s);
+    // Send and Swap end on one outcome component, so the success mark is
+    // defined once: it draws in the semantic green and collapses to a static
+    // mark under reduced motion. Swap had its own copy, and the two drifted.
+    expect(SIDEPANEL_STYLES).toMatch(/\.send-success-ring \{[^}]*animation: send-draw/s);
+    expect(SIDEPANEL_STYLES).not.toContain("swap-draw");
     const reducedBlock = SIDEPANEL_STYLES.slice(SIDEPANEL_STYLES.indexOf("prefers-reduced-motion"));
-    expect(reducedBlock).toContain(".swap-success-ring, .swap-success-check");
+    expect(reducedBlock).toContain(".send-success-ring, .send-success-check");
     // The pending-count badge ink is the page ground, never the accent's paired
     // text colour (which tracks the accent, not the danger fill).
     expect(SIDEPANEL_STYLES).toMatch(/\.badge \{[^}]*color: var\(--bramble-bg\)/s);

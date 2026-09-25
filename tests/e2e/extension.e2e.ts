@@ -7,6 +7,7 @@ import { expect, test } from "./fixtures";
 import { startTestDapp } from "./test-dapp-server";
 import {
   createWalletFromGeneratedPhrase,
+  expectInvokeApprovalWithheld,
   IMPORT_MNEMONIC,
   importWalletFromPhrase,
   openPendingWalletSurface,
@@ -54,7 +55,7 @@ test("loads the dedicated Ledger hardware session surface", async ({ extension }
   );
 
   await expect(ledger.getByRole("heading", { name: "Connect your Ledger" })).toBeVisible();
-  await expect(ledger.getByText("Secure device session")).toBeVisible();
+  await expect(ledger.getByText(/Chrome needs this tab open/)).toBeVisible();
   await expect(ledger.getByRole("button", { name: /USB cable/ })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -68,6 +69,22 @@ test("loads the dedicated Ledger hardware session surface", async ({ extension }
   await ledger.getByRole("button", { name: /Bluetooth/ }).click();
   await expect(ledger.getByRole("button", { name: "Pair with Bluetooth" })).toBeEnabled();
   await expect(ledger.getByText("Stay on the Ledger dashboard")).toBeVisible();
+});
+
+test("refuses a Ledger tab that was not opened by the wallet", async ({ extension }) => {
+  for (const hash of [
+    "",
+    "#session=not-a-session",
+    "#session=2db2df18-12db-1d66-9b38-02dc16460ce3",
+  ]) {
+    const ledger = await extension.openExtensionPage(`ledger-grant.html${hash}`);
+    await expect(ledger.getByText("Open Ledger from Bramble")).toBeVisible();
+    await expect(
+      ledger.getByText("This hardware tab needs a fresh secure session from the wallet."),
+    ).toBeVisible();
+    await expect(ledger.getByRole("button", { name: "Connect with USB" })).toBeDisabled();
+    await ledger.close();
+  }
 });
 
 test("imports an existing recovery phrase without backup verification", async ({ extension }) => {
@@ -219,9 +236,11 @@ test("surfaces an invoke as a transaction approval and rejects on deny", async (
 
     await dapp.getByTestId("invoke").click();
     await expect(dapp.getByTestId("invoke-result")).toHaveText("pending");
-    // The provider request surfaces as a transaction approval card in the side
-    // panel; denying it rejects the held provider promise.
-    await resolvePendingApproval(sidepanel, "Transaction request", dappServer.origin, "deny");
+    // Egress is blocked, so the fee cannot be priced. Approve stays disabled
+    // and the dapp promise stays pending; only deny settles it.
+    await expectInvokeApprovalWithheld(sidepanel, dappServer.origin);
+    await expect(dapp.getByTestId("invoke-result")).toHaveText("pending");
+    await sidepanel.locator('[data-approval-action="deny"]').click();
 
     await expect(dapp.getByTestId("invoke-result")).toContainText('"status":"rejected"');
   } finally {
@@ -241,16 +260,16 @@ test("surfaces a SNIP wire-format multicall as a transaction approval", async ({
     await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
 
     // Real dapps speak the SNIP wallet API: snake_case call fields and decimal
-    // calldata, here an approve on a TRACKED token (mainnet STRK) plus a swap
-    // call, so the allowance-review enrichment path is exercised too. The test
-    // dapp's own button sends the legacy camelCase shape, which once left this
-    // wire format entirely uncovered.
+    // calldata, here an approve on a tracked token (mainnet STRK) plus a swap
+    // call. The result is recorded on the page so a rejection cannot pass
+    // unnoticed while the card is still on screen.
     await dapp.evaluate(() => {
       const provider = (
         globalThis as unknown as {
           starknet_bramble: { request: (args: unknown) => Promise<unknown> };
         }
       ).starknet_bramble;
+      document.body.dataset["multicall"] = "pending";
       void provider
         .request({
           params: {
@@ -275,12 +294,25 @@ test("surfaces a SNIP wire-format multicall as a transaction approval", async ({
           },
           type: "wallet_addInvokeTransaction",
         })
-        .catch(() => undefined);
+        .then(
+          () => {
+            document.body.dataset["multicall"] = "resolved";
+          },
+          () => {
+            document.body.dataset["multicall"] = "rejected";
+          },
+        );
     });
 
-    // With the panel open and unlocked, the review takeover appears on its own.
-    await expect(sidepanel.getByText("Review request")).toBeVisible({ timeout: 10_000 });
-    await expect(sidepanel.getByText("Transaction request").first()).toBeVisible();
+    await expectInvokeApprovalWithheld(sidepanel, dappServer.origin);
+    await expect(sidepanel.getByText("What will happen")).toBeVisible();
+    await expect(sidepanel.getByText("Allow 0x4270…3b0f to spend 0.5 STRK")).toBeVisible();
+    await expect(sidepanel.getByText("Call multi_route_swap on 0x4270…3b0f")).toBeVisible();
+    await expect(sidepanel.locator("code", { hasText: /^approve$/ })).toHaveCount(1);
+    await expect(sidepanel.locator("code", { hasText: /^multi_route_swap$/ })).toHaveCount(1);
+    await expect(dapp.locator("body")).toHaveAttribute("data-multicall", "pending");
+    await sidepanel.locator('[data-approval-action="deny"]').click();
+    await expect(dapp.locator("body")).toHaveAttribute("data-multicall", "rejected");
   } finally {
     await dappServer.close();
   }

@@ -116,6 +116,9 @@ describe("official STRK20 SDK submission boundary", () => {
           },
         ],
         isAuthorized: context.isAuthorized,
+        // Registration journals its signed identity before sending, so a lost
+        // answer can later be resolved on-chain (official-sdk-maturity).
+        onSigned: expect.any(Function),
         proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
         rpcUrls: context.rpcUrls,
         signHash: expect.any(Function),

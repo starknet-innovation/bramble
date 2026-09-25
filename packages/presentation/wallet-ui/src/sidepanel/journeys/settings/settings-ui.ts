@@ -4,7 +4,7 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { buildInfo } from "../../shell/build-info";
 import { bindGroupControls } from "./group-ui";
 
@@ -12,17 +12,14 @@ import { bindGroupControls } from "./group-ui";
  * Dependencies the settings bindings close over.
  */
 export type SettingsUiDeps = {
-  readonly activeAccountId: () => string | null;
   readonly app: Element | null;
   /** Ids of accounts already in the vault; phrase-import scan rows matching them lock. */
   readonly existingAccountIds?: () => ReadonlySet<string>;
   readonly expandedGroup: () => string | null;
   readonly networkId: () => string;
-  readonly openAssign: () => string | null;
   readonly refresh: () => Promise<WalletStatus>;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly setExpandedGroup: (id: string | null) => void;
-  readonly setOpenAssign: (id: string | null) => void;
   readonly startAddAccount: () => void;
   readonly wallet: SidepanelWallet;
 };
@@ -32,34 +29,40 @@ const rerender = async (deps: SettingsUiDeps): Promise<void> => {
 };
 
 /**
- * Binds the account label form on the account flow.
+ * Binds every account-name form in the account flow's "Account names" section.
+ * Each form carries the account it renames (`data-account-name-form`), so the
+ * write targets the row the user submitted rather than whichever account is
+ * active — the screen lists them all. An empty name clears the stored label and
+ * the account falls back to its generated name.
  */
 export const bindAccountLabel = (deps: SettingsUiDeps): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#label-form");
   const result = deps.app?.querySelector<HTMLElement>("#label-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
 
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const accountId = deps.activeAccountId();
-    if (!accountId) {
-      return;
-    }
-    const label = String(new FormData(form).get("label") ?? "").trim();
-    buttonBusy(submitButton, true);
-    void deps.wallet.setAccountLabel(accountId, label).then(
-      async () => {
-        showToast(label ? "Label saved" : "Label cleared", "success", form);
-        await rerender(deps);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Label update failed"), "error", form);
-        if (result) {
-          result.textContent = errorMessage(error, "Label update failed");
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
+  deps.app?.querySelectorAll<HTMLFormElement>("[data-account-name-form]").forEach((form) => {
+    const accountId = form.dataset["accountNameForm"];
+    const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!accountId) {
+        return;
+      }
+      const label = String(new FormData(form).get("label") ?? "").trim();
+      buttonBusy(submitButton, true);
+      void deps.wallet.setAccountLabel(accountId, label).then(
+        async () => {
+          showToast(label ? "Name saved" : "Name cleared", "success", form);
+          await rerender(deps);
+        },
+        (error: unknown) => {
+          showToast(errorMessage(error, "Name update failed"), "error", form);
+          if (result) {
+            result.textContent = errorLine(error, "Name update failed");
+          }
+          buttonBusy(submitButton, false);
+        },
+      );
+    });
   });
 };
 
@@ -75,17 +78,14 @@ export const bindAddAccount = (deps: SettingsUiDeps): void => {
 };
 
 /**
- * Binds the account-groups controls wherever they appear in the panel — the
- * manage-accounts "Groups" section, the per-account assignment panels, and the
- * left drawer's assignment panels — so both entry points share one wiring.
+ * Binds the account-groups controls wherever they appear in the panel — today
+ * the manage-accounts "Groups" section — through one wiring.
  */
 export const bindGroups = (deps: SettingsUiDeps): void => {
   bindGroupControls(deps.app, {
     expandedGroup: deps.expandedGroup,
-    openAssign: deps.openAssign,
     rerender: () => rerender(deps),
     setExpandedGroup: deps.setExpandedGroup,
-    setOpenAssign: deps.setOpenAssign,
     wallet: deps.wallet,
   });
 };
@@ -188,7 +188,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       (error: unknown) => {
         showToast(errorMessage(error, "Currency update failed"), "error", currencySelect);
         if (result) {
-          result.textContent = errorMessage(error, "Currency update failed");
+          result.textContent = errorLine(error, "Currency update failed");
         }
         currencySelect.disabled = false;
       },
@@ -310,7 +310,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
         (error: unknown) => {
           showToast(errorMessage(error, "Backup restore failed"), "error", importButton);
           if (result) {
-            result.textContent = errorMessage(error, "Backup restore failed");
+            result.textContent = errorLine(error, "Backup restore failed");
           }
           buttonBusy(importButton, false);
         },

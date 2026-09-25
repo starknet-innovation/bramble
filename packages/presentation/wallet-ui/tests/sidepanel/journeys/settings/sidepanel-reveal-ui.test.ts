@@ -90,12 +90,12 @@ describe("bindReveal", () => {
     toggle?.click();
     expect(phrase?.classList.contains("is-masked")).toBe(false);
     expect(key?.classList.contains("is-masked")).toBe(false);
-    expect(toggle?.textContent).toContain("Tap to hide");
+    expect(toggle?.textContent).toContain("Hide");
 
     toggle?.click();
     expect(phrase?.classList.contains("is-masked")).toBe(true);
     expect(key?.classList.contains("is-masked")).toBe(true);
-    expect(toggle?.textContent).toContain("Tap to show");
+    expect(toggle?.textContent).toContain("Show");
   });
 
   test("a confirmed passphrase reveals the phrase and key and unhides the output", async () => {
@@ -114,7 +114,9 @@ describe("bindReveal", () => {
     expect(container.querySelector("#reveal-phrase")?.textContent).toBe(MNEMONIC);
     expect(container.querySelector("#reveal-key")?.textContent).toBe(PRIVATE_KEY);
     expect(container.querySelector("#reveal-output")?.hasAttribute("hidden")).toBe(false);
-    expect(container.querySelector("#reveal-result")?.textContent).toContain("Revealed");
+    expect(container.querySelector("#reveal-result")?.textContent).toContain(
+      "Write it down offline",
+    );
   });
 
   test("a wallet with no recovery phrase shows the fallback line, still revealing the key", async () => {
@@ -151,8 +153,7 @@ describe("bindReveal", () => {
     };
     const html = revealFlow(ledgerStatus);
 
-    expect(html).toContain("lives on your Ledger");
-    expect(html).toContain("Recover this account from your Ledger device");
+    expect(html).toContain("key is on your Ledger");
     // No reveal form or secret output region is emitted for a hardware account.
     expect(html).not.toContain('id="reveal-form"');
     expect(html).not.toContain('id="reveal-output"');

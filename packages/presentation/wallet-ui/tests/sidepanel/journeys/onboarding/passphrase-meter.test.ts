@@ -38,7 +38,7 @@ describe("applyPassphraseMeter", () => {
     applyPassphraseMeter(meter, "correct horse battery staple", "");
     expect(meter.requirement.dataset["strength"]).toBe("strong");
     expect(meter.requirement.style.getPropertyValue("--meter-fill")).toBe("1");
-    expect(meter.result.textContent).toBe("Strong passphrase");
+    expect(meter.result.textContent).toBe("Strong");
     expect(meter.requirement.classList.contains("is-ready")).toBe(false);
   });
 
@@ -49,7 +49,7 @@ describe("applyPassphraseMeter", () => {
     expect(meter.requirement.classList.contains("is-ready")).toBe(false);
 
     applyPassphraseMeter(meter, "correct horse battery staple", "correct horse battery staple");
-    expect(meter.result.textContent).toBe("Strong passphrase · Passphrases match");
+    expect(meter.result.textContent).toBe("Strong · Passphrases match");
     expect(meter.requirement.classList.contains("is-ready")).toBe(true);
 
     // A short passphrase that "matches" its confirmation is still not ready.

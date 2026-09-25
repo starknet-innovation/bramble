@@ -5,13 +5,10 @@
  * fresh passphrase check, are never written to storage, and are wiped whenever
  * the shell re-renders (leaving the screen).
  *
- * The phrase may also be copied to the system clipboard. That is a deliberate
- * widening of where the secret can live — the clipboard is readable by every
- * application on the machine and may sync between devices — so the copy is
- * offered only after the same re-auth that reveals the phrase, the screen says
- * plainly what the user is accepting, and a best-effort timer overwrites the
- * clipboard afterwards. Best-effort is the honest word: the panel can be closed
- * before the timer fires, and a clipboard manager's own history is beyond reach.
+ * The phrase may also be copied to the system clipboard through the shared
+ * guarded copy (../../shared/guarded-copy.ts), which the onboarding phrase step
+ * uses too: offered only after the same re-auth that reveals the phrase, with
+ * the same warning beside it and the same best-effort clear afterwards.
  */
 
 import { button } from "@bramble/ui-kit/controls";
@@ -19,7 +16,8 @@ import { textField } from "@bramble/ui-kit/fields";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { bindGuardedCopy } from "../../shared/guarded-copy";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen } from "../../shared/parts";
 
@@ -53,7 +51,7 @@ export const revealFlow = (status: WalletStatus): string => {
         "reveal",
         `<section class="section" role="note">
           <p class="eyebrow">Recovery</p>
-          <p class="hint">This account lives on your Ledger. Its keys never leave the device, so there is no recovery phrase or private key to reveal here. Recover this account from your Ledger device itself, using the recovery phrase you set up with Ledger — not this wallet.</p>
+          <p class="hint">This account’s key is on your Ledger. Recover it with the device.</p>
         </section>`,
       )
     );
@@ -64,13 +62,13 @@ export const revealFlow = (status: WalletStatus): string => {
       "reveal",
       `<section class="section reveal-warning" role="note">
       <p class="reveal-danger">${icon("alert")}Anyone who sees these can take your funds.</p>
-      <p class="hint">Reveal only in private. Bramble will never ask you for them. They are shown once here and never leave this screen.</p>
+      <p class="hint">Reveal only in private. Bramble will never ask you for them.</p>
     </section>
     <section class="section">
       <form id="reveal-form">
         ${textField({
           autocomplete: "current-password",
-          hint: "Re-enter it to reveal. An unlocked session alone is not enough.",
+          hint: "An unlocked session is not enough.",
           label: "Confirm vault passphrase",
           minlength: MIN_VAULT_PASSPHRASE_LENGTH,
           name: "vaultPassphrase",
@@ -89,7 +87,7 @@ export const revealFlow = (status: WalletStatus): string => {
           label: "Copy recovery phrase",
           variant: "ghost",
         })}
-        <p class="hint" id="reveal-copy-note">Copying puts the phrase on this device's clipboard, where other apps can read it and it may sync to your other devices. Bramble clears it about a minute after you copy, but cannot clear a clipboard manager's own history.</p>
+        <p class="hint" id="reveal-copy-note">Copy at your own risk</p>
         <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
         <code class="reveal-value is-masked" id="reveal-key"></code>
         ${
@@ -100,7 +98,7 @@ export const revealFlow = (status: WalletStatus): string => {
         ${button({
           attributes: { id: "reveal-toggle" },
           icon: "check",
-          label: "Tap to show",
+          label: "Show",
           variant: "secondary",
         })}
         <p class="hint">Write them down offline. Leaving this screen hides them again.</p>
@@ -109,14 +107,6 @@ export const revealFlow = (status: WalletStatus): string => {
     )
   );
 };
-
-// How long the copied phrase is left on the clipboard before the best-effort
-// overwrite. Long enough to paste into a password manager, short enough that a
-// forgotten clipboard is not a standing exposure. The overwrite is blind — we
-// never read the clipboard, which would need a permission far broader than this
-// feature justifies — so it can clobber something copied in the meantime; the
-// window is kept short partly for that reason.
-const CLIPBOARD_CLEAR_MS = 60_000;
 
 /**
  * Binds the reveal form: confirm the passphrase, then show blurred secrets with
@@ -135,31 +125,12 @@ export const bindReveal = (deps: RevealUiDeps): void => {
   // Reading the live node at click time keeps the phrase in exactly one place in
   // the DOM. Putting it in a data attribute — as the shared inline copy control
   // does — would mint a second copy that outlives the mask.
-  copyPhrase?.addEventListener("click", () => {
-    const phrase = phraseEl?.textContent ?? "";
-    const view = copyPhrase.ownerDocument.defaultView;
-    const clipboard = view?.navigator.clipboard;
-    if (phrase.length === 0 || !clipboard) {
-      showToast("Nothing to copy", "error", copyPhrase);
-      return;
-    }
-    void clipboard.writeText(phrase).then(
-      () => {
-        showToast("Copied — the clipboard is cleared in about a minute", "success", copyPhrase);
-        view?.setTimeout(() => {
-          void clipboard.writeText("").catch(() => undefined);
-        }, CLIPBOARD_CLEAR_MS);
-      },
-      () => {
-        showToast("Copy failed", "error", copyPhrase);
-      },
-    );
-  });
+  bindGuardedCopy(copyPhrase ?? null, () => phraseEl?.textContent ?? "");
 
   toggle?.addEventListener("click", () => {
     const masked = phraseEl?.classList.toggle("is-masked") ?? true;
     keyEl?.classList.toggle("is-masked", masked);
-    toggle.lastChild?.replaceWith(masked ? "Tap to show" : "Tap to hide");
+    toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
   });
 
   form?.addEventListener("submit", (event) => {
@@ -177,7 +148,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
         }
         output?.removeAttribute("hidden");
         if (result) {
-          result.textContent = "Revealed. Tap to show, then write it down offline.";
+          result.textContent = "Write it down offline.";
         }
         form.reset();
         buttonBusy(submitButton, false);
@@ -185,7 +156,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
       (error: unknown) => {
         showToast(errorMessage(error, "Reveal failed"), "error", form);
         if (result) {
-          result.textContent = errorMessage(error, "Reveal failed");
+          result.textContent = errorLine(error, "Reveal failed");
         }
         buttonBusy(submitButton, false);
       },

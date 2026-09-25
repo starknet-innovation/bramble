@@ -1,8 +1,7 @@
 /**
- * Send, Receive, and Ledger-signing layer. Transaction progress keeps a
- * persistent map; Receive puts the shareable address before technical identity.
- * Motion is reserved for active work and the final submitted receipt, with a
- * complete reduced-motion cut.
+ * Send and Ledger-signing layer. Transaction progress keeps a persistent map;
+ * motion is reserved for active work and the final submitted receipt, with a
+ * complete reduced-motion cut. Receive has its own layer in ./styles-receive.
  */
 import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
@@ -10,106 +9,6 @@ import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramb
  * Send-flow stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const SEND_STYLES = `
-  .receive-address-view {
-    gap: ${SPACE.md};
-    min-width: 0;
-  }
-  .receive-address-view .qr-card { width: min(204px, 100%); }
-  .receive-intro {
-    display: grid;
-    gap: ${SPACE.xs};
-    text-align: center;
-  }
-  .receive-intro h2 { font-size: ${TYPE.title.size}; margin: 0; }
-  .receive-intro p {
-    color: var(--bramble-muted);
-    font-size: ${TYPE.caption.size};
-    line-height: ${TYPE.caption.line};
-    margin: 0;
-  }
-  /* The address is shown whole and wraps by CSS only, so what is selected and
-     copied is the exact canonical string — never an ellipsised one. */
-  .receive-intro .receive-address-line { color: var(--bramble-text); }
-  .receive-address-line code {
-    display: block;
-    line-height: ${TYPE.caption.line};
-    overflow-wrap: anywhere;
-    user-select: all;
-    word-break: break-all;
-  }
-  .receive-payload-switch { width: 100%; }
-  .receive-card-explainer { margin: 0; text-align: center; }
-  .receive-actions {
-    display: grid;
-    gap: ${SPACE.sm};
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  }
-  .receive-actions button { min-width: 0; padding-inline: ${SPACE.sm}; text-wrap: nowrap; }
-  details.receive-identity {
-    background: transparent;
-    border-radius: 0;
-    border-top: 1px solid var(--bramble-hairline);
-  }
-  /* Flush section inside the receive card: the summary carries its own
-     rounded hover, inset by the section's own gutter, since this details is
-     not a clipped panel. */
-  details.receive-identity > summary {
-    border-radius: ${RADIUS.md};
-    margin: 0 -${SPACE.sm};
-    padding: 0 ${SPACE.sm};
-  }
-  .receive-identity .disclosure-body {
-    gap: ${SPACE.md};
-    padding: ${SPACE.sm} 0 0;
-  }
-  .receive-identity .disclosure-body::before { display: none; }
-  .receive-key-row {
-    align-items: center;
-    display: grid;
-    gap: ${SPACE.sm};
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-height: ${CONTROL.hit};
-  }
-  .receive-key-row + .receive-key-row {
-    border-top: 1px solid var(--bramble-hairline);
-    padding-top: ${SPACE.md};
-  }
-  .receive-key-row > strong { font-size: ${TYPE.label.size}; }
-  .receive-key-row > [data-nostr-key-status] {
-    color: var(--bramble-muted);
-    font-size: ${TYPE.caption.size};
-    line-height: ${TYPE.caption.line};
-    text-align: right;
-  }
-  .receive-address-view[data-wallet-card-state="unavailable"] .receive-key-row > [data-nostr-key-status] {
-    grid-column: 1 / -1;
-    text-align: left;
-  }
-  .receive-key-value {
-    align-items: center;
-    display: inline-flex;
-    gap: ${SPACE.xs};
-    justify-self: end;
-    min-width: 0;
-  }
-  .receive-key-value code {
-    overflow: hidden;
-    text-align: center;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-    word-break: normal;
-  }
-  .receive-card-pending {
-    align-items: center;
-    color: inherit;
-    display: flex;
-    justify-content: center;
-    margin: 0;
-    min-height: 188px;
-    opacity: 0.62;
-    padding: ${SPACE.lg};
-    text-align: center;
-  }
   .send-flow, .send-flow form, .send-stage { display: grid; gap: ${SPACE.lg}; }
   .send-flow form { min-width: 0; }
   .send-stage-frame {
@@ -118,9 +17,14 @@ export const SEND_STYLES = `
     min-width: 0;
     view-transition-name: send-stage;
   }
+  /* Columns come from the steps themselves: a pinned count left an empty
+     column behind when the rail lost a step, which read as the whole rail
+     sitting off to the left. */
   .send-progress {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    justify-content: center;
     list-style: none;
     margin: 0;
     padding: 0;

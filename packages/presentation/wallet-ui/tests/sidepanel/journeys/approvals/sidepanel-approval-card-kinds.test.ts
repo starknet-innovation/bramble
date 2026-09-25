@@ -69,8 +69,11 @@ describe("approvalCard renders each approval kind", () => {
       { existingGrant: true, id: ID, kind: "connect", origin: ORIGIN },
       status,
     );
-    expect(html).toContain("Adds this account to the accounts already shared with this site.");
+    expect(html).toContain("Adds this account to the ones already shared with this site");
     expect(html).not.toContain("Shares this account&#39;s address");
+    // Both branches state that the share lasts until the site is disconnected;
+    // the returning-grant branch used to drop it.
+    expect(html).toContain("until you disconnect it");
   });
 
   test("a locked connection request withholds the account echo and Approve", () => {

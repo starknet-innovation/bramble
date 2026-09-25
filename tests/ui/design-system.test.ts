@@ -143,7 +143,7 @@ describe("design system", () => {
     expect(violations).toEqual([]);
   });
 
-  test("full-screen onboarding consumes shared controls and defaults to Mainnet", () => {
+  test("full-screen onboarding consumes shared controls and pins the Bramble account", () => {
     const markup = onboarding(status);
     expect(markup).toContain(
       button({
@@ -158,7 +158,10 @@ describe("design system", () => {
     // The private-key import keeps the contract choice for existing accounts.
     expect(markup).toContain('id="key-method-button"');
     expect(markup).toContain("Ready Account");
-    expect(markup).toContain("Bramble Account — Recommended");
-    expect(markup).toContain("Starknet Mainnet");
+    expect(markup).toContain("Bramble Account");
+    // The wizard no longer names the network anywhere: the real-funds
+    // acknowledgement was the only place it did, and it was removed in the copy
+    // review. The network is still pinned to DEFAULT_NETWORK by the binder.
+    expect(markup).not.toContain("Starknet Mainnet");
   });
 });
