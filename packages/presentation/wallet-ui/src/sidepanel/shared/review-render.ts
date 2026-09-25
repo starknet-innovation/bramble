@@ -213,12 +213,16 @@ export const reviewCallsList = (
  * Renders risk-flag and insight lines inside the shared review panel. Returns an
  * empty string when there is nothing to surface, so an absent panel leaves no
  * empty box behind rather than an empty bordered region.
+ *
+ * The "Risk and recovery" label belongs to the flag list. `clearCopy` is the
+ * opposite of a flag — a neutral statement about what the action does, shown
+ * when nothing was flagged — so it renders unlabelled rather than under a
+ * heading announcing a risk the panel is not reporting.
  */
 export const reviewPanel = (items: readonly string[], clearCopy?: string): string =>
   items.length === 0
     ? clearCopy
       ? `<div class="review-panel decision-layer decision-risk" role="note">
-          <p class="decision-label">Risk and recovery</p>
           <p>${escapeHtml(clearCopy)}</p>
         </div>`
       : ""

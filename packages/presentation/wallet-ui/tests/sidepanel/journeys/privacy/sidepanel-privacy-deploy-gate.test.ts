@@ -163,8 +163,11 @@ describe("privacy deployment gate", () => {
       false,
       strkAvailableForFees({ error: "fetch failed" }),
     );
-    expect(html).toContain("Deploy and enable");
+    // An unknown balance is not a zero balance: the tile must not divert to
+    // Receive as it does for an account known to be unfunded.
+    expect(html).toContain("deploy this account first");
     expect(html).not.toContain("Fund with STRK");
+    expect(html).not.toContain('data-view="receive"');
   });
 
   test("does not ask the chain when privacy is already unavailable", async () => {

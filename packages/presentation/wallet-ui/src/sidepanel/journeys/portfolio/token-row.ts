@@ -135,8 +135,7 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
       </button>`;
   }
   if (breakdown.kind === "unregistered" || breakdown.kind === "undeployed") {
-    const label =
-      breakdown.kind === "undeployed" ? "Deploy and enable" : "Register to start shielding";
+    const label = breakdown.kind === "undeployed" ? "Shield" : "Register to start shielding";
     return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="${label}">
         <span class="token-breakdown-label">${icon("lock")}Private balance</span>
         <span>${label}</span>

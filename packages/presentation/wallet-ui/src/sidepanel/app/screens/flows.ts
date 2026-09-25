@@ -29,7 +29,7 @@ import {
   noAccountEmpty,
   type WalletView,
 } from "../../shared/parts";
-import { reviewOutcome, reviewPanel } from "../../shared/review-render";
+import { reviewPanel } from "../../shared/review-render";
 import { knownAccountType } from "../../shell/account-types";
 
 // Fees use STRK and registration invokes a deployed account. Deployment blocks
@@ -117,7 +117,6 @@ const deployAccountFlow = (
       ${
         account
           ? `<section class="section" id="deploy-review-stage">
-              ${reviewOutcome("Deploy this account contract on Starknet so it can submit transactions.")}
               ${receipt([
                 { label: "Account", value: accountDisplayName(account, preferences) },
                 {

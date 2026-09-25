@@ -212,8 +212,9 @@ describe("sidepanel views", () => {
     const html = dashboard("deploy-account", status, [], preferences, { balances: [] }, false);
     expect(html).toContain('id="wallet-screen-deploy-account"');
     expect(html).toContain('id="deploy-review-stage"');
-    expect(html).toContain("What will happen");
-    expect(html).toContain("Risk and recovery");
+    expect(html).not.toContain("What will happen");
+    expect(html).not.toContain("Risk and recovery");
+    expect(html).toContain("Deployment creates this account on-chain.");
     expect(html).toContain("Review deployment");
     expect(html).toMatch(/id="deploy-success"[^>]*hidden/);
     expect(html).not.toContain("wallet-dock");

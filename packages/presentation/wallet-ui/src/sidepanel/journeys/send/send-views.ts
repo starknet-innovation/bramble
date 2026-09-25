@@ -29,6 +29,7 @@ import { starknetNetworkGlyph, tokenGlyph } from "../portfolio/token-row";
 import { type SendAsset, type SendIntent, sendAssets, sendBalanceLine } from "./send-model";
 import { recipientStage } from "./send-recipient-view";
 import {
+  TRANSFER_FAILURE_TITLE,
   type TransferMode,
   type TransferModeCopy,
   transferModeCopy,
@@ -212,14 +213,13 @@ const successStage = (copy: TransferModeCopy): string => `
     </div>
   </section>`;
 
-const failureStage = (copy: TransferModeCopy): string => `
+const failureStage = (): string => `
   <section class="send-outcome send-failure" id="send-failure" role="alert" aria-live="assertive" hidden>
     <span class="send-outcome-mark" aria-hidden="true">
       <svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg>
     </span>
     <div class="send-outcome-copy">
-      <p class="send-outcome-kicker">Nothing else will be submitted</p>
-      <h2 id="send-failure-title">${escapeHtml(copy.failureTitle)}</h2>
+      <h2 id="send-failure-title">${escapeHtml(TRANSFER_FAILURE_TITLE)}</h2>
       <p id="send-failure-copy">The transaction was not sent. Your balance is unchanged.</p>
       ${outcomeHash("send-failure-hash")}
     </div>
@@ -342,7 +342,7 @@ export const sendFlow = (
             ${workingStage()}
             ${pendingStage()}
             ${successStage(copy)}
-            ${failureStage(copy)}
+            ${failureStage()}
             <p class="send-result" id="transfer-result" role="status" aria-live="assertive"></p>
           </div>
         </form>

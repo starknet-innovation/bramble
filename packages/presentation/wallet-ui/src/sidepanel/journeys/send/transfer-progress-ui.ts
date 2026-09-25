@@ -91,7 +91,7 @@ export const workingStatus = <Review>(
   // pointing the reader back at the Ledger is wrong.
   if (state.fields?.signer === "ledger" && state.stage === "authorizing" && !isHandingOn(state)) {
     return {
-      copy: "Review the request on your Ledger. Nothing broadcasts until device approval is verified.",
+      copy: "Review the request on your Ledger.",
       title: "Waiting for your Ledger",
     };
   }

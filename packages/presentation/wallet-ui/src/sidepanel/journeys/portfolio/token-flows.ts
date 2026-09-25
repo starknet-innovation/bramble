@@ -227,7 +227,7 @@ const privacyActions = (
     return button({
       attributes: { "data-privacy-open": tokenId },
       icon: "shield",
-      label: "Deploy and enable",
+      label: "Shield",
     });
   if (privacy.error) return "";
   if (privacy.value?.registration === "registered")

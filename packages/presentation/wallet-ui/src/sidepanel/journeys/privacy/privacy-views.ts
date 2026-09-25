@@ -230,7 +230,7 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
     action: button({
       attributes: { "data-privacy-deploy-register": "" },
       icon: "shield",
-      label: "Deploy and enable",
+      label: "Shield",
     }),
     body: "Registration is a transaction sent by this account, so its contract has to exist on Starknet first. Deploying and registering are two transactions, each with a network fee.",
     title: "Deploy this account first",

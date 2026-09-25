@@ -67,8 +67,6 @@ export type TransferModeCopy = {
   readonly closeLabel: string;
   /** Label of the final confirm control for a software signer. */
   readonly confirmLabel: string;
-  /** Heading of the failure receipt. */
-  readonly failureTitle: string;
   /** The operation as a title-case noun: the amount step's header. */
   readonly noun: string;
   /**
@@ -96,7 +94,6 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
     amountLabel: "Amount to send",
     closeLabel: "Close Send",
     confirmLabel: "Confirm and send",
-    failureTitle: "Send not completed",
     noun: "Send",
     preparing: "Preparing send",
     progressive: "Sending",
@@ -110,7 +107,6 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
     amountLabel: "Amount to shield",
     closeLabel: "Close Shield",
     confirmLabel: "Confirm and shield",
-    failureTitle: "Shield not completed",
     noun: "Shield",
     preparing: "Preparing shield",
     progressive: "Shielding",
@@ -125,7 +121,6 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
     amountLabel: "Amount to unshield",
     closeLabel: "Close Unshield",
     confirmLabel: "Confirm and unshield",
-    failureTitle: "Unshield not completed",
     noun: "Unshield",
     preparing: "Preparing unshield",
     progressive: "Unshielding",
@@ -137,6 +132,14 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
     verb: "unshield",
   },
 };
+
+/**
+ * Heading of the failure receipt, in every mode. The flow header above it
+ * already names the operation ("Shield failed"), so this line carries the fact
+ * the header does not: nothing was submitted. Mode-independent on purpose —
+ * "Shield not completed" under "Shield failed" said one thing twice.
+ */
+export const TRANSFER_FAILURE_TITLE = "Transaction not sent";
 
 /**
  * The copy table for one mode. Total over the union, so no caller falls back

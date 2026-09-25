@@ -188,7 +188,7 @@ export const shieldTile = (
 ): string => {
   const needsDeploy = deployment === false;
   const needsFunds = needsDeploy && fundedForFees === false;
-  const tileLabel = needsFunds ? "Fund with STRK" : needsDeploy ? "Deploy and enable" : "Shield";
+  const tileLabel = needsFunds ? "Fund with STRK" : "Shield";
   const body = `<span class="tile-icon">${icon("shield")}</span>
       <span class="tile-label">${tileLabel}</span>`;
   if (tokenId === null) {
@@ -199,7 +199,7 @@ export const shieldTile = (
   }
   const attribute = ready && !needsDeploy ? "data-send-shield" : "data-privacy-open";
   const label = needsDeploy
-    ? "Deploy and enable"
+    ? "Shield — deploy this account first"
     : ready
       ? "Shield public value into your private balance"
       : "Activate private balances";

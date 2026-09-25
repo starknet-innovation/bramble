@@ -56,7 +56,7 @@ export const privacyPoolNotice = (
   const hook = deploying ? "data-privacy-deploy-register" : "data-privacy-register";
   return `<button class="privacy-pool-notice" ${hook}="" type="button">
       <span class="privacy-pool-copy"><strong>${escapeHtml(PUBLIC_ONLY_COPY)}</strong><span>${escapeHtml(deploying ? DEPLOY_FIRST_COPY : UNREGISTERED_COPY)}</span></span>
-      <strong>${deploying ? "Deploy and enable" : "Enable privacy"}</strong>
+      <strong>Enable privacy</strong>
     </button>`;
 };
 

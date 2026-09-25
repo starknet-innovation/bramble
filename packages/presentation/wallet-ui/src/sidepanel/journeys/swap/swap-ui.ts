@@ -203,10 +203,10 @@ const paintSwapMeta = (root: Element, figures: SwapFigures): void => {
   setText(root, "swap-gas", quote ? `Fee ≈ ${formatFiat(quote.gasFeesInUsd, "usd")}` : "");
   const warning = root.querySelector<HTMLElement>("#swap-warning");
   if (warning) {
+    // The Swap button carries the figure ("Swap anyway (-4.2%)"), so the
+    // warning names the risk rather than restating the percentage.
     const message =
-      quote && figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
-        ? `This route returns ${figures.lossPercent.toFixed(1)}% less value than you pay. Small orders can route poorly — try a larger amount or a different pair.`
-        : "";
+      quote && figures.lossPercent >= SWAP_LOSS_WARN_PERCENT ? "High slippage risk" : "";
     warning.textContent = message;
     warning.hidden = message.length === 0;
   }

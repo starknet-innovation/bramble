@@ -111,7 +111,6 @@ const applyModeCopy = (form: HTMLFormElement, mode: TransferMode, reviewing: boo
   setText(form, "send-amount-label", copy.amountLabel);
   setText(form, "send-review-label", reviewing ? `${copy.preparing}…` : copy.reviewLabel);
   setText(form, "send-success-title", copy.successTitle);
-  setText(form, "send-failure-title", copy.failureTitle);
 };
 
 /**

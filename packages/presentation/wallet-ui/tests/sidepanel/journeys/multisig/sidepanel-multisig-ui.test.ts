@@ -447,7 +447,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(newest).toContain("0x999");
     expect(newest).toContain("0x2");
     expect(newest).toContain("What will happen");
-    expect(newest).toContain("Risk and recovery");
+    expect(newest).not.toContain("Risk and recovery");
     expect(newest).toContain("Cost");
     expect(newest).toContain("Technical details");
     pending[0]?.resolve(fixture.deploymentReview);
