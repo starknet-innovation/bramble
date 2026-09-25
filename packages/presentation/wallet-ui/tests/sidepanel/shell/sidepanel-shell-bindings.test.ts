@@ -162,6 +162,7 @@ describe("bindDashboard", () => {
        <button id="bad-reload" data-reload-balances type="button"></button>`,
     );
     const renders: WalletStatus[] = [];
+    const reasons: (string | undefined)[] = [];
     let mode: "ok" | "bad" = "ok";
     const wallet = {
       loadStatus: async () => {
@@ -173,8 +174,9 @@ describe("bindDashboard", () => {
     };
     bindDashboard({
       app: container,
-      render: async (next) => {
+      render: async (next, reason) => {
         renders.push(next);
+        reasons.push(reason);
       },
       setActiveView: () => undefined,
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
@@ -183,6 +185,9 @@ describe("bindDashboard", () => {
     click(container.querySelector("#ok-reload"));
     await tick();
     expect(renders).toEqual([status]);
+    // Without this the background serves the snapshot it already holds, and a
+    // refresh the user pressed returns the figures they were already looking at.
+    expect(reasons).toEqual(["action"]);
 
     mode = "bad";
     const bad = container.querySelector<HTMLButtonElement>("#bad-reload");

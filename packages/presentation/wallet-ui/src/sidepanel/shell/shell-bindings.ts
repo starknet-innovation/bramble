@@ -8,6 +8,7 @@
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
+import type { RefreshReason } from "../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, renderFragment, scopedStatus, showToast } from "../shared/dom";
 import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
@@ -24,7 +25,12 @@ export type ShellBindingDeps = {
   /** Captures the account/network whose deployment an async watcher may apply. */
   readonly deploymentScope?: () => DeploymentPollScope | null;
   readonly wallet: SidepanelWallet;
-  readonly render: (status: WalletStatus) => Promise<void>;
+  /**
+   * Repaints the shell. `reason` reaches the hydration pass: "action" forces a
+   * balance refetch past the one-minute snapshot TTL, which is what a control
+   * the user pressed has to do.
+   */
+  readonly render: (status: WalletStatus, reason?: RefreshReason) => Promise<void>;
   readonly setActiveView: (view: WalletView) => void;
 };
 
@@ -42,7 +48,7 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
     void wallet.lockVault().then(
       (status) => {
         showToast("Vault locked", "success", lockButton);
-        void render(status);
+        void render(status, "action");
       },
       (error: unknown) => {
         showToast(errorMessage(error, "Lock failed"), "error", lockButton);
@@ -55,10 +61,15 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
   });
 
   // Both the tab-bar refresh control and the in-panel retry reload balances.
+  // They refresh as an action, so the background refetches rather than serving
+  // the snapshot it already holds — a refresh that returns the cache is not one.
   app?.querySelectorAll<HTMLButtonElement>("[data-reload-balances]").forEach((button) => {
     button.addEventListener("click", () => {
       buttonBusy(button, true);
-      void wallet.loadStatus().then(render, () => buttonBusy(button, false));
+      void wallet.loadStatus().then(
+        (status) => render(status, "action"),
+        () => buttonBusy(button, false),
+      );
     });
   });
 };
@@ -122,7 +133,7 @@ export const watchDeployment = async (
   if (await awaitDeployment(deps.wallet, scope, options)) {
     const status = await deps.wallet.loadStatus();
     if (scope.stillCurrent() && status.activeAccountId === scope.accountId) {
-      await deps.render(status);
+      await deps.render(status, "action");
     }
   }
 };
@@ -237,7 +248,7 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
         async (status) => {
           setActiveView("settings");
           showToast("Network switched", "success", button);
-          await render(status);
+          await render(status, "action");
         },
         (error: unknown) => {
           showToast(errorMessage(error, "Network switch failed"), "error", button);
