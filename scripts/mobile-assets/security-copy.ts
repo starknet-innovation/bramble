@@ -43,8 +43,6 @@ const SECURITY_COPY: Readonly<Record<string, string>> = {
   securityRowOn: "{biometry} on",
   securitySubtitle: "How this device opens your wallet",
   securityTitle: "Unlock & auto-lock",
-  sendUnsupportedAccount:
-    "Sending from Ready accounts is not available on mobile yet. Use the Bramble extension to send from this account.",
   sendViewOnlyAccount: "Braavos accounts are view only for now.",
   throttled: "Too many attempts. Try again in {time}.",
   unlockWithBiometry: "Unlock with {biometry}",

@@ -196,10 +196,6 @@ class SendFlowModel(
                     hooks.notice(BrambleCopy.sendViewOnlyAccount, false)
                 }
 
-                is SendException.UnsupportedAccount -> {
-                    hooks.notice(BrambleCopy.sendUnsupportedAccount, false)
-                }
-
                 else -> {
                     amountError = SendCopy.amountInvalid
                 }

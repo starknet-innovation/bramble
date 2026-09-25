@@ -6,8 +6,9 @@ use serde_json::Value;
 use starknet_types_core::felt::Felt;
 
 use super::fees::{self, FeeQuote};
-use super::judge::{self, Answer, ChainAnswer, ClassHashAnswer, EstimateAnswer};
+use super::judge::{self, Answer, ChainAnswer, EstimateAnswer};
 use super::plan::{Expect, Kind, PlanState};
+use super::plan_probe::{Outcome, Probe};
 use super::rpc_bodies::{self, DeployTx, InvokeTx};
 use super::types::{
     FeeAffordability, ReviewFlag, RpcPurpose, SendFailureCode, SendStep, TransferReview,
@@ -25,48 +26,64 @@ pub(crate) fn entry_quote(entries: &[Value], index: usize) -> Option<FeeQuote> {
 }
 
 impl PlanState {
-    /// The INVOKE this plan estimates or signs, at `nonce`.
-    pub(crate) fn invoke_tx<'a>(&'a self, nonce: &'a Felt) -> Option<InvokeTx<'a>> {
+    /// The INVOKE this plan estimates, at `nonce`, with the account's query signature.
+    pub(crate) fn invoke_tx<'a>(
+        &'a self,
+        nonce: &'a Felt,
+        signature: &'a [Felt],
+    ) -> Option<InvokeTx<'a>> {
         match &self.kind {
             Kind::Transfer(transfer) => Some(InvokeTx {
                 sender: &self.account.address,
                 calldata: &transfer.calldata,
                 nonce,
                 bounds: None,
-                signature: None,
+                signature,
             }),
             _ => None,
         }
     }
 
-    /// The DEPLOY_ACCOUNT this plan estimates or signs, at `nonce`.
-    pub(crate) fn deploy_tx<'a>(&'a self, nonce: &'a Felt) -> DeployTx<'a> {
-        DeployTx {
-            class_hash: &self.account.class_hash,
-            public_key: &self.account.public_key,
+    /// The DEPLOY_ACCOUNT this plan estimates, at `nonce`; `None` when the account's class is
+    /// not one this wallet deploys.
+    pub(crate) fn deploy_tx<'a>(
+        &'a self,
+        nonce: &'a Felt,
+        signature: &'a [Felt],
+    ) -> Option<DeployTx<'a>> {
+        let deployment = self.account.deployment.as_ref()?;
+        Some(DeployTx {
+            class_hash: &deployment.class_hash,
+            salt: &deployment.salt,
+            constructor_calldata: &deployment.constructor_calldata,
             nonce,
             bounds: None,
-            signature: None,
-        }
+            signature,
+        })
     }
 
     /// `[INVOKE]` when deployed, `[DEPLOY_ACCOUNT nonce, INVOKE nonce + 1]` when not.
     pub(crate) fn invoke_estimate_body(&self, id: u64, deployed: bool) -> String {
         let nonce = self.work.nonce;
+        let query = self.account.query_signature();
+        let skip = !self.account.is_argent();
         if deployed {
-            return rpc_bodies::estimate(id, self.invoke_tx(&nonce).as_ref(), None);
+            return rpc_bodies::estimate(id, self.invoke_tx(&nonce, &query).as_ref(), None, skip);
         }
         let next = nonce + Felt::ONE;
         rpc_bodies::estimate(
             id,
-            self.invoke_tx(&next).as_ref(),
-            Some(&self.deploy_tx(&nonce)),
+            self.invoke_tx(&next, &query).as_ref(),
+            self.deploy_tx(&nonce, &query).as_ref(),
+            skip,
         )
     }
 
     pub(crate) fn deploy_estimate_body(&self, id: u64) -> String {
         let nonce = self.work.nonce;
-        rpc_bodies::estimate(id, None, Some(&self.deploy_tx(&nonce)))
+        let query = self.account.query_signature();
+        let skip = !self.account.is_argent();
+        rpc_bodies::estimate(id, None, self.deploy_tx(&nonce, &query).as_ref(), skip)
     }
 
     fn read_deploy_nonce(&mut self) -> SendStep {
@@ -78,41 +95,75 @@ impl PlanState {
         )
     }
 
-    pub(crate) fn on_review_reply(&mut self, expect: Expect, answer: Option<Answer>) -> SendStep {
+    /// The review's deployment estimate: Ready re-reads the account first, as
+    /// `estimateAccountDeploymentFee` does; a class this wallet does not deploy has no estimate.
+    fn review_deployment(&mut self) -> SendStep {
+        if self.account.is_argent() {
+            return self.probe(Probe::ReviewDeploy);
+        }
+        self.read_deploy_nonce()
+    }
+
+    /// The review's account-state read concluded.
+    pub(crate) fn review_probed(&mut self, outcome: Outcome) -> SendStep {
         let address = self.account.address;
+        match outcome {
+            Outcome::Deployed => {
+                self.work.deployed = Some(true);
+                if matches!(self.kind, Kind::Deployment) {
+                    self.work.already_deployed = true;
+                    return self.review();
+                }
+                self.rpc(Expect::ReviewNonce, RpcPurpose::Nonce, false, |_, id| {
+                    rpc_bodies::nonce(id, &address)
+                })
+            }
+            Outcome::Undeployed => {
+                self.work.deployed = Some(false);
+                self.work.requires_deployment = true;
+                if matches!(self.kind, Kind::Deployment) {
+                    // The probe just made is the deployment estimate's own read.
+                    return self.read_deploy_nonce_if_deployable();
+                }
+                if self.account.deployment.is_none() {
+                    // `accountDeployment` refuses before the bulk estimate reads a nonce.
+                    return self.review_deployment();
+                }
+                self.rpc(Expect::ReviewNonce, RpcPurpose::Nonce, false, |_, id| {
+                    rpc_bodies::nonce(id, &address)
+                })
+            }
+            // Deployed, but refused: the invoke estimate fails, which blocks confirmation.
+            Outcome::Refused(_) => {
+                self.work.deployed = Some(true);
+                self.review()
+            }
+            Outcome::NodeError | Outcome::Unreadable => self.review_unknown(),
+        }
+    }
+
+    /// Ready's re-read before the deployment estimate: any usable state proceeds to the estimate
+    /// (the extension ignores the answer); a refusal or failed read fails the deployment fee.
+    pub(crate) fn review_deploy_probed(&mut self, outcome: Outcome) -> SendStep {
+        match outcome {
+            Outcome::Deployed | Outcome::Undeployed => self.read_deploy_nonce_if_deployable(),
+            Outcome::Refused(_) | Outcome::NodeError | Outcome::Unreadable => self.review(),
+        }
+    }
+
+    fn read_deploy_nonce_if_deployable(&mut self) -> SendStep {
+        if self.account.deployment.is_none() {
+            return self.review();
+        }
+        self.read_deploy_nonce()
+    }
+
+    pub(crate) fn on_review_reply(&mut self, expect: Expect, answer: Option<Answer>) -> SendStep {
         match expect {
             Expect::ReviewChain => match judge::chain(answer, self.account.network) {
-                ChainAnswer::Match => self.rpc(
-                    Expect::ReviewClass,
-                    RpcPurpose::ClassHashAt,
-                    false,
-                    |_, id| rpc_bodies::class_hash_at(id, &address),
-                ),
+                ChainAnswer::Match => self.probe(Probe::Review),
                 ChainAnswer::Mismatch => self.fail(SendFailureCode::WrongChain, None),
                 ChainAnswer::Unreadable => self.review_unknown(),
-            },
-            Expect::ReviewClass => match judge::class_hash(answer) {
-                ClassHashAnswer::Deployed => {
-                    self.work.deployed = Some(true);
-                    if matches!(self.kind, Kind::Deployment) {
-                        self.work.already_deployed = true;
-                        return self.review();
-                    }
-                    self.rpc(Expect::ReviewNonce, RpcPurpose::Nonce, false, |_, id| {
-                        rpc_bodies::nonce(id, &address)
-                    })
-                }
-                ClassHashAnswer::Undeployed => {
-                    self.work.deployed = Some(false);
-                    self.work.requires_deployment = true;
-                    if matches!(self.kind, Kind::Deployment) {
-                        return self.read_deploy_nonce();
-                    }
-                    self.rpc(Expect::ReviewNonce, RpcPurpose::Nonce, false, |_, id| {
-                        rpc_bodies::nonce(id, &address)
-                    })
-                }
-                ClassHashAnswer::NodeError | ClassHashAnswer::Unreadable => self.review_unknown(),
             },
             Expect::ReviewNonce => {
                 let deployed = self.work.deployed == Some(true);
@@ -127,7 +178,7 @@ impl PlanState {
                         )
                     }
                     None if deployed => self.review(),
-                    None => self.read_deploy_nonce(),
+                    None => self.review_deployment(),
                 }
             }
             Expect::ReviewEstimate => {
@@ -138,7 +189,7 @@ impl PlanState {
                 if deployed {
                     self.review()
                 } else {
-                    self.read_deploy_nonce()
+                    self.review_deployment()
                 }
             }
             Expect::ReviewDeployNonce => match judge::nonce(answer) {

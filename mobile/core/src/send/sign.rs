@@ -7,6 +7,7 @@ use krusty_kms::{compute_deploy_account_v3_hash, compute_invoke_v3_hash, DaMode}
 use starknet_types_core::felt::Felt;
 
 use super::fees::{krusty_bounds, Bounds, FeeRefusal};
+use super::plan::Deployment;
 use crate::networks::NetworkId;
 
 /// The v3 INVOKE hash: tip 0, no paymaster or deployment data, L1 data availability.
@@ -34,21 +35,20 @@ pub fn invoke_hash(
     ))
 }
 
-/// The v3 DEPLOY_ACCOUNT hash for an OpenZeppelin account: salt 0, the public key as the only
-/// constructor argument, nonce 0 (starknet.js `deployAccount`).
+/// The v3 DEPLOY_ACCOUNT hash for the account's own deployment (`plan::Deployment`): nonce 0
+/// (starknet.js `deployAccount`), the class, salt and constructor calldata the address commits to.
 pub fn deploy_hash(
     network: NetworkId,
     address: &Felt,
-    class_hash: &Felt,
-    public_key: &Felt,
+    deployment: &Deployment,
     bounds: &Bounds,
 ) -> Result<Felt, FeeRefusal> {
     let (l1, l2, data) = krusty_bounds(bounds)?;
     Ok(compute_deploy_account_v3_hash(
         address,
-        class_hash,
-        &[*public_key],
-        &Felt::ZERO,
+        &deployment.class_hash,
+        &deployment.constructor_calldata,
+        &deployment.salt,
         &network.chain().as_felt(),
         &Felt::ZERO,
         0,

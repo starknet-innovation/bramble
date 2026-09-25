@@ -56,14 +56,17 @@ fn view_only_is_enforced_per_record_even_when_the_key_is_shared() {
         .sign_hash_for_account(ozr.id.clone(), "0x1".into())
         .unwrap();
     assert_eq!(signed.public_key, ozr.public_key);
-    // Argent (Ready) shares index 0's key too, but this core does not build its
-    // `argent-signer-array` authorization, so it refuses rather than sign in the OZ shape.
+    // Argent (Ready) shares index 0's key too and passes the same gate: the plan wraps its
+    // signature in the `argent-signer-array` layout (`transactions_argent_parity.rs`).
     assert_eq!(argent0.public_key, ozr.public_key);
     assert_eq!(argent0.authorization_shape, "argent-signer-array");
-    assert!(matches!(
-        core.sign_hash_for_account(argent0.id.clone(), "0x1".into()),
-        Err(CoreError::InvalidInput { .. })
-    ));
+    let ready = core
+        .sign_hash_for_account(argent0.id.clone(), "0x1".into())
+        .unwrap();
+    assert_eq!(
+        ready, signed,
+        "one key per index; the record only chooses the layout"
+    );
     // The deprecated OZ-only view never lists the Braavos records.
     let legacy = core.accounts(NetworkId::Sepolia).unwrap();
     assert_eq!(legacy.len(), 1);

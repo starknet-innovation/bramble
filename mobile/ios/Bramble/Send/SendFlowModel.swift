@@ -234,9 +234,6 @@ final class SendFlowModel {
         } catch SendError.ViewOnlyAccount {
             amountError = BrambleCopy.sendViewOnlyAccount
             return
-        } catch SendError.UnsupportedAccount {
-            amountError = BrambleCopy.sendUnsupportedAccount
-            return
         } catch {
             amountError = SendCopy.amountInvalid
             return

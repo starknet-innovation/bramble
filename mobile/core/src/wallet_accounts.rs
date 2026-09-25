@@ -8,8 +8,7 @@
 //! (plain preferences in the extension) are passive.
 //!
 //! Signing: every signature the core makes for an account passes `signing_record`, which refuses
-//! a vault still waiting for discovery, an unknown id, a view-only (Braavos) record, and any
-//! family whose authorization this core does not build (Argent/Ready, `argent-signer-array`).
+//! a vault still waiting for discovery, an unknown id, and a view-only (Braavos) record.
 
 use crate::account_catalog::{authorization_shape, type_label, AccountFamily};
 use crate::account_names::{display_name, normalise_label, short_label};
@@ -90,8 +89,6 @@ pub(crate) enum SignRefusal {
     Unknown,
     /// Braavos: restored to be seen, never signed for (`docs/accounts.md` §2.7).
     ViewOnly,
-    /// A family whose authorization this core does not build yet (Argent/Ready).
-    Unsupported,
 }
 
 impl From<SignRefusal> for CoreError {
@@ -99,15 +96,16 @@ impl From<SignRefusal> for CoreError {
         invalid(match refusal {
             SignRefusal::Unknown => "unknown account",
             SignRefusal::ViewOnly => "this account is view only",
-            SignRefusal::Unsupported => "this account type cannot sign on mobile yet",
         })
     }
 }
 
 /// The one gate before any signature: the record must exist in a vault that is not waiting for
-/// discovery, must not be view-only, and must be OpenZeppelin, the only family whose
-/// authorization (`stark-pair`, a bare `[r, s]`) and deployment this core builds. Argent 0.4.0
-/// needs the extension's `argent-signer-array`; see `docs/accounts.md` §2.7a.
+/// discovery and must not be view-only. OpenZeppelin (`stark-pair`) and Ready/Argent
+/// (`argent-signer-array`) records pass; Braavos is view-only (`docs/accounts.md` §2.7). The
+/// signature array a transaction carries is the plan's, built for the record's family; a Ready
+/// account's live class and signer are checked on chain before any hash reaches this gate
+/// (`send/plan_probe.rs`).
 pub(crate) fn signing_record<'a>(
     payload: &'a VaultPayload,
     account_id: &str,
@@ -118,8 +116,8 @@ pub(crate) fn signing_record<'a>(
     let record = payload.record(account_id).ok_or(SignRefusal::Unknown)?;
     match record.family() {
         _ if record.view_only() => Err(SignRefusal::ViewOnly),
-        AccountFamily::OpenZeppelin => Ok(record),
-        AccountFamily::Argent | AccountFamily::Braavos => Err(SignRefusal::Unsupported),
+        AccountFamily::OpenZeppelin | AccountFamily::Argent => Ok(record),
+        AccountFamily::Braavos => Err(SignRefusal::ViewOnly),
     }
 }
 

@@ -113,7 +113,8 @@ fn write_transport_failure_is_indeterminate_and_never_resent() {
         failed,
         SendFailure {
             code: SendFailureCode::SubmissionIndeterminate,
-            hash: Some(hash)
+            hash: Some(hash),
+            detail: None,
         }
     );
     assert_eq!(
@@ -199,7 +200,8 @@ fn deploy_wait_gives_up_after_two_hundred_attempts() {
         failure(step),
         SendFailure {
             code: SendFailureCode::DeploymentUnconfirmed,
-            hash: Some(deploy_hash)
+            hash: Some(deploy_hash),
+            detail: None,
         }
     );
     assert_eq!(plan.signatures_made(), 1, "the invoke was never signed");
@@ -310,11 +312,11 @@ fn a_locked_wallet_cannot_prepare() {
     );
 }
 
-/// Signing goes through the account record: a view-only (Braavos) record and an Argent (Ready)
-/// record are refused before a plan exists, even though every family at one index shares the
-/// OZ record's key; a vault still waiting for discovery has nothing to send from.
+/// Signing goes through the account record: a view-only (Braavos) record is refused before a plan
+/// exists, even though every family at one index shares the OZ record's key, while OpenZeppelin
+/// and Ready (Argent) records plan; a vault still waiting for discovery has nothing to send from.
 #[test]
-fn only_openzeppelin_records_can_send_or_deploy() {
+fn braavos_records_cannot_send_or_deploy() {
     let (_dir, _clock, core) = common_pending();
     let class = |label: &str| {
         bramble_core::account_classes()
@@ -350,20 +352,27 @@ fn only_openzeppelin_records_can_send_or_deploy() {
             ],
         )
         .unwrap();
-    for (record, refusal) in [
-        (&restored[1], SendError::UnsupportedAccount),
-        (&restored[2], SendError::ViewOnlyAccount),
-    ] {
-        let mut transfer = request(ACCOUNT_1);
-        transfer.account_id = record.id.clone();
-        assert_eq!(
-            core.clone().prepare_transfer(transfer).err(),
-            Some(refusal.clone())
-        );
-        assert_eq!(
-            core.clone().prepare_deployment(record.id.clone()).err(),
-            Some(refusal)
-        );
+    // Ready (Argent) records plan like OpenZeppelin ones (`transactions_argent_parity.rs`);
+    // Braavos stays view-only.
+    let braavos = &restored[2];
+    let mut transfer = request(ACCOUNT_1);
+    transfer.account_id = braavos.id.clone();
+    assert_eq!(
+        core.clone().prepare_transfer(transfer).err(),
+        Some(SendError::ViewOnlyAccount)
+    );
+    assert_eq!(
+        core.clone().prepare_deployment(braavos.id.clone()).err(),
+        Some(SendError::ViewOnlyAccount)
+    );
+    let mut ready = request(ACCOUNT_1);
+    ready.account_id = restored[1].id.clone();
+    assert!(core.clone().prepare_transfer(ready).is_ok());
+    assert!(core
+        .clone()
+        .prepare_deployment(restored[1].id.clone())
+        .is_ok());
+    for record in &restored[1..] {
         // Reading activity is not signing; any stored record may be read.
         assert!(core.activity(record.id.clone()).unwrap().is_empty());
     }

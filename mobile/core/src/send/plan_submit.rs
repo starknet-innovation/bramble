@@ -7,10 +7,9 @@
 use starknet_types_core::felt::Felt;
 
 use super::fees::{self, Bounds, FeeQuote, FeeRefusal};
-use super::judge::{
-    self, Answer, ChainAnswer, ClassHashAnswer, EstimateAnswer, Observation, WriteAnswer,
-};
+use super::judge::{self, Answer, ChainAnswer, EstimateAnswer, Observation, WriteAnswer};
 use super::plan::{AfterWait, Expect, Kind, PlanState};
+use super::plan_probe::{Outcome, Probe};
 use super::plan_review::DEPLOY_SUMMARY;
 use super::rpc_bodies::{self, InvokeTx};
 use super::sign;
@@ -110,32 +109,12 @@ impl PlanState {
         expect: Expect,
         answer: Option<Answer>,
     ) -> SendStep {
-        let address = self.account.address;
         match expect {
             Expect::SubmitChain => match judge::chain(answer, self.account.network) {
-                ChainAnswer::Match => self.rpc(
-                    Expect::SubmitClass,
-                    RpcPurpose::ClassHashAt,
-                    false,
-                    |_, id| rpc_bodies::class_hash_at(id, &address),
-                ),
+                ChainAnswer::Match => self.probe(Probe::Submit),
                 ChainAnswer::Mismatch => self.fail(Code::WrongChain, None),
                 ChainAnswer::Unreadable => self.fail(Code::PreparationUnavailable, None),
             },
-            Expect::SubmitClass => {
-                let verdict = judge::class_hash(answer);
-                match verdict {
-                    ClassHashAnswer::Deployed if !self.is_transfer() => {
-                        self.fail(Code::AlreadyDeployed, None)
-                    }
-                    ClassHashAnswer::Deployed | ClassHashAnswer::Undeployed => {
-                        self.work.submit_deployed = verdict == ClassHashAnswer::Deployed;
-                        self.read_nonce(Expect::SubmitNonce)
-                    }
-                    ClassHashAnswer::NodeError => self.fail(Code::NodeError, None),
-                    ClassHashAnswer::Unreadable => self.fail(Code::PreparationUnavailable, None),
-                }
-            }
             Expect::SubmitNonce => match judge::nonce(answer) {
                 Some(nonce) => {
                     self.work.nonce = nonce;
@@ -159,15 +138,6 @@ impl PlanState {
                 None => self.fail(Code::PreparationUnavailable, None),
             },
             Expect::SubmitEstimate => self.on_invoke_estimate(answer),
-            Expect::DeployClass => match judge::class_hash(answer) {
-                ClassHashAnswer::Deployed => self.read_nonce(Expect::InvokeNonce),
-                ClassHashAnswer::Undeployed if self.work.reviewed_deploy_fee.is_none() => {
-                    self.fail(Code::ReviewedDeploymentFeeRequired, None)
-                }
-                ClassHashAnswer::Undeployed => self.read_nonce(Expect::DeployNonce),
-                ClassHashAnswer::NodeError => self.fail(Code::NodeError, None),
-                ClassHashAnswer::Unreadable => self.fail(Code::PreparationUnavailable, None),
-            },
             Expect::DeployNonce => match judge::nonce(answer) {
                 Some(nonce) => {
                     self.work.nonce = nonce;
@@ -204,6 +174,42 @@ impl PlanState {
         }
     }
 
+    /// The confirmation's account-state read concluded (`submitInvokeTransaction` /
+    /// `submitAccountDeployment`).
+    pub(crate) fn submit_probed(&mut self, outcome: Outcome) -> SendStep {
+        match outcome {
+            Outcome::Deployed if !self.is_transfer() => self.fail(Code::AlreadyDeployed, None),
+            // `accountDeployment` refuses a class this wallet does not deploy before any estimate.
+            Outcome::Undeployed if self.account.deployment.is_none() => {
+                self.fail(Code::AccountNotDeployable, None)
+            }
+            Outcome::Deployed | Outcome::Undeployed => {
+                self.work.submit_deployed = matches!(outcome, Outcome::Deployed);
+                self.read_nonce(Expect::SubmitNonce)
+            }
+            Outcome::Refused(failure) => self.refuse(failure),
+            Outcome::NodeError => self.fail(Code::NodeError, None),
+            Outcome::Unreadable => self.fail(Code::PreparationUnavailable, None),
+        }
+    }
+
+    /// `ensureAccountDeployed`'s account-state read concluded.
+    pub(crate) fn deploy_probed(&mut self, outcome: Outcome) -> SendStep {
+        match outcome {
+            Outcome::Deployed => self.read_nonce(Expect::InvokeNonce),
+            Outcome::Undeployed if self.work.reviewed_deploy_fee.is_none() => {
+                self.fail(Code::ReviewedDeploymentFeeRequired, None)
+            }
+            Outcome::Undeployed if self.account.deployment.is_none() => {
+                self.fail(Code::AccountNotDeployable, None)
+            }
+            Outcome::Undeployed => self.read_nonce(Expect::DeployNonce),
+            Outcome::Refused(failure) => self.refuse(failure),
+            Outcome::NodeError => self.fail(Code::NodeError, None),
+            Outcome::Unreadable => self.fail(Code::PreparationUnavailable, None),
+        }
+    }
+
     fn on_invoke_estimate(&mut self, answer: Option<Answer>) -> SendStep {
         let deployed = self.work.submit_deployed;
         let Some(reviewed) = self.work.reviewed_fee else {
@@ -222,13 +228,7 @@ impl PlanState {
                 if deployed {
                     self.read_nonce(Expect::InvokeNonce)
                 } else {
-                    let address = self.account.address;
-                    self.rpc(
-                        Expect::DeployClass,
-                        RpcPurpose::ClassHashAt,
-                        false,
-                        |_, id| rpc_bodies::class_hash_at(id, &address),
-                    )
+                    self.probe(Probe::Deploy)
                 }
             }
         }
@@ -255,12 +255,13 @@ impl PlanState {
         self.work.invoke_hash = Some(hash);
         self.persist_pending(core, &hash, true);
         self.rpc(Expect::InvokeWrite, RpcPurpose::AddInvoke, true, |s, id| {
-            let unsigned = s.invoke_tx(&nonce).expect("transfer plan has an invoke");
+            let unsigned = s
+                .invoke_tx(&nonce, &signature)
+                .expect("transfer plan has an invoke");
             rpc_bodies::add_invoke(
                 id,
                 &InvokeTx {
                     bounds: Some(&bounds),
-                    signature: Some(&signature),
                     ..unsigned
                 },
             )
@@ -308,8 +309,9 @@ impl PlanState {
         self.checkpoint(next)
     }
 
-    /// Signs under the plan's session generation. The public key must be the account's.
-    pub(super) fn sign(&mut self, core: &WalletCore, hash: &Felt) -> Result<[Felt; 2], Code> {
+    /// Signs under the plan's session generation and returns the account's signature array
+    /// (`serializeAccountSignature`). The public key must be the account's.
+    pub(super) fn sign(&mut self, core: &WalletCore, hash: &Felt) -> Result<Vec<Felt>, Code> {
         let signature = core
             .plan_sign(self.generation, &self.account.account_id, hash)
             .map_err(|error| match error {
@@ -324,7 +326,7 @@ impl PlanState {
         match parsed {
             (Some(public_key), Some(r), Some(s)) if public_key == self.account.public_key => {
                 self.signatures += 1;
-                Ok([r, s])
+                Ok(self.account.signature(r, s))
             }
             _ => Err(Code::SigningFailed),
         }

@@ -10,9 +10,12 @@ use std::sync::Arc;
 use starknet_types_core::felt::Felt;
 
 use super::calls;
-use super::plan::{Account, Kind, Transfer, TransferPlan};
+use krusty_kms::{calculate_contract_address, AccountClass, ArgentAccount};
+
+use super::plan::{Account, Authorization, Deployment, Kind, Transfer, TransferPlan};
 use super::types::{SendError, TransferRequest};
 use super::u256::U256;
+use crate::account_catalog::{self, AccountFamily};
 use crate::account_store::StoredAccount;
 use crate::activity::store;
 use crate::history::activity::ActivityEntry;
@@ -26,7 +29,6 @@ impl From<SignRefusal> for SendError {
         match refusal {
             SignRefusal::Unknown => SendError::UnknownAccount,
             SignRefusal::ViewOnly => SendError::ViewOnlyAccount,
-            SignRefusal::Unsupported => SendError::UnsupportedAccount,
         }
     }
 }
@@ -39,13 +41,48 @@ enum Use {
     Read,
 }
 
+/// The DEPLOY_ACCOUNT a record's address commits to (`accountDeployment`), or `None` when this
+/// wallet does not deploy the record's class. OpenZeppelin: salt 0 and `[public_key]`. Ready:
+/// only the pinned Argent 0.4.0 class, with the record's salt and Krusty's constructor calldata
+/// for that class (`[0, public_key, 1]`: a Starknet signer and no guardian). Either way the
+/// parameters must reproduce the stored address, or nothing is deployed.
+fn deployment(record: &StoredAccount, address: &Felt, public_key: &Felt) -> Option<Deployment> {
+    let class_hash = record.class_felt();
+    let (salt, constructor_calldata) = match record.family() {
+        AccountFamily::OpenZeppelin => (Felt::ZERO, vec![*public_key]),
+        AccountFamily::Argent if class_hash == account_catalog::catalog().argent_default => {
+            let argent = ArgentAccount::try_with_class_hash(class_hash).ok()?;
+            (
+                record.salt_felt()?,
+                argent.build_constructor_calldata(public_key),
+            )
+        }
+        AccountFamily::Argent | AccountFamily::Braavos => return None,
+    };
+    let computed =
+        calculate_contract_address(&salt, &class_hash, &constructor_calldata, &Felt::ZERO).ok()?;
+    (computed == *address).then_some(Deployment {
+        class_hash,
+        salt,
+        constructor_calldata,
+    })
+}
+
 fn plan_account(record: &StoredAccount) -> Result<Account, SendError> {
     let parse = |value: &str| felt::parse_non_zero(value).ok_or(SendError::UnknownAccount);
+    let (address, public_key) = (parse(&record.address)?, parse(&record.public_key)?);
+    // A Braavos record reaches here only to read activity: `signing_record` refuses it, and a
+    // plan for it never reaches a signing point.
+    let authorization = match record.family() {
+        AccountFamily::Argent => Authorization::ArgentSignerArray,
+        AccountFamily::OpenZeppelin | AccountFamily::Braavos => Authorization::StarkPair,
+    };
     Ok(Account {
         network: record.network(),
-        address: parse(&record.address)?,
-        public_key: parse(&record.public_key)?,
-        class_hash: parse(&record.class_hash)?,
+        deployment: deployment(record, &address, &public_key),
+        address,
+        public_key,
+        authorization,
         account_id: record.id.clone(),
     })
 }
@@ -61,8 +98,8 @@ impl WalletCore {
     }
 
     /// The stored record `account_id` names plus the session generation, for a plan being
-    /// prepared. A signing plan must pass `signing_record` (no view-only or Argent record, no
-    /// pending discovery). Passive: preparing or reading never renews the idle window.
+    /// prepared. A signing plan must pass `signing_record` (no view-only record, no pending
+    /// discovery). Passive: preparing or reading never renews the idle window.
     fn plan_account_for(
         &self,
         account_id: &str,
@@ -107,8 +144,9 @@ impl WalletCore {
 impl WalletCore {
     /// Validates and canonicalises a transfer and returns its plan. Requires an unlocked wallet;
     /// records the session generation so a lock (even one followed by a new unlock) voids it.
-    /// The account is the vault record `request.account_id` on `request.network`; a view-only
-    /// (Braavos) or Argent/Ready record is refused before any request is built.
+    /// The account is the vault record `request.account_id` on `request.network`: an
+    /// OpenZeppelin or Ready (Argent) record; a view-only (Braavos) record is refused before any
+    /// request is built.
     /// Refuses a token that is not bundled for the network, an unparseable or zero recipient,
     /// and an amount the extension would refuse or no ERC-20 could carry.
     pub fn prepare_transfer(
@@ -154,7 +192,7 @@ impl WalletCore {
     }
 
     /// The standalone Deploy account flow for the home chip: the same machine without the invoke.
-    /// Only for a record that passes the signing gate (an OpenZeppelin account).
+    /// Only for a record that passes the signing gate (an OpenZeppelin or Ready account).
     pub fn prepare_deployment(
         self: Arc<Self>,
         account_id: String,
