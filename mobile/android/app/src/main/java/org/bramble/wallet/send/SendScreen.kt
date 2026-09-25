@@ -52,6 +52,7 @@ import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.design.TokenMark
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.makeSendModel
 import org.bramble.wallet.ui.shortAddress
 
 internal val panelShape = RoundedCornerShape(BrambleRadius.lg)

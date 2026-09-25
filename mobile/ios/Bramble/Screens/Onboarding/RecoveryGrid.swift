@@ -185,7 +185,6 @@ struct RecoveryEntryGrid: View {
 }
 
 struct RecoveryWordGrid: View {
-    @Environment(\.skin) private var skin
     let words: [String]
     let masked: Bool
 

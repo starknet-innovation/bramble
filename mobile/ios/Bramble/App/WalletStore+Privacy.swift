@@ -48,17 +48,6 @@ extension WalletStore {
 
     var privacyHeaderStatus: PrivacyStatus { privacyStatus(network: network, reading: privacy.reading) }
 
-    func privateLineFor(_ token: String) -> PrivateLine {
-        privateLine(
-            network: network,
-            deployment: deployment,
-            strkFunded: strkFunding.map { $0 == .funded },
-            reading: privacy.reading,
-            tokenAddress: token,
-            state: privacy.state
-        )
-    }
-
     func tokenDetailPrivacyFor(_ token: String) -> TokenDetailPrivacy {
         tokenDetailPrivacy(
             network: network,

@@ -1,4 +1,3 @@
-import BrambleCore
 import SwiftUI
 
 /// The extension's `[data-copy]` control (`bindCopyButtons` in `dom.ts`): copies the full value,

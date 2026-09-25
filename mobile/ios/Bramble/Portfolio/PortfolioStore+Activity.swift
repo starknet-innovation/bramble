@@ -1,5 +1,4 @@
 import BrambleCore
-import Foundation
 
 /// The Activity feed (`activity-ops.ts handleActivity` over `createExplorerFirstHistory`): the saved
 /// log first, then — when a read is due or forced — Starkscan when the explorer lane is permitted,

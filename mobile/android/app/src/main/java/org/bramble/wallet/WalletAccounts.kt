@@ -91,7 +91,8 @@ private suspend fun WalletStore.report(
         true
     } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (error: Exception) {
+    } catch (ignored: Exception) {
+        // Any failure shows the fixed [failure] copy, never the core's detail.
         showToast(failure)
         false
     }

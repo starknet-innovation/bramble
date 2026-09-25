@@ -9,7 +9,7 @@ import XCTest
 final class AccountsBridgeTests: XCTestCase {
     private struct Rules: Decodable {
         struct Name: Decodable { let address: String; let name: String; let short: String }
-        struct Label: Decodable { let value: String; let valid: Bool; let stored: String? }
+        struct Label: Decodable { let value: String; let valid: Bool }
 
         let names: [Name]
         let labels: [Label]

@@ -54,6 +54,7 @@ import org.bramble.wallet.design.IconButton
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.StatusDot
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.refreshBalances
 import org.bramble.wallet.send.SendScreen
 
 /**

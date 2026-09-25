@@ -208,7 +208,8 @@ class RecoveryScanDriver(
         val active = generation
         try {
             runSteps(network, manual, active)
-        } catch (error: Exception) {
+        } catch (ignored: Exception) {
+            // By design any failure pauses the scan with fixed retry copy; its detail is not shown.
             if (active == generation) {
                 failed = true
                 status = "Account search paused. Check the network and retry."

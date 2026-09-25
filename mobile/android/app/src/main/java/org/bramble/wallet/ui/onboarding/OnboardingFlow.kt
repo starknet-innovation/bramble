@@ -18,9 +18,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import org.bramble.wallet.WalletStore
+import org.bramble.wallet.create
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.BrambleMotion
 import org.bramble.wallet.design.brambleTween
+import org.bramble.wallet.finishOnboarding
+import org.bramble.wallet.importWallet
 
 private enum class Step {
     WELCOME,

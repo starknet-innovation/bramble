@@ -1,4 +1,3 @@
-import BrambleCore
 import SwiftUI
 
 /// `homeView()` from `portfolio/home-view.ts`: hero total, the deploy notice, the four major
@@ -26,7 +25,7 @@ struct HomeView: View {
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
                 ShieldActionTile(receive: receive, journey: privacy)
             }
-            PortfolioTokens(open: open, receive: receive, privacy: privacy)
+            PortfolioTokens(open: open)
         }
     }
 }

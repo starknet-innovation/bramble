@@ -1,4 +1,3 @@
-import BrambleCore
 import SwiftUI
 
 /// First-run flow, step for step with the extension's onboarding wizard:

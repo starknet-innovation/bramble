@@ -32,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.bramble.core.CoreException
+import org.bramble.core.InternalException
 import org.bramble.wallet.R
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.describe
@@ -50,8 +51,11 @@ import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.refreshSecurity
+import org.bramble.wallet.retryRemainingMs
 import org.bramble.wallet.securityCopy
 import org.bramble.wallet.throttledText
+import org.bramble.wallet.unlock
 import org.bramble.wallet.unlockWithBiometric
 
 /** The side panel's display tracking for gate and onboarding headlines (iOS uses -0.035). */
@@ -198,7 +202,10 @@ private fun CoroutineScope.launchUnlock(
             // A throttled attempt is shown by the countdown below, which ends on its own.
             onFailure(null)
             store.showError(throttled)
-        } catch (error: Exception) {
+        } catch (error: CoreException) {
+            onFailure(describe(error))
+            store.showError(error)
+        } catch (error: InternalException) {
             onFailure(describe(error))
             store.showError(error)
         }

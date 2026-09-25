@@ -1,5 +1,4 @@
 import BrambleCore
-import Foundation
 
 /// Account management over the core (`docs/accounts.md` §3.3). The core owns every rule: names,
 /// labels, groups, the network switch, and which index a new account takes. This layer only

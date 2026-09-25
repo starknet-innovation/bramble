@@ -1,5 +1,4 @@
 import BrambleCore
-import Foundation
 import Observation
 
 /// Runs "Find your accounts" (`recovery-account-ui.ts`) over the core's sans-IO scan: asks the

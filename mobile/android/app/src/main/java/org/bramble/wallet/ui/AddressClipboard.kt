@@ -30,7 +30,8 @@ object AddressClipboard {
             try {
                 clipboard.setPrimaryClip(ClipData.newPlainText(ClipboardPolicy.LABEL, value))
                 true
-            } catch (refused: RuntimeException) {
+            } catch (ignored: RuntimeException) {
+                // Any refusal from the clipboard service (not focused, or it died) is "Copy failed".
                 false
             }
         if (copied) {

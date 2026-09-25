@@ -51,7 +51,8 @@ object BoundedHttp : PortfolioTransport {
         val connection = url.openConnection() as HttpURLConnection
         return try {
             exchange(connection, request)
-        } catch (error: Exception) {
+        } catch (ignored: Exception) {
+            // Any transport failure is an unanswered request; the core plans the retry.
             unanswered()
         } finally {
             connection.disconnect()

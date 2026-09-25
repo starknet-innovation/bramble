@@ -117,7 +117,6 @@ struct TokensView: View {
 /// `tokenAddFlow`: the contract address, read on chain before anything is saved.
 struct AddTokenView: View {
     @Environment(WalletStore.self) private var store
-    @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
     @State private var address = ""
     @State private var result: String?

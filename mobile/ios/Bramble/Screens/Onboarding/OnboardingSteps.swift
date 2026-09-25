@@ -143,7 +143,6 @@ struct InlineActionStyle: ButtonStyle {
 }
 
 struct PassphraseStep: View {
-    @Environment(\.skin) private var skin
     @Environment(WalletStore.self) private var store
     let path: OnboardingFlow.Path
     let back: () -> Void

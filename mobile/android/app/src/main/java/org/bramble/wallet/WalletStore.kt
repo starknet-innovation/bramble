@@ -1,7 +1,6 @@
 package org.bramble.wallet
 
 import android.content.SharedPreferences
-import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -16,7 +15,6 @@ import org.bramble.core.AccountGroup
 import org.bramble.core.AccountRecord
 import org.bramble.core.CoreException
 import org.bramble.core.InternalException
-import org.bramble.core.NetworkId
 import org.bramble.core.NetworkInfo
 import org.bramble.core.SecurityStatus
 import org.bramble.core.TransferPlan
@@ -25,10 +23,7 @@ import org.bramble.core.WalletStatus
 import org.bramble.core.supportedNetworks
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.ThemeChoice
-import org.bramble.wallet.portfolio.rawBalances
 import org.bramble.wallet.security.BiometricVault
-import org.bramble.wallet.send.SendFlowModel
-import org.bramble.wallet.send.SendHooks
 
 /**
  * UI state over the Rust `WalletCore`, mirroring the iOS `WalletStore`. Everything secret stays in
@@ -45,7 +40,8 @@ import org.bramble.wallet.send.SendHooks
  */
 class WalletStore(
     private val core: WalletCore,
-    private val prefs: SharedPreferences,
+    /** Non-secret preferences (network, theme); written by `WalletStoreSettings.kt`. */
+    internal val prefs: SharedPreferences,
     /** The biometric slot's Keystore half; used by this file and `WalletStoreBiometrics.kt` only. */
     internal val biometrics: BiometricVault,
     /** Main-thread scope that outlives screens: background locks, the idle timer, clipboard expiry. */
@@ -71,13 +67,13 @@ class WalletStore(
     internal val walletCore: WalletCore get() = core
 
     /** Whether a vault exists on disk, tracked here so `lock()` never waits on the core mutex. */
-    private var vaultWritten = core.status() != WalletStatus.NO_WALLET
+    internal var vaultWritten = core.status() != WalletStatus.NO_WALLET
 
     /** Shows the unlock screen at the core's idle deadline (the core refuses work past it anyway). */
     private var idleTimer: Job? = null
 
     /** Open transfer plans, closed on lock (defence in depth: the core voids them on any lock). */
-    private val plans = mutableListOf<TransferPlan>()
+    internal val plans = mutableListOf<TransferPlan>()
 
     /** The top-level screen; in memory only, and back to [Route.LOCKED] on every lock. */
     var route by mutableStateOf(if (vaultWritten) Route.LOCKED else Route.ONBOARDING)
@@ -116,7 +112,7 @@ class WalletStore(
 
     /** Words of a just-created wallet; never persisted, cleared on finish or lock. */
     var pendingBackup by mutableStateOf(emptyList<String>())
-        private set
+        internal set
 
     /** A transient message shown as a toast; an error unless [toastPositive]. */
     var toast by mutableStateOf<String?>(null)
@@ -128,19 +124,19 @@ class WalletStore(
 
     /** The selected network, from the non-secret `network` preference. */
     var network by mutableStateOf(NetworkPreference.fromStored(prefs.getString(NetworkPreference.KEY, null)))
-        private set
+        internal set
 
     /** The appearance choice, from the non-secret theme preference. */
     var theme by mutableStateOf(ThemeChoice.fromStored(prefs.getString(ThemeChoice.STORAGE_KEY, null)))
-        private set
+        internal set
 
     /** Lock, backoff and biometric state from the core. Passive: reading it never renews the session. */
     var security by mutableStateOf(core.securityStatus())
-        private set
+        internal set
 
     /** `elapsedRealtime` at which the next passphrase attempt is allowed; 0 when it is now. */
     var retryAtElapsedMs by mutableStateOf(0L)
-        private set
+        internal set
 
     /** Set when biometrics were invalidated, so the unlock screen can say why. */
     var biometricNotice by mutableStateOf<String?>(null)
@@ -174,9 +170,6 @@ class WalletStore(
     /** Where the biometric key lives (StrongBox or the TEE), for the Security screen. */
     val keyStorageLabel: String
         get() = if (biometrics.strongBox) BrambleCopy.keyStorageStrongBox else BrambleCopy.keyStorageSecureHardware
-
-    /** Milliseconds until a passphrase attempt is allowed, for countdowns; 0 when it is now. */
-    fun retryRemainingMs(now: Long = SystemClock.elapsedRealtime()): Long = (retryAtElapsedMs - now).coerceAtLeast(0L)
 
     /** Shows [error] as a toast, unless it only reports that a lock overtook the call. */
     fun showError(error: Throwable) {
@@ -218,47 +211,7 @@ class WalletStore(
 
     // Onboarding
 
-    /**
-     * Writes a new vault with a 12-word phrase on this network and keeps the words in
-     * [pendingBackup] for the backup steps. Throws the core's error (or [SessionEndedException]).
-     */
-    suspend fun create(password: String) {
-        val ticket = session.ticket()
-        val network = network
-        val words = calls.work(ticket) { core.createWalletOnNetwork(password, 12u, network) }.words
-        vaultWritten = true
-        pendingBackup = words
-    }
-
-    /** Writes the vault with recovery pending and no accounts; "Find your accounts" comes next. */
-    suspend fun importWallet(
-        phrase: String,
-        password: String,
-    ) {
-        val ticket = session.ticket()
-        calls.work(ticket) { core.importWallet(password, phrase, null) }
-        vaultWritten = true
-    }
-
-    /** Leaves onboarding (or "Find your accounts") for the wallet; the backup words are dropped here. */
-    suspend fun finishOnboarding() {
-        pendingBackup = emptyList()
-        enterWallet(session.ticket())
-    }
-
     // Session
-
-    /** One throttled, counted passphrase attempt in the core; the countdown is refreshed either way. */
-    suspend fun unlock(password: String) {
-        val ticket = session.ticket()
-        try {
-            calls.work(ticket) { core.unlock(password) }
-        } finally {
-            refreshSecurity()
-        }
-        biometricNotice = null
-        enterWallet(ticket)
-    }
 
     /**
      * Ends the session: wipes UI state at once on the main thread and locks the core on
@@ -288,21 +241,6 @@ class WalletStore(
                     }
                 applySecurity(status)
             }
-    }
-
-    /** Switches to [next], remembers it, and re-enters the wallet on it (accounts, balances). */
-    suspend fun switchNetwork(next: NetworkId) {
-        privacy.reset()
-        network = next
-        portfolio.lock()
-        prefs.edit().putString(NetworkPreference.KEY, NetworkPreference.stored(next)).apply()
-        enterWallet(session.ticket())
-    }
-
-    /** Applies and remembers the appearance [choice]. */
-    fun setTheme(choice: ThemeChoice) {
-        theme = choice
-        prefs.edit().putString(ThemeChoice.STORAGE_KEY, choice.stored).apply()
     }
 
     /**
@@ -341,39 +279,6 @@ class WalletStore(
     }
 
     /**
-     * Re-checks the password in the core (throttled; biometrics never reveal) and returns the
-     * phrase for display only.
-     */
-    suspend fun revealPhrase(password: String): List<String> {
-        val ticket = session.ticket()
-        val words =
-            try {
-                calls.work(ticket) { core.revealRecoveryPhrase(password) }.words
-            } finally {
-                refreshSecurity()
-            }
-        scheduleIdleLock()
-        return words
-    }
-
-    /**
-     * Removes the vault after the core re-checks [password] (throttled), then the biometric key,
-     * the session and the portfolio caches. Throws the core's error; nothing is removed then.
-     */
-    suspend fun deleteWallet(password: String) {
-        val ticket = session.ticket()
-        try {
-            calls.work(ticket) { core.deleteWallet(password) }
-        } finally {
-            refreshSecurity()
-        }
-        vaultWritten = false
-        biometrics.delete()
-        lock()
-        portfolio.deleteFiles()
-    }
-
-    /**
      * On unlock and every network switch: back to "Find your accounts" while recovery is pending
      * (never a wallet with zero accounts), else `ensureNetworkAccount` runs before anything renders.
      */
@@ -396,17 +301,6 @@ class WalletStore(
         refreshBalances(ticket)
     }
 
-    // Security (docs/vault-security.md)
-
-    /** Re-reads the core's security state. Passive: never renews the idle window. */
-    fun refreshSecurity() = applySecurity(core.securityStatus())
-
-    private fun applySecurity(status: SecurityStatus) {
-        security = status
-        val retry = status.retryAfterMs.toLong()
-        retryAtElapsedMs = if (retry > 0) SystemClock.elapsedRealtime() + retry else 0L
-    }
-
     /** Shows the unlock screen at the core's idle deadline; the core enforces it regardless. */
     internal fun scheduleIdleLock() {
         idleTimer?.cancel()
@@ -421,48 +315,4 @@ class WalletStore(
                 if (core.status() == WalletStatus.UNLOCKED) scheduleIdleLock() else lock()
             }
     }
-
-    // Send
-
-    /**
-     * A Send journey for the active account, with balances of this view only. Null while locked
-     * and for an account the core will not sign for ([sendRefusal]: Braavos, Ready).
-     */
-    fun makeSendModel(): SendFlowModel? {
-        val account = activeRecord?.takeIf { sendRefusal(it) == null } ?: return null
-        val current = portfolio.rawBalances(networkInfo)
-        return SendFlowModel(
-            core,
-            networkInfo,
-            account,
-            records.filter {
-                it.id != account.id
-            },
-            current,
-            SendHooks(track = { plans += it }) { message, success ->
-                showToast(message, positive = success)
-            },
-        )
-    }
-
-    /**
-     * Balances through the portfolio (the one read; a new scope serves saved figures first), then
-     * privacy.
-     */
-    suspend fun refreshBalances(ticket: Long = session.ticket()) {
-        val account = activeRecord ?: return
-        if (!session.isCurrent(ticket)) return
-        if (portfolio.scope?.accountId !=
-            account.id
-        ) {
-            portfolio.load(account, networkInfo)
-        } else {
-            portfolio.refresh(force = true)
-        }
-        privacy.retain(network, account.id) // one reading per account record, fed into Home's rows
-        privacy.refresh(core, networkInfo, account.id)
-        portfolio.setPrivacy(privacy.reading, privacy.state)
-    }
-
-    internal fun coreStatus(): WalletStatus = core.status() // tests and diagnostics; takes the session mutex
 }

@@ -139,11 +139,3 @@ extension View {
         modifier(BrambleTextModifier(style: style, weight: weight, tracking: tracking, mono: mono))
     }
 }
-
-/// A length that follows Dynamic Type with the same curve as the text beside it (row heights and
-/// icons next to text). Equal to the metric at "Large".
-enum BrambleScaled {
-    static func value(_ metric: CGFloat, relativeTo textSize: CGFloat, _ dynamicType: DynamicTypeSize) -> CGFloat {
-        metric * BrambleTypography.scaled(textSize, for: dynamicType) / textSize
-    }
-}

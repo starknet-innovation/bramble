@@ -1,8 +1,8 @@
 import SwiftUI
 
 // Loading feedback from `styles-progress.ts` and `styles-home.ts`. The extension has no skeleton
-// or shimmer, so neither does the phone: unknown values show a Placeholder, indeterminate waits
-// show Liquid Dots, and a busy refresh spins its glyph. All of it holds still under Reduce Motion.
+// or shimmer, so neither does the phone: indeterminate waits show Liquid Dots, and a busy refresh
+// spins its glyph. All of it holds still under Reduce Motion.
 
 /// `.liquid-dots`: two dots swapping sides over `MOTION.waitLoopMs` on the in-out curve. The
 /// extension's SVG goo filter has no SwiftUI equivalent, so the dots stay separate (recorded as an

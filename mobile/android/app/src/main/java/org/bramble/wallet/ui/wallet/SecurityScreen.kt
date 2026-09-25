@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import org.bramble.core.CoreException
+import org.bramble.core.InternalException
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleCopy
 import org.bramble.wallet.design.BrambleField
@@ -33,8 +35,12 @@ import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.disableBiometric
 import org.bramble.wallet.enableBiometric
+import org.bramble.wallet.refreshSecurity
+import org.bramble.wallet.retryRemainingMs
 import org.bramble.wallet.securityCopy
+import java.io.IOException
 import java.security.GeneralSecurityException
+import java.security.ProviderException
 
 /**
  * "Unlock & auto-lock", port of the iOS `SecurityView` (`docs/vault-security.md` §5): the
@@ -130,10 +136,18 @@ private suspend fun tryEnableBiometric(
         store.enableBiometric(activity, attempt)
     } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (unavailable: GeneralSecurityException) {
+    } catch (ignored: GeneralSecurityException) {
         // The Keystore refused a biometric-bound key (for example, nothing enrolled).
         store.showToast(securityCopy(BrambleCopy.biometricUnavailable))
-    } catch (error: Exception) {
+    } catch (error: CoreException) {
+        store.showError(error)
+    } catch (error: InternalException) {
+        store.showError(error)
+    } catch (error: IOException) {
+        // The sealed wrap secret could not be written.
+        store.showError(error)
+    } catch (error: ProviderException) {
+        // A Keystore failure that is not a `GeneralSecurityException` (StrongBox or TEE errors).
         store.showError(error)
     }
 }

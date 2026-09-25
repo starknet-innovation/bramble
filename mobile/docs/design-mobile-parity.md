@@ -93,8 +93,9 @@ the one systematic offset and it is intentional.
   copy, error on error toasts, selection on segments/tabs/accounts/theme, soft on toast swipe);
   interruptible SPRING-token animations; Reduce Motion (no scale, travel, spin, or pulse); edge
   swipe-back per 4.6; sheet detents and drag indicator; `DeviceClass` short/regular.
-- Feedback components (Required 4): Callout, EmptyState, ErrorPanel, Pill, HardwarePill,
-  CountBadge, Placeholder, LiquidDots, BusyRefreshIcon, rebuilt Toast with host.
+- Feedback components (Required 4): Callout, EmptyState, ErrorPanel, LiquidDots,
+  BusyRefreshIcon, rebuilt Toast with host. Pill, HardwarePill, CountBadge and Placeholder were
+  removed as unused (SwiftLint's analyzer); port them again with the first screen that shows one.
 - Accessibility (Required 5): labels, traits, hints and values on every control; headers marked;
   masked phrase exposed as one "Recovery phrase hidden" element; `ContrastTests` over the
   generated skins with the extension's thresholds plus the phone-only pairs.

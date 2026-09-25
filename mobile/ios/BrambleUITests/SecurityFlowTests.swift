@@ -1,4 +1,3 @@
-import Darwin
 import notify
 import XCTest
 
@@ -100,11 +99,6 @@ final class SecurityFlowTests: XCTestCase {
         UITest.tap(app.buttons["Open Bramble"])
         UITest.waitForWallet(app)
         return app
-    }
-
-    private func openSecurity(_ app: XCUIApplication) {
-        UITest.tap(app.buttons["Settings"])
-        UITest.tap(app.buttons["Unlock & auto-lock"])
     }
 
     private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval = 20) {

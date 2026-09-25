@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import org.bramble.wallet.WalletStore
+import org.bramble.wallet.deleteWallet
 import org.bramble.wallet.design.BrambleField
 import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.BrambleIconName
@@ -30,6 +31,7 @@ import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.revealPhrase
 import org.bramble.wallet.ui.onboarding.RecoveryWordGrid
 
 private const val REVEAL_WARNING =

@@ -1,4 +1,3 @@
-import BrambleCore
 import SwiftUI
 
 // Controls the Receive, contacts, and multisig screens add to the design system: the multisig

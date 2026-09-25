@@ -48,8 +48,6 @@ struct PortfolioTokens: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let open: (WalletShell.Flow) -> Void
-    var receive: () -> Void = { /* No action unless the shell wires the receive flow. */ }
-    var privacy: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
     @State private var retrying = false
 
     var body: some View {

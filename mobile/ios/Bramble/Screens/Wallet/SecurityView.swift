@@ -7,7 +7,6 @@ import SwiftUI
 /// needs no key. Auto-lock is the extension's fixed policy, shown read-only.
 struct SecurityView: View {
     @Environment(WalletStore.self) private var store
-    @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
     @State private var choice = false
     @State private var confirming = false

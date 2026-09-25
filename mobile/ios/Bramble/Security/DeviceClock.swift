@@ -1,6 +1,5 @@
 import BrambleCore
 import Darwin
-import Foundation
 
 /// The core's only time source: `mach_continuous_time` (keeps counting while the device sleeps,
 /// cannot be set from Settings) and the kernel's per-boot session UUID. There is deliberately no

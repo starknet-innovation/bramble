@@ -11,7 +11,6 @@ import org.bramble.core.SendFailure
 import org.bramble.core.SendFailureCode
 import org.bramble.core.SendStep
 import org.bramble.core.StepReply
-import org.bramble.core.TokenInfo
 import org.bramble.core.TransferPlan
 import org.bramble.core.TransferRequest
 import org.bramble.core.TransferReview
@@ -19,7 +18,6 @@ import org.bramble.core.TxStatus
 import org.bramble.core.WalletCore
 import org.bramble.core.formatTokenAmount
 import org.bramble.core.parseTokenAmount
-import org.bramble.core.validateRecipient
 import org.bramble.wallet.design.BrambleCopy
 
 /**
@@ -80,31 +78,31 @@ class SendFlowModel(
 
     /** The current screen. */
     var stage by mutableStateOf(Stage.RECIPIENT)
-        private set
+        internal set
 
     /** The recipient field's text, as typed (untrusted until the core validates it). */
     var recipientInput by mutableStateOf("")
-        private set
+        internal set
 
     /** Why the typed recipient was refused, or null. */
     var recipientError by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     /** The core-canonicalised recipient address, once accepted. */
     var recipient by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     /** The token to send: STRK by default, else the network's first token. */
     var token by mutableStateOf(network.tokens.firstOrNull { it.symbol == "STRK" } ?: network.tokens.first())
-        private set
+        internal set
 
     /** The amount field's text, with a decimal comma turned into a point. */
     var amount by mutableStateOf("")
-        private set
+        internal set
 
     /** Why the amount was refused, or null. */
     var amountError by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     /** The core plan's review of the transfer, while one is open. */
     var review by mutableStateOf<TransferReview?>(null)
@@ -152,73 +150,6 @@ class SendFlowModel(
         val text =
             runCatching { formatTokenAmount(raw, token.decimals, 4u) }.getOrNull() ?: return SendCopy.balanceUnavailable
         return "${SendCopy.balancePrefix}$text ${token.symbol}"
-    }
-
-    /** Typing clears the recipient error, as the iOS `didSet`. */
-    fun updateRecipient(text: String) {
-        recipientInput = text
-        recipientError = null
-    }
-
-    /** Typing clears the amount error and drops any plan: an edit always needs a new review. */
-    fun updateAmount(text: String) {
-        val next = text.replace(',', '.')
-        if (next == amount) return
-        amount = next
-        amountError = null
-        dropPlan()
-    }
-
-    /** Picks one of the person's own accounts as the recipient, then continues as typed input would. */
-    fun useRecipient(address: String) {
-        recipientInput = address
-        continueWithRecipient()
-    }
-
-    /** Has the core validate the typed recipient; on success moves to the amount, else shows why. */
-    fun continueWithRecipient() {
-        val canonical = validateRecipient(recipientInput)
-        if (canonical == null) {
-            recipientError = SendCopy.invalidRecipient
-            return
-        }
-        recipient = canonical
-        dropPlan()
-        stage = Stage.DETAILS
-    }
-
-    /** Opens the token list. */
-    fun pickAsset() {
-        stage = Stage.ASSET
-    }
-
-    /** Selects [next] as the token, clears the amount, and drops any plan. */
-    fun choose(next: TokenInfo) {
-        token = next
-        amount = ""
-        amountError = null
-        dropPlan()
-        stage = Stage.DETAILS
-    }
-
-    /**
-     * Half and Max use the full raw balance (Max does not reserve the fee), formatted exactly, as
-     * the extension's `balanceShortcut`; both do nothing while the balance is unread.
-     */
-    fun fill(half: Boolean) {
-        val raw = rawBalance ?: return
-        val selected = if (half) halve(raw) else raw
-        val formatted =
-            if (selected.all { it == '0' }) {
-                null
-            } else {
-                runCatching { formatTokenAmount(selected, token.decimals, token.decimals) }.getOrNull()
-            }
-        if (formatted != null) {
-            amount = formatted
-            amountError = null
-            dropPlan()
-        }
     }
 
     /**
@@ -303,40 +234,8 @@ class SendFlowModel(
         settle { driver.run(StepReply.CheckAgain) }
     }
 
-    /** Drops the plan and returns to the amount. */
-    fun edit() {
-        dropPlan()
-        stage = Stage.DETAILS
-    }
-
-    /** Back from a stage: recipient ← details ← review/failure. */
-    fun back() {
-        when (stage) {
-            Stage.REVIEW, Stage.FAILED -> {
-                dropPlan()
-                stage =
-                    if (recipient == null) Stage.RECIPIENT else Stage.DETAILS
-            }
-
-            Stage.ASSET -> {
-                stage = if (recipient == null) Stage.RECIPIENT else Stage.DETAILS
-            }
-
-            Stage.DETAILS -> {
-                dropPlan()
-                stage = Stage.RECIPIENT
-            }
-
-            else -> {
-                // No step back inside the flow from here; the screen decides whether to leave.
-            }
-        }
-    }
-
-    /** Lock, backgrounding, dismissal. The core keeps the pending record of any sent write. */
-    fun close() = dropPlan()
-
-    private fun dropPlan() {
+    /** Closes and forgets the open plan and its review; the next Review opens a new one. */
+    internal fun dropPlan() {
         driver?.plan?.close()
         driver = null
         review = null
@@ -348,7 +247,7 @@ class SendFlowModel(
         val plan = driver?.plan
         try {
             handle(run())
-        } catch (error: SendException) {
+        } catch (ignored: SendException) {
             // A refused step (`PlanClosed` after a lock, `OutOfOrder`) ends the journey closed. If
             // a signed write may already have left, the core says which and with what hash.
             fail(plan?.interruptedFailure() ?: SendFailure(SendFailureCode.LOCKED, null))

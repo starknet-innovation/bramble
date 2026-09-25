@@ -164,6 +164,14 @@ analyzer_rules:
   - unused_declaration
   - unused_import
 
+# The iOS 18 SDK moved View, Color, EdgeInsets and the rest into SwiftUICore, which SwiftUI
+# re-exports and clients cannot import; without this, unused_import calls every `import SwiftUI` dead.
+unused_import:
+  allowed_transitive_imports:
+    - module: SwiftUI
+      allowed_transitive_imports:
+        - SwiftUICore
+
 # SwiftUI declares property wrappers with arguments on the property's own line
 # (`@Environment(\.skin) private var skin`); the default would split every one of them.
 attributes:

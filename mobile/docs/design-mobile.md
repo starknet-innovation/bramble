@@ -327,14 +327,13 @@ These are new files in DesignSystem, each under 500 lines:
   ghost small button carrying the refresh icon and the label "Try again". The accessibility label
   is supplied by the caller, e.g. "Retry loading balances". The message is the host's
   `describe(error)`, which never contains input.
-- `Pill(label:dot:icon:tone:)` plus `HardwarePill` and `CountBadge(count:)`. CountBadge rejects
-  negative values with a precondition in debug builds and hides in release builds, which mirrors
-  the extension's throw.
+- `Pill`, `HardwarePill`, `CountBadge` and `Placeholder` are not built: no screen showed them, so
+  they were removed as unused. When one returns, CountBadge must reject a negative count in debug
+  builds and hide in release builds, which mirrors the extension's throw.
 - `Toast` rebuilt with success and error tones, the copy-details button (full `details`, local-only
   pasteboard with a 120s expiry, and a check glyph for 1400ms), and a stack host.
 - **Loading.** The extension has **no skeleton or shimmer**, so mobile does not add one. Required 4
   says "skeleton"; we meet it faithfully with:
-  - `Placeholder` ("—") for unknown values;
   - `LiquidDots` (two 24pt dots, travel 16, 2000ms loop, compact 8pt), ported from
     `styles-progress.ts` values emitted by the generator;
   - `BusyRefreshIcon` (800ms linear spin, static under reduced motion);

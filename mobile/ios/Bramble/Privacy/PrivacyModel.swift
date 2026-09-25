@@ -1,5 +1,4 @@
 import BrambleCore
-import Foundation
 import Observation
 
 /// The selected account's private-balance reading (the extension's `PrivacyDisclosureState`).

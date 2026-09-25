@@ -42,6 +42,8 @@ import org.bramble.wallet.design.ThemeChoice
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.securityCopy
+import org.bramble.wallet.setTheme
+import org.bramble.wallet.switchNetwork
 
 /** Settings hub (`settings-ui.ts`), port of the iOS `SettingsHubView`: eyebrow-labelled groups. */
 @Composable

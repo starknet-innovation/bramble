@@ -7,9 +7,9 @@
 # is every `active: false` rule in `detekt --generate-config` for 1.23.8; regenerate it on upgrade.
 #
 # Four stay off, each because it contradicts the repository or another rule (see the comments at
-# each), and three are narrowed where they misfire on this code (MagicNumber, UnnecessaryParentheses,
-# FunctionNaming). Nothing is switched off to hide findings, and inline @Suppress is not used
-# anywhere (AGENTS.md): fix the code, or change a rule here in review. Generated code
+# each), and four are narrowed where they misfire on this code (MagicNumber, UnnecessaryParentheses,
+# FunctionNaming, LongParameterList). Nothing is switched off to hide findings, and inline @Suppress
+# is not used anywhere (AGENTS.md): fix the code, or change a rule here in review. Generated code
 # (*.generated.kt, the UniFFI bindings under build/) is excluded on the command line.
 #
 # Rules that need type resolution (for example Deprecation, ExplicitCollectionElementAccessMethod)
@@ -60,6 +60,10 @@ complexity:
   # Tightened from 600 to the repository's 500-line file rule (AGENTS.md).
   LargeClass:
     threshold: 500
+  # Compose API guidelines give a component one flat parameter list with defaulted optionals
+  # (Modifier, colours, callbacks) instead of a config object; only required parameters count.
+  LongParameterList:
+    ignoreDefaultParameters: true
   MethodOverloading:
     active: true
   NamedArguments:

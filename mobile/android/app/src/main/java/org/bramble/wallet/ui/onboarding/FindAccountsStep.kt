@@ -141,9 +141,9 @@ private suspend fun restoreSelected(
         done()
     } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (failure: CoreException) {
+    } catch (ignored: CoreException) {
         failed()
-    } catch (failure: InternalException) {
+    } catch (ignored: InternalException) {
         failed()
     }
 }

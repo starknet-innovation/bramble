@@ -1,5 +1,4 @@
 import BrambleCore
-import Foundation
 
 /// Token management (`token-ops.ts`): show/hide, add by contract (metadata read on chain), find
 /// held registry tokens, and a token's 7-day chart. Error copy is the extension's, from the core.
