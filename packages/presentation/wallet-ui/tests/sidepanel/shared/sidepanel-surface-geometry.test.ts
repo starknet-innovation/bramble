@@ -35,6 +35,7 @@ describe("sidepanel surface geometry", () => {
       ".send-review-summary",
       ".send-review-fee",
       ".send-review-disclosure",
+      ".send-receipt",
     ]) {
       expect(rule(selector)).toContain(`border-radius: ${RADIUS.lg}`);
     }

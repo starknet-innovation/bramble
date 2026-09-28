@@ -1,5 +1,6 @@
 /**
- * Shared decoded-transfer review markup used by Send and NFT transfer flows.
+ * Shared decoded-transfer review markup used by Send and NFT transfer flows,
+ * and the Send receipt shown once the transfer lands.
  */
 import { escapeHtml } from "@bramble/core/html";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -11,7 +12,7 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import { tokenGlyph } from "../portfolio/token-row";
-import type { TransferMode } from "./transfer-mode";
+import { type TransferMode, transferSuccessSummary } from "./transfer-mode";
 import type { TransferFields } from "./transfer-model";
 
 type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
@@ -71,3 +72,44 @@ export const reviewDetailsHtml = (review: TransferReview): string =>
  */
 export const reviewPanelHtml = (review: TransferReview): string =>
   `${reviewDetailsHtml(review)}${reviewFeeHtml(review)}`;
+
+// A truncated address beside a copy control carrying the full value, so the
+// receipt reads as a sentence yet every party can still be checked exactly.
+const receiptAddress = (address: string, copyLabel: string): string =>
+  `<span class="send-receipt-address"><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, copyLabel)}</span>`;
+
+/**
+ * Renders the receipt's transaction hash in full (the stylesheet ellipsizes
+ * it) beside a copy control carrying the same value. Escaped; the caller binds
+ * `[data-copy]` after mounting.
+ */
+export const successHashHtml = (hash: string): string =>
+  `<code id="send-success-hash" title="${escapeHtml(hash)}">${escapeHtml(hash)}</code>${inlineCopyButton(hash, "Copy transaction hash")}`;
+
+/**
+ * Renders the Send receipt sentence: "<sender> sent <amount> to <recipient>",
+ * each party named when a name is known and its address copyable. A shield or
+ * unshield moves value within the user's own account, so it keeps the plain
+ * own-account sentence. An empty sender address (no account on the form)
+ * drops the subject rather than inventing one. All dynamic copy is escaped;
+ * the caller binds `[data-copy]` after mounting.
+ */
+export const successReceiptHtml = (
+  fields: TransferFields,
+  sender: { readonly address: string; readonly label: string },
+  mode: TransferMode,
+): string => {
+  const label = fields.recipientLabel || accountLabel(fields.recipient);
+  if (mode !== "send") {
+    return escapeHtml(transferSuccessSummary(mode, fields.amount, fields.tokenSymbol, label));
+  }
+  const amount = `<strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong>`;
+  const recipientName = fields.recipientLabel
+    ? `<strong>${escapeHtml(fields.recipientLabel)}</strong> `
+    : "";
+  const senderName = sender.label ? `<strong>${escapeHtml(sender.label)}</strong> ` : "";
+  const subject = sender.address
+    ? `${senderName}${receiptAddress(sender.address, "Copy sender address")} sent`
+    : "Sent";
+  return `${subject} ${amount} to ${recipientName}${receiptAddress(fields.recipient, "Copy recipient address")}`;
+};
