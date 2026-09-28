@@ -404,6 +404,33 @@ describe("bindPickers", () => {
     expect(sinks.renders).toEqual([]);
   });
 
+  test("ignores non-button markup that carries data-network-id", async () => {
+    const container = mount(`
+      <form data-network-id="SN_SEPOLIA">
+        <input id="inside" type="search" />
+      </form>`);
+    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
+    let called = 0;
+    bindPickers(
+      makeDeps(
+        container,
+        {
+          setActiveNetwork: async () => {
+            called += 1;
+            return status;
+          },
+        },
+        sinks,
+      ),
+    );
+
+    click(container.querySelector("#inside"));
+    await tick();
+
+    expect(called).toBe(0);
+    expect(sinks.views).toEqual([]);
+  });
+
   test("reports a network switch failure on the picker result line", async () => {
     const container = mount(pickerMarkup);
     const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };

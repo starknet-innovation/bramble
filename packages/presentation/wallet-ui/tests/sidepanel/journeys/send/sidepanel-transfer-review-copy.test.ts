@@ -77,13 +77,26 @@ describe("send review recipient copy", () => {
     const copy = app.querySelector<HTMLButtonElement>("#send-review-summary [data-copy]");
     if (!copy) throw new Error("copy control missing");
 
+    // This suite runs timers immediately, so the toast is dismissed as soon as
+    // it lands; record what was shown rather than what remains.
+    const shown: string[] = [];
+    const observer = new MutationObserver((records) => {
+      for (const node of records.flatMap((record) => [...record.addedNodes])) {
+        if (node instanceof HTMLElement && node.matches(".toast.success")) {
+          shown.push(node.querySelector(".toast-text")?.textContent ?? "");
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
     copy.click();
     await flush();
+    observer.disconnect();
 
     expect(copied).toEqual([CANONICAL]);
-    // Feedback lands in the screen's own status line (the review lives inside a
-    // section), never as a second binding's duplicate.
-    expect(app.querySelector("#transfer-result")?.textContent).toBe("Copied");
+    // The screen's result line is an error alert, so feedback goes to one
+    // success toast rather than showing "Copied" in the danger tone.
+    expect(app.querySelector("#transfer-result")?.textContent).toBe("");
+    expect(shown).toEqual(["Copied"]);
     // The working stage is a live-region container in the same section; the
     // feedback must never have replaced its markup.
     expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending your transaction…");

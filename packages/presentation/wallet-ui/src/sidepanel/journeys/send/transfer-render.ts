@@ -7,7 +7,6 @@
 
 import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
-import { accountLabel } from "../../shared/parts";
 import { reviewFeeBlocked } from "../../shared/review-render";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
@@ -15,7 +14,6 @@ import {
   transferModeCopy,
   transferModeFor,
   transferStageTitle,
-  transferSuccessSummary,
 } from "./transfer-mode";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
 import {
@@ -24,7 +22,12 @@ import {
   type WorkingStatus,
   workingStatus,
 } from "./transfer-progress-ui";
-import { reviewRisksHtml, reviewSummaryHtml } from "./transfer-review-markup";
+import {
+  reviewDetailsHtml,
+  reviewSummaryHtml,
+  successHashHtml,
+  successReceiptHtml,
+} from "./transfer-review-markup";
 import { routeReviewFeeHtml } from "./transfer-review-routes";
 import { transferRoute } from "./transfer-route";
 import type { TransferReview } from "./transfer-submit";
@@ -157,6 +160,43 @@ const applyOutcomeHash = (form: HTMLFormElement, id: string, hash: string): void
   row?.querySelector<HTMLElement>("[data-copy]")?.setAttribute("data-copy", hash);
 };
 
+// Paints the receipt: the copyable sender/recipient sentence, the hash with its
+// copy control, and the Starkscan link. The link comes only from the shared
+// explorer gate, so a network without an explorer (devnet) or a malformed hash
+// hides it instead of pointing somewhere that cannot resolve.
+const applySuccessReceipt = (
+  form: HTMLFormElement,
+  fields: TransferFields,
+  hash: string,
+  mode: TransferMode,
+): void => {
+  const regions: ReadonlyArray<readonly [string, string]> = [
+    [
+      "#send-success-summary",
+      successReceiptHtml(
+        fields,
+        { address: form.dataset["sender"] ?? "", label: form.dataset["senderLabel"] ?? "" },
+        mode,
+      ),
+    ],
+    ["#send-success-tx", successHashHtml(hash)],
+  ];
+  for (const [selector, html] of regions) {
+    const region = form.querySelector<HTMLElement>(selector);
+    if (!region) continue;
+    region.innerHTML = html;
+    // Freshly rendered markup: the shell's copy binding ran before this paint.
+    bindCopyButtons(region);
+  }
+  const explorer = form.querySelector<HTMLAnchorElement>("#send-success-explorer");
+  const url = explorerTransactionUrl(form.dataset["networkId"] ?? "", hash);
+  if (explorer) {
+    explorer.hidden = url === null;
+    if (url === null) explorer.removeAttribute("href");
+    else explorer.href = url;
+  }
+};
+
 /**
  * Paints the Send form for one state. `poolFeeFri` is threaded in rather than
  * read here: the privacy reading belongs to the binding, so this stays a
@@ -262,6 +302,9 @@ export const applyTransferUi = (
     applyOutcomeHash(form, "send-success-hash", state.transactionHash);
     applyOutcomeHash(form, "send-pending-hash", state.transactionHash);
     applyOutcomeHash(form, "send-failure-hash", state.transactionHash);
+    applySuccessReceipt(form, state.fields, state.transactionHash, mode);
+    setText(form, "send-pending-hash", state.transactionHash);
+    setText(form, "send-failure-hash", state.transactionHash);
   }
   if (state.stage === "failed") {
     setText(

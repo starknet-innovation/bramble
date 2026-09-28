@@ -18,7 +18,7 @@ import {
   bindTransfer,
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
-import { accountLabel } from "../../../../src/sidepanel/shared/parts";
+import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x1234";
@@ -59,14 +59,14 @@ afterAll(unregisterDom);
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-const mountOutcome = (chainStatus: ActivityStatus) => {
+const mountOutcome = (chainStatus: ActivityStatus, prefs: WalletPreferences = preferences) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(
     document
       .createRange()
       .createContextualFragment(
-        sendFlow(status, account, preferences, [BALANCE], { [TOKEN_ADDRESS]: 1 }),
+        sendFlow(status, account, prefs, [BALANCE], { [TOKEN_ADDRESS]: 1 }),
       ),
   );
   document.body.append(app);
@@ -136,7 +136,71 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+  });
+
+  test("reads the receipt as sender sent amount to recipient, with copy and explorer", async () => {
+    const { app, form } = mountOutcome("accepted");
+    await submitTwice(form);
+    const receipt = app.querySelector("#send-success-summary");
+    expect(receipt?.textContent).toContain("sent 1 TST to Treasury");
+    // The sender is named the way the rest of the wallet names the account.
+    expect(receipt?.querySelector("strong")?.textContent).toBe(
+      accountDisplayName(account, preferences),
+    );
+    const copies = [...(receipt?.querySelectorAll<HTMLElement>("[data-copy]") ?? [])];
+    expect(copies.map((button) => button.dataset["copy"] ?? null)).toEqual([
+      account.address,
+      RECIPIENT,
+    ]);
+    expect(
+      app.querySelector<HTMLElement>('#send-success-tx [aria-label="Copy transaction hash"]')
+        ?.dataset["copy"],
+    ).toBe(HASH);
+    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-explorer");
+    expect(explorer?.hidden).toBe(false);
+    expect(explorer?.getAttribute("href")).toBe(`https://starkscan.co/tx/${HASH}`);
+    expect(explorer?.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(app.querySelector("#send-view-activity")?.textContent).toBe("View in Activity tab");
+  });
+
+  test("names the sender with the user's own label, rendered as text", async () => {
+    const label = '<img src=x onerror="alert(1)"> Savings & "Ops"';
+    const { app, form } = mountOutcome("accepted", {
+      ...preferences,
+      accountLabels: { [account.id]: label },
+    });
+    await submitTwice(form);
+    const receipt = app.querySelector("#send-success-summary");
+    expect(receipt?.querySelector("strong")?.textContent).toBe(label);
+    expect(receipt?.querySelector("img")).toBeNull();
+  });
+
+  test("copies from the receipt without writing into the error line", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+    const { app, form } = mountOutcome("accepted");
+    await submitTwice(form);
+    for (const label of ["Copy sender address", "Copy transaction hash"]) {
+      app.querySelector<HTMLButtonElement>(`#send-success [aria-label="${label}"]`)?.click();
+      await flush();
+    }
+    expect(copied).toEqual([account.address, HASH]);
+    // The error line is an alert, so copy feedback goes to the success toast.
+    expect(app.querySelector("#transfer-result")?.textContent).toBe("");
+  });
+
+  test("hides the explorer link on a network without an explorer", async () => {
+    const { app, form } = mountOutcome("accepted");
+    // Devnet has no public explorer; the form carries the network it rendered for.
+    form.dataset["networkId"] = "SN_DEVNET";
+    await submitTwice(form);
+    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-explorer");
+    expect(explorer?.hidden).toBe(true);
+    expect(explorer?.hasAttribute("href")).toBe(false);
   });
 
   // The point of the fast-confirmation work: a pre-confirmation is a real
@@ -147,7 +211,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
   });
 
   test("shows the failure recovery state when Starknet rejects", async () => {

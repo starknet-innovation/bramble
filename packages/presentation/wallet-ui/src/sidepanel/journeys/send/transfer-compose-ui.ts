@@ -148,13 +148,20 @@ const applySelectedAsset = (form: HTMLFormElement, row: HTMLElement): void => {
   setSendFormValue(form, "fiatEstimate", "");
 };
 
-// True when the typed address matches no row on the screen: not one of the
-// user's own accounts, and not a saved contact. Compared as felts, so a padded
-// or differently cased spelling of a known address is still known.
-const isUnlistedRecipient = (form: HTMLFormElement, address: string): boolean =>
-  ![...form.querySelectorAll<HTMLElement>("[data-send-recipient]")].some((row) =>
+// The name of the row the typed address belongs to: one of the user's own
+// accounts, a saved contact, or a shared account, all on this network. Compared
+// as felts, so a padded or differently cased spelling of a known address is
+// still known. Names only ever come from the user's own rows, never from the
+// typed text, and the review keeps the real address beside them.
+const knownRecipientLabel = (form: HTMLFormElement, address: string): string | undefined =>
+  [...form.querySelectorAll<HTMLElement>("[data-send-recipient]")].find((row) =>
     sameFelt(row.dataset["sendRecipient"] ?? "", address),
-  );
+  )?.dataset["sendRecipientLabel"];
+
+// True when the typed address matches no row on the screen. The same lookup as
+// the name, so "Save address" and the name shown can never disagree.
+const isUnlistedRecipient = (form: HTMLFormElement, address: string): boolean =>
+  knownRecipientLabel(form, address) === undefined;
 
 // True when the row sits in a folder the user has minimized. The archive starts
 // that way; every other folder starts open.
@@ -238,7 +245,9 @@ const bindRecipientControls = (
       search?.focus();
       return;
     }
-    choose(address, accountLabel(address));
+    // A pasted address that is already on the screen reads as the row it
+    // matches, the same as tapping that row would.
+    choose(address, knownRecipientLabel(form, address) || accountLabel(address));
   });
   updateSearch();
 };

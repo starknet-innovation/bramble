@@ -36,6 +36,7 @@ describe("sidepanel surface geometry", () => {
       // The fee block is a spacing container now; Cost and Visibility are the
       // cards inside it, and the send review carries no disclosure.
       ".send-review-fee > .decision-layer",
+      ".send-receipt",
     ]) {
       expect(rule(selector)).toContain(`border-radius: ${RADIUS.lg}`);
     }

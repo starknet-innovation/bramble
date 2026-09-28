@@ -108,7 +108,49 @@ export const SEND_OUTCOME_STYLES = `
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.semibold};
   }
+  /* One shrinkable column: the receipt's unbroken hash must ellipsize inside
+     the panel rather than widen the grid track past it. */
+  .send-success { grid-template-columns: minmax(0, 1fr); }
   .send-outcome .send-actions { width: 100%; }
+  .send-receipt {
+    background: var(--bramble-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    gap: ${SPACE.md};
+    grid-template-columns: minmax(0, 1fr);
+    padding: ${SPACE.lg};
+    text-align: start;
+    width: 100%;
+  }
+  .send-receipt-summary { line-height: 1.9; margin: 0; }
+  .send-receipt-summary strong { color: var(--bramble-text); font-weight: ${WEIGHT.semibold}; }
+  .send-receipt-address { align-items: center; display: inline-flex; gap: 2px; min-width: 0; vertical-align: middle; }
+  .send-receipt-address code { font-size: ${TYPE.label.size}; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .send-receipt-tx {
+    align-items: center;
+    border-top: 1px solid var(--bramble-border);
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: space-between;
+    padding-top: ${SPACE.md};
+    width: 100%;
+  }
+  .send-receipt-tx .send-receipt-address { flex: 0 1 auto; }
+  .send-receipt-label { color: var(--bramble-muted); flex: none; font-size: ${TYPE.caption.size}; }
+  .send-explorer-link {
+    align-items: center;
+    color: var(--bramble-accent);
+    display: inline-flex;
+    font-weight: ${WEIGHT.medium};
+    gap: ${SPACE.xs};
+    justify-self: start;
+    text-decoration: none;
+  }
+  .send-explorer-link[hidden] { display: none; }
+  .send-explorer-link .icon { height: 16px; width: 16px; }
+  @media (hover: hover) and (pointer: fine) {
+    .send-explorer-link:hover { text-decoration: underline; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .send-failure-ring, .send-failure-mark { animation: none; stroke-dashoffset: 0; }
