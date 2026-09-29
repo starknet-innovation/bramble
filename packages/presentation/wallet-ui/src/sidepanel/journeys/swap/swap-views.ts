@@ -115,7 +115,8 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
           <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
         </span>
         <div class="send-outcome-copy">
-          <h2>Swap complete</h2>
+          <h2 id="swap-success-title">Swap complete</h2>
+          <p id="swap-success-note" hidden></p>
         </div>
         <div class="send-receipt">
           <p class="send-receipt-summary" id="swap-success-summary"></p>

@@ -3,6 +3,7 @@
 import type { SendRouteResolution } from "@bramble/transactions/send-routes";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { awaitConfirmation } from "../../shared/confirm-submitted";
 import { errorMessage, showToast } from "../../shared/dom";
 import { watchDeployment } from "../../shell/shell-bindings";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
@@ -12,9 +13,6 @@ import { bindTransferBuckets } from "./transfer-buckets-ui";
 import { bindTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
-  CONFIRMATION_DELAYS_MS,
-  confirmationOutcome,
-  confirmationStatus,
   friendlyReviewError,
   initialTransferState,
   recipientFieldError,
@@ -253,40 +251,29 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     .querySelector("#send-pending-activity")
     ?.addEventListener("click", () => navigate?.("activity"));
 
-  const wait =
-    deps.waitForConfirmation ??
-    ((delayMs: number): Promise<void> =>
-      new Promise((resolve) => {
-        setTimeout(resolve, delayMs);
-      }));
-  // Polls to CONFIRMATION_DELAYS_MS, then hands over to "Check again".
+  // Polls to the last checkpoint, then hands over to "Check again".
   const confirmSubmitted = async (epoch: number): Promise<void> => {
     const hash = transferState.transactionHash;
     if (!hash) return;
-    for (const delay of deps.confirmationDelaysMs ?? CONFIRMATION_DELAYS_MS) {
-      await wait(delay);
-      if (epoch !== transferEpoch) return;
-      try {
-        const activity = await wallet.loadActivity();
-        if (epoch !== transferEpoch) return;
-        const outcome = confirmationOutcome(confirmationStatus(activity.entries, hash));
-        if (outcome) {
-          transferState =
-            outcome.kind === "succeeded"
-              ? { ...transferState, error: "", stage: "submitted" }
-              : { ...transferState, error: outcome.message, stage: "failed" };
-          repaintActiveTransfer?.();
-          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
-          return;
-        }
-      } catch {
-        // A transient activity read is retried at the next scheduled checkpoint.
-      }
-    }
-    if (epoch === transferEpoch) {
+    const outcome = await awaitConfirmation({
+      ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
+      hash,
+      loadActivity: () => wallet.loadActivity(),
+      stillCurrent: () => epoch === transferEpoch,
+      ...(deps.waitForConfirmation ? { wait: deps.waitForConfirmation } : {}),
+    });
+    if (epoch !== transferEpoch) return;
+    if (!outcome) {
       transferState = { ...transferState, stage: "pending" };
       repaintActiveTransfer?.();
+      return;
     }
+    transferState =
+      outcome.kind === "succeeded"
+        ? { ...transferState, error: "", stage: "submitted" }
+        : { ...transferState, error: outcome.message, stage: "failed" };
+    repaintActiveTransfer?.();
+    showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
   };
   form.querySelector("#send-check-again")?.addEventListener("click", () => {
     const epoch = ++transferEpoch;

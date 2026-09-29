@@ -11,13 +11,13 @@ import type { ActivityStatus } from "@bramble/transactions/activity";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/journeys/send/send-views";
 import {
-  CONFIRMATION_DELAYS_MS,
-  confirmationOutcome,
-} from "../../../../src/sidepanel/journeys/send/transfer-model";
-import {
   bindTransfer,
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import {
+  CONFIRMATION_DELAYS_MS,
+  confirmationOutcome,
+} from "../../../../src/sidepanel/shared/confirm-submitted";
 import { accountDisplayName, accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
