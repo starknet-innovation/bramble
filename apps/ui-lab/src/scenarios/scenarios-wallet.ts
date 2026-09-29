@@ -1,5 +1,11 @@
 import type { SidepanelWallet } from "@bramble/wallet-ui/lab";
-import { bindAddressBook, bindHomeUi, bindReceiveWalletCard } from "@bramble/wallet-ui/lab";
+import {
+  bindAddressBook,
+  bindHomeUi,
+  bindReceiveWalletCard,
+  outcomeReceiptFor,
+  paintOutcomeReceipt,
+} from "@bramble/wallet-ui/lab";
 import { softwareAccount, statusFor } from "../fixtures/fixtures";
 import {
   allowances,
@@ -211,20 +217,31 @@ export const portfolioScenario: WalletScenario = {
           view: "deploy-account",
         }),
       id: "deploy-submitted",
-      label: "Deployment submitted",
+      label: "Deployment complete",
       narrative:
-        "The receipt every settled transaction ends on, here for a deployment: what happened, the identifier, and one way on.",
-      // The stage the binder reveals once the deployment has a hash. Shown
-      // directly because the fixture runtime submits nothing.
+        "The receipt every settled transaction ends on: what happened, one line saying what it means, and the identifier.",
+      // The stage the binder reveals once the chain confirms the deployment.
+      // Painted through the same writer the binder uses, because the fixture
+      // runtime submits nothing.
       prepare: (context) => {
         context.app.querySelector("#deploy-review-stage")?.setAttribute("hidden", "");
         context.app.querySelector("#deploy-success")?.removeAttribute("hidden");
-        const hash = context.app.querySelector("#deploy-hash");
-        if (hash) {
-          hash.textContent = "0x5f2a7c19b4e86d30af51c8b27e94d6013a8f45c2e7b91d0a3c6e8f24b71d9053";
-        }
+        paintOutcomeReceipt(
+          context.app,
+          "deploy-success",
+          outcomeReceiptFor(
+            { kind: "succeeded", toast: "" },
+            {
+              confirmedDescription: "This account is on Starknet and can submit transactions.",
+              confirmedTitle: "Deployment complete",
+              submittedTitle: "Deployment submitted",
+            },
+            "0x5f2a7c19b4e86d30af51c8b27e94d6013a8f45c2e7b91d0a3c6e8f24b71d9053",
+          ),
+          "SN_MAIN",
+        );
       },
-      state: { accountDeployment: "submitted", task: "receipt" },
+      state: { accountDeployment: "confirmed", task: "receipt" },
     },
     {
       content: () =>

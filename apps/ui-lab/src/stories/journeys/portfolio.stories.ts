@@ -28,7 +28,7 @@ export const DeployAccount = checkpointStory(
   "deploy-account",
 );
 export const DeploySubmitted = checkpointStory(
-  "Deployment submitted",
+  "Deployment complete",
   "portfolio",
   "deploy-submitted",
 );

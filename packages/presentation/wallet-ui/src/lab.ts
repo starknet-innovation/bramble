@@ -37,7 +37,11 @@ export * from "./sidepanel/journeys/send/transfer-ui";
 export * from "./sidepanel/journeys/swap/swap-client";
 export * from "./sidepanel/journeys/swap/swap-ui";
 export * from "./sidepanel/runtime/runtime";
+/** The chain's answer a receipt is built from. */
+export type { ConfirmationOutcome } from "./sidepanel/shared/confirm-submitted";
 export { showToast } from "./sidepanel/shared/dom";
+/** Builds and writes a settled-transaction receipt, as every journey does. */
+export { outcomeReceiptFor, paintOutcomeReceipt } from "./sidepanel/shared/outcome-receipt";
 export * from "./sidepanel/shared/parts";
 export * from "./sidepanel/shared/review-render";
 export * from "./sidepanel/shared/token-dropdown";

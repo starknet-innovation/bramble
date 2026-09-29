@@ -4,12 +4,17 @@
  * through the verified invoke path.
  */
 
-import { escapeHtml } from "@bramble/core/html";
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TransferReviewResponse, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { awaitConfirmation, type ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
-import { icon } from "../../shared/icons";
+import {
+  outcomeReceiptActions,
+  outcomeReceiptFor,
+  outcomeReceiptSection,
+  paintOutcomeReceipt,
+} from "../../shared/outcome-receipt";
 import { reviewFeeBlocked } from "../../shared/review-render";
 import { watchDeployment } from "../../shell/shell-bindings";
 import { friendlyReviewError, recipientFieldError, reviewPanelHtml } from "../send/transfer-ui";
@@ -20,9 +25,39 @@ import { friendlyReviewError, recipientFieldError, reviewPanelHtml } from "../se
  */
 export type NftUiDeps = {
   readonly app: Element | null;
+  /** Overrides the confirmation checkpoints; tests pass a single zero delay. */
+  readonly confirmationDelaysMs?: readonly number[];
+  /** Leaves the transfer for a dock screen from its receipt. */
+  readonly navigate?: (view: "activity") => void;
   readonly openDetail: (id: string) => void;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly wallet: SidepanelWallet;
+};
+
+// A transfer has nothing to itemise beyond the review above it, so the receipt
+// states the outcome, says once where the token went, and shows the hash.
+const paintNftReceipt = async (
+  deps: NftUiDeps,
+  root: ParentNode | null | undefined,
+  outcome: ConfirmationOutcome | null,
+  hash: string,
+): Promise<void> => {
+  const status = await deps.wallet.loadStatus();
+  if (!root) return;
+  paintOutcomeReceipt(
+    root,
+    "nft-success",
+    outcomeReceiptFor(
+      outcome,
+      {
+        confirmedDescription: "The collectible is now held by the recipient.",
+        confirmedTitle: "Transfer complete",
+        submittedTitle: "Transfer submitted",
+      },
+      hash,
+    ),
+    status.networkId,
+  );
 };
 
 const rerender = async (deps: NftUiDeps): Promise<void> => {
@@ -233,26 +268,32 @@ const bindSendForm = (deps: NftUiDeps): void => {
         reviewedDeploymentFee,
       )
       .then(
-        (transactionHash) => {
+        async (transactionHash) => {
           showToast("NFT transfer submitted", "success", deps.app);
           form.dataset["stage"] = "submitted";
           form.removeAttribute("aria-busy");
           if (reviewPanel) {
             renderFragment(
               reviewPanel,
-              `<section class="nft-transfer-outcome" role="status">
-                <span class="nft-transfer-mark">${icon("check")}</span>
-                <div>
-                  <strong>Submitted to Starknet</strong>
-                  <p>The transfer is now visible in Activity while the network confirms it.</p>
-                  <code>${escapeHtml(transactionHash)}</code>
-                </div>
-              </section>`,
+              outcomeReceiptSection("nft-success", outcomeReceiptActions("nft-view-activity")),
             );
+            reviewPanel.querySelector("#nft-success")?.removeAttribute("hidden");
+            reviewPanel
+              .querySelector("#nft-view-activity")
+              ?.addEventListener("click", () => deps.navigate?.("activity"));
           }
           if (result) {
-            result.textContent = "Transfer submitted. Confirmation is tracked in Activity.";
+            result.textContent = "";
           }
+          // Submitted is not delivered. The receipt opens on what is certain
+          // and firms up once the chain reports the transfer.
+          await paintNftReceipt(deps, reviewPanel, null, transactionHash);
+          void awaitConfirmation({
+            ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
+            hash: transactionHash,
+            loadActivity: () => deps.wallet.loadActivity(),
+            stillCurrent: () => form.isConnected,
+          }).then((outcome) => paintNftReceipt(deps, reviewPanel, outcome, transactionHash));
           if (requiresDeployment) {
             void watchDeployment(
               { render: deps.render, wallet: deps.wallet },

@@ -10,7 +10,9 @@ import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
 import type { RefreshReason } from "../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../runtime/runtime";
+import { awaitConfirmation, type ConfirmationOutcome } from "../shared/confirm-submitted";
 import { buttonBusy, errorMessage, renderFragment, scopedStatus, showToast } from "../shared/dom";
+import { outcomeReceiptFor, paintOutcomeReceipt } from "../shared/outcome-receipt";
 import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
 
@@ -34,6 +36,8 @@ export type ShellBindingDeps = {
    */
   readonly render: (status: WalletStatus, reason?: RefreshReason) => Promise<void>;
   readonly setActiveView: (view: WalletView) => void;
+  /** Overrides the confirmation checkpoints; tests pass a single zero delay. */
+  readonly confirmationDelaysMs?: readonly number[];
 };
 
 /**
@@ -174,6 +178,33 @@ export const awaitDeployment = async (
   return false;
 };
 
+// A deployment has nothing to itemise, so its receipt states the outcome, says
+// once what now exists, and shows the hash. The network comes off the live
+// status rather than the markup, because the explorer link must match the chain
+// the account was deployed on.
+const paintDeployReceipt = async (
+  deps: ShellBindingDeps,
+  outcome: ConfirmationOutcome | null,
+  hash: string,
+): Promise<void> => {
+  const status = await deps.wallet.loadStatus();
+  if (!deps.app) return;
+  paintOutcomeReceipt(
+    deps.app,
+    "deploy-success",
+    outcomeReceiptFor(
+      outcome,
+      {
+        confirmedDescription: "This account is on Starknet and can submit transactions.",
+        confirmedTitle: "Deployment complete",
+        submittedTitle: "Deployment submitted",
+      },
+      hash,
+    ),
+    status.networkId,
+  );
+};
+
 /**
  * Binds the account-deployment action.
  *
@@ -191,7 +222,6 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   const reviewPanelRoot = deps.app?.querySelector<HTMLElement>("#deploy-review");
   const reviewStage = deps.app?.querySelector<HTMLElement>("#deploy-review-stage");
   const successStage = deps.app?.querySelector<HTMLElement>("#deploy-success");
-  const hash = deps.app?.querySelector<HTMLElement>("#deploy-hash");
   if (!button) {
     return;
   }
@@ -232,13 +262,16 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     );
   }
 
+  deps.app
+    ?.querySelector("#deploy-view-activity")
+    ?.addEventListener("click", () => deps.setActiveView("activity"));
   target.addEventListener("click", () => {
     buttonBusy(target, true);
     scopedStatus(target, "Submitting deployment…");
     const reviewedFee = DEPLOYMENT_FEES.get(target);
     if (reviewedFee) DEPLOYMENT_FEES.delete(target);
     void deps.wallet.deployAccount(reviewedFee).then(
-      (response) => {
+      async (response) => {
         // No quote was in hand, so this call returned one: show it and submit
         // on the next press rather than spending a fee the reader never saw.
         if (typeof response !== "string") {
@@ -248,11 +281,24 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           return;
         }
         showToast("Deployment submitted", "success", target);
-        if (hash) hash.textContent = response;
         reviewStage?.setAttribute("hidden", "");
         successStage?.removeAttribute("hidden");
         scopedStatus(target, "");
         buttonBusy(target, false);
+        // Submitted is not deployed. The receipt says only what the chain has
+        // answered for, so it opens on the submitted wording and firms up once
+        // the account is actually on-chain.
+        await paintDeployReceipt(deps, null, response);
+        await paintDeployReceipt(
+          deps,
+          await awaitConfirmation({
+            ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
+            hash: response,
+            loadActivity: () => deps.wallet.loadActivity(),
+            stillCurrent: () => successStage?.isConnected === true,
+          }),
+          response,
+        );
       },
       (error: unknown) => failed(error, "Deployment failed"),
     );

@@ -57,6 +57,7 @@ import {
 } from "../../journeys/settings/settings-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
+import { outcomeReceiptActions, outcomeReceiptSection } from "../../shared/outcome-receipt";
 import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
@@ -134,18 +135,7 @@ const deployAccountFlow = (
               })}
               <p id="deploy-result" role="status"></p>
             </section>
-            <section class="send-outcome send-success" id="deploy-success" role="status" aria-live="polite" hidden>
-              <span class="send-outcome-mark" aria-hidden="true">
-                <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
-              </span>
-              <div class="send-outcome-copy">
-                <p class="send-outcome-kicker">Submitted to Starknet</p>
-                <h2>Deployment submitted</h2>
-                <p>Your account will be ready once Starknet confirms this transaction.</p>
-                <code id="deploy-hash"></code>
-              </div>
-              ${button({ attributes: { "data-view": "home" }, icon: "home", label: "Back to home" })}
-            </section>`
+            ${outcomeReceiptSection("deploy-success", outcomeReceiptActions("deploy-view-activity"))}`
           : noAccountEmpty(status)
       }
     </section>`,

@@ -17,6 +17,11 @@ import type {
 } from "../../../src/popup/responses/responses";
 import type { WalletView } from "../../../src/sidepanel/app/screens/views";
 import {
+  outcomeReceiptActions,
+  outcomeReceiptSection,
+} from "../../../src/sidepanel/shared/outcome-receipt";
+import { accountLabel } from "../../../src/sidepanel/shared/parts";
+import {
   bindDashboard,
   bindDeploy,
   bindPickers,
@@ -26,6 +31,8 @@ import { registerDom, unregisterDom } from "../../support/groups-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
+
+const HASH = "0x04aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 const status: WalletStatus = {
   accountCount: 2,
@@ -204,13 +211,14 @@ describe("bindDeploy", () => {
     document.body.replaceChildren();
   });
 
+  // The production receipt, so the binder writes into the shape it ships.
   const deployMarkup = `<section class="section">
       <section id="deploy-review-stage">
         <button id="deploy-button" type="button">Deploy</button>
         <div id="deploy-review"></div>
         <p role="status"></p>
       </section>
-      <section id="deploy-success" hidden><code id="deploy-hash"></code></section>
+      ${outcomeReceiptSection("deploy-success", outcomeReceiptActions("deploy-view-activity"))}
     </section>`;
 
   test("quotes the fee as the screen opens, then submits under it", async () => {
@@ -257,11 +265,27 @@ describe("bindDeploy", () => {
       deployAccount: async (fee?: { readonly overallFee: string; readonly unit: "FRI" }) => {
         if (!fee) return { overallFee: "1000000000000000", unit: "FRI" as const };
         deploys += 1;
-        return "0xdeploytx";
+        return HASH;
       },
+      loadActivity: async () => ({
+        entries: [
+          {
+            accountId: account.id,
+            hash: HASH,
+            kind: "deploy" as const,
+            networkId: "SN_MAIN" as const,
+            status: "preconfirmed" as const,
+            submittedAt: 1,
+            summary: "Deploy account contract",
+          },
+        ],
+        historyUnavailable: false,
+      }),
+      loadStatus: async () => status,
     };
     bindDeploy({
       app: container,
+      confirmationDelaysMs: [0],
       render: async () => undefined,
       setActiveView: () => undefined,
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
@@ -272,11 +296,20 @@ describe("bindDeploy", () => {
     await tick();
     click(container.querySelector("#deploy-button"));
     await tick();
+    await tick();
+    await tick();
 
     expect(deploys).toBe(1);
     expect(container.querySelector("#deploy-review-stage")?.hasAttribute("hidden")).toBe(true);
     expect(container.querySelector("#deploy-success")?.hasAttribute("hidden")).toBe(false);
-    expect(container.querySelector("#deploy-hash")?.textContent).toBe("0xdeploytx");
+    // Submitted is not deployed: the receipt firms up only once the chain says so.
+    expect(container.querySelector("#deploy-success-title")?.textContent).toBe(
+      "Deployment complete",
+    );
+    expect(container.querySelector("#deploy-success-description")?.textContent).toContain(
+      "can submit transactions",
+    );
+    expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(accountLabel(HASH));
     expect(document.querySelectorAll(".toast.success").length).toBeGreaterThan(0);
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });
