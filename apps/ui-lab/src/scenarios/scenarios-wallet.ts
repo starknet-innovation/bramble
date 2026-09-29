@@ -217,7 +217,7 @@ export const portfolioScenario: WalletScenario = {
           view: "deploy-account",
         }),
       id: "deploy-submitted",
-      label: "Deployment complete",
+      label: "Account deployed",
       narrative:
         "The receipt every settled transaction ends on: what happened, one line saying what it means, and the identifier.",
       // The stage the binder reveals once the chain confirms the deployment.
@@ -233,7 +233,7 @@ export const portfolioScenario: WalletScenario = {
             { kind: "succeeded", toast: "" },
             {
               confirmedDescription: "This account is on Starknet and can submit transactions.",
-              confirmedTitle: "Deployment complete",
+              confirmedTitle: "Account deployed",
               submittedTitle: "Deployment submitted",
             },
             "0x5f2a7c19b4e86d30af51c8b27e94d6013a8f45c2e7b91d0a3c6e8f24b71d9053",

@@ -303,9 +303,7 @@ describe("bindDeploy", () => {
     expect(container.querySelector("#deploy-review-stage")?.hasAttribute("hidden")).toBe(true);
     expect(container.querySelector("#deploy-success")?.hasAttribute("hidden")).toBe(false);
     // Submitted is not deployed: the receipt firms up only once the chain says so.
-    expect(container.querySelector("#deploy-success-title")?.textContent).toBe(
-      "Deployment complete",
-    );
+    expect(container.querySelector("#deploy-success-title")?.textContent).toBe("Account deployed");
     expect(container.querySelector("#deploy-success-description")?.textContent).toContain(
       "can submit transactions",
     );
