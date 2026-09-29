@@ -130,7 +130,7 @@ const deployAccountFlow = (
                 attributes: { id: "deploy-button" },
                 disabled: deployment !== false,
                 icon: "check",
-                label: deployment === true ? "Account already deployed" : "Review deployment",
+                label: deployment === true ? "Account already deployed" : "Deploy",
               })}
               <p id="deploy-result" role="status"></p>
             </section>

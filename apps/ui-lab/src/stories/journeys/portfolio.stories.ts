@@ -27,6 +27,11 @@ export const DeployAccount = checkpointStory(
   "portfolio",
   "deploy-account",
 );
+export const DeploySubmitted = checkpointStory(
+  "Deployment submitted",
+  "portfolio",
+  "deploy-submitted",
+);
 export const PricesOffline = checkpointStory("Prices unavailable", "portfolio", "prices-offline");
 export const BalanceFailed = checkpointStory(
   "Balance refresh failed",

@@ -206,14 +206,14 @@ describe("bindDeploy", () => {
 
   const deployMarkup = `<section class="section">
       <section id="deploy-review-stage">
-        <button id="deploy-button" type="button">Review deployment</button>
+        <button id="deploy-button" type="button">Deploy</button>
         <div id="deploy-review"></div>
         <p role="status"></p>
       </section>
       <section id="deploy-success" hidden><code id="deploy-hash"></code></section>
     </section>`;
 
-  test("shows the decision anatomy before echoing the reviewed deployment fee", async () => {
+  test("quotes the fee as the screen opens, then submits under it", async () => {
     const container = mount(deployMarkup);
     const calls: unknown[] = [];
     const reviewedFee = { overallFee: "1000000000000000", unit: "FRI" as const };
@@ -237,9 +237,11 @@ describe("bindDeploy", () => {
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
     });
 
-    click(container.querySelector("#deploy-button"));
+    // The quote is the screen's own first act, so the reader has the figure
+    // before pressing rather than as the result of pressing.
     await tick();
     expect(container.querySelector("#deploy-review")?.textContent).toContain("Cost");
+    expect(calls).toEqual([undefined]);
 
     click(container.querySelector("#deploy-button"));
     await tick();
@@ -249,8 +251,11 @@ describe("bindDeploy", () => {
   test("submits a deployment and reports the transaction hash on the status line", async () => {
     const container = mount(deployMarkup);
     let deploys = 0;
+    // The background only submits under a reviewed fee: a call without one
+    // returns an estimate and never deploys (see deployment-ops).
     const wallet = {
-      deployAccount: async () => {
+      deployAccount: async (fee?: { readonly overallFee: string; readonly unit: "FRI" }) => {
+        if (!fee) return { overallFee: "1000000000000000", unit: "FRI" as const };
         deploys += 1;
         return "0xdeploytx";
       },
@@ -262,6 +267,9 @@ describe("bindDeploy", () => {
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
     });
 
+    // The control is busy until the quote lands, so a press can only follow it.
+    expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(true);
+    await tick();
     click(container.querySelector("#deploy-button"));
     await tick();
 

@@ -198,8 +198,33 @@ export const portfolioScenario: WalletScenario = {
       id: "deploy-account",
       label: "Deploy account review",
       narrative:
-        "Single-signer deployment uses a dedicated transaction review and receipt rather than expanding Home.",
-      state: { accountDeployment: "required", task: "review deployment" },
+        "The fee is quoted onto the screen, so Deploy is a decision the reader already has the number for.",
+      state: { accountDeployment: "required", task: "deploy" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          view: "deploy-account",
+        }),
+      id: "deploy-submitted",
+      label: "Deployment submitted",
+      narrative:
+        "The receipt every settled transaction ends on, here for a deployment: what happened, the identifier, and one way on.",
+      // The stage the binder reveals once the deployment has a hash. Shown
+      // directly because the fixture runtime submits nothing.
+      prepare: (context) => {
+        context.app.querySelector("#deploy-review-stage")?.setAttribute("hidden", "");
+        context.app.querySelector("#deploy-success")?.removeAttribute("hidden");
+        const hash = context.app.querySelector("#deploy-hash");
+        if (hash) {
+          hash.textContent = "0x5f2a7c19b4e86d30af51c8b27e94d6013a8f45c2e7b91d0a3c6e8f24b71d9053";
+        }
+      },
+      state: { accountDeployment: "submitted", task: "receipt" },
     },
     {
       content: () =>

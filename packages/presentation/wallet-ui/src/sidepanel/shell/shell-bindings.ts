@@ -15,6 +15,8 @@ import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
+// Controls whose screen has already asked for a quote, so a repaint does not.
+const QUOTED_DEPLOYMENTS = new WeakSet<HTMLButtonElement>();
 
 /**
  * Services and state setters the shell bindings close over. State lives in the
@@ -174,6 +176,15 @@ export const awaitDeployment = async (
 
 /**
  * Binds the account-deployment action.
+ *
+ * The fee is part of the screen rather than a step before it: it is quoted as
+ * soon as the screen opens, so Deploy is a decision the reader already has the
+ * number for. The control used to say "Review deployment" and, on the first
+ * press, turn into the confirm button — a label that promised a screen it never
+ * opened.
+ *
+ * A quote that cannot be fetched does not strand the screen: the reason is
+ * shown and Deploy quotes again on press, submitting once it has a figure.
  */
 export const bindDeploy = (deps: ShellBindingDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#deploy-button");
@@ -181,41 +192,69 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   const reviewStage = deps.app?.querySelector<HTMLElement>("#deploy-review-stage");
   const successStage = deps.app?.querySelector<HTMLElement>("#deploy-success");
   const hash = deps.app?.querySelector<HTMLElement>("#deploy-hash");
-  button?.addEventListener("click", () => {
-    buttonBusy(button, true);
-    scopedStatus(
-      button,
-      DEPLOYMENT_FEES.has(button) ? "Submitting deployment..." : "Estimating fee...",
+  if (!button) {
+    return;
+  }
+  const target = button;
+
+  const showFee = (estimate: FeeEstimate): void => {
+    DEPLOYMENT_FEES.set(target, estimate);
+    if (reviewPanelRoot) {
+      renderFragment(
+        reviewPanelRoot,
+        reviewConstraints(`Maximum network fee: ${formatFeeEstimate(estimate)}`),
+      );
+    }
+  };
+
+  const failed = (error: unknown, fallback: string): void => {
+    DEPLOYMENT_FEES.delete(target);
+    const message = errorMessage(error, fallback);
+    if (reviewPanelRoot) renderFragment(reviewPanelRoot, reviewConstraints(message));
+    showToast(message, "error", target);
+    scopedStatus(target, message);
+    buttonBusy(target, false);
+  };
+
+  // Quoted once per mounted screen. The binder runs on every paint, and the
+  // repaint that follows the quote would otherwise ask for another.
+  if (!QUOTED_DEPLOYMENTS.has(target) && !target.disabled) {
+    QUOTED_DEPLOYMENTS.add(target);
+    buttonBusy(target, true);
+    scopedStatus(target, "Estimating fee…");
+    void deps.wallet.deployAccount().then(
+      (response) => {
+        if (typeof response !== "string") showFee(response);
+        scopedStatus(target, "");
+        buttonBusy(target, false);
+      },
+      (error: unknown) => failed(error, "Could not estimate the deployment fee"),
     );
-    const reviewedFee = DEPLOYMENT_FEES.get(button);
-    if (reviewedFee) DEPLOYMENT_FEES.delete(button);
+  }
+
+  target.addEventListener("click", () => {
+    buttonBusy(target, true);
+    scopedStatus(target, "Submitting deployment…");
+    const reviewedFee = DEPLOYMENT_FEES.get(target);
+    if (reviewedFee) DEPLOYMENT_FEES.delete(target);
     void deps.wallet.deployAccount(reviewedFee).then(
       (response) => {
+        // No quote was in hand, so this call returned one: show it and submit
+        // on the next press rather than spending a fee the reader never saw.
         if (typeof response !== "string") {
-          DEPLOYMENT_FEES.set(button, response);
-          const fee = formatFeeEstimate(response);
-          if (reviewPanelRoot) {
-            renderFragment(reviewPanelRoot, reviewConstraints(`Maximum network fee: ${fee}`));
-          }
-          scopedStatus(button, `Maximum network fee: ${fee}`);
-          button.lastChild?.replaceWith(`Confirm deployment · ${fee}`);
-          buttonBusy(button, false);
+          showFee(response);
+          scopedStatus(target, "");
+          buttonBusy(target, false);
           return;
         }
-        showToast("Deployment submitted", "success", button);
+        showToast("Deployment submitted", "success", target);
         if (hash) hash.textContent = response;
         reviewStage?.setAttribute("hidden", "");
         successStage?.removeAttribute("hidden");
-        scopedStatus(button, "");
-        buttonBusy(button, false);
+        scopedStatus(target, "");
+        buttonBusy(target, false);
       },
-      (error: unknown) => {
-        DEPLOYMENT_FEES.delete(button);
-        if (reviewPanelRoot) renderFragment(reviewPanelRoot, "");
-        showToast(errorMessage(error, "Deployment failed"), "error", button);
-        scopedStatus(button, errorMessage(error, "Deployment failed"));
-        buttonBusy(button, false);
-      },
+      (error: unknown) => failed(error, "Deployment failed"),
     );
   });
 };

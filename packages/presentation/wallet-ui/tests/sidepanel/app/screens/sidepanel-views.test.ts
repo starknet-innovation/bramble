@@ -211,11 +211,11 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="deploy-review-stage"');
     expect(html).not.toContain("What will happen");
     expect(html).not.toContain("Risk and recovery");
-    // The receipt states the account, address and network; the header names
-    // the screen. Nothing else on it earns a line.
+    // The receipt states the account, address and network, the header names the
+    // screen, and the fee is quoted onto it — so the control is the action.
     expect(html).not.toContain("Deployment creates this account on-chain.");
-    expect(html).not.toContain("Contract");
-    expect(html).toContain("Review deployment");
+    expect(html).toContain(">Deploy<");
+    expect(html).not.toContain("Review deployment");
     expect(html).toMatch(/id="deploy-success"[^>]*hidden/);
     expect(html).not.toContain("wallet-dock");
   });
