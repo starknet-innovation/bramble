@@ -189,22 +189,19 @@ describe("sidepanel views", () => {
   test("Home says nothing about an account that is not on chain yet", () => {
     // Home used to carry a "Deploy account" / "Fund with STRK" chip in the
     // danger colour. The first send creates the account and quotes both fees as
-    // one, so the state is normal and the shortcut lives in Security &
-    // permissions instead.
+    // one, so the state is normal and the shortcut lives in Settings instead.
     const undeployed = dashboard("home", status, [], preferences, { balances: [] }, false);
 
     expect(undeployed).not.toContain("deploy-notice");
     expect(undeployed).not.toContain("Deploy account");
     expect(undeployed).not.toContain('data-view="deploy-account"');
-    // The Shield tile's own "Fund with STRK" is a different control and stays:
-    // shielding really does need STRK, whatever the account's deploy state.
-    // The dedicated deployment flow is still reachable by its own route, and
-    // that route has a way in: the Settings hub links to Security & permissions.
-    expect(dashboard("security", status, [], preferences, { balances: [] }, false)).toContain(
+    // The dedicated deployment flow is reachable from the Settings hub itself,
+    // one tap in rather than four, and no longer from the security hub.
+    expect(dashboard("settings", status, [], preferences, { balances: [] }, false)).toContain(
       'data-view="deploy-account"',
     );
-    expect(dashboard("settings", status, [], preferences, { balances: [] }, false)).toContain(
-      'data-view="security"',
+    expect(dashboard("security", status, [], preferences, { balances: [] }, false)).not.toContain(
+      'data-view="deploy-account"',
     );
   });
 

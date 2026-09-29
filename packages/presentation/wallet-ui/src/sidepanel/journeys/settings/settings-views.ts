@@ -44,6 +44,13 @@ export const settingsScreen = (
       </div>
     </section>
     <section class="section">
+      <p class="eyebrow">This account</p>
+      <div class="menu-list" role="group" aria-label="This account">
+        ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
+      </div>
+      <p class="hint">Deploy your account manually</p>
+    </section>
+    <section class="section">
       <p class="eyebrow">Access & permissions</p>
       <div class="menu-list" role="group" aria-label="Access and permissions">
         ${walletMenuRow("security", "Security & permissions", "lock")}
@@ -162,13 +169,6 @@ export const securityFlow = (status: WalletStatus): string =>
         ${walletMenuRow("allowances", "Token allowances", "coins")}
         ${walletMenuRow("multisigs", "Multisig accounts", "users")}
       </div>
-    </section>
-    <section class="section">
-      <p class="eyebrow">This account</p>
-      <div class="menu-list" role="group" aria-label="This account">
-        ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
-      </div>
-      <p class="hint">Deploy your account manually</p>
     </section>
     <section class="section">
       <p class="eyebrow">Recovery</p>

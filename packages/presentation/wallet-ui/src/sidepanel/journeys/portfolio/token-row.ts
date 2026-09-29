@@ -128,14 +128,12 @@ export type PrivateBreakdown =
 
 const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown): string => {
   const symbol = token.symbol;
-  if (breakdown.kind === "needs-funds") {
-    return `<button class="token-breakdown-register" data-view="receive" type="button" title="Receive STRK before deploying this account">
-        <span class="token-breakdown-label">${icon("lock")}Private balance</span>
-        <span>Fund with STRK</span>
-      </button>`;
-  }
-  if (breakdown.kind === "unregistered" || breakdown.kind === "undeployed") {
-    const label = breakdown.kind === "undeployed" ? "Shield" : "Register to start shielding";
+  if (
+    breakdown.kind === "needs-funds" ||
+    breakdown.kind === "unregistered" ||
+    breakdown.kind === "undeployed"
+  ) {
+    const label = breakdown.kind === "unregistered" ? "Register to start shielding" : "Shield";
     return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="${label}">
         <span class="token-breakdown-label">${icon("lock")}Private balance</span>
         <span>${label}</span>

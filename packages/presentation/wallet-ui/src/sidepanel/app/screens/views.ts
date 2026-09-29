@@ -257,7 +257,6 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.currency,
     context.privacy,
     context.deployment,
-    context.fundedForFees,
   );
 };
 

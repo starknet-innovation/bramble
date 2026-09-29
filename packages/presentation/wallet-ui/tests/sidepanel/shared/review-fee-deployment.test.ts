@@ -11,7 +11,7 @@ import { describe, expect, test } from "bun:test";
 import { reviewFeeSection } from "@bramble/wallet-ui/lab";
 import type { WalletStatus } from "../../../src/popup/responses/responses";
 import { homeScreen } from "../../../src/sidepanel/journeys/portfolio/home-view";
-import { securityFlow } from "../../../src/sidepanel/journeys/settings/settings-views";
+import { settingsScreen } from "../../../src/sidepanel/journeys/settings/settings-views";
 
 const status = {
   accountCount: 1,
@@ -99,9 +99,11 @@ describe("undeployed-account fee review", () => {
   test("deploying is a setting, not a flag on Home", () => {
     // Home used to carry a danger-coloured "Deploy account" chip. An account
     // that is not on chain yet is normal — the first send creates it and the
-    // review quotes both halves — so the shortcut moved to Security &
-    // permissions, where a user who wants to deploy first can find it.
-    const settings = securityFlow(status);
+    // review quotes both halves — so the shortcut moved to Settings, beside
+    // the other account destinations, where someone who wants to deploy first
+    // can find it. It is not access control, so it does not live in the
+    // security hub.
+    const settings = settingsScreen(status, null);
 
     expect(settings).toContain('data-view="deploy-account"');
     expect(settings).toContain("Deploy account");

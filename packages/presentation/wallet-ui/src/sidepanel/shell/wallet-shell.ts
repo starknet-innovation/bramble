@@ -188,20 +188,22 @@ export const shieldTile = (
 ): string => {
   const needsDeploy = deployment === false;
   const needsFunds = needsDeploy && fundedForFees === false;
-  const tileLabel = needsFunds ? "Fund with STRK" : "Shield";
   const body = `<span class="tile-icon">${icon("shield")}</span>
-      <span class="tile-label">${tileLabel}</span>`;
+      <span class="tile-label">Shield</span>`;
   if (tokenId === null) {
     return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
   }
-  if (needsFunds) {
-    return `<button class="action-tile" data-view="receive" type="button" aria-label="Receive STRK before deploying this account">${body}</button>`;
-  }
+  // One tile, one word, whatever the account still needs: deployment and
+  // funding are steps on the way to shielding, and the privacy screen this
+  // opens names whichever one is in the way. The accessible name carries that
+  // reason, so a screen reader is told before the tap rather than after.
   const attribute = ready && !needsDeploy ? "data-send-shield" : "data-privacy-open";
-  const label = needsDeploy
-    ? "Shield — deploy this account first"
-    : ready
-      ? "Shield public value into your private balance"
-      : "Activate private balances";
+  const label = needsFunds
+    ? "Shield — add STRK to this account first"
+    : needsDeploy
+      ? "Shield — deploy this account first"
+      : ready
+        ? "Shield public value into your private balance"
+        : "Activate private balances";
   return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };

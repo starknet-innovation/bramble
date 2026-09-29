@@ -241,8 +241,8 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
       icon: "qrCode",
       label: "Fund with STRK",
     }),
-    body: "Going private is a one-time registration paid in STRK: the pool fee plus a network fee. This account does not hold enough STRK for it yet.",
-    title: "Add STRK to go private",
+    body: "Going private requires your account to be funded and activated.",
+    title: "Initialize your account",
   },
   ledger: {
     action: "",

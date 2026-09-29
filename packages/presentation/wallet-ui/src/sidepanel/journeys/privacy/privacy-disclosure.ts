@@ -20,6 +20,12 @@ export type PrivacyUiDeps = {
   readonly balances: () => readonly TokenBalance[];
   readonly deployment?: () => boolean | null;
   readonly disclosure: () => PrivacyDisclosureState;
+  /**
+   * Whether the loaded public balances can pay a fee. `null` means the read has
+   * not succeeded, which is not the same as a read that found no STRK — only a
+   * definite `false` may refuse.
+   */
+  readonly fundedForFees?: () => boolean | null;
   readonly generation: () => number;
   readonly journey: () => PrivacyJourneyState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;

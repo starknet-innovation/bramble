@@ -209,20 +209,16 @@ const tokenActions = (tokenId: string): string =>
     variant: "secondary",
   })}</div>`;
 
+// Deployment and funding are steps on the way to shielding, not alternatives
+// to it, so the control keeps the verb and the privacy screen it opens names
+// whichever prerequisite is in the way.
 const privacyActions = (
   tokenId: string,
   privacy: PrivacyDisclosureState,
   deployment: boolean | null,
-  fundedForFees: boolean | null = true,
 ): string => {
   const seen = deploymentKnownFromPrivacy(deployment, privacy);
   if (privacyIneligibleKind(privacy)) return "";
-  if (seen === false && fundedForFees === false)
-    return button({
-      attributes: { "data-view": "receive" },
-      icon: "qrCode",
-      label: "Fund with STRK",
-    });
   if (seen === false)
     return button({
       attributes: { "data-privacy-open": tokenId },
@@ -257,7 +253,6 @@ export const tokenDetailFlow = (
     value: null,
   },
   deployment: boolean | null = null,
-  fundedForFees: boolean | null = true,
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
@@ -305,7 +300,7 @@ export const tokenDetailFlow = (
                 : ""
         }
         ${tokenActions(token.id)}
-        ${privacyActions(token.id, privacy, deployment, fundedForFees)}
+        ${privacyActions(token.id, privacy, deployment)}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>
