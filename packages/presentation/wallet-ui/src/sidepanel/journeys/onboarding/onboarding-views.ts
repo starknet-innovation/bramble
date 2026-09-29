@@ -102,12 +102,18 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   return `
   ${textField({
     autocomplete: "new-password",
-    hint: `${MIN_VAULT_PASSPHRASE_LENGTH} characters minimum`,
     label: "Vault passphrase",
     minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: passphraseName,
     placeholder: `At least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
     required: true,
+    trailing: iconButton({
+      attributes: { "data-passphrase-reveal": true },
+      className: "field-action",
+      icon: "eye",
+      label: "Show passphrase",
+      variant: "ghost",
+    }),
     type: "password",
   })}
   ${textField({
@@ -197,14 +203,14 @@ const generatedStep = (): string => `
         ${button({
           attributes: { id: "phrase-toggle" },
           icon: "book",
-          label: "Show recovery phrase",
+          label: "Show",
           variant: "secondary",
         })}
         ${button({
           attributes: { id: "generated-copy-phrase" },
           disabled: true,
           icon: "copy",
-          label: "Copy recovery phrase",
+          label: "Copy",
           variant: "ghost",
         })}
       </div>

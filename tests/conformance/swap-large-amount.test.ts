@@ -151,6 +151,7 @@ const mountSwap = (prepareGate?: Promise<void>): { readonly sent: unknown[] } =>
     app,
     balances: () => ({ balances: [balance] }),
     currency: () => "usd",
+    navigateActivity: () => undefined,
     navigateHome: () => undefined,
     preferences: () => preferences,
     render: async () => undefined,

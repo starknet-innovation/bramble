@@ -159,7 +159,7 @@ export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<
   const phrase = await phraseInputs.evaluateAll((inputs) =>
     inputs.map((input) => (input as HTMLInputElement).value).join(" "),
   );
-  await onboarding.getByRole("button", { name: "Show recovery phrase" }).click();
+  await onboarding.getByRole("button", { name: "Show", exact: true }).click();
   await onboarding.getByRole("button", { name: "I saved my phrase" }).click();
   await fillBackupVerify(onboarding, phrase);
   await onboarding.getByRole("button", { name: "Continue" }).click();

@@ -155,7 +155,7 @@ describe("onboarding phrase copy", () => {
     click(app, "#create-new-button");
     await tick();
     expect(copyButton(app)?.disabled).toBe(true);
-    expect(app.querySelector("#phrase-toggle")?.textContent).toContain("Show recovery phrase");
+    expect(app.querySelector("#phrase-toggle")?.textContent).toContain("Show");
     expect(
       app.querySelector('[data-recovery-grid="generated"]')?.classList.contains("is-masked"),
     ).toBe(true);

@@ -100,6 +100,16 @@ export const SEND_OUTCOME_STYLES = `
     justify-content: center;
     min-width: 0;
   }
+  /* The failure outcome keeps its reason and the control that copies it on one
+     line, so the copy sits with the text it takes rather than under it. */
+  .send-outcome-reason {
+    align-items: start;
+    display: inline-flex;
+    gap: ${SPACE.xs};
+    justify-content: center;
+    min-width: 0;
+  }
+  .send-outcome-reason p { margin: 0; min-width: 0; }
   .send-outcome-hash a { color: inherit; text-decoration: none; }
   .send-outcome-hash a[href] code { text-decoration: underline; text-underline-offset: 2px; }
   .send-outcome-hash a[href]:hover code { color: var(--bramble-accent); }

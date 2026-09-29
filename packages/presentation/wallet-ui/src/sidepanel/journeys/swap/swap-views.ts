@@ -15,6 +15,7 @@ import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
+import { outcomeHashRow } from "../../shared/outcome-hash";
 import { flowScreen, flowSteps, noAccountEmpty } from "../../shared/parts";
 import { formatFeeEstimate } from "../../shared/review-render";
 import { tokenDropdownShell } from "../../shared/token-dropdown";
@@ -114,8 +115,17 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
           <svg viewBox="0 0 56 56"><circle class="swap-success-ring" cx="28" cy="28" r="25" /><path class="swap-success-check" d="M18 29.5l7 7 14-15" /></svg>
         </span>
         <h2>Swap submitted</h2>
-        <p class="swap-success-summary" id="swap-success-summary"></p>
-        <p class="hint">Taking you home — track it under Activity.</p>
+        <div class="send-receipt">
+          <p class="send-receipt-summary swap-success-summary" id="swap-success-summary"></p>
+          <div class="send-receipt-tx">
+            <span class="send-receipt-label">Transaction</span>
+            ${outcomeHashRow("swap-success-hash")}
+          </div>
+        </div>
+        <div class="send-actions">
+          ${button({ attributes: { id: "swap-view-activity" }, icon: "activity", label: "View in Activity tab" })}
+          ${button({ attributes: { id: "swap-home" }, label: "Back", variant: "secondary" })}
+        </div>
       </section>
       <p id="swap-result" role="status"></p>`,
     )

@@ -29,8 +29,6 @@ import {
   noAccountEmpty,
   type WalletView,
 } from "../../shared/parts";
-import { reviewPanel } from "../../shared/review-render";
-import { knownAccountType } from "../../shell/account-types";
 
 // Fees use STRK and registration invokes a deployed account. Deployment blocks
 // only on a conclusive `false`, so a fresh read does not flicker into the form.
@@ -106,11 +104,7 @@ const deployAccountFlow = (
   preferences: WalletPreferences | null,
   deployment: boolean | null,
 ): string =>
-  flowHeader(
-    "Deploy account",
-    status,
-    account ? accountDisplayName(account, preferences) : undefined,
-  ) +
+  flowHeader("Deploy account", status) +
   flowScreen(
     "deploy-account",
     `<section class="section">
@@ -129,13 +123,8 @@ const deployAccountFlow = (
                   value: accountLabel(account.address),
                   valueStyle: "code",
                 },
-                {
-                  label: "Contract",
-                  value: knownAccountType(account.classHash) ?? "Starknet account",
-                },
                 { label: "Network", value: networkDisplayName(status.network) },
               ])}
-              ${reviewPanel([], "Deployment creates this account on-chain. Its address and signing authority do not change.")}
               <div id="deploy-review" aria-live="polite"></div>
               ${button({
                 attributes: { id: "deploy-button" },

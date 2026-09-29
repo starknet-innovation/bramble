@@ -20,6 +20,7 @@ import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
+import { applyOutcomeHash } from "../../shared/outcome-hash";
 import { setFlowStep } from "../../shared/parts";
 import { reviewPanel } from "../../shared/review-render";
 import { compactAmount, tokenGlyph } from "../portfolio/token-row";
@@ -43,6 +44,7 @@ export type SwapUiDeps = {
   readonly app: Element | null;
   readonly balances: () => BalanceState;
   readonly currency: () => DisplayCurrency;
+  readonly navigateActivity: () => void;
   readonly navigateHome: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly render: (status: WalletStatus) => Promise<void>;
@@ -63,8 +65,7 @@ let quoteSeq = 0;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 let stage: SwapStage = "edit";
 let successSummary = "";
-const SUCCESS_HOLD_MS = 1900;
-let successTimer: ReturnType<typeof setTimeout> | null = null;
+let successHash = "";
 
 /** Opens the swap on a chosen sell token, clearing any in-flight quote. */
 export const presetSwapPair = (sellId: string, tokens: readonly TokenConfig[]): void => {
@@ -225,13 +226,14 @@ const paintSwapMeta = (root: Element, figures: SwapFigures): void => {
 
 const SWAP_STEP_INDEX: Readonly<Record<SwapStage, number>> = { confirm: 1, edit: 0, success: 2 };
 
-const paintSwapStages = (root: Element, figures: SwapFigures): void => {
+const paintSwapStages = (root: Element, figures: SwapFigures, networkId: string): void => {
   setFlowStep(root, "data-swap-step", SWAP_STEP_INDEX[stage]);
   root.querySelector(".send-progress")?.removeAttribute("hidden");
   root.querySelector("#swap-edit")?.toggleAttribute("hidden", stage !== "edit");
   root.querySelector("#swap-confirm")?.toggleAttribute("hidden", stage !== "confirm");
   root.querySelector("#swap-success")?.toggleAttribute("hidden", stage !== "success");
   setText(root, "swap-success-summary", successSummary);
+  applyOutcomeHash(root, "swap-success-hash", successHash, networkId);
   const { buyToken, sellToken, valueDelta } = figures;
   if (stage !== "confirm" || !quote || !preparation || !sellToken || !buyToken) {
     return;
@@ -268,7 +270,7 @@ const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
   const figures = swapFigures(deps);
   paintSwapPanels(deps, root, figures);
   paintSwapMeta(root, figures);
-  paintSwapStages(root, figures);
+  paintSwapStages(root, figures, deps.status().networkId);
 };
 
 const setResult = (root: Element, text: string): void => setText(root, "swap-result", text);
@@ -341,10 +343,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     pendingBuyAmount = null;
     amountText = "";
     successSummary = "";
-    if (successTimer !== null) {
-      clearTimeout(successTimer);
-      successTimer = null;
-    }
+    successHash = "";
     return;
   }
   healSelection(deps);
@@ -428,6 +427,21 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         },
       );
   });
+  // Both ways off the receipt reset the stage first, so returning to Swap opens
+  // on a fresh quote rather than on the transaction that already left.
+  const leaveReceipt = (): void => {
+    stage = "edit";
+    successSummary = "";
+    successHash = "";
+  };
+  root.querySelector("#swap-view-activity")?.addEventListener("click", () => {
+    leaveReceipt();
+    deps.navigateActivity();
+  });
+  root.querySelector("#swap-home")?.addEventListener("click", () => {
+    leaveReceipt();
+    deps.navigateHome();
+  });
   // The review stage carries no Back button, so the header's arrow steps back to
   // the quote from there and leaves the flow from anywhere else.
   root.ownerDocument.querySelector("#swap-header-back")?.addEventListener("click", () => {
@@ -454,10 +468,11 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     const executed = quote;
     const claimedPreparation = preparation;
     deps.swap.execute(claimedPreparation.id).then(
-      async () => {
+      async (transactionHash) => {
         const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
         const buyText = `${compactAmount(executed.buyAmount)} ${buyToken.symbol}`;
         successSummary = `${sellText} → ~${buyText}`;
+        successHash = transactionHash;
         quote = null;
         preparation = null;
         amountText = "";
@@ -466,18 +481,6 @@ export const bindSwap = (deps: SwapUiDeps): void => {
           stage = "success";
           applySwapUi(deps, root);
         });
-        if (successTimer !== null) {
-          clearTimeout(successTimer);
-        }
-        successTimer = setTimeout(() => {
-          successTimer = null;
-          stage = "edit";
-          successSummary = "";
-          deps.navigateHome();
-          // Honest state on landing: the transaction is sent and pending,
-          // not yet final — Activity carries it until it settles.
-          showToast(`Transaction sent — ${sellText} → ~${buyText} pending`, "success", root);
-        }, SUCCESS_HOLD_MS);
         await deps.render(await deps.wallet.loadStatus());
       },
       (error: unknown) => {

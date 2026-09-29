@@ -100,6 +100,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Setup strength meter: reads the typed vault credential only to score and
   // describe it; nothing is stored, logged, or sent.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-meter.ts",
+  // Show/hide on a passphrase being created: names the field in its own
+  // accessible label and flips the input type. It never reads the value.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-reveal.ts",
   // Weak-credential acknowledgement shared by the software and Ledger setup
   // flows: reads the typed vault credential only to decide whether to reveal a
   // checkbox and whether the step may proceed. It holds no reference to the

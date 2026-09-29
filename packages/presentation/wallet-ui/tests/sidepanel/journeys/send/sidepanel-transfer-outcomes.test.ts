@@ -18,7 +18,7 @@ import {
   bindTransfer,
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
-import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
+import { accountDisplayName, accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x1234";
@@ -193,14 +193,60 @@ describe("Send confirmation outcomes", () => {
     expect(app.querySelector("#transfer-result")?.textContent).toBe("");
   });
 
-  test("hides the explorer link on a network without an explorer", async () => {
-    const { app, form } = mountOutcome("accepted");
-    // Devnet has no public explorer; the form carries the network it rendered for.
-    form.dataset["networkId"] = "SN_DEVNET";
+  test("the failure control copies the error, and no hash row is left empty", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+    const { app, form } = mountOutcome("rejected");
     await submitTwice(form);
-    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-explorer");
-    expect(explorer?.hidden).toBe(true);
+    expect(form.dataset["stage"]).toBe("failed");
+    const reason = app.querySelector("#send-failure-copy")?.textContent ?? "";
+    expect(reason.length).toBeGreaterThan(0);
+    // What is worth taking to support is the reason, not the identifier — this
+    // control used to copy the hash, which a failure usually does not have.
+    app.querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy the error"]')?.click();
+    await flush();
+    expect(copied).toEqual([reason]);
+    // A chain rejection does have a hash, so its row stays.
+    expect(
+      app
+        .querySelector("#send-failure-hash")
+        ?.closest(".send-outcome-hash")
+        ?.hasAttribute("hidden"),
+    ).toBe(false);
+  });
+
+  test("withdraws the hash row from an outcome that never got one", async () => {
+    const { app, form } = mountOutcome("accepted");
+    // Before any submission every outcome row is empty; showing one would be an
+    // empty line beside a control that copies nothing.
+    for (const id of ["send-success-hash", "send-pending-hash", "send-failure-hash"]) {
+      expect(
+        app.querySelector(`#${id}`)?.closest(".send-outcome-hash")?.hasAttribute("hidden"),
+      ).toBe(true);
+    }
+    await submitTwice(form);
+    expect(
+      app
+        .querySelector("#send-success-hash")
+        ?.closest(".send-outcome-hash")
+        ?.hasAttribute("hidden"),
+    ).toBe(false);
+  });
+
+  test("leaves the hash unlinked on a network without an explorer", async () => {
+    const { app, form } = mountOutcome("accepted");
+    // Devnet has no public explorer; the form carries the network it rendered
+    // for, under its own key — `data-network-id` on a Send container is what
+    // once made every click inside the flow navigate to Settings.
+    form.dataset["sendNetwork"] = "SN_DEVNET";
+    await submitTwice(form);
+    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-hash-link");
     expect(explorer?.hasAttribute("href")).toBe(false);
+    // The hash and its copy control stay: only the link is withheld.
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   // The point of the fast-confirmation work: a pre-confirmation is a real

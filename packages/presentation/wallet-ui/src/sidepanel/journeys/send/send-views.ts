@@ -15,6 +15,7 @@ import type { TokenBalance, WalletStatus } from "../../../popup/responses/respon
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
+import { outcomeHashRow } from "../../shared/outcome-hash";
 import {
   accountDisplayName,
   accountLabel,
@@ -188,15 +189,6 @@ const workingStage = (): string => `
     </div>
   </section>`;
 
-// Every outcome states the same identifier the same way: truncated so the row
-// leaves room for the control beside it, opening on the explorer, and copying
-// in full. ./transfer-render fills all three once the hash is known.
-const outcomeHash = (id: string): string => `
-  <span class="send-outcome-hash">
-    <a id="${id}-link" target="_blank" rel="noopener noreferrer"><code id="${id}"></code></a>
-    ${inlineCopyButton("", "Copy transaction hash")}
-  </span>`;
-
 const successStage = (copy: TransferModeCopy): string => `
   <section class="send-outcome send-success" id="send-success" role="status" aria-live="polite" hidden>
     <span class="send-outcome-mark" aria-hidden="true">
@@ -209,13 +201,12 @@ const successStage = (copy: TransferModeCopy): string => `
       <p class="send-receipt-summary" id="send-success-summary"></p>
       <div class="send-receipt-tx">
         <span class="send-receipt-label">Transaction</span>
-        <span class="send-receipt-address" id="send-success-tx"></span>
+        ${outcomeHashRow("send-success-hash")}
       </div>
-      <a class="send-explorer-link" id="send-success-explorer" target="_blank" rel="noopener noreferrer" hidden>View on Starkscan${icon("externalLink")}</a>
     </div>
     <div class="send-actions">
       ${button({ attributes: { id: "send-view-activity" }, icon: "activity", label: "View in Activity tab" })}
-      ${button({ attributes: { id: "send-home" }, label: "Back to home", variant: "secondary" })}
+      ${button({ attributes: { id: "send-home" }, label: "Back", variant: "secondary" })}
     </div>
   </section>`;
 
@@ -226,8 +217,11 @@ const failureStage = (): string => `
     </span>
     <div class="send-outcome-copy">
       <h2 id="send-failure-title">${escapeHtml(TRANSFER_FAILURE_TITLE)}</h2>
-      <p id="send-failure-copy">The transaction was not sent. Your balance is unchanged.</p>
-      ${outcomeHash("send-failure-hash")}
+      <span class="send-outcome-reason">
+        <p id="send-failure-copy">The transaction was not sent. Your balance is unchanged.</p>
+        ${inlineCopyButton("", "Copy the error", { id: "send-failure-copy-error" })}
+      </span>
+      ${outcomeHashRow("send-failure-hash")}
     </div>
     <div class="send-actions">
       ${button({ attributes: { id: "send-retry" }, label: "Try again" })}
@@ -242,7 +236,7 @@ const pendingStage = (): string => `
       <p class="send-outcome-kicker">Submitted to Starknet</p>
       <h2>Confirmation is taking longer</h2>
       <p>The transaction has a hash and remains pending. You can check again or follow it in Activity.</p>
-      ${outcomeHash("send-pending-hash")}
+      ${outcomeHashRow("send-pending-hash")}
     </div>
     <div class="send-actions">
       ${button({ attributes: { id: "send-check-again" }, label: "Check confirmation" })}

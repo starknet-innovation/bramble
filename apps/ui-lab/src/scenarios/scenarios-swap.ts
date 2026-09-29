@@ -105,6 +105,7 @@ const prepareSwap =
       app: context.app,
       balances: () => ({ balances: journeyBalances }) as const,
       currency: () => "usd" as const,
+      navigateActivity: () => context.emit({ detail: "navigate activity", kind: "state" }),
       navigateHome: () => context.emit({ detail: "navigate home", kind: "state" }),
       preferences: () => journeyPreferences,
       render: async () => undefined,

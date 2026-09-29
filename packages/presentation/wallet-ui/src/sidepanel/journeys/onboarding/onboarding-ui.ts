@@ -17,6 +17,7 @@ import { bindGeneratedPhrase } from "./generated-phrase-ui";
 import { bindKeyImport } from "./import-key-ui";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
 import { applyPassphraseMeter } from "./passphrase-meter";
+import { bindPassphraseReveal } from "./passphrase-reveal";
 import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
 import { bindRecoveryWordAssist } from "./recovery-word-assist";
@@ -470,6 +471,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       );
   });
 
+  bindPassphraseReveal(form);
   refreshAccountGate();
   refreshRecovery();
   refreshPassword();

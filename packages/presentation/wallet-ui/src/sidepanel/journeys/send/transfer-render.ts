@@ -5,8 +5,8 @@
  * access and no state of its own.
  */
 
-import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
+import { applyOutcomeHash } from "../../shared/outcome-hash";
 import { reviewFeeBlocked } from "../../shared/review-render";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
@@ -22,12 +22,7 @@ import {
   type WorkingStatus,
   workingStatus,
 } from "./transfer-progress-ui";
-import {
-  reviewDetailsHtml,
-  reviewSummaryHtml,
-  successHashHtml,
-  successReceiptHtml,
-} from "./transfer-review-markup";
+import { reviewRisksHtml, reviewSummaryHtml, successReceiptHtml } from "./transfer-review-markup";
 import { routeReviewFeeHtml } from "./transfer-review-routes";
 import { transferRoute } from "./transfer-route";
 import type { TransferReview } from "./transfer-submit";
@@ -136,30 +131,6 @@ const applyWorkingStatus = (form: HTMLFormElement, status: WorkingStatus): void 
   form.querySelector("#send-working-copy")?.toggleAttribute("hidden", status.copy === "");
 };
 
-/**
- * Fills one outcome's hash row: truncated on screen so it leaves room for the
- * copy control beside it, the whole hash on its title and in that control, and
- * the explorer behind the link. A network with no explorer (devnet) renders the
- * hash as plain text rather than a link that cannot resolve.
- */
-const applyOutcomeHash = (form: HTMLFormElement, id: string, hash: string): void => {
-  const code = form.querySelector(`#${id}`);
-  if (!code) {
-    return;
-  }
-  code.textContent = accountLabel(hash);
-  code.setAttribute("title", hash);
-  const row = code.closest(".send-outcome-hash");
-  const link = row?.querySelector<HTMLAnchorElement>("a");
-  const explorer = explorerTransactionUrl(form.dataset["sendNetwork"] ?? "", hash);
-  if (link && explorer) {
-    link.href = explorer;
-  } else {
-    link?.removeAttribute("href");
-  }
-  row?.querySelector<HTMLElement>("[data-copy]")?.setAttribute("data-copy", hash);
-};
-
 // Paints the receipt: the copyable sender/recipient sentence, the hash with its
 // copy control, and the Starkscan link. The link comes only from the shared
 // explorer gate, so a network without an explorer (devnet) or a malformed hash
@@ -167,34 +138,19 @@ const applyOutcomeHash = (form: HTMLFormElement, id: string, hash: string): void
 const applySuccessReceipt = (
   form: HTMLFormElement,
   fields: TransferFields,
-  hash: string,
   mode: TransferMode,
 ): void => {
-  const regions: ReadonlyArray<readonly [string, string]> = [
-    [
-      "#send-success-summary",
-      successReceiptHtml(
-        fields,
-        { address: form.dataset["sender"] ?? "", label: form.dataset["senderLabel"] ?? "" },
-        mode,
-      ),
-    ],
-    ["#send-success-tx", successHashHtml(hash)],
-  ];
-  for (const [selector, html] of regions) {
-    const region = form.querySelector<HTMLElement>(selector);
-    if (!region) continue;
-    region.innerHTML = html;
-    // Freshly rendered markup: the shell's copy binding ran before this paint.
-    bindCopyButtons(region);
+  const region = form.querySelector<HTMLElement>("#send-success-summary");
+  if (!region) {
+    return;
   }
-  const explorer = form.querySelector<HTMLAnchorElement>("#send-success-explorer");
-  const url = explorerTransactionUrl(form.dataset["networkId"] ?? "", hash);
-  if (explorer) {
-    explorer.hidden = url === null;
-    if (url === null) explorer.removeAttribute("href");
-    else explorer.href = url;
-  }
+  region.innerHTML = successReceiptHtml(
+    fields,
+    { address: form.dataset["sender"] ?? "", label: form.dataset["senderLabel"] ?? "" },
+    mode,
+  );
+  // Freshly rendered markup: the shell's copy binding ran before this paint.
+  bindCopyButtons(region);
 };
 
 /**
@@ -292,26 +248,24 @@ export const applyTransferUi = (
   }
 
   if (state.fields && state.transactionHash) {
-    const summary = transferSuccessSummary(
-      mode,
-      state.fields.amount,
-      state.fields.tokenSymbol,
-      state.fields.recipientLabel || accountLabel(state.fields.recipient),
-    );
-    setText(form, "send-success-summary", summary);
-    applyOutcomeHash(form, "send-success-hash", state.transactionHash);
-    applyOutcomeHash(form, "send-pending-hash", state.transactionHash);
-    applyOutcomeHash(form, "send-failure-hash", state.transactionHash);
-    applySuccessReceipt(form, state.fields, state.transactionHash, mode);
-    setText(form, "send-pending-hash", state.transactionHash);
-    setText(form, "send-failure-hash", state.transactionHash);
+    applySuccessReceipt(form, state.fields, mode);
+  }
+  // Always applied, including with no hash: that is what withdraws the row on
+  // an outcome that never got one.
+  for (const id of ["send-success-hash", "send-pending-hash", "send-failure-hash"]) {
+    applyOutcomeHash(form, id, state.transactionHash ?? "", form.dataset["sendNetwork"] ?? "");
   }
   if (state.stage === "failed") {
-    setText(
-      form,
-      "send-failure-copy",
-      state.error || "The transaction was not sent. Your balance is unchanged.",
-    );
+    const reason = state.error || "The transaction was not sent. Your balance is unchanged.";
+    setText(form, "send-failure-copy", reason);
+    // What is worth taking to support is the reason, not the identifier the
+    // transaction never got. The hash, when there is one, copies from its own
+    // row above.
+    const copyError = form.querySelector<HTMLElement>("#send-failure-copy-error");
+    copyError?.setAttribute("data-copy", reason);
+    // Bound through the row: `bindCopyButtons` scans descendants, so handing it
+    // the control itself finds nothing.
+    bindCopyButtons(copyError?.parentElement ?? null);
   }
   setText(form, "transfer-result", state.stage === "failed" ? "" : state.error);
   if (previousStage && previousStage !== state.stage) {
