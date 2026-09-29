@@ -1,11 +1,98 @@
 # Copy style
 
-How Bramble writes. Derived from an audit of the 646 user-facing strings in the extension, so most
-of this records what the wallet already does — the parts that were inconsistent have a ruling.
+How Bramble writes. Derived from an audit of every user-facing string in the extension and from
+the copy review that followed it, which removed about a thousand words of prose and added back
+half that — most of what came out did not need rewriting, it needed deleting.
 
 Scope: everything a user reads in the extension (side panel, popup, onboarding tab, Ledger grant
 tab, and the approval-review sentences in `packages/features/transactions/src/routing/`). The
 website and the store listings are not covered yet.
+
+**Read "Every word counts" first.** The rest of this file is voice and mechanics — worth knowing,
+rarely the reason a screen reads badly. Nine screens out of ten are fixed by deleting a sentence.
+
+## Every word counts
+
+The recurring feedback is that the wallet uses too many words, so people stop reading, and that
+the excess reads as machine-written — which makes a wallet look unsafe. It is not caused by
+flowery adjectives: the codebase contains no *seamless*, *robust*, *simply* or *easily* in
+anything a user reads. It is caused by the eight habits below. Each one is a real before/after.
+
+`bun run check:copy` warns about the mechanical half of these. It never fails a build: wording is
+a judgement call and a regex cannot make it, so a hit is a question for the author, not a verdict.
+
+### 1. Say the subject once per screen
+
+The heading, the lede and the field label named the same thing three times.
+
+> "Create your vault passphrase" · ~~"You will use this to unlock Bramble on this device."~~ · [Vault passphrase]
+
+Drop the lede unless it carries a fact the heading and the controls do not.
+
+### 2. A control keeps the user's verb
+
+The button is what the reader asked for. A prerequisite is named on the screen that resolves it,
+never folded into the label — a control that renames itself after the obstacle makes the obstacle
+look like the destination.
+
+> ~~"Deploy and enable"~~, ~~"Fund with STRK"~~ → **"Shield"**
+
+The reason moves into the accessible name (`"Shield — add STRK to this account first"`), so a
+screen reader hears it before the tap rather than after.
+
+### 3. State the consequence; do not collect a tick
+
+First-run carried five acknowledgement checkboxes. A tick nobody can proceed without is not a
+decision, it is a click, and five of them teach the reader to click past exactly the sentences
+that matter. The consequence goes in the copy, once; the button is the confirmation.
+
+This does not apply to a per-transaction choice the reader can genuinely decline.
+
+### 4. Do not narrate the machine
+
+Report the state the reader can act on. The wallet's own steps between are not news.
+
+> ~~"The reviewed transaction is being authorized inside the wallet."~~
+> ~~"Starknet received the transaction. Bramble is checking its chain status now."~~
+
+### 5. Unasked reassurance reads as nervousness
+
+Promising in advance that nothing will happen invites the doubt it answers. This is the habit that
+most makes the wallet feel unsafe, because confident software does not keep insisting.
+
+> ~~"Nothing broadcasts until device approval is verified."~~
+> ~~"Nothing else will be submitted"~~ — above a heading that already said the transaction was not sent
+
+After a failure, "nothing was submitted" is different: it answers the reader's first question and
+is worth stating. The rule is about the promise made in advance, not the fact reported afterwards.
+
+### 6. Say what to do, not how it works
+
+Mechanism is for a reader who can act on it. Someone with an empty account cannot act on a fee
+breakdown.
+
+> ~~"Going private is a one-time registration paid in STRK: the pool fee plus a network fee. This account does not hold enough STRK for it yet."~~
+> → "Going private requires your account to be funded and activated." · "Deposit some STRK, then come back"
+
+### 7. A label must be true of what it labels
+
+"Risk and recovery" sat over neutral all-clear text on three screens, and "Maximum cost and
+constraints" over a single fee. A label that overstates its contents trains the reader to
+discount every label.
+
+> ~~"Maximum cost and constraints"~~ → **"Cost"**
+
+### 8. A number lives in one place
+
+> ~~"This route returns 4.2% less value than you pay. Small orders can route poorly — try a larger amount or a different pair."~~ → **"High slippage risk"**
+
+The figure stays on the button (`Swap anyway (−4.2%)`), where the decision is made.
+
+### Before you add a sentence
+
+Ask, in order: does the heading already say this? does the control already say this? can the
+reader act on it? would they notice if it were gone? A sentence that survives all four earns its
+place.
 
 ## Voice
 
@@ -50,13 +137,6 @@ the full form lands harder and reads more deliberate:
 
 > Anyone with these words controls the wallet and its funds. Bramble cannot recover them for you.
 
-**State the consequence; do not collect consent.** First-run carried four "I understand this
-wallet can hold real funds on Starknet Mainnet" tickboxes and a fifth for a weak passphrase. A
-tickbox nobody can proceed without is not a decision, it is a click, and five of them taught the
-user to click past exactly the sentences that matter. The consequence goes in the copy, once, on
-the screen it belongs to; the button is the confirmation. This does not apply to a per-transaction
-choice the user really can decline — those stay.
-
 **Warn where the wallet hands over a secret, not where the user brings one.** "Save your recovery
 phrase" keeps its line, because Bramble just created something the user does not yet understand
 the weight of:
@@ -67,10 +147,6 @@ The import screens do not. "Anyone with this key controls the account. Paste it 
 you trust" arrives as the user is already pasting a key they already own onto a device they
 already chose — too late to be advice, so it reads as scolding. Both private-key import screens
 and the in-wallet phrase import carried a version of it; all three are gone.
-
-**A heading is not repeated by its lede.** A step that says "Create your vault passphrase" over a
-field labelled "Vault passphrase" does not also need "You will use this to unlock Bramble on this
-device". Drop the lede unless it carries a fact the heading and the controls do not.
 
 **Empty states open with what is absent**, then what to do about it if there is anything to do.
 "No tracked balances yet. Add or detect tokens to see them here."
@@ -111,7 +187,8 @@ check the rewrite still conveys each one.
 
 Cutting a disclosure outright is a separate, deliberate decision about whether the screen is the
 right place for it at all — see "Warn where the wallet hands over a secret" above — not something
-a tightening pass does on its way past.
+a tightening pass does on its way past. Deleting a sentence that discloses nothing is the
+ordinary case, and "Every word counts" governs it.
 
 ## Copy that is not copy
 
