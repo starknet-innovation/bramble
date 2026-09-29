@@ -209,8 +209,8 @@ export const swapScenario: WalletScenario = {
     ),
     checkpoint(
       "submitted",
-      "Swap submitted",
-      "The submitted state acknowledges the handoff before returning to account-scoped Activity.",
+      "Swap complete",
+      "The same receipt a send ends on: what moved, the identifier, and two ways on.",
     ),
   ],
   description:

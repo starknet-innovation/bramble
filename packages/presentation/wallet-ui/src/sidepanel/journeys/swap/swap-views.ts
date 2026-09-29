@@ -110,13 +110,15 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
           })}
         </div>
       </section>
-      <section class="swap-stage swap-success" id="swap-success" role="status" hidden>
-        <span class="swap-success-mark" aria-hidden="true">
-          <svg viewBox="0 0 56 56"><circle class="swap-success-ring" cx="28" cy="28" r="25" /><path class="swap-success-check" d="M18 29.5l7 7 14-15" /></svg>
+      <section class="swap-stage swap-success send-outcome send-success" id="swap-success" role="status" hidden>
+        <span class="send-outcome-mark" aria-hidden="true">
+          <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
         </span>
-        <h2>Swap submitted</h2>
+        <div class="send-outcome-copy">
+          <h2>Swap complete</h2>
+        </div>
         <div class="send-receipt">
-          <p class="send-receipt-summary swap-success-summary" id="swap-success-summary"></p>
+          <p class="send-receipt-summary" id="swap-success-summary"></p>
           <div class="send-receipt-tx">
             <span class="send-receipt-label">Transaction</span>
             ${outcomeHashRow("swap-success-hash")}

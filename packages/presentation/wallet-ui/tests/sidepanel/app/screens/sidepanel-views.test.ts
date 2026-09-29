@@ -173,8 +173,8 @@ describe("sidepanel views", () => {
     expect(html).not.toMatch(/<dl[^>]*id="swap-confirm-receipt"/);
     expect(html).toMatch(/id="swap-warning"[^>]*hidden/);
     expect(html).toMatch(/id="swap-success"[^>]*hidden/);
-    expect(html).toContain('class="swap-success-ring"');
-    expect(html).toContain('class="swap-success-check"');
+    expect(html).toContain('class="send-success-ring"');
+    expect(html).toContain('class="send-success-check"');
     // Swap owns its back arrow so it can step from the review to the quote.
     expect(html).toMatch(/id="swap-header-back"[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
