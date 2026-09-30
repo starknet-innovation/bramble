@@ -15,6 +15,10 @@ settings:
     # Simulator builds sign ad hoc: an unsigned app cannot use the data-protection Keychain, so a
     # plain `xcodebuild test` needs no extra flag (README).
     "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+    # The core's XCFramework has an arm64 simulator slice only (build-core-ios.sh), so an x86_64
+    # simulator build could never link. Excluding it lets a generic-destination build (which
+    # otherwise builds every architecture) succeed; named Apple-silicon simulators are unaffected.
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 targets:
   # UniFFI's generated Swift, compiled as its own module so the app writes `import BrambleCore`.
