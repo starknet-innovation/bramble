@@ -244,7 +244,7 @@ describe("sidepanel views", () => {
     ]);
 
     expect(html).toContain('class="tx-kind-icon tx-kind-transfer accepted"');
-    expect(html).toContain("Send 1.5 ETH to");
+    expect(html).toContain("Sent 1.5 ETH");
     expect(html).toContain('id="activity-export"');
     expect(html).toContain('id="activity-refresh"');
 

@@ -23,19 +23,14 @@ import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { icon } from "../../shared/icons";
-import { inlineCopyButton } from "../../shared/parts";
+import { accountLabel, inlineCopyButton } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import {
   deploymentKnownFromPrivacy,
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
-import {
-  type ActivityPricing,
-  activityRowModel,
-  capitalise,
-  compactSummary,
-} from "./activity-format";
+import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import {
   type PrivateBreakdown,
@@ -163,10 +158,6 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
   // than pointing somewhere that cannot resolve the hash.
   const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
   const statusLabel = `${row.label}, ${label}`;
-  const summary = compactSummary(entry.summary);
-  const name = summary.toLowerCase().startsWith(row.title.toLowerCase())
-    ? summary
-    : `${row.title}. ${summary}`;
   // Status leads the clock on the tooltip and in the accessible name; the time
   // is not printed on the row itself.
   const clock = formatUtcClock(entry.submittedAt);
@@ -175,35 +166,51 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
   const avatar = row.tokenSymbol
     ? tokenGlyph(row.tokenAddress ?? "0x0", row.tokenSymbol)
     : starknetNetworkGlyph();
+  // The verb alone ("Sent") said less than the row's own asset column did, so
+  // the amount joins it and the column goes. The fiat figure went with it: a
+  // value computed from today's price is not what this transaction was worth.
+  // Entries recorded before the amount and token fields existed carry the
+  // figure only inside their summary, which `detail` has already stripped the
+  // verb from. Using it keeps the amount on the collapsed row; a counterparty
+  // detail is an address and belongs in the expansion, not the heading.
+  const figure = row.amount ?? (row.counterparty ? null : row.detail);
+  const heading = figure === null ? row.title : `${row.title} ${figure}`;
+  const when = [formatUtcDate(entry.submittedAt), clock].filter((part) => part !== null).join(", ");
   return `
   <li class="tx-row" data-live-group title="${escapeHtml(timing)}">
-    <div class="tx-copy">
-      <span class="tx-title">
-        <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
+    <details class="disclosure tx-disclosure" data-disclosure="tx:${escapeHtml(entry.hash)}">
+      <summary aria-label="${escapeHtml(heading)}. ${escapeHtml(spoken)}">
+        <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-hidden="true" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
+        <span class="tx-copy">
+          <strong class="tx-title">${escapeHtml(heading)}</strong>
+          ${
+            explorer
+              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
+              : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
+          }
+        </span>
         ${
-          explorer
-            ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(name)}. ${escapeHtml(spoken)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(row.title)}</a>`
-            : `<strong class="tx-summary">${escapeHtml(row.title)}<span class="sr-only">${escapeHtml(name.slice(row.title.length))}. ${escapeHtml(spoken)}.</span></strong>`
+          entry.status === "accepted"
+            ? ""
+            : `<span class="tx-meta ${escapeHtml(entry.status)}">${escapeHtml(capitalise(label))}</span>`
         }
-      </span>
-      ${
-        row.detail && row.counterparty
-          ? `<span class="tx-detail tx-counterparty"><span title="${escapeHtml(row.counterparty.address)}">${escapeHtml(row.detail)}</span>${inlineCopyButton(row.counterparty.address, `Copy ${row.counterparty.role} address`)}</span>`
-          : row.detail
-            ? `<span class="tx-detail">${escapeHtml(row.detail)}</span>`
-            : ""
-      }
-      ${
-        entry.status === "accepted"
-          ? ""
-          : `<span class="tx-meta ${escapeHtml(entry.status)}" aria-hidden="true">${escapeHtml(capitalise(label))}</span>`
-      }
-    </div>
-    <div class="tx-side">
-      ${row.fiat ? `<span class="tx-fiat">${escapeHtml(row.fiat)}</span>` : '<span class="tx-fiat is-unknown">—</span>'}
-      ${row.amount ? `<span class="tx-amount">${escapeHtml(row.amount)}</span>` : '<span class="tx-amount is-unknown">—</span>'}
-    </div>
-    <span class="tx-avatar">${avatar}</span>
+        <span class="tx-avatar">${avatar}</span>
+        <span class="disclosure-mark">${icon("chevronRight")}</span>
+      </summary>
+      <div class="disclosure-body">
+        <dl class="request-detail">
+          ${
+            row.counterparty
+              ? `<div><dt>${escapeHtml(capitalise(row.counterparty.role))}</dt><dd><code title="${escapeHtml(row.counterparty.address)}">${escapeHtml(accountLabel(row.counterparty.address))}</code>${inlineCopyButton(row.counterparty.address, `Copy ${row.counterparty.role} address`)}</dd></div>`
+              : row.detail && row.detail !== figure
+                ? `<div><dt>Detail</dt><dd>${escapeHtml(row.detail)}</dd></div>`
+                : ""
+          }
+          ${when === "" ? "" : `<div><dt>Submitted</dt><dd>${escapeHtml(when)}</dd></div>`}
+          ${hint ? `<div><dt>Status</dt><dd>${escapeHtml(hint)}</dd></div>` : ""}
+        </dl>
+      </div>
+    </details>
   </li>`;
 };
 

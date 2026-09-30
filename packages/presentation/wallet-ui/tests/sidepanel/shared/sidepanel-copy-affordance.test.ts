@@ -191,15 +191,15 @@ describe("truncated identifiers are copyable in full", () => {
         summary: "Send 1 STRK",
       }),
     );
-    // The detail line is not a <code>, so check it by hand: truncated text,
-    // full value on the control.
-    expect(root.querySelector(".tx-counterparty > span")?.textContent).toBe(
-      `To ${accountLabel(COUNTERPARTY)}`,
+    // The counterparty now sits in the row's expansion as a <code> with its
+    // control beside it, which is the shared affordance.
+    expect(root.querySelector(".disclosure-body code")?.textContent).toBe(
+      accountLabel(COUNTERPARTY),
     );
-    expect(root.querySelector<HTMLElement>(".tx-counterparty [data-copy]")?.dataset["copy"]).toBe(
+    expect(root.querySelector<HTMLElement>(".disclosure-body [data-copy]")?.dataset["copy"]).toBe(
       COUNTERPARTY,
     );
-    expectEveryTruncatedIdentifierCopyable(root, 0);
+    expectEveryTruncatedIdentifierCopyable(root, 1);
   });
 
   test("accounts & groups, deploy review, address book, and allowances", () => {

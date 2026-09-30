@@ -40,6 +40,13 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
   const refreshButton = app?.querySelector<HTMLButtonElement>("#activity-refresh");
   const exportButton = app?.querySelector<HTMLButtonElement>("#activity-export");
 
+  // The explorer link sits inside the row's <summary>, so a click on it would
+  // also toggle the row open behind the new tab. Following the link is the
+  // whole intent of that press, so it does not double as an expander.
+  app?.querySelectorAll<HTMLAnchorElement>("a[data-tx-hash]").forEach((link) => {
+    link.addEventListener("click", (event) => event.stopPropagation());
+  });
+
   refreshButton?.addEventListener("click", () => {
     buttonBusy(refreshButton, true);
     const accountId = app?.querySelector<HTMLElement>("[data-activity-account-id]")?.dataset[

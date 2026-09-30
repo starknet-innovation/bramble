@@ -64,11 +64,12 @@ describe("sidepanel surface geometry", () => {
   test("de-boxed list rows share the page column and bleed only their fill", () => {
     // Token and activity rows put their content on the text column of the
     // headings above them; the hover fill extends one step past it.
-    for (const selector of [".token-row", ".tx-row"]) {
-      const declarations = rule(selector);
-      expect(declarations).toContain(`margin: 0 -${SPACE.sm}`);
-      expect(declarations).toMatch(new RegExp(`padding: [^;]*${SPACE.sm}`));
-    }
+    expect(rule(".token-row")).toContain(`margin: 0 -${SPACE.sm}`);
+    expect(rule(".token-row")).toMatch(new RegExp(`padding: [^;]*${SPACE.sm}`));
+    // An activity row opens in place, so the bleed is on the row and the
+    // padding on the summary that carries its content.
+    expect(rule(".tx-row")).toContain(`margin: 0 -${SPACE.sm}`);
+    expect(rule(".tx-disclosure > summary")).toMatch(new RegExp(`padding: [^;]*${SPACE.sm}`));
     expect(rule(".tx-day-label")).not.toContain("padding");
     expect(rule(".section-head")).not.toContain("padding");
   });

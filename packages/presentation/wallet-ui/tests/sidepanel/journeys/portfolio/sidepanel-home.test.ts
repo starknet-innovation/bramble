@@ -177,7 +177,7 @@ describe("sidepanel home", () => {
       },
     ]);
     expect(html).not.toContain('data-home-tab="activity"');
-    expect(html).not.toContain("Send 1.5 ETH to");
+    expect(html).not.toContain("Sent 1.5 ETH");
     expect(html).toMatch(/class="nav-item" data-view="activity"/);
 
     const activity = dashboard("activity", status, [], preferences, { balances: [] }, null, [
@@ -191,7 +191,7 @@ describe("sidepanel home", () => {
         summary: "Send 1.5 ETH to 0x777a…bbcc",
       },
     ]);
-    expect(activity).toContain("Send 1.5 ETH to");
+    expect(activity).toContain("Sent 1.5 ETH");
   });
 
   // Positional args after expandedGroupId(20): priceStale(21), priceAsOf(22).
