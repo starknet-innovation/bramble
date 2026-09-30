@@ -21,6 +21,8 @@ import {
   COPY_EXEMPT_STRINGS,
   COPY_PATTERNS,
   COPY_SCAN_ROOTS,
+  isProse,
+  textRuns,
 } from "./copy-policy";
 
 /** One flagged string, with enough context to judge it without opening the file. */
@@ -86,18 +88,6 @@ const blankComments = (text: string): string => {
   return output;
 };
 
-// Selectors, attribute values, ids, urls, single tokens, and anything long
-// enough to be data rather than a sentence (the BIP39 list) are not prose. The
-// test is deliberately loose: a false positive costs a reviewer one glance,
-// while skipping real copy costs the rule its point.
-const isProse = (value: string): boolean =>
-  value.length <= 400 &&
-  value.trim().split(/\s+/).length >= 3 &&
-  /[a-z]{3}/.test(value) &&
-  !/^[\w.-]+$/.test(value.trim()) &&
-  !/^(?:https?:|data:|0x|--|\.|#|[A-Za-z-]+\s*[:{;])/.test(value.trim()) &&
-  !/[<>{}]/.test(value);
-
 /** Every quoted run and every literal chunk between `${}` holes. */
 const copyStrings = (text: string): readonly { readonly index: number; readonly value: string }[] =>
   [...text.matchAll(/(["'`])((?:\\.|(?!\1)[\s\S])*)\1/g)].flatMap((match) => {
@@ -120,12 +110,14 @@ for (const root of COPY_SCAN_ROOTS) {
   for (const file of await sourceFiles(root)) {
     if (COPY_EXEMPT_PATHS.some((exempt) => file.startsWith(exempt))) continue;
     const source = blankComments(await readFile(file, "utf8"));
-    for (const { index, value } of copyStrings(source)) {
-      if (!isProse(value)) continue;
-      if (COPY_EXEMPT_STRINGS.some((exempt) => exempt.text === value.trim())) continue;
-      for (const { note, pattern, rule } of COPY_PATTERNS) {
-        if (pattern.test(value)) {
-          findings.push({ file, line: lineOf(source, index), note, rule, text: value.trim() });
+    for (const literal of copyStrings(source)) {
+      for (const { index, value } of textRuns(literal.value, literal.index)) {
+        if (!isProse(value)) continue;
+        if (COPY_EXEMPT_STRINGS.some((exempt) => exempt.text === value.trim())) continue;
+        for (const { note, pattern, rule } of COPY_PATTERNS) {
+          if (pattern.test(value)) {
+            findings.push({ file, line: lineOf(source, index), note, rule, text: value.trim() });
+          }
         }
       }
     }

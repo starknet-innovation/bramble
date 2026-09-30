@@ -65,6 +65,51 @@ export const COPY_SCAN_ROOTS: readonly string[] = [
   "packages/platform/ledger-protocol/src",
 ];
 
+// Selectors, ids, urls, single tokens, CSS, and anything long enough to be
+// data rather than a sentence (the BIP39 list) are not prose. The test is
+// deliberately loose: a false positive costs a reviewer one glance, while
+// skipping real copy costs the rule its point.
+export const isProse = (value: string): boolean =>
+  value.length <= 400 &&
+  value.trim().split(/\s+/).length >= 3 &&
+  /[a-z]{3}/.test(value) &&
+  !/^[\w.-]+$/.test(value.trim()) &&
+  !/^(?:https?:|data:|0x|--|\.|#|[A-Za-z-]+\s*[:{;])/.test(value.trim()) &&
+  !/[{}]/.test(value);
+
+/**
+ * Splits one literal into the runs a reader actually sees.
+ *
+ * Almost every sentence in this wallet is written inside an HTML template, so
+ * a check that skipped anything containing a tag was skipping the copy it
+ * exists to read. Tags are cut out and their text nodes kept; the attributes
+ * that carry prose are kept too, since a label a screen reader announces is
+ * copy like any other. Offsets are tracked so a hit still reports its line.
+ */
+const PROSE_ATTRIBUTES = /(?:aria-label|aria-description|title|placeholder|alt)="([^"]*)"/g;
+export const textRuns = (
+  value: string,
+  index: number,
+): readonly { readonly index: number; readonly value: string }[] => {
+  if (!value.includes("<")) {
+    return [{ index, value }];
+  }
+  const runs: { readonly index: number; readonly value: string }[] = [];
+  let offset = 0;
+  for (const part of value.split(/(<[^>]*>)/g)) {
+    if (part.startsWith("<")) {
+      PROSE_ATTRIBUTES.lastIndex = 0;
+      for (const attribute of part.matchAll(PROSE_ATTRIBUTES)) {
+        runs.push({ index: index + offset + (attribute.index ?? 0), value: attribute[1] ?? "" });
+      }
+    } else {
+      runs.push({ index: index + offset, value: part });
+    }
+    offset += part.length;
+  }
+  return runs;
+};
+
 export const COPY_PATTERNS: readonly CopyPattern[] = [
   {
     // Deliberately future and conditional only. After a failure, "nothing was

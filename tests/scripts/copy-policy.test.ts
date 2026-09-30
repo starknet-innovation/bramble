@@ -9,7 +9,13 @@
  * judgement rather than to themselves.
  */
 import { describe, expect, test } from "bun:test";
-import { COPY_EXEMPT_PATHS, COPY_EXEMPT_STRINGS, COPY_PATTERNS } from "../../scripts/copy-policy";
+import {
+  COPY_EXEMPT_PATHS,
+  COPY_EXEMPT_STRINGS,
+  COPY_PATTERNS,
+  isProse,
+  textRuns,
+} from "../../scripts/copy-policy";
 
 const rulesFor = (copy: string): readonly string[] =>
   COPY_PATTERNS.filter(({ pattern }) => pattern.test(copy)).map(({ rule }) => rule);
@@ -100,5 +106,36 @@ describe("the exemption list", () => {
     for (const { text } of COPY_EXEMPT_STRINGS) {
       expect(rulesFor(text), text).not.toEqual([]);
     }
+  });
+});
+
+describe("what counts as copy", () => {
+  // The gate read only bare string arguments for its first weeks, so a
+  // sentence written inside a template — which is most of this wallet — was
+  // invisible to it. The reveal screen's "never leave this screen" sat one
+  // line above a Copy button the whole time.
+  const runs = (literal: string): readonly string[] =>
+    textRuns(literal, 0)
+      .map(({ value }) => value.trim())
+      .filter((value) => value !== "");
+
+  test("reads the text inside an HTML template", () => {
+    expect(runs('<p class="hint">Shown once and never leave this screen.</p>')).toContain(
+      "Shown once and never leave this screen.",
+    );
+  });
+
+  test("reads the attributes a screen reader announces", () => {
+    expect(runs('<button aria-label="Copy the recovery phrase" />')).toContain(
+      "Copy the recovery phrase",
+    );
+    expect(runs('<div class="hint" data-group-name>')).toEqual([]);
+  });
+
+  test("still refuses selectors, CSS and data", () => {
+    expect(isProse(".grant-method-options { grid-template-columns: 1fr; }")).toBe(false);
+    expect(isProse("https://example.com/a/b")).toBe(false);
+    expect(isProse("abandon ability able ".repeat(40))).toBe(false);
+    expect(isProse("Reveal only in private.")).toBe(true);
   });
 });
