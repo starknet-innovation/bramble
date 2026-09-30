@@ -136,7 +136,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   test("reads the receipt as sender sent amount to recipient, with copy and explorer", async () => {
@@ -153,12 +153,14 @@ describe("Send confirmation outcomes", () => {
       account.address,
       RECIPIENT,
     ]);
+    // The hash row is the shared outcome hash: shortened, linked to the
+    // explorer, and copyable in full.
     expect(
-      app.querySelector<HTMLElement>('#send-success-tx [aria-label="Copy transaction hash"]')
-        ?.dataset["copy"],
+      app.querySelector<HTMLElement>('#send-success [aria-label="Copy transaction hash"]')?.dataset[
+        "copy"
+      ],
     ).toBe(HASH);
-    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-explorer");
-    expect(explorer?.hidden).toBe(false);
+    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-hash-link");
     expect(explorer?.getAttribute("href")).toBe(`https://starkscan.co/tx/${HASH}`);
     expect(explorer?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(app.querySelector("#send-view-activity")?.textContent).toBe("View in Activity tab");
@@ -257,7 +259,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   test("shows the failure recovery state when Starknet rejects", async () => {
