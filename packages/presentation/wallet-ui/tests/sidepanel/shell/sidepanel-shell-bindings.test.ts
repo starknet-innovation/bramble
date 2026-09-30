@@ -369,6 +369,26 @@ describe("bindPickers", () => {
     expect(sinks.renders).toEqual([]);
   });
 
+  test("ignores non-button markup that carries the picker data attributes", async () => {
+    const container = mount(`
+      <form data-network-id="SN_SEPOLIA" data-account-id="${secondAccount.id}">
+        <input id="inside" type="search" />
+      </form>`);
+    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
+    let called = 0;
+    const count = async () => {
+      called += 1;
+      return status;
+    };
+    bindPickers(makeDeps(container, { setActiveAccount: count, setActiveNetwork: count }, sinks));
+
+    click(container.querySelector("#inside"));
+    await tick();
+
+    expect(called).toBe(0);
+    expect(sinks.views).toEqual([]);
+  });
+
   test("reports a network switch failure on the picker result line", async () => {
     const container = mount(pickerMarkup);
     const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };

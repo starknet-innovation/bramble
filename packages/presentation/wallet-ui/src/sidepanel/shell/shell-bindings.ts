@@ -214,13 +214,15 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
  * selecting an account means "use this account", so it lands on Home showing the
  * now-active account (matching the drawer's account tap) rather than returning to
  * the entry point. The flow header's back control still pops the nav history, so
- * Back returns to wherever the manage view was opened from.
+ * Back returns to wherever the manage view was opened from. Only picker buttons
+ * bind: other markup carries `data-network-id`/`data-account-id` as plain data
+ * (the Send form does), and binding it would turn every click inside into a switch.
  */
 export const bindPickers = (deps: ShellBindingDeps): void => {
   const { app, wallet, render, setActiveView } = deps;
   const result = app?.querySelector<HTMLElement>("#picker-result");
 
-  app?.querySelectorAll<HTMLButtonElement>("[data-network-id]").forEach((button) => {
+  app?.querySelectorAll<HTMLButtonElement>("button[data-network-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const networkId = button.dataset["networkId"];
       if (!networkId || button.getAttribute("aria-pressed") === "true") {
@@ -247,7 +249,7 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
     });
   });
 
-  app?.querySelectorAll<HTMLButtonElement>("[data-account-id]").forEach((button) => {
+  app?.querySelectorAll<HTMLButtonElement>("button[data-account-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const accountId = button.dataset["accountId"];
       if (!accountId || button.getAttribute("aria-pressed") === "true") {
