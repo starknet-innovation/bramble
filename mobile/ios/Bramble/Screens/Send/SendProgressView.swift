@@ -1,146 +1,46 @@
 import BrambleCore
 import SwiftUI
 
-/// `.send-task-list`: the submission steps on a panel with the xs elevation, split by hairlines
-/// inset past the state dot.
-struct SendTaskList: View {
-    @Environment(\.skin) private var skin
-    let labels: [String]
-    let active: Int
-
-    var body: some View {
-        let metrics = BrambleMetrics.SendWorking.self
-        VStack(spacing: 0) {
-            ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
-                HStack(spacing: metrics.taskGap) {
-                    Circle()
-                        .fill(index < active ? skin.positive : index == active ? skin.accent : skin.hairlineStrong)
-                        .frame(width: metrics.taskDot, height: metrics.taskDot)
-                        .accessibilityHidden(true)
-                    Text(label)
-                        .brambleText(
-                            BrambleTypeScale.label.sized(metrics.taskSize),
-                            weight: index == active ? BrambleWeight.semibold : BrambleWeight.regular
-                        )
-                        .foregroundStyle(index > active ? skin.muted : skin.text)
-                    Spacer(minLength: 0)
-                }
-                .frame(minHeight: metrics.taskHeight)
-                .overlay(alignment: .top) {
-                    if index > 0 {
-                        Rectangle()
-                            .fill(skin.hairline)
-                            .frame(height: 1)
-                            .padding(.leading, metrics.taskHairlineInset)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityValue(index < active ? "Done" : index == active ? "In progress" : "")
-            }
-        }
-        .padding(metrics.taskListPadding)
-        .background(skin.panel, in: RoundedRectangle(cornerRadius: metrics.taskListRadius, style: .continuous))
-        .elevation(BrambleElevation.sendTaskList)
-    }
-}
-
-/// `#send-working`: the authorizing, broadcasting and confirming screens with their task list.
+/// `#send-working`: the one working screen, from authorizing to confirming, with a single title
+/// and no body, task list or liveness line. The flow header names the stage ("Sending").
 struct SendWorkingView: View {
     @Environment(\.skin) private var skin
-    let stage: SendFlowModel.Stage
-
-    /// The stage's copy and its position in the task list.
-    private struct Content {
-        let title: String
-        let copy: String
-        let liveness: String
-        let labels: [String]
-        let active: Int
-    }
-
-    /// Index of the active row in the task list: sign, broadcast, then confirm.
-    private enum ActiveTask {
-        static let authorizing = 1
-        static let broadcasting = 2
-        static let confirming = 3
-    }
-
-    private var content: Content {
-        switch stage {
-        case .broadcasting:
-            Content(
-                title: SendCopy.workingBroadcastingTitle,
-                copy: SendCopy.workingBroadcastingCopy,
-                liveness: SendCopy.keepAppOpen,
-                labels: [SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm],
-                active: ActiveTask.broadcasting
-            )
-
-        case .confirming:
-            Content(
-                title: SendCopy.workingConfirmingTitle,
-                copy: SendCopy.workingConfirmingCopy,
-                liveness: SendCopy.workingConfirmingLiveness,
-                labels: [
-                    SendCopy.taskReviewLocked,
-                    SendCopy.taskAuthorized,
-                    SendCopy.taskBroadcastComplete,
-                    SendCopy.taskConfirm
-                ],
-                active: ActiveTask.confirming
-            )
-
-        default:
-            Content(
-                title: SendCopy.workingAuthorizingTitle,
-                copy: SendCopy.workingAuthorizingCopy,
-                liveness: SendCopy.keepAppOpen,
-                labels: [SendCopy.taskReviewLocked, SendCopy.taskSign, SendCopy.taskBroadcast, SendCopy.taskConfirm],
-                active: ActiveTask.authorizing
-            )
-        }
-    }
 
     var body: some View {
-        let stageContent = content
         let metrics = BrambleMetrics.SendWorking.self
         VStack(spacing: metrics.gap) {
             LiquidDots()
                 .foregroundStyle(skin.accent)
                 .frame(width: metrics.markSize, height: metrics.markSize)
-            VStack(spacing: metrics.copyGap) {
-                Text(stageContent.title)
-                    .brambleText(
-                        BrambleTypeScale.title.sized(metrics.titleSize),
-                        weight: BrambleMetrics.H2.weight,
-                        tracking: BrambleMetrics.H2.tracking
-                    )
-                    .accessibilityAddTraits(.isHeader)
-                Text(stageContent.copy).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
-            }
-            .multilineTextAlignment(.center)
-            SendTaskList(labels: stageContent.labels, active: stageContent.active)
-            Text(stageContent.liveness)
-                .brambleText(BrambleTypeScale.caption)
-                .foregroundStyle(skin.muted)
+            Text(SendCopy.workingTitle)
+                .brambleText(
+                    BrambleTypeScale.title.sized(metrics.titleSize),
+                    weight: BrambleMetrics.H2.weight,
+                    tracking: BrambleMetrics.H2.tracking
+                )
                 .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isHeader)
         }
         .frame(maxWidth: .infinity, minHeight: metrics.minHeight)
         .accessibilityElement(children: .contain)
     }
 }
 
-/// `.send-outcome`: a centred mark, kicker, title and copy, the hash, and the stage's actions.
-/// Shared by the Send outcomes and the Deploy account receipt.
+/// `.send-outcome`: a centred mark, an optional kicker, the title and copy (with a control that
+/// copies the copy when it is an error), the transaction hash row, and the stage's actions.
+/// Shared by the Send outcomes and the Deploy account receipt (`outcome-receipt.ts`).
 struct SendOutcomeLayout<Actions: View>: View {
     @Environment(\.skin) private var skin
     let icon: BrambleIconName
     let tint: Color
-    let kicker: String
+    var kicker: String?
     let title: String
-    let message: String?
-    let hash: String?
+    var message: String?
+    /// The accessible name of the control that copies `message` (the failure's "Copy the error").
+    var copyMessageLabel: String?
+    var hash: String?
+    /// "Transaction" over the hash on a receipt; nil puts the hash row directly under the copy.
+    var hashLabel: String?
     var explorerURL: URL?
     @ViewBuilder let actions: () -> Actions
 
@@ -152,9 +52,11 @@ struct SendOutcomeLayout<Actions: View>: View {
                 .frame(width: metrics.markSize, height: metrics.markSize)
                 .accessibilityHidden(true)
             VStack(spacing: metrics.copyGap) {
-                Text(kicker)
-                    .brambleText(BrambleTypeScale.caption.sized(metrics.kickerSize), weight: metrics.kickerWeight)
-                    .foregroundStyle(skin.muted)
+                if let kicker {
+                    Text(kicker)
+                        .brambleText(BrambleTypeScale.caption.sized(metrics.kickerSize), weight: metrics.kickerWeight)
+                        .foregroundStyle(skin.muted)
+                }
                 Text(title)
                     .brambleText(
                         BrambleTypeScale.headline.sized(metrics.titleSize),
@@ -163,45 +65,63 @@ struct SendOutcomeLayout<Actions: View>: View {
                     )
                     .accessibilityAddTraits(.isHeader)
                 if let message {
-                    Text(message).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+                    HStack(spacing: BrambleSpace.xs) {
+                        Text(message).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
+                        if let copyMessageLabel { CopyButton(value: message, label: copyMessageLabel) }
+                    }
                 }
-                if let hash {
-                    Text(hash)
-                        .brambleText(BrambleTypeScale.mono.sized(metrics.hashSize), mono: true)
-                        .foregroundStyle(skin.muted)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                        .accessibilityLabel("Transaction hash \(hash)")
-                }
-                explorerLink
             }
             .multilineTextAlignment(.center)
+            if let hash {
+                OutcomeHashRow(hash: hash, label: hashLabel, explorerURL: explorerURL)
+            }
             VStack(spacing: BrambleMetrics.Send.actionsGap) { actions() }
         }
         .frame(maxWidth: .infinity, minHeight: metrics.minHeight)
-    }
-
-    /// Deliberate deviation (transactions.md §2.6): the extension links only from Activity.
-    @ViewBuilder private var explorerLink: some View {
-        if let explorerURL {
-            Link(destination: explorerURL) {
-                HStack(spacing: BrambleSpace.xs) {
-                    BrambleIcon(.externalLink, size: BrambleSpace.lg)
-                    Text(SendCopy.explorerLinkLabel)
-                        .brambleText(BrambleTypeScale.caption, weight: BrambleWeight.semibold)
-                }
-                .foregroundStyle(skin.accent)
-                .frame(minHeight: BrambleHit.minimum)
-            }
-            .accessibilityLabel(SendCopy.explorerLinkLabel)
-        }
     }
 }
 
 private enum OutcomeLayout {
     /// The outcome glyph is drawn at half the mark's size.
     static let glyphDivisor: CGFloat = 2
+}
+
+/// `outcomeHashRow`: the hash truncated (`accountLabel`), linked to the explorer when the network
+/// has one (opened in the system browser), and a control that copies it in full. On a receipt it
+/// sits under the "Transaction" label.
+struct OutcomeHashRow: View {
+    @Environment(\.skin) private var skin
+    let hash: String
+    var label: String?
+    var explorerURL: URL?
+
+    var body: some View {
+        let metrics = BrambleMetrics.SendOutcome.self
+        VStack(spacing: BrambleSpace.xs) {
+            if let label {
+                Text(label)
+                    .brambleText(BrambleTypeScale.label.sized(BrambleMetrics.Send.receiptLabelSize))
+                    .foregroundStyle(skin.muted)
+            }
+            HStack(spacing: BrambleSpace.xs) {
+                if let explorerURL {
+                    Link(destination: explorerURL) { hashText(metrics).foregroundStyle(skin.accent) }
+                        .accessibilityLabel(SendCopy.explorerLinkLabel)
+                        .accessibilityValue(hash)
+                } else {
+                    hashText(metrics).foregroundStyle(skin.muted).accessibilityValue(hash)
+                }
+                CopyButton(value: hash, label: SendCopy.copyTransactionHash)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func hashText(_ metrics: BrambleMetrics.SendOutcome.Type) -> some View {
+        Text(shortAddress(hash))
+            .brambleText(BrambleTypeScale.mono.sized(metrics.hashSize), mono: true)
+            .lineLimit(1)
+    }
 }
 
 /// `#send-success`, `#send-pending` and `#send-failure`.
@@ -215,19 +135,20 @@ struct SendOutcomeView: View {
         switch model.stage {
         case .submitted:
             let sent = model.review.map { review in
-                review.amountDisplay + " " + review.tokenSymbol + SendCopy.sentTo + review.recipientShort
+                review.amountDisplay + " " + review.tokenSymbol + SendCopy.sentTo
+                    + (model.recipientLabel ?? review.recipientShort)
             }
             SendOutcomeLayout(
                 icon: .check,
                 tint: skin.positive,
-                kicker: SendCopy.successKicker,
                 title: SendCopy.successTitle,
                 message: sent,
                 hash: model.hash,
+                hashLabel: SendCopy.transactionLabel,
                 explorerURL: model.explorerURL
             ) {
                 PillButton(SendCopy.viewActivity, icon: .activity, action: viewActivity)
-                PillButton(SendCopy.backToHome, kind: .secondary, action: done)
+                PillButton(SendCopy.back, kind: .secondary, action: done)
             }
 
         case .pending:
@@ -248,9 +169,9 @@ struct SendOutcomeView: View {
             SendOutcomeLayout(
                 icon: .x,
                 tint: skin.danger,
-                kicker: SendCopy.failureKicker,
                 title: SendCopy.failureTitle,
                 message: model.failureMessage ?? SendCopy.failureDefault,
+                copyMessageLabel: SendCopy.copyError,
                 hash: model.hash,
                 explorerURL: model.explorerURL
             ) {

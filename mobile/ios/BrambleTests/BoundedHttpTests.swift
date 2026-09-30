@@ -35,7 +35,14 @@ final class ScriptedProtocol: URLProtocol, @unchecked Sendable {
 
 final class BoundedHttpTests: XCTestCase {
     private func request(_ path: String, limit: UInt64 = 64, deadlineMs: UInt64 = 2_000) -> HttpRequest {
-        HttpRequest(method: .get, url: "https://stub.test\(path)", headers: [], body: nil, maxBodyBytes: limit, deadlineMs: deadlineMs)
+        HttpRequest(
+            method: .get,
+            url: "https://stub.test\(path)",
+            headers: [],
+            body: nil,
+            maxBodyBytes: limit,
+            deadlineMs: deadlineMs
+        )
     }
 
     override func setUp() {

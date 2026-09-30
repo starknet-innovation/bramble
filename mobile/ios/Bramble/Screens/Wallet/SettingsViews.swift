@@ -3,6 +3,12 @@ import SwiftUI
 
 /// Settings hub (`settings-ui.ts`): eyebrow-labelled groups of menu rows.
 struct SettingsHubView: View {
+    /// `settingsScreen`'s "This account" row: it opens Deploy account whatever the deployment
+    /// state, because that screen itself says when the account is already deployed.
+    static let deployRow = (section: SendCopy.settingsThisAccount, title: SendCopy.settingsDeployRow)
+    /// Where the deploy row leads.
+    static let deployFlow = WalletShell.Flow.deploy
+
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @AppStorage(ThemeChoice.storageKey) private var theme = ThemeChoice.default
@@ -28,6 +34,9 @@ struct SettingsHubView: View {
                 MenuRow(icon: .globe, title: "Network", value: store.networkInfo.name) { open(.network) }
                 MenuRow(icon: .book, title: "Address book") { open(.coordination(.addressBook)) }
                 MenuRow(icon: .users, title: "Shared accounts") { open(.coordination(.sharedAccounts)) }
+            }
+            SettingsSection(title: Self.deployRow.section) {
+                MenuRow(icon: .rocket, title: Self.deployRow.title) { open(Self.deployFlow) }
             }
             SettingsSection(title: "Preferences") {
                 MenuRow(

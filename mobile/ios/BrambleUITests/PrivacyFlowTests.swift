@@ -47,7 +47,7 @@ final class PrivacyFlowTests: XCTestCase {
     private func assertUnsupported(_ app: XCUIApplication) {
         XCTAssertTrue(app.staticTexts["Not available in the mobile app yet"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["Back to wallet"].exists)
-        XCTAssertFalse(app.buttons["Deploy and enable"].exists)
+        XCTAssertFalse(app.buttons["Deploy"].exists, "deployment is never offered from privacy")
     }
 
     func testRegisteredPortfolioIncludesPrivateValueAndShieldIsUnsupported() {
@@ -96,22 +96,27 @@ final class PrivacyFlowTests: XCTestCase {
 
     func testUndeployedAndFundedStopsAtTheDeployBlockerWithoutADeployButton() {
         let app = launch(node: "undeployed", privacy: "unregistered")
-        // Token detail's action and the Shield tile both reach the deploy blocker, never a deploy.
+        // Token detail's "Shield" and the Shield tile both reach the deploy blocker, never a deploy.
         openToken(app, "STRK")
-        tap(app.buttons["Deploy and enable"])
+        tap(app.buttons["Shield"])
         XCTAssertTrue(app.staticTexts["Deploy this account first"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["Deploy and enable"].exists, "deployment is never offered from privacy")
+        XCTAssertTrue(app.staticTexts["Deploy this account before enabling private balances"].exists)
+        XCTAssertFalse(app.buttons["Deploy"].exists, "deployment is never offered from privacy")
         tap(app.buttons["Back to wallet"])
-        tap(app.buttons["Deploy and enable"])
+        tap(app.buttons["Back"].firstMatch)
+        // The tile reads "Shield"; its accessible name says what stands in the way.
+        tap(app.buttons["Shield — deploy this account first"])
         XCTAssertTrue(app.staticTexts["Deploy this account first"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["Deploy and enable"].exists, "deployment is never offered from privacy")
+        XCTAssertFalse(app.buttons["Deploy"].exists, "deployment is never offered from privacy")
         snapshot(app, "privacy-deploy-blocker")
     }
 
-    func testUndeployedAndUnfundedSendsToReceive() {
+    func testUndeployedAndUnfundedStopsAtTheFundBlocker() {
         let app = launch(node: "unfunded", privacy: "unregistered")
-        tap(app.buttons["Receive STRK before deploying this account"])
-        XCTAssertTrue(app.staticTexts["Your Starknet address"].waitForExistence(timeout: 10))
+        // The tile opens the journey, which names the prerequisite itself (no detour to Receive).
+        tap(app.buttons["Shield — add STRK to this account first"])
+        XCTAssertTrue(app.staticTexts["Initialize your account"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Deposit some STRK, then come back"].exists)
     }
 
     func testSepoliaIsNotAvailableOnThisNetwork() {

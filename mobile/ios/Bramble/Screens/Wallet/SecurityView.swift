@@ -58,8 +58,10 @@ struct SecurityView: View {
                 }
                 VStack(alignment: .leading, spacing: BrambleMetrics.Section.gap) {
                     Eyebrow(text: BrambleCopy.autoLockEyebrow)
-                    DetailRow(icon: .lockKeyhole, text: fill(BrambleCopy.autoLockIdle))
-                    DetailRow(icon: .lock, text: BrambleCopy.autoLockBackground)
+                    MenuGroup {
+                        DetailRow(icon: .lockKeyhole, text: fill(BrambleCopy.autoLockIdle))
+                        DetailRow(icon: .lock, text: BrambleCopy.autoLockBackground)
+                    }
                 }
             }
             .padding(BrambleMetrics.Screen.shellPadding)

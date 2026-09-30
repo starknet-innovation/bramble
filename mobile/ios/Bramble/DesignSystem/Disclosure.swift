@@ -1,7 +1,7 @@
 import SwiftUI
 
-// `details.disclosure` and the checkbox glyph, shared by the account screens (Find your accounts,
-// Receive's wallet identity) and the onboarding check rows. Both are flat, as the menu list is:
+// `details.disclosure` and the checkbox glyph, shared by the account screens (Find your accounts and
+// its candidate rows, Receive's wallet identity). Both are flat, as the menu list is:
 // the panel fill and the generated menu metrics, no edge and no shadow.
 
 /// `details.disclosure`: a menu-row header (title, optional summary, chevron) over a panel that

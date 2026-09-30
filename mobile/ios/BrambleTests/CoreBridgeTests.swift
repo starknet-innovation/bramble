@@ -54,6 +54,31 @@ final class CoreBridgeTests: XCTestCase {
         }
     }
 
+    /// The extension's meter vectors through FFI, and the setup form's one gate: past the
+    /// 8-character floor a matched passphrase submits, weak or not (no acknowledgement).
+    func testPassphraseMeterAndGateFollowTheExtension() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "extension-parity", withExtension: "json"))
+        let fixture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let rendered: [String: Any] = try fixtureValue(fixture, "ui")
+        let vectors: [[String: Any]] = try fixtureValue(rendered, "passphrases")
+        XCTAssertFalse(vectors.isEmpty)
+        let levels: [String: PassphraseLevel] = ["empty": .empty, "weak": .weak, "fair": .fair, "strong": .strong]
+        for vector in vectors {
+            let value: String = try fixtureValue(vector, "value")
+            let strength = passphraseStrength(passphrase: value)
+            let acceptable = vector["acceptable"] as? Bool
+            XCTAssertEqual(strength.acceptable, acceptable, value)
+            XCTAssertEqual(strength.hint, vector["hint"] as? String, value)
+            XCTAssertEqual(strength.level, levels[vector["level"] as? String ?? ""], value)
+            let submits = PassphraseStep.canSubmit(strength, passphrase: value, confirmation: value)
+            XCTAssertEqual(submits, acceptable, value)
+            XCTAssertFalse(PassphraseStep.canSubmit(strength, passphrase: value, confirmation: value + "x"), value)
+        }
+        let weak = passphraseStrength(passphrase: "aaaaaaaa")
+        XCTAssertEqual(weak.level, .weak)
+        XCTAssertTrue(PassphraseStep.canSubmit(weak, passphrase: "aaaaaaaa", confirmation: "aaaaaaaa"))
+    }
+
     func testLockedCoreRefusesKeyOperations() throws {
         let core = try core()
         let phrase = try core.createWallet(password: "a strong password", wordCount: 12)

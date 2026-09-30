@@ -5,15 +5,16 @@ import SwiftUI
 private let privacyLockIconSize: CGFloat = 12
 
 /// The Home Shield tile (`wallet-shell.ts` `shieldTile`). Label and accessibility label are the
-/// extension's; the tap follows mobile/docs/privacy.md §2.1 (deploy and every write suppressed).
+/// extension's: it always reads "Shield", and the accessible name carries the reason. Every
+/// enabled tile opens the privacy journey, which names a deploy or fund blocker itself; the
+/// extension's "Send in Shield mode" is the journey's Unsupported blocker on mobile (§2.1).
 struct ShieldActionTile: View {
     @Environment(WalletStore.self) private var store
-    let receive: () -> Void
     let journey: () -> Void
 
     var body: some View {
         let tile = store.shieldTileState
-        ActionTile(title: tile.copy.label, icon: .shield, action: tile == .fundFirst ? receive : journey)
+        ActionTile(title: tile.copy.label, icon: .shield, action: journey)
             .disabled(tile == .noStrkToken || store.account == nil)
             .accessibilityLabel(tile.copy.accessibility)
     }

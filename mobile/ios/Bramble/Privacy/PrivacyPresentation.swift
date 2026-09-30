@@ -3,7 +3,8 @@ import BrambleCore
 /// The core's privacy gate answers, spelled in the extension's copy. Views render these; the unit
 /// tests hold them to the rendered extension (`extension-privacy-rules.json`).
 extension ShieldTile {
-    /// The tile's label and accessibility label (`shieldTile`).
+    /// The tile's label and accessibility label (`shieldTile`). Every tile reads "Shield"; the
+    /// accessible name says what stands in the way.
     var copy: (label: String, accessibility: String) {
         switch self {
         case .noStrkToken:
@@ -12,8 +13,8 @@ extension ShieldTile {
         case .fundFirst:
             (PrivacyCopy.tileFundLabel, PrivacyCopy.tileFundAria)
 
-        case .deployAndEnable:
-            (PrivacyCopy.tileDeployLabel, PrivacyCopy.tileDeployLabel)
+        case .deployFirst:
+            (PrivacyCopy.tileDeployLabel, PrivacyCopy.tileDeployAria)
 
         case .activate:
             (PrivacyCopy.tileShieldLabel, PrivacyCopy.tileActivateAria)
@@ -25,17 +26,15 @@ extension ShieldTile {
 }
 
 extension PrivateLine {
-    /// The value side of a row's "Private balance" line (`privateBreakdownLine`).
+    /// The value side of a row's "Private balance" line (`privateBreakdownLine`). An undeployed
+    /// account reads "Shield", funded or not: the journey it opens names the prerequisite.
     var text: String {
         switch self {
         case .unavailable:
             PrivacyCopy.lineUnavailable
 
-        case .fundWithStrk:
-            PrivacyCopy.tileFundLabel
-
-        case .deployAndEnable:
-            PrivacyCopy.tileDeployLabel
+        case .shield:
+            PrivacyCopy.detailShield
 
         case .discovering:
             PrivacyCopy.lineDiscovering
@@ -45,6 +44,26 @@ extension PrivateLine {
 
         case let .amount(text):
             text
+        }
+    }
+}
+
+extension DetailAction {
+    /// The token screen's privacy controls, left to right (`privacyActions`): one "Shield" for an
+    /// undeployed account, "Shield" and "Unshield" once registered, "Go private" otherwise.
+    var labels: [String] {
+        switch self {
+        case .none:
+            []
+
+        case .shield:
+            [PrivacyCopy.detailShield]
+
+        case .shieldUnshield:
+            [PrivacyCopy.detailShield, PrivacyCopy.detailUnshield]
+
+        case .goPrivate:
+            [PrivacyCopy.detailGoPrivate]
         }
     }
 }

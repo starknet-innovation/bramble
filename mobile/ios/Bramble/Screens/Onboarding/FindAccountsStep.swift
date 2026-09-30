@@ -2,8 +2,9 @@ import BrambleCore
 import SwiftUI
 
 /// `data-onboarding-step="recovery-accounts"`: the first 20 indices searched for Bramble, Ready,
-/// and Braavos accounts, active ones selected, an advanced manual index, the acknowledgement that
-/// gates restore on every network (as `refreshGate` does), and one atomic restore.
+/// and Braavos accounts, active ones selected, an advanced manual index, and one atomic restore.
+/// Restore needs only a selection (`refreshGate`): the extension dropped the Mainnet
+/// acknowledgement that used to gate it.
 ///
 /// **Decision:** no "Back to passphrase". Mobile seals the vault at the passphrase step (with
 /// recovery pending) so a kill or lock resumes here; there is no earlier step to return to.
@@ -13,7 +14,6 @@ struct FindAccountsStep: View {
     @Environment(\.scenePhase) private var phase
     let done: () -> Void
     @State private var driver: RecoveryScanDriver?
-    @State private var acknowledged = false
     @State private var manualIndex = ""
     @State private var result: String?
     @State private var restoring = false
@@ -21,8 +21,6 @@ struct FindAccountsStep: View {
 
     private static let lede = "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. "
         + "Accounts with on-chain activity are selected automatically."
-    private static let acknowledgement = "I checked these account types and indices and want to restore the "
-        + "selected accounts on Starknet Mainnet."
 
     var body: some View {
         OnboardingStep(icon: .wallet, title: "Find your accounts", lede: Self.lede) {
@@ -45,12 +43,11 @@ struct FindAccountsStep: View {
                 group(.argent, "Ready accounts")
                 group(.braavos, "Braavos accounts")
                 Disclosure(title: "Advanced manual index", isOpen: $manualOpen) { manual }
-                CheckRow(text: Self.acknowledgement, isOn: $acknowledged)
                 StatusLine(text: result)
             }
         } cta: {
             PillButton("Restore selected accounts", busy: restoring) { restore() }
-                .disabled((driver?.selected.isEmpty ?? true) || !acknowledged || driver?.scanning == true)
+                .disabled((driver?.selected.isEmpty ?? true) || driver?.scanning == true)
         }
         .task {
             guard driver == nil else { return }
@@ -107,7 +104,7 @@ struct FindAccountsStep: View {
     }
 
     private func restore() {
-        guard let driver, !driver.selected.isEmpty, acknowledged else { return }
+        guard let driver, !driver.selected.isEmpty else { return }
         restoring = true
         result = "Restoring the selected accounts into your encrypted vault…"
         Task {

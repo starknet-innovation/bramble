@@ -2,7 +2,7 @@ import BrambleCore
 import SwiftUI
 
 // Structural components from `styles-base.ts`: grouped menu lists with inset hairlines, the flow
-// header with its network pill, and the onboarding badge, option card, and detail row.
+// header with its network pill, the onboarding badge and option card, and the static detail row.
 
 /// `.menu-list`: one panel per group, rows split by hairlines inset from the leading edge. Flat:
 /// the extension gives grouped lists no shadow.
@@ -241,25 +241,26 @@ struct OptionCard: View {
     }
 }
 
-/// `.onboarding-complete-detail`: an elevated row with an icon and a caption.
+/// A static line in a `MenuGroup`: the glyph and a short fact, with no action (Security's
+/// auto-lock facts). Built on the generated menu-row metrics; the onboarding completion card that
+/// once had its own detail rows no longer shows any.
 struct DetailRow: View {
     @Environment(\.skin) private var skin
     let icon: BrambleIconName
     let text: String
 
     var body: some View {
-        let metrics = BrambleMetrics.Complete.self
-        HStack(spacing: metrics.detailGap) {
-            BrambleIcon(icon, size: metrics.detailGlyph).foregroundStyle(skin.text)
+        let metrics = BrambleMetrics.MenuRow.self
+        HStack(spacing: metrics.gap) {
+            BrambleIcon(icon, size: metrics.glyph).foregroundStyle(skin.muted)
             Text(text)
-                .brambleText(BrambleTypeScale.caption.sized(metrics.detailSize))
-                .foregroundStyle(skin.muted)
+                .brambleText(BrambleTypeScale.body.sized(metrics.titleSize))
+                .foregroundStyle(skin.text)
                 .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
         }
-        .padding(metrics.detailPadding)
-        .frame(minHeight: metrics.detailHeight)
-        .background(skin.elevated, in: RoundedRectangle(cornerRadius: metrics.detailRadius, style: .continuous))
+        .padding(metrics.padding)
+        .frame(minHeight: metrics.height)
         .accessibilityElement(children: .combine)
     }
 }

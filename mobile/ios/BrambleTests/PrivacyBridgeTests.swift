@@ -68,15 +68,24 @@ final class PrivacyBridgeTests: XCTestCase {
             let answer = shieldTile(network: network, deployment: deployment, strkFunded: funded, reading: reading)
             XCTAssertEqual(answer.copy.label, tile["label"] as? String, "\(row)")
             XCTAssertEqual(answer.copy.accessibility, tile["aria"] as? String, "\(row)")
+            // The private line and token detail take no funding flag: undeployed reads "Shield".
             let line = privateLine(
                 network: network,
                 deployment: deployment,
-                strkFunded: funded,
                 reading: reading,
                 tokenAddress: state.balances[0].tokenAddress,
                 state: state
             )
             XCTAssertEqual(line.text, (row["privateLine"] as? [String: Any])?["text"] as? String, "\(row)")
+            let detail = tokenDetailPrivacy(
+                network: network,
+                deployment: deployment,
+                reading: reading,
+                tokenAddress: state.balances[0].tokenAddress,
+                state: state
+            )
+            let actions = (row["detail"] as? [String: Any])?["actions"] as? [String]
+            XCTAssertEqual(detail.action.labels, actions, "\(row)")
             let notice = receivePoolNotice(deployment: deployment, strkFunded: funded, reading: reading)
             XCTAssertEqual(notice == .hidden, row["notice"] as? String == "hidden", "\(row)")
         }
@@ -89,8 +98,12 @@ final class PrivacyBridgeTests: XCTestCase {
         XCTAssertEqual(Set(mobileOnly.keys), ["unsupportedTitle", "unsupportedBody"])
         XCTAssertEqual(PrivacyCopy.unsupportedTitle, mobileOnly["unsupportedTitle"])
         XCTAssertEqual(PrivacyCopy.noticeTitle, strings["noticeTitle"])
-        XCTAssertEqual(PrivacyCopy.preparingBody, strings["preparingBody"])
+        XCTAssertNil(strings["preparingBody"], "the preparing screen has a title and tasks, no body")
         XCTAssertEqual(PrivacyBlocker.network.copy.title, strings["blockedNetworkTitle"])
+        // The journey names the prerequisite in its hint: deploy, or deposit STRK.
+        XCTAssertEqual(PrivacyJourney.hint(.deploy), strings["deployRequired"])
+        XCTAssertEqual(PrivacyJourney.hint(.fund), strings["fundsRequired"])
+        XCTAssertEqual(ShieldTile.deployFirst.copy.accessibility, strings["tileDeployAria"])
         XCTAssertFalse(strings.values.contains(PrivacyCopy.unsupportedTitle))
         XCTAssertEqual(
             privacyCapabilities(),

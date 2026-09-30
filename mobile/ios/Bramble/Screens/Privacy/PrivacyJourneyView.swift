@@ -23,9 +23,11 @@ final class PrivacyJourney {
         var afterRead = false
         guard let account = store.account else { return }
         while true {
+            // The loaded STRK balance: only a loaded zero turns the deploy blocker into Fund.
             let entry = privacyEntry(
                 network: store.network,
                 deployment: deployment,
+                strkFunded: store.strkFunding.map { $0 == .funded },
                 reading: store.privacy.reading,
                 afterRead: afterRead
             )
@@ -54,10 +56,13 @@ final class PrivacyJourney {
 
     /// The reason line under a blocker. Service text is never shown, so a failed read carries the
     /// extension's fallback, "Private balances unavailable".
-    private static func hint(_ blocker: PrivacyBlocker) -> String? {
+    static func hint(_ blocker: PrivacyBlocker) -> String? {
         switch blocker {
         case .deploy:
             PrivacyCopy.deployRequired
+
+        case .fund:
+            PrivacyCopy.fundsRequired
 
         case .service:
             PrivacyCopy.blockedServiceTitle
@@ -112,7 +117,7 @@ struct PrivacyJourneyView: View {
     private var preparing: some View {
         VStack(spacing: BrambleSpace.lg) {
             ProgressView().controlSize(.large)
-            title(PrivacyCopy.preparingTitle, body: PrivacyCopy.preparingBody)
+            title(PrivacyCopy.preparingTitle)
             VStack(alignment: .leading, spacing: BrambleSpace.sm) {
                 ForEach(Array(Self.preparingTasks.enumerated()), id: \.offset) { index, task in
                     HStack(spacing: BrambleSpace.md) {
@@ -160,7 +165,8 @@ struct PrivacyJourneyView: View {
         }
     }
 
-    private func title(_ title: String, body: String) -> some View {
+    /// The screen's heading, over its body when it has one (the preparing screen has none).
+    private func title(_ title: String, body: String? = nil) -> some View {
         VStack(spacing: BrambleSpace.sm) {
             Text(title)
                 .brambleText(
@@ -170,22 +176,24 @@ struct PrivacyJourneyView: View {
                 )
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.isHeader)
-            Text(body)
-                .brambleText(BrambleTypeScale.body)
-                .foregroundStyle(skin.muted)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: Layout.titleBodyMaxWidth)
+            if let body {
+                Text(body)
+                    .brambleText(BrambleTypeScale.body)
+                    .foregroundStyle(skin.muted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: Layout.titleBodyMaxWidth)
+            }
         }
     }
 }
 
 /// Token detail's privacy section (`tokenDetailFlow` summary + `privacyActions`, §2.3), shown on
-/// the portfolio's token-detail screen (`TokenDetailView`).
+/// the portfolio's token-detail screen (`TokenDetailView`). An undeployed account gets one
+/// "Shield" control, funded or not: the journey it opens names the deploy or fund blocker.
 struct TokenPrivacySection: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     let tokenAddress: String
-    let receive: () -> Void
     let journey: () -> Void
 
     private static let lockIconSize: CGFloat = 12
@@ -198,22 +206,20 @@ struct TokenPrivacySection: View {
             case .none:
                 EmptyView()
 
-            case .fundWithStrk:
-                PillButton(PrivacyCopy.tileFundLabel, icon: .qrCode, action: receive)
-
-            case .deployAndEnable:
-                PillButton(PrivacyCopy.tileDeployLabel, icon: .shield, action: journey)
-
-            case .goPrivate:
-                PillButton(PrivacyCopy.detailGoPrivate, icon: .shield, action: journey)
+            case .shield, .goPrivate:
+                // One control, opening the journey (which names a deploy or fund blocker itself).
+                ForEach(detail.action.labels, id: \.self) { label in
+                    PillButton(label, icon: .shield, action: journey)
+                }
 
             case .shieldUnshield:
+                let labels = detail.action.labels
                 HStack(spacing: BrambleSpace.sm) {
-                    PillButton(PrivacyCopy.detailShield, icon: .shield) {
+                    PillButton(labels.first ?? PrivacyCopy.detailShield, icon: .shield) {
                         // No action: shielding is not built on mobile, so the capability keeps this disabled.
                     }
                     .disabled(!privacyCapabilities().canShield)
-                    PillButton(PrivacyCopy.detailUnshield, kind: .secondary) {
+                    PillButton(labels.last ?? PrivacyCopy.detailUnshield, kind: .secondary) {
                         // No action: unshielding is not built on mobile, so the capability keeps this disabled.
                     }
                     .disabled(!privacyCapabilities().canUnshield)

@@ -1,13 +1,18 @@
 import BrambleCore
 import SwiftUI
 
-/// The Send journey from `send-views.ts`: recipient → details (asset, amount) → review → working
-/// → outcome. Every string is the extension's (`SendCopy`, generated); every value shown is the
-/// core's; every length is the side panel's send stylesheet (`BrambleMetrics.Send*`, generated).
-/// The plan is closed when this screen goes away, and on lock by `WalletStore`.
+/// The Send journey from `send-views.ts`: recipient → details (amount, with the asset picked in a
+/// sheet) → review → working → outcome. Every string is the extension's (`SendCopy`, generated);
+/// every value shown is the core's; every length is the side panel's send stylesheet
+/// (`BrambleMetrics.Send*`, generated). The plan is closed when this screen goes away, and on
+/// lock by `WalletStore`.
 struct SendFlowView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    /// The token to open on (a token screen's Send); nil opens on STRK.
+    var token: String?
+    /// The asset sheet's "Manage tokens" row: opens the token list over the journey.
+    var manageTokens: () -> Void = { /* No action unless the shell wires the token list. */ }
     @State private var model: SendFlowModel?
 
     var body: some View {
@@ -15,7 +20,7 @@ struct SendFlowView: View {
             VStack(alignment: .leading, spacing: BrambleMetrics.Send.stageGap) {
                 if let model {
                     FlowHeader(title: model.title, network: store.networkLabel) { back(model) }
-                    SendStageView(model: model, done: { dismiss() }, viewActivity: {
+                    SendStageView(model: model, manageTokens: manageTokens, done: { dismiss() }, viewActivity: {
                         store.tab = .activity
                         dismiss()
                     })
@@ -33,7 +38,7 @@ struct SendFlowView: View {
             .padding(BrambleMetrics.Screen.shellPadding)
         }
         .scrollDismissesKeyboard(.interactively)
-        .onAppear { if model == nil { model = store.makeSendModel() } }
+        .onAppear { if model == nil { model = store.makeSendModel(token: token) } }
         .onDisappear { model?.close() }
         .onChange(of: model?.toast) { _, toast in
             guard let toast else { return }
@@ -53,7 +58,7 @@ struct SendFlowView: View {
         case .recipient, .submitted, .pending:
             dismiss()
 
-        case .details, .asset, .review, .failed:
+        case .details, .review, .failed:
             model.back()
 
         default:
@@ -65,6 +70,7 @@ struct SendFlowView: View {
 /// Switches on the journey's stage.
 struct SendStageView: View {
     let model: SendFlowModel
+    let manageTokens: () -> Void
     let done: () -> Void
     let viewActivity: () -> Void
 
@@ -73,17 +79,14 @@ struct SendStageView: View {
         case .recipient:
             SendRecipientView(model: model)
 
-        case .asset:
-            SendAssetView(model: model)
-
         case .details, .reviewing:
-            SendDetailsView(model: model)
+            SendDetailsView(model: model, manageTokens: manageTokens)
 
         case .review:
             SendReviewView(model: model)
 
         case .authorizing, .broadcasting, .confirming:
-            SendWorkingView(stage: model.stage)
+            SendWorkingView()
 
         case .pending, .submitted, .failed:
             SendOutcomeView(model: model, done: done, viewActivity: viewActivity)
@@ -91,7 +94,8 @@ struct SendStageView: View {
     }
 }
 
-/// `.send-origin-account`: the sending account on the elevated fill.
+/// `.send-origin-account`: the sending account on the elevated fill, its truncated address beside
+/// a control that copies it in full (`copySendingAddress`).
 struct SendOriginCard: View {
     @Environment(\.skin) private var skin
     let account: AccountRecord
@@ -102,15 +106,19 @@ struct SendOriginCard: View {
             AccountAvatarView(address: account.address)
             VStack(alignment: .leading, spacing: metrics.rowCopyGap) {
                 Text(account.displayName).brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
-                Text(account.shortAddress).brambleText(BrambleTypeScale.caption, mono: true).foregroundStyle(skin.muted)
+                Text(account.shortAddress)
+                    .brambleText(BrambleTypeScale.caption, mono: true)
+                    .foregroundStyle(skin.muted)
+                    .accessibilityValue(account.address)
             }
             Spacer(minLength: 0)
+            CopyButton(value: account.address, label: SendCopy.copySendingAddress)
         }
         .padding(.leading, metrics.originInset)
         .padding(.vertical, BrambleSpace.sm)
         .frame(minHeight: metrics.originHeight)
         .background(skin.elevated, in: RoundedRectangle(cornerRadius: metrics.originRadius, style: .continuous))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -171,14 +179,13 @@ struct SendSearchField: View {
     }
 }
 
-/// `.send-recipient-row` / `.send-asset-row`: a pressable panel row with a mark, copy and a
-/// trailing value.
+/// `.send-recipient-row`: a pressable panel row with a mark, the name over the truncated address,
+/// an optional note (the sender's "Current"), and a chevron.
 struct SendChoiceRow<Mark: View>: View {
     @Environment(\.skin) private var skin
     let title: String
     let detail: String
-    var mono = true
-    var value: String?
+    var note: String?
     let label: String
     @ViewBuilder let mark: () -> Mark
     let action: () -> Void
@@ -194,20 +201,16 @@ struct SendChoiceRow<Mark: View>: View {
                         .foregroundStyle(skin.text)
                         .lineLimit(1)
                     Text(detail)
-                        .brambleText(BrambleTypeScale.caption, mono: mono)
+                        .brambleText(BrambleTypeScale.caption, mono: true)
                         .foregroundStyle(skin.muted)
                         .lineLimit(1)
+                    if let note {
+                        Text(note).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                    }
                 }
                 .padding(.horizontal, metrics.rowCopyInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if let value {
-                    Text(value)
-                        .brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
-                        .monospacedDigit()
-                        .foregroundStyle(skin.text)
-                } else {
-                    BrambleIcon(.chevronRight, size: BrambleControl.icon).foregroundStyle(skin.muted)
-                }
+                BrambleIcon(.chevronRight, size: BrambleControl.icon).foregroundStyle(skin.muted)
             }
             .padding(metrics.rowPadding)
             .frame(minHeight: metrics.rowHeight)
@@ -226,76 +229,23 @@ struct SendChoiceRow<Mark: View>: View {
     }
 }
 
-/// `.send-recipient-stage`: the sending account, the address field, the account / address-book
-/// tabs, and Continue.
-struct SendRecipientView: View {
-    @Bindable var model: SendFlowModel
-    @State private var tab = 0
+/// `.send-list-heading`: a list's glyph and name, and for a folder the number of accounts in it.
+struct SendListHeading: View {
+    @Environment(\.skin) private var skin
+    let icon: BrambleIconName
+    let title: String
+    var count: Int?
 
     var body: some View {
-        let metrics = BrambleMetrics.Send.self
-        VStack(alignment: .leading, spacing: metrics.stageGap) {
-            VStack(alignment: .leading, spacing: BrambleSpace.sm) {
-                SendHeading(text: SendCopy.sendingFrom, kicker: true)
-                SendOriginCard(account: model.account)
+        HStack(spacing: BrambleSpace.sm) {
+            BrambleIcon(icon, size: BrambleControl.icon).foregroundStyle(skin.muted)
+            Text(title).brambleText(BrambleTypeScale.label, weight: BrambleWeight.semibold)
+            if let count {
+                Text(String(count)).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
             }
-            VStack(alignment: .leading, spacing: BrambleSpace.sm) {
-                SendHeading(text: SendCopy.sendingTo)
-                SendSearchField(
-                    placeholder: SendCopy.recipientPlaceholder,
-                    label: SendCopy.recipientFieldLabel,
-                    text: $model.recipientInput,
-                    invalid: model.recipientError != nil
-                ) { model.continueWithRecipient() }
-                StatusLine(text: model.recipientError, tone: .danger)
-            }
-            SegmentedControl(options: [(SendCopy.myAccounts, 0), (SendCopy.addressBook, 1)], selection: $tab)
-            if tab == 0 {
-                VStack(spacing: metrics.listGap) {
-                    ForEach(model.otherAccounts, id: \.id) { account in
-                        SendChoiceRow(
-                            title: account.displayName,
-                            detail: account.shortAddress,
-                            label: "\(account.displayName), \(account.shortAddress)",
-                            mark: { AccountAvatarView(address: account.address, size: BrambleSize.mark) },
-                            action: { model.useRecipient(account.address) }
-                        )
-                    }
-                }
-            } else {
-                EmptyState(message: SendCopy.addressBookEmpty)
-            }
-            PillButton(SendCopy.continueWithAddress) { model.continueWithRecipient() }
-                .disabled(model.recipientInput.trimmingCharacters(in: .whitespaces).isEmpty)
+            Spacer(minLength: 0)
         }
-    }
-}
-
-/// `.send-asset-stage`: the network's bundled tokens with the account's balance.
-struct SendAssetView: View {
-    @Environment(WalletStore.self) private var store
-    let model: SendFlowModel
-
-    var body: some View {
-        let metrics = BrambleMetrics.Send.self
-        VStack(alignment: .leading, spacing: metrics.listGap) {
-            HStack {
-                SendHeading(text: SendCopy.yourTokens, kicker: true)
-                Spacer()
-                SendHeading(text: SendCopy.yourBalance, kicker: true)
-            }
-            ForEach(model.network.tokens, id: \.address) { token in
-                let amount = store.amount(of: token)
-                SendChoiceRow(
-                    title: token.symbol,
-                    detail: amount ?? "…",
-                    mono: false,
-                    value: "—",
-                    label: "\(token.symbol), \(amount ?? "loading")",
-                    mark: { TokenMark(address: token.address, symbol: token.symbol) },
-                    action: { model.choose(token) }
-                )
-            }
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }

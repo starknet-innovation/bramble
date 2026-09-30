@@ -1,16 +1,15 @@
 import BrambleCore
 import SwiftUI
 
-/// `#account-preview` with the Mainnet acknowledgement: confirm the derived public address.
+/// `#account-preview`: confirm the derived public address. The extension dropped the Mainnet
+/// acknowledgement (`mainnet-ack.ts`), so adding the account needs only the selected preview.
 struct ReviewAccountStep: View {
     @Environment(\.skin) private var skin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(WalletStore.self) private var store
-    let network: NetworkId
     let next: () -> Void
     @State private var account: AccountRecord?
     @State private var selected = true
-    @State private var acknowledged = false
 
     /// The check mark shrinks slightly while the account is not selected.
     private static let unselectedCheckScale: CGFloat = 0.92
@@ -21,18 +20,10 @@ struct ReviewAccountStep: View {
             title: "Review your account",
             lede: "Confirm the derived public address, then add it to this wallet."
         ) {
-            VStack(spacing: BrambleMetrics.Onboarding.fieldsGap) {
-                accountOption
-                if network == .mainnet {
-                    CheckRow(
-                        text: "I understand this wallet can hold real funds on Starknet Mainnet.",
-                        isOn: $acknowledged
-                    )
-                }
-            }
+            accountOption
         } cta: {
             PillButton("Add selected account", action: next)
-                .disabled(account == nil || !selected || (network == .mainnet && !acknowledged))
+                .disabled(account == nil || !selected)
         }
         .task { account = try? await store.previewAccount() }
     }

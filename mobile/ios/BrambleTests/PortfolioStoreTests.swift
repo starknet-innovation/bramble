@@ -226,10 +226,13 @@ final class PortfolioStoreTests: XCTestCase {
         try await store.load(account: account(.mainnet), network: network(.mainnet))
         await store.refreshActivity(force: false)
         let rows = store.groups.flatMap(\.rows)
-        XCTAssertEqual(rows.map(\.title), ["Received", "Sent"])
+        // The heading joins the verb and the amount; no row carries a fiat figure.
+        XCTAssertEqual(rows.map { $0.heading.split(separator: " ").first.map(String.init) }, ["Received", "Sent"])
         XCTAssertEqual(rows.first?.explorerUrl, "https://starkscan.co/tx/0xabc1")
-        XCTAssertEqual(rows.first?.fiatText, "+$0.75")
-        XCTAssertEqual(rows.first?.copyLabel, "Copy sender address")
+        XCTAssertEqual(rows.first?.hashCopyLabel, "Copy transaction hash")
+        XCTAssertEqual(rows.first?.counterparty?.role, "Sender")
+        XCTAssertEqual(rows.first?.counterparty?.copyLabel, "Copy sender address")
+        XCTAssertEqual(rows.last?.counterparty?.copyLabel, "Copy recipient address")
 
         let down = try self.store("history-unavailable", in: "d")
         try await down.load(account: account(.mainnet), network: network(.mainnet))

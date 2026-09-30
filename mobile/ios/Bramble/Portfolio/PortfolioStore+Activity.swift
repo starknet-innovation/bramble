@@ -38,7 +38,8 @@ extension PortfolioStore {
         recomputeGroups()
     }
 
-    /// The day groups the Activity screen renders, priced with the active network's view.
+    /// The day groups the Activity screen renders. The tracked tokens resolve each row's token
+    /// mark; rows carry no fiat figure, so prices are not an input.
     func recomputeGroups() {
         guard let scope, let view = activityView else {
             groups = []
@@ -47,7 +48,6 @@ extension PortfolioStore {
         groups = activityGroups(
             entries: view.entries,
             tracked: preferences.tracked(network: scope.network.network).map(\.token),
-            prices: priceView ?? emptyPrices,
             nowMs: clock()
         )
     }

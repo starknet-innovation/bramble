@@ -18,6 +18,9 @@ struct AddressBookView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
+    /// An address to start the form with: Send's "Save" for a typed recipient (the extension's
+    /// `setAddressBookDraft`). It fills the empty Address field once, on first appearance.
+    var draft: String?
     @State private var walletCard = ""
     @State private var label = ""
     @State private var address = ""
@@ -52,6 +55,7 @@ struct AddressBookView: View {
             .padding(.bottom, BrambleSpace.xl)
         }
         .task { await coordination.refresh() }
+        .onAppear { if let draft, address.isEmpty { address = draft } }
     }
 
     private var form: some View {

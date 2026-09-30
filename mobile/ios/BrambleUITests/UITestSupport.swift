@@ -203,23 +203,13 @@ enum UITest {
         XCTAssertFalse(name.isEmpty || name.hasPrefix("Account "), "header shows \(name)", file: file, line: line)
     }
 
-    /// The restore acknowledgement's label up to the network name, which varies with the network
-    /// the test runs on ("…on Starknet Mainnet." / "…on Starknet Sepolia.").
-    static let restoreAcknowledgement = "I checked these account types and indices and want to restore the "
-        + "selected accounts on Starknet "
-
-    /// The restore acknowledgement checkbox on whichever network the test runs.
-    static func restoreAcknowledgementButton(_ app: XCUIApplication) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", restoreAcknowledgement)).firstMatch
-    }
-
     /// The published wallet's primary account as "Find your accounts" titles it.
     static let primaryCandidate = "Account 0, 0x2083…98d9"
 
     /// "Find your accounts" over the fixture node, which knows only the published wallet's primary
     /// account: waits for the search, keeps that account selected (a funded or deployed state
-    /// selects it automatically; `unfunded` leaves it to the user, as the extension does),
-    /// acknowledges, and restores. `shot` captures the review before the restore.
+    /// selects it automatically; `unfunded` leaves it to the user, as the extension does), and
+    /// restores: a selection is the only gate. `shot` captures the review before the restore.
     static func restorePrimaryAccount(_ app: XCUIApplication, shot: (() -> Void)? = nil) {
         wait(app.staticTexts["Find your accounts"])
         wait(app.staticTexts["Search complete. Checked 20 indices across every account type."], Timeout.accountSearch)
@@ -229,10 +219,9 @@ enum UITest {
         wait(row, Timeout.onScreen)
         if !row.isSelected { row.tap() }
         shot?()
-        let acknowledge = restoreAcknowledgementButton(app)
-        if !acknowledge.isHittable { app.swipeUp() }
-        tap(acknowledge)
-        tap(app.buttons["Restore selected accounts"])
+        let restore = app.buttons["Restore selected accounts"]
+        if !restore.isHittable { app.swipeUp() }
+        tap(restore)
         wait(app.staticTexts["You’re all set"])
     }
 

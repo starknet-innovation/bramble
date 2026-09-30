@@ -1,14 +1,16 @@
 import BrambleCore
 import SwiftUI
 
-/// `tokenDetailFlow`: price with the 7-day sparkline, the balance, and the contract receipt.
+/// `tokenDetailFlow`: price with the 7-day sparkline, the balance, Send (`tokenActions`; mobile has
+/// no swap flow, so Swap is not offered), the private half, and the contract receipt.
 struct TokenDetailView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
     @Environment(\.dismiss) private var dismiss
     let tokenId: String
-    var receive: () -> Void = { /* No action unless the shell wires the receive flow. */ }
-    /// Opens the privacy journey (Shield, Go private, Deploy and enable).
+    /// Opens Send on this token (its address); the recipient is still chosen first.
+    var send: (String) -> Void = { _ in /* No action unless the shell wires the send flow. */ }
+    /// Opens the privacy journey (Shield, Go private).
     var journey: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
     @State private var points: [Double] = []
 
@@ -27,8 +29,13 @@ struct TokenDetailView: View {
                     ) { dismiss() }
                     price(token, portfolio: portfolio)
                     balance(token, portfolio: portfolio)
+                    // Always offered for a token this wallet can send: an empty balance is found on
+                    // the amount step, as when Send is opened from Home.
+                    if SendFlowModel.token(token.address, in: store.networkInfo) != nil {
+                        PillButton("Send", icon: .send) { send(token.address) }
+                    }
                     // The private half of this token (`tokenDetailPrivacy`): amount, retry, actions.
-                    TokenPrivacySection(tokenAddress: token.address, receive: receive, journey: journey)
+                    TokenPrivacySection(tokenAddress: token.address, journey: journey)
                     contract(token)
                 }
                 .padding(BrambleMetrics.Screen.shellPadding)

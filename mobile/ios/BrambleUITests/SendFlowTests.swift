@@ -3,9 +3,10 @@ import XCTest
 /// Walks the Send journey on a simulator against design-mobile's offline fixture transport
 /// (`-uiTestOfflineFixtures <state>`, answering from `RpcFixtures.generated.swift`, which carries
 /// the node replies recorded from the extension's own send path), so nothing touches a network:
-/// recipient validation, amount gates and Max, the review (fee lines, copy button, Edit), the
-/// fee-failure and poisoning blocks, and the home deploy notice. It stops at "Confirm and send":
-/// that button is asserted, never tapped, and the fixture node must report zero writes.
+/// recipient validation, amount gates and Max, the review (facts, Cost box, risks, copy button,
+/// Back to the details), the fee-failure and poisoning blocks, and Settings' deploy row with its
+/// fee quoted on open. It stops at "Confirm and send" and "Deploy": those buttons are asserted,
+/// never tapped, and the fixture node must report zero writes.
 final class SendFlowTests: XCTestCase {
     private let recipient = "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3"
     private let lookalike = "0x2083610000000000000000000000000000000000000000000000000000098d9"
@@ -84,34 +85,43 @@ final class SendFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Estimated fee: 0.008053 STRK"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["125.5 STRK"].exists)
         XCTAssertTrue(app.buttons["Copy recipient address"].exists)
+        XCTAssertFalse(app.staticTexts["Risk and recovery"].exists, "nothing to warn about, so no panel")
         let confirm = app.buttons["Confirm and send"]
         XCTAssertTrue(confirm.exists && confirm.isEnabled)
         snapshot(app, "send-review")
-        tap(app.buttons["Edit"])
+        // No Edit button on the confirm face: Back returns to the details and drops the review.
+        tap(app.buttons["Back"].firstMatch)
         XCTAssertTrue(app.textFields["Amount to send"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Confirm and send"].exists, "an edit drops the review")
         assertNoWrites(app)
     }
 
-    func testUndeployedReviewShowsBothFeesAndTheHomeNotice() {
+    func testUndeployedReviewShowsOneCombinedFee() {
         let app = launch("undeployed")
-        XCTAssertTrue(app.buttons["Deploy account"].waitForExistence(timeout: 15), "home deploy notice")
-        snapshot(app, "home-deploy-notice")
         openSendDetails(app, to: recipient)
         type("1.5", into: app.textFields["Amount to send"])
         tap(app.buttons["Review send"])
-        XCTAssertTrue(app.staticTexts["Estimated transaction fee: 0.008053 STRK"].waitForExistence(timeout: 15))
-        let deploymentFee = NSPredicate(format: "label BEGINSWITH %@", "Estimated account deployment fee: ")
-        XCTAssertTrue(app.staticTexts.matching(deploymentFee).firstMatch.exists)
+        // One figure for both transactions, with the deployment's share named under it.
+        let total = NSPredicate(format: "label BEGINSWITH %@", "Estimated fee: ")
+        XCTAssertTrue(app.staticTexts.matching(total).firstMatch.waitForExistence(timeout: 15))
+        let share = NSPredicate(format: "label BEGINSWITH %@", "Creating this account on Starknet is ")
+        XCTAssertTrue(app.staticTexts.matching(share).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["Risk and recovery"].exists)
         XCTAssertTrue(app.buttons["Confirm and send"].isEnabled)
         snapshot(app, "send-review-undeployed")
         assertNoWrites(app)
     }
 
-    func testUnfundedHomeAsksForStrk() {
-        let app = launch("unfunded")
-        XCTAssertTrue(app.buttons["Fund with STRK"].waitForExistence(timeout: 15))
-        snapshot(app, "home-fund-notice")
+    func testSettingsDeployRowQuotesTheFeeOnOpen() {
+        let app = launch("undeployed")
+        XCTAssertFalse(app.buttons["Deploy account"].exists, "Home no longer flags an undeployed account")
+        tap(app.buttons["Settings"])
+        tap(app.buttons["Deploy account"])
+        let quote = NSPredicate(format: "label BEGINSWITH %@", "Maximum network fee: ")
+        XCTAssertTrue(app.staticTexts.matching(quote).firstMatch.waitForExistence(timeout: 15))
+        // Asserted, never tapped: quoting is a read, so the fixture node sees no write.
+        XCTAssertTrue(app.buttons["Deploy"].isEnabled)
+        snapshot(app, "deploy-account")
     }
 
     func testFeeFailureAndPoisoningBlockConfirm() {

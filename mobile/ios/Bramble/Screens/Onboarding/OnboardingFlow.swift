@@ -121,7 +121,7 @@ struct OnboardingFlow: View {
             }
 
         case .reviewAccount:
-            ReviewAccountStep(network: store.network) { replace(with: .savePhrase) }
+            ReviewAccountStep { replace(with: .savePhrase) }
 
         case .findAccounts:
             FindAccountsStep { replace(with: .complete) }

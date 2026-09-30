@@ -33,7 +33,7 @@ final class MainnetSendTests: XCTestCase {
             core: core,
             network: network,
             account: account,
-            otherAccounts: [],
+            accounts: [account],
             balances: [:],
             transport: URLSessionRpcTransport()
         )

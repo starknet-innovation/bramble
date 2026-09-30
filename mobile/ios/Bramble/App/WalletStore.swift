@@ -6,8 +6,6 @@ import Observation
 private enum WalletDefaults {
     /// Words in a newly created recovery phrase.
     static let newPhraseWordCount: UInt8 = 12
-    /// Fraction digits shown for a formatted token balance.
-    static let balanceFractionDigits: UInt8 = 4
 }
 
 /// UI state over the Rust `WalletCore`. Everything secret stays inside the core: this type holds
@@ -56,7 +54,7 @@ final class WalletStore {
     var biometricNotice: String?
     /// Fires the idle lock in the UI at the core's deadline (the core enforces it regardless).
     @ObservationIgnored private var idleTimer: Task<Void, Never>?
-    /// The core's judgement of the selected account's deployment, for the home deploy notice.
+    /// The core's judgement of the selected account's deployment, for the privacy gates.
     var deployment: DeploymentState = .unknown
     /// Open transfer plans, closed on lock (defence in depth: the core refuses them anyway).
     var plans: [TransferPlan] = []
@@ -399,16 +397,6 @@ final class WalletStore {
     /// The active account's one activity list: this wallet's transactions and on-chain history,
     /// as the core's log holds them (the same rows the Activity screen groups).
     var activity: [ActivityEntry] { portfolio.activityView?.entries ?? [] }
-
-    /// Base-unit balance formatted for display, or nil until it has loaded.
-    func amount(of token: TokenInfo) -> String? {
-        guard let raw = balances[token.symbol] else { return nil }
-        return try? formatTokenAmount(
-            raw: raw,
-            decimals: token.decimals,
-            maxFraction: WalletDefaults.balanceFractionDigits
-        )
-    }
 }
 
 /// User-facing text for a core error, in the extension's wording. Never includes input.

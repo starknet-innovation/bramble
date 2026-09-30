@@ -80,11 +80,34 @@ final class TransferBridgeTests: XCTestCase {
         XCTAssertEqual(confirmationCheckpointsMs(), delays.map(UInt32.init))
     }
 
+    func testStageTitlesAndTheWorkingScreenAreTheExtensions() throws {
+        let copy: [String: Any] = try fixtureValue(transactionFixture(), "copy")
+        let stages: [String: SendFlowModel.Stage] = [
+            "recipient": .recipient, "details": .details, "reviewing": .reviewing, "review": .review,
+            "authorizing": .authorizing, "broadcasting": .broadcasting, "confirming": .confirming,
+            "pending": .pending, "submitted": .submitted, "failed": .failed
+        ]
+        let titles: [[String: String]] = try fixtureValue(copy, "stageTitles")
+        // Every stage the extension titles, and no other: there is no asset stage.
+        XCTAssertEqual(Set(titles.compactMap { $0["stage"] }), Set(stages.keys))
+        for entry in titles {
+            let stage = try XCTUnwrap(stages[entry["stage"] ?? ""])
+            XCTAssertEqual(SendFlowModel.title(stage), entry["title"], "\(stage)")
+        }
+        // One working title from authorizing to confirming, and no body copy.
+        let working: [String: [String: String]] = try fixtureValue(copy, "working")
+        for (stage, texts) in working {
+            XCTAssertEqual(texts["title"], SendCopy.workingTitle, stage)
+            XCTAssertEqual(texts["copy"], "", stage)
+        }
+    }
+
     func testCopyTableIsTheExtensionCopy() throws {
         let copy: [String: Any] = try fixtureValue(transactionFixture(), "copy")
         let mode: [String: String] = try fixtureValue(copy, "mode")
         XCTAssertEqual(SendCopy.confirmLabel, mode["confirmLabel"])
-        XCTAssertEqual(SendCopy.reviewNote, mode["reviewNote"])
+        XCTAssertEqual(SendCopy.reviewLabel, mode["reviewLabel"])
+        XCTAssertEqual(SendCopy.successTitle, mode["successTitle"])
         let failures: [String: String] = try fixtureValue(copy, "failures")
         XCTAssertEqual(SendFailureText.reason(.preparationUnavailable), failures["preparationUnavailable"])
         XCTAssertEqual(SendFailureText.reason(.submissionIndeterminate), failures["indeterminate"])
@@ -98,8 +121,6 @@ final class TransferBridgeTests: XCTestCase {
             SendCopy.failurePrefix + deploymentUnconfirmed.replacingOccurrences(of: "{hash}", with: "0xabc")
         )
         XCTAssertEqual(SendFailureText.message(SendFailure(code: .nodeError, hash: nil)), SendCopy.failureDefault)
-        let mobileWording: [String: String] = try fixtureValue(copy, "mobileWording")
-        XCTAssertEqual(SendCopy.keepAppOpen, mobileWording["keepOpen"])
     }
 
     func testPendingRecordsAreObservedOnTheExtensionsWindow() throws {

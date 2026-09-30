@@ -203,18 +203,44 @@ final class PortfolioParityTests: XCTestCase {
         let entries = try entryRows.map(activityEntry)
         let tokenRows: [[String: Any]] = try fixtureValue(block, "tokens")
         let tokens = try tokenRows.map(tokenConfig)
-        let view = PriceView(currency: .usd, prices: points(block["prices"]), changes: [], asOfMs: nil, stale: false)
-        let groups = activityGroups(entries: entries, tracked: tokens, prices: view, nowMs: now)
+        // Rows carry no fiat figure, so prices are not an input any more.
+        let groups = activityGroups(entries: entries, tracked: tokens, nowMs: now)
         XCTAssertEqual(groups.map(\.heading), block["headings"] as? [String])
         let rows = groups.flatMap(\.rows)
         let html: [[String: Any]] = try fixtureValue(block, "rows")
         XCTAssertEqual(rows.count, html.count)
         for (row, expected) in zip(rows, html) {
-            XCTAssertEqual(row.accessibilityLabel, expected["accessible"] as? String)
-            XCTAssertEqual(row.explorerUrl, expected["href"] as? String)
-            XCTAssertEqual(row.fiatText ?? "—", expected["fiat"] as? String)
-            XCTAssertEqual(row.timing, expected["timing"] as? String)
+            assertSummary(row, expected)
+            assertExpansion(row, expected)
         }
+    }
+
+    /// The disclosure's summary as the extension renders it (`transactionRow`).
+    private func assertSummary(_ row: ActivityRow, _ expected: [String: Any]) {
+        XCTAssertEqual(row.heading, expected["title"] as? String)
+        XCTAssertEqual(row.accessibilityLabel, expected["accessible"] as? String)
+        XCTAssertEqual(row.glyphTitle, expected["glyphTitle"] as? String)
+        XCTAssertEqual(row.hashLabel, expected["hash"] as? String)
+        XCTAssertEqual(row.hashCopyLabel, expected["hashCopyLabel"] as? String)
+        XCTAssertEqual(row.hash, expected["hashCopyValue"] as? String)
+        XCTAssertEqual(row.explorerUrl, expected["href"] as? String)
+        XCTAssertEqual(row.statusWord, expected["meta"] as? String)
+        XCTAssertEqual(row.timing, expected["timing"] as? String)
+        let avatar = expected["avatar"] as? [String: Any]
+        XCTAssertEqual(row.avatar.logoAddress != nil, avatar?["logo"] as? Bool)
+    }
+
+    /// The disclosure's expansion: the counterparty or the detail, the submission time, the hint.
+    private func assertExpansion(_ row: ActivityRow, _ expected: [String: Any]) {
+        let counterparty = expected["counterparty"] as? [String: Any]
+        XCTAssertEqual(row.counterparty == nil, counterparty == nil)
+        XCTAssertEqual(row.counterparty?.role, counterparty?["role"] as? String)
+        XCTAssertEqual(row.counterparty?.address, counterparty?["copyValue"] as? String)
+        XCTAssertEqual(row.counterparty?.addressLabel, counterparty?["label"] as? String)
+        XCTAssertEqual(row.counterparty?.copyLabel, counterparty?["copyLabel"] as? String)
+        XCTAssertEqual(row.detail, expected["detail"] as? String)
+        XCTAssertEqual(row.submitted, expected["submitted"] as? String)
+        XCTAssertEqual(row.statusHint, expected["statusHint"] as? String)
     }
 
     func testLinksGlyphsAndSparklinesThroughFfi() throws {

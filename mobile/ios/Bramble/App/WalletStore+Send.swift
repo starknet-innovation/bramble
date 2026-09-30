@@ -16,15 +16,17 @@ extension WalletStore {
     }
 
     /// A Send journey for the active account, or nil while locked or when it cannot send.
-    func makeSendModel() -> SendFlowModel? {
+    /// `token` opens it on that asset (a token screen's Send); the recipient is still chosen first.
+    func makeSendModel(token: String? = nil) -> SendFlowModel? {
         guard let account = activeRecord, sendRefusal == nil else { return nil }
         return SendFlowModel(
             core: core,
             network: networkInfo,
             account: account,
-            otherAccounts: records.filter { $0.id != account.id },
+            accounts: records,
             balances: balances,
-            transport: rpc.transport
+            transport: rpc.transport,
+            openingToken: token
         ) { [weak self] plan in self?.plans.append(plan) }
     }
 
@@ -42,13 +44,13 @@ extension WalletStore {
         }
     }
 
-    /// Refreshes the deploy notice and the activity list, then settles recorded transactions
+    /// Refreshes the deployment reading and the activity list, then settles recorded transactions
     /// through `observeActivity`. This is how a send whose reply was lost to backgrounding gets
     /// its outcome.
     func refreshSendState() async {
         guard let account = activeRecord else { return }
         let network = networkInfo
-        // The deploy notice is for accounts this core can deploy; others never show it.
+        // Only accounts this core can deploy are read; the privacy gates take the rest as unknown.
         deployment = sendRefusal == nil ? await rpc.deploymentState(of: account.address, on: network) : .unknown
         await observeActivity()
     }

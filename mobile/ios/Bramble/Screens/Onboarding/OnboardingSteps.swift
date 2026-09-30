@@ -4,7 +4,7 @@ import SwiftUI
 // Each step reproduces its extension counterpart in `onboarding-views.ts` / `onboarding-surface.ts`:
 // same badge, heading, lede, controls, and CTA copy.
 
-/// `.onboarding-welcome`: wordmark lockup, two actions, the local-encryption note.
+/// `.onboarding-welcome`: wordmark lockup and the two actions.
 struct WelcomeStep: View {
     @Environment(\.skin) private var skin
     @Environment(\.deviceClass) private var device
@@ -39,14 +39,6 @@ struct WelcomeStep: View {
                     PillButton("Create a new wallet", action: create)
                     PillButton("Add an existing wallet", kind: .secondary, action: recover)
                 }
-                HStack(spacing: metrics.noteGap) {
-                    BrambleIcon(.lock, size: metrics.noteGlyph)
-                    Text("Encrypted locally on this device")
-                        .brambleText(BrambleTypeScale.caption.sized(metrics.noteSize))
-                }
-                .foregroundStyle(skin.muted)
-                .padding(.top, metrics.noteTop)
-                .accessibilityElement(children: .combine)
             }
             .padding(.horizontal, insets.inline)
             .padding(.top, metrics.paddingTop)
@@ -149,14 +141,13 @@ struct PassphraseStep: View {
     let submit: (String) async throws -> Void
     @State private var passphrase = ""
     @State private var confirmation = ""
-    @State private var weakAcknowledged = false
     @FocusState private var focus: Field?
 
     private enum Field { case passphrase, confirmation }
 
     var body: some View {
         let strength = passphraseStrength(passphrase: passphrase)
-        let matches = strength.acceptable && !confirmation.isEmpty && passphrase == confirmation
+        let matches = Self.canSubmit(strength, passphrase: passphrase, confirmation: confirmation)
         OnboardingStep(
             back: back,
             icon: .lock,
@@ -184,13 +175,6 @@ struct PassphraseStep: View {
                 .focused($focus, equals: .confirmation)
                 .submitLabel(.done)
                 PassphraseMeter(strength: strength, status: meterStatus(strength, matches: matches), ready: matches)
-                if strength.needsAcknowledgement {
-                    CheckRow(
-                        text: "This passphrase is weak. "
-                            + "I understand it is all that protects this wallet on this device.",
-                        isOn: $weakAcknowledged
-                    )
-                }
             }
         } cta: {
             PillButton(path == .create ? "Continue" : "Find your accounts", busy: store.busy) {
@@ -202,8 +186,18 @@ struct PassphraseStep: View {
                     } catch { store.toast = describe(error) }
                 }
             }
-            .disabled(!matches || (strength.needsAcknowledgement && !weakAcknowledged))
+            .disabled(!matches)
         }
+    }
+
+    /// The setup form's one gate: a passphrase the vault accepts (the 8-character floor), matched
+    /// by its confirmation. A weak one is named by the meter but needs no acknowledgement.
+    nonisolated static func canSubmit(
+        _ strength: PassphraseStrength,
+        passphrase: String,
+        confirmation: String
+    ) -> Bool {
+        strength.acceptable && !confirmation.isEmpty && passphrase == confirmation
     }
 
     /// `applyPassphraseMeter`'s status line.
@@ -357,8 +351,8 @@ struct ConfirmBackupStep: View {
     }
 }
 
-/// `onboardingComplete()`: check mark, eyebrow, heading, the two custody details, one action,
-/// centred on the full-bleed complete card (`.onboarding-complete`).
+/// `onboardingComplete()`: check mark, heading and one action, centred on the full-bleed complete
+/// card (`.onboarding-complete`).
 struct CompleteStep: View {
     @Environment(\.skin) private var skin
     let open: () -> Void
@@ -374,25 +368,13 @@ struct CompleteStep: View {
                         .frame(width: gate.brandSize, height: gate.brandSize)
                         .background(skin.positive, in: Circle())
                         .accessibilityHidden(true)
-                    VStack(spacing: gate.headGap) {
-                        Eyebrow(text: "Setup complete")
-                        Text("You’re all set")
-                            .brambleText(
-                                BrambleTypeStyle(size: gate.titleSize, lineHeight: gate.titleLineHeight),
-                                weight: gate.titleWeight,
-                                tracking: BrambleMetrics.Onboarding.titleTracking
-                            )
-                            .accessibilityAddTraits(.isHeader)
-                        Text("Your account is ready in Bramble. Receive assets, or deploy when you’re ready.")
-                            .brambleText(BrambleTypeScale.body)
-                            .foregroundStyle(skin.muted)
-                            .multilineTextAlignment(.center)
-                    }
-                    VStack(spacing: complete.detailsGap) {
-                        DetailRow(icon: .lock, text: "Vault encrypted locally on this device")
-                        DetailRow(icon: .shield, text: "Recovery and signing material stay behind the wallet boundary")
-                    }
-                    .frame(maxWidth: complete.detailsWidth)
+                    Text("You’re all set")
+                        .brambleText(
+                            BrambleTypeStyle(size: gate.titleSize, lineHeight: gate.titleLineHeight),
+                            weight: gate.titleWeight,
+                            tracking: BrambleMetrics.Onboarding.titleTracking
+                        )
+                        .accessibilityAddTraits(.isHeader)
                     PillButton("Open Bramble", action: open).frame(maxWidth: complete.actionsWidth)
                 }
                 .padding(complete.padding)

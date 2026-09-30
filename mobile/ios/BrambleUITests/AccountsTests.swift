@@ -182,8 +182,8 @@ final class AccountsTests: XCTestCase {
         removeWallet(app)
     }
 
-    /// Import → Find your accounts (stub node) → manual index → acknowledgement gate on Sepolia →
-    /// kill before restore resumes discovery → restore → switch network projects the account.
+    /// Import → Find your accounts (stub node) → manual index → a selection is the only restore
+    /// gate → kill before restore resumes discovery → restore → switch network projects the account.
     func testImportDiscoverResumeRestoreAndSwitchNetwork() {
         var app = launch(fresh: true)
         tap(app.buttons["Add an existing wallet"])
@@ -206,7 +206,7 @@ final class AccountsTests: XCTestCase {
         tap(app.buttons["Bramble accounts"])
         let account0 = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Account 0,'")).firstMatch
         tap(account0)
-        XCTAssertFalse(restore.isEnabled, "the acknowledgement is required on Sepolia too")
+        XCTAssertTrue(restore.isEnabled, "a selection is enough: there is no acknowledgement to tick")
         app.swipeUp()
         tap(app.buttons["Advanced manual index"])
         type("5", into: app.textFields["Account index"])
@@ -225,7 +225,6 @@ final class AccountsTests: XCTestCase {
         tap(app.buttons["Bramble accounts"])
         tap(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Account 0,'")).firstMatch)
         app.swipeUp()
-        tap(UITest.restoreAcknowledgementButton(app))
         XCTAssertTrue(restore.isEnabled)
         tap(restore)
         toast(app, "1 account restored")

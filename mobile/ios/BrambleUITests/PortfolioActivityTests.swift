@@ -136,15 +136,18 @@ final class PortfolioActivityTests: XCTestCase {
         _ = waitForValue(total) { $0.hasPrefix("€") }
     }
 
-    /// (5) Activity: grouped rows linked to the explorer, with a copy control.
+    /// (5) Activity: disclosure rows, each hash linked to the explorer with its copy control; a
+    /// row opens onto its counterparty with a copy control of its own.
     private func activityStory(_ app: XCUIApplication) {
         tap(app.buttons["Activity"])
         let received = element(app, "activity-link-0xabc1")
         XCTAssertTrue(received.waitForExistence(timeout: 20))
         XCTAssertEqual(received.value as? String, "https://starkscan.co/tx/0xabc1")
-        XCTAssertTrue(received.label.hasPrefix("Received 1.5 STRK from 0x5a1b…7e8f."))
-        XCTAssertTrue(received.label.hasSuffix("View transaction on Starkscan"))
+        XCTAssertEqual(received.label, "View this transaction on Starkscan")
         XCTAssertTrue(element(app, "activity-link-0xabc2").exists)
+        XCTAssertTrue(app.buttons["Copy transaction hash"].firstMatch.exists)
+        let summary = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Received 1.5 STRK.")).firstMatch
+        tap(summary)
         tap(app.buttons["Copy sender address"].firstMatch)
         snapshot(app, "activity")
     }

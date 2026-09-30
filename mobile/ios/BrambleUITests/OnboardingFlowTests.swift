@@ -69,7 +69,7 @@ final class OnboardingFlowTests: XCTestCase {
     private func reviewAndAdd(_ app: XCUIApplication) {
         XCTAssertTrue(app.staticTexts["Review your account"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.staticTexts["Primary Bramble account"].exists)
-        tap(app.buttons["I understand this wallet can hold real funds on Starknet Mainnet."])
+        XCTAssertTrue(app.buttons["Add selected account"].isEnabled, "no Mainnet acknowledgement to tick")
         snapshot(app, "review-account")
         tap(app.buttons["Add selected account"])
     }
@@ -96,7 +96,7 @@ final class OnboardingFlowTests: XCTestCase {
     }
 
     /// "Find your accounts" against Mainnet: the expected account is listed and selected, then
-    /// restored behind the acknowledgement.
+    /// restored (a selection is the only gate).
     private func discoverAndRestore(_ app: XCUIApplication, expecting account: String) {
         XCTAssertTrue(app.staticTexts["Find your accounts"].waitForExistence(timeout: 20))
         let done = app.staticTexts["Search complete. Checked 20 indices across every account type."]
@@ -108,7 +108,6 @@ final class OnboardingFlowTests: XCTestCase {
         if !row.isSelected { row.tap() }
         snapshot(app, "find-accounts")
         app.swipeUp()
-        tap(UITest.restoreAcknowledgementButton(app))
         tap(app.buttons["Restore selected accounts"])
     }
 

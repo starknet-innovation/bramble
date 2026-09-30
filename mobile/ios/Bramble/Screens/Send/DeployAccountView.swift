@@ -1,9 +1,11 @@
 import BrambleCore
 import SwiftUI
 
-/// `deploy-account` from `flows.ts`: what will happen, the account receipt, the risk note, then
-/// "Review deployment" → "Confirm deployment · <fee>" → "Deployment submitted". Built from the
-/// Send screens' receipt, fee panel and outcome, so both flows share one layout.
+/// `deploy-account` (`deployAccountFlow` in `flows.ts`, bound by `bindDeploy`): the Account,
+/// Address and Network rows, the fee quoted on open in the Cost box, one Deploy button, and the
+/// receipt once submitted. Opened from Settings › This account whatever the deployment state:
+/// an account already on chain reads "Account already deployed" on a disabled button. Built from
+/// the Send screens' receipt, Cost box and outcome, so both flows share one layout.
 struct DeployAccountView: View {
     @Environment(WalletStore.self) private var store
     @Environment(\.skin) private var skin
@@ -15,112 +17,94 @@ struct DeployAccountView: View {
             VStack(alignment: .leading, spacing: BrambleMetrics.Send.stageGap) {
                 FlowHeader(title: SendCopy.deployTitle, network: store.networkLabel) { dismiss() }
                 if let model, let account = store.account {
-                    if model.stage == .submitted {
-                        submitted(model)
+                    if model.stage == .submitted || model.stage == .confirmed {
+                        receipt(model)
                     } else {
                         form(model, account: account)
                     }
+                } else {
+                    // A view-only account has nothing this wallet can deploy; say why.
+                    StatusLine(text: store.sendRefusal)
                 }
             }
             .padding(BrambleMetrics.Screen.shellPadding)
         }
-        .onAppear { if model == nil { model = store.makeDeployModel() } }
+        .onAppear {
+            guard model == nil, let started = store.makeDeployModel() else { return }
+            model = started
+            Task { await started.quote() }
+        }
         .onDisappear { model?.close() }
     }
 
     private func form(_ model: DeployFlowModel, account: AccountRecord) -> some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Send.formGap) {
-            Eyebrow(text: SendCopy.whatWillHappen)
-            Text(SendCopy.deployOutcome).brambleText(BrambleTypeScale.body)
             SendReceipt(rows: [
                 SendReceipt.Row(SendCopy.deployAccountRow, account.displayName),
                 SendReceipt.Row(SendCopy.deployAddressRow, account.shortAddress, mono: true),
-                SendReceipt.Row(SendCopy.deployContractRow, SendCopy.deployContractValue),
                 SendReceipt.Row(SendCopy.deployNetworkRow, store.networkLabel)
             ])
-            Eyebrow(text: SendCopy.riskAndRecovery)
-            Text(SendCopy.deployRisk).brambleText(BrambleTypeScale.body).foregroundStyle(skin.muted)
             if let fee = model.fee {
-                VStack(alignment: .leading, spacing: BrambleMetrics.SendReview.feeGap) {
-                    Eyebrow(text: SendCopy.maximumCost)
-                    Text(SendCopy.maximumFeePrefix + fee.display)
-                        .brambleText(BrambleTypeScale.body, weight: BrambleWeight.semibold)
-                        .monospacedDigit()
+                SendCostBox(cost: SendReviewCopy.Cost(
+                    lines: [SendCopy.maximumFeePrefix + fee.display],
+                    failure: nil,
+                    shortfall: false
+                )) {
+                    // No retry: a quoted fee has nothing to retry.
                 }
-                .padding(BrambleMetrics.SendReview.feePadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    skin.panel,
-                    in: RoundedRectangle(cornerRadius: BrambleMetrics.SendReview.feeRadius, style: .continuous)
-                )
             }
-            StatusLine(text: model.stage == .failed ? model.failureMessage : nil, tone: .danger)
+            StatusLine(
+                text: model.status,
+                tone: model.stage == .failed || model.stage == .estimateFailed ? .danger : .muted
+            )
             action(model)
         }
     }
 
     @ViewBuilder
     private func action(_ model: DeployFlowModel) -> some View {
-        switch model.stage {
-        case .reviewed, .submitting:
-            PillButton(
-                SendCopy.confirmDeploymentPrefix + (model.fee?.display ?? ""),
-                icon: .check,
-                busy: model.stage == .submitting
-            ) {
-                Task { await model.confirm() }
-            }
-
-        case .alreadyDeployed:
+        if model.stage == .alreadyDeployed {
             PillButton(SendCopy.alreadyDeployed, icon: .check) {
                 // No action: the account is already deployed, so this is a disabled status button.
             }
             .disabled(true)
-
-        default:
-            PillButton(SendCopy.reviewDeployment, icon: .check, busy: model.stage == .reviewing) {
-                Task { await model.review() }
+        } else {
+            PillButton(
+                SendCopy.deployButton,
+                icon: .check,
+                busy: model.stage == .estimating || model.stage == .submitting
+            ) {
+                Task { await model.deploy() }
             }
         }
     }
 
-    private func submitted(_ model: DeployFlowModel) -> some View {
-        SendOutcomeLayout(
+    /// `outcomeReceiptSection("deploy-success")`: "Deployment submitted" until the chain answers,
+    /// then "Account deployed"; the transaction row; View in Activity tab and Back.
+    private func receipt(_ model: DeployFlowModel) -> some View {
+        let receipt = model.receipt
+        return SendOutcomeLayout(
             icon: .check,
             tint: skin.positive,
-            kicker: SendCopy.deploySuccessKicker,
-            title: SendCopy.deploySuccessTitle,
-            message: SendCopy.deploySuccessBody,
-            hash: model.hash
+            title: receipt.title,
+            message: receipt.message,
+            hash: model.hash,
+            hashLabel: SendCopy.transactionLabel,
+            explorerURL: model.explorerURL
         ) {
-            PillButton(SendCopy.backToHome, icon: .home) {
-                Task { await store.refreshBalances() }
-                dismiss()
-            }
+            PillButton(SendCopy.viewActivity, icon: .activity) { leave(to: .activity) }
+            PillButton(SendCopy.back, kind: .secondary) { leave(to: .home) }
         }
     }
-}
 
-/// `deployNotice`: shown only when the core judged the account `Undeployed`. With a STRK balance
-/// read as zero it asks for funding and opens Receive; otherwise it opens Deploy account.
-struct DeployNoticeView: View {
-    @Environment(WalletStore.self) private var store
-    let receive: () -> Void
-    let deploy: () -> Void
-
-    var body: some View {
-        if store.deployment == .undeployed {
-            let unfunded = store.balances["STRK"].map { $0 == "0" } ?? false
-            // The extension's notice is a chip whose explanation is its title (tooltip); here the
-            // explanation is the accessibility hint.
-            PillButton(
-                unfunded ? SendCopy.fundChip : SendCopy.deployChip,
-                kind: .secondary,
-                icon: unfunded ? .qrCode : .rocket,
-                small: true,
-                action: unfunded ? receive : deploy
-            )
-            .accessibilityHint(unfunded ? SendCopy.fundChipTitle : SendCopy.deployChipTitle)
+    /// Leaves the flow for a dock tab (the extension's Back goes Home), re-reading the account's
+    /// deployment and balances on the way.
+    private func leave(to tab: WalletStore.Tab) {
+        Task {
+            await store.refreshSendState()
+            await store.refreshBalances()
         }
+        store.tab = tab
+        dismiss()
     }
 }

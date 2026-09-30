@@ -1,21 +1,20 @@
 import SwiftUI
 
-/// `homeView()` from `portfolio/home-view.ts`: hero total, the deploy notice, the four major
-/// actions, and the token list (`PortfolioHeroView`, `PortfolioTokens`: prices, tracked tokens,
-/// balances and their states all from the core, read once through the portfolio store).
+/// `homeView()` from `portfolio/home-view.ts`: hero total, the four major actions, and the token
+/// list (`PortfolioHeroView`, `PortfolioTokens`: prices, tracked tokens, balances and their states
+/// all from the core, read once through the portfolio store). Home no longer flags an undeployed
+/// account: the first send deploys it, and Settings › This account opens Deploy account.
 struct HomeView: View {
     @Environment(WalletStore.self) private var store
     let receive: () -> Void
     let open: (WalletShell.Flow) -> Void
     var send: () -> Void = { /* No action unless the shell wires the send flow. */ }
-    var deploy: () -> Void = { /* No action unless the shell wires deployment. */ }
     var privacy: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
 
     var body: some View {
         VStack(alignment: .leading, spacing: BrambleMetrics.Screen.gap) {
             PortfolioHeroView()
             ShieldedHeroLabel()
-            DeployNoticeView(receive: receive, deploy: deploy)
             HStack(spacing: BrambleMetrics.ActionRow.gap) {
                 ActionTile(title: "Send", icon: .send, action: send).disabled(store.account == nil)
                 ActionTile(title: "Swap", icon: .shuffle) {
@@ -23,7 +22,7 @@ struct HomeView: View {
                 }
                 .disabled(true)
                 ActionTile(title: "Receive", icon: .qrCode, action: receive)
-                ShieldActionTile(receive: receive, journey: privacy)
+                ShieldActionTile(journey: privacy)
             }
             PortfolioTokens(open: open)
         }

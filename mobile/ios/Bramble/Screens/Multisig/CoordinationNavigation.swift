@@ -4,6 +4,8 @@ import SwiftUI
 /// `WalletShell.Flow.coordination(_)` so the shell needs one case, not one per screen.
 enum CoordinationFlow: Hashable {
     case addressBook
+    /// Save a typed Send recipient: the address book with that address filled in.
+    case saveAddress(String)
     case sharedAccounts
     case readyMultisig
     case addShared
@@ -35,6 +37,9 @@ struct CoordinationDestination: View {
         switch flow {
         case .addressBook:
             AddressBookView()
+
+        case .saveAddress(let address):
+            AddressBookView(draft: address)
 
         case .sharedAccounts:
             SharedAccountsView()

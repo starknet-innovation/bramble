@@ -6,6 +6,8 @@ import SwiftUI
 struct WalletShell: View {
     enum Flow: Hashable {
         case receive, network, appearance, security, reveal, remove, send, deploy, accounts
+        /// Send, opened on one token (its address) from that token's screen.
+        case sendToken(String)
         case coordination(CoordinationFlow)
         case tokens, addToken, discoverTokens
         case token(String)
@@ -28,15 +30,7 @@ struct WalletShell: View {
                         HomeView(
                             receive: { flows.append(.receive) },
                             open: { flows.append($0) },
-                            send: {
-                                // Ready and Braavos accounts are refused by the core; say why up front.
-                                if let refusal = store.sendRefusal {
-                                    store.toast = refusal
-                                } else {
-                                    flows.append(.send)
-                                }
-                            },
-                            deploy: { flows.append(.deploy) },
+                            send: { openSend(.send) },
                             privacy: { flows.append(.privacy) }
                         )
 
@@ -79,6 +73,15 @@ struct WalletShell: View {
         }
     }
 
+    /// Opens a Send journey. An account the core cannot sign for is refused up front, with why.
+    private func openSend(_ flow: Flow) {
+        if let refusal = store.sendRefusal {
+            store.toast = refusal
+        } else {
+            flows.append(flow)
+        }
+    }
+
     /// The screen each pushed flow shows.
     private func destination(_ flow: Flow) -> some View {
         Group {
@@ -102,7 +105,10 @@ struct WalletShell: View {
                 RemoveWalletView()
 
             case .send:
-                SendFlowView()
+                SendFlowView { flows.append(.tokens) }
+
+            case let .sendToken(address):
+                SendFlowView(token: address) { flows.append(.tokens) }
 
             case .deploy:
                 DeployAccountView()
@@ -125,7 +131,7 @@ struct WalletShell: View {
             case let .token(id):
                 TokenDetailView(
                     tokenId: id,
-                    receive: { flows.append(.receive) },
+                    send: { openSend(.sendToken($0)) },
                     journey: { flows.append(.privacy) }
                 )
 

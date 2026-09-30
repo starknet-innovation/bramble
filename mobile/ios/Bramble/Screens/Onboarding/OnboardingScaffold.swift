@@ -156,28 +156,3 @@ struct OnboardingStep<Body: View, CTA: View>: View {
         .padding(.bottom, insets.headBottom)
     }
 }
-
-/// `label:has(> input[type=checkbox])`: a native-feeling checkbox row in the accent colour.
-struct CheckRow: View {
-    @Environment(\.skin) private var skin
-    let text: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Button { isOn.toggle() } label: {
-            HStack(alignment: .top, spacing: BrambleSpace.sm) {
-                CheckBox(isOn: isOn).padding(.top, 1)
-                Text(text)
-                    .brambleText(BrambleTypeScale.body)
-                    .foregroundStyle(skin.text)
-                    .multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
-            }
-            .hitTarget(height: BrambleTypeScale.body.size * BrambleTypeScale.body.lineHeight)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(text)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-        .accessibilityValue(isOn ? "Checked" : "Unchecked")
-    }
-}

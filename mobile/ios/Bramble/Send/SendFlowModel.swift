@@ -19,8 +19,10 @@ private enum SendFlowNumbers {
 @MainActor
 @Observable
 final class SendFlowModel {
+    /// There is no asset stage: the token is picked in a sheet over the details (the extension's
+    /// dropdown inside its amount stage).
     enum Stage: Equatable {
-        case recipient, asset, details, reviewing, review, authorizing, broadcasting, confirming, pending
+        case recipient, details, reviewing, review, authorizing, broadcasting, confirming, pending
         case submitted, failed
     }
 
@@ -28,6 +30,9 @@ final class SendFlowModel {
     var recipientInput = "" { didSet { recipientError = nil } }
     private(set) var recipientError: String?
     private(set) var recipient: String?
+    /// The name of the row the recipient came from (a saved contact or one of the user's own
+    /// accounts), never typed text; nil shows the truncated address instead.
+    private(set) var recipientLabel: String?
     private(set) var token: TokenInfo
     var amount = "" { didSet { if amount != oldValue { amountError = nil; dropPlan() } } }
     private(set) var amountError: String?
@@ -48,8 +53,9 @@ final class SendFlowModel {
     let network: NetworkInfo
     /// The sending account: a vault record the core will sign for by id.
     let account: AccountRecord
-    /// This network's other accounts, offered as recipients.
-    let otherAccounts: [AccountRecord]
+    /// Every account on this network, the sender included (`sendRecipientAccounts`): shielding
+    /// sends to the account's own address, so the origin stays pickable and is marked "Current".
+    let accounts: [AccountRecord]
     private let core: WalletCore
     private let balances: [String: String]
     private let transport: RpcTransport
@@ -60,28 +66,38 @@ final class SendFlowModel {
         core: WalletCore,
         network: NetworkInfo,
         account: AccountRecord,
-        otherAccounts: [AccountRecord],
+        accounts: [AccountRecord],
         balances: [String: String],
         transport: RpcTransport,
+        openingToken: String? = nil,
         track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ }
     ) {
         self.core = core
         self.network = network
         self.account = account
-        self.otherAccounts = otherAccounts
+        self.accounts = accounts
         self.balances = balances
         self.transport = transport
         self.track = track
-        token = network.tokens.first { $0.symbol == "STRK" } ?? network.tokens[0]
+        token = Self.token(openingToken, in: network) ?? network.tokens.first { $0.symbol == "STRK" }
+            ?? network.tokens[0]
     }
 
-    var title: String {
+    /// The network's token at `address`, compared as canonical felts; nil for none (the journey
+    /// then opens on STRK, as from Home). A token screen's Send seeds the asset and nothing else.
+    nonisolated static func token(_ address: String?, in network: NetworkInfo) -> TokenInfo? {
+        guard let address, let wanted = validateRecipient(input: address) else { return nil }
+        return network.tokens.first { validateRecipient(input: $0.address) == wanted }
+    }
+
+    var title: String { Self.title(stage) }
+
+    /// The flow header's title for each stage (`transferStageTitle`): authorizing, broadcasting
+    /// and confirming all read "Sending".
+    nonisolated static func title(_ stage: Stage) -> String {
         switch stage {
         case .recipient:
             SendCopy.titleRecipient
-
-        case .asset:
-            SendCopy.titleAsset
 
         case .details, .reviewing:
             SendCopy.titleDetails
@@ -127,33 +143,35 @@ final class SendFlowModel {
 
     // MARK: Recipient and asset
 
-    func useRecipient(_ address: String) {
+    /// A tapped recipient row: its address, under the row's own name.
+    func useRecipient(_ address: String, label: String) {
         recipientInput = address
-        continueWithRecipient()
+        continueWithRecipient(label: label)
     }
 
-    /// Validates with the core's `normalizeFeltInput` + `isStarkFieldElement` port.
-    func continueWithRecipient() {
+    /// Validates with the core's `normalizeFeltInput` + `isStarkFieldElement` port. `label` is the
+    /// name of the listed row the typed address matches, if any (`knownRecipientLabel`).
+    func continueWithRecipient(label: String? = nil) {
         guard let canonical = validateRecipient(input: recipientInput) else {
             recipientError = SendCopy.invalidRecipient
             return
         }
         recipient = canonical
+        recipientLabel = label
         dropPlan()
         stage = .details
     }
 
-    func pickAsset() { stage = .asset }
-
+    /// The token picked in the asset sheet; the amount typed for another token is cleared.
     func choose(_ token: TokenInfo) {
         self.token = token
         amount = ""
-        stage = .details
+        dropPlan()
     }
 
     func back() {
         switch stage {
-        case .asset, .review, .failed:
+        case .review, .failed:
             dropPlan(); stage = recipient == nil ? .recipient : .details
 
         case .details:

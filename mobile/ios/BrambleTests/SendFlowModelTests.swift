@@ -2,9 +2,10 @@
 import BrambleCore
 import XCTest
 
-/// The UI-side journey over a canned node: stage order and titles, Max and Half, edits dropping
-/// the plan, lock voiding it, fee failure blocking Confirm, failure copy, and the host's endpoint
-/// and write guarantees (one proven endpoint per plan, a write sent once and never retried).
+/// The UI-side journey over a canned node: stage order and titles, recipient names, the asset
+/// choice, Max and Half, leaving the review dropping the plan, lock voiding it, fee failure
+/// blocking Confirm, failure copy, and the host's endpoint and write guarantees (one proven
+/// endpoint per plan, a write sent once and never retried).
 @MainActor
 final class SendFlowModelTests: XCTestCase {
     private var unlocked: WalletCore?
@@ -32,7 +33,7 @@ final class SendFlowModelTests: XCTestCase {
             core: core,
             network: sepolia(),
             account: accounts[0],
-            otherAccounts: Array(accounts.dropFirst()),
+            accounts: accounts,
             balances: balances,
             transport: node
         )
@@ -95,15 +96,65 @@ final class SendFlowModelTests: XCTestCase {
         XCTAssertTrue(node.posts.isEmpty, "nothing was estimated")
     }
 
-    func testAnEditDropsTheReview() async throws {
+    func testLeavingTheReviewDropsIt() async throws {
         let model = try model()
         await reviewed(model)
         XCTAssertNotNil(model.review)
-        model.edit()
+        // The confirm face has no Edit button: Back returns to the details and drops the plan.
+        model.back()
         XCTAssertNil(model.review)
         XCTAssertEqual(model.stage, .details)
         await model.confirm()
         XCTAssertEqual(model.stage, .details, "confirm does nothing without a fresh review")
+        model.back()
+        XCTAssertEqual(model.stage, .recipient)
+    }
+
+    func testARowNamesTheRecipientAndTypedTextNever() throws {
+        let model = try model()
+        let second = try ozRecord(core, .sepolia, 1)
+        model.useRecipient(second.address, label: second.displayName)
+        XCTAssertEqual(model.stage, .details)
+        XCTAssertEqual(model.recipientLabel, second.displayName)
+        model.back()
+        model.recipientInput = account1
+        model.continueWithRecipient()
+        XCTAssertNil(model.recipientLabel, "a typed address with no matching row reads as its address")
+        XCTAssertEqual(model.recipient, validateRecipient(input: account1))
+    }
+
+    func testATokenScreenOpensSendOnItsTokenAtTheRecipientStep() throws {
+        let network = try sepolia()
+        let other = try XCTUnwrap(network.tokens.first { $0.symbol != "STRK" })
+        let accounts = try core.accountRecords(network: .sepolia)
+        // A zero-padded spelling of the token's address is the same token.
+        let padded = "0x0" + other.address.dropFirst(2).drop { $0 == "0" }
+        let seeded = try SendFlowModel(
+            core: core,
+            network: network,
+            account: accounts[0],
+            accounts: accounts,
+            balances: [:],
+            transport: node,
+            openingToken: padded
+        )
+        XCTAssertEqual(seeded.token.address, other.address)
+        XCTAssertEqual(seeded.stage, .recipient, "Send seeds the asset and nothing else")
+        XCTAssertNil(SendFlowModel.token("0x1234", in: network), "an unknown token opens on STRK")
+    }
+
+    func testChoosingAnAssetKeepsTheDetailsAndClearsTheAmount() throws {
+        let model = try model()
+        model.recipientInput = account1
+        model.continueWithRecipient()
+        XCTAssertEqual(model.token.symbol, "STRK", "the journey opens on STRK")
+        model.amount = "1"
+        let other = try XCTUnwrap(model.network.tokens.first { $0.symbol != "STRK" })
+        model.choose(other)
+        XCTAssertEqual(model.token.address, other.address)
+        XCTAssertEqual(model.amount, "")
+        XCTAssertEqual(model.stage, .details)
+        XCTAssertEqual(model.title, SendCopy.titleDetails)
     }
 
     func testLockVoidsTheReviewedPlan() async throws {
@@ -139,6 +190,10 @@ final class SendFlowModelTests: XCTestCase {
         let hash = try XCTUnwrap(try core.activity(accountId: try ozRecord(core, .sepolia).id).first?.hash)
         XCTAssertEqual(model.failureMessage, SendCopy.failurePrefix + SendCopy.failureIndeterminate)
         XCTAssertEqual(model.hash, hash, "the pending record's hash stays visible")
+        // "Edit transaction" returns to the details; the write is never retried from there.
+        model.edit()
+        XCTAssertEqual(model.stage, .details)
+        XCTAssertEqual(node.posts.filter(\.write).count, 1)
     }
 
     func testClosingAfterTheWriteLeftNeverReportsNotSent() async throws {

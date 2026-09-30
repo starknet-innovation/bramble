@@ -52,7 +52,6 @@ extension WalletStore {
         tokenDetailPrivacy(
             network: network,
             deployment: deployment,
-            strkFunded: strkFunding.map { $0 == .funded },
             reading: privacy.reading,
             tokenAddress: token,
             state: privacy.state
