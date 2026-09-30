@@ -102,7 +102,7 @@ const renderNftTransferReview = (
     result.textContent = recipientBlocked
       ? "This transfer is blocked. Change the recipient and review it again."
       : feeFailed
-        ? "Fee estimate failed. Retry the fee estimate before sending."
+        ? "Couldn't estimate the fee. Retry before sending."
         : "Review the details above, then confirm.";
   }
   reviewPanel
@@ -134,13 +134,13 @@ const bindAddForm = (deps: NftUiDeps): void => {
       )
       .then(
         async () => {
-          showToast("NFT added", "success", deps.app);
+          showToast("Collectible added", "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Add NFT failed"), "error", deps.app);
+          showToast(errorMessage(error, "Couldn't add that collectible"), "error", deps.app);
           if (result) {
-            result.textContent = errorMessage(error, "Add NFT failed");
+            result.textContent = errorMessage(error, "Couldn't add that collectible");
           }
           buttonBusy(submitButton, false);
         },
@@ -217,7 +217,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
       form.dataset["stage"] = "reviewing";
       form.setAttribute("aria-busy", "true");
       if (result) {
-        result.textContent = "Checking ownership, recipient, transfer details, and fee…";
+        result.textContent = "Checking the transfer…";
       }
       void deps.wallet
         .reviewNftTransfer(fields.contract, fields.tokenId, fields.networkId, fields.recipient)
@@ -256,7 +256,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
     form.dataset["stage"] = "submitting";
     form.setAttribute("aria-busy", "true");
     if (result) {
-      result.textContent = "Authorizing and submitting the reviewed transfer…";
+      result.textContent = "Submitting…";
     }
     void deps.wallet
       .transferNft(
@@ -269,7 +269,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
       )
       .then(
         async (transactionHash) => {
-          showToast("NFT transfer submitted", "success", deps.app);
+          showToast("Transfer submitted", "success", deps.app);
           form.dataset["stage"] = "submitted";
           form.removeAttribute("aria-busy");
           if (reviewPanel) {
@@ -309,7 +309,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
           }
         },
         (error: unknown) => {
-          const message = errorMessage(error, "NFT transfer failed");
+          const message = errorMessage(error, "The transfer didn't go through");
           form.dataset["stage"] = "failed";
           form.removeAttribute("aria-busy");
           showToast(message, "error", deps.app);
@@ -383,11 +383,11 @@ const bindHideDiscovered = (deps: NftUiDeps): void => {
         .then(() => deps.wallet.setNftSpam(id, true))
         .then(
           async () => {
-            showToast("NFT hidden", "success", deps.app);
+            showToast("Collectible hidden", "success", deps.app);
             await rerender(deps);
           },
           (error: unknown) => {
-            showToast(errorMessage(error, "NFT update failed"), "error", deps.app);
+            showToast(errorMessage(error, "Couldn't update that collectible"), "error", deps.app);
             buttonBusy(button, false);
           },
         );
@@ -417,7 +417,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "NFT update failed"), "error", deps.app);
+          showToast(errorMessage(error, "Couldn't update that collectible"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -433,11 +433,11 @@ const bindRowActions = (deps: NftUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.removeNft(id).then(
         async () => {
-          showToast("NFT removed", "success", deps.app);
+          showToast("Collectible removed", "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "NFT removal failed"), "error", deps.app);
+          showToast(errorMessage(error, "Couldn't remove that collectible"), "error", deps.app);
           buttonBusy(button, false);
         },
       );

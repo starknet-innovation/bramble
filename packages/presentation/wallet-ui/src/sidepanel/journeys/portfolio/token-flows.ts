@@ -173,7 +173,7 @@ export const tokenDiscoverFlow = (status: WalletStatus): string =>
   flowScreen(
     "token-discover",
     `<section class="section">
-      <p class="hint">Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.</p>
+      <p class="hint">Likely-spam tokens stay hidden from Home.</p>
       ${button({
         attributes: { id: "detect-tokens" },
         icon: "refresh",

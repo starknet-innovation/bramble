@@ -249,9 +249,7 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="activity-refresh"');
 
     const empty = dashboard("activity", status, [], preferences, { balances: [] });
-    expect(empty).toContain(
-      "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.",
-    );
+    expect(empty).toContain("No activity yet. Transactions for this account appear here.");
     expect(empty).not.toContain("Couldn't load on-chain history");
 
     // historyUnavailable is the final positional arg: the full-screen degraded

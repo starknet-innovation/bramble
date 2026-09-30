@@ -124,10 +124,9 @@ export const unifiedHomeBalances = (
  * committed its block yet.
  */
 const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
-  pending:
-    "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.",
+  pending: "Broadcast accepted. It can't be fee-bumped, replaced, or cancelled.",
   preconfirmed:
-    "Pre-confirmed by the block proposer, so the result is known but not yet final. Bramble keeps checking in the background and will tell you if it does not settle.",
+    "Pre-confirmed by the block proposer: the result is known, the block is not final. The wallet keeps checking and will tell you if it does not settle.",
 };
 
 /**
@@ -310,7 +309,7 @@ const tokensPanel = (
     "error" in state
       ? tokensErrorPanel(state.error)
       : unified.length === 0
-        ? emptyState("No tracked balances yet. Add or detect tokens to see them here.")
+        ? emptyState("No tracked balances yet. Add or scan for tokens to see them here.")
         : `<ul class="token-list">${unified
             .map((token) =>
               unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
@@ -347,7 +346,7 @@ const tokensPanel = (
 export const activityEmptyCopy = (historyUnavailable: boolean): string =>
   historyUnavailable
     ? "No transactions recorded on this device yet."
-    : "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.";
+    : "No activity yet. Transactions for this account appear here.";
 
 /**
  * Renders the portfolio section. With only Tokens visible there is no tab

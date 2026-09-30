@@ -109,9 +109,12 @@ describe("cluster views", () => {
     const html = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       pendingTx,
     ]);
-    expect(html).toContain("normally confirms quickly");
-    expect(html).toContain("checks immediately");
+    // What a reader can act on while a transaction is pending: nothing. The
+    // wallet used to also narrate how quickly it checks, which changed neither
+    // the wait nor what they could do about it.
+    expect(html).toContain("Broadcast accepted");
     expect(html).toContain("fee-bumped, replaced, or cancelled");
+    expect(html).not.toContain("checks immediately");
     expect(html).toMatch(/tx-kind-transfer pending"[^>]*title="/);
 
     const settled = dashboard("activity", status, [], preferences, { balances: [] }, null, [
