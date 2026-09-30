@@ -289,7 +289,7 @@ describe("account drawer folders", () => {
 
     expect(harness.container.querySelector("#drawer-folder-form")).not.toBeNull();
     expect(harness.container.querySelector("#drawer-folder-result")?.textContent).toContain(
-      "store unavailable",
+      "The folder store is unavailable.",
     );
     // The submit is released so the corrected name can be sent again.
     expect(

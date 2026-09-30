@@ -12,7 +12,7 @@
  */
 
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../shared/dom";
 import { INITIAL_COLLAPSED_FOLDERS } from "./drawer-folders";
 
 /**
@@ -172,7 +172,7 @@ const bindAddFolder = (root: Element, deps: DrawerFolderDeps): void => {
       },
       (error: unknown) => {
         buttonBusy(submit, false);
-        if (result) result.textContent = errorMessage(error, "Could not add that folder");
+        if (result) result.textContent = errorLine(error, "Could not add that folder");
       },
     );
   });

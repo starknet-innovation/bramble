@@ -16,7 +16,7 @@ import { textField } from "@bramble/ui-kit/fields";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { bindGuardedCopy } from "../../shared/guarded-copy";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen } from "../../shared/parts";
@@ -156,7 +156,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
       (error: unknown) => {
         showToast(errorMessage(error, "Reveal failed"), "error", form);
         if (result) {
-          result.textContent = errorMessage(error, "Reveal failed");
+          result.textContent = errorLine(error, "Reveal failed");
         }
         buttonBusy(submitButton, false);
       },

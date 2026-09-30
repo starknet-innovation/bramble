@@ -8,7 +8,7 @@ import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TransferReviewResponse, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation, type ConfirmationOutcome } from "../../shared/confirm-submitted";
-import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, renderFragment, showToast } from "../../shared/dom";
 import {
   outcomeReceiptActions,
   outcomeReceiptFor,
@@ -140,7 +140,7 @@ const bindAddForm = (deps: NftUiDeps): void => {
         (error: unknown) => {
           showToast(errorMessage(error, "Couldn't add that collectible"), "error", deps.app);
           if (result) {
-            result.textContent = errorMessage(error, "Couldn't add that collectible");
+            result.textContent = errorLine(error, "Couldn't add that collectible");
           }
           buttonBusy(submitButton, false);
         },

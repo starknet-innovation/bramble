@@ -133,7 +133,11 @@ describe("privacy UI async scope isolation", () => {
       { error: null, loading: false, value: null },
     );
     bindWith(statusFor(account.id), { error: null, loading: true, value: null });
-    bindWith(statusFor(account.id), { error: "prover offline", loading: false, value: null });
+    bindWith(statusFor(account.id), {
+      error: "The prover is offline.",
+      loading: false,
+      value: null,
+    });
 
     expect(loads).toBe(0);
   });
@@ -162,7 +166,7 @@ describe("privacy UI async scope isolation", () => {
       status: () => statusFor(account.id),
       wallet: {
         loadPrivacyState: async () => {
-          throw new Error("privacy indexer unavailable for this account");
+          throw new Error("The privacy indexer is unavailable for this account.");
         },
       } as unknown as SidepanelWallet,
     });
@@ -170,9 +174,9 @@ describe("privacy UI async scope isolation", () => {
     button?.click();
     await tick();
 
-    expect(disclosure.error).toBe("privacy indexer unavailable for this account");
+    expect(disclosure.error).toBe("The privacy indexer is unavailable for this account.");
     expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe(
-      "privacy indexer unavailable for this account",
+      "The privacy indexer is unavailable for this account.",
     );
     expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
     expect(button?.hasAttribute("data-busy")).toBe(false);

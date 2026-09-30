@@ -11,7 +11,14 @@ import type { WalletView } from "../app/screens/views";
 import type { RefreshReason } from "../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { awaitConfirmation, type ConfirmationOutcome } from "../shared/confirm-submitted";
-import { buttonBusy, errorMessage, renderFragment, scopedStatus, showToast } from "../shared/dom";
+import {
+  buttonBusy,
+  errorLine,
+  errorMessage,
+  renderFragment,
+  scopedStatus,
+  showToast,
+} from "../shared/dom";
 import { outcomeReceiptFor, paintOutcomeReceipt } from "../shared/outcome-receipt";
 import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
@@ -59,7 +66,7 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
       (error: unknown) => {
         showToast(errorMessage(error, "Lock failed"), "error", lockButton);
         if (result) {
-          result.textContent = errorMessage(error, "Lock failed");
+          result.textContent = errorLine(error, "Lock failed");
         }
         buttonBusy(lockButton, false);
       },
@@ -338,7 +345,7 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
         (error: unknown) => {
           showToast(errorMessage(error, "Network switch failed"), "error", button);
           if (result) {
-            result.textContent = errorMessage(error, "Network switch failed");
+            result.textContent = errorLine(error, "Network switch failed");
           }
           buttonBusy(button, false);
         },

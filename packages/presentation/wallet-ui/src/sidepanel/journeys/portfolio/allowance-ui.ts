@@ -5,7 +5,7 @@
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
 
 const REVIEWED_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
@@ -77,9 +77,9 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
           REVIEWED_FEES.delete(button);
           showToast(errorMessage(error, "Revoke failed"), "error", button);
           if (result) {
-            result.textContent = errorMessage(error, "Revoke failed");
+            result.textContent = errorLine(error, "Revoke failed");
           }
-          if (review) review.textContent = errorMessage(error, "Revoke failed");
+          if (review) review.textContent = errorLine(error, "Revoke failed");
           buttonBusy(button, false);
         },
       );

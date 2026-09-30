@@ -73,66 +73,11 @@ const rawErrorStrings = (): ReadonlySet<string> => {
   return found;
 };
 
-// Reviewed with the multisig journey, not before it. Several of these tell a
-// signer something they act on, so collapsing them to a generic sentence would
-// lose more than it hides.
-const DEFERRED = new Set([
-  "switch to the multisig network first",
-  "This intent is too large for secure relay sharing. Copy the intent package instead",
-  "Signer-management intents require the complete current public signer configuration",
-  "Signer set, threshold, and salt do not reproduce the watched multisig address",
-  "multisig balances unavailable",
-  "Multisig balances are loading.",
-  "A supplied public key is not a current Stark signer for this multisig",
-  "add Ready multisig failed",
-  "Argent multisig deployment address needs STRK before deployment",
-  "Argent multisig deployment did not reach the network. Try again.",
-  "Argent multisig deployment must exactly match a fresh fee review",
-  "Argent multisig deployment outcome is unresolved",
-  "Argent multisig deployment review address mismatch",
-  "Argent multisig deployment review unavailable",
-  "Argent multisig has a pending or unresolved operation",
-  "Argent multisig intent already has its threshold signatures",
-  "Argent multisig intent is stale after a configuration change",
-  "Argent multisig intent nonce is no longer current",
-  "Argent multisig intent not found",
-  "Argent multisig not found",
-  "Argent multisig submission outcome is unresolved",
-  "Argent multisig threshold is not satisfied",
-  "co-signer sync failed",
-  "confirm removal of terminal Argent multisig history",
-  "conflicting Argent multisig intent id",
-  "coordination identity unavailable",
-  "deploy Ready multisig failed",
-  "invalid Argent multisig deployment operation",
-  "invalid Argent multisig intent package",
-  "invalid Argent multisig prepared transaction",
-  "invalid Argent multisig signature import",
-  "invalid Argent multisig signing claim",
-  "invalid Argent multisig submission claim",
-  "multisig balance snapshot unavailable",
-  "multisig not found on the active network",
-  "Nostr relay update failed",
-  "remove Ready multisig failed",
-  "remove Ready multisig intent failed",
-  "resolve multisig signer account failed",
-  "review Ready multisig deployment failed",
-  "Save a co-signer wallet card before sharing securely",
-  "secure co-signer share failed",
-  "Secure co-signer coordination is unavailable for this wallet",
-  "Secure co-signer sharing is unavailable. Try again shortly",
-  "Secure co-signer updates are unavailable. Try again shortly",
-  "Secure co-signer updates could not be verified. Try again shortly",
-  "selected account is not a current Argent multisig signer",
-  "selected signer account is unavailable on this network",
-  "selected signer is not a member of the reviewed constructor",
-  "signature is not valid for this exact Argent multisig intent",
-  "signer account lookup unavailable",
-  "Signer keys cannot be verified until the multisig is deployed",
-  "Signer public keys are invalid or duplicated",
-  "stable Argent Multisig 0.2 class is not declared on this network",
-  "this Argent multisig signer already signed the intent",
-]);
+// Empty, and meant to stay that way. It held the Argent multisig vocabulary
+// until the multisig copy pass translated it; a new entry here is a decision to
+// ship a developer's words to a reader, so it needs the same justification the
+// list itself once carried.
+const DEFERRED = new Set<string>([]);
 
 describe("error copy coverage", () => {
   const raws = rawErrorStrings();

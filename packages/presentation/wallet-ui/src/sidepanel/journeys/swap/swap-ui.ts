@@ -18,7 +18,7 @@ import type {
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation } from "../../shared/confirm-submitted";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { setFlowStep } from "../../shared/parts";
@@ -246,7 +246,7 @@ const requestQuote = (deps: SwapUiDeps, root: Element): void => {
         return;
       }
       pendingBuyAmount = null;
-      setResult(root, errorMessage(error, "No route available right now."));
+      setResult(root, errorLine(error, "No route available right now."));
       applySwapUi(deps, root);
     },
   );
@@ -365,7 +365,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
             buttonBusy(reviewButton, false);
             return;
           }
-          setResult(root, errorMessage(error, "Could not prepare a safe swap route."));
+          setResult(root, errorLine(error, "Could not prepare a safe swap route."));
           buttonBusy(reviewButton, false);
           applySwapUi(deps, root);
         },
@@ -448,7 +448,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
       },
       (error: unknown) => {
         showToast(errorMessage(error, "Swap failed"), "error", root);
-        setResult(root, errorMessage(error, "Swap failed"));
+        setResult(root, errorLine(error, "Swap failed"));
         confirmButton.innerHTML = restingContent;
         buttonBusy(confirmButton, false);
         preparation = null;

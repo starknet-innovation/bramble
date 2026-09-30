@@ -141,7 +141,7 @@ describe("bindDashboard", () => {
     const lockButton = container.querySelector<HTMLButtonElement>("#lock-button");
     const wallet = {
       lockVault: async () => {
-        throw new Error("boom lock");
+        throw new Error("The vault refused to lock.");
       },
     };
     bindDashboard({
@@ -157,8 +157,10 @@ describe("bindDashboard", () => {
     await tick();
 
     expect(renders).toEqual([]);
-    expect(container.querySelector("#panel-result")?.textContent).toBe("boom lock");
-    expect(errorToasts()).toContain("boom lock");
+    expect(container.querySelector("#panel-result")?.textContent).toBe(
+      "The vault refused to lock.",
+    );
+    expect(errorToasts()).toContain("The vault refused to lock.");
     // The lock button is re-enabled so the user can retry.
     expect(lockButton?.disabled).toBe(false);
   });
@@ -316,7 +318,7 @@ describe("bindDeploy", () => {
     const container = mount(deployMarkup);
     const wallet = {
       deployAccount: async () => {
-        throw new Error("deploy denied");
+        throw new Error("The deployment was denied.");
       },
     };
     bindDeploy({
@@ -329,8 +331,10 @@ describe("bindDeploy", () => {
     click(container.querySelector("#deploy-button"));
     await tick();
 
-    expect(container.querySelector('[role="status"]')?.textContent).toBe("deploy denied");
-    expect(errorToasts()).toContain("deploy denied");
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "The deployment was denied.",
+    );
+    expect(errorToasts()).toContain("The deployment was denied.");
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });
 });
@@ -479,7 +483,7 @@ describe("bindPickers", () => {
         container,
         {
           setActiveNetwork: async () => {
-            throw new Error("switch failed");
+            throw new Error("The network switch did not take.");
           },
         },
         sinks,
@@ -490,8 +494,10 @@ describe("bindPickers", () => {
     await tick();
 
     expect(sinks.views).toEqual([]);
-    expect(container.querySelector("#picker-result")?.textContent).toBe("switch failed");
-    expect(errorToasts()).toContain("switch failed");
+    expect(container.querySelector("#picker-result")?.textContent).toBe(
+      "The network switch did not take.",
+    );
+    expect(errorToasts()).toContain("The network switch did not take.");
     expect(button?.disabled).toBe(false);
   });
 });

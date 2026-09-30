@@ -38,6 +38,10 @@ const RAW_RPC = /(?:^\s*RPC:|\bstarknet_[a-zA-Z0-9_]+\b[\s\S]*\bparams\b|\bwith 
 const RAW_RPC_RESPONSE =
   /(?:^\s*(?:20|24|41|55):|\baccount validation failed\b|\bblock not found(?:: undefined)?\b|\bcontract not found(?:: undefined)?\b|\bresource bounds? (?:were )?not satisfied\b|\btransaction execution error\b)/i;
 const RAW_HTTP = /(?:\bHTTP\s+[45]\d\d\b|\bresponse body\b|\brequest rejected\s*[:{[])/i;
+// A diagnostic no reader was meant to see. Curated copy starts with a capital
+// or a digit; the raw strings the background throws start lowercase.
+const DEVELOPER_VOICE = /^[a-z]/;
+
 const rawServiceDiagnostic = (value: string): boolean =>
   value.length > 240 ||
   /[\r\n]/.test(value) ||
@@ -47,11 +51,15 @@ const rawServiceDiagnostic = (value: string): boolean =>
 /**
  * Classifies a raw error string into user-facing copy.
  *
- * An unrecognised string is still shown as-is. Refusing every lowercase
- * diagnostic would be the better guard, but the Argent multisig vocabulary is
- * not translated yet and several of its strings tell a signer something they
- * need; that guard lands with the multisig copy pass, once nothing is left to
- * lose by it.
+ * An unmapped string is shown as-is only when it already reads as a sentence.
+ * A lowercase diagnostic is replaced with the generic fallback instead, so a
+ * string nobody wrote for a reader cannot reach one — the failure this module
+ * exists to prevent, closed now that every diagnostic in the repository is
+ * translated and a conformance check keeps it that way.
+ *
+ * This is a backstop, not a substitute for the table: it makes a new
+ * diagnostic read as "Something went wrong" rather than as source code, which
+ * is better but still not an answer.
  */
 export const friendlyError = (raw: string): FriendlyError => {
   const trimmed = raw.trim();
@@ -86,5 +94,5 @@ export const friendlyError = (raw: string): FriendlyError => {
     return { message: SERVICE_REJECTED };
   }
 
-  return { message: trimmed };
+  return { message: DEVELOPER_VOICE.test(trimmed) ? UNEXPECTED_FALLBACK : trimmed };
 };

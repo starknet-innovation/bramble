@@ -48,9 +48,16 @@ describe("friendlyError", () => {
     expect(result.message).toBe("The wallet is locked or unavailable. Unlock it and try again.");
   });
 
-  test("keeps unrecognized errors verbatim", () => {
-    const raw = "krusty kms handshake failed: 0x1f timeout";
-    expect(friendlyError(raw)).toEqual({ message: raw });
+  // The backstop. Curated copy starts with a capital, so an unmapped sentence
+  // is someone's writing and survives; an unmapped lowercase string is a
+  // diagnostic that reached here by accident and must not reach a reader.
+  test("keeps an unrecognized sentence, and refuses an unrecognized diagnostic", () => {
+    const sentence = "The prover returned an answer this build does not know.";
+    expect(friendlyError(sentence)).toEqual({ message: sentence });
+
+    expect(friendlyError("krusty kms handshake failed: 0x1f timeout").message).toBe(
+      "Something went wrong. Please try again.",
+    );
   });
 
   test("collapses raw RPC and API diagnostics to short recovery copy", () => {
@@ -79,9 +86,16 @@ describe("friendlyError", () => {
     }
   });
 
-  test("keeps actionable wallet-domain errors visible", () => {
-    const raw = "Argent multisig intent nonce is no longer current";
-    expect(friendlyError(raw).message).toBe(raw);
+  // This one was deferred through four passes because collapsing it to a
+  // generic message would have cost a signer the one thing they could act on.
+  // It is translated now, so it keeps the fact and loses the vocabulary.
+  test("translates a wallet-domain error without losing what it told a signer", () => {
+    expect(friendlyError("Argent multisig intent nonce is no longer current").message).toBe(
+      "This transaction is out of date. Create a new one.",
+    );
+    expect(friendlyError("Argent multisig threshold is not satisfied").message).toBe(
+      "Not enough signatures yet.",
+    );
   });
 
   // The defect this mapping exists to fix: a raw diagnostic reaching a toast.

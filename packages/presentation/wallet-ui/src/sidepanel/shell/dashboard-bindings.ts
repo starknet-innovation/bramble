@@ -14,7 +14,7 @@ import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
+import { buttonBusy, errorLine, errorMessage, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
 import {
@@ -147,7 +147,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         (error: unknown) => {
           showToast(errorMessage(error, "Address save failed"), "error", form);
           if (result) {
-            result.textContent = errorMessage(error, "Address save failed");
+            result.textContent = errorLine(error, "Address save failed");
           }
           buttonBusy(submitButton, false);
         },
@@ -324,7 +324,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         (error: unknown) => {
           showToast(errorMessage(error, "Approval failed"), "error", button);
           if (result) {
-            result.textContent = errorMessage(error, "Approval failed");
+            result.textContent = errorLine(error, "Approval failed");
           }
           // The background atomically consumes an approval before execution.
           // Repaint after any executor error so stale controls cannot decide the

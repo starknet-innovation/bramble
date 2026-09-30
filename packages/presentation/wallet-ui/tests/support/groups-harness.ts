@@ -192,7 +192,8 @@ const buildWallet = (
   const getGroups = (): AccountGroups => withDefaultGroups(readGroups());
   // A store fault, so the failure paths (error toast, un-busied control, the
   // unchanged store) are driven by the real bindings rather than assumed.
-  const fail = <T>(): Promise<T> => Promise.reject(new WalletError("store unavailable"));
+  const fail = <T>(): Promise<T> =>
+    Promise.reject(new WalletError("The folder store is unavailable."));
   return {
     createGroup: (name: string, groupIcon: AccountGroupIcon): Promise<string> => {
       calls.createGroup.push([name, groupIcon]);
