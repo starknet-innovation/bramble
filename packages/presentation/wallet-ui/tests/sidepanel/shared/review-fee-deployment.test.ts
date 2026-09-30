@@ -101,13 +101,11 @@ describe("undeployed-account fee review", () => {
     // that is not on chain yet is normal — the first send creates it and the
     // review quotes both halves — so the shortcut moved to Settings, beside
     // the other account destinations, where someone who wants to deploy first
-    // can find it. It is not access control, so it does not live in the
-    // security hub.
+    // can find it.
     const settings = settingsScreen(status, null);
 
     expect(settings).toContain('data-view="deploy-account"');
     expect(settings).toContain("Deploy account");
-    expect(settings).toContain("Deploy your account manually");
     const home = homeScreen(
       status,
       { address: "0x1", derivation: { kind: "imported-raw-key" } } as never,

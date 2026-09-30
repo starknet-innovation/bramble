@@ -37,7 +37,7 @@ export const settingsScreen = (
     <section class="section">
       <p class="eyebrow">Accounts & networks</p>
       <div class="menu-list" role="group" aria-label="Accounts and networks">
-        ${walletMenuRow("account", "Accounts & groups", "wallet")}
+        ${walletMenuRow("account", "Accounts & folders", "wallet")}
         ${walletMenuRow("network", "Network", "globe", status.network)}
         ${walletMenuRow("address-book", "Address book", "book")}
         ${walletMenuRow("multisigs", "Multisig accounts", "users")}
@@ -48,12 +48,10 @@ export const settingsScreen = (
       <div class="menu-list" role="group" aria-label="This account">
         ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
       </div>
-      <p class="hint">Deploy your account manually</p>
     </section>
     <section class="section">
       <p class="eyebrow">Access & permissions</p>
       <div class="menu-list" role="group" aria-label="Access and permissions">
-        ${walletMenuRow("security", "Security & permissions", "lock")}
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
         ${walletMenuRow(
@@ -68,7 +66,7 @@ export const settingsScreen = (
       <p class="eyebrow">Backup & recovery</p>
       <div class="menu-list" role="group" aria-label="Backup and recovery">
         ${walletMenuRow("backup", "Backup & restore", "shield")}
-        ${walletMenuRow("reveal", "Reveal recovery secrets", "lock")}
+        ${walletMenuRow("reveal", "Reveal secrets", "lock")}
       </div>
     </section>
     <section class="section">
@@ -102,7 +100,7 @@ export const appearanceFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
 ): string =>
-  flowHeader("Appearance & currency", status, "How the wallet looks and values assets") +
+  flowHeader("Appearance & currency", status) +
   flowScreen(
     "appearance",
     `<section class="section">
@@ -156,42 +154,18 @@ export const requestSettingsFlow = (
   );
 
 /**
- * Renders the security hub as destinations grouped by what they protect.
- */
-export const securityFlow = (status: WalletStatus): string =>
-  flowHeader("Security & permissions", status, "Review access before recovery") +
-  flowScreen(
-    "security",
-    `<section class="section">
-      <p class="eyebrow">External access</p>
-      <div class="menu-list" role="group" aria-label="External access">
-        ${walletMenuRow("connected-sites", "Connected sites", "link")}
-        ${walletMenuRow("allowances", "Token allowances", "coins")}
-        ${walletMenuRow("multisigs", "Multisig accounts", "users")}
-      </div>
-    </section>
-    <section class="section">
-      <p class="eyebrow">Recovery</p>
-      <div class="menu-list" role="group" aria-label="Recovery">
-        ${walletMenuRow("backup", "Backup & restore", "shield")}
-        ${walletMenuRow("reveal", "Reveal recovery secrets", "lock")}
-      </div>
-    </section>`,
-  );
-
-/**
  * Renders the backup choice before either export or restore changes state.
  */
 export const backupHubFlow = (status: WalletStatus): string => {
   const hasLedgerAccount = status.accounts.some((account) => account.derivation.kind === "ledger");
   return (
-    flowHeader("Backup & restore", status, "Choose one focused task") +
+    flowHeader("Backup & restore", status) +
     flowScreen(
       "backup",
       `<section class="section">
         <div class="menu-list" role="group" aria-label="Backup and restore">
-          ${walletMenuRow("backup-export", "Download wallet backup", "receive")}
-          ${walletMenuRow("backup-restore", "Restore from a backup", "refresh")}
+          ${walletMenuRow("backup-export", "Download backup", "receive")}
+          ${walletMenuRow("backup-restore", "Restore backup", "refresh")}
         </div>
         ${
           hasLedgerAccount
@@ -207,15 +181,15 @@ export const backupHubFlow = (status: WalletStatus): string => {
  * Renders the non-secret preference export task.
  */
 export const backupExportFlow = (status: WalletStatus): string =>
-  flowHeader("Download backup", status, "Preferences and wallet organization") +
+  flowHeader("Download backup", status, "Your settings, folders, and address book") +
   flowScreen(
     "backup-export",
     `<section class="section">
-      <p class="hint">Recovery phrases, imported private keys, and Ledger key material are never included.</p>
+      <p class="hint">Recovery phrases, private keys, and Ledger keys are not included.</p>
       ${button({
         attributes: { id: "backup-export" },
         icon: "receive",
-        label: "Download backup",
+        label: "Download",
       })}
       <p id="backup-result" role="status"></p>
     </section>`,
@@ -225,7 +199,7 @@ export const backupExportFlow = (status: WalletStatus): string =>
  * Renders backup restore as an isolated replacement task.
  */
 export const backupRestoreFlow = (status: WalletStatus): string =>
-  flowHeader("Restore backup", status, "Replace preferences from a trusted file") +
+  flowHeader("Restore backup", status, "Replaces your settings from a file you trust") +
   flowScreen(
     "backup-restore",
     `<section class="section">

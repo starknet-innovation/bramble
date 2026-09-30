@@ -162,7 +162,7 @@ export const groupsSection = (
   const createOpen = expandedGroupId === CREATE_GROUP_PANEL || groups.length === 0;
   return `
   <section class="section">
-    <p class="eyebrow">Groups</p>
+    <p class="eyebrow">Folders</p>
     <ul class="group-manage-list">
       ${createGroupRow(createOpen)}
       ${groups

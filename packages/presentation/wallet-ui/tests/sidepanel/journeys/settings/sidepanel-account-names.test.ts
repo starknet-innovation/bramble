@@ -99,8 +99,8 @@ describe("account names section", () => {
       html.indexOf(`data-account-name-form="${acctA.id}"`),
       html.indexOf(`data-account-name-form="${acctB.id}"`),
     );
-    expect(row).toContain('aria-label="Groups: Work"');
-    // Filing still happens by dragging in the drawer or in the Groups
+    expect(row).toContain('aria-label="Folders: Work"');
+    // Filing still happens by dragging in the drawer or in the Folders
     // accordion; the name row only reports it.
     expect(row).not.toContain("data-group-toggle");
   });

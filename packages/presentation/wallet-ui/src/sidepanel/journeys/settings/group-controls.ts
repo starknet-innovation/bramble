@@ -25,7 +25,7 @@ import { icon } from "../../shared/icons";
  * as options are pressed; `selected` seeds the initial choice.
  */
 const groupIconPicker = (selected: AccountGroupIcon = "folder"): string => `
-  <div class="group-icon-picker" role="radiogroup" aria-label="Group icon">
+  <div class="group-icon-picker" role="radiogroup" aria-label="Folder icon">
     ${GROUP_ICONS.map(
       (glyph) =>
         `<button class="group-icon-option" type="button" data-group-icon="${glyph}" aria-pressed="${glyph === selected}" aria-label="${glyph}" title="${glyph}">${icon(glyph)}</button>`,
@@ -95,6 +95,6 @@ export const editGroupForm = (group: AccountGroup): string => `
 export const accountGroupsLine = (memberGroups: AccountGroups): string =>
   memberGroups.length === 0
     ? ""
-    : `<span class="account-groups-line" aria-label="Groups: ${escapeHtml(
+    : `<span class="account-groups-line" aria-label="Folders: ${escapeHtml(
         memberGroups.map((group) => group.name).join(", "),
       )}">${memberGroups.map((group) => icon(group.icon)).join("")}</span>`;

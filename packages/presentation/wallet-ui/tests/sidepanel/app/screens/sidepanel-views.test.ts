@@ -196,11 +196,8 @@ describe("sidepanel views", () => {
     expect(undeployed).not.toContain("Deploy account");
     expect(undeployed).not.toContain('data-view="deploy-account"');
     // The dedicated deployment flow is reachable from the Settings hub itself,
-    // one tap in rather than four, and no longer from the security hub.
+    // one tap in rather than four.
     expect(dashboard("settings", status, [], preferences, { balances: [] }, false)).toContain(
-      'data-view="deploy-account"',
-    );
-    expect(dashboard("security", status, [], preferences, { balances: [] }, false)).not.toContain(
       'data-view="deploy-account"',
     );
   });

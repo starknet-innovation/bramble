@@ -51,7 +51,7 @@ export const revealFlow = (status: WalletStatus): string => {
         "reveal",
         `<section class="section" role="note">
           <p class="eyebrow">Recovery</p>
-          <p class="hint">Account private key secured by your ledger device</p>
+          <p class="hint">This account’s key is on your Ledger. Recover it with the device.</p>
         </section>`,
       )
     );
@@ -62,13 +62,13 @@ export const revealFlow = (status: WalletStatus): string => {
       "reveal",
       `<section class="section reveal-warning" role="note">
       <p class="reveal-danger">${icon("alert")}Anyone who sees these can take your funds.</p>
-      <p class="hint">Reveal only in private. Bramble will never ask you for them. They are shown once here and never leave this screen.</p>
+      <p class="hint">Reveal only in private. Bramble will never ask you for them.</p>
     </section>
     <section class="section">
       <form id="reveal-form">
         ${textField({
           autocomplete: "current-password",
-          hint: "Re-enter it to reveal. An unlocked session alone is not enough.",
+          hint: "An unlocked session is not enough.",
           label: "Confirm vault passphrase",
           minlength: MIN_VAULT_PASSPHRASE_LENGTH,
           name: "vaultPassphrase",

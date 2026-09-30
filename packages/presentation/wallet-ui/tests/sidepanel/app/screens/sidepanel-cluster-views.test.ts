@@ -128,7 +128,7 @@ describe("cluster views", () => {
     const settings = dashboard("settings", status, [], preferences, { balances: [] });
     expect(settings).toContain('data-view="allowances"');
     expect(settings).toContain('data-view="reveal"');
-    expect(settings).toContain("Reveal recovery secrets");
+    expect(settings).toContain("Reveal secrets");
   });
 
   test("a site request names the paused task without repeating return guidance", () => {

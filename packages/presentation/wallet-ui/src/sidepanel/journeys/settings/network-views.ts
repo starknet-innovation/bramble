@@ -32,7 +32,7 @@ const devnetHint = (status: WalletStatus, preferences: WalletPreferences | null)
   }
   const override = rpcOverrideFor(status, preferences);
   const endpoint = escapeHtml(override || STARKNET_NETWORKS.SN_DEVNET.rpcUrls[0]);
-  const elsewhere = override ? "" : " Running yours elsewhere? Set a custom RPC under Advanced.";
+  const elsewhere = override ? "" : " Set a custom RPC under Advanced if yours runs elsewhere.";
   return `<p class="hint">Expects a node at ${endpoint} started with --chain-id SN_DEVNET.${elsewhere}</p>`;
 };
 
@@ -74,7 +74,6 @@ const explorerFallbackForm = (
     ${textField({
       autocomplete: "off",
       className: "mono",
-      hint: "Used in case of RPC failure",
       label: `Explorer data API for ${status.network}`,
       name: "apiUrl",
       placeholder: "https://…/v1",
@@ -82,15 +81,14 @@ const explorerFallbackForm = (
       type: "url",
       value: explorerApiUrlFor(status, preferences),
     })}
-    <p class="hint">Activity history comes from this explorer.</p>
     ${checkboxField({
       checked: allowed,
       name: "explorerFallback",
-      text: "Use this explorer for activity history and as an RPC fallback",
+      text: "Use this explorer for activity, and as a fallback when the RPC fails",
     })}
     ${button({
       icon: "check",
-      label: "Save explorer settings",
+      label: "Save explorer",
       type: "submit",
       variant: "secondary",
     })}
@@ -119,7 +117,7 @@ const endpointDisclosure = (
  * Renders the primary network picker.
  */
 export const networkFlow = (status: WalletStatus, preferences: WalletPreferences | null): string =>
-  flowHeader("Network", status, "Choose where the wallet operates") +
+  flowHeader("Network", status) +
   flowScreen(
     "network",
     `<section class="section">
@@ -231,7 +229,7 @@ export const advancedNetworkFlow = (
             })}
             ${button({
               icon: "check",
-              label: "Save coordination relay",
+              label: "Save relay",
               type: "submit",
               variant: "secondary",
             })}
@@ -246,7 +244,7 @@ export const advancedNetworkFlow = (
             attributes: { id: "product-analytics" },
             checked: preferences?.productAnalytics ?? true,
             name: "productAnalytics",
-            text: "Share pseudonymous gateway usage (on by default; turn off anytime)",
+            text: "Share pseudonymous gateway usage (on by default)",
           })}
           <p class="hint">Helps Bramble understand feature usage and failures.</p>`,
         )}

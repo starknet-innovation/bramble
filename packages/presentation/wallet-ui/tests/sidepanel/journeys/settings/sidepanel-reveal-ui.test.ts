@@ -153,7 +153,7 @@ describe("bindReveal", () => {
     };
     const html = revealFlow(ledgerStatus);
 
-    expect(html).toContain("secured by your ledger device");
+    expect(html).toContain("key is on your Ledger");
     // No reveal form or secret output region is emitted for a hardware account.
     expect(html).not.toContain('id="reveal-form"');
     expect(html).not.toContain('id="reveal-output"');

@@ -53,7 +53,6 @@ import {
   backupExportFlow,
   backupRestoreFlow,
   requestSettingsFlow,
-  securityFlow,
 } from "../../journeys/settings/settings-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
@@ -244,7 +243,7 @@ export const accountFlow = (
   // halves read the same seeded folder list, so a wallet that has never stored
   // a group still shows "My accounts" and "Archived accounts" on both.
   return (
-    flowHeader("Accounts & groups", status) +
+    flowHeader("Accounts & folders", status) +
     flowScreen(
       "account",
       accountNamesSection(status, preferences, groups) +
@@ -326,8 +325,6 @@ export const simpleFlowScreen = (
       return appearanceFlow(ctx.status, ctx.preferences);
     case "request-settings":
       return requestSettingsFlow(ctx.status, ctx.preferences);
-    case "security":
-      return securityFlow(ctx.status);
     case "backup-export":
       return backupExportFlow(ctx.status);
     case "backup-restore":
