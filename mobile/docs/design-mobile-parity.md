@@ -55,10 +55,10 @@ section 3.
 | ImportMethod | fixed | fixed | Option detail weight 600. Titles wrap differently: CSS `text-wrap: balance` has no iOS 17 equivalent (intentional). Ledger and Private key rows are disabled on mobile (feature absent). |
 | RecoveryPhrase | match | match | |
 | Passphrase | match | match | |
-| ReviewAccount | fixed | fixed | "01" disc and weight 600 address. Address truncation is `shortAddress` (accounts workstream). The mainnet checkbox is absent on Sepolia, as in the extension. |
+| ReviewAccount | fixed | fixed | "01" disc and weight 600 address. Address truncation is `shortAddress` (accounts workstream). There is no Mainnet checkbox: the extension deleted it (the 2026-09-30 port). |
 | SavePhrase (masked) | fixed | fixed | The masked grid now renders no words at all (an empty blurred field), which looks the same as the extension's blurred words and keeps the words out of the view and accessibility trees. No back control after the vault is written (unchanged behaviour). |
 | ConfirmBackup | match | match | |
-| Complete | match | match | Mobile copy omits "side panel" and "connect to an app" (mobile has neither; unchanged). |
+| Complete | match | match | Only the check mark, "You’re all set" and "Open Bramble": the extension dropped the eyebrow, lede and detail rows (the 2026-09-30 port). |
 | Unlock / UnlockFailed | fixed | fixed | CTA pinned at the foot, above the keyboard. The failed capture was taken while the keyboard was dismissing, so the CTA and toast sit higher than at rest. |
 | Home ready | match | match | Send, Swap, Shield are disabled on mobile (feature absent). No fiat: total and value read "—" (portfolio workstream). |
 | Home balance error | fixed | fixed | New `.panel-error` state, "RPC endpoints unavailable" with Try again; gap above tightened to 8. |

@@ -40,12 +40,13 @@ path, never from Krusty. Accounts: the published E2E phrase, indices 0 and 1, SN
    the "transaction hash not found" message; `monotonicActivityStatus`; the not-found threshold.
 7. **Copy.** Every string in §2, read from the extension modules that export it (the
    `REVIEWED_FEE_EXCEEDED` message, `transferStageTitle`, `reviewFeeSection`, deploy errors);
-   inline-markup strings are extracted by rendering the UI Lab scenario. The one mobile wording
-   change ("Keep this app open.") is recorded. Swift unit tests assert the `SendCopy` table
-   against it. Decided at implementation: the same generator renders `SendCopy.generated.swift`
-   and `SendCopy.generated.kt` from this section (`scripts/mobile-send-copy.ts`), so no Send
-   string is typed by hand; the drift gate compares both files. Failure messages are the
-   extension's real error text, captured by injecting each fault into the recorded transport.
+   inline-markup strings are extracted by rendering the UI Lab scenario. No mobile wording
+   change remains (the working screen's liveness line, the only one, was removed). Swift unit
+   tests assert the `SendCopy` table against it. Decided at implementation: the same generator
+   renders `SendCopy.generated.swift` and `SendCopy.generated.kt` from this section
+   (`scripts/mobile-send-copy.ts`), so no Send string is typed by hand; the drift gate compares
+   both files. Failure messages are the extension's real error text, captured by injecting each
+   fault into the recorded transport.
 8. **Timing constants.** Confirmation checkpoints, deploy poll interval and attempts, 3/2 headroom.
 
 ## 7. Test plan
@@ -73,11 +74,21 @@ path, never from Krusty. Accounts: the published E2E phrase, indices 0 and 1, SN
 - `TransferBridgeTests.swift`: loads the `extension-transactions-*.json` fixture, drives `prepare_transfer` /
   `advance` with canned replies, asserts bodies and final hash match the fixture and that no step
   exposes a key or a bare signature; checks `validate_recipient`, `shortAddress` (the core's `account_label`),
-  `explorer_transaction_url` and `parse_token_amount` from Swift.
-- `SendFlowModelTests.swift`: stage transitions and titles; Max uses the full balance; an edit
-  drops the plan; lock closes it; a fee failure disables Confirm; failure codes map to the
+  `explorer_transaction_url` and `parse_token_amount` from Swift; the stage titles (authorizing,
+  broadcasting and confirming all read "Sending"; there is no asset stage) and the working
+  screen's one title with no body copy.
+- `SendFlowModelTests.swift`: stage transitions; Max uses the full balance; an edit drops the
+  plan; a row names the recipient and typed text never does; a token screen opens Send on its
+  token; lock closes the plan; a fee failure disables Confirm; failure codes map to the
   extension's copy (fixture item 7); the driver never retries an `is_write` step and never sends
   a write to an endpoint other than the proven one.
+- `SendReviewCopyTests.swift` (facts, each Cost box state with the combined figure and the
+  deployment's share, the risks panel only when there is something to say),
+  `SendRecipientsTests.swift` (address book, accounts under folders with empty folders dropped,
+  search, the Save offer only for a new address) and `DeployFlowModelTests.swift` (fee quoted on
+  open, one Deploy press, a failed quote quoted again before anything is spent, an account
+  already on chain, the receipt firming up from submitted to deployed), each against the
+  regenerated fixtures.
 - `MainnetSendTests.swift`: skipped (`XCTSkip`) unless
   `TEST_RUNNER_BRAMBLE_MOBILE_MAINNET_SEND_ACK` equals "I understand this broadcasts a real
   mainnet transaction" and `CI` is unset. Documented in README; never run by agents.
@@ -92,11 +103,15 @@ path, never from Krusty. Accounts: the published E2E phrase, indices 0 and 1, SN
   and estimate replies are generated from the extension's recorded send path, so the suite never
   touches the network.
 - Walks recipient (invalid address error, then a pasted valid one), details (Max, "Too many
-  decimal places", zero), Review (fee line; two fees when undeployed; copy button; Edit drops the
-  review), the fee-failure fixture (Retry, disabled Confirm) and the poisoning fixture.
+  decimal places", zero), Review (the Estimated fee line; one combined figure with the
+  deployment's share when undeployed; no "Risk and recovery" panel when nothing needs saying;
+  copy button; Back drops the review), the fee-failure fixture (Retry, disabled Confirm) and the
+  poisoning fixture.
 - Asserts "Confirm and send" exists and is enabled, then **stops**: it never taps it, and asserts
   the transport recorded zero write requests.
-- Home: "Fund with STRK" at zero balance and "Deploy account" otherwise, for the undeployed fixture.
+- Home shows no deploy chip for the undeployed fixture; Settings › "This account" › "Deploy
+  account" shows "Maximum network fee: …" (quoted on open) and an enabled "Deploy", which it
+  never taps.
 
 **Extension (`bun run check`).** The generator's own test asserts the capture harness saw the
 expected RPC method sequence; the drift gate covers the fixture file.
@@ -117,18 +132,22 @@ generated Kotlin bindings. They are **uncompiled** here (no SDK); a JVM parity t
   mobile-transactions-capture,mobile-transactions-copy,mobile-transactions-screens,
   mobile-transactions-fixture,mobile-send-copy}.ts`.
 - **New on iOS:** `mobile/ios/Bramble/Send/{SendFlowModel,DeployFlowModel,SendDriver,
-  SendFailureText,SendCopy.generated}.swift` (reached from the tests through `@testable import
-  Bramble`); the transport is design-mobile's `App/RpcTransport.swift` with its DEBUG
-  `App/FixtureTransport.swift`, `mobile/ios/Bramble/Screens/Send/{SendFlowView,SendReviewView,SendProgressView,
-  DeployAccountView}.swift`, `App/WalletStore+Send.swift`; tests `BrambleTests/{SendTestSupport,
-  TransferBridgeTests,SendFlowModelTests,MainnetSendTests}.swift`, `BrambleUITests/SendFlowTests.swift`.
+  SendFailureText,SendRecipients,SendReviewCopy,SendCopy.generated}.swift` (reached from the tests
+  through `@testable import Bramble`); the transport is design-mobile's `App/RpcTransport.swift`
+  with its DEBUG `App/FixtureTransport.swift`,
+  `mobile/ios/Bramble/Screens/Send/{SendFlowView,SendRecipientView,SendDetailsView,
+  SendAssetSheet,SendReviewView,SendProgressView,DeployAccountView}.swift`,
+  `App/WalletStore+Send.swift`; tests
+  `BrambleTests/{SendTestSupport,TransferBridgeTests,SendFlowModelTests,SendRecipientsTests,
+  SendReviewCopyTests,DeployFlowModelTests,MainnetSendTests}.swift`, `BrambleUITests/SendFlowTests.swift`.
 - **New on Android (uncompiled):** `app/src/main/java/org/bramble/wallet/send/{SendDriver,
   SendFlowModel,SendScreen,SendCopy.generated}.kt`.
 - **Additive edits to shared files:** `lib.rs` (`mod send; mod activity;`, re-exports);
   `wallet.rs` (plan accessors on vault-security's `lock_epoch` and `with_session`, activity-file
-  delete; `sign_hash` untouched); `WalletStore.swift` (close plan on lock, deployment state for the notice);
-  `WalletShell.swift` (Send route); `HomeView.swift` (enable tile, host notice); `RpcClient.swift`
-  (refuse redirects on write steps via a task delegate).
+  delete; `sign_hash` untouched); `WalletStore.swift` (close plan on lock, deployment state for the
+  privacy gates); `WalletShell.swift` (Send route); `HomeView.swift` (enable tile);
+  `SettingsViews.swift` (Settings › "This account" › Deploy account); `RpcClient.swift` (refuse
+  redirects on write steps via a task delegate).
 - **Dependencies.** None new. The `transfer` selector is a constant checked by the existing
   `sha3` dev-dependency Keccak test, as `balanceOf` is. starknet-rust-core stays transitive.
 

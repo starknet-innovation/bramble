@@ -123,8 +123,8 @@ authorization (`docs/accounts.md` §2.7a). Not yet: private-key import and Braav
    `close` export clashed with Kotlin's generated `AutoCloseable.close()` (now exported as
    `cancel`, on iOS too), a stale `account?.index` privacy read in `reloadAccounts`, a duplicated
    `CheckBoxMark`, a nullable multisig authority status, and privacy views that named controls
-   the design system does not have. Android now also has the deploy notice and Deploy account
-   flow (the core's `prepareDeployment` plan), the Activity list over the core's one activity
+   the design system does not have. Android now also has the Deploy account flow from Settings (the
+   core's `prepareDeployment` plan), the Activity list over the core's one activity
    store with explorer links and pending-record reconciliation, token detail with the private
    balance section, and the real deployment state in every privacy gate and in the journey.
    Running the `android` job in `.github/workflows/mobile.yml` on GitHub is still **open**.

@@ -374,7 +374,7 @@ gesture into a field. After a multi-word paste the clipboard is cleared (`UIPast
 | # | Threat | Mitigation | Residual |
 | --- | --- | --- | --- |
 | T1 | Stolen, locked phone | Vault under complete file protection; W behind Secure Enclave-enforced biometry / Keystore auth; passphrase guesses throttled | Nation-state SEP/TEE compromise |
-| T2 | Offline attack on a copied `vault.json` | PBKDF2 600k on the passphrase slot; the biometric slot is useless without W | Weak passphrases (setup meter and acknowledgement already implemented) |
+| T2 | Offline attack on a copied `vault.json` | PBKDF2 600k on the passphrase slot; the biometric slot is useless without W | Weak passphrases (the setup meter names a weak one; the extension dropped the acknowledgement, so nothing countersigns it) |
 | T3 | Guessing through the UI, including killing the app mid-attempt | Core-enforced backoff, counted before the KDF, persisted | An attacker with filesystem write can reset the counter, but can already do T2 |
 | T4 | Changing the clock, or rebooting, to skip backoff | The delay counts down only on the host's monotonic clock (keeps counting in sleep, cannot be set); wall-clock changes have no effect; a new boot id or a monotonic value below the stamp restarts the full delay | An attacker with filesystem write can edit the stamp, but can already do T2 |
 | T5 | Someone adds a face or finger | `.biometryCurrentSet` / `setInvalidatedByBiometricEnrollment` + domain-state check → lock, drop slot | — |

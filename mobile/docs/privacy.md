@@ -5,7 +5,8 @@ built on `mobile/transactions`, with the review's six must-fix items resolved (�
 into `feature/mobile-wallet`. The §1.1 exemption is **decided: approved by the owner**
 (2026-09-24). It covers SCOPE.md Phase 2 "STRK20 privacy" for the
 pieces Krusty 0.11.0 can support. The transactions workstream's `TransferPlan`, RPC bodies,
-judges and activity store are reused; nothing in `send/` is copied.
+judges and activity store are reused; nothing in `send/` is copied. Since 2026-09-30 every entry
+point reads "Shield" and opens the journey (§2.1).
 
 ## 1. Ground truth, and the honest boundary
 
@@ -97,21 +98,22 @@ replaces that with one additive line.
 | Core `ShieldTile` | Label | Accessibility label | Tap on mobile | Extension tap |
 | --- | --- | --- | --- | --- |
 | `NoStrkToken` | Shield (disabled) | "Shield unavailable until a token is tracked" | none | none |
-| `FundFirst` (undeployed, STRK = 0) | "Fund with STRK" | "Receive STRK before deploying this account" | Receive | Receive |
-| `DeployAndEnable` (undeployed, funded or unknown) | "Deploy and enable" | "Deploy and enable" | journey → `deploy` blocker, **action suppressed** | deploy then register |
+| `FundFirst` (undeployed, loaded STRK = 0) | "Shield" | "Shield — add STRK to this account first" | journey → `fund` blocker | privacy screen |
+| `DeployFirst` (undeployed, STRK funded or not loaded) | "Shield" | "Shield — deploy this account first" | journey → `deploy` blocker, **action suppressed** | privacy screen |
 | `Activate` (deployed or unknown, not registered) | "Shield" | "Activate private balances" | journey (§2.5) | activation |
 | `Ready` (registered) | "Shield" | "Shield public value into your private balance" | journey → `Unsupported` blocker (§2.7) | Send in Shield mode |
 
-The hero shows "Includes shielded balances" when a visible private balance is non-zero
-(`visiblePrivateHomeBalances`), and its total is computed from the unified list (§2.2), so it
-includes private value exactly as the extension's `portfolioTotal(unifiedHomeBalances(...))`
-does. Mobile has no price source on this branch, so the total still reads "—"; the unified list is
-the hook the portfolio workstream's total consumes.
+Every enabled tile reads "Shield" and opens the journey, which names what stands in the way; the
+reason is in the accessible name. The hero shows "Includes shielded balances" when a visible
+private balance is non-zero (`visiblePrivateHomeBalances`), and its total is computed from the
+unified list (§2.2), so it includes private value exactly as the extension's
+`portfolioTotal(unifiedHomeBalances(...))` does. Mobile has no price source on this branch, so the
+total still reads "—"; the unified list is the hook the portfolio workstream's total consumes.
 
 **Why the deploy action is suppressed.** The extension's fix #402 ("stop offering a deployment
 privacy cannot use") establishes that a deploy the user cannot follow with registration must not
-be offered from privacy surfaces. Plain deployment stays available from the transactions
-workstream's home Deploy chip.
+be offered from privacy surfaces. Plain deployment stays available from Settings › This account
+› Deploy account (transactions.md §2.7).
 
 ### 2.2 Token rows: unified amounts and the private line
 
@@ -129,8 +131,8 @@ The row expands to the extension's breakdown: "Public balance" and the private l
 `token-row.ts` `privateBreakdownLine`, driven by `privateBreakdownFor`, in this precedence:
 
 1. `Unconfigured` → "Unavailable";
-2. undeployed → "Fund with STRK" (opens Receive) if unfunded, else "Deploy and enable" (opens the
-   journey, which stops at the deploy blocker);
+2. undeployed → "Shield", funded or not (opens the journey, which names the deploy or fund
+   blocker);
 3. `Failed` → "Unavailable";
 4. `Idle` or `Loading` → "Discovering…";
 5. unregistered → "Register to start shielding" (opens the journey);
@@ -143,7 +145,7 @@ list also shows "Private balances · Try again", which re-runs the read plan. Th
 
 ### 2.3 Token detail
 
-The core's `token_detail_privacy(network, deployment, strk_funded, reading, token_address, state)`
+The core's `token_detail_privacy(network, deployment, reading, token_address, state)`
 mirrors `token-flows.ts` `tokenDetailFlow` + `privacyActions`, including the #402/`3a8a2d81`
 rules, and returns a summary and an action:
 
@@ -157,8 +159,7 @@ rules, and returns a summary and an action:
 | Action (`DetailAction`) | When | Mobile rendering |
 | --- | --- | --- |
 | `None` | ineligible network, or a failed read | nothing |
-| `FundWithStrk` | known undeployed and STRK = 0 | "Fund with STRK" → Receive |
-| `DeployAndEnable` | known undeployed otherwise | "Deploy and enable" → journey → deploy blocker, deploy suppressed as on the tile |
+| `Shield` | known undeployed, funded or not | "Shield" → journey → deploy or fund blocker, deploy suppressed as on the tile |
 | `ShieldUnshield` | registered | "Shield" and "Unshield" shown, disabled, with the Unsupported note |
 | `GoPrivate` | otherwise | "Go private" → journey |
 
@@ -184,19 +185,20 @@ outcome in order:
    "Private balances unavailable", detail "Account deployment could not be checked. Try again.",
    with "Try again".
 3. **Undeployed.** If the reading is still `Idle`/`Loading`: "Checking private balances" (the
-   preparing screen, `discovering` step) until it settles; then blocked `deploy`: "Deploy this
-   account first" with "Deploy this account before enabling private balances". **"Deploy and
-   enable" is not rendered** (`can_register = false`).
+   preparing screen, `discovering` step) until it settles; then blocked `fund` when the loaded
+   STRK balance is zero (`strk_funded == Some(false)`): "Initialize your account" with "Deposit
+   some STRK, then come back"; else (funded, or not loaded yet) blocked `deploy`: "Deploy this
+   account first" with "Deploy this account before enabling private balances". **Neither
+   blocker's action is rendered** (`can_register = false`).
 4. **Reading not settled.** `Discovering` until it settles.
 5. **Read failed.** Blocked `service` with "Try again". The detail is the fixed fallback "Private
    balances unavailable" (service text is never surfaced; the extension shows its sanitised text).
 6. **Registered** (extension: Send in Shield mode) and **unregistered** (extension: activation):
    blocked `unsupported` (§2.7). It has no action button, so it is laid out like `ledger`.
 
-Preparing screen (`discovering` only): "Checking private balances", "Reading this account's
-registration and private notes before anything is prepared.", hint "Keep the wallet open.", task
-list Check registration / Build registration proof / Review and confirm / Broadcast to Starknet
-(only the first active), button "Back to wallet".
+Preparing screen (`discovering` only): "Checking private balances" with no body, hint "Keep the
+wallet open.", task list Check registration / Build registration proof / Review and confirm /
+Broadcast to Starknet (only the first active), button "Back to wallet".
 
 The `proving` step, the activation review, working, success and failure screens (stories
 `02 Activation/*`) are **not built in v1**. Their copy is still captured in the fixture, so
@@ -212,7 +214,7 @@ transfers only" and one of three variants:
 
 - **fund-first:** "Deploy this account and add STRK before enabling private balances.";
 - **deploy-first:** "Enabling private balances takes two transactions: deploy, then register.
-  Each has a network fee."; the "Deploy and enable" action is suppressed;
+  Each has a network fee."; the deploy action is suppressed;
 - **register:** "Enable private balances to receive privately." with "Enable privacy", which opens
   the journey and so reaches the Unsupported blocker.
 
@@ -240,17 +242,17 @@ status, body, now_ms }, Rpc, TransportFailure, WaitElapsed}`, each with `now_ms`
 `PrivacyFailure` codes (`NotConfigured, WrongChain, RpcUnavailable, ServiceUnavailable,
 RateLimited, Reorg, BudgetExceeded, InvalidResponse, PoolReadFailed, Locked`); and the gate enums
 `PrivacyReading, ShieldTile, PrivateLine, PoolNotice, PrivacyBlocker (+ Unsupported),
-PrivacyEntry, DetailSummary, DetailAction, PrivacyStatus, UnifiedBalance`. `Ledger`, `Fund` and
-`Pending` are unreachable on mobile; they keep the copy table complete.
+PrivacyEntry, DetailSummary, DetailAction, PrivacyStatus, UnifiedBalance`. `Ledger` and `Pending`
+are unreachable on mobile; they keep the copy table complete.
 
 The surface: `WalletCore::prepare_privacy_read(account_id)` (unlocked wallet; an OpenZeppelin
 record on its own network, view-only and Ready records are `UnknownAccount`; records the session
 generation, `NotConfigured` for Sepolia or an OHTTP network, no I/O) returns a
 `PrivacyReadPlan` with `advance(reply)` (wrong id or kind → `OutOfOrder`, closed) and `close()`.
 Pure functions: `privacy_configured`, `privacy_capabilities`, `max_privacy_response_bytes`,
-`shield_tile`, `private_line`, `receive_pool_notice`, `privacy_entry(network, deployment, reading,
-after_read)`, `token_detail_privacy`, `privacy_status`, `shielded_balances_included`,
-`unified_home_balances`.
+`shield_tile`, `private_line`, `receive_pool_notice`, `privacy_entry(network, deployment,
+strk_funded, reading, after_read)`, `token_detail_privacy`, `privacy_status`,
+`shielded_balances_included`, `unified_home_balances`.
 
 **Plan sequence**, in the extension's `stateResponse` order:
 
@@ -427,10 +429,10 @@ also answers the portfolio's balance reads): registered (unified ETH row, "Inclu
 balances", token detail's "Private balance" with Shield and Unshield disabled, tile → Unsupported),
 unregistered (token detail's "Register to start shielding" and "Go private", Receive notice,
 "Enable privacy" → Unsupported), service-failed (retry row, service blocker), undeployed-funded
-(token detail and tile → deploy blocker, **no** deploy button), undeployed-unfunded (tile →
-Receive), Sepolia (network blocker). A launch with only `-uiTestOfflineFixtures` (Send's suite)
-gets an `offline` privacy fixture, and the live onboarding suite passes `offline`, so no UI test
-sends a viewing key anywhere.
+(token detail's "Shield" and the tile → deploy blocker, **no** deploy button), undeployed-unfunded
+(tile → fund blocker, "Deposit some STRK, then come back"), Sepolia (network blocker). A launch
+with only `-uiTestOfflineFixtures` (Send's suite) gets an `offline` privacy fixture, and the live
+onboarding suite passes `offline`, so no UI test sends a viewing key anywhere.
 
 ## 8. Files
 

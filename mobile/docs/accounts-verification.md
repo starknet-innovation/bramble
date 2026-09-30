@@ -15,7 +15,7 @@ surface, single-sourced data, and storage). Section numbers carry on from there.
 | Clipboard exfiltration | iOS `.localOnly` (no Universal Clipboard) with a 120 s expiry. Android clears after 120 s if the clip is still ours. Only public values are ever copied. |
 | Privacy: one RPC host sees ~120 addresses from one IP | The screen says so. The user's configured endpoint is used. Scanning happens only when the user asks for it, and the manual index is explicit. |
 | Label and group metadata leaking via backups or logs | Sealed in the vault, which is excluded from backup. Never in errors, logs or UserDefaults. XCUITest uses public fixtures only. |
-| Accidental restore of the wrong set | The acknowledgement checkbox gates the CTA on every network (extension parity). |
+| Accidental restore of the wrong set | Nothing is written until Restore, which needs a selection (the extension dropped its acknowledgement tick, so mobile has none). Rows name each account's type and index, and the restore is one atomic write. |
 | Resource exhaustion via manual index or big selections | Index ≤ 0x7fffffff (krusty's unhardened bound). ≤ 40 per restore. Record cap 128. Label ≤ 64. |
 | Braavos signing with an unsupported account | The key is shared across families at one index, so a raw-hash signature for index `i` is cryptographically valid for **every** account at that index; a per-index refusal alone cannot stop it. `sign_hash_for_account` refuses `view_only` records and pending vaults; legacy `sign_hash(i)` signs only when an OZ record exists at `i`. Enforcement rests on the core signing only hashes it can attribute to a non-view-only account; the full fix is core-computed transaction hashes (transactions workstream). §2.7. |
 | Signing before discovery finishes | Both signing entry points refuse while `recoveryPending` is set; a pending vault has no records. |
@@ -110,7 +110,7 @@ xcodebuild -project mobile/ios/Bramble.xcodeproj -scheme Bramble \
    stub transport compiled only under `#if DEBUG` and switched on by a launch argument, which
    answers `starknet_chainId` and reports every probed address as undeployed and unfunded, so
    there is no network use. Checks: the index-0 Bramble row is listed but not auto-selected, the
-   manual index, the acknowledgement gate (required on Sepolia too, with the extension's text),
+   manual index, a selection being the only restore gate (there is no acknowledgement to tick),
    restore, and kill-before-restore resuming discovery.
 7. After import, switch Sepolia → Mainnet: the drawer shows the projected account (same friendly
    name rule, the Mainnet address), never an empty list.

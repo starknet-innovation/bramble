@@ -1,6 +1,6 @@
 # Portfolio and activity: mobile design
 
-Status: implemented (see §11), revised after review (the seven must-fix items are resolved in place and listed in §10), branch `mobile/portfolio-activity`, 2026-09-24. Scope: fiat values, token management, the explorer-connected activity feed, and loading/stale/offline/error states on iOS (built and tested) and Android (written against the generated Kotlin bindings, **not compiled** here). Sending belongs to transactions, account management to accounts. **The extension's TypeScript is the specification**: the Rust core ports its rules as sans-IO request builders and response judges, parity fixtures from the extension's own code pin them, and Swift/Kotlin render output and move bytes.
+Status: implemented (see §11), revised after review (the seven must-fix items are resolved in place and listed in §10), branch `mobile/portfolio-activity`, 2026-09-24. Scope: fiat values, token management, the explorer-connected activity feed, and loading/stale/offline/error states on iOS (built and tested) and Android (written against the generated Kotlin bindings, **not compiled** here). Sending belongs to transactions, account management to accounts. Activity rows follow the extension's copy review since 2026-09-30 (disclosures, no fiat; §2.3, §3.6). **The extension's TypeScript is the specification**: the Rust core ports its rules as sans-IO request builders and response judges, parity fixtures from the extension's own code pin them, and Swift/Kotlin render output and move bytes.
 
 ## 1. Sources in the extension
 
@@ -25,7 +25,7 @@ These are new screens under `Screens/Wallet/Portfolio/`.
 - **Add token** (`tokenAddFlow`): header "Add token", subtitle "Track a token by its contract"; field "Contract address", placeholder `0x…`, hint "Name, symbol, and decimals are read from the contract before it is saved.", button "Read and add token". Errors "Couldn't reach the network, try again" (transport) and "could not read token metadata"; toasts "Token added", "Add token failed". A likely-spam token is saved **and** hidden, as in the extension.
 - **Find held tokens** (`tokenDiscoverFlow`): header "Find held tokens", subtitle "Scan the Starknet token registry", hint "Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.", button "Scan for tokens". One result row per token with "Add"; status "No new tokens found." or "<n> found."; empty list "No new tokens found in this account." Errors are never shown as an empty result: "Couldn't reach the network, try again" or "Token scan failed, try again".
 - **Token detail** (`tokenDetailFlow`): eyebrow "Price" with the fiat price or "Unavailable"; a
-  7-day sparkline (100×32 viewBox, points rounded to 2 places, trend from first vs last point) or "Price history unavailable." under 2 finite points; hint "7-day price from CoinGecko. Shown for information only."; "Your balance"; a "Contract" receipt: Address (truncated, with copy), Symbol, Decimals, Network.
+  7-day sparkline (100×32 viewBox, points rounded to 2 places, trend from first vs last point) or "Price history unavailable." under 2 finite points; hint "7-day price from CoinGecko. Shown for information only."; "Your balance"; a "Send" action that opens Send on that token (`tokenActions`; no Swap, because mobile has no swap flow); a "Contract" receipt: Address (truncated, with copy), Symbol, Decimals, Network.
 
 ### 2.3 Activity tab
 
@@ -33,9 +33,12 @@ The Dock's `activity` tab already exists in `WalletShell.swift`. Its placeholder
 
 - **Header** (`activityScreen`): h1 "Activity", accessibility label "Activity on <network>", icon button "Refresh transactions" (forces a history read). "Export CSV" is out of scope (§9) and is not shown at all, since a control that can never work would mislead.
 - **Unavailable notice** above the list when the history read failed: "Couldn't load on-chain history. Showing transactions recorded on this device only — check your connection or RPC endpoint and refresh."
-- **Empty copy** (`activityEmptyCopy`): "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here."; when unavailable, "No transactions recorded on this device yet."
-- **Rows** (`activity-format.ts`): title and icon from `activityAppearance`'s ordered ten rules (Swapped, Unstaked, Claimed rewards, Staked, private, Approved/Revoked, Received/Sent, Deployed, Declared, Interacted). Amount `<compactActivityAmount> <SYM>` (≤4 fraction places) or "—". Fiat signed "+", "−" (U+2212) or unsigned via `formatFiat`, only when exactly one tracked token on the entry's network has that symbol and is priced. Detail `From|To|With <0x1234…abcd>` with an inline copy button ("Copy sender|recipient|counterparty address") copying the full address, a swap pair "A to B", or the rest of the summary. Accepted rows show no status word; others show one with the extension's hint; icon tint secondary / warning / positive at 0.68 / danger. Time is not printed: it goes into the accessibility label as `<Status> · HH:MM UTC`. Rows group by UTC day under "Today", "Yesterday", `DD Mon YYYY` (en-GB) or "Undated".
-- **Explorer link**: the verb opens `explorer_transaction_url(network, hash)` in the **system browser** (`openURL`; Android `ACTION_VIEW`), never an in-app web view; the label ends "View transaction on Starkscan". When the URL is `None` (devnet or invalid hash) the verb is plain text.
+- **Empty copy** (`activityEmptyCopy`): "No activity yet. Transactions for this account appear here."; when unavailable, "No transactions recorded on this device yet."
+- **Rows** are disclosures (`home-tabs.ts` `transactionRow` over `activity-format.ts`). Title, icon and verb come from `activityAppearance`'s ordered ten rules (Swapped, Unstaked, Claimed rewards, Staked, private, Approved/Revoked, Received/Sent, Deployed, Declared, Interacted).
+  - **Summary:** the kind glyph (hidden from assistive tech; its tooltip is the provisional hint, else "Transfer, accepted"); a heading that joins the verb and the amount, "Received 1.5 STRK" (`<compactActivityAmount> <SYM>`, ≤4 fraction places; an entry with neither amount nor counterparty joins its detail instead, "Revoked For USDC"); a status word ("Pending", "Pre-confirmed", "Rejected", "Reverted") for a row that is not accepted; the token mark (the Starknet mark when the entry records no token); and the truncated hash (6…4) linked to the explorer, with a "Copy transaction hash" control. Icon tint secondary / warning / positive at 0.68 / danger.
+  - **Expansion:** the counterparty (role "Sender", "Recipient" or "Counterparty", the truncated address, "Copy sender|recipient|counterparty address" copying the full address) or, without one, a "Detail" fact (a swap pair "A to B" or the rest of the summary); "Submitted" (`DD Mon YYYY, HH:MM UTC`); and "Status", the provisional hint of a pending or pre-confirmed row.
+  - No fiat figure: a value computed from today's price is not what the transaction was worth, so rows take no price input. The summary's accessible name is `<heading>. <status>, HH:MM UTC`. Rows group by UTC day under "Today", "Yesterday", `DD Mon YYYY` (en-GB) or "Undated".
+- **Explorer link**: the truncated hash opens `explorer_transaction_url(network, hash)` in the **system browser** (`openURL`; Android `ACTION_VIEW`), never an in-app web view; its accessible name is "View this transaction on Starkscan". When the URL is `None` (devnet or invalid hash) the hash is plain text.
 - **Cadence** (`hydrate.ts`, `activity-ops.ts`): cached log first, then live. Opening the tab asks for a refresh; a read is *due* with no previous sync, `syncedAt` in the future, ≥5 min since the last sync (60 s if it was unavailable), or a local row newer than the sync. Refresh forces a read. Poll every 60 s while foregrounded, with a burst 3 s after opening.
 - **Scope** is account + network; switching clears the list before the new scope renders (ui-lab `activity` scenario: account-a, scope-cleared, account-b, account-a-restored).
 
@@ -230,16 +233,18 @@ pub struct ActivityView { pub entries: Vec<ActivityEntry>, pub history_unavailab
 ### 3.6 Presentation of rows (`history/appearance.rs`, `history/time.rs`, `history/explorer.rs`)
 
 ```rust
-#[uniffi::export] pub fn activity_groups(entries: Vec<ActivityEntry>, tracked: Vec<TokenConfig>, prices: PriceView, currency: DisplayCurrency, now_ms: u64) -> Vec<ActivityDayGroup>;
+#[uniffi::export] pub fn activity_groups(entries: Vec<ActivityEntry>, tracked: Vec<TokenConfig>, now_ms: Option<f64>) -> Vec<ActivityDayGroup>;
 pub struct ActivityDayGroup { pub heading: String, pub rows: Vec<ActivityRow> }
-pub struct ActivityRow { pub hash: String, pub title: String, pub icon: String /* BrambleIconName */,
-    pub direction: Option<ActivityDirection>, pub amount_text: String, pub fiat_text: String,
-    pub detail_prefix: Option<String>, pub counterparty: Option<String>, pub counterparty_short: Option<String>,
-    pub copy_label: Option<String>, pub detail_text: Option<String>, pub status_word: Option<String>,
-    pub status_hint: Option<String>, pub tone: ActivityTone, pub accessibility_label: String, pub explorer_url: Option<String>,
-    /// activityRowModel's tokenSymbol / tokenAddress, and the resolved `.tx-avatar` glyph:
-    /// `token_glyph(tokenAddress ?? "0x0", tokenSymbol)` or, with no symbol, the Starknet mark.
-    pub token_symbol: Option<String>, pub token_address: Option<String>, pub avatar: TokenGlyph }
+pub struct ActivityRow {
+    pub icon: String /* BrambleIconName */, pub tone: ActivityTone, pub status: TxStatus, pub glyph_title: String,
+    pub heading: String /* "Received 1.5 STRK" */, pub hash: String, pub hash_label: String, pub hash_copy_label: String,
+    pub explorer_url: Option<String>, pub status_word: Option<String>,
+    /// The resolved `.tx-avatar` glyph: `token_glyph(tokenAddress ?? "0x0", tokenSymbol)` or, with no symbol, the Starknet mark.
+    pub avatar: TokenGlyph, pub accessibility_label: String /* "{heading}. {status}, {clock}" */, pub timing: String,
+    /// The expansion: who, what, when and the provisional hint.
+    pub counterparty: Option<ActivityCounterparty>, pub detail: Option<String>, pub submitted: Option<String>, pub status_hint: Option<String> }
+/// role "Sender" | "Recipient" | "Counterparty"; `address` full (copied), `address_label` 6…4 (shown).
+pub struct ActivityCounterparty { pub role: String, pub address: String, pub address_label: String, pub copy_label: String }
 /// tokenGlyph: the bundled logo (64-digit key) or a letter badge of `symbol.slice(0, 3)` toned
 /// `BigInt(address) % 4` (0 when the address does not parse).
 pub struct TokenGlyph { pub logo_address: Option<String>, pub letters: String, pub tone: u8 }
@@ -311,7 +316,7 @@ New `scripts/mobile-parity-portfolio.ts` exports `computePortfolioParity()`, whi
 | `starkscan` | request URL and headers; page/transfer parser accept and reject (each bound); `toActivity` rows including synthetic "Untracked token"; Retry-After parsing (delta, HTTP date, over cap); cooldown per outcome (429, 500, 503, timeout, transport, invalid body → cooldown; **404 → none**) |
 | `events` | `decodeTransferEvent` for Cairo 1 and legacy layouts, limb ≥ 2^128, mint/burn, bad hash; scan window arithmetic; dedup/cap |
 | `activity` | `activity_account_id` (`canonicalAccountId`: unpadded, SN_MAIN/SN_SEPOLIA), `isActivityEntry`, `onChainActivityEntry` summaries, `mergeActivity` promotion/dedup, due-rules timeline |
-| `appearance` | `activityAppearance` for a summary corpus covering every rule; `tokenSymbol`/`tokenAddress` and the `tokenGlyph` avatar (logo, tone 0–3, Starknet fallback); fiat sign; detail line; status word/hint; day headings at fixed `now`; `HH:MM UTC` labels |
+| `appearance` | `activityAppearance` for a summary corpus covering every rule; `activityRowModel` (token, counterparty role, detail) and each rendered disclosure row: heading, glyph title, hash label and copy control, explorer href, status word, the `tokenGlyph` avatar (logo, tone 0–3, Starknet fallback), counterparty, detail, submitted, status hint, accessible name, timing; day headings at fixed `now`; `HH:MM UTC` labels |
 | `explorer` | `explorerTransactionUrl` and `explorerAccountUrl` (0x00ab, uppercase, zero, ≥ prime, devnet) |
 | `status` | `networkDataIssue` for each story state; `friendlyNetworkError`; `activityEmptyCopy` |
 
@@ -323,7 +328,7 @@ Rust (`tests/portfolio_parity.rs`) and Swift (through FFI, proving `f64`/`Option
 
 **Swift unit** (`BrambleTests`): `BoundedHttpTests` (`URLProtocol` stub): redirect refused, oversized declared and streamed bodies aborted, deadline fires on a trickling body, no cookies or Referer. `PortfolioStoreTests` (stub transport, fixture bodies): hero total and delta; currency switch keeps rows priced; Sepolia serves the cached mainnet STRK price, never fetches, never stale; "N not shown" count; hide/show persisted; add-token spam auto-hide; discovery errors surfaced, not emptied; late responses after lock or account switch dropped (generation); a failed refresh keeps values and marks them stale. `PortfolioFilesTests`: protection and backup exclusion set; delete-wallet removes the directory. Plus the §6 parity assertions through FFI.
 
-**XCUITest** (`BrambleUITests/PortfolioActivityTests.swift`) on the simulator "Bramble portfolio-activity" (created if missing; never "iPhone 16"): `mobile/scripts/build-core-ios.sh debug`, `cd mobile/ios && xcodegen generate`, then `xcodebuild … -destination 'platform=iOS Simulator,name=Bramble portfolio-activity' test`. The launch argument `-BrambleUITestNetworkStub <scenario>` installs a `URLProtocol` serving fixture bodies; it is compiled only under `#if DEBUG`, so a release build cannot be pointed at fake data. Scenarios mirror the ui-lab stories (ready, saved-data, prices-offline, balance-error, empty-network). Flows: (1) hero total and "% · 24h", row fiat and badges; (2) "Manage tokens · 1 not shown" → Tokens → Show → row on Home; (3) Add by contract (stubbed metadata) → "Token added"; Find held tokens → "1 found." → Add; (4) Settings → Appearance & currency (the existing screen, Theme section intact) → EUR → hero shows "€"; (5) Activity: grouped "Received"/"Sent" rows, the explorer link's accessibility value equals the expected Starkscan URL (asserted, not opened), copy copies the full counterparty; (6) history unavailable → notice plus "No transactions recorded on this device yet."; (7) each degraded story → the pill's accessibility value holds the extension copy. The mainnet onboarding suite is untouched; nothing broadcasts.
+**XCUITest** (`BrambleUITests/PortfolioActivityTests.swift`) on the simulator "Bramble portfolio-activity" (created if missing; never "iPhone 16"): `mobile/scripts/build-core-ios.sh debug`, `cd mobile/ios && xcodegen generate`, then `xcodebuild … -destination 'platform=iOS Simulator,name=Bramble portfolio-activity' test`. The launch argument `-BrambleUITestNetworkStub <scenario>` installs a `URLProtocol` serving fixture bodies; it is compiled only under `#if DEBUG`, so a release build cannot be pointed at fake data. Scenarios mirror the ui-lab stories (ready, saved-data, prices-offline, balance-error, empty-network). Flows: (1) hero total and "% · 24h", row fiat and badges; (2) "Manage tokens · 1 not shown" → Tokens → Show → row on Home; (3) Add by contract (stubbed metadata) → "Token added"; Find held tokens → "1 found." → Add; (4) Settings → Appearance & currency (the existing screen, Theme section intact) → EUR → hero shows "€"; (5) Activity: disclosure rows, each hash linked to the explorer (the link's accessibility value equals the expected Starkscan URL, asserted, not opened) with its copy control; opening a "Received" row lists its sender, whose control copies the full address; (6) history unavailable → notice plus "No transactions recorded on this device yet."; (7) each degraded story → the pill's accessibility value holds the extension copy. The mainnet onboarding suite is untouched; nothing broadcasts.
 
 **Android**: `PortfolioStore.kt`, the screens and `BoundedHttp.kt` are written against the generated Kotlin bindings, are **uncompiled** here, and are marked so in the PR. No instrumented tests are claimed.
 
@@ -347,7 +352,7 @@ Rust (`tests/portfolio_parity.rs`) and Swift (through FFI, proving `f64`/`Option
 2. **Endpoint failover** is part of the sans-IO contract (§3.5, §3.9): `HistoryScan::restart`, transport-classified judge outcomes for metadata and discovery, chain-id proof before any scan, metadata or discovery call, and `mark_unavailable` only after every endpoint failed.
 3. **Appearance** extends the existing `AppearanceView` (§2.4, §8): no second struct, one row.
 4. **Number parsing** reads raw numeric text with `str::parse::<f64>` in the core's own JSON reader (§3.2); a fixture pins a literal the default serde_json parser mis-rounds.
-5. **Activity avatar**: `ActivityRow` carries `token_symbol`, `token_address` and a resolved `TokenGlyph` (§3.6), pinned in `appearance`.
+5. **Activity avatar**: `ActivityRow` carries a resolved `TokenGlyph` (`avatar`, §3.6), pinned in `appearance`.
 6. **`activity_account_id`** is the one builder of activity/snapshot ids (§3.5), pinned in `activity`.
 7. **Smaller departures**: "unsupported token symbol" (§3.3, `tokenMeta`); Starkscan cooldown classification ported exactly with a 404 case (§3.5, `starkscan`).
 

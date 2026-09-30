@@ -3,7 +3,8 @@
 Status: implemented on branch `mobile/transactions` (2026-09-24); review must-fix items resolved
 in §3–§5 and listed in §10. This is the plan for SCOPE.md Phase 1.2. It covers sending an ERC-20 from an OpenZeppelin (OZ)
 account on mainnet or Sepolia, and deploying the account automatically before its first send,
-exactly as the extension does.
+exactly as the extension does. Section 2 was rewritten on 2026-09-30 to follow the extension's
+copy review.
 
 ## 1. Ground truth: what the extension actually does
 
@@ -41,27 +42,36 @@ reuses `mobile/ios/Bramble/DesignSystem` (`Surfaces.swift`, `Controls.swift`, ge
 and follows the `send-*` classes in `packages/presentation/wallet-ui/src/sidepanel/styles`. The
 UI Lab stories in "Wallet journeys/03 Send and swap" are the visual reference for each checkpoint.
 
-### 2.1 Home
+### 2.1 Home and Settings
 
 - **Send tile.** `HomeView.swift` enables it whenever an account exists (a one-line edit). The
   extension does not gate the tile on deployment, and neither does mobile.
-- **Deploy notice (`deployNotice`).** Shown only when the core has judged `Undeployed`. An
-  unknown status shows nothing.
-  - **Funding chip.** Shown when the STRK balance was read and is zero (`strkAvailableForFees ===
-    false`). It reads "Fund with STRK", with the title "Deploying costs a network fee. Receive
-    STRK into this account first.", and opens Receive.
-  - **Deploy chip.** Shown otherwise. It reads "Deploy account", with the title "This account
-    contract is not on-chain yet. Deploying it enables transactions.". The standalone Deploy
-    account flow (§2.7) is part of this workstream.
+- **No deploy notice.** Home no longer flags an undeployed account: the "Deploy account" and
+  "Fund with STRK" chips are gone, and the first send deploys the account (§3).
+- **Settings › "This account".** A Settings section headed "This account" holds one row,
+  "Deploy account", which opens the standalone flow (§2.7). It is shown whatever the deployment
+  state, because that screen says "Account already deployed" itself.
+- **Token screen.** A "Send" action opens Send on that token (no Swap: mobile has no swap flow).
 
-### 2.2 Recipient ("Send to")
+### 2.2 Recipient ("Send")
 
-- **Sending from.** A card with the avatar (`account_avatar`), the account name (the accounts
-  workstream owns naming) and a truncated address.
-- **Search field.** "Address or saved name"; autocorrect, capitalisation, smart punctuation off.
-- **Tabs.** "My accounts" (the wallet's other accounts on the network, else "No other accounts
-  are available on this network.") and "Address book" (none on mobile yet: "Your address book has
-  no contacts on this network."). A search with no match shows "No matching recipient.".
+The flow header reads "Send". Under the heading "Send to", typing in the search field ("Address
+or saved name"; autocorrect, capitalisation, smart punctuation off) filters every list below it;
+a search that matches nothing shows "No matching recipient.".
+
+- **Send from.** The heading "Send from" over a card with the avatar (`account_avatar`), the
+  account name (the accounts workstream owns naming) and a truncated address, beside a control
+  "Copy sending account address" that copies the full address.
+- **Address book.** The heading "Address book" over the saved contacts on this network. A typed
+  address that validates and is not already listed also offers "Save", which opens the address
+  book with the address filled in. There is no address-book empty state.
+- **Accounts under their folders.** The wallet's accounts on the network, filed as the account
+  drawer files them: the folder's glyph, name and account count, then its rows; accounts in no
+  folder sit under "My accounts"; empty folders are not listed. The sending account's own row is
+  listed too, marked "Current".
+- **Picking a recipient.** A row sends to its address and carries its name to the review as the
+  recipient label. Typed text never supplies a label, but a typed address that is already listed
+  reads as the row it matches (compared as canonical felts).
 - **Continue with address.** Disabled until `validate_recipient` returns a canonical felt; the
   error is "Enter a valid Starknet address.". Validation follows `normalizeFeltInput` then
   `isStarkFieldElement`: trim; when the text starts with `0x`, lowercase it and strip leading
@@ -71,8 +81,13 @@ UI Lab stories in "Wallet journeys/03 Send and swap" are the visual reference fo
 
 ### 2.3 Details ("Send")
 
-- **Accounts receipt** (From, To, Network). **Asset card** opens "Select an asset" (bundled
-  `networks.json` tokens; STRK preselected).
+- **Accounts receipt** (From, To, Network). **Asset trigger** (the token's glyph and symbol)
+  opens "Tokens you can send", mirroring the extension's token dropdown: a sheet on iOS, a stage
+  of its own on Android. It has one group, "Your tokens", listing the network's bundled
+  `networks.json` tokens with the chosen one marked, and no search field. iOS adds a "Manage
+  tokens" row under the list that opens the token list; Android has no token-management screen.
+  STRK is preselected unless Send was opened from a token screen. Choosing a token clears the
+  amount.
 - **Amount.** Placeholder "0". The balance line reads "Balance <compact> SYMBOL", or "Balance
   unavailable" when the balance could not be read.
 - **Half and Max.** Max is the full raw public balance, formatted exactly; it does **not**
@@ -81,18 +96,25 @@ UI Lab stories in "Wallet journeys/03 Send and swap" are the visual reference fo
 - **Gates.** "Enter an amount greater than zero."; the public-to-public route gate's "Checking
   your SYMBOL balance…" and "Not enough SYMBOL"; `parse_token_amount`'s "Too many decimal places".
 - **Review send.** The button creates the `TransferPlan` (§3) and moves to the reviewing stage.
-  The step rail reads Amount/Review/Authorize/Confirm.
 
 ### 2.4 Review ("Review send")
 
-- **Header and hero.** "Edit" button; the amount as typed, the symbol, and "Fiat estimate
-  unavailable" until prices exist.
-- **Recipient row.** Shows the label or the truncated address. Its copy button, "Copy recipient
-  address", copies the full address using the existing `ReceiveView` clipboard options
-  (local-only, 120 s expiry).
-- **Fee section (`reviewFeeSection`).** The first matching case applies:
-  1. Deployment needed and both fees known: "Estimated transaction fee: X" and "Estimated account
-     deployment fee: Y".
+The confirm face is a facts list, a Cost box and, only when needed, a risks panel, then the
+button (`transfer-review-markup.ts` `reviewSummaryHtml` / `reviewRisksHtml`). There is no hero,
+Edit button, review note or Technical details disclosure (the decoded `transfer` call, "Maximum
+cost and constraints" and "What will happen" are gone); Back returns to the details.
+
+- **Facts list.** One hairline between rows, the label on the left and the value over its
+  detail line on the right. "From": the sender's name, else its truncated address, over the
+  truncated address. "To": the recipient's label (the row it was picked from), else the
+  truncated address, over the truncated address, beside "Copy recipient address", which copies
+  the full address using the existing `ReceiveView` clipboard options (local-only, 120 s
+  expiry). "Amount": the token glyph and "<amount> SYMBOL" over "Fiat estimate unavailable"
+  (mobile's Send has no fiat).
+- **Cost box.** The heading "Cost", then the first matching case of `reviewFeeSection`:
+  1. Deployment needed and both fees known: one combined figure, "Estimated fee: X" with X the
+     sum of the two, and under it "Creating this account on Starknet is Y of that." (Y the
+     deployment fee). Fees in unlike units cannot be summed and fall to case 2.
   2. Deployment needed and either fee failed: "Couldn't estimate both the transaction and
      account deployment fees. Check your connection and retry before sending." with "Retry fee
      estimate".
@@ -100,68 +122,74 @@ UI Lab stories in "Wallet journeys/03 Send and swap" are the visual reference fo
   4. Account deployed and the estimate failed: "Couldn't estimate the network fee right now.
      Check your connection and retry before sending." with "Retry fee estimate".
 
-  X is `formatFri`: the integer part, then the fraction truncated to 6 digits with trailing zeros
-  stripped, then " STRK". A non-FRI unit renders as "<n> <UNIT>".
-- **Shortfall warning.** Warn-only: "This account's STRK balance is less than this transaction
-  needs, including the estimated network fee. The network will likely reject it.". It compares
-  FRI fees only, and adds the amount when the token sent is STRK.
-- **Technical details (collapsed).** The decoded `transfer` call and the "Maximum cost and
-  constraints", "What will happen" and "Risk and recovery" sections, with the deploy note "This
-  account is not deployed yet; the first send also submits its deployment." when undeployed, or
-  "No additional wallet warnings were detected. Verify the recipient and decoded action before
-  confirming." when there are no flags.
+  X and Y are `formatFri`: the integer part, then the fraction truncated to 6 digits with trailing
+  zeros stripped, then " STRK". A non-FRI unit renders as "<n> <UNIT>".
+- **Shortfall warning.** Warn-only, in the Cost box: "This account's STRK balance is less than
+  this transaction needs, including the estimated network fee. The network will likely reject
+  it.". It compares FRI fees only, and adds the amount when the token sent is STRK.
+- **Risks panel.** Shown only when there is something to say: the heading "Risk and recovery",
+  one alert line per flag, and on an account's first send the deploy note "This account is not
+  deployed yet; the first send also submits its deployment." With nothing to warn about nothing
+  is shown (no "No additional wallet warnings" line).
 - **Flags.** `self-transfer`: "The recipient is this wallet's own address.". `address-poisoning`
-  (the recipient's `short_address` matches the acting account's but the address differs; mobile
-  has no address book, so this is the extension's rule with an empty book) blocks with "This recipient closely mimics a saved address. Change it and review
-  again.", and the core refuses again at confirm. `unknown-contract` cannot occur: only bundled
-  tokens are selectable.
+  (the recipient's `short_address` matches the acting account's but the address differs; the core
+  trusts only the acting account's address, so saved contacts are not an input) lists "The
+  recipient closely mimics one of your saved addresses but is a different account. Re-check every
+  character before sending." and blocks Confirm with "This recipient closely mimics a saved
+  address. Change it and review again.", and the core refuses again at confirm.
+  `unknown-contract` cannot occur: only bundled tokens are selectable.
 - **Blocking.** Any fee failure disables Confirm and shows "Fee estimate unavailable. Retry
-  before authorizing this transaction.".
-- **Footer.** "Confirm only if the recipient, amount, and decoded action are correct." and the
-  button "Confirm and send".
+  before authorizing this transaction.". The button reads "Confirm and send".
 - **Edits.** Any edit (the extension's `transferKey`) drops the plan; a new plan means a new review.
 
-### 2.5 Working states
+### 2.5 Working state
 
-- **Authorizing** ("Authorize send"). Reads "Authorizing transaction" / "The reviewed
-  transaction is being authorized inside the wallet.", with the tasks Review locked, Sign
-  securely, Broadcast to Starknet and Confirm on Starknet. The liveness line is adapted to
-  "Keep this app open." (the extension says "panel"; this is the only wording change, and it is
-  recorded in the copy fixture).
-- **Broadcasting** ("Sending"). The automatic deployment and its wait, then the invoke broadcast.
-- **Confirming** ("Confirming"). Reads "Confirming on Starknet" / "Starknet received the
-  transaction. Bramble is checking its chain status now." / "Fast confirmations often arrive in
-  under a second.".
+Authorizing, broadcasting and confirming are one screen: the flow header reads "Sending" for all
+three, and the body is a progress mark under one title, "Sending your transaction…", with no body
+copy, task list or liveness line (so the one wording change mobile made, "Keep this app open.",
+is gone too). Underneath, broadcasting is still the automatic deployment and its wait, then the
+invoke broadcast; confirming runs the checkpoints.
 
 ### 2.6 Outcomes
 
-- **Confirmed** ("Confirmed"). Kicker "Confirmed on Starknet", title "Send complete", summary
-  "<amount> <SYMBOL> sent to <label>", the hash as monospaced text, buttons "View activity" and
-  "Back to home"; toast "Transaction confirmed on Starknet" (or "Transaction pre-confirmed on
-  Starknet").
+An outcome with a hash shows the extension's hash row (`outcomeHashRow`): the hash truncated,
+linked to Starkscan when the network has one (accessible name "View this transaction on
+Starkscan"; opened in the system browser), beside "Copy transaction hash". The link comes only
+from the core's `explorer_transaction_url`, which returns `None` for a malformed or zero hash, so
+the hash is then plain text. A receipt labels the row "Transaction".
+
+- **Confirmed** ("Confirmed"). No kicker. Title "Send complete", summary "<amount> <SYMBOL> sent
+  to <label>", the "Transaction" row, buttons "View in Activity tab" and "Back"; toast
+  "Transaction confirmed on Starknet" (or "Transaction pre-confirmed on Starknet").
 - **Pending** ("Confirmation pending"). "Submitted to Starknet" / "Confirmation is taking longer"
   / "The transaction has a hash and remains pending. You can check again or follow it in
-  Activity.". Buttons: "Check confirmation" and "View activity".
-- **Failed** ("Send failed"). "Nothing else will be submitted" / "Send not completed" / "The
-  transaction was not sent. <error>". The default error is "The transaction was not sent. Your
-  balance is unchanged.". Buttons: "Try again" and "Edit transaction". Toast: "Transaction was not
-  sent". Rejected: "Starknet rejected this transaction. No transfer was completed."; reverted:
-  "Starknet reverted this transaction. Review its activity details before retrying." (toast
-  "Transaction was not confirmed").
-- **Explorer link (deliberate deviation).** The brief asks for one. The extension shows its
-  Starkscan link only on Activity rows (aria "View transaction on Starkscan"). Mobile shows the
-  same link on Activity rows **and** on the Confirmed and Pending screens. It is built only by
-  the core's `explorer_transaction_url`, which returns `None` for a malformed or zero hash, so the
-  button is absent then. If review prefers strict parity, removing the button is a one-line
-  change.
+  Activity.". Buttons: "Check confirmation" and "View in Activity tab".
+- **Failed** ("Send failed"). No kicker. Title "Transaction not sent" over "The transaction was
+  not sent. <error>", beside "Copy the error", which copies that message. The default error is
+  "The transaction was not sent. Your balance is unchanged.". Buttons: "Try again" and "Edit
+  transaction". Toast: "Transaction was not sent". Rejected: "Starknet rejected this
+  transaction. No transfer was completed."; reverted: "Starknet reverted this transaction.
+  Review its activity details before retrying." (toast "Transaction was not confirmed").
 
-### 2.7 Deploy account (standalone, from the home chip)
+### 2.7 Deploy account (standalone, from Settings)
 
-- Title "Deploy account"; "Deploy this account contract on Starknet so it can submit
-  transactions."; "Deployment creates this account on-chain. Its address and signing authority do
-  not change."; "Review deployment", then "Confirm deployment · <fee>" with "Maximum network fee:
-  <fee>"; success "Submitted to Starknet" / "Deployment submitted" / "Your account will be ready
-  once Starknet confirms this transaction."; "Account already deployed" when deployed.
+Opened by Settings › "This account" › "Deploy account" (§2.1). An account the core cannot deploy
+(view-only) shows why instead of the form.
+
+- **Rows.** Header "Deploy account", then Account (the name), Address (truncated) and Network.
+  The Contract row, "What will happen" and "Risk and recovery" are gone.
+- **Quote on open.** The fee is quoted as the screen opens: the status line reads "Estimating
+  fee…", then the Cost box reads "Maximum network fee: <fee>". If the quote fails the line reads
+  "Could not estimate the deployment fee"; pressing Deploy then quotes again and shows the new
+  figure, and the next press submits, so no fee is spent that was never on screen.
+- **One button.** "Deploy" submits under the quoted fee, with the status "Submitting
+  deployment…". The earlier two-press "Review deployment" → "Confirm deployment · <fee>" is gone.
+  An account already on chain reads "Account already deployed" on the disabled button.
+- **Receipt.** Right after the broadcast the title is "Deployment submitted"; once the chain
+  accepts or pre-confirms the deployment it firms up to "Account deployed" over "This account is
+  on Starknet and can submit transactions." (a rejected or reverted deployment is a failure,
+  never a deployed receipt). Rows: "Transaction" with the hash (§2.6), "View in Activity tab"
+  and "Back" (Home).
 - **Activity.** Kind `deploy`, summary "Deploy account contract". The automatic deployment inside
   a send **does** get its own `deploy` row on mobile, recorded before its write leaves the core
   (§3, "Pending record before every write"). The extension records none because its background
@@ -244,7 +272,7 @@ impl WalletCore {
     /// Requires an unlocked wallet. Validates and canonicalises every input and builds the
     /// ERC-20 call. Does no I/O. Records the session generation it was prepared under.
     pub fn prepare_transfer(self: Arc<Self>, request: TransferRequest) -> Result<Arc<TransferPlan>, SendError>;
-    /// Standalone deployment for the home chip; same state machine without the invoke.
+    /// Standalone deployment for Settings' Deploy account; same state machine without the invoke.
     pub fn prepare_deployment(self: Arc<Self>, account_id: String) -> Result<Arc<TransferPlan>, SendError>;
     /// Local activity for one stored account, newest first (§4).
     pub fn activity(&self, account_id: String) -> Result<Vec<ActivityRecord>, SendError>;
@@ -257,7 +285,7 @@ pub fn validate_recipient(input: String) -> Option<String>;               // can
 pub fn parse_token_amount(amount: String, decimals: u8) -> Result<String, SendError>; // base units
 pub fn explorer_transaction_url(network: NetworkId, hash: String) -> Option<String>;
 pub fn confirmation_checkpoints_ms() -> Vec<u32>;
-pub fn deployment_status_request(id: u64, address: String) -> Option<String>; // getClassHashAt body for the home notice
+pub fn deployment_status_request(id: u64, address: String) -> Option<String>; // getClassHashAt body (the privacy gates' deployment state)
 pub fn judge_deployment_status(body: String, id: u64) -> DeploymentState;     // error code 20 => Undeployed
 ```
 

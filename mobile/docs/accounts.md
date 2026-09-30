@@ -2,7 +2,8 @@
 
 Status: design for the `mobile/accounts` workstream (2026-09-24), written against worktree HEAD
 `660a538e`, revised after review (signing by record, network projection, the restore
-acknowledgement, and the clipboard amendment). Phase A is implemented and merged into
+acknowledgement, and the clipboard amendment; the acknowledgement was removed on 2026-09-30, §2.6).
+Phase A is implemented and merged into
 `feature/mobile-wallet` (after vault-security, android-parity, design-mobile and transactions);
 the merge changed §2.7 (signing), §3.1 (the index shims), §5 (one migration chain across both
 branches' vault formats) and §2.8 (one clipboard and toast path). Read with
@@ -134,14 +135,12 @@ checkpoint labels. The rendered step is `recovery-accounts`:
   `recovery-account-ui.ts`, reproduced verbatim through the core (`RecoveryCandidate.hint`).
 - The "Advanced manual index" disclosure holds an "Account index" field and a "Check this index"
   button. An invalid index shows the toast "Enter a valid non-negative account index".
-- On **every** network, a checkbox reading "I checked these account types and indices and want to
-  restore the selected accounts on Starknet Mainnet." This is the extension's text verbatim, even
-  on Sepolia: `recoveryScanFields` always renders `recoveryMainnetAck`
-  (`onboarding-views.ts:365-370`), and `refreshGate` in `recovery-account-ui.ts` requires it on
-  every network (it does not use `mainnetAckSatisfied`). Mobile matches that.
-- The CTA "Restore selected accounts" is enabled only when at least 1 row is selected **and** the
-  box is checked, on every network. A new search unchecks it again (`start()` resets it). A
-  selection over 40 shows the toast "Choose at most 40 accounts.
+- There is no acknowledgement checkbox. The extension deleted its Mainnet acknowledgements
+  (`mainnet-ack.ts`, commit c1772c05), including the one this step carried, so "Review your
+  account" asks for none either, on any network; `refreshGate` in `recovery-account-ui.ts` now
+  looks only at the selection.
+- The CTA "Restore selected accounts" is enabled only when at least 1 row is selected and no scan
+  is running. A selection over 40 shows the toast "Choose at most 40 accounts.
   Uncheck one to add another." While restoring, the status reads "Restoring the selected accounts
   into your encrypted vault…". Afterwards the toast reads "N account(s) restored", or "Account
   recovery failed" on error.
@@ -212,8 +211,8 @@ OpenZeppelin ones, with the extension's authorization (`authorizationShape` in
   with `AccountClassUnrecognised`, `AccountClassUnsupported` (with the class label),
   `AccountNotDeployable`, `AccountOwnerMismatch`, `AccountOwnerTypeUnsupported` or
   `AccountGuardianUnsupported`, whose copy is the extension's own text.
-- **Apps.** The Send action and the home deploy notice now open for Ready accounts; Braavos still
-  shows "Braavos accounts are view only for now.".
+- **Apps.** The Send action and Settings' Deploy account row now open for Ready accounts; Braavos
+  still shows "Braavos accounts are view only for now.".
 
 Parity: `scripts/mobile-transactions-argent.ts` runs the extension's own send path for the
 published phrase's Ready account under each Argent class (0.4.0 deployed, undeployed and
