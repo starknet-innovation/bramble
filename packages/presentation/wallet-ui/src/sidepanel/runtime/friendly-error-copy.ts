@@ -50,6 +50,7 @@ const REVIEW_MOVED = "This changed while you were reviewing it. Review it again.
 const FEE_MOVED = "The fee changed while you were reviewing. Check it and submit again.";
 const SWAP_ROUTE_UNSAFE = "Couldn't prepare a safe route for this swap. Get a fresh quote.";
 const REFUSED = "The wallet refused that request.";
+const LEDGER_RETRY = "Couldn't reach your Ledger. Reconnect the device and try again.";
 const ACTIVATE_FIRST = "Activate private balances first.";
 const DEPLOY_FIRST = "Deploy this account first.";
 
@@ -210,6 +211,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "This collectible is on another network. Switch networks to move it.",
   ],
   ["invalid watch asset metadata", "That site sent token details this wallet can't read."],
+  ["add nft failed", "Couldn't add that collectible. Check the contract address and try again."],
+  ["remove nft failed", "Couldn't remove that collectible. Try again."],
+  ["nft update failed", "Couldn't update that collectible. Try again."],
+  ["nft transfer review failed", "Couldn't prepare this transfer. Try again."],
+  ["nft transfer failed", "The transfer didn't go through. Try again."],
 
   // --- Send ----------------------------------------------------------------
   ["transfer failed", "The transfer didn't go through. Try again."],
@@ -246,6 +252,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "ledger signing unavailable",
     "Ledger signing isn't available. Reconnect the device and try again.",
   ],
+  // One move answers all four: reconnect the device.
+  ["add ledger account failed", LEDGER_RETRY],
+  ["create ledger wallet failed", LEDGER_RETRY],
+  ["derive ledger accounts failed", LEDGER_RETRY],
+  ["complete ledger sign failed", "Signing on your Ledger didn't finish. Try again."],
 
   // --- Private balances ----------------------------------------------------
   ["private balances unavailable", "Couldn't load private balances. Try again."],

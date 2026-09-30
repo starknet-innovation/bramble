@@ -47,7 +47,10 @@ const sourceFiles = (dir: string): string[] => {
 };
 
 const ERROR_REPLY = /\{\s*error:\s*"([^"]{3,120})"/g;
-const RUNTIME_FALLBACK = /responseError\(\s*[A-Za-z_$][\w$]*\s*,\s*"([^"]{3,120})"/g;
+// Matched on shape, not on the callee's name: the collectibles client
+// imports responseError as `failure`, and a name-based scan missed five
+// diagnostics for as long as it did.
+const RUNTIME_FALLBACK = /\bthrow\s+[A-Za-z_$][\w$]*\(\s*[A-Za-z_$][\w$]*\s*,\s*"([^"]{3,120})"/g;
 
 const rawErrorStrings = (): ReadonlySet<string> => {
   const found = new Set<string>();
