@@ -137,13 +137,13 @@ export const multisigPortfolio = (input: {
     <div class="tab-bar">
       <div class="tab-set" role="tablist" aria-label="Multisig sections">
         <button class="home-tab" id="multisig-tab-assets" data-ms-home-tab="assets" type="button" role="tab" aria-controls="multisig-panel-assets" aria-selected="true" tabindex="0">Tokens</button>
-        <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Signing intents, ${openCountText} open" tabindex="-1">Intents${openCount > 0 ? `<span class="home-tab-count">${openCountText}</span>` : ""}</button>
+        <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Transactions, ${openCountText} open" tabindex="-1">Transactions${openCount > 0 ? `<span class="home-tab-count">${openCountText}</span>` : ""}</button>
       </div>
     </div>
     <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
     <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>
       <div class="multisig-intent-sync">
-        <div><strong>Co-signer updates</strong><span>Check securely for intents and signatures shared by known contacts.</span></div>
+        <div><strong>Co-signer updates</strong><span>Check securely for transactions and signatures shared by known contacts.</span></div>
         ${button({ attributes: { "data-ms-sync-intents": true }, icon: "refresh", label: "Check for updates", size: "small", variant: "secondary" })}
       </div>
       ${compactIntentListView(input.intentList.heading, input.intentList.items, input.intentList.emptyMessage)}

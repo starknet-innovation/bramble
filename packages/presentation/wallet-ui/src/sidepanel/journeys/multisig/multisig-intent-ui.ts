@@ -76,11 +76,11 @@ const bindCopies = (deps: MultisigUiDeps): void => {
       if (!id) return;
       void intentById(deps, id)
         .then((intent) => {
-          if (!intent) throw new Error("Signing intent unavailable");
+          if (!intent) throw new Error("That transaction is unavailable");
           return copyText(
             button,
             JSON.stringify({ intent, kind: "bramble.argent-multisig-intent", version: 1 }),
-            "Intent package copied",
+            "Transaction package copied",
           );
         })
         .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error", button));
@@ -94,8 +94,8 @@ const bindCopies = (deps: MultisigUiDeps): void => {
       void intentById(deps, id)
         .then((intent) => {
           const signature = intent?.signatures[index];
-          if (!signature) throw new Error("Signature fragment unavailable");
-          return copyText(button, JSON.stringify(signature), "Signature fragment copied");
+          if (!signature) throw new Error("That signature is unavailable");
+          return copyText(button, JSON.stringify(signature), "Signature copied");
         })
         .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error", button));
     });
@@ -156,8 +156,9 @@ const bindActions = (deps: MultisigUiDeps): void => {
       const id = button.dataset["msRefreshIntent"];
       if (!id) return;
       run(deps, button, async () => {
-        if (!(await openUpdatedIntent(deps, id))) throw new Error("Signing intent unavailable");
-        return "Fee-updated transaction ready to review";
+        if (!(await openUpdatedIntent(deps, id)))
+          throw new Error("That transaction is unavailable");
+        return "Fee updated. Ready to review.";
       });
     });
   });
@@ -172,7 +173,7 @@ const bindSignatureImports = (deps: MultisigUiDeps): void => {
         String(new FormData(form).get("signature") ?? ""),
       );
       if (!id || !signature) {
-        showToast("Signature fragment is invalid", "error", form);
+        showToast("That signature isn't valid", "error", form);
         return;
       }
       run(deps, form.querySelector('button[type="submit"]'), async () => {
@@ -192,15 +193,15 @@ const bindDeletes = (deps: MultisigUiDeps): void => {
       if (!id || !accountId) return;
       if (control.dataset["confirm"] !== "true") {
         control.dataset["confirm"] = "true";
-        control.textContent = "Confirm delete intent";
-        control.setAttribute("aria-label", "Tap again to delete saved intent");
-        control.setAttribute("title", "Tap again to delete saved intent");
+        control.textContent = "Confirm delete";
+        control.setAttribute("aria-label", "Tap again to delete");
+        control.setAttribute("title", "Tap again to delete");
         return;
       }
       run(deps, control, async () => {
         await deps.multisig.removeIntent(id);
         deps.openDetail(accountId, "multisig-home");
-        return "Saved intent deleted";
+        return "Saved transaction deleted";
       });
     });
   });
@@ -220,7 +221,7 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
         button,
         async () => {
           const multisigId = deps.selectedMultisigId();
-          if (!multisigId) throw new Error("Select a multisig before checking for updates");
+          if (!multisigId) throw new Error("Select a multisig first");
           const result = await deps.multisig.syncIntents(multisigId);
           updatedIntentIds = result.intentIds;
           return result.imported === 0

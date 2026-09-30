@@ -27,7 +27,7 @@ export type CompactIntentList = {
 export const intentDeleteButton = (id: string, accountId: string): string =>
   button({
     attributes: { "data-ms-delete-intent": id, "data-ms-intent-account": accountId },
-    label: "Delete saved intent",
+    label: "Delete saved transaction",
     size: "small",
     tone: "danger",
     variant: "ghost",
@@ -68,7 +68,7 @@ export const compactIntentListView = (
     className: "tab-more",
     icon: "chevronRight",
     iconPosition: "after",
-    label: "Import intent",
+    label: "Import transaction",
     size: "small",
     variant: "ghost",
   })}`;

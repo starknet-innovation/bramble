@@ -47,7 +47,7 @@ const drawerMultisigRow = (
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
         <code title="${escapeHtml(record.address)}">${escapeHtml(accountLabel(record.address))}</code>
-        <span class="account-groups-line">Ready Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}` : "authority unavailable"}${open > 0 ? ` · ${open} open` : ""}</span>
+        <span class="account-groups-line">Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}` : "authority unavailable"}${open > 0 ? ` · ${open} open` : ""}</span>
       </span>
       <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
     </button>

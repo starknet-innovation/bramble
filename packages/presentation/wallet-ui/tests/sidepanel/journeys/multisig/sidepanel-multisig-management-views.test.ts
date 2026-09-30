@@ -137,7 +137,7 @@ describe("Argent multisig management views", () => {
     ).toContain("Check the network and retry");
     expect(multisigReceiveFlow(fixture.status, null)).toContain("no longer watched");
     expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
-    expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Ready multisig");
+    expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched multisig");
     expect(multisigTrackFlow(fixture.status, fixture.view)).toContain('id="multisig-track-form"');
   });
 

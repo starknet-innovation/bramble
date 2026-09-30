@@ -477,7 +477,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     const tabs = Array.from(app.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]"));
     const panels = Array.from(app.querySelectorAll<HTMLElement>("[data-ms-home-panel]"));
     expect(tabs).toHaveLength(2);
-    expect(tabs[1]?.getAttribute("aria-label")).toBe("Signing intents, 0 open");
+    expect(tabs[1]?.getAttribute("aria-label")).toBe("Transactions, 0 open");
     const selectedTab = tabs[1];
     if (!selectedTab) throw new Error("intents tab unavailable");
     expect(tabs.map((tab) => tab.getAttribute("aria-controls"))).toEqual(

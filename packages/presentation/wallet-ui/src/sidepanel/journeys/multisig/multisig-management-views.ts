@@ -151,12 +151,12 @@ const setupOption = (
  * Renders the shared-account gateway without mutating chain state.
  */
 export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Ready Multisig", status, "Multiple signers approve together") +
+  flowHeader("Multisig", status, "Multiple signers approve together") +
   flowScreen(
     "multisig-add",
     `<section class="section">
       ${account ? "" : noAccountEmpty(status)}
-      <div class="multisig-setup-options" role="group" aria-label="Ready multisig setup">
+      <div class="multisig-setup-options" role="group" aria-label="Multisig setup">
         ${setupOption("multisig-deploy", "users", "Create a multisig account", "Set participants, fund, and deploy.")}
         ${setupOption("multisig-watch", "search", "Add a shared address", "Sync it or resume setup.")}
       </div>
@@ -200,7 +200,7 @@ export const multisigSignersFlow = (
   if (!view) {
     return (
       flowHeader("Signers", status) +
-      flowScreen("multisig-signers", emptyState("This Ready multisig is no longer watched."))
+      flowScreen("multisig-signers", emptyState("This multisig is no longer watched."))
     );
   }
   const { record, config } = view;
@@ -421,7 +421,7 @@ export const multisigReceiveFlow = (
   if (!view) {
     return (
       flowHeader("Receive", status) +
-      flowScreen("multisig-receive", emptyState("This Ready multisig is no longer watched."))
+      flowScreen("multisig-receive", emptyState("This multisig is no longer watched."))
     );
   }
   return (
@@ -442,7 +442,7 @@ export const multisigReceiveFlow = (
  * Renders full frozen-intent import for independent co-signers.
  */
 export const multisigTrackFlow = (status: WalletStatus, view: ArgentMultisigView | null): string =>
-  flowHeader("Import signing intent", status, view ? multisigDisplayName(view.record) : undefined) +
+  flowHeader("Import transaction", status, view ? multisigDisplayName(view.record) : undefined) +
   flowScreen(
     "multisig-track",
     view
@@ -454,5 +454,5 @@ export const multisigTrackFlow = (status: WalletStatus, view: ArgentMultisigView
             <p id="multisig-track-result" role="status"></p>
           </form>
         </section>`
-      : emptyState("Select a watched Ready multisig first."),
+      : emptyState("Select a watched multisig first."),
   );

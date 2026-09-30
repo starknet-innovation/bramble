@@ -114,7 +114,7 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   "multisig-propose": "New multisig transaction",
   "multisig-receive": "Receive to multisig",
   "multisig-signers": "Manage multisig signers",
-  "multisig-track": "Import signing intent",
+  "multisig-track": "Import transaction",
   "multisig-watch": "Add multisig account",
   network: "Networks",
   nfts: "Collectibles",

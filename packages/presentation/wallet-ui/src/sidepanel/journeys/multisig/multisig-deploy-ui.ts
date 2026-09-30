@@ -457,7 +457,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
               <div class="disclosure-body">
                 <dl class="request-detail">
                   <div><dt>Address</dt><dd><code>${escapeHtml(next.address)}</code>${copyButton(next.address, "Copy multisig address")}</dd></div>
-                  <div><dt>Contract</dt><dd>Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
+                  <div><dt>Contract</dt><dd>Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
                   <div><dt>Class hash</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, "Copy Ready Multisig class hash")}</dd></div>
                   <div><dt>Network</dt><dd><code>${escapeHtml(next.networkId)}</code></dd></div>
                   <div><dt>Signers</dt><dd>${next.signerPublicKeys.length}</dd></div>

@@ -64,7 +64,7 @@ const walletStub = (calls: Array<readonly [string, boolean, string]>, fail = fal
     setExplorerFallback: async (networkId: string, enabled: boolean, apiUrl: string) => {
       calls.push([networkId, enabled, apiUrl]);
       if (fail) {
-        throw new Error("preferences unavailable");
+        throw new Error("Couldn't load your settings. Try again.");
       }
     },
   }) as unknown as SidepanelWallet;
@@ -199,7 +199,7 @@ describe("advanced endpoints explorer-fallback control", () => {
     await tick();
 
     expect(app.querySelector("#explorer-fallback-result")?.textContent).toBe(
-      "preferences unavailable",
+      "Couldn't load your settings. Try again.",
     );
   });
 

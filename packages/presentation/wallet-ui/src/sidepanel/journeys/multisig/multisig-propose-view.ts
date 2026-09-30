@@ -227,7 +227,7 @@ export const multisigProposeFlow = (
   if (!view) {
     return (
       flowHeader("New transaction", status) +
-      flowScreen("multisig-propose", emptyState("This Ready multisig is no longer watched."))
+      flowScreen("multisig-propose", emptyState("This multisig is no longer watched."))
     );
   }
   if (!view.config || view.authorityStatus !== "available") {

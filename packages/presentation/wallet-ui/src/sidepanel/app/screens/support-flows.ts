@@ -96,7 +96,7 @@ export const addressBookFlow = (
             ${textField({
               autocomplete: "off",
               className: "mono",
-              hint: "Authenticates encrypted multisig intent handoffs from this contact.",
+              hint: "Authenticates encrypted multisig transaction handoffs from this contact.",
               label: "Coordination public key",
               name: "nostrPublicKey",
               placeholder: "64-character Nostr public key",

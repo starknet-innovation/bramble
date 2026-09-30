@@ -9,7 +9,7 @@ import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { HostPermissionApi } from "../../runtime/runtime-global";
-import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 
 /**
  * Dependencies the endpoint bindings close over.
@@ -77,10 +77,9 @@ const bindEndpointForm = (
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          const message = errorMessage(error, fail);
-          showToast(message, "error", form, errorDetails(error, fail));
+          showToast(errorMessage(error, fail), "error", form, errorDetails(error, fail));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, fail);
           }
           buttonBusy(submitButton, false);
         },
@@ -138,10 +137,9 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
         },
         (error: unknown) => {
           const fallback = "Privacy service configuration failed";
-          const message = errorMessage(error, fallback);
-          showToast(message, "error", form, errorDetails(error, fallback));
+          showToast(errorMessage(error, fallback), "error", form, errorDetails(error, fallback));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, fallback);
           }
           buttonBusy(submitButton, false);
         },
@@ -176,10 +174,9 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
         },
         (error: unknown) => {
           const fallback = "Explorer fallback update failed";
-          const message = errorMessage(error, fallback);
-          showToast(message, "error", form, errorDetails(error, fallback));
+          showToast(errorMessage(error, fallback), "error", form, errorDetails(error, fallback));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, fallback);
           }
           buttonBusy(submitButton, false);
         },

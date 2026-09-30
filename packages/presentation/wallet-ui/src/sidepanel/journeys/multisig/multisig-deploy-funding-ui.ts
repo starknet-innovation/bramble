@@ -36,7 +36,7 @@ export const bindDeploymentFunding = (
           destination: "public",
           networkId: review.networkId,
           recipient: review.address,
-          recipientLabel: review.name ?? "New Ready multisig",
+          recipientLabel: review.name ?? "New multisig",
           source: "public",
           tokenId,
         })

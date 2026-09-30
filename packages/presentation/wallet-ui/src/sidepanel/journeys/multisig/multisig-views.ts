@@ -111,7 +111,7 @@ export const multisigsFlow = (
           : ""
       }
       <section class="section">
-        <div class="menu-list" role="group" aria-label="Ready multisig actions">
+        <div class="menu-list" role="group" aria-label="Multisig actions">
           ${walletMenuRow("multisig-watch", "Add multisig account", "plus")}
           ${walletMenuRow("multisig-deploy", "Create a multisig account", "users")}
         </div>
@@ -211,7 +211,7 @@ const intentCard = (
   return `<article class="allowance-row multisig-intent" data-ms-intent="${escapeHtml(intent.id)}">
     <header class="decision-head">
       <span class="decision-seal">${icon("users")}</span>
-      <span><p class="decision-label">${isReplacement ? "Fee-updated transaction" : intent.state === "stale" ? "Not submitted" : "Reviewed intent"}</p><h2>${escapeHtml(intent.summary)}</h2></span>
+      <span><p class="decision-label">${isReplacement ? "Fee-updated transaction" : intent.state === "stale" ? "Not submitted" : "Reviewed transaction"}</p><h2>${escapeHtml(intent.summary)}</h2></span>
     </header>
     ${reviewCallsList(
       transactionReview.calls.map((call) => call.summary),
@@ -222,7 +222,7 @@ const intentCard = (
       ...(hasFreshAuthority
         ? []
         : [
-            "The fresh on-chain signer authority does not exactly match this intent snapshot. Signing and submission are disabled.",
+            "The on-chain signers no longer match this transaction. Signing and submission are disabled.",
           ]),
     ])}
     <section class="decision-layer decision-boundary" aria-label="Cost">
@@ -301,7 +301,7 @@ const intentList = (
     ? all.filter((intent) => intent.id === selectedIntentId)
     : actionableArgentMultisigIntents(all);
   if (selectedIntentId && scoped[0]) return intentCard(scoped[0], view, status, preferences, all);
-  if (selectedIntentId) return emptyState("This signing intent is no longer available.");
+  if (selectedIntentId) return emptyState("This transaction is no longer available.");
   const submitted = scoped.find((intent) => intent.state === "submitted");
   if (submitted) return intentCard(submitted, view, status, preferences, all);
   const awaiting = scoped.filter(
@@ -309,10 +309,10 @@ const intentList = (
   );
   const stale = scoped.filter((intent) => intent.state === "stale");
   if (awaiting.length === 0 && stale.length === 0) {
-    return emptyState("No intents are awaiting verification or signature.");
+    return emptyState("Nothing to sign.");
   }
   return `<div class="multisig-intent-stack">
-    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Awaiting verification &amp; signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
+    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Waiting for a signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
     ${stale.length === 0 ? "" : `<section><p class="eyebrow">Needs attention</p><div class="allowance-list">${stale.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
   </div><p id="multisig-intent-result" role="status"></p>`;
 };
@@ -327,11 +327,10 @@ const compactIntentList = (
   const heading = scoped.every((intent) => intent.state === "stale")
     ? "Needs attention"
     : scoped.some((intent) => intent.state === "stale")
-      ? "Intents requiring action"
-      : "Awaiting verification & signature";
+      ? "Transactions needing you"
+      : "Waiting for a signature";
   return {
-    emptyMessage:
-      "No intents are awaiting verification or signature. Import one to review it here.",
+    emptyMessage: "Nothing to sign. Import a transaction to review it here.",
     heading,
     items: scoped.map((intent) => ({
       accountId: record.id,
@@ -369,10 +368,10 @@ export const multisigDetailFlow = (
 ): string => {
   if (!view) {
     return (
-      (screen === "multisig-home" ? "" : flowHeader("Ready multisig", status)) +
+      (screen === "multisig-home" ? "" : flowHeader("Multisig", status)) +
       (screen === "multisig-home" ? dockScreen : flowScreen)(
         screen,
-        emptyState("This Ready multisig is no longer watched."),
+        emptyState("This multisig is no longer watched."),
       )
     );
   }
