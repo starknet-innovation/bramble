@@ -212,7 +212,7 @@ describe("sidepanel views", () => {
     // screen, and the fee is quoted onto it — so the control is the action.
     expect(html).not.toContain("Deployment creates this account on-chain.");
     expect(html).toContain(">Deploy<");
-    expect(html).not.toContain("Review deployment");
+    expect(html).not.toContain("Check fee and address");
     expect(html).toMatch(/id="deploy-success"[^>]*hidden/);
     expect(html).not.toContain("wallet-dock");
   });

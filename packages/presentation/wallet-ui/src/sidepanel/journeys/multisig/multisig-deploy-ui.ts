@@ -314,7 +314,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (reviewRoot) renderFragment(reviewRoot, "");
     if (button) {
       button.hidden = false;
-      button.lastChild?.replaceWith("Review deployment");
+      button.lastChild?.replaceWith("Check fee and address");
       buttonBusy(button, false);
       button.disabled = form.dataset["classReady"] !== "true" || !signerAccountInput?.value;
     }
@@ -346,7 +346,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       form,
       target.closest(".multisig-deploy-signers-step") ? "participants" : "approval",
     );
-    button?.lastChild?.replaceWith("Review deployment");
+    button?.lastChild?.replaceWith("Check fee and address");
     if (reviewEnabled) buttonBusy(button, false);
   });
   form?.addEventListener("submit", (event) => {
@@ -365,7 +365,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (stored && !reviewed) {
       reviews.delete(form);
       if (reviewRoot) renderFragment(reviewRoot, "");
-      button?.lastChild?.replaceWith("Review deployment");
+      button?.lastChild?.replaceWith("Check fee and address");
     }
     buttonBusy(button, true);
     if (reviewed) {
@@ -410,7 +410,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
               ? "Fee review expired. Review the deployment again."
               : "Deployment failed. Review the error, then try again.",
           );
-          button?.lastChild?.replaceWith("Review deployment");
+          button?.lastChild?.replaceWith("Check fee and address");
           setDeploymentStage(form, "deploy");
           showToast(deploymentFailureToast(message, reviewed), "error", form);
           buttonBusy(button, false);
@@ -477,7 +477,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         }
         setDeploymentStage(form, fundingRequired ? "fund" : "deploy");
         if (button) button.hidden = fundingRequired;
-        button?.lastChild?.replaceWith(fundingRequired ? "Review deployment" : "Deploy multisig");
+        if (!fundingRequired) button?.lastChild?.replaceWith("Deploy multisig");
         deps.setResult("multisig-deploy-result", "");
         buttonBusy(button, false);
       })
@@ -485,7 +485,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         if (!isCurrent()) return;
         const message = deploymentReviewFailure(errorMessage(error, "Deployment review failed"));
         setDeploymentStage(form, "approval");
-        button?.lastChild?.replaceWith("Review deployment");
+        button?.lastChild?.replaceWith("Check fee and address");
         deps.setResult(
           "multisig-deploy-result",
           message === ALREADY_DEPLOYED_MESSAGE

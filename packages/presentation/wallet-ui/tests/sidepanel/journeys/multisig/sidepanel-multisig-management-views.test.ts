@@ -55,7 +55,7 @@ describe("Argent multisig management views", () => {
     expect(ready).toContain("Continue to approval");
     expect(ready).toContain("data-nav-back");
     expect(ready).not.toContain("data-multisig-deploy-back");
-    expect(ready).toContain("Review deployment");
+    expect(ready).toContain("Check fee and address");
     expect(ready.match(/data-multisig-deploy-step=/g)).toHaveLength(4);
     expect(ready).toContain("Participants");
     expect(ready).not.toContain("<small>Address</small>");

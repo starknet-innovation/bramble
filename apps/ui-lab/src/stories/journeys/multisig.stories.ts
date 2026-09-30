@@ -150,7 +150,7 @@ export const DeployApproval: LabStory = {
     await expect(body?.querySelector(".flow-header [data-nav-back]")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
-      "Review deployment",
+      "Check fee and address",
     );
   },
 };
