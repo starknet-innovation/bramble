@@ -289,12 +289,15 @@ fn static_gates_match_the_rendered_extension() {
         let state = Some(registered_state(network, &rules));
         let label = format!("{row}");
         let tile = &row["tile"];
-        let expected_tile = match (text(&tile["action"]), text(&tile["label"])) {
-            ("receive", _) => ShieldTile::FundFirst,
+        // One word on every tile; the accessible name carries the reason and tells them apart.
+        assert_eq!(text(&tile["label"]), "Shield", "{label}");
+        let expected_tile = match (text(&tile["action"]), text(&tile["aria"])) {
+            ("none", _) => ShieldTile::NoStrkToken,
             ("send-shield", _) => ShieldTile::Ready,
-            ("privacy-open", "Deploy and enable") => ShieldTile::DeployAndEnable,
-            ("privacy-open", _) => ShieldTile::Activate,
-            _ => ShieldTile::NoStrkToken,
+            ("privacy-open", "Shield — add STRK to this account first") => ShieldTile::FundFirst,
+            ("privacy-open", "Shield — deploy this account first") => ShieldTile::DeployFirst,
+            ("privacy-open", "Activate private balances") => ShieldTile::Activate,
+            other => panic!("unexpected tile {other:?}"),
         };
         assert_eq!(
             shield_tile(network, dep, fund, read),
@@ -305,14 +308,13 @@ fn static_gates_match_the_rendered_extension() {
             "Discovering…" => PrivateLine::Discovering,
             "Unavailable" => PrivateLine::Unavailable,
             "Register to start shielding" => PrivateLine::RegisterToStart,
-            "Fund with STRK" => PrivateLine::FundWithStrk,
-            "Deploy and enable" => PrivateLine::DeployAndEnable,
+            "Shield" => PrivateLine::Shield,
             amount => PrivateLine::Amount {
                 text: amount.into(),
             },
         };
         assert_eq!(
-            private_line(network, dep, fund, read, ETH.into(), state.clone()),
+            private_line(network, dep, read, ETH.into(), state.clone()),
             expected_line,
             "{label}"
         );
@@ -339,7 +341,7 @@ fn static_gates_match_the_rendered_extension() {
             expected_notice,
             "{label}"
         );
-        let detail = token_detail_privacy(network, dep, fund, read, ETH.into(), state);
+        let detail = token_detail_privacy(network, dep, read, ETH.into(), state);
         let expected_summary = match row["detail"]["summary"].as_str() {
             None => DetailSummary::None,
             Some("Try again") => DetailSummary::Retry,
@@ -359,8 +361,7 @@ fn static_gates_match_the_rendered_extension() {
             [] => DetailAction::None,
             ["Go private"] => DetailAction::GoPrivate,
             ["Shield", "Unshield"] => DetailAction::ShieldUnshield,
-            ["Fund with STRK"] => DetailAction::FundWithStrk,
-            ["Deploy and enable"] => DetailAction::DeployAndEnable,
+            ["Shield"] => DetailAction::Shield,
             other => panic!("unexpected actions {other:?}"),
         };
         assert_eq!(detail.action, expected_action, "{label}");
@@ -379,7 +380,8 @@ fn journey_outcomes_match_the_bound_extension() {
         };
         let mut after_read = false;
         let outcome = loop {
-            match hooks::entry_outcome(network, dep, read, after_read).as_str() {
+            // The fixture binds the journey without a balance read, so funding is unknown.
+            match hooks::entry_outcome(network, dep, None, read, after_read).as_str() {
                 "check" => match text(&row["deploymentRead"]) {
                     "throws" => break "blocked:service".to_string(),
                     other => dep = deployment(other),
@@ -395,7 +397,7 @@ fn journey_outcomes_match_the_bound_extension() {
         assert_eq!(outcome, text(&row["outcome"]), "{row}");
         if outcome == "open-shield" || outcome == "activate" {
             assert_eq!(
-                privacy_entry(network, dep, read, after_read),
+                privacy_entry(network, dep, None, read, after_read),
                 PrivacyEntry::Blocked {
                     blocker: PrivacyBlocker::Unsupported
                 }

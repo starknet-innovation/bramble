@@ -6,7 +6,8 @@
 use std::sync::OnceLock;
 
 use super::activity::{ActivityEntry, ActivityKind};
-use crate::js::num::{js_trim, utf16_len, utf16_slice};
+use crate::account_names::short_label;
+use crate::js::num::{js_trim, utf16_len};
 use crate::js::regex::Regex;
 use crate::portfolio::fiat::compact_amount;
 
@@ -71,8 +72,9 @@ pattern!(
 pattern!(leading_figure, r"^~?\d[\d,]*(?:\.\d+)?\s+\S+\s*", false);
 pattern!(trailing_privately, r"\s+privately$", true);
 
-/// Which way value moved.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+/// Which way value moved. Internal to the row model (it picks the counterparty's role); no row
+/// shows it, so it does not cross FFI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityDirection {
     In,
     Out,
@@ -245,16 +247,6 @@ pub(super) fn compact_activity_amount(amount: &str) -> String {
     }
 }
 
-/// `shortAddress` / `accountLabel`: `0x1234…abcd`, always six and four units.
-fn account_label(address: &str) -> String {
-    let len = utf16_len(address);
-    format!(
-        "{}…{}",
-        utf16_slice(address, 0, 6),
-        utf16_slice(address, len.saturating_sub(4), len)
-    )
-}
-
 fn non_empty(value: String) -> Option<String> {
     (!value.is_empty()).then_some(value)
 }
@@ -272,7 +264,7 @@ pub(super) fn detail(
             "recipient" => "To",
             _ => "With",
         };
-        return Some(format!("{preposition} {}", account_label(address)));
+        return Some(format!("{preposition} {}", short_label(address)));
     }
     let summary = compact_summary(js_trim(&entry.summary));
     if look.kind == "swap" {

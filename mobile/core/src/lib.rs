@@ -115,8 +115,8 @@ pub use wallet_accounts::AccountRecord;
 pub use history::activity::{ActivityEntry, FailureNotice};
 pub use history::activity_book::{ActivityBook, ActivityView};
 pub use history::appearance::{
-    activity_empty_copy, activity_groups, activity_unavailable_notice, ActivityDayGroup,
-    ActivityDirection, ActivityRow, ActivityTone,
+    activity_empty_copy, activity_groups, activity_unavailable_notice, ActivityCounterparty,
+    ActivityDayGroup, ActivityDirection, ActivityRow, ActivityTone,
 };
 pub use history::events::{HistoryScan, ScanStep};
 pub use history::explorer::{activity_account_id, explorer_transaction_url};

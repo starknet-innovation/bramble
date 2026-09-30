@@ -117,20 +117,20 @@ pub fn shield_tile(
     let needs_deploy = deployed(deployment, reading) == Some(false);
     if needs_deploy && strk_funded == Some(false) {
         ShieldTile::FundFirst
-    } else if registered(reading) && !needs_deploy {
-        ShieldTile::Ready
     } else if needs_deploy {
-        ShieldTile::DeployAndEnable
+        ShieldTile::DeployFirst
+    } else if registered(reading) {
+        ShieldTile::Ready
     } else {
         ShieldTile::Activate
     }
 }
 
-/// `privateBreakdownFor` → `privateBreakdownLine`.
+/// `privateBreakdownFor` → `privateBreakdownLine`. The extension still tells `needs-funds` from
+/// `undeployed` here, but renders both as the same "Shield" control, so funding is not an input.
 pub fn private_line(
     network: NetworkId,
     deployment: DeploymentState,
-    strk_funded: Option<bool>,
     reading: PrivacyReading,
     token_address: &str,
     state: Option<&PrivacyState>,
@@ -141,11 +141,7 @@ pub fn private_line(
         return PrivateLine::Unavailable;
     }
     if deployed(deployment, reading) == Some(false) {
-        return if strk_funded == Some(false) {
-            PrivateLine::FundWithStrk
-        } else {
-            PrivateLine::DeployAndEnable
-        };
+        return PrivateLine::Shield;
     }
     match reading {
         PrivacyReading::Failed | PrivacyReading::Unconfigured => PrivateLine::Unavailable,
@@ -186,10 +182,13 @@ pub fn receive_pool_notice(
 }
 
 /// The extension's `startJourney` / `continueJourney` decision. `after_read` is false on the tap
-/// and true once the host has run (or joined) the read the journey waits for.
+/// and true once the host has run (or joined) the read the journey waits for. An undeployed
+/// account whose loaded STRK balance is zero (`strk_funded == Some(false)`) is sent to `Fund`
+/// rather than `Deploy`; an unloaded balance (`None`) keeps the deployment path.
 pub fn entry_outcome(
     network: NetworkId,
     deployment: DeploymentState,
+    strk_funded: Option<bool>,
     reading: PrivacyReading,
     after_read: bool,
 ) -> Outcome {
@@ -204,6 +203,8 @@ pub fn entry_outcome(
         let waiting = matches!(reading, PrivacyReading::Idle | PrivacyReading::Loading);
         return if waiting && !after_read {
             Outcome::Discovering
+        } else if strk_funded == Some(false) {
+            Outcome::Blocked(PrivacyBlocker::Fund)
         } else {
             Outcome::Blocked(PrivacyBlocker::Deploy)
         };
@@ -219,11 +220,11 @@ pub fn entry_outcome(
     }
 }
 
-/// `tokenDetailFlow`'s private summary and `privacyActions`.
+/// `tokenDetailFlow`'s private summary and `privacyActions`. Funding is not an input: an
+/// undeployed account gets "Shield", and the journey it opens names the prerequisite.
 pub fn token_detail(
     network: NetworkId,
     deployment: DeploymentState,
-    strk_funded: Option<bool>,
     reading: PrivacyReading,
     token_address: &str,
     state: Option<&PrivacyState>,
@@ -248,10 +249,8 @@ pub fn token_detail(
     };
     let action = if reading == PrivacyReading::Unconfigured {
         DetailAction::None
-    } else if seen == Some(false) && strk_funded == Some(false) {
-        DetailAction::FundWithStrk
     } else if seen == Some(false) {
-        DetailAction::DeployAndEnable
+        DetailAction::Shield
     } else if is_error(reading) {
         DetailAction::None
     } else if registered(reading) {
@@ -284,12 +283,12 @@ mod tests {
     fn sepolia_is_always_the_network_refusal() {
         let s = NetworkId::Sepolia;
         assert_eq!(
-            entry_outcome(s, DeploymentState::Deployed, REGISTERED, false),
+            entry_outcome(s, DeploymentState::Deployed, None, REGISTERED, false),
             Outcome::Blocked(PrivacyBlocker::Network)
         );
         assert_eq!(status(s, REGISTERED), PrivacyStatus::Unavailable);
         assert_eq!(
-            token_detail(s, DeploymentState::Deployed, None, LOADING, "0x1", None).action,
+            token_detail(s, DeploymentState::Deployed, LOADING, "0x1", None).action,
             DetailAction::None
         );
     }
@@ -307,7 +306,35 @@ mod tests {
         );
         assert_eq!(
             shield_tile(m, DeploymentState::Undeployed, None, LOADING),
-            ShieldTile::DeployAndEnable
+            ShieldTile::DeployFirst
+        );
+    }
+
+    #[test]
+    fn only_a_loaded_empty_strk_balance_diverts_to_fund() {
+        let m = NetworkId::Mainnet;
+        let undeployed = DeploymentState::Undeployed;
+        let unregistered = PrivacyReading::Settled {
+            registration: PrivacyRegistration::Unregistered,
+        };
+        assert_eq!(
+            entry_outcome(m, undeployed, Some(false), unregistered, false),
+            Outcome::Blocked(PrivacyBlocker::Fund)
+        );
+        for funded in [None, Some(true)] {
+            assert_eq!(
+                entry_outcome(m, undeployed, funded, unregistered, false),
+                Outcome::Blocked(PrivacyBlocker::Deploy)
+            );
+        }
+        // The journey still waits for a pending read before naming either prerequisite.
+        assert_eq!(
+            entry_outcome(m, undeployed, Some(false), LOADING, false),
+            Outcome::Discovering
+        );
+        assert_eq!(
+            entry_outcome(m, undeployed, Some(false), LOADING, true),
+            Outcome::Blocked(PrivacyBlocker::Fund)
         );
     }
 }

@@ -2,6 +2,7 @@
 //! the extension's output. Not part of the FFI surface.
 
 pub use crate::history::activity::{decode_transfer_event, entry_from_json, merge_activity};
+pub use crate::history::appearance::{activity_row_model, ActivityRowModel};
 pub use crate::history::classify::compact_summary;
 pub use crate::history::explorer::canonical_account_id;
 pub use crate::history::starkscan::{cooldown_ms, parse_retry_after_ms, transfers_to_activity};

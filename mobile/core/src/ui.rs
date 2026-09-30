@@ -12,7 +12,6 @@ const AVATAR_SIZE: i64 = 36;
 const SUGGESTION_LIMIT: usize = 5;
 const MAX_VAULT_PASSPHRASE_LENGTH: usize = 1024;
 const MIN_VAULT_PASSPHRASE_LENGTH: usize = 8;
-const RECOMMENDED_VAULT_PASSPHRASE_LENGTH: usize = 12;
 const STRONG_BITS: f64 = 72.0;
 const FAIR_BITS: f64 = 48.0;
 
@@ -121,7 +120,7 @@ pub enum PassphraseLevel {
     Strong,
 }
 
-/// One meter reading: band, bar fill (0–1), guidance line, and the two gates the setup form uses.
+/// One meter reading: band, bar fill (0–1), guidance line, and the gate the setup form uses.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct PassphraseStrength {
     pub level: PassphraseLevel,
@@ -129,8 +128,6 @@ pub struct PassphraseStrength {
     pub hint: String,
     /// The vault accepts it (`isVaultPassphrase`).
     pub acceptable: bool,
-    /// Accepted but weak: the user must acknowledge it (`requiresWeakPassphraseAcknowledgement`).
-    pub needs_acknowledgement: bool,
 }
 
 /// `isVaultPassphrase`: at most 1024 UTF-16 units, at least 8 after trimming.
@@ -161,7 +158,6 @@ pub fn passphrase_strength(value: &str) -> PassphraseStrength {
     let too_short = format!("Enter at least {MIN_VAULT_PASSPHRASE_LENGTH} characters");
     let reading = |level, ratio, hint: String| PassphraseStrength {
         acceptable: is_vault_passphrase(value),
-        needs_acknowledgement: is_vault_passphrase(value) && level == PassphraseLevel::Weak,
         hint,
         level,
         ratio,
@@ -180,29 +176,14 @@ pub fn passphrase_strength(value: &str) -> PassphraseStrength {
     if !is_vault_passphrase(value) {
         return reading(PassphraseLevel::Weak, ratio.min(0.4), too_short);
     }
-    let short = utf16_len(js_trim(value)) < RECOMMENDED_VAULT_PASSPHRASE_LENGTH;
-    let longer = format!("{RECOMMENDED_VAULT_PASSPHRASE_LENGTH}+ characters is safer");
+    // Past the floor the hint names the band alone; the bar already shows the distance.
     if bits >= STRONG_BITS {
-        let hint = if short {
-            format!("Strong — {longer}")
-        } else {
-            "Strong passphrase".into()
-        };
-        return reading(PassphraseLevel::Strong, 1.0, hint);
+        return reading(PassphraseLevel::Strong, 1.0, "Strong".into());
     }
     if bits >= FAIR_BITS {
-        let hint = if short {
-            format!("Fair — {longer}")
-        } else {
-            "Fair — longer, or mix in numbers and symbols".into()
-        };
-        return reading(PassphraseLevel::Fair, ratio, hint);
+        return reading(PassphraseLevel::Fair, ratio, "Fair".into());
     }
-    reading(
-        PassphraseLevel::Weak,
-        ratio,
-        "Weak — use more characters, or more varied ones".into(),
-    )
+    reading(PassphraseLevel::Weak, ratio, "Weak".into())
 }
 
 /// Whether one typed word (trimmed) is in the BIP-39 English list.
@@ -241,7 +222,10 @@ mod tests {
         assert_eq!(passphrase_strength("").level, PassphraseLevel::Empty);
         assert_eq!(passphrase_strength("short").level, PassphraseLevel::Weak);
         assert!(!passphrase_strength("short").acceptable);
-        assert!(passphrase_strength("aaaaaaaa").needs_acknowledgement);
+        // Weak but past the 8-character floor: accepted with no further gate.
+        let weak = passphrase_strength("aaaaaaaa");
+        assert_eq!(weak.level, PassphraseLevel::Weak);
+        assert!(weak.acceptable);
         assert_eq!(
             passphrase_strength("correct horse battery staple!9").level,
             PassphraseLevel::Strong

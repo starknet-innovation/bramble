@@ -112,10 +112,5 @@ fn passphrase_meter_matches_the_extension() {
             case["acceptable"].as_bool().unwrap(),
             "gate for {label:?}"
         );
-        assert_eq!(
-            reading.needs_acknowledgement,
-            case["needsAcknowledgement"].as_bool().unwrap(),
-            "ack for {label:?}"
-        );
     }
 }

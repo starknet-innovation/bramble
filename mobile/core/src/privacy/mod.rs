@@ -84,7 +84,7 @@ pub fn max_privacy_response_bytes() -> u64 {
 }
 
 /// The Home Shield tile. `strk_funded`: the loaded public STRK balance is above zero; `None`
-/// while it has not loaded.
+/// while it has not loaded. Only the tile's accessible name depends on it (`FundFirst`).
 #[uniffi::export]
 pub fn shield_tile(
     network: NetworkId,
@@ -95,24 +95,16 @@ pub fn shield_tile(
     gates::shield_tile(network, deployment, strk_funded, reading)
 }
 
-/// A Home row's private line.
+/// A Home row's private line. A reading from another network is ignored.
 #[uniffi::export]
 pub fn private_line(
     network: NetworkId,
     deployment: DeploymentState,
-    strk_funded: Option<bool>,
     reading: PrivacyReading,
     token_address: String,
     state: Option<PrivacyState>,
 ) -> PrivateLine {
-    gates::private_line(
-        network,
-        deployment,
-        strk_funded,
-        reading,
-        &token_address,
-        state.as_ref(),
-    )
+    gates::private_line(network, deployment, reading, &token_address, state.as_ref())
 }
 
 /// Receive's "Public transfers only" notice.
@@ -126,16 +118,19 @@ pub fn receive_pool_notice(
 }
 
 /// Where a privacy entry point leads on mobile. `after_read` is false on the tap and true once the
-/// host has run the read a `Discovering` answer asked for. The extension's "Send in Shield mode"
-/// and "activation" become the `Unsupported` blocker while the capabilities are false.
+/// host has run the read a `Discovering` answer asked for. `strk_funded` is the loaded public STRK
+/// balance being above zero, `None` while it has not loaded: only a loaded zero turns an
+/// undeployed account's `Deploy` blocker into `Fund`. The extension's "Send in Shield mode" and
+/// "activation" become the `Unsupported` blocker while the capabilities are false.
 #[uniffi::export]
 pub fn privacy_entry(
     network: NetworkId,
     deployment: DeploymentState,
+    strk_funded: Option<bool>,
     reading: PrivacyReading,
     after_read: bool,
 ) -> PrivacyEntry {
-    match gates::entry_outcome(network, deployment, reading, after_read) {
+    match gates::entry_outcome(network, deployment, strk_funded, reading, after_read) {
         Outcome::Blocked(blocker) => PrivacyEntry::Blocked { blocker },
         Outcome::CheckDeployment => PrivacyEntry::CheckDeployment,
         Outcome::Discovering => PrivacyEntry::Discovering,
@@ -147,24 +142,16 @@ pub fn privacy_entry(
     }
 }
 
-/// Token detail's private summary and action.
+/// Token detail's private summary and action. A reading from another network is ignored.
 #[uniffi::export]
 pub fn token_detail_privacy(
     network: NetworkId,
     deployment: DeploymentState,
-    strk_funded: Option<bool>,
     reading: PrivacyReading,
     token_address: String,
     state: Option<PrivacyState>,
 ) -> TokenDetailPrivacy {
-    gates::token_detail(
-        network,
-        deployment,
-        strk_funded,
-        reading,
-        &token_address,
-        state.as_ref(),
-    )
+    gates::token_detail(network, deployment, reading, &token_address, state.as_ref())
 }
 
 /// The header's private-data freshness on Home.
@@ -218,11 +205,12 @@ pub mod testing {
     pub fn entry_outcome(
         network: crate::networks::NetworkId,
         deployment: crate::send::types::DeploymentState,
+        strk_funded: Option<bool>,
         reading: super::types::PrivacyReading,
         after_read: bool,
     ) -> String {
         use super::gates::Outcome;
-        match super::gates::entry_outcome(network, deployment, reading, after_read) {
+        match super::gates::entry_outcome(network, deployment, strk_funded, reading, after_read) {
             Outcome::OpenShield => "open-shield".into(),
             Outcome::Activate => "activate".into(),
             Outcome::CheckDeployment => "check".into(),

@@ -190,13 +190,22 @@ pub enum PrivacyReading {
     },
 }
 
-/// The Home Shield tile (`wallet-shell.ts` `shieldTile`).
+/// The Home Shield tile (`wallet-shell.ts` `shieldTile`). Every enabled variant is labelled
+/// "Shield"; the variant picks the accessible name, which carries the reason the label does not
+/// spell out, and the destination.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ShieldTile {
+    /// Disabled: no STRK token is tracked on this network.
     NoStrkToken,
+    /// Undeployed and the loaded STRK balance is zero. Opens the privacy journey, which raises
+    /// the `Fund` blocker.
     FundFirst,
-    DeployAndEnable,
+    /// Undeployed (STRK funded or not yet loaded). Opens the privacy journey, which raises the
+    /// `Deploy` blocker.
+    DeployFirst,
+    /// Deployed or deployment unknown, and not read as registered. Opens the privacy journey.
     Activate,
+    /// Registered and deployed. Opens Send in Shield mode (public to private).
     Ready,
 }
 
@@ -204,9 +213,11 @@ pub enum ShieldTile {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum PrivateLine {
     Unavailable,
-    FundWithStrk,
-    DeployAndEnable,
+    /// Undeployed, funded or not: a "Shield" control that opens the privacy journey, which names
+    /// the prerequisite in the way (deploy or fund).
+    Shield,
     Discovering,
+    /// A control that opens the privacy journey.
     RegisterToStart,
     /// `compactAmount(formatted, 2)` and the symbol.
     Amount {
@@ -260,9 +271,13 @@ pub enum DetailSummary {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum DetailAction {
     None,
-    FundWithStrk,
-    DeployAndEnable,
+    /// Undeployed, funded or not: one "Shield" control that opens the privacy journey, which
+    /// names the prerequisite in the way (deploy or fund).
+    Shield,
+    /// Registered: "Shield" and "Unshield", each opening Send in its privacy mode.
     ShieldUnshield,
+    /// Deployed or deployment unknown, and not read as registered: "Go private", opening the
+    /// privacy journey.
     GoPrivate,
 }
 
