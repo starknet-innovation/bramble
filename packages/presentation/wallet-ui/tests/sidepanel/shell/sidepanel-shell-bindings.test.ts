@@ -1,9 +1,8 @@
 /**
  * Behavioural coverage for the dashboard chrome bindings under happy-dom:
- * bindDashboard (lock control + reload-balances retry), bindDeploy (the account
- * deployment action and its post-submit watch kick-off), and the bindPickers
- * network-switch and error branches not exercised by
- * tests/sidepanel/sidepanel-account-select.test.ts. Each binding is driven against a
+ * bindDashboard (lock control + reload-balances retry) and bindDeploy (the account
+ * deployment action and its post-submit watch kick-off); bindPickers lives in
+ * sidepanel-network-picker.test.ts. Each binding is driven against a
  * recording fake wallet with a minimal hand-built DOM carrying exactly the
  * ids/attributes the binders query, then real clicks are dispatched and both the
  * wallet call and the resulting DOM/toast feedback are asserted. Mirrors the
@@ -15,7 +14,6 @@ import type {
   DeploymentStatusResponse,
   WalletStatus,
 } from "../../../src/popup/responses/responses";
-import type { WalletView } from "../../../src/sidepanel/app/screens/views";
 import {
   outcomeReceiptActions,
   outcomeReceiptSection,
@@ -24,7 +22,6 @@ import { accountLabel } from "../../../src/sidepanel/shared/parts";
 import {
   bindDashboard,
   bindDeploy,
-  bindPickers,
   type ShellBindingDeps,
 } from "../../../src/sidepanel/shell/shell-bindings";
 import { registerDom, unregisterDom } from "../../support/groups-harness";
@@ -336,169 +333,6 @@ describe("bindDeploy", () => {
     );
     expect(errorToasts()).toContain("The deployment was denied.");
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
-  });
-});
-
-describe("bindPickers", () => {
-  beforeEach(() => {
-    document.body.replaceChildren();
-  });
-
-  const pickerMarkup = `
-    <button data-network-id="SN_SEPOLIA" aria-pressed="false" type="button">Sepolia</button>
-    <button data-network-id="SN_MAIN" aria-pressed="true" type="button">Mainnet</button>
-    <p id="picker-result" role="status"></p>`;
-
-  const makeDeps = (
-    container: HTMLElement,
-    wallet: Partial<Record<string, unknown>>,
-    sinks: { renders: WalletStatus[]; views: WalletView[] },
-  ): ShellBindingDeps => ({
-    app: container,
-    render: async (next) => {
-      sinks.renders.push(next);
-    },
-    setActiveView: (view) => {
-      sinks.views.push(view);
-    },
-    wallet: wallet as unknown as ShellBindingDeps["wallet"],
-  });
-
-  test("ignores a non-button carrying the network, and everything inside it", async () => {
-    // The Send form carries its own network for the explorer link. Binding on
-    // the attribute alone made every click inside it switch network and leave
-    // for settings, because the click bubbled to the form.
-    const container = mount(`
-      <form data-network-id="SN_SEPOLIA">
-        <button id="inner" type="button">Choose a recipient</button>
-      </form>
-      <p id="picker-result" role="status"></p>`);
-    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
-    const seen: string[] = [];
-    bindPickers(
-      makeDeps(
-        container,
-        {
-          setActiveNetwork: async (id: string) => {
-            seen.push(id);
-            return status;
-          },
-        },
-        sinks,
-      ),
-    );
-
-    click(container.querySelector("#inner"));
-    await tick();
-    click(container.querySelector("form"));
-    await tick();
-
-    expect(seen).toEqual([]);
-    expect(sinks.views).toEqual([]);
-  });
-
-  test("switches the network, returns to settings, and re-renders", async () => {
-    const container = mount(pickerMarkup);
-    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
-    const seen: string[] = [];
-    bindPickers(
-      makeDeps(
-        container,
-        {
-          setActiveNetwork: async (id: string) => {
-            seen.push(id);
-            return status;
-          },
-        },
-        sinks,
-      ),
-    );
-
-    click(container.querySelector('[data-network-id="SN_SEPOLIA"]'));
-    await tick();
-
-    expect(seen).toEqual(["SN_SEPOLIA"]);
-    expect(sinks.views).toEqual(["settings"]);
-    expect(sinks.renders).toEqual([status]);
-  });
-
-  test("tapping the already-active network is a no-op", async () => {
-    const container = mount(pickerMarkup);
-    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
-    let called = 0;
-    bindPickers(
-      makeDeps(
-        container,
-        {
-          setActiveNetwork: async () => {
-            called += 1;
-            return status;
-          },
-        },
-        sinks,
-      ),
-    );
-
-    click(container.querySelector('[data-network-id="SN_MAIN"]'));
-    await tick();
-
-    expect(called).toBe(0);
-    expect(sinks.views).toEqual([]);
-    expect(sinks.renders).toEqual([]);
-  });
-
-  test("ignores non-button markup that carries data-network-id", async () => {
-    const container = mount(`
-      <form data-network-id="SN_SEPOLIA">
-        <input id="inside" type="search" />
-      </form>`);
-    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
-    let called = 0;
-    bindPickers(
-      makeDeps(
-        container,
-        {
-          setActiveNetwork: async () => {
-            called += 1;
-            return status;
-          },
-        },
-        sinks,
-      ),
-    );
-
-    click(container.querySelector("#inside"));
-    await tick();
-
-    expect(called).toBe(0);
-    expect(sinks.views).toEqual([]);
-  });
-
-  test("reports a network switch failure on the picker result line", async () => {
-    const container = mount(pickerMarkup);
-    const sinks = { renders: [] as WalletStatus[], views: [] as WalletView[] };
-    const button = container.querySelector<HTMLButtonElement>('[data-network-id="SN_SEPOLIA"]');
-    bindPickers(
-      makeDeps(
-        container,
-        {
-          setActiveNetwork: async () => {
-            throw new Error("The network switch did not take.");
-          },
-        },
-        sinks,
-      ),
-    );
-
-    click(button);
-    await tick();
-
-    expect(sinks.views).toEqual([]);
-    expect(container.querySelector("#picker-result")?.textContent).toBe(
-      "The network switch did not take.",
-    );
-    expect(errorToasts()).toContain("The network switch did not take.");
-    expect(button?.disabled).toBe(false);
   });
 });
 
