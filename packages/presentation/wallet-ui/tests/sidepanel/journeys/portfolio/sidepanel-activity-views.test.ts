@@ -241,7 +241,8 @@ describe("activity journey boundaries", () => {
 
     expect(html).not.toContain("data-tx-explorer");
     expect(html).not.toContain("starkscan.co");
-    expect(html).not.toContain('data-copy="0x123"');
+    // The hash is still copyable where it cannot be linked.
+    expect(html).toContain('data-copy="0x123"');
     // No explorer, so the hash is printed as plain text rather than a link
     // that could not resolve.
     expect(html).toContain('<code class="tx-hash is-plain">');

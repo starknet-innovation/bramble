@@ -40,12 +40,14 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
   const refreshButton = app?.querySelector<HTMLButtonElement>("#activity-refresh");
   const exportButton = app?.querySelector<HTMLButtonElement>("#activity-export");
 
-  // The explorer link sits inside the row's <summary>, so a click on it would
-  // also toggle the row open behind the new tab. Following the link is the
-  // whole intent of that press, so it does not double as an expander.
-  app?.querySelectorAll<HTMLAnchorElement>("a[data-tx-hash]").forEach((link) => {
-    link.addEventListener("click", (event) => event.stopPropagation());
-  });
+  // The explorer link and the copy control sit inside the row's <summary>, so
+  // a click on either would also toggle the row. Both presses mean exactly one
+  // thing, so neither doubles as an expander.
+  app
+    ?.querySelectorAll<HTMLElement>(".tx-disclosure > summary :is(a, button)")
+    .forEach((control) => {
+      control.addEventListener("click", (event) => event.stopPropagation());
+    });
 
   refreshButton?.addEventListener("click", () => {
     buttonBusy(refreshButton, true);

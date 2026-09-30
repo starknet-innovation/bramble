@@ -47,8 +47,10 @@ export const ACTIVITY_STYLES = `
   .tx-disclosure > .disclosure-body { padding: 0 ${SPACE.sm} ${SPACE.sm}; }
   /* The shortened hash under the heading: the row's one link, and the only
      place the transaction's own identifier appears. */
+  .tx-hash-row { align-items: center; display: flex; gap: 2px; min-width: 0; }
   .tx-hash {
-    color: var(--bramble-muted); font-size: ${TYPE.body.size}; text-decoration: none; width: fit-content;
+    color: var(--bramble-muted); font-size: ${TYPE.body.size}; min-width: 0; overflow: hidden;
+    text-decoration: none; text-overflow: ellipsis; text-wrap: nowrap;
   }
   .tx-hash:hover { text-decoration: underline; text-underline-offset: 3px; }
   .tx-hash > code { font-variant-numeric: tabular-nums; }

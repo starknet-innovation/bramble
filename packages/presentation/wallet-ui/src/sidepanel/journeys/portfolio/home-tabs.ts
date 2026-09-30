@@ -183,11 +183,14 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
         <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-hidden="true" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
         <span class="tx-copy">
           <strong class="tx-title">${escapeHtml(heading)}</strong>
-          ${
-            explorer
-              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
-              : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
-          }
+          <span class="tx-hash-row">
+            ${
+              explorer
+                ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
+                : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
+            }
+            ${inlineCopyButton(entry.hash, "Copy transaction hash")}
+          </span>
         </span>
         ${
           entry.status === "accepted"
