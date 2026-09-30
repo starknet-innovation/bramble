@@ -84,6 +84,49 @@ describe("friendlyError", () => {
     expect(friendlyError(raw).message).toBe(raw);
   });
 
+  // The defect this mapping exists to fix: a raw diagnostic reaching a toast.
+  test("no longer shows developer-voice diagnostics to the reader", () => {
+    for (const raw of [
+      "add token failed",
+      "explorer fallback update failed",
+      "token detection failed",
+      "privacy service configuration failed",
+      "wallet lock incomplete",
+    ]) {
+      const { message } = friendlyError(raw);
+      expect(message).not.toBe(raw);
+      expect(message[0]).toBe(message[0]?.toUpperCase() ?? "");
+    }
+  });
+
+  // Where two failures leave the reader the same move, they get the same
+  // sentence. A dozen phrasings of "try again" is the drift this guards.
+  test("shares one sentence across a family the reader cannot tell apart", () => {
+    const saves = [
+      "display update failed",
+      "label update failed",
+      "rpc endpoint update failed",
+      "explorer fallback update failed",
+      "token visibility update failed",
+    ].map((raw) => friendlyError(raw).message);
+    expect(new Set(saves).size).toBe(1);
+
+    const routes = [
+      "swap build returned no swap call",
+      "swap build returned too many calls",
+      "swap build returned more than one swap call",
+      "swap build returned a route the wallet could not decode",
+    ].map((raw) => friendlyError(raw).message);
+    expect(new Set(routes).size).toBe(1);
+  });
+
+  // The code says group, the UI says folder. The error layer follows the UI.
+  test("calls an account group a folder", () => {
+    expect(friendlyError("group create failed").message).toContain("folder");
+    expect(friendlyError("group remove failed").message).toContain("folder");
+    expect(friendlyError("group membership update failed").message).not.toContain("group");
+  });
+
   test("falls back to a generic message for empty input", () => {
     const result = friendlyError("   ");
     expect(result.message).toBe("Something went wrong. Please try again.");

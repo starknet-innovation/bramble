@@ -16,6 +16,10 @@
  * boundary.
  */
 export const SECRET_MATERIAL_FILES = new Set([
+  // Translates raw background diagnostics into reader-facing sentences. Three
+  // of its lookup keys name secret-material fields because that is the exact
+  // text the background threw; nothing here reads, logs, or persists one.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy.ts",
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Privileged first-run boundary: the phrase is validated through Krusty and
