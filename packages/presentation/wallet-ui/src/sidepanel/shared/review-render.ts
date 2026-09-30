@@ -126,12 +126,42 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
 export const reviewFeeSection = (
   state: ReviewFeeState,
   retryAttributes: UiAttributes,
-  options: { readonly extra?: string; readonly rule?: boolean } = {},
+  options: {
+    readonly extra?: string;
+    /**
+     * The pool's own charge, in FRI. Given it, the section adds the total of
+     * what will actually leave the account — the arithmetic belongs here
+     * because only this function knows which network figure it printed.
+     */
+    readonly poolFeeFri?: string;
+    readonly rule?: boolean;
+  } = {},
 ): string => {
-  const { extra = "", rule = true } = options;
+  const { extra = "", poolFeeFri, rule = true } = options;
+  // Two fees on one screen is two numbers to add up. Stated only when both are
+  // known and share a denomination; an unlike pair fails closed rather than
+  // printing a total that means nothing.
+  const totalLine = (network: FeeEstimate): string => {
+    // Unlike denominations fail closed: a total that adds FRI to anything else
+    // would understate the cost exactly as a missing half does.
+    if (poolFeeFri === undefined || network.unit !== "FRI") {
+      return "";
+    }
+    try {
+      // Both figures reach here as base units, but the pool quotes hex and an
+      // estimate may be decimal, so each is parsed rather than compared as text.
+      const total = BigInt(network.overallFee) + BigInt(poolFeeFri);
+      return `<p class="review-fee review-fee-total">Total: ${escapeHtml(
+        formatFri(`0x${total.toString(16)}`),
+      )}</p>`;
+    } catch {
+      return "";
+    }
+  };
   // Every branch closes the same way, so a caller's extra cost line lands
   // inside the section rather than orphaned under it.
-  const boundary = (content: string): string => reviewBoundary(`${content}${extra}`, rule);
+  const boundary = (content: string, network?: FeeEstimate): string =>
+    reviewBoundary(`${content}${extra}${network ? totalLine(network) : ""}`, rule);
   if (state.feeEstimatePending === true) {
     return boundary('<p class="review-fee" role="status">Estimating network fee…</p>');
   }
@@ -151,6 +181,7 @@ export const reviewFeeSection = (
         )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
           formatFeeEstimate(state.deploymentFee),
         )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
+        total,
       );
     }
   }
@@ -178,6 +209,7 @@ export const reviewFeeSection = (
   if (state.fee) {
     return boundary(
       `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`,
+      state.fee,
     );
   }
   if (state.feeEstimateFailed === true) {

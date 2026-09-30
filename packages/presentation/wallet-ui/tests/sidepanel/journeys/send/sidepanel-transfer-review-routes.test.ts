@@ -208,6 +208,57 @@ describe("route fee lines", () => {
     }
   });
 
+  test("adds the two fees up when a route charges both", () => {
+    // 6 STRK pool charge over a 0.01 STRK network fee.
+    const shield = routeFeeHtml(routeFor("public", "private"), {
+      poolFeeFri: POOL_FEE,
+      preparation: accountPreparation(),
+      review: review(),
+    });
+    expect(shield).toContain("Estimated fee:");
+    expect(shield).toContain("Pool fee: 6 STRK");
+    expect(shield).toContain("Total: 6.01 STRK");
+
+    // A relayed route builds its own lines and totals the same pair. The
+    // shared fixture withdraws exactly the pool charge, which is the sponsored
+    // case, so this one keeps 0.01 STRK above it.
+    const withCut = {
+      ...relayed(),
+      relayFee: {
+        amount: `0x${(BigInt(POOL_FEE) + BigInt("0x2386f26fc10000")).toString(16)}`,
+        recipient: "0x2",
+        token: "0x3",
+      },
+    } as PrivacyPreparation;
+    const unshield = routeFeeHtml(routeFor("private", "public"), {
+      poolFeeFri: POOL_FEE,
+      preparation: withCut,
+      review: review(),
+    });
+    expect(unshield).toContain("Estimated fee: 0.01 STRK");
+    expect(unshield).toContain("Pool fee: 6 STRK");
+    expect(unshield).toContain("Total: 6.01 STRK");
+
+    // Sponsored gas costs the pool charge and nothing else, so no total.
+    const sponsored = routeFeeHtml(routeFor("private", "public"), {
+      poolFeeFri: POOL_FEE,
+      preparation: relayed(),
+      review: review(),
+    });
+    expect(sponsored).toContain("Sponsored");
+    expect(sponsored).not.toContain("Total:");
+  });
+
+  test("states no total when there is only one fee to state", () => {
+    // A public transfer pays network gas alone, so a total would repeat it.
+    const html = routeFeeHtml(routeFor("public", "public"), {
+      preparation: null,
+      review: review(),
+    });
+    expect(html).toContain("Estimated fee:");
+    expect(html).not.toContain("Total:");
+  });
+
   test("pairs a boxed Cost with a boxed Visibility", () => {
     const html = routeReviewFeeHtml(routeFor("public", "public"), {
       preparation: null,

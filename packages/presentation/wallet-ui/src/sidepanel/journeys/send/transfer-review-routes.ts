@@ -82,7 +82,12 @@ const relayCut = (total: string, poolFeeFri: string): bigint | null => {
 // it, and the sender's only broadcast cost is whatever the relay keeps above the
 // pool's charge. A deposit's gas is not knowable here at all: its proof, and so
 // the calldata being estimated, is built at submission.
-const networkFeeHtml = (route: SendRoute, state: RouteFeeState, poolFee: string): string => {
+const networkFeeHtml = (
+  route: SendRoute,
+  state: RouteFeeState,
+  poolFee: string,
+  poolFeeFri: string | undefined,
+): string => {
   if (route.submission === "relay") {
     const relayFee = state.preparation?.relayFee;
     const total = relayFee?.amount;
@@ -97,15 +102,25 @@ const networkFeeHtml = (route: SendRoute, state: RouteFeeState, poolFee: string)
         `${feeLine("Fee taken from your private balance", formatFri(total))}${poolFee}`,
       );
     }
+    // A sponsored route costs the pool charge and nothing else, so its total
+    // would only repeat the line above it.
+    const network = cut === null || cut === 0n ? null : `0x${cut.toString(16)}`;
     return reviewCostSection(
-      `${feeLine(
-        "Estimated fee",
-        cut === null || cut === 0n ? "Sponsored" : formatFri(`0x${cut.toString(16)}`),
-      )}${poolFee}`,
+      `${feeLine("Estimated fee", network === null ? "Sponsored" : formatFri(network))}${poolFee}${
+        network !== null && poolFeeFri !== undefined
+          ? feeLine("Total", formatFri(`0x${(BigInt(network) + BigInt(poolFeeFri)).toString(16)}`))
+          : ""
+      }`,
     );
   }
   const estimate = state.review
-    ? reviewFeeSection(state.review, { id: "review-retry-fee" }, { extra: poolFee, rule: false })
+    ? reviewFeeSection(
+        state.review,
+        { id: "review-retry-fee" },
+        // The pool charge goes in as a figure as well as a line, so the section
+        // can state what the two come to together.
+        { extra: poolFee, rule: false, ...(poolFeeFri === undefined ? {} : { poolFeeFri }) },
+      )
     : "";
   return (
     estimate || reviewCostSection(`${feeLine("Estimated fee", "charged at submission")}${poolFee}`)
@@ -129,15 +144,12 @@ const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
  * a deposit no network-fee line at all and named the relayed routes' charges
  * differently again.
  */
-export const routeFeeHtml = (route: SendRoute, state: RouteFeeState): string =>
-  networkFeeHtml(
-    route,
-    state,
-    poolFeeHtml(
-      route,
-      route.submission === "account" ? state.preparation?.poolFeeFri : state.poolFeeFri,
-    ),
-  );
+export const routeFeeHtml = (route: SendRoute, state: RouteFeeState): string => {
+  const poolFeeFri =
+    route.submission === "account" ? state.preparation?.poolFeeFri : state.poolFeeFri;
+  const charged = route.poolFeeRequired && route.feeBucket !== "none" ? poolFeeFri : undefined;
+  return networkFeeHtml(route, state, poolFeeHtml(route, poolFeeFri), charged);
+};
 
 /**
  * The fee lines followed by the disclosure, which is what the review screen
