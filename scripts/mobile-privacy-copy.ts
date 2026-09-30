@@ -7,7 +7,10 @@
 
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
-import { PRIVACY_DEPLOY_REQUIRED } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  PRIVACY_DEPLOY_REQUIRED,
+  PRIVACY_FUNDS_REQUIRED,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../packages/presentation/wallet-ui/src/popup/responses/responses";
 import { homeTabs } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/home-tabs";
 import { homeScreen } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/home-view";
@@ -161,6 +164,7 @@ export const computePrivacyCopy = (gates: {
     detailGoPrivate,
     detailShield,
     detailUnshield,
+    fundsRequired: PRIVACY_FUNDS_REQUIRED,
     headerJourney: pick(
       flow({ blocker: { kind: "service", message: "" }, stage: "blocked", tokenId }),
       /<h1[^>]*>([^<]*)<\/h1>/,
@@ -194,6 +198,7 @@ export const computePrivacyCopy = (gates: {
     statusUnavailable:
       privacyDataIssue("home", account, status, disclosureFor("failed"), false) ?? "",
     tileActivateAria: aria(tile(strk?.id ?? "", false, true, true)),
+    tileDeployAria: aria(tile(strk?.id ?? "", false, false, true)),
     tileDeployLabel: label(tile(strk?.id ?? "", false, false, true)),
     tileFundAria: aria(tile(strk?.id ?? "", false, false, false)),
     tileFundLabel: label(tile(strk?.id ?? "", false, false, false)),
