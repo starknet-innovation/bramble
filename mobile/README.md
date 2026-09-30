@@ -135,7 +135,7 @@ Status (2026-09-25, JDK 17, SDK 35, NDK 27.2, API 35 emulator): `:app:assembleDe
 `:app:testDebugUnitTest` passes 38 JVM tests; `:app:connectedDebugAndroidTest` passes 36
 instrumented tests, with the opt-in `LiveMainnetWalletTest` skipped. Several instrumented tests
 (onboarding, Home, Activity) read public mainnet data, as the iOS UI suite does; the deploy, token
-detail and deploy-notice tests route the store's chain reads through an offline fixture node
+detail and Settings deploy-row tests route the store's chain reads through an offline fixture node
 (`androidTest/.../FixtureNode.kt`) that refuses every write. `bun run mobile:lint` is clean. The
 Android job has not run in CI yet (SCOPE.md, Phase 1.1).
 
