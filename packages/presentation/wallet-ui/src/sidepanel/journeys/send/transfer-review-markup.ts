@@ -98,14 +98,6 @@ const receiptAddress = (address: string, copyLabel: string): string =>
   `<span class="send-receipt-address"><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, copyLabel)}</span>`;
 
 /**
- * Renders the receipt's transaction hash in full (the stylesheet ellipsizes
- * it) beside a copy control carrying the same value. Escaped; the caller binds
- * `[data-copy]` after mounting.
- */
-export const successHashHtml = (hash: string): string =>
-  `<code id="send-success-hash" title="${escapeHtml(hash)}">${escapeHtml(hash)}</code>${inlineCopyButton(hash, "Copy transaction hash")}`;
-
-/**
  * Renders the Send receipt sentence: "<sender> sent <amount> to <recipient>",
  * each party named when a name is known and its address copyable. A shield or
  * unshield moves value within the user's own account, so it keeps the plain
