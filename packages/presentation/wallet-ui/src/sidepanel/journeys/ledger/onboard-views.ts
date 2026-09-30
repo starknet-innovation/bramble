@@ -115,7 +115,7 @@ export const importAccountChooser = (): string => {
     <div class="add-account-chooser" role="group" aria-label="Import an existing account">
       ${chooserOption("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
       ${chooserOption("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
-      ${chooserOption("restore-ready-ledger", "shield", "Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X). Reads your device at Ready’s derivation path.")}
+      ${chooserOption("restore-ready-ledger", "shield", "Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X).")}
     </div>
     <div class="onboard-actions">
       ${button({
@@ -328,11 +328,11 @@ const pickerCopy = (
   application === READY_EIP2645_APPLICATION
     ? {
         heading: "Select Ready accounts",
-        lede: "Each address is read from your device at Ready’s derivation path; Ready accounts with on-chain activity are preselected. Ready numbers Ledger accounts after the accounts already in that wallet, so yours may be a few pages in — use Show more.",
+        lede: "Accounts with activity are preselected. Ready lists Ledger accounts last, so yours may be a few pages in — use Show more.",
       }
     : {
         heading: "Select accounts",
-        lede: "Each address is read from your device; accounts with on-chain activity are preselected.",
+        lede: "Accounts with activity are preselected.",
       };
 
 /**

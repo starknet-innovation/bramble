@@ -16,7 +16,12 @@
 import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { COPY_EXEMPT_PATHS, COPY_PATTERNS, COPY_SCAN_ROOTS } from "./copy-policy";
+import {
+  COPY_EXEMPT_PATHS,
+  COPY_EXEMPT_STRINGS,
+  COPY_PATTERNS,
+  COPY_SCAN_ROOTS,
+} from "./copy-policy";
 
 /** One flagged string, with enough context to judge it without opening the file. */
 type Finding = {
@@ -117,6 +122,7 @@ for (const root of COPY_SCAN_ROOTS) {
     const source = blankComments(await readFile(file, "utf8"));
     for (const { index, value } of copyStrings(source)) {
       if (!isProse(value)) continue;
+      if (COPY_EXEMPT_STRINGS.some((exempt) => exempt.text === value.trim())) continue;
       for (const { note, pattern, rule } of COPY_PATTERNS) {
         if (pattern.test(value)) {
           findings.push({ file, line: lineOf(source, index), note, rule, text: value.trim() });

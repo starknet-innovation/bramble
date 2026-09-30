@@ -69,7 +69,10 @@ describe("onboarding views", () => {
     expect(html).toContain('data-add-kind="import-phrase"');
     expect(html).toContain('data-add-kind="import-key"');
     expect(html).toContain('data-add-kind="restore-ready-ledger"');
-    expect(html).toContain("Ready’s derivation path");
+    // The option names the wallet the account came from; where on the device
+    // it is read from is the wallet's business, not the reader's.
+    expect(html).toContain("Ready (Argent X)");
+    expect(html).not.toContain("derivation path");
     expect((html.match(/data-add-kind="/g) ?? []).length).toBe(3);
   });
 
@@ -164,7 +167,7 @@ describe("onboarding views", () => {
     const html = ledgerAccountPicker(candidates, [ready(12).id], undefined, "argentx");
     expect(html).toContain("Select Ready accounts");
     expect(html).toContain("Ready accounts");
-    expect(html).toContain("Ready’s derivation path");
+    expect(html).not.toContain("derivation path");
     // Ready numbers Ledger accounts after the wallet's other accounts.
     expect(html).toContain("Show more");
     expect(html).toContain("a few pages in");

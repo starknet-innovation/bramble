@@ -32,6 +32,24 @@ export const COPY_EXEMPT_PATHS: readonly string[] = [
 ];
 
 /**
+ * Single strings kept against a rule they trip, each with the reason.
+ *
+ * A path exemption says "this whole surface is edited differently". This list
+ * is narrower: the rule is right in general and wrong for this one sentence,
+ * and writing it down is what separates a decision from an oversight. Keep it
+ * short — a growing list means a rule needs rewording, not more exceptions.
+ */
+export const COPY_EXEMPT_STRINGS: readonly { readonly reason: string; readonly text: string }[] = [
+  {
+    // The rule exists to stop the wallet reassuring nobody who asked. This is
+    // the one screen where they did ask: a tab the reader did not open is
+    // asking for access to the device holding their keys.
+    reason: "answers the question the Ledger grant tab is opened to raise",
+    text: "Your keys never leave your Ledger.",
+  },
+];
+
+/**
  * Directories scanned. The extension's own UI only: the UI Lab renders these
  * same templates, and the website and store listings are not covered by the
  * copy style yet.
@@ -40,6 +58,11 @@ export const COPY_SCAN_ROOTS: readonly string[] = [
   "packages/presentation/wallet-ui/src",
   "packages/features/privacy/src",
   "packages/features/settings/src",
+  // Both carry prose a user reads and neither renders through the side panel:
+  // the standalone device-permission tab, and the Ledger rejection catalog
+  // whose sentences are shown verbatim wherever a device refuses.
+  "apps/extension/src/ledger-grant",
+  "packages/platform/ledger-protocol/src",
 ];
 
 export const COPY_PATTERNS: readonly CopyPattern[] = [
@@ -54,7 +77,7 @@ export const COPY_PATTERNS: readonly CopyPattern[] = [
   },
   {
     note: "Unasked reassurance. A claim about what the wallet never does belongs in the security docs, not on a screen someone is trying to get through.",
-    pattern: /\bnever\s+(?:leaves|touches|sees|reads)\b/i,
+    pattern: /\bnever\s+(?:leave|leaves|touch|touches|see|sees|read|reads)\b/i,
     rule: "no unasked reassurance",
   },
   {

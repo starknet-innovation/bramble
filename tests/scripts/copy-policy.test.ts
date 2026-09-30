@@ -9,7 +9,7 @@
  * judgement rather than to themselves.
  */
 import { describe, expect, test } from "bun:test";
-import { COPY_EXEMPT_PATHS, COPY_PATTERNS } from "../../scripts/copy-policy";
+import { COPY_EXEMPT_PATHS, COPY_EXEMPT_STRINGS, COPY_PATTERNS } from "../../scripts/copy-policy";
 
 const rulesFor = (copy: string): readonly string[] =>
   COPY_PATTERNS.filter(({ pattern }) => pattern.test(copy)).map(({ rule }) => rule);
@@ -22,6 +22,9 @@ describe("copy patterns catch what the review deleted", () => {
     ],
     ["Nothing else will be submitted", "no unasked reassurance"],
     ["The key never leaves this device unencrypted.", "no unasked reassurance"],
+    // Plural subject. The rule read only the third-person form until the
+    // Ledger grant tab turned up a sentence it could not see.
+    ["Your keys never leave your Ledger.", "no unasked reassurance"],
     [
       "The reviewed transaction is being authorized inside the wallet.",
       "do not narrate the machine",
@@ -89,5 +92,13 @@ describe("the exemption list", () => {
         "packages/features/transactions/src/routing/verify-decode.ts".startsWith(path),
       ),
     ).toBe(true);
+  });
+
+  test("keeps only strings that a rule would otherwise flag", () => {
+    // An exemption for a string no pattern catches is dead weight that reads
+    // like a rule was bent. Each entry has to be earning its place.
+    for (const { text } of COPY_EXEMPT_STRINGS) {
+      expect(rulesFor(text), text).not.toEqual([]);
+    }
   });
 });
