@@ -79,6 +79,17 @@ const reviewBoundary = (content: string, rule = true): string =>
   </section>`;
 
 /**
+ * Wraps already-composed fee markup in the Cost box.
+ *
+ * `reviewFeeSection` builds and boxes its own lines, but the Send review also
+ * composes fee lines for routes with no estimate to section — a relay's
+ * sponsored gas, a deposit priced at submission. Those were the ones left
+ * outside a box, beside a Visibility section that had one.
+ */
+export const reviewCostSection = (trustedMarkup: string): string =>
+  reviewBoundary(trustedMarkup, false);
+
+/**
  * Renders a plain-language consequence for decisions that do not carry decoded
  * calls (connections, signatures, and configuration changes).
  */

@@ -13,7 +13,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import type { SendDisclosure, SendRoute } from "@bramble/transactions/send-routes";
 import { formatFri } from "../../shared/parts";
-import { reviewFeeSection } from "../../shared/review-render";
+import { reviewCostSection, reviewFeeSection } from "../../shared/review-render";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferReview } from "./transfer-submit";
 
@@ -93,17 +93,23 @@ const networkFeeHtml = (route: SendRoute, state: RouteFeeState, poolFee: string)
     if (total !== undefined && cut === null) {
       // The withdrawal does not decompose against the known pool fee, so it is
       // reported whole rather than split into parts that were guessed.
-      return `${feeLine("Fee taken from your private balance", formatFri(total))}${poolFee}`;
+      return reviewCostSection(
+        `${feeLine("Fee taken from your private balance", formatFri(total))}${poolFee}`,
+      );
     }
-    return `${feeLine(
-      "Estimated fee",
-      cut === null || cut === 0n ? "Sponsored" : formatFri(`0x${cut.toString(16)}`),
-    )}${poolFee}`;
+    return reviewCostSection(
+      `${feeLine(
+        "Estimated fee",
+        cut === null || cut === 0n ? "Sponsored" : formatFri(`0x${cut.toString(16)}`),
+      )}${poolFee}`,
+    );
   }
   const estimate = state.review
     ? reviewFeeSection(state.review, { id: "review-retry-fee" }, { extra: poolFee, rule: false })
     : "";
-  return estimate || `${feeLine("Estimated fee", "charged at submission")}${poolFee}`;
+  return (
+    estimate || reviewCostSection(`${feeLine("Estimated fee", "charged at submission")}${poolFee}`)
+  );
 };
 
 // The pool's per-batch charge, always named separately and always attributed to

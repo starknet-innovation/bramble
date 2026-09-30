@@ -181,6 +181,42 @@ describe("route fee lines", () => {
     }
   });
 
+  // Cost and Visibility are two answers, so the review draws two boxes. Only
+  // the account route's estimate came through the shared section, which meant
+  // a relayed or deposit route showed bare fee lines beside a boxed
+  // Visibility.
+  test("every route puts its fees in the Cost box", () => {
+    for (const [source, destination] of [
+      ["private", "private"],
+      ["private", "public"],
+      ["public", "private"],
+      ["public", "public"],
+    ] as const) {
+      const label = `${source} to ${destination}`;
+      for (const state of [
+        { poolFeeFri: POOL_FEE, preparation: relayed(), review: review() },
+        // No estimate to section: a deposit is priced at submission.
+        { poolFeeFri: POOL_FEE, preparation: relayed(), review: null },
+      ]) {
+        const html = routeFeeHtml(routeFor(source, destination), {
+          ...state,
+          preparation: source === "private" ? state.preparation : null,
+        });
+        expect(html, label).toContain('aria-label="Cost"');
+        expect(html, label).toContain('class="decision-label">Cost<');
+      }
+    }
+  });
+
+  test("pairs a boxed Cost with a boxed Visibility", () => {
+    const html = routeReviewFeeHtml(routeFor("public", "public"), {
+      preparation: null,
+      review: review(),
+    });
+    expect((html.match(/class="decision-layer/g) ?? []).length).toBe(2);
+    expect(html.indexOf('aria-label="Cost"')).toBeLessThan(html.indexOf('aria-label="Visibility"'));
+  });
+
   test("surfaces a failed estimate through the shared fee section", () => {
     const html = routeFeeHtml(routeFor("public", "public"), {
       preparation: null,
