@@ -17,12 +17,12 @@ import {
   transferSuccessSummary,
 } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-mode";
 import {
-  confirmationOutcome,
   initialTransferState,
   recipientFieldError,
 } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-model";
 import { workingStatus } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-progress-ui";
 import { reviewedState } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-submit";
+import { confirmationOutcome } from "../packages/presentation/wallet-ui/src/sidepanel/shared/confirm-submitted";
 import { reviewFeeSection } from "../packages/presentation/wallet-ui/src/sidepanel/shared/review-render";
 
 const MAINNET_ACCOUNT = "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9";
@@ -57,7 +57,6 @@ export const computeCopyVectors = () => {
   };
   const stages = [
     "recipient",
-    "asset",
     "details",
     "reviewing",
     "review",
@@ -72,8 +71,6 @@ export const computeCopyVectors = () => {
     confirmationOutcomes: (
       ["accepted", "preconfirmed", "rejected", "reverted", "pending"] as const
     ).map((status) => ({ outcome: confirmationOutcome(status), status })),
-    // The one wording mobile changes: the extension's side panel says "panel".
-    mobileWording: { keepOpen: "Keep this app open." },
     mode: transferModeCopy("send"),
     amountErrors: {
       invalid: errorText(() => parseTokenAmount("", 18)),

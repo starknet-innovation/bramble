@@ -1,6 +1,6 @@
 /**
- * Static text of the extension's Send screens and deploy notice, read by rendering the side
- * panel's own markup (`sendFlow`, `deployNotice`) and extracting each section's text in order.
+ * Static text of the extension's Send screens and the Settings deploy row, read by rendering the
+ * side panel's own markup (`sendFlow`, `settingsScreen`) and extracting each section's text in order.
  * The mobile screens show the same strings; a copy change in the extension fails the drift gate
  * until the fixture, and the Swift copy table asserted against it, follow.
  */
@@ -14,17 +14,16 @@ import {
 import { transactionRow } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/home-tabs";
 import { sendBalanceLine } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/send-model";
 import {
-  reviewDetailsHtml,
+  reviewRisksHtml,
   reviewSummaryHtml,
 } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-review-markup";
+import { settingsScreen } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/settings/settings-views";
 import { reviewFeeSection } from "../packages/presentation/wallet-ui/src/sidepanel/shared/review-render";
-import { deployNotice } from "../packages/presentation/wallet-ui/src/sidepanel/shell/wallet-shell";
 
 const ADDRESS = "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9";
 const SECTIONS = [
   "send-recipient-stage",
   "send-details",
-  "send-asset-stage",
   "send-review-stage",
   "send-working",
   "send-pending",
@@ -41,8 +40,8 @@ const texts = (html: string): string[] =>
 const attributes = (html: string, name: string): string[] =>
   [...html.matchAll(new RegExp(`${name}="([^"]+)"`, "g"))].map((match) => match[1] ?? "");
 
-// Two deploy strings exist only inside the Deploy account binding's template literals; they are
-// read from that source so a wording change there still fails the drift gate.
+// The deploy strings the binding writes (fee line, status lines, receipt titles) exist only inside
+// its literals; they are read from that source so a wording change there still fails the drift gate.
 const BINDING_SOURCE = "packages/presentation/wallet-ui/src/sidepanel/shell/shell-bindings.ts";
 
 // The details step's zero-amount gate is likewise a literal inside the Send binding.
@@ -94,27 +93,38 @@ export const computeScreenCopy = () => {
       ];
     }),
   );
-  const notice = (funded: boolean) => {
-    const markup = deployNotice(account as never, false, funded);
-    return { label: texts(markup)[0] ?? "", title: attributes(markup, "title")[0] ?? "" };
+  // Deploying first is a choice in Settings, under the account it applies to; Home no longer
+  // flags an undeployed account, because the first send deploys it.
+  const deployRow = () => {
+    const settings = settingsScreen(
+      { accounts: [account], network: "Starknet Sepolia", networkId: "SN_SEPOLIA" } as never,
+      null,
+      { commit: "", version: "" } as never,
+    );
+    const group =
+      settings.match(
+        /<section class="section">(?:(?!<\/section>)[\s\S])*?data-view="deploy-account"[\s\S]*?<\/section>/,
+      )?.[0] ?? "";
+    const [eyebrow = "", label = ""] = texts(group);
+    return { eyebrow, label };
   };
   const recipient = "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3";
-  const summary = reviewSummaryHtml({
-    amount: "1.5",
-    fiatEstimate: "",
-    recipient,
-    recipientLabel: "",
-    tokenAddress: tokens[0]?.address ?? "",
-    tokenSymbol: "STRK",
-  } as never);
-  const details = (requiresDeployment: boolean) =>
-    texts(
-      reviewDetailsHtml({
-        flags: [],
-        requiresDeployment,
-        summaries: ["Send 1.5 STRK to 0x3fa7…41a3"],
-      } as never),
-    );
+  const summary = reviewSummaryHtml(
+    {
+      amount: "1.5",
+      fiatEstimate: "",
+      recipient,
+      recipientLabel: "",
+      tokenAddress: tokens[0]?.address ?? "",
+      tokenSymbol: "STRK",
+    } as never,
+    "send",
+    { address: ADDRESS, label: "Account 1" },
+  );
+  // The confirm face shows only what needs saying: nothing on a clean send, the deployment note
+  // on an account's first one.
+  const risks = (requiresDeployment: boolean) =>
+    texts(reviewRisksHtml({ flags: [], requiresDeployment, summaries: [] } as never));
   const deployScreen = (deployment: boolean) =>
     texts(
       simpleFlowScreen("deploy-account", {
@@ -157,19 +167,26 @@ export const computeScreenCopy = () => {
     activityStatusLabels: Object.fromEntries(
       ["pending", "preconfirmed", "accepted", "rejected", "reverted"].map((status) => [
         status,
-        attributes(row(status), "aria-label")[0]?.split(", ").at(-1) ?? "",
+        attributes(row(status), "aria-label")[0]?.split(". ").at(-1) ?? "",
       ]),
     ),
     amountGate: bindingPrefix(/error: "(Enter an amount[^"]*)"/, SEND_BINDING_SOURCE),
     deployAccount: {
-      confirmPrefix: bindingPrefix(/`(Confirm deployment · )\$\{fee\}`/),
+      confirmedDescription: bindingPrefix(/confirmedDescription: "([^"]+)"/),
+      confirmedTitle: bindingPrefix(/confirmedTitle: "([^"]+)"/),
       deployed: deployScreen(true),
-      maximumFeePrefix: bindingPrefix(/`(Maximum network fee: )\$\{fee\}`/),
+      estimateFailed: bindingPrefix(/failed\(error, "([^"]+)"\)/),
+      estimating: bindingPrefix(/scopedStatus\(target, "(Estimating[^"]+)"\)/),
+      maximumFeePrefix: bindingPrefix(
+        /`(Maximum network fee: )\$\{formatFeeEstimate\(estimate\)\}`/,
+      ),
+      submittedTitle: bindingPrefix(/submittedTitle: "([^"]+)"/),
+      submitting: bindingPrefix(/scopedStatus\(target, "(Submitting[^"]+)"\)/),
       undeployed: deployScreen(false),
     },
     review: {
-      details: details(false),
-      detailsUndeployed: details(true),
+      risks: risks(false),
+      risksUndeployed: risks(true),
       shortfall: texts(
         reviewFeeSection(
           {
@@ -186,7 +203,7 @@ export const computeScreenCopy = () => {
       { formatted: null, line: sendBalanceLine("public", null, "STRK") },
       { formatted: "12.5", line: sendBalanceLine("public", "12.5", "STRK") },
     ],
-    deployNotice: { deploy: notice(true), fund: notice(false) },
+    deployRow: deployRow(),
     sections,
   };
 };

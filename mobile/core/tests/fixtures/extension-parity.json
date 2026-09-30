@@ -117,7 +117,6 @@
         "acceptable": false,
         "hint": "Enter at least 8 characters",
         "level": "empty",
-        "needsAcknowledgement": false,
         "ratio": 0,
         "value": ""
       },
@@ -125,7 +124,6 @@
         "acceptable": false,
         "hint": "Enter at least 8 characters",
         "level": "weak",
-        "needsAcknowledgement": false,
         "ratio": 0.08,
         "value": "a"
       },
@@ -133,7 +131,6 @@
         "acceptable": false,
         "hint": "Enter at least 8 characters",
         "level": "weak",
-        "needsAcknowledgement": false,
         "ratio": 0.32641942487090914,
         "value": "short"
       },
@@ -141,87 +138,76 @@
         "acceptable": false,
         "hint": "Enter at least 8 characters",
         "level": "weak",
-        "needsAcknowledgement": false,
         "ratio": 0.4,
         "value": "        x"
       },
       {
         "acceptable": true,
-        "hint": "Weak — use more characters, or more varied ones",
+        "hint": "Weak",
         "level": "weak",
-        "needsAcknowledgement": true,
         "ratio": 0.32641942487090914,
         "value": "aaaaaaaa"
       },
       {
         "acceptable": true,
-        "hint": "Weak — use more characters, or more varied ones",
+        "hint": "Weak",
         "level": "weak",
-        "needsAcknowledgement": true,
         "ratio": 0.5222710797934547,
         "value": "abcdefgh"
       },
       {
         "acceptable": true,
-        "hint": "Weak — use more characters, or more varied ones",
+        "hint": "Weak",
         "level": "weak",
-        "needsAcknowledgement": true,
         "ratio": 0.5222710797934547,
         "value": "password"
       },
       {
         "acceptable": true,
-        "hint": "Fair — 12+ characters is safer",
+        "hint": "Fair",
         "level": "fair",
-        "needsAcknowledgement": false,
         "ratio": 0.7442745387983594,
         "value": "Password1"
       },
       {
         "acceptable": true,
-        "hint": "Fair — 12+ characters is safer",
+        "hint": "Fair",
         "level": "fair",
-        "needsAcknowledgement": false,
         "ratio": 0.9124799456015206,
         "value": "Password1!"
       },
       {
         "acceptable": true,
-        "hint": "Strong passphrase",
+        "hint": "Strong",
         "level": "strong",
-        "needsAcknowledgement": false,
         "ratio": 1,
         "value": "correct horse battery staple"
       },
       {
         "acceptable": true,
-        "hint": "Strong passphrase",
+        "hint": "Strong",
         "level": "strong",
-        "needsAcknowledgement": false,
         "ratio": 1,
         "value": "correct horse battery staple!9"
       },
       {
         "acceptable": true,
-        "hint": "Strong — 12+ characters is safer",
+        "hint": "Strong",
         "level": "strong",
-        "needsAcknowledgement": false,
         "ratio": 1,
         "value": "Tr0ub4dor&3"
       },
       {
         "acceptable": true,
-        "hint": "Strong passphrase",
+        "hint": "Strong",
         "level": "strong",
-        "needsAcknowledgement": false,
         "ratio": 1,
         "value": "ünïcödé-pässphrase"
       },
       {
         "acceptable": true,
-        "hint": "Weak — use more characters, or more varied ones",
+        "hint": "Weak",
         "level": "weak",
-        "needsAcknowledgement": true,
         "ratio": 0.39409329057487913,
         "value": "🔒🔒🔒🔒🔒🔒🔒🔒🔒"
       },
@@ -229,7 +215,6 @@
         "acceptable": false,
         "hint": "Enter at least 8 characters",
         "level": "weak",
-        "needsAcknowledgement": false,
         "ratio": 0.4,
         "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       }

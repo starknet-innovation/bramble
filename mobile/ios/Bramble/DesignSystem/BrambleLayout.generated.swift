@@ -88,14 +88,6 @@ enum BrambleMetrics {
     }
     enum Complete {
         static let actionsWidth: CGFloat = 320
-        static let detailGap: CGFloat = 8
-        static let detailGlyph: CGFloat = 16
-        static let detailHeight: CGFloat = 44
-        static let detailPadding: EdgeInsets = EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
-        static let detailRadius: CGFloat = 14
-        static let detailSize: CGFloat = 12
-        static let detailsGap: CGFloat = 8
-        static let detailsWidth: CGFloat = 360
         static let padding: CGFloat = 32
     }
     enum Dock {
@@ -103,7 +95,7 @@ enum BrambleMetrics {
         static let height: CGFloat = 72
         static let item: CGFloat = 44
         static let offset: CGFloat = 16
-        static let padding: EdgeInsets = EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
+        static let padding: EdgeInsets = EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
     }
     enum Dot {
         static let degradedPulseMs: Double = 2400
@@ -314,7 +306,7 @@ enum BrambleMetrics {
         static let actionsGap: CGFloat = 8
         static let amountCardGap: CGFloat = 12
         static let amountCardPadding: EdgeInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
-        static let amountCardRadius: CGFloat = 24
+        static let amountCardRadius: CGFloat = 20
         static let amountHeight: CGFloat = 52
         static let amountSize: CGFloat = 36
         static let amountWeight: Int = 650
@@ -326,7 +318,7 @@ enum BrambleMetrics {
         static let metaSize: CGFloat = 12
         static let originHeight: CGFloat = 46
         static let originInset: CGFloat = 12
-        static let originRadius: CGFloat = 20
+        static let originRadius: CGFloat = 14
         static let receiptCodeSize: CGFloat = 12
         static let receiptGap: CGFloat = 12
         static let receiptLabelSize: CGFloat = 13
@@ -341,7 +333,7 @@ enum BrambleMetrics {
         static let searchGap: CGFloat = 8
         static let searchHeight: CGFloat = 46
         static let searchInset: CGFloat = 12
-        static let searchRadius: CGFloat = 20
+        static let searchRadius: CGFloat = 14
         static let sectionTitleSize: CGFloat = 17
         static let sectionTitleWeight: Int = 650
         static let shortcutHeight: CGFloat = 40
@@ -363,24 +355,20 @@ enum BrambleMetrics {
         static let titleSize: CGFloat = 28
     }
     enum SendReview {
-        static let disclosureBodyGap: CGFloat = 12
-        static let disclosureBodyPadding: EdgeInsets = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
-        static let disclosureHeight: CGFloat = 56
-        static let disclosurePadding: EdgeInsets = EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
-        static let disclosureRadius: CGFloat = 20
+        static let amountGap: CGFloat = 8
+        static let amountGlyph: CGFloat = 28
+        static let factCodeSize: CGFloat = 12
+        static let factGap: CGFloat = 12
+        static let factHeight: CGFloat = 56
+        static let factLabelSize: CGFloat = 13
         static let feeGap: CGFloat = 8
-        static let feePadding: EdgeInsets = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
-        static let feeRadius: CGFloat = 20
+        static let feeLayerPadding: EdgeInsets = EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16)
+        static let feeLayerRadius: CGFloat = 20
         static let headGap: CGFloat = 12
-        static let heroBottom: CGFloat = 16
-        static let heroCopyGap: CGFloat = 4
-        static let heroGap: CGFloat = 12
-        static let heroSize: CGFloat = 22
-        static let markSize: CGFloat = 40
         static let noteSize: CGFloat = 12
         static let stackGap: CGFloat = 8
         static let summaryPadding: EdgeInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
-        static let summaryRadius: CGFloat = 24
+        static let summaryRadius: CGFloat = 20
     }
     enum SendWorking {
         static let copyGap: CGFloat = 8
@@ -407,7 +395,7 @@ enum BrambleMetrics {
         static let radius: CGFloat = 14
         static let stackBottom: CGFloat = 84
         static let stackGap: CGFloat = 8
-        static let stackInset: CGFloat = 12
+        static let stackInset: CGFloat = 16
         static let weight: Int = 600
     }
     enum TokenRow {
@@ -420,7 +408,7 @@ enum BrambleMetrics {
         static let markTracking: CGFloat = 0.02
         static let markWeight: Int = 800
         static let padding: EdgeInsets = EdgeInsets(top: 12, leading: 8, bottom: 12, trailing: 8)
-        static let radius: CGFloat = 10
+        static let radius: CGFloat = 14
         static let symbolSize: CGFloat = 14
         static let symbolWeight: Int = 650
         static let valueWeight: Int = 700
@@ -443,10 +431,6 @@ enum BrambleMetrics {
         static let actionsGap: CGFloat = 8
         static let lockupHeight: CGFloat = 220
         static let lockupHeightShort: CGFloat = 160
-        static let noteGap: CGFloat = 6
-        static let noteGlyph: CGFloat = 13
-        static let noteSize: CGFloat = 12
-        static let noteTop: CGFloat = 8
         static let paddingTop: CGFloat = 26
         static let wordmarkFraction: CGFloat = 0.6
         static let wordmarkWidth: CGFloat = 220

@@ -258,6 +258,8 @@ enum class BrambleIconName(@DrawableRes val drawable: Int) {
     USER(R.drawable.ic_user),
     USERS(R.drawable.ic_users),
     GLOBE(R.drawable.ic_globe),
+    EYE(R.drawable.ic_eye),
+    EYE_OFF(R.drawable.ic_eye_off),
     EXTERNAL_LINK(R.drawable.ic_external_link),
     LINK(R.drawable.ic_link),
     LOCK(R.drawable.ic_lock),

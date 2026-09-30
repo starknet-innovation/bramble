@@ -283,6 +283,8 @@ enum BrambleIconName: String, CaseIterable {
     case user = "Icons/user"
     case users = "Icons/users"
     case globe = "Icons/globe"
+    case eye = "Icons/eye"
+    case eyeOff = "Icons/eyeOff"
     case externalLink = "Icons/externalLink"
     case link = "Icons/link"
     case lock = "Icons/lock"

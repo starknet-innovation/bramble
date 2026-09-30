@@ -40,6 +40,10 @@ export const ELEVATION_COMPONENTS = {
 const ELEVATION_IGNORED: Readonly<Record<string, string>> = {
   ".approval-takeover .request-card": "context override to none; mobile has no dApp takeover",
   "button, a.icon-button": "controls are flat (`box-shadow: none`); nothing to mirror",
+  ".drawer-network-menu":
+    "not ported yet: mobile switches network from Settings, and its drawer has no network menu",
+  ".token-dropdown-panel":
+    "mobile picks a token on its own screen, the platform idiom, not in a floating panel",
 };
 
 /** Swift identifier → the `:active` selector whose `transform: scale()` it mirrors. */

@@ -173,7 +173,6 @@ export const computePrivacyCopy = (gates: {
     noticeRegisterAction: registerAction ?? "",
     noticeRegisterBody: registerBody ?? "",
     noticeTitle: registerTitle ?? "",
-    preparingBody: pick(preparing, /<h2>[^<]*<\/h2>\s*<p>([^<]*)<\/p>/),
     preparingHint: pick(preparing, /id="privacy-liveness">([^<]*)</),
     preparingTitle: pick(preparing, /<h2>([^<]*)<\/h2>/),
     privateBalance: pick(

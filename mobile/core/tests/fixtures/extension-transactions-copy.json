@@ -36,14 +36,10 @@
         "status": "pending"
       }
     ],
-    "mobileWording": {
-      "keepOpen": "Keep this app open."
-    },
     "mode": {
       "amountLabel": "Amount to send",
       "closeLabel": "Close Send",
       "confirmLabel": "Confirm and send",
-      "failureTitle": "Send not completed",
       "noun": "Send",
       "preparing": "Preparing send",
       "progressive": "Sending",
@@ -70,20 +66,20 @@
     },
     "reviewFee": {
       "deployedFailed": [
-        "Maximum cost and constraints",
+        "Cost",
         "Couldn't estimate the network fee right now. Check your connection and retry before sending.",
         "Retry fee estimate"
       ],
-      "deployedKnown": ["Maximum cost and constraints", "Estimated fee: 0.008053 STRK"],
+      "deployedKnown": ["Cost", "Estimated fee: 0.008053 STRK"],
       "undeployedFailed": [
-        "Maximum cost and constraints",
+        "Cost",
         "Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.",
         "Retry fee estimate"
       ],
       "undeployedKnown": [
-        "Maximum cost and constraints",
-        "Estimated transaction fee: 0.008053 STRK",
-        "Estimated account deployment fee: 0.005 STRK"
+        "Cost",
+        "Estimated fee: 0.013053 STRK",
+        "Creating this account on Starknet is 0.005 STRK of that."
       ]
     },
     "reviewBlocks": {
@@ -93,11 +89,7 @@
     "stageTitles": [
       {
         "stage": "recipient",
-        "title": "Send to"
-      },
-      {
-        "stage": "asset",
-        "title": "Select an asset"
+        "title": "Send"
       },
       {
         "stage": "details",
@@ -113,7 +105,7 @@
       },
       {
         "stage": "authorizing",
-        "title": "Authorize send"
+        "title": "Sending"
       },
       {
         "stage": "broadcasting",
@@ -121,7 +113,7 @@
       },
       {
         "stage": "confirming",
-        "title": "Confirming"
+        "title": "Sending"
       },
       {
         "stage": "pending",
@@ -138,35 +130,16 @@
     ],
     "working": {
       "authorizing": {
-        "copy": "The reviewed transaction is being authorized inside the wallet.",
-        "labels": [
-          "Review locked",
-          "Sign securely",
-          "Broadcast to Starknet",
-          "Confirm on Starknet"
-        ],
-        "liveness": "Keep this panel open.",
-        "states": ["done", "active", "pending", "pending"],
-        "title": "Authorizing transaction"
+        "copy": "",
+        "title": "Sending your transaction…"
       },
       "broadcasting": {
-        "copy": "Signed. The transaction is being broadcast to Starknet.",
-        "labels": [
-          "Review locked",
-          "Sign securely",
-          "Broadcast to Starknet",
-          "Confirm on Starknet"
-        ],
-        "liveness": "Broadcasting · 0 s. Keep this panel open.",
-        "states": ["done", "done", "active", "pending"],
-        "title": "Sending to Starknet"
+        "copy": "",
+        "title": "Sending your transaction…"
       },
       "confirming": {
-        "copy": "Starknet received the transaction. Bramble is checking its chain status now.",
-        "labels": ["Review locked", "Authorized", "Broadcast complete", "Confirm on Starknet"],
-        "liveness": "Fast confirmations often arrive in under a second.",
-        "states": ["done", "done", "done", "active"],
-        "title": "Confirming on Starknet"
+        "copy": "",
+        "title": "Sending your transaction…"
       }
     },
     "successSummary": "1.5 STRK sent to 0x3fa7…41a3",
@@ -191,11 +164,21 @@
     "screens": {
       "activityRow": {
         "ariaLabels": [
-          "Transfer, pending",
-          "Sent. Send 1.5 STRK to 0x3fa7…41a3. pending. View transaction on Starkscan",
+          "Sent 1.5 STRK. pending",
+          "View this transaction on Starkscan",
+          "Copy transaction hash",
           "Copy recipient address"
         ],
-        "text": ["Sent", "To 0x3fa7…41a3", "Pending", "—", "1.5 STRK", "STR"]
+        "text": [
+          "Sent 1.5 STRK",
+          "0x2270…f099",
+          "Pending",
+          "STR",
+          "Recipient",
+          "0x3fa7…41a3",
+          "Status",
+          "Broadcast accepted. It can&#39;t be fee-bumped, replaced, or cancelled."
+        ]
       },
       "activityStatusLabels": {
         "pending": "pending",
@@ -206,80 +189,67 @@
       },
       "amountGate": "Enter an amount greater than zero.",
       "deployAccount": {
-        "confirmPrefix": "Confirm deployment · ",
+        "confirmedDescription": "This account is on Starknet and can submit transactions.",
+        "confirmedTitle": "Account deployed",
         "deployed": [
           "Deploy account",
-          "Bold Ladybird",
           "Sepolia",
-          "What will happen",
-          "Deploy this account contract on Starknet so it can submit transactions.",
           "Account",
           "Bold Ladybird",
           "Address",
           "0x2083…98d9",
-          "Contract",
-          "Starknet account",
           "Network",
           "Sepolia",
-          "Risk and recovery",
-          "Deployment creates this account on-chain. Its address and signing authority do not change.",
           "Account already deployed",
-          "Submitted to Starknet",
-          "Deployment submitted",
-          "Your account will be ready once Starknet confirms this transaction.",
-          "Back to home"
+          "Transaction",
+          "View in Activity tab",
+          "Back"
         ],
+        "estimateFailed": "Could not estimate the deployment fee",
+        "estimating": "Estimating fee…",
         "maximumFeePrefix": "Maximum network fee: ",
+        "submittedTitle": "Deployment submitted",
+        "submitting": "Submitting deployment…",
         "undeployed": [
           "Deploy account",
-          "Bold Ladybird",
           "Sepolia",
-          "What will happen",
-          "Deploy this account contract on Starknet so it can submit transactions.",
           "Account",
           "Bold Ladybird",
           "Address",
           "0x2083…98d9",
-          "Contract",
-          "Starknet account",
           "Network",
           "Sepolia",
-          "Risk and recovery",
-          "Deployment creates this account on-chain. Its address and signing authority do not change.",
-          "Review deployment",
-          "Submitted to Starknet",
-          "Deployment submitted",
-          "Your account will be ready once Starknet confirms this transaction.",
-          "Back to home"
+          "Deploy",
+          "Transaction",
+          "View in Activity tab",
+          "Back"
         ]
       },
       "review": {
-        "details": [
-          "What will happen",
-          "Send 1.5 STRK to 0x3fa7…41a3",
-          "Risk and recovery",
-          "No additional wallet warnings were detected. Verify the recipient and decoded action before confirming."
-        ],
-        "detailsUndeployed": [
-          "What will happen",
-          "Send 1.5 STRK to 0x3fa7…41a3",
+        "risks": [],
+        "risksUndeployed": [
           "Risk and recovery",
           "This account is not deployed yet; the first send also submits its deployment."
         ],
         "shortfall": [
-          "Maximum cost and constraints",
+          "Cost",
           "Estimated fee: 0.008053 STRK",
           "This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it."
         ],
         "summary": [
-          "1.5 STRK",
-          "Fiat estimate unavailable",
-          "Recipient",
+          "From",
+          "Account 1",
+          "0x2083…98d9",
+          "To",
           "0x3fa7…41a3",
-          "0x3fa7…41a3"
+          "0x3fa7…41a3",
+          "Amount",
+          "1.5 STRK",
+          "Fiat estimate unavailable"
         ],
         "summaryLabels": [
           "Copy recipient address",
+          "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
           "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
           "Copy recipient address"
         ]
@@ -294,55 +264,60 @@
           "line": "Balance 12.5 STRK"
         }
       ],
-      "deployNotice": {
-        "deploy": {
-          "label": "Deploy account",
-          "title": "This account contract is not on-chain yet. Deploying it enables transactions."
-        },
-        "fund": {
-          "label": "Fund with STRK",
-          "title": "Deploying costs a network fee. Receive STRK into this account first."
-        }
+      "deployRow": {
+        "eyebrow": "This account",
+        "label": "Deploy account"
       },
       "sections": {
         "send-recipient-stage": {
-          "ariaLabels": ["Recipient address or saved name", "Recipient sources"],
+          "ariaLabels": ["Copy sending account address", "Recipient address or saved name"],
           "placeholders": ["Address or saved name"],
           "text": [
-            "Sending from",
+            "Send from",
             "Bold Ladybird",
             "0x2083…98d9",
-            "Sending to",
-            "My accounts",
+            "Send to",
             "Address book",
+            "Save",
             "My accounts",
+            "1",
             "Bold Ladybird",
             "0x2083…98d9",
-            "Current account · shield into its private balance",
-            "Address book",
-            "Your address book has no contacts on this network.",
+            "Current",
             "No matching recipient.",
             "Continue with address"
           ]
         },
         "send-details": {
-          "ariaLabels": ["Amount to send", "Enter an amount in USD"],
+          "ariaLabels": [
+            "Copy sending account address",
+            "Send from the private balance",
+            "Copy recipient address",
+            "Receive into the private balance",
+            "Tokens you can send",
+            "Amount to send",
+            "Enter an amount in USD"
+          ],
           "placeholders": ["0"],
           "text": [
             "Accounts",
             "From",
             "Bold Ladybird",
             "0x2083…98d9",
-            "Public",
+            "Private",
             "To",
             "Not selected",
             "—",
-            "Public",
+            "Private",
             "Network",
             "Sepolia",
             "Retry",
             "Asset",
             "STRK",
+            "Your tokens",
+            "STRK",
+            "ETH",
+            "Manage tokens",
             "Amount to send",
             "Balance — STRK",
             "Half",
@@ -352,68 +327,37 @@
             "Review send"
           ]
         },
-        "send-asset-stage": {
-          "ariaLabels": ["Search tokens"],
-          "placeholders": ["Search tokens"],
-          "text": [
-            "Search tokens",
-            "Your tokens",
-            "Your balance",
-            "STRK",
-            "— STRK",
-            "—",
-            "ETH",
-            "— ETH",
-            "—",
-            "No matching token."
-          ]
-        },
         "send-review-stage": {
           "ariaLabels": [],
           "placeholders": [],
-          "text": [
-            "Review send",
-            "Edit",
-            "Technical details",
-            "Confirm only if the recipient, amount, and decoded action are correct.",
-            "Confirm and send"
-          ]
+          "text": ["Confirm and send"]
         },
         "send-working": {
-          "ariaLabels": ["Transaction status"],
+          "ariaLabels": [],
           "placeholders": [],
-          "text": [
-            "Authorizing transaction",
-            "The reviewed transaction is being authorized inside the wallet.",
-            "Review transaction",
-            "Authorize",
-            "Broadcast",
-            "Confirm on Starknet",
-            "Keep this panel open."
-          ]
+          "text": ["Sending your transaction…"]
         },
         "send-pending": {
-          "ariaLabels": [],
+          "ariaLabels": ["Copy transaction hash"],
           "placeholders": [],
           "text": [
             "Submitted to Starknet",
             "Confirmation is taking longer",
             "The transaction has a hash and remains pending. You can check again or follow it in Activity.",
             "Check confirmation",
-            "View activity"
+            "View in Activity tab"
           ]
         },
         "send-success": {
-          "ariaLabels": [],
+          "ariaLabels": ["Copy transaction hash"],
           "placeholders": [],
-          "text": ["Confirmed on Starknet", "Send complete", "View activity", "Back to home"]
+          "text": ["Send complete", "Transaction", "View in Activity tab", "Back"]
         },
         "send-failure": {
-          "ariaLabels": [],
+          "ariaLabels": ["Copy the error", "Copy transaction hash"],
           "placeholders": [],
           "text": [
-            "Nothing else will be submitted",
-            "Send not completed",
+            "Transaction not sent",
             "The transaction was not sent. Your balance is unchanged.",
             "Try again",
             "Edit transaction"

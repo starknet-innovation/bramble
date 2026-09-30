@@ -5,6 +5,7 @@
  * `bun run mobile:parity` (derivation vectors) and commit the result.
  */
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { EXPECTED_DEPENDENCIES } from "../../scripts/config-standards-policy";
 import { readMobileAssetSources, renderMobileAssets } from "../../scripts/mobile-assets";
@@ -25,6 +26,7 @@ import {
   renderPrivacyCopy,
 } from "../../scripts/mobile-privacy-copy";
 import { computePrivacyFixture, PRIVACY_FIXTURE_PATHS } from "../../scripts/mobile-privacy-fixture";
+import { PRIVACY_SDK_BUNDLE } from "../../scripts/mobile-privacy-wire";
 import {
   renderSendCopy,
   SEND_COPY_KOTLIN_PATH,
@@ -143,11 +145,16 @@ describe("mobile vault security", () => {
 });
 
 describe("mobile privacy parity", () => {
-  test("the committed privacy fixture is what the extension's privacy path does today", async () => {
-    for (const [path, part] of await computePrivacyFixture()) {
-      expect(JSON.parse(await readFile(path, "utf8"))).toEqual(part);
-    }
-  });
+  // The capture drives the vendored privacy SDK, which only the full pipeline builds (ci.yml
+  // fast-checks runs without vendored artifacts). release-validation vendors it and runs this.
+  test.skipIf(!existsSync(PRIVACY_SDK_BUNDLE))(
+    "the committed privacy fixture is what the extension's privacy path does today",
+    async () => {
+      for (const [path, part] of await computePrivacyFixture()) {
+        expect(JSON.parse(await readFile(path, "utf8"))).toEqual(part);
+      }
+    },
+  );
 
   test("the privacy copy tables are rendered from the committed fixture", async () => {
     const { copy } = JSON.parse(await readFile(PRIVACY_FIXTURE_PATHS.copy, "utf8")) as {

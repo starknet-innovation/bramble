@@ -234,7 +234,6 @@ const computeStaticGates = () => {
               "usd",
               privacy,
               DEPLOYMENTS[deployment],
-              funded,
             ),
           ),
           notice: poolNotice(reading, deployment, strk),

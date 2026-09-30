@@ -9,11 +9,7 @@
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { deriveAccount } from "@bramble/vault/accounts";
 import { decryptJson, isEncryptedEnvelope, KDF_ITERATIONS } from "@bramble/vault/encrypted-store";
-import {
-  estimatePassphraseStrength,
-  isVaultPassphrase,
-  requiresWeakPassphraseAcknowledgement,
-} from "@bramble/wallet-model/passphrase";
+import { estimatePassphraseStrength, isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 // Not a package export: the avatar is a side-panel renderer, read here only to pin the mobile port.
 import { accountAvatar } from "../packages/presentation/wallet-ui/src/sidepanel/shell/account-avatar";
 
@@ -113,7 +109,6 @@ export type ParityPassphrase = {
   readonly ratio: number;
   readonly hint: string;
   readonly acceptable: boolean;
-  readonly needsAcknowledgement: boolean;
 };
 
 /** Presentation rules the mobile apps must reproduce: avatar markup and meter readings. */
@@ -131,7 +126,6 @@ export const computeUiParity = (): {
       acceptable: isVaultPassphrase(value),
       hint: strength.hint,
       level: strength.level,
-      needsAcknowledgement: requiresWeakPassphraseAcknowledgement(value),
       ratio: strength.ratio,
       value,
     };

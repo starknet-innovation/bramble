@@ -215,31 +215,67 @@ const corpus = (): ActivityEntry[] => [
   }),
 ];
 
-const readRow = (html: string) => ({
-  accessible:
-    firstMatch(html, /<a class="tx-summary-link"[^>]*aria-label="([^"]*)"/) ??
-    (() => {
-      const strong = /<strong class="tx-summary">([^<]*)<span class="sr-only">([^<]*)<\/span>/.exec(
-        html,
-      );
-      return strong ? unescapeHtml(`${strong[1]}${strong[2]}`) : null;
-    })(),
-  amount: firstMatch(html, /<span class="tx-amount[^"]*">([^<]*)<\/span>/),
-  avatar: readGlyph(/<span class="tx-avatar">([\s\S]*?)<\/span>\s*<\/li>/.exec(html)?.[1] ?? ""),
-  copyLabel:
-    firstMatch(html, /class="[^"]*copy-inline[^"]*"[^>]*aria-label="([^"]*)"/) ??
-    firstMatch(html, /aria-label="(Copy [a-z]+ address)"/),
-  copyValue: firstMatch(html, /data-copy="([^"]*)"/),
-  fiat: firstMatch(html, /<span class="tx-fiat[^"]*">([^<]*)<\/span>/),
-  glyphLabel: firstMatch(html, /<span class="tx-kind-icon[^"]*" aria-label="([^"]*)"/),
-  glyphTitle: firstMatch(
-    html,
-    /<span class="tx-kind-icon[^"]*" aria-label="[^"]*" title="([^"]*)"/,
-  ),
-  href: firstMatch(html, /<a class="tx-summary-link" href="([^"]*)"/),
-  meta: firstMatch(html, /<span class="tx-meta [a-z]+" aria-hidden="true">([^<]*)<\/span>/),
-  timing: firstMatch(html, /<li class="tx-row" data-live-group title="([^"]*)"/),
-});
+// One attribute of a tag, whatever order the renderer writes them in.
+const attr = (tag: string, name: string): string | null =>
+  firstMatch(tag, new RegExp(`\\s${name}="([^"]*)"`));
+
+// The inline copy control inside `html`: its accessible name and the value it copies.
+const copyControl = (html: string) => {
+  const tag = /<button[^>]*\bcopy-inline\b[^>]*>/.exec(html)?.[0] ?? "";
+  return { label: attr(tag, "aria-label"), value: attr(tag, "data-copy") };
+};
+
+// A `<dt>label</dt><dd>…</dd>` fact from the row's expansion.
+const fact = (body: string, label: string): string | null => {
+  const dd = new RegExp(`<div><dt>${label}</dt><dd>([\\s\\S]*?)</dd></div>`).exec(body)?.[1];
+  return dd === undefined ? null : unescapeHtml(dd.replace(/<[^>]+>/g, "").trim());
+};
+
+// The row as `transactionRow` renders it: a disclosure whose summary carries the heading, the
+// hash and its copy control, the status word and the token mark, and whose body holds the
+// counterparty (or detail), the submission time and the provisional-status hint.
+const readRow = (html: string) => {
+  const summaryTag = /<summary[^>]*>/.exec(html)?.[0] ?? "";
+  const summary = /<summary[^>]*>([\s\S]*?)<\/summary>/.exec(html)?.[1] ?? "";
+  const body = /<div class="disclosure-body">([\s\S]*?)<\/div>\s*<\/details>/.exec(html)?.[1] ?? "";
+  const hashLink = /<a class="tx-hash"[^>]*>/.exec(summary)?.[0] ?? "";
+  const counterparty = /<div><dt>([A-Z][a-z]+)<\/dt><dd><code title="([^"]*)">([^<]*)<\/code>/.exec(
+    body,
+  );
+  const hash = copyControl(summary);
+  const peer = copyControl(body);
+  return {
+    accessible: attr(summaryTag, "aria-label"),
+    avatar: readGlyph(
+      /<span class="tx-avatar">([\s\S]*?)<\/span>\s*<span class="disclosure-mark">/.exec(
+        summary,
+      )?.[1] ?? "",
+    ),
+    counterparty: counterparty
+      ? {
+          address: unescapeHtml(counterparty[2] ?? ""),
+          copyLabel: peer.label,
+          copyValue: peer.value,
+          label: unescapeHtml(counterparty[3] ?? ""),
+          role: counterparty[1] ?? "",
+        }
+      : null,
+    detail: fact(body, "Detail"),
+    glyphTitle: firstMatch(
+      summary,
+      /<span class="tx-kind-icon[^"]*" aria-hidden="true" title="([^"]*)"/,
+    ),
+    hash: firstMatch(summary, /class="tx-hash(?: is-plain)?"[^>]*>(?:<code>)?([^<]*)</),
+    hashCopyLabel: hash.label,
+    hashCopyValue: hash.value,
+    href: attr(hashLink, "href"),
+    meta: firstMatch(summary, /<span class="tx-meta [a-z]+">([^<]*)<\/span>/),
+    statusHint: fact(body, "Status"),
+    submitted: fact(body, "Submitted"),
+    timing: firstMatch(html, /<li class="tx-row" data-live-group title="([^"]*)"/),
+    title: firstMatch(summary, /<strong class="tx-title">([^<]*)<\/strong>/),
+  };
+};
 
 /** Activity rows and day groups for a summary corpus covering every appearance rule. */
 export const appearanceBlock = () => {

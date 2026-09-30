@@ -31,7 +31,11 @@ import {
   synthPages,
 } from "./mobile-privacy-cases";
 
-const SDK_BUNDLE = "vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.js";
+/**
+ * The vendored privacy SDK bundle the wire capture drives. `bun run vendor:privacy` builds it; the
+ * offline fast-checks tier does not, so the capture cannot run there.
+ */
+export const PRIVACY_SDK_BUNDLE = "vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.js";
 // The bundled routing, exactly as the mobile core embeds it; the stub answers, nothing is sent.
 const MAINNET_ROUTING = DEFAULT_STRK20_NETWORKS.SN_MAIN;
 const RPC_URL = STARKNET_NETWORKS.SN_MAIN.rpcUrls[0] ?? "";
@@ -146,7 +150,7 @@ export const runPrivacyCase = async (scenario: PrivacyCase) => {
   resetRpcEndpointCooldownsForTests();
   // The same pinned bundle the extension ships (verified by `check:privacy`), loaded the way
   // `check-privacy-sdk.ts` loads it: the vendored JavaScript has no type declarations.
-  const sdk = (await import(pathToFileURL(resolve(SDK_BUNDLE)).href)) as PrivacySdkRuntime;
+  const sdk = (await import(pathToFileURL(resolve(PRIVACY_SDK_BUNDLE)).href)) as PrivacySdkRuntime;
   const service = createOfficialStrk20Service({
     pauseForServiceRetry: async (attempt, retryAfterMs) => {
       pauses.push({ attempt, retryAfterMs: retryAfterMs ?? null });

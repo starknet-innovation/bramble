@@ -43,10 +43,8 @@ import {
   SLOW_OBSERVATION_PERIOD_MINUTES,
   UNRESOLVED_WINDOW_MS,
 } from "../apps/extension/src/background/transactions/tx-observation";
-import {
-  CONFIRMATION_DELAYS_MS,
-  recipientFieldError,
-} from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-model";
+import { recipientFieldError } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-model";
+import { CONFIRMATION_DELAYS_MS } from "../packages/presentation/wallet-ui/src/sidepanel/shared/confirm-submitted";
 import { formatFri } from "../packages/presentation/wallet-ui/src/sidepanel/shared/parts";
 import { formatFeeEstimate } from "../packages/presentation/wallet-ui/src/sidepanel/shared/review-render";
 
