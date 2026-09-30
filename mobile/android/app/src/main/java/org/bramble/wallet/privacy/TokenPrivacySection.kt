@@ -31,43 +31,42 @@ import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.textStyle
-import org.bramble.wallet.strkFunded
 
 /**
  * The core's answer for [tokenAddress]'s private half on token detail (`tokenDetailPrivacy`),
- * from the store's real deployment judgement, STRK funding and privacy reading.
+ * from the store's real deployment judgement and privacy reading.
  */
 fun WalletStore.tokenDetailPrivacyFor(tokenAddress: String): TokenDetailPrivacy =
-    tokenDetailPrivacy(network, deployment, strkFunded, privacy.reading, tokenAddress, privacy.state)
+    tokenDetailPrivacy(network, deployment, privacy.reading, tokenAddress, privacy.state)
 
 /**
  * Token detail's private half, twin of the iOS `TokenPrivacySection`: the "Private balance" line
- * (amount, Try again, or "Register to start shielding") and the core's action. Fund with STRK
- * opens Receive; Deploy and enable and Go private open the journey; Shield and Unshield stay
- * disabled while the core's capabilities say mobile cannot submit them.
+ * (amount, Try again, or "Register to start shielding") and the core's action. Shield (an
+ * undeployed account, funded or not) and Go private open the journey, which names what is in the
+ * way; Shield and Unshield for a registered account stay disabled while the core's capabilities
+ * say mobile cannot submit them. [actions] (the token's Send) sit between the line and the action.
  */
 @Composable
 fun TokenPrivacySection(
     store: WalletStore,
     tokenAddress: String,
-    receive: () -> Unit,
     journey: () -> Unit,
+    actions: @Composable () -> Unit = {},
 ) {
     val skin = LocalSkin.current
     val detail = store.tokenDetailPrivacyFor(tokenAddress)
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
         DetailSummaryLine(store, detail.summary)
+        // The token's own actions sit between its private line and the privacy action, as the
+        // extension's `tokenActions` then `privacyActions`.
+        actions()
         when (detail.action) {
             DetailAction.NONE -> {
                 // Nothing to offer for this token here.
             }
 
-            DetailAction.FUND_WITH_STRK -> {
-                PillButton(PrivacyCopy.tileFundLabel, icon = BrambleIconName.QR_CODE, onClick = receive)
-            }
-
-            DetailAction.DEPLOY_AND_ENABLE -> {
-                PillButton(PrivacyCopy.tileDeployLabel, icon = BrambleIconName.SHIELD, onClick = journey)
+            DetailAction.SHIELD -> {
+                PillButton(PrivacyCopy.detailShield, icon = BrambleIconName.SHIELD, onClick = journey)
             }
 
             DetailAction.GO_PRIVATE -> {

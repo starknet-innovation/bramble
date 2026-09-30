@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import org.bramble.core.TokenGlyph
 
 // Structural components from `styles-base.ts`, ported from the iOS Surfaces.swift: grouped menu
 // lists with inset hairlines, the flow header with its network pill, and the onboarding badge,
@@ -179,15 +180,27 @@ fun DetailRow(
 fun TokenMark(
     address: String,
     symbol: String,
+) = TokenBadge(BrambleTokenLogos.drawables[address.lowercase()], symbol.take(1))
+
+/**
+ * The core's `tokenGlyph` as a mark (an Activity row's token, `ActivityRow.avatar`): the bundled
+ * logo the core picked by its 64-digit key, or the letter badge with the core's letters.
+ */
+@Composable
+fun TokenMark(glyph: TokenGlyph) = TokenBadge(glyph.logoAddress?.let { BrambleTokenLogos.drawables[it] }, glyph.letters)
+
+@Composable
+private fun TokenBadge(
+    logo: Int?,
+    letters: String,
 ) {
     val skin = LocalSkin.current
-    val logo = BrambleTokenLogos.drawables[address.lowercase()]
     Box(Modifier.size(BrambleSize.mark).clip(CircleShape), contentAlignment = Alignment.Center) {
         if (logo != null) {
             Image(painterResource(logo), contentDescription = null, modifier = Modifier.size(BrambleSize.mark))
         } else {
             Box(Modifier.size(BrambleSize.mark).background(skin.sunken), contentAlignment = Alignment.Center) {
-                Text(symbol.take(1), color = skin.muted, style = textStyle(BrambleTypeScale.body, BrambleWeight.bold))
+                Text(letters, color = skin.muted, style = textStyle(BrambleTypeScale.body, BrambleWeight.bold))
             }
         }
     }

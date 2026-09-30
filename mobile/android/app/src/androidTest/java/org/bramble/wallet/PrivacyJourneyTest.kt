@@ -8,6 +8,7 @@ import org.bramble.core.PrivacyBlocker
 import org.bramble.core.PrivacyReading
 import org.bramble.wallet.privacy.PrivacyCopy
 import org.bramble.wallet.privacy.PrivacyJourneyBlock
+import org.bramble.wallet.privacy.PrivacyJourneyReads
 import org.bramble.wallet.privacy.resolvePrivacyJourney
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -15,8 +16,9 @@ import org.junit.runner.RunWith
 
 /**
  * The privacy journey (`startJourney` / `continueJourney`, iOS `PrivacyJourney.start`) asks the
- * core's `privacyEntry` with the deployment it has, reads the deployment only when the core asks,
- * and stops at the core's blocker. Runs against the real core, with no wallet and no network.
+ * core's `privacyEntry` with the deployment and STRK funding it has, reads the deployment only
+ * when the core asks, and stops at the core's blocker with its hint. Runs against the real core,
+ * with no wallet and no network.
  */
 @RunWith(AndroidJUnit4::class)
 class PrivacyJourneyTest {
@@ -29,17 +31,21 @@ class PrivacyJourneyTest {
         fun run(
             network: NetworkId,
             known: DeploymentState,
+            strkFunded: Boolean? = null,
         ): PrivacyJourneyBlock =
             runBlocking {
                 resolvePrivacyJourney(
                     network,
                     known,
-                    reading = { PrivacyReading.Idle },
-                    checkDeployment = {
-                        deploymentChecks += 1
-                        deployment
-                    },
-                    read = { privacyReads += 1 },
+                    strkFunded,
+                    PrivacyJourneyReads(
+                        reading = { PrivacyReading.Idle },
+                        checkDeployment = {
+                            deploymentChecks += 1
+                            deployment
+                        },
+                        read = { privacyReads += 1 },
+                    ),
                 )
             }
     }
@@ -59,6 +65,15 @@ class PrivacyJourneyTest {
         val block = reads.run(NetworkId.MAINNET, DeploymentState.UNDEPLOYED)
         assertEquals(PrivacyBlocker.DEPLOY, block.blocker)
         assertEquals(0, reads.deploymentChecks)
+    }
+
+    @Test
+    fun unfundedUndeployedAsksForStrk() {
+        val reads = Reads(DeploymentState.UNKNOWN)
+        val block = reads.run(NetworkId.MAINNET, DeploymentState.UNDEPLOYED, strkFunded = false)
+        assertEquals(PrivacyJourneyBlock(PrivacyBlocker.FUND, PrivacyCopy.fundsRequired), block)
+        // A funded or unread balance keeps the deployment path.
+        assertEquals(PrivacyBlocker.DEPLOY, reads.run(NetworkId.MAINNET, DeploymentState.UNDEPLOYED, true).blocker)
     }
 
     @Test

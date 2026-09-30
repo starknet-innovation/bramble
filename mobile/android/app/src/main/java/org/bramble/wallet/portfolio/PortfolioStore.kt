@@ -107,7 +107,7 @@ class PortfolioStore(
     var activityView by mutableStateOf<ActivityView?>(null)
         private set
 
-    /** [activityView]'s entries grouped by day, with prices applied. */
+    /** [activityView]'s entries grouped by UTC day, as the core renders the rows (no fiat figure). */
     var groups by mutableStateOf(emptyList<ActivityDayGroup>())
         private set
 
@@ -325,7 +325,7 @@ class PortfolioStore(
         hero = portfolioHero(home?.let { unified.map { it.balance } }, view, scope != null)
         groups =
             if (current != null && activityView != null) {
-                activityGroups(activityView!!.entries, tracked.map { it.token }, view, clock())
+                activityGroups(activityView!!.entries, tracked.map { it.token }, clock())
             } else {
                 emptyList()
             }

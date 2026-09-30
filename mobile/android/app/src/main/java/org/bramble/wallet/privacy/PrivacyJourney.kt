@@ -34,35 +34,51 @@ import org.bramble.wallet.design.FlowHeader
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
+import org.bramble.wallet.design.TaskList
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.strkFunded
+
+/**
+ * How the privacy journey learns more than the store already knows.
+ *
+ * @property reading the private-balance reading as it stands now.
+ * @property checkDeployment reads the account's deployment from the chain; `UNKNOWN` on failure.
+ * @property read runs one fresh private-balance read, after which [reading] reports its result.
+ */
+data class PrivacyJourneyReads(
+    val reading: () -> PrivacyReading,
+    val checkDeployment: suspend () -> DeploymentState,
+    val read: suspend () -> Unit,
+)
 
 /**
  * `startJourney` / `continueJourney`, twin of the iOS `PrivacyJourney.start`, decided by the
- * core's [privacyEntry] from [deployment] (the store's last judgement, never assumed): the host
- * only reads what an answer asks for, [checkDeployment] or one fresh private-balance [read], and
- * asks again. A deployment that still cannot be judged, or a second `Discovering`, ends at the
- * service blocker with its hint. Never throws for a network failure: the reads report `UNKNOWN`
- * or a failed [reading].
+ * core's [privacyEntry] from [deployment] (the store's last judgement, never assumed) and
+ * [strkFunded] (the loaded public STRK balance is above zero, null while unread: only a loaded
+ * zero turns an undeployed account's Deploy blocker into Fund). The host only reads what an
+ * answer asks for through [reads], a deployment check or one fresh private-balance read, and asks
+ * again. A deployment that still cannot be judged, or a second `Discovering`, ends at the service
+ * blocker with its hint. Never throws for a network failure: the reads report `UNKNOWN` or a
+ * failed reading.
  */
 suspend fun resolvePrivacyJourney(
     network: NetworkId,
     deployment: DeploymentState,
-    reading: () -> PrivacyReading,
-    checkDeployment: suspend () -> DeploymentState,
-    read: suspend () -> Unit,
+    strkFunded: Boolean?,
+    reads: PrivacyJourneyReads,
 ): PrivacyJourneyBlock {
     var known = deployment
     var afterRead = false
     var stop: PrivacyJourneyBlock? = null
     while (stop == null) {
         stop =
-            when (val entry = privacyEntry(network, known, reading(), afterRead)) {
+            when (val entry = privacyEntry(network, known, strkFunded, reads.reading(), afterRead)) {
                 is PrivacyEntry.Blocked -> {
                     PrivacyJourneyBlock(entry.blocker, journeyHint(entry.blocker))
                 }
 
                 is PrivacyEntry.CheckDeployment -> {
-                    known = checkDeployment()
+                    known = reads.checkDeployment()
                     PrivacyJourneyBlock(PrivacyBlocker.SERVICE, PrivacyCopy.deploymentUnchecked)
                         .takeIf { known == DeploymentState.UNKNOWN }
                 }
@@ -71,7 +87,7 @@ suspend fun resolvePrivacyJourney(
                     // One fresh read; a second `Discovering` after it ends at the service blocker.
                     val readNow = !afterRead
                     if (readNow) {
-                        read()
+                        reads.read()
                         afterRead = true
                     }
                     PrivacyJourneyBlock(PrivacyBlocker.SERVICE, PrivacyCopy.blockedServiceTitle).takeIf { !readNow }
@@ -93,10 +109,14 @@ data class PrivacyJourneyBlock(
     val hint: String?,
 )
 
-/** The reason line under a blocker; service text is never shown, so a failed read has the fallback. */
+/**
+ * The reason line under a blocker: what to do before coming back (deploy, or deposit STRK).
+ * Service text is never shown, so a failed read has the fallback.
+ */
 private fun journeyHint(blocker: PrivacyBlocker): String? =
     when (blocker) {
         PrivacyBlocker.DEPLOY -> PrivacyCopy.deployRequired
+        PrivacyBlocker.FUND -> PrivacyCopy.fundsRequired
         PrivacyBlocker.SERVICE -> PrivacyCopy.blockedServiceTitle
         else -> null
     }
@@ -123,9 +143,12 @@ suspend fun WalletStore.privacyJourney(): PrivacyJourneyBlock {
     return resolvePrivacyJourney(
         network,
         deployment,
-        reading = { privacy.reading },
-        checkDeployment = { rpc.deploymentState(account.address, info) },
-        read = { refreshPrivacy() },
+        strkFunded,
+        PrivacyJourneyReads(
+            reading = { privacy.reading },
+            checkDeployment = { rpc.deploymentState(account.address, info) },
+            read = { refreshPrivacy() },
+        ),
     )
 }
 
@@ -165,7 +188,11 @@ fun PrivacyJourneyScreen(
     }
 }
 
-/** The preparing wait: a spinner, the title and body, and the way back. */
+/**
+ * The preparing wait (`privacy-views.ts` `preparing`, the discovering step): a spinner, the
+ * title, the journey's task list with its first task under way, the hint, and the way back. No
+ * body: the task list says what is happening.
+ */
 @Composable
 private fun Preparing(back: () -> Unit) {
     val skin = LocalSkin.current
@@ -180,7 +207,15 @@ private fun Preparing(back: () -> Unit) {
             color = skin.text,
             style = textStyle(BrambleTypeScale.title, BrambleWeight.bold),
         )
-        Text(PrivacyCopy.preparingBody, color = skin.muted, style = textStyle(BrambleTypeScale.body))
+        TaskList(
+            listOf(
+                PrivacyCopy.preparingTask1,
+                PrivacyCopy.preparingTask2,
+                PrivacyCopy.preparingTask3,
+                PrivacyCopy.preparingTask4,
+            ),
+            active = 0,
+        )
         Text(PrivacyCopy.preparingHint, color = skin.muted, style = textStyle(BrambleTypeScale.label))
         PillButton(PrivacyCopy.backToWallet, kind = PillKind.SECONDARY, onClick = back)
     }

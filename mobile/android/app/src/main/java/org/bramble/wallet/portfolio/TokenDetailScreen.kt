@@ -32,6 +32,7 @@ import org.bramble.core.fiatValueText
 import org.bramble.core.formatFiat
 import org.bramble.core.tokenSparkline
 import org.bramble.wallet.WalletStore
+import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleSize
 import org.bramble.wallet.design.BrambleSpace
@@ -41,10 +42,12 @@ import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.FlowHeader
 import org.bramble.wallet.design.LocalSkin
+import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.privacy.TokenPrivacySection
 import org.bramble.wallet.send.Receipt
+import org.bramble.wallet.sendRefusal
 import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.ui.shortAddress
 
@@ -54,16 +57,18 @@ private const val SPARKLINE_HEIGHT = 32.0
 
 /**
  * `tokenDetailFlow`, port of the iOS `TokenDetailView`: price with the 7-day sparkline, the
- * balance, the private half of this token ([TokenPrivacySection], from the core's
- * `tokenDetailPrivacy` over the real deployment state), and the contract receipt. [tokenId] names
- * a tracked token; one no longer tracked (a lock, a network switch) returns to the shell.
+ * balance, the token's Send (opening Send on this token, [send] with its address; shown only
+ * where the Send journey can carry it), the private half of this token ([TokenPrivacySection],
+ * from the core's `tokenDetailPrivacy` over the real deployment state), and the contract receipt.
+ * The extension's Swap is not offered: mobile has no swap flow. [tokenId] names a tracked token;
+ * one no longer tracked (a lock, a network switch) returns to the shell.
  */
 @Composable
 fun TokenDetailScreen(
     store: WalletStore,
     tokenId: String,
     back: () -> Unit,
-    receive: () -> Unit,
+    send: (String) -> Unit,
     journey: () -> Unit,
 ) {
     val portfolio = store.portfolio
@@ -79,7 +84,11 @@ fun TokenDetailScreen(
         FlowHeader(token.symbol, subtitle = token.name, network = store.networkLabel, back = back)
         PriceSection(portfolio, token)
         BalanceSection(portfolio, token)
-        TokenPrivacySection(store, token.address, receive = receive, journey = journey)
+        TokenPrivacySection(store, token.address, journey = journey) {
+            if (store.canSend(token.address)) {
+                PillButton("Send", icon = BrambleIconName.SEND) { send(token.address) }
+            }
+        }
         ContractSection(store, token)
         Spacer(Modifier.height(BrambleSpace.lg))
     }
@@ -160,6 +169,13 @@ private fun BalanceSection(
         if (fiat != null) Text(fiat, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
     }
 }
+
+/**
+ * Whether the active account can open Send on [tokenAddress]: an account the core signs for, and
+ * a token the Send journey offers (this network's own tokens).
+ */
+private fun WalletStore.canSend(tokenAddress: String): Boolean =
+    activeRecord?.let { sendRefusal(it) == null } == true && networkInfo.tokens.any { it.address == tokenAddress }
 
 /** The contract receipt: address (with its copy control), symbol, decimals, network. */
 @Composable

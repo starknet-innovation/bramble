@@ -73,10 +73,17 @@ object SecretInput {
     /** Digits and one decimal separator; a number class carries no suggestions by definition. */
     const val AMOUNT_TYPE: Int = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
 
-    /** The input type for [kind]: addresses share the word policy. */
-    fun inputType(kind: SecretKind): Int =
+    /**
+     * The input type for [kind]: addresses share the word policy. A [revealed] passphrase (the
+     * creation screens' show control, never Unlock) takes the readable word policy, so it still
+     * has no suggestions and no personalised learning while it is on screen.
+     */
+    fun inputType(
+        kind: SecretKind,
+        revealed: Boolean = false,
+    ): Int =
         when (kind) {
-            SecretKind.PASSPHRASE -> PASSPHRASE_TYPE
+            SecretKind.PASSPHRASE -> if (revealed) WORD_TYPE else PASSPHRASE_TYPE
             SecretKind.WORD, SecretKind.ADDRESS -> WORD_TYPE
             SecretKind.AMOUNT -> AMOUNT_TYPE
         }
@@ -189,6 +196,16 @@ class SecretEditText(
         imeOptions = imeAction or SecretInput.IME_FLAGS
     }
 
+    /** Switches to [type] (masking or showing a passphrase) and keeps the caret where it was. */
+    internal fun applyInputType(type: Int) {
+        if (inputType == type) return
+        val start = selectionStart
+        val end = selectionEnd
+        inputType = type
+        typeface = Typeface.DEFAULT
+        if (start >= 0 && end >= 0) setSelection(start, end)
+    }
+
     internal fun setValue(value: String) {
         if (text?.toString() == value) return
         syncing = true
@@ -217,7 +234,8 @@ fun secretFieldTag(label: String): String = "secret:$label"
  * `IME_FLAG_NO_PERSONALIZED_LEARNING`, and its editor cannot be kept out of saved state or the
  * copy menu). [accessibilityLabel] becomes the field's content description, which is also how
  * instrumented tests find it (with Espresso: the field is a platform view, not a Compose semantics
- * node). [textColor] overrides the ink, for an invalid field. The field's text is cleared when it
+ * node). [textColor] overrides the ink, for an invalid field. [revealed] shows a passphrase (the
+ * creation screens only); a new field always starts masked. The field's text is cleared when it
  * leaves the composition.
  */
 @Composable
@@ -236,6 +254,7 @@ fun SecretField(
     onFocusChange: (Boolean) -> Unit = {},
     onBackspaceWhenEmpty: () -> Unit = {},
     onImeAction: (() -> Unit)? = null,
+    revealed: Boolean = false,
 ) {
     val skin = LocalSkin.current
     AndroidView(
@@ -247,6 +266,7 @@ fun SecretField(
             edit.onFocus = onFocusChange
             edit.onBackspaceWhenEmpty = onBackspaceWhenEmpty
             edit.onImeAction = onImeAction
+            edit.applyInputType(SecretInput.inputType(kind, revealed))
             val imeOptions = imeAction or SecretInput.IME_FLAGS
             if (edit.imeOptions != imeOptions) edit.imeOptions = imeOptions
             edit.contentDescription = accessibilityLabel

@@ -28,7 +28,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.BrambleControl
@@ -44,7 +43,6 @@ import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.FlowHeader
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
-import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.SecretField
 import org.bramble.wallet.design.SecretKind
 import org.bramble.wallet.design.StatusLine
@@ -63,61 +61,87 @@ internal val capsule = RoundedCornerShape(percent = 50)
  * The Send journey in Compose, stage for stage with the iOS `SendFlowView` and the extension's
  * `send-views.ts`, built from the design components (FlowHeader, the one hardened field, pills,
  * panels) with the send stylesheet's geometry. All copy comes from the generated `SendCopy`; every
- * value shown is the core plan's. Routed from Home's Send tile (`WalletShell`, `Flow.SEND`); the
- * plan is closed when the screen leaves, and on lock by `WalletStore`.
+ * value shown is the core plan's. Routed from Home's Send tile and a token's Send (`WalletShell`,
+ * `Flow.SEND`, opening on [startToken]); [openAddressBook] takes the recipient stage's Save to the
+ * address book, and [viewActivity] leaves every flow for the Activity tab. The plan is closed when
+ * the screen leaves, and on lock by `WalletStore`.
  */
 @Composable
 fun SendScreen(
     store: WalletStore,
     back: () -> Unit,
+    viewActivity: () -> Unit,
+    openAddressBook: (() -> Unit)? = null,
+    startToken: String? = null,
 ) {
-    val model = remember { store.makeSendModel() }
+    val model = remember { store.makeSendModel(startToken) }
     if (model == null) {
         // Locked, or an account the core will not sign for (Home says why): nothing to show.
         LaunchedEffect(Unit) { back() }
         return
     }
-    val scope = rememberCoroutineScope()
     DisposableEffect(model) { onDispose { model.close() } }
+    // The address book lists the contacts as the core holds them now, not as last visited.
+    LaunchedEffect(model) { store.coordination.refresh() }
+    val saveContact =
+        openAddressBook?.let { open ->
+            { address: String ->
+                store.coordination.contactDraft = address
+                open()
+            }
+        }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
     ) {
         FlowHeader(model.title, network = store.networkLabel, back = { stepBack(model, back) })
-        when (model.stage) {
-            SendFlowModel.Stage.RECIPIENT -> {
-                RecipientStage(model)
-            }
+        StageContent(store, model, saveContact, back, viewActivity)
+        Spacer(Modifier.height(BrambleSpace.lg))
+    }
+}
 
-            SendFlowModel.Stage.ASSET -> {
-                AssetStage(store, model)
-            }
+/** The body of [model]'s current stage; [back] and [viewActivity] are the outcomes' ways off it. */
+@Composable
+private fun StageContent(
+    store: WalletStore,
+    model: SendFlowModel,
+    saveContact: ((String) -> Unit)?,
+    back: () -> Unit,
+    viewActivity: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    when (model.stage) {
+        SendFlowModel.Stage.RECIPIENT -> {
+            RecipientStage(store, model, saveContact)
+        }
 
-            SendFlowModel.Stage.DETAILS, SendFlowModel.Stage.REVIEWING -> {
-                DetailsStage(store, model) { scope.launch { model.reviewSend() } }
-            }
+        SendFlowModel.Stage.ASSET -> {
+            AssetStage(store, model)
+        }
 
-            SendFlowModel.Stage.REVIEW -> {
-                model.review?.let { review ->
-                    ReviewStage(
-                        store,
-                        model,
-                        review,
-                        retry = { scope.launch { model.retryFee() } },
-                        confirm = { scope.launch { model.confirm() } },
-                    )
-                }
-            }
+        SendFlowModel.Stage.DETAILS, SendFlowModel.Stage.REVIEWING -> {
+            DetailsStage(store, model) { scope.launch { model.reviewSend() } }
+        }
 
-            SendFlowModel.Stage.AUTHORIZING, SendFlowModel.Stage.BROADCASTING, SendFlowModel.Stage.CONFIRMING -> {
-                WorkingStage(model.stage)
-            }
-
-            SendFlowModel.Stage.PENDING, SendFlowModel.Stage.SUBMITTED, SendFlowModel.Stage.FAILED -> {
-                OutcomeStage(model, scope, back)
+        SendFlowModel.Stage.REVIEW -> {
+            model.review?.let { review ->
+                ReviewStage(
+                    store,
+                    model,
+                    review,
+                    retry = { scope.launch { model.retryFee() } },
+                    confirm = { scope.launch { model.confirm() } },
+                )
             }
         }
-        Spacer(Modifier.height(BrambleSpace.lg))
+
+        SendFlowModel.Stage.AUTHORIZING, SendFlowModel.Stage.BROADCASTING, SendFlowModel.Stage.CONFIRMING -> {
+            WorkingStage()
+        }
+
+        SendFlowModel.Stage.PENDING, SendFlowModel.Stage.SUBMITTED, SendFlowModel.Stage.FAILED -> {
+            SendOutcomeStage(store, model, scope, back, viewActivity)
+        }
     }
 }
 
@@ -141,63 +165,6 @@ private fun stepBack(
 
         else -> {
             // The working stages have no back step: the plan is mid-flight.
-        }
-    }
-}
-
-/** The pending, submitted and failed outcomes, each with its actions. */
-@Composable
-private fun OutcomeStage(
-    model: SendFlowModel,
-    scope: CoroutineScope,
-    back: () -> Unit,
-) {
-    when (model.stage) {
-        SendFlowModel.Stage.PENDING -> {
-            Outcome(
-                BrambleIconName.REFRESH,
-                LocalSkin.current.accent,
-                OutcomeCopy(SendCopy.pendingKicker, SendCopy.pendingTitle, SendCopy.pendingBody),
-                model.hash,
-            ) {
-                PillButton(SendCopy.checkConfirmation) { scope.launch { model.checkAgain() } }
-                PillButton(
-                    SendCopy.viewActivity,
-                    kind = PillKind.SECONDARY,
-                    icon = BrambleIconName.ACTIVITY,
-                ) { back() }
-            }
-        }
-
-        SendFlowModel.Stage.SUBMITTED -> {
-            val sent =
-                model.review?.let {
-                    "${it.amountDisplay} ${it.tokenSymbol}${SendCopy.sentTo}${it.recipientShort}"
-                }
-            Outcome(
-                BrambleIconName.CHECK,
-                LocalSkin.current.positive,
-                OutcomeCopy(SendCopy.successKicker, SendCopy.successTitle, sent),
-                model.hash,
-            ) {
-                PillButton(SendCopy.backToHome, onClick = back)
-            }
-        }
-
-        else -> {
-            Outcome(
-                BrambleIconName.X,
-                LocalSkin.current.danger,
-                OutcomeCopy(
-                    SendCopy.failureKicker,
-                    SendCopy.failureTitle,
-                    model.failureMessage ?: SendCopy.failureDefault,
-                ),
-                model.hash,
-            ) {
-                PillButton(SendCopy.tryAgain) { scope.launch { model.reviewSend() } }
-                PillButton(SendCopy.editTransaction, kind = PillKind.SECONDARY) { model.edit() }
-            }
         }
     }
 }
@@ -255,7 +222,7 @@ private fun DetailsStage(
         Receipt(
             listOf(
                 SendCopy.fromLabel to model.account.displayName,
-                SendCopy.toLabel to (model.recipient?.let { shortAddress(it) } ?: "—"),
+                SendCopy.toLabel to (model.recipientLabel ?: model.recipient?.let { shortAddress(it) } ?: "—"),
                 SendCopy.networkLabel to store.networkLabel,
             ),
         )

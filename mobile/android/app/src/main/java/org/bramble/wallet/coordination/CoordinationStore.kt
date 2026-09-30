@@ -48,6 +48,12 @@ class CoordinationStore(
     /** The coordination relay settings; null until read, or when the core refused to read them. */
     var relayPolicy by mutableStateOf<RelayPolicy?>(null)
         private set
+
+    /**
+     * A public, canonical address the Send recipient stage offered to save, for the address book
+     * to prefill once (it clears this as it takes it); dropped on lock.
+     */
+    var contactDraft: String? = null
     private var syncJob: Job? = null
 
     /** Bumped on lock; a core call that finishes after it must not write back. */
@@ -68,6 +74,7 @@ class CoordinationStore(
         contacts = emptyList()
         multisigs = emptyList()
         relayPolicy = null
+        contactDraft = null
     }
 
     /** Derives the coordination public key once; a failure sets [nostrUnavailable] instead of throwing. */

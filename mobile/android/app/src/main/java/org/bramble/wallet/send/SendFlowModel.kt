@@ -31,19 +31,19 @@ class SendFlowModel(
     private val core: WalletCore,
     /** The network the journey sends on; its tokens are the ones offered. */
     val network: NetworkInfo,
-    /** The sending account; the core signs by its id and refuses Braavos and Ready records. */
+    /** The sending account; the core signs by its id and refuses Braavos records. */
     val account: AccountRecord,
-    /** This network's other accounts, offered as recipients. */
-    val otherAccounts: List<AccountRecord>,
     private val balances: Map<String, String>,
     private val hooks: SendHooks = SendHooks(),
+    /** The token to open on (a token screen's Send), or null for STRK; the flow still starts at the recipient. */
+    startToken: String? = null,
 ) {
     /** The screen the journey shows, in the extension's order. */
     enum class Stage {
         /** Typing or picking the recipient. */
         RECIPIENT,
 
-        /** Choosing the token. */
+        /** Choosing the token: "Tokens you can send", the platform's own screen for the dropdown. */
         ASSET,
 
         /** Entering the amount. */
@@ -90,8 +90,20 @@ class SendFlowModel(
     var recipient by mutableStateOf<String?>(null)
         internal set
 
-    /** The token to send: STRK by default, else the network's first token. */
-    var token by mutableStateOf(network.tokens.firstOrNull { it.symbol == "STRK" } ?: network.tokens.first())
+    /**
+     * The name of the row the recipient was picked from, or matched (one of the person's accounts
+     * or a saved contact); null for an address typed fresh. Names only ever come from the person's
+     * own rows, never from the typed text, and the review keeps the real address beside them.
+     */
+    var recipientLabel by mutableStateOf<String?>(null)
+        internal set
+
+    /** The token to send: [startToken] when this network has it, else STRK, else the first token. */
+    var token by mutableStateOf(
+        network.tokens.firstOrNull { it.address == startToken }
+            ?: network.tokens.firstOrNull { it.symbol == "STRK" }
+            ?: network.tokens.first(),
+    )
         internal set
 
     /** The amount field's text, with a decimal comma turned into a point. */
@@ -128,7 +140,7 @@ class SendFlowModel(
     val title: String get() =
         when (stage) {
             Stage.RECIPIENT -> SendCopy.titleRecipient
-            Stage.ASSET -> SendCopy.titleAsset
+            Stage.ASSET -> SendCopy.tokensYouCanSend
             Stage.DETAILS, Stage.REVIEWING -> SendCopy.titleDetails
             Stage.REVIEW -> SendCopy.titleReview
             Stage.AUTHORIZING -> SendCopy.titleAuthorizing

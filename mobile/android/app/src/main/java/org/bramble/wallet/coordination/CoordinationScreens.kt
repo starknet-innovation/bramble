@@ -147,7 +147,14 @@ fun AddressBookScreen(
 ) {
     val coordination = store.coordination
     val scope = rememberCoroutineScope()
-    val draft = remember { ContactDraft() }
+    // A typed recipient Send offered to save arrives as the address, for a label to be added.
+    val draft =
+        remember {
+            ContactDraft().apply {
+                coordination.contactDraft?.let { address = it }
+                coordination.contactDraft = null
+            }
+        }
     LaunchedEffect(Unit) { coordination.refresh() }
     Page(store, "Address book", "${coordination.contacts.size} saved", back) {
         ContactFields(store, draft)

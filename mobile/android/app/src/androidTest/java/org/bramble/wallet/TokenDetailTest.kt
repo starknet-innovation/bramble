@@ -12,17 +12,18 @@ import org.bramble.wallet.design.BrambleTheme
 import org.bramble.wallet.portfolio.TokenDetailScreen
 import org.bramble.wallet.privacy.PrivacyCopy
 import org.bramble.wallet.privacy.tokenDetailPrivacyFor
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Token detail (`tokenDetailFlow`, iOS `TokenDetailView`): price, balance, contract receipt and
- * the private-balance section. The section's action is the core's `tokenDetailPrivacy` over the
- * store's real deployment judgement: for the undeployed published account it asks to fund or
- * deploy first, which an assumed Unknown deployment would never do.
+ * Token detail (`tokenDetailFlow`, iOS `TokenDetailView`): price, balance, the token's Send,
+ * contract receipt and the private-balance section. The section's action is the core's
+ * `tokenDetailPrivacy` over the store's real deployment judgement: for the undeployed published
+ * account it reads "Shield" and opens the journey, which names the prerequisite; an assumed
+ * Unknown deployment would offer "Go private" instead.
  */
 @RunWith(AndroidJUnit4::class)
 class TokenDetailTest {
@@ -36,37 +37,20 @@ class TokenDetailTest {
         openPublicWalletOn(FixtureNode(deployed = false))
         val strk = onMainThread { portfolio.tracked.first { it.token.symbol == "STRK" }.token }
         rule.setContent {
-            BrambleTheme { TokenDetailScreen(appStore, strk.id, back = {}, receive = {}, journey = {}) }
+            BrambleTheme { TokenDetailScreen(appStore, strk.id, back = {}, send = {}, journey = {}) }
         }
         waitFor(hasText("Your balance".uppercase()))
         waitFor(hasText("Contract".uppercase()))
         waitFor(hasText(strk.decimals.toString()))
         waitFor(hasContentDescription("Copy token address") and hasClickAction())
+        waitFor(hasText("Send") and hasClickAction())
 
         val action = onMainThread { tokenDetailPrivacyFor(strk.address).action }
-        assertTrue(
-            "an undeployed account is asked to fund or deploy first, not $action",
-            action == DetailAction.DEPLOY_AND_ENABLE || action == DetailAction.FUND_WITH_STRK,
-        )
-        val label =
-            if (action ==
-                DetailAction.FUND_WITH_STRK
-            ) {
-                PrivacyCopy.tileFundLabel
-            } else {
-                PrivacyCopy.tileDeployLabel
-            }
-        waitFor(hasText(label) and hasClickAction())
+        assertEquals("an undeployed account is offered Shield, funded or not", DetailAction.SHIELD, action)
+        waitFor(hasText(PrivacyCopy.detailShield) and hasClickAction())
         val assumed =
             onMainThread {
-                tokenDetailPrivacy(
-                    network,
-                    DeploymentState.UNKNOWN,
-                    strkFunded,
-                    privacy.reading,
-                    strk.address,
-                    privacy.state,
-                )
+                tokenDetailPrivacy(network, DeploymentState.UNKNOWN, privacy.reading, strk.address, privacy.state)
             }
         assertNotEquals("the real deployment changes the answer", action, assumed.action)
     }

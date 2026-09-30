@@ -38,7 +38,7 @@ enum class Flow {
     /** The privacy journey: the preparing wait, then the core's blocker. */
     PRIVACY,
 
-    /** The standalone Deploy account flow, from Home's deploy notice. */
+    /** The standalone Deploy account flow, from Settings' "This account" row. */
     DEPLOY,
 
     /** A tracked token's detail: price, balance, private balance and contract. */

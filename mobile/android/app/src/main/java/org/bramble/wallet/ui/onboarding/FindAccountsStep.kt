@@ -54,16 +54,12 @@ private const val FIND_ACCOUNTS_LEDE =
     "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. " +
         "Accounts with on-chain activity are selected automatically."
 
-private const val RESTORE_ACKNOWLEDGEMENT =
-    "I checked these account types and indices and want to restore the selected accounts on " +
-        "Starknet Mainnet."
-
 /**
  * `data-onboarding-step="recovery-accounts"` (`recovery-account-ui.ts`), twin of the iOS
  * `FindAccountsStep`: the first 20 indices searched for Bramble, Ready and Braavos accounts (the
  * core derives and judges; [RecoveryScanDriver] only moves bytes), active ones selected, an
- * advanced manual index, the acknowledgement that gates restore on every network (as the
- * extension's `refreshGate`), and one atomic restore. No "Back to passphrase": the vault is
+ * advanced manual index, and one atomic restore. The selection alone gates it, as the extension's
+ * `refreshGate` since its Mainnet acknowledgement was deleted. No "Back to passphrase": the vault is
  * already sealed with recovery pending, so a lock or kill resumes here (`Route.DISCOVERY`).
  */
 @Composable
@@ -74,7 +70,6 @@ fun FindAccountsStep(
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
     val driver = remember { RecoveryScanDriver(store.walletCore, LiveRpcTransport()) }
-    var acknowledged by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
     var restoring by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { driver.start(store.networkInfo) }
@@ -90,18 +85,9 @@ fun FindAccountsStep(
             ),
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-                ScanStatus(store, driver) {
-                    // A new search starts over, so the acknowledgement is asked for again.
-                    acknowledged = false
-                    scope.launch { driver.start(store.networkInfo) }
-                }
+                ScanStatus(store, driver) { scope.launch { driver.start(store.networkInfo) } }
                 FAMILIES.forEach { (family, title) -> FamilyDisclosure(store, driver, family, title) }
                 ManualIndex(store, driver)
-                CheckRow(
-                    RESTORE_ACKNOWLEDGEMENT,
-                    checked = acknowledged,
-                    onCheckedChange = { acknowledged = it },
-                )
                 StatusLine(result)
             }
         },
@@ -109,7 +95,7 @@ fun FindAccountsStep(
             PillButton(
                 "Restore selected accounts",
                 busy = restoring,
-                enabled = driver.selected.isNotEmpty() && acknowledged && !driver.scanning,
+                enabled = driver.selected.isNotEmpty() && !driver.scanning,
             ) {
                 restoring = true
                 result = "Restoring the selected accounts into your encrypted vault…"

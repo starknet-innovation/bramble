@@ -160,7 +160,6 @@ class Robot(
     fun reviewAndAdd(expectingShort: String?) {
         waitForText("Review your account", 20_000)
         if (expectingShort != null) waitForText(expectingShort, 20_000)
-        tap("I understand this wallet can hold real funds on Starknet Mainnet.")
         snapshot("review-account")
         tap("Add selected account")
     }
@@ -168,7 +167,7 @@ class Robot(
     /**
      * "Find your accounts" after an import: waits for the search over the configured RPC endpoint,
      * makes sure the Bramble row with [expectingShort] is checked (an unfunded account is not
-     * selected automatically), ticks the acknowledgement, and restores.
+     * selected automatically), and restores. No acknowledgement: the selection alone gates it.
      */
     fun findAndRestore(expectingShort: String) {
         waitForText("Find your accounts", 20_000)
@@ -184,7 +183,6 @@ class Robot(
                 SemanticsProperties.ToggleableState,
             ) { ToggleableState.Off }
         if (state != ToggleableState.On) node.performClick()
-        tap("I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.")
         tap("Restore selected accounts")
     }
 

@@ -69,16 +69,27 @@ fun WalletShell(store: WalletStore) {
     var flows by remember { mutableStateOf(listOf<Flow>()) }
     var accountsOpen by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
-    // The token a pushed Flow.TOKEN_DETAIL shows (the flow stack holds screens, not arguments).
+    // The token a pushed Flow.TOKEN_DETAIL shows, and the token a pushed Flow.SEND opens on (null
+    // for STRK): the flow stack holds screens, not arguments.
     var tokenId by remember { mutableStateOf("") }
+    var sendToken by remember { mutableStateOf<String?>(null) }
     val pop = { flows = flows.dropLast(1) }
     val push = { next: Flow -> flows = flows + next }
+    // A receipt's "View in Activity tab": every flow closes, whatever opened the journey.
+    val showActivity = {
+        store.tab = Tab.ACTIVITY
+        flows = emptyList()
+    }
+    val openSend = { token: String? ->
+        sendToken = token
+        push(Flow.SEND)
+    }
     BackHandler(enabled = flows.isNotEmpty()) { pop() }
 
     val flow = flows.lastOrNull()
     if (flow != null) {
         Box(Modifier.fillMaxSize().background(skin.bg).safeDrawingPadding()) {
-            FlowScreen(flow, store, tokenId, pop, push)
+            FlowScreen(flow, store, FlowArguments(tokenId, sendToken, openSend, showActivity), pop, push)
         }
         return
     }
@@ -95,7 +106,7 @@ fun WalletShell(store: WalletStore) {
         },
     ) {
         WalletHeader(store, openAccounts = { accountsOpen = true })
-        DockScreen(store, push) { id ->
+        DockScreen(store, push, openSend = { openSend(null) }) { id ->
             tokenId = id
             push(Flow.TOKEN_DETAIL)
         }
@@ -111,14 +122,29 @@ fun WalletShell(store: WalletStore) {
 }
 
 /**
- * The pushed [flow]'s screen; [pop] returns to the one below it, [push] opens another. [tokenId]
- * is the tracked token a [Flow.TOKEN_DETAIL] shows.
+ * What a pushed flow needs beyond the store, since the flow stack holds screens only.
+ *
+ * @property tokenId the tracked token a [Flow.TOKEN_DETAIL] shows.
+ * @property sendToken the token a [Flow.SEND] opens on, or null for STRK.
+ * @property openSend pushes [Flow.SEND] on a token (a token screen's Send).
+ * @property showActivity closes every flow onto the Activity tab (a receipt's "View in Activity tab").
+ */
+private data class FlowArguments(
+    val tokenId: String,
+    val sendToken: String?,
+    val openSend: (String?) -> Unit,
+    val showActivity: () -> Unit,
+)
+
+/**
+ * The pushed [flow]'s screen; [pop] returns to the one below it, [push] opens another, and
+ * [arguments] carries what the flow shows.
  */
 @Composable
 private fun FlowScreen(
     flow: Flow,
     store: WalletStore,
-    tokenId: String,
+    arguments: FlowArguments,
     pop: () -> Unit,
     push: (Flow) -> Unit,
 ) {
@@ -128,7 +154,13 @@ private fun FlowScreen(
         }
 
         Flow.SEND -> {
-            SendScreen(store, back = pop)
+            SendScreen(
+                store,
+                back = pop,
+                viewActivity = arguments.showActivity,
+                openAddressBook = { push(Flow.ADDRESS_BOOK) },
+                startToken = arguments.sendToken,
+            )
         }
 
         Flow.MANAGE_ACCOUNTS -> {
@@ -171,7 +203,7 @@ private fun FlowScreen(
         }
 
         Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL -> {
-            PortfolioFlowScreen(flow, store, tokenId, pop, push)
+            PortfolioFlowScreen(flow, store, arguments, pop, push)
         }
     }
 }
@@ -181,22 +213,22 @@ private fun FlowScreen(
 private fun PortfolioFlowScreen(
     flow: Flow,
     store: WalletStore,
-    tokenId: String,
+    arguments: FlowArguments,
     pop: () -> Unit,
     push: (Flow) -> Unit,
 ) {
     when (flow) {
         Flow.DEPLOY -> {
             org.bramble.wallet.send
-                .DeployAccountScreen(store, back = pop)
+                .DeployAccountScreen(store, viewActivity = arguments.showActivity, back = pop)
         }
 
         Flow.TOKEN_DETAIL -> {
             org.bramble.wallet.portfolio.TokenDetailScreen(
                 store,
-                tokenId,
+                arguments.tokenId,
                 back = pop,
-                receive = { push(Flow.RECEIVE) },
+                send = arguments.openSend,
                 journey = { push(Flow.PRIVACY) },
             )
         }
@@ -208,11 +240,15 @@ private fun PortfolioFlowScreen(
     }
 }
 
-/** The dock screen for the selected tab; [openToken] opens a tracked token's detail by id. */
+/**
+ * The dock screen for the selected tab; [openSend] opens the Send journey on STRK, [openToken] a
+ * tracked token's detail by id.
+ */
 @Composable
 private fun DockScreen(
     store: WalletStore,
     push: (Flow) -> Unit,
+    openSend: () -> Unit,
     openToken: (String) -> Unit,
 ) {
     when (store.tab) {
@@ -221,8 +257,7 @@ private fun DockScreen(
                 store,
                 HomeActions(
                     receive = { push(Flow.RECEIVE) },
-                    send = { push(Flow.SEND) },
-                    deploy = { push(Flow.DEPLOY) },
+                    send = openSend,
                     privacy = { push(Flow.PRIVACY) },
                     openToken = openToken,
                 ),

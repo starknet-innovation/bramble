@@ -232,7 +232,8 @@ fun IconButton(
 /**
  * `input`: elevated fill and `md` radius, with no edge. An [invalid] field turns to the
  * `dangerSoft` fill with `danger` text. The input inside is always the one hardened [SecretField]
- * (passphrases, phrase words, and the Send recipient and amount, by [kind]).
+ * (passphrases, phrase words, and the Send recipient and amount, by [kind]). [trailing] sits at
+ * the field's end (`.field-action`, the passphrase show control), and [revealed] is its state.
  */
 @Composable
 fun BrambleField(
@@ -245,29 +246,34 @@ fun BrambleField(
     invalid: Boolean = false,
     hint: String? = null,
     onSubmit: (() -> Unit)? = null,
+    revealed: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val skin = LocalSkin.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(BrambleLayout.fieldLabelGap)) {
         if (label != null) {
             Text(label, color = skin.muted, style = textStyle(BrambleTypeScale.label, BrambleWeight.semibold))
         }
-        Box(
+        Row(
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = BrambleSize.control)
                 .background(if (invalid) skin.dangerSoft else skin.elevated, RoundedCornerShape(BrambleRadius.md))
-                .padding(horizontal = BrambleSpace.md),
-            contentAlignment = Alignment.CenterStart,
+                .padding(start = BrambleSpace.md, end = if (trailing == null) BrambleSpace.md else BrambleSpace.xs),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             SecretField(
                 value = value,
                 onValueChange = onValueChange,
                 accessibilityLabel = label ?: placeholder,
                 kind = kind,
+                modifier = Modifier.weight(1f),
                 placeholder = placeholder,
                 textColor = if (invalid) skin.danger else skin.text,
                 onImeAction = onSubmit,
+                revealed = revealed,
             )
+            trailing?.invoke()
         }
         if (hint != null) Text(hint, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
     }

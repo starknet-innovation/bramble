@@ -13,8 +13,8 @@ screen, copy by copy and gate by gate. Because iOS is itself a documented mobile
 extension side panel, Android copies **iOS behaviour** wherever iOS and the extension differ. Android
 does not "fix" those differences on its own, because that would give three behaviours instead of two.
 The differences are listed in section 2.3 and belong to the `accounts` and `design-mobile`
-workstreams, which will change iOS and Android together. One exception came out of review: the
-weak-passphrase tick follows the extension, because iOS there matches neither (section 2.2).
+workstreams, which will change iOS and Android together. Since the 2026-09-30 port both apps
+follow the extension's copy review directly (section 2.2 and the port notes in section 10).
 
 Non-goals, owned by siblings (full list in section 10): friendly account names ("Amber Otter"),
 discovery, the account-type chooser (Argent, multisig), fiat, the explorer activity feed, Nostr,
@@ -96,14 +96,14 @@ back control nor the system back gesture (`BackHandler`) goes past it (iOS `repl
 
 | Step | Copy and behaviour |
 |---|---|
-| Welcome | `brand_wordmark` (220dp, content description "Bramble"). "Create a new wallet" (primary), "Add an existing wallet" (secondary), lock icon + "Encrypted locally on this device". |
+| Welcome | `brand_wordmark` (220dp, content description "Bramble"). "Create a new wallet" (primary), "Add an existing wallet" (secondary). No local-storage note (the extension dropped `.onboarding-local-note`). |
 | Method | Medallion `wallet`. "Choose how to add your wallet" / "Bring an existing Starknet wallet into Bramble.". Rows: "Recovery phrase" / "Import 12 or 24 recovery words from another wallet." (book, enabled); "Ledger hardware wallet" (shield) and "Private key" (link), both disabled with "Coming to Bramble mobile.". |
 | Recovery | "Enter your recovery phrase" / "Type each word, or paste the complete phrase into the first field. Unknown words are flagged as you go.". 3-column grid. Each cell has a right-aligned mono micro number and a mono caption input. Toggle "Use a 24-word phrase" ⇄ "Use a 12-word phrase". CTA "Continue". |
-| Passphrase | "Create your vault passphrase" / "You will use this to unlock Bramble on this device.". Field "Vault passphrase", placeholder "At least 8 characters", hint "Use at least 8 characters; 12 or more is safer. This unlocks the encrypted vault on this device.". Field "Confirm passphrase", placeholder "Enter it again". Meter and weak acknowledgement below. CTA "Continue" (create) or "Find your accounts" (import). |
-| Review | "Review your account" / "Confirm the derived public address, then add it to this wallet.". Card "Primary Bramble account" + short address (6…4); the card starts selected (iOS) and carries shadow `sm` while selected. Placeholder "Deriving account…". Mainnet checkbox "I understand this wallet can hold real funds on Starknet Mainnet.", shown only when network is mainnet. CTA "Add selected account". |
+| Passphrase | "Create your vault passphrase" / "You will use this to unlock Bramble on this device.". Field "Vault passphrase", placeholder "At least 8 characters", hint "Use at least 8 characters; 12 or more is safer. This unlocks the encrypted vault on this device.". The first field ends in a show control (`eye`/`eyeOff`, "Show passphrase" ⇄ "Hide passphrase", `passphrase-reveal.ts`): masked on every visit, a revealed value takes the readable word input type, still with no suggestions. Field "Confirm passphrase", placeholder "Enter it again". Meter below; no weak acknowledgement. CTA "Continue" (create) or "Find your accounts" (import). |
+| Review | "Review your account" / "Confirm the derived public address, then add it to this wallet.". Card "Primary Bramble account" + short address (6…4); the card starts selected (iOS) and carries shadow `sm` while selected. Placeholder "Deriving account…". No Mainnet checkbox (the extension deleted `mainnet-ack.ts`; Find your accounts lost its restore acknowledgement too). CTA "Add selected account". |
 | Save phrase | "Save your recovery phrase" / "Write these words down in order and keep them offline.". The masked grid is blurred (6dp `Modifier.blur`, API 31+; on API 28–30 an opaque sunken cover) and hidden from accessibility until revealed; revealed words carry test tags `recovery-word-N`. `FLAG_SECURE` replaces iOS's capture detection. Toggle "Show recovery phrase" ⇄ "Hide recovery phrase" (secondary, book). Hint "Anyone with these words controls the wallet. Bramble cannot recover them for you.". Status "Reveal the phrase, save it offline, then continue.". CTA "I saved my phrase", enabled while the words are shown (iOS `.disabled(!revealed)`). |
 | Confirm | "Confirm your backup" / "Enter the requested words to make sure your offline copy is accurate.". Fields "Word 3", "Word 7", "Word 11". Status "Backup confirmed." / "Enter the requested words to continue.". |
-| All set | Positive 64pt disc with `accentText` check, eyebrow "Setup complete", headline "You’re all set" (U+2019), lede "Your account is ready in Bramble. Receive assets, or deploy when you’re ready.". Detail rows: lock "Vault encrypted locally on this device", shield "Recovery and signing material stay behind the wallet boundary". CTA "Open Bramble". |
+| All set | Positive 64pt disc with `accentText` check, headline "You’re all set" (U+2019), CTA "Open Bramble". Nothing else: the eyebrow, lede and detail rows are gone. |
 
 Rules, every one of them taken from the core:
 
@@ -112,13 +112,10 @@ scores on its own. 4pt track, ease-out enter duration; weak → danger, fair →
 positive. The line shows the hint while the value is invalid or the confirmation is empty, else
 "<hint> · Passphrases match" (positive) or "Passphrases do not match".
 
-Weak acknowledgement (`WeakAck.kt`): the check row (18pt box, 4pt radius) appears only when
-`needs_acknowledgement`: "This passphrase is weak. I understand it is all that protects this wallet
-on this device." It follows the extension's `weak-passphrase-ack.ts` `sync`: the tick is cleared
-when `needs_acknowledgement` goes from true to false (the row hides), and kept while it still
-applies, so a later weak value asks again. `WeakAckStateTest` pins this. Gate:
-`acceptable && value == confirm && (!needs_ack || ticked)`. iOS never clears the tick, which is a
-gap for `design-mobile` or `accounts` to fix on iOS (noted in section 10).
+Gate (`PassphraseGate.kt`, pinned by `PassphraseGateTest`): `acceptable && confirm != "" && value ==
+confirm`. The extension deleted its weak-passphrase acknowledgement (and the core its
+`needs_acknowledgement`), so a weak value past the 8-character floor is named by the meter and
+accepted; past the floor the core's hint is just "Weak", "Fair" or "Strong".
 
 Recovery grid (`RecoveryGrid.kt`, iOS `RecoveryGrid.swift`)
 - Values are normalised with `trim().lowercase()`.
@@ -202,7 +199,7 @@ locked session's screens (and their state) leave the composition at once.
 - Action row with tiles Send (send), Swap (shuffle), Receive (qrCode), Shield (shield). Only Receive
   is enabled. Each tile has an accentSoft fill, lg radius, minimum height `BrambleSize.actionTile`,
   a 22.5dp icon over a semibold caption, and press scale 0.97.
-- "Tokens" heading plus a moreHorizontal control.
+- "Tokens" heading plus a moreHorizontal control. No deploy notice: the first send deploys.
 - Token rows: 40dp logo (section 4.2), symbol over `format_token_amount(raw, decimals, 4)` in
   tabular digits, "—" on the right, hairline dividers.
 - Activity tab (placeholder for `portfolio-activity`): "No activity yet. On-chain transactions for this
@@ -242,6 +239,7 @@ chevronRight, and hairlines are inset 16.
 | Group | Rows |
 |---|---|
 | Accounts & networks | Network (globe), value = network name |
+| This account (`SendCopy.settingsThisAccount`) | Deploy account (rocket), whatever the deployment state; opens Deploy account (a view-only account gets its refusal toast) |
 | Preferences | Appearance (settings), value "Dark"/"Light" |
 | Backup & recovery | Reveal recovery secrets (lock) |
 | Security | Unlock & auto-lock (shield), value "Fingerprint on"/"Passphrase only"; Lock wallet (lockKeyhole, no chevron); Remove wallet from this device (alert, danger) |
@@ -477,8 +475,10 @@ tests that mirror the iOS XCUITests.
   (`accounts`/`nostr-multisig`); fiat and activity (`portfolio-activity`); send, swap, shield
   (`transactions`); Keystore, biometrics, back-off and idle lock landed with `vault-security` at the merge.
 - When those land in the core or generator, Android picks them up via the bindings (seams: section 1).
-- iOS gap, for `design-mobile` or `accounts`: the iOS weak-passphrase tick is never cleared when the
-  acknowledgement stops applying; Android follows the extension (section 2.2).
+- Port of 2026-09-30 (extension copy review): Home lost its deploy notice; Settings "This account"
+  opens Deploy account, which quotes on open and has one Deploy button; Send, Activity rows and
+  privacy follow the regenerated `SendCopy`/`PrivacyCopy` and the core's new row and gate shapes.
+  Not ported: the token picker's "Manage tokens" row (Android has no token-management screen).
 
 ## 11. Review resolutions
 
@@ -489,7 +489,7 @@ tests that mirror the iOS XCUITests.
 | Word `inputType` without class bits (both reports) | `TYPE_CLASS_TEXT` always set; `SecretFieldTest` asserts the full value and the class nibble (T4) |
 | `pm clear` and the `network` argument | Orchestrator with `clearPackageData=true`; argument dropped (sections 2.1, 8.2, 8.4) |
 | Compose finders cannot type into `EditText` | Espresso added; fields found by content description after scrolling by test tag (sections 8.2, 8.4) |
-| Weak acknowledgement clearing | Follows the extension's `sync`; iOS gap noted (sections 2.2, 10) |
+| Weak acknowledgement clearing | Superseded: the extension removed the acknowledgement (section 2.2) |
 | Clipboard expiry and `EXTRA_IS_SENSITIVE` | Best-effort expiry on focus, ours-only check via the clip description; not marked sensitive, preview shown (T7) |
 | Midnight multiply colour | Composed from `bg` and `text` at the named 45% ratio, as iOS; no generator change (section 2.2) |
 | Stale balances after a network or account change (review 2) | `balances` carry the network and address they were read for; `switchNetwork`, `addAccount` and `select` clear them, a read that returns for another view is dropped, and `amount()` shows nothing for a view it was not read for |

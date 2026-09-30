@@ -215,7 +215,7 @@ private fun StepContent(
         }
 
         Step.REVIEW_ACCOUNT -> {
-            ReviewAccountStep(store, store.network) { actions.replace(Step.SAVE_PHRASE) }
+            ReviewAccountStep(store) { actions.replace(Step.SAVE_PHRASE) }
         }
 
         Step.FIND_ACCOUNTS -> {

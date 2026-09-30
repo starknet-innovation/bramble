@@ -13,34 +13,49 @@ import org.bramble.core.WalletCore
 import org.bramble.core.activityNeedsObservation
 import org.bramble.core.activityObservationPeriodFor
 import org.bramble.core.activityObservationPeriodMs
+import org.bramble.core.validateRecipient
 import org.bramble.wallet.portfolio.rawBalances
 import org.bramble.wallet.privacy.refreshPrivacy
+import org.bramble.wallet.send.RecipientBook
 import org.bramble.wallet.send.SendDriver
 import org.bramble.wallet.send.SendFlowModel
 import org.bramble.wallet.send.SendHooks
+import org.bramble.wallet.send.recipientBook
 
 // Balances and Send on [WalletStore], split from WalletStore.kt by behaviour. Main-thread only,
 // like the store.
 
 /**
- * A Send journey for the active account, with balances of this view only. Null while locked
- * and for an account the core will not sign for ([sendRefusal]: Braavos).
+ * A Send journey for the active account, with balances of this view only, opening on
+ * [startToken] (a token screen's Send) when this network has it. Null while locked and for an
+ * account the core will not sign for ([sendRefusal]: Braavos).
  */
-fun WalletStore.makeSendModel(): SendFlowModel? {
+fun WalletStore.makeSendModel(startToken: String? = null): SendFlowModel? {
     val account = activeRecord?.takeIf { sendRefusal(it) == null } ?: return null
     val current = portfolio.rawBalances(networkInfo)
     return SendFlowModel(
         walletCore,
         networkInfo,
         account,
-        records.filter {
-            it.id != account.id
-        },
         current,
         SendHooks(track = { plans += it }) { message, success ->
             showToast(message, positive = success)
         },
+        startToken,
     )
+}
+
+/**
+ * The Send recipient stage's lists on this network (`recipientBook`): the saved contacts as the
+ * coordination store last read them, then this network's accounts under their folders, the
+ * active one marked current. Contacts are saved zero-padded while account records and
+ * `validateRecipient` answer in the core's minimal form, so each contact address is put in that
+ * one form first: a typed or pasted address then finds the row it matches, whichever way it was
+ * written.
+ */
+fun WalletStore.sendRecipients(): RecipientBook {
+    val contacts = coordination.contacts.map { it.copy(address = validateRecipient(it.address) ?: it.address) }
+    return recipientBook(records, groups, contacts, activeRecord?.id)
 }
 
 /**
@@ -54,7 +69,7 @@ suspend fun WalletStore.refreshBalances(ticket: Long = session.ticket()) {
     } else {
         portfolio.refresh(force = true)
     }
-    // Deployment feeds the deploy notice and the privacy gates, so it is read before privacy.
+    // Deployment feeds the Deploy account screen and the privacy gates, so it is read before privacy.
     refreshSendState(ticket)
     if (session.isCurrent(ticket) && activeRecord?.id == account.id) {
         refreshPrivacy() // one reading per account record, fed into Home's rows

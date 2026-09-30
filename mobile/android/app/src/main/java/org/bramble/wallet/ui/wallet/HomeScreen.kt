@@ -24,15 +24,15 @@ import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
-import org.bramble.wallet.send.DeployNoticeChip
 import org.bramble.wallet.sendRefusal
 import org.bramble.wallet.strkFunded
 
 /**
- * `homeView()` from `portfolio/home-view.ts`, port of the iOS `HomeView`: hero total, the deploy
- * notice, the four major actions (Send opens `SendScreen` for an OpenZeppelin account only), and
- * the token list, all from the portfolio store (prices, tracked tokens, the one balance read). The
- * deploy notice and the Shield gate take the core's judgement of the account's deployment.
+ * `homeView()` from `portfolio/home-view.ts`, port of the iOS `HomeView`: hero total, the four
+ * major actions (Send opens `SendScreen` for an OpenZeppelin account only), and the token list,
+ * all from the portfolio store (prices, tracked tokens, the one balance read). Home no longer
+ * flags an undeployed account: the first send deploys it, and Settings' "This account" offers the
+ * Deploy account screen. The Shield gate takes the core's judgement of the account's deployment.
  */
 @Composable
 fun HomeScreen(
@@ -43,7 +43,6 @@ fun HomeScreen(
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.xl)) {
         org.bramble.wallet.portfolio
             .PortfolioHeroSection(store.portfolio)
-        DeployNoticeChip(store, receive = actions.receive, deploy = actions.deploy)
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
             val active = store.activeRecord
             ActionTile("Send", BrambleIconName.SEND, enabled = active != null, modifier = Modifier.weight(1f)) {
@@ -61,7 +60,6 @@ fun HomeScreen(
                     store.privacy.reading,
                 ),
                 modifier = Modifier.weight(1f),
-                receive = actions.receive,
                 journey = actions.privacy,
             )
         }
@@ -86,16 +84,14 @@ fun HomeScreen(
 /**
  * Where Home's controls lead, wired by the shell: the flows it pushes and a token's detail by id.
  *
- * @property receive opens Receive (also the Fund with STRK notice and Shield tile).
+ * @property receive opens Receive.
  * @property send opens the Send journey (OpenZeppelin accounts only).
- * @property deploy opens the Deploy account flow from the deploy notice.
- * @property privacy opens the privacy journey.
+ * @property privacy opens the privacy journey (every enabled Shield tile).
  * @property openToken opens a tracked token's detail by its token id.
  */
 data class HomeActions(
     val receive: () -> Unit,
     val send: () -> Unit,
-    val deploy: () -> Unit,
     val privacy: () -> Unit,
     val openToken: (String) -> Unit,
 )

@@ -24,20 +24,28 @@ fun SendFlowModel.updateAmount(text: String) {
     dropPlan()
 }
 
-/** Picks one of the person's own accounts as the recipient, then continues as typed input would. */
-fun SendFlowModel.useRecipient(address: String) {
+/** Picks a listed row (a contact or one of the person's accounts) as the recipient, under its name. */
+fun SendFlowModel.useRecipient(
+    address: String,
+    label: String,
+) {
     recipientInput = address
-    continueWithRecipient()
+    continueWithRecipient { label }
 }
 
-/** Has the core validate the typed recipient; on success moves to the amount, else shows why. */
-fun SendFlowModel.continueWithRecipient() {
+/**
+ * Has the core validate the typed recipient; on success moves to the amount, else shows why. A
+ * typed address that is already listed reads as the row it matches ([labelFor], over the core's
+ * canonical form), the same as tapping that row would.
+ */
+fun SendFlowModel.continueWithRecipient(labelFor: (String) -> String? = { null }) {
     val canonical = validateRecipient(recipientInput)
     if (canonical == null) {
         recipientError = SendCopy.invalidRecipient
         return
     }
     recipient = canonical
+    recipientLabel = labelFor(canonical)
     dropPlan()
     stage = Stage.DETAILS
 }

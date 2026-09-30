@@ -26,7 +26,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import org.bramble.core.AccountRecord
-import org.bramble.core.NetworkId
 import org.bramble.core.accountPreviewLabel
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.design.AccountAvatar
@@ -40,7 +39,6 @@ import org.bramble.wallet.design.BrambleSize
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.BrambleWeight
-import org.bramble.wallet.design.CheckRow
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.brambleShadow
@@ -53,20 +51,19 @@ import org.bramble.wallet.previewAccount
 private const val DESELECTED_CHECK_SCALE = 0.92f
 
 /**
- * `#account-preview` with the Mainnet acknowledgement, port of the iOS `ReviewAccountStep`:
- * confirm the derived public address (the new vault's active record, OpenZeppelin index 0 on this
- * network, shown with the core's 10…8 `accountPreviewLabel`), then add it. Create path only; an
- * import goes to "Find your accounts". The card starts selected.
+ * `#account-preview`, port of the iOS `ReviewAccountStep`: confirm the derived public address (the
+ * new vault's active record, OpenZeppelin index 0 on this network, shown with the core's 10…8
+ * `accountPreviewLabel`), then add it. Create path only; an import goes to "Find your accounts".
+ * The card starts selected. No Mainnet tick: the extension deleted `mainnet-ack.ts`, so the
+ * selected card alone enables the action.
  */
 @Composable
 fun ReviewAccountStep(
     store: WalletStore,
-    network: NetworkId,
     next: () -> Unit,
 ) {
     var account by remember { mutableStateOf<AccountRecord?>(null) }
     var selected by remember { mutableStateOf(true) }
-    var acknowledged by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { account = runCatching { store.previewAccount() }.getOrNull() }
     val checkScale by animateFloatAsState(
         if (selected) 1f else DESELECTED_CHECK_SCALE,
@@ -82,21 +79,12 @@ fun ReviewAccountStep(
                 lede = "Confirm the derived public address, then add it to this wallet.",
             ),
         content = {
-            Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-                ReviewCard(account, selected, checkScale) { selected = !selected }
-                if (network == NetworkId.MAINNET) {
-                    CheckRow(
-                        "I understand this wallet can hold real funds on Starknet Mainnet.",
-                        checked = acknowledged,
-                        onCheckedChange = { acknowledged = it },
-                    )
-                }
-            }
+            ReviewCard(account, selected, checkScale) { selected = !selected }
         },
         cta = {
             PillButton(
                 "Add selected account",
-                enabled = account != null && selected && (network != NetworkId.MAINNET || acknowledged),
+                enabled = account != null && selected,
                 onClick = next,
             )
         },

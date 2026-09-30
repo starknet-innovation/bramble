@@ -8,7 +8,6 @@ import org.bramble.core.SendException
 import org.bramble.core.StepReply
 import org.bramble.core.activityNeedsObservation
 import org.bramble.core.activityObservationPeriodMs
-import org.bramble.wallet.portfolio.rawBalances
 import org.bramble.wallet.send.DeployFlowModel
 import org.bramble.wallet.send.SendDriver
 
@@ -16,40 +15,9 @@ import org.bramble.wallet.send.SendDriver
 // twin of the iOS `WalletStore+Send.swift`. Main-thread only, like the store.
 
 /**
- * `deployNotice`: shown only when the core judged the account [DeploymentState.UNDEPLOYED]. With
- * [strkRaw] (base units) read as zero it asks for funding first; an unread balance still offers
- * deployment, whose review then reports the fee the account must cover.
- */
-fun deployNotice(
-    deployment: DeploymentState,
-    strkRaw: String?,
-): DeployNotice =
-    when {
-        deployment != DeploymentState.UNDEPLOYED -> DeployNotice.HIDDEN
-        strkRaw != null && strkRaw.trimStart('0').isEmpty() -> DeployNotice.FUND
-        else -> DeployNotice.DEPLOY
-    }
-
-/** What Home's deploy notice offers (`deployNotice` in the extension's home view). */
-enum class DeployNotice {
-    /** Deployed, not yet judged, or an account this core cannot deploy: no notice. */
-    HIDDEN,
-
-    /** Undeployed with a STRK balance read as zero: "Fund with STRK" opens Receive. */
-    FUND,
-
-    /** Undeployed and not known to be empty: "Deploy account" opens the Deploy flow. */
-    DEPLOY,
-}
-
-/** Home's deploy notice for the active account, from [WalletStore.deployment] and its STRK balance. */
-val WalletStore.deployNotice: DeployNotice
-    get() = deployNotice(deployment, portfolio.rawBalances(networkInfo)["STRK"])
-
-/**
- * The standalone Deploy account flow for the active account, or null while locked or for an
- * account the core builds no deployment for ([sendRefusal]: Braavos, Ready). Its plans are
- * tracked so a lock cancels them.
+ * The standalone Deploy account flow for the active account (Settings' "This account"), or null
+ * while locked or for an account the core builds no deployment for ([sendRefusal]: Braavos). Its
+ * plans are tracked so a lock cancels them.
  */
 fun WalletStore.makeDeployModel(): DeployFlowModel? {
     val account = activeRecord?.takeIf { sendRefusal(it) == null } ?: return null
@@ -57,16 +25,16 @@ fun WalletStore.makeDeployModel(): DeployFlowModel? {
 }
 
 /**
- * Refreshes [WalletStore.deployment] (for the deploy notice and the privacy gates) and settles
- * pending activity records through the core's status reconciliation (`refreshActivity`: never
- * signs; repeated not-found answers mark a record rejected). Only records the core says are still
- * observed are read, each at most once per observation period, as the extension's
+ * Refreshes [WalletStore.deployment] (for the Deploy account screen and the privacy gates), and
+ * settles pending activity records through the core's status reconciliation (`refreshActivity`:
+ * never signs; repeated not-found answers mark a record rejected). Only records the core says are
+ * still observed are read, each at most once per observation period, as the extension's
  * `tx-observation.ts`. A result that lands after a lock or an account switch is dropped.
  */
 suspend fun WalletStore.refreshSendState(ticket: Long = session.ticket()) {
     val account = activeRecord ?: return
     val network = networkInfo
-    // The deploy notice is for accounts this core can deploy; others never show it.
+    // Only accounts this core can deploy are judged; the others stay Unknown.
     val judged =
         if (sendRefusal(account) == null) rpc.deploymentState(account.address, network) else DeploymentState.UNKNOWN
     if (session.isCurrent(ticket) && activeRecord?.id == account.id) {

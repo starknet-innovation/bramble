@@ -32,22 +32,24 @@ import org.bramble.wallet.ui.wallet.ActionTile
  * decision is the core's; these only spell its answers in the extension's copy.
  */
 
-/** The tile's label and accessibility label (`shieldTile`). */
+/**
+ * The tile's label and accessibility label (`shieldTile`). Every tile reads "Shield"; the
+ * accessible name carries what the label does not spell out (fund or deploy first, activate).
+ */
 fun ShieldTile.copy(): Pair<String, String> =
     when (this) {
         ShieldTile.NO_STRK_TOKEN -> PrivacyCopy.tileShieldLabel to PrivacyCopy.tileNoTokenAria
         ShieldTile.FUND_FIRST -> PrivacyCopy.tileFundLabel to PrivacyCopy.tileFundAria
-        ShieldTile.DEPLOY_AND_ENABLE -> PrivacyCopy.tileDeployLabel to PrivacyCopy.tileDeployLabel
+        ShieldTile.DEPLOY_FIRST -> PrivacyCopy.tileDeployLabel to PrivacyCopy.tileDeployAria
         ShieldTile.ACTIVATE -> PrivacyCopy.tileShieldLabel to PrivacyCopy.tileActivateAria
         ShieldTile.READY -> PrivacyCopy.tileShieldLabel to PrivacyCopy.tileReadyAria
     }
 
-/** The value side of a row's "Private balance" line. */
+/** The value side of a row's "Private balance" line; `Shield` opens the privacy journey. */
 fun PrivateLine.text(): String =
     when (this) {
         is PrivateLine.Unavailable -> PrivacyCopy.lineUnavailable
-        is PrivateLine.FundWithStrk -> PrivacyCopy.tileFundLabel
-        is PrivateLine.DeployAndEnable -> PrivacyCopy.tileDeployLabel
+        is PrivateLine.Shield -> PrivacyCopy.detailShield
         is PrivateLine.Discovering -> PrivacyCopy.lineDiscovering
         is PrivateLine.RegisterToStart -> PrivacyCopy.registerToStart
         is PrivateLine.Amount -> text
@@ -93,12 +95,15 @@ fun PrivacyBlocker.copy(): Triple<String, String, String> =
         }
     }
 
-/** The Home Shield tile: Fund with STRK opens Receive, everything else opens the journey. */
+/**
+ * The Home Shield tile: every enabled tile opens the privacy journey, which names the blocker in
+ * the way (deploy or fund) itself. `Ready` would open Send in Shield mode, which mobile cannot
+ * submit yet, so the journey states that too. No STRK token tracked disables it.
+ */
 @Composable
 fun ShieldActionTile(
     tile: ShieldTile,
     modifier: Modifier = Modifier,
-    receive: () -> Unit,
     journey: () -> Unit,
 ) {
     val (label, accessibility) = tile.copy()
@@ -107,9 +112,8 @@ fun ShieldActionTile(
         BrambleIconName.SHIELD,
         enabled = tile != ShieldTile.NO_STRK_TOKEN,
         modifier = modifier.semantics { contentDescription = accessibility },
-    ) {
-        if (tile == ShieldTile.FUND_FIRST) receive() else journey()
-    }
+        onClick = journey,
+    )
 }
 
 /** Receive's "Public transfers only" notice; deploy-first shows text with its action suppressed. */

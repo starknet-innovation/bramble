@@ -17,13 +17,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import kotlinx.coroutines.launch
 import org.bramble.core.AccountRecord
-import org.bramble.wallet.DeployNotice
 import org.bramble.wallet.WalletStore
-import org.bramble.wallet.deployNotice
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
@@ -38,17 +34,21 @@ import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.makeDeployModel
 import org.bramble.wallet.refreshBalances
+import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.ui.shortAddress
 
 /**
- * `deploy-account` from `flows.ts`, port of the iOS `DeployAccountView`: what will happen, the
- * account receipt, the risk note, then "Review deployment" → "Confirm deployment · <fee>" →
- * "Deployment submitted". Built from the Send screens' receipt and outcome, so both flows share
- * one layout. Every value shown is the core plan's; the plan closes when the screen leaves.
+ * `deploy-account` from `flows.ts` with the extension's `bindDeploy`, port of the iOS
+ * `DeployAccountView`: the account, address and network, the fee quoted as the screen opens, one
+ * Deploy button, then the receipt ("Deployment submitted", firming up to "Account deployed").
+ * Opened from Settings' "This account"; [viewActivity] leaves every flow for the Activity tab.
+ * Built from the Send screens' receipt and outcome, so both flows share one layout. Every value
+ * shown is the core plan's; the plan closes when the screen leaves.
  */
 @Composable
 fun DeployAccountScreen(
     store: WalletStore,
+    viewActivity: () -> Unit,
     back: () -> Unit,
 ) {
     val model = remember { store.makeDeployModel() }
@@ -59,13 +59,19 @@ fun DeployAccountScreen(
         return
     }
     DisposableEffect(model) { onDispose { model.close() } }
+    LaunchedEffect(model) { model.open(store.deployment) }
+    // Leaving re-reads balances and deployment, so Settings and the privacy gates see the result.
+    val leave = { exit: () -> Unit ->
+        store.appScope.launch { store.refreshBalances() }
+        exit()
+    }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = BrambleSpace.lg),
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
     ) {
-        FlowHeader(SendCopy.deployTitle, network = store.networkLabel, back = back)
+        FlowHeader(SendCopy.deployTitle, network = store.networkLabel, back = { leave(back) })
         if (model.stage == DeployFlowModel.Stage.SUBMITTED) {
-            Submitted(store, model, back)
+            Submitted(store, model, viewActivity = { leave(viewActivity) }, back = { leave(back) })
         } else {
             DeployForm(store, model, account)
         }
@@ -73,7 +79,7 @@ fun DeployAccountScreen(
     }
 }
 
-/** The review form: outcome, receipt, risk, the reviewed fee, the failure line and the action. */
+/** The account receipt, the Cost box with the quoted fee (or why there is none), and Deploy. */
 @Composable
 private fun DeployForm(
     store: WalletStore,
@@ -82,20 +88,16 @@ private fun DeployForm(
 ) {
     val skin = LocalSkin.current
     val scope = rememberCoroutineScope()
+    val view = deployView(model.stage, model.fee, model.problem)
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
-        Eyebrow(SendCopy.whatWillHappen)
-        Text(SendCopy.deployOutcome, color = skin.text, style = textStyle(BrambleTypeScale.body))
         Receipt(
             listOf(
                 SendCopy.deployAccountRow to account.displayName,
                 SendCopy.deployAddressRow to shortAddress(account.address),
-                SendCopy.deployContractRow to SendCopy.deployContractValue,
                 SendCopy.deployNetworkRow to store.networkLabel,
             ),
-        )
-        Eyebrow(SendCopy.riskAndRecovery)
-        Text(SendCopy.deployRisk, color = skin.muted, style = textStyle(BrambleTypeScale.body))
-        model.fee?.let { fee ->
+        ) { index -> if (index == ADDRESS_ROW) CopyButton(store, account.address, COPY_ADDRESS) }
+        view.cost?.let { cost ->
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -103,81 +105,50 @@ private fun DeployForm(
                     .padding(horizontal = BrambleSpace.lg, vertical = BrambleSpace.md),
                 verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
             ) {
-                Eyebrow(SendCopy.maximumCost)
+                Eyebrow(SendCopy.cost)
                 Text(
-                    SendCopy.maximumFeePrefix + fee.display,
-                    color = skin.text,
+                    cost,
+                    color = if (view.costFailed) skin.danger else skin.text,
                     style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold).copy(fontFeatureSettings = "tnum"),
                 )
             }
         }
-        StatusLine(model.failureMessage.takeIf { model.stage == DeployFlowModel.Stage.FAILED }, StatusTone.DANGER)
-        when (model.stage) {
-            DeployFlowModel.Stage.REVIEWED, DeployFlowModel.Stage.SUBMITTING -> {
-                PillButton(
-                    SendCopy.confirmDeploymentPrefix + model.fee?.display.orEmpty(),
-                    icon = BrambleIconName.CHECK,
-                    busy = model.stage == DeployFlowModel.Stage.SUBMITTING,
-                ) { scope.launch { model.confirm() } }
-            }
-
-            DeployFlowModel.Stage.ALREADY_DEPLOYED -> {
-                // A status, not an action: the account is already on-chain.
-                PillButton(SendCopy.alreadyDeployed, icon = BrambleIconName.CHECK, enabled = false) {}
-            }
-
-            else -> {
-                PillButton(
-                    SendCopy.reviewDeployment,
-                    icon = BrambleIconName.CHECK,
-                    busy = model.stage == DeployFlowModel.Stage.REVIEWING,
-                ) { scope.launch { model.review() } }
-            }
-        }
+        PillButton(
+            view.button,
+            icon = BrambleIconName.CHECK,
+            busy = view.busy,
+            enabled = view.enabled,
+        ) { scope.launch { model.deploy() } }
+        StatusLine(view.status)
     }
 }
 
-/** "Deployment submitted", with the hash; Back to home re-reads balances and deployment. */
+/** The receipt: the chain's answer so far, the hash, then View in Activity tab and Back. */
 @Composable
 private fun Submitted(
     store: WalletStore,
     model: DeployFlowModel,
+    viewActivity: () -> Unit,
     back: () -> Unit,
 ) {
+    val (title, body) = deployReceipt(model.confirmed)
     Outcome(
         BrambleIconName.CHECK,
         LocalSkin.current.positive,
-        OutcomeCopy(SendCopy.deploySuccessKicker, SendCopy.deploySuccessTitle, SendCopy.deploySuccessBody),
-        model.hash,
+        title,
+        message = body,
+        detail = {
+            ReceiptCard(store, summary = null, hash = model.hash)
+            StatusLine(model.problem, StatusTone.DANGER)
+        },
     ) {
-        PillButton(SendCopy.backToHome, icon = BrambleIconName.HOME) {
-            store.appScope.launch { store.refreshBalances() }
-            back()
-        }
+        PillButton(SendCopy.viewActivity, icon = BrambleIconName.ACTIVITY, onClick = viewActivity)
+        PillButton(SendCopy.back, kind = PillKind.SECONDARY, onClick = back)
     }
 }
 
-/**
- * Home's `deployNotice` ([deployNotice]): shown only when the core judged the account undeployed.
- * With a STRK balance read as zero it asks for funding and opens Receive; otherwise it opens the
- * Deploy account flow. The extension's chip explains itself in a tooltip; here the explanation is
- * the control's state description, read after its label.
- */
-@Composable
-fun DeployNoticeChip(
-    store: WalletStore,
-    receive: () -> Unit,
-    deploy: () -> Unit,
-) {
-    val notice = store.deployNotice
-    if (notice == DeployNotice.HIDDEN) return
-    val unfunded = notice == DeployNotice.FUND
-    val explanation = if (unfunded) SendCopy.fundChipTitle else SendCopy.deployChipTitle
-    PillButton(
-        if (unfunded) SendCopy.fundChip else SendCopy.deployChip,
-        modifier = Modifier.semantics { stateDescription = explanation },
-        kind = PillKind.SECONDARY,
-        icon = if (unfunded) BrambleIconName.QR_CODE else BrambleIconName.ROCKET,
-        onClick = if (unfunded) receive else deploy,
-    )
-}
+/** The receipt row whose value is the address, which carries the copy control. */
+private const val ADDRESS_ROW = 1
+
+/** The address row's copy control, as the extension's receipt action. */
+private const val COPY_ADDRESS = "Copy address"

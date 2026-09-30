@@ -8,20 +8,29 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.delay
@@ -36,6 +45,7 @@ import org.bramble.wallet.design.BrambleControl
 import org.bramble.wallet.design.BrambleIcon
 import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleLayout
+import org.bramble.wallet.design.BrambleRadius
 import org.bramble.wallet.design.BrambleSkin
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
@@ -46,6 +56,7 @@ import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.TokenMark
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.refreshSendState
+import org.bramble.wallet.send.SendCopy
 import org.bramble.wallet.ui.CopyButton
 
 /** Milliseconds between feed re-checks while the Activity tab is visible (the iOS 60 s poll). */
@@ -138,96 +149,167 @@ internal fun ActivityFeed(
 }
 
 /**
- * `transactionRow`: the kind glyph beside the verb (a link to the explorer in the system
- * browser), the detail line with its copy control, the status word when unsettled, the signed
- * fiat over the amount, and the trailing token mark.
+ * `transactionRow`, a disclosure. The summary: the kind glyph (hidden from assistive tech, its
+ * tone the status), the heading that joins verb and amount, the truncated hash (a link to the
+ * explorer in the system browser when there is one) with its copy control, the status word for a
+ * row that is not accepted, the token mark, and the disclosure chevron. The expansion: the
+ * counterparty (or the Detail fact), then Submitted and Status. No fiat figure: a value from
+ * today's price is not what the transaction was worth.
  */
 @Composable
 private fun ActivityRowItem(
     store: WalletStore,
     row: ActivityRow,
 ) {
-    val skin = LocalSkin.current
-    val tone = toneColor(row.tone, skin)
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = BrambleSpace.sm).testTag("activity-row-${row.hash}"),
-        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
-        verticalAlignment = Alignment.CenterVertically,
+    var open by remember(row.hash) { mutableStateOf(false) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(BrambleRadius.lg))
+            .testTag("activity-row-${row.hash}"),
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-            ActivityTitle(row, tone)
-            row.detail?.let { detail ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        detail,
-                        color = skin.muted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = textStyle(BrambleTypeScale.body),
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    val counterparty = row.counterparty
-                    val copyLabel = row.copyLabel
-                    // The one clipboard path: public address only, expiring, confirmed by the store.
-                    if (counterparty != null && copyLabel != null) CopyButton(store, counterparty, copyLabel)
-                }
-            }
-            row.statusWord?.let {
-                Text(it, color = tone, maxLines = 1, style = textStyle(BrambleTypeScale.caption, BrambleWeight.medium))
-            }
-        }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs)) {
-            Text(
-                row.fiatText ?: "—",
-                color = if (row.fiatText == null) skin.muted else skin.text,
-                maxLines = 1,
-                style = textStyle(BrambleTypeScale.row, BrambleWeight.medium).copy(fontFeatureSettings = "tnum"),
-            )
-            Text(
-                row.amountText ?: "—",
-                color = skin.muted,
-                maxLines = 1,
-                style = textStyle(BrambleTypeScale.body).copy(fontFeatureSettings = "tnum"),
-            )
-        }
-        val address = row.tokenAddress
-        if (address != null) TokenMark(address, row.tokenSymbol ?: "")
+        ActivitySummary(store, row, open) { open = !open }
+        if (open) ActivityFacts(store, row)
     }
 }
 
-/** The glyph and the verb; with an explorer URL the verb is a link that opens the system browser. */
+/** The disclosure's summary row; tapping it (outside its controls) toggles the facts. */
 @Composable
-private fun ActivityTitle(
+private fun ActivitySummary(
+    store: WalletStore,
     row: ActivityRow,
-    tone: Color,
+    open: Boolean,
+    toggle: () -> Unit,
+) {
+    val skin = LocalSkin.current
+    val tone = toneColor(row.tone, skin)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+            .clickable(
+                onClickLabel = if (open) "Hide details" else "Show details",
+                role = Role.Button,
+                onClick = toggle,
+            ).padding(vertical = BrambleSpace.sm),
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val glyphTint = if (row.tone == ActivityTone.SETTLED) skin.text else tone
+        Box(Modifier.clearAndSetSemantics {}) {
+            BrambleIcon(activityIcon(row.icon), glyphTint, BrambleLayout.detailIcon)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
+            Text(
+                row.heading,
+                color = skin.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = textStyle(BrambleTypeScale.row, BrambleWeight.medium),
+                modifier = Modifier.semantics { contentDescription = row.accessibilityLabel },
+            )
+            ActivityHash(store, row)
+        }
+        row.statusWord?.let {
+            Text(it, color = tone, maxLines = 1, style = textStyle(BrambleTypeScale.caption, BrambleWeight.medium))
+        }
+        TokenMark(row.avatar)
+        BrambleIcon(
+            BrambleIconName.CHEVRON_RIGHT,
+            skin.muted,
+            modifier = Modifier.rotate(if (open) DISCLOSURE_OPEN_DEGREES else 0f),
+        )
+    }
+}
+
+/** The truncated hash, linked to the explorer when the row has a link, and its copy control. */
+@Composable
+private fun ActivityHash(
+    store: WalletStore,
+    row: ActivityRow,
 ) {
     val skin = LocalSkin.current
     val uri = LocalUriHandler.current
     val link = row.explorerUrl
-    val linkModifier =
-        if (link != null) {
-            Modifier
-                .testTag("activity-link-${row.hash}")
-                .clickable(onClickLabel = "Open in explorer", role = Role.Button) { uri.openUri(link) }
-        } else {
-            Modifier
-        }
-    Row(
-        linkModifier.semantics(mergeDescendants = true) { contentDescription = row.accessibilityLabel },
-        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val glyphTint = if (row.tone == ActivityTone.SETTLED) skin.text else tone
-        BrambleIcon(activityIcon(row.icon), glyphTint, BrambleLayout.detailIcon)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val linked =
+            if (link != null) {
+                Modifier
+                    .testTag("activity-link-${row.hash}")
+                    .semantics { contentDescription = SendCopy.explorerLinkLabel }
+                    .clickable(role = Role.Button) { uri.openUri(link) }
+            } else {
+                Modifier
+            }
         Text(
-            row.title,
-            color = skin.text,
+            row.hashLabel,
+            color = if (link != null) skin.accent else skin.muted,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = textStyle(BrambleTypeScale.row, BrambleWeight.medium),
+            style = textStyle(BrambleTypeScale.caption, mono = true),
+            modifier = linked,
         )
+        CopyButton(store, row.hash, row.hashCopyLabel)
     }
 }
+
+/**
+ * The expansion's facts: the counterparty (its role, the 6…4 address and a copy control carrying
+ * the full one), or the Detail fact; then Submitted and Status, each only when the row has it.
+ */
+@Composable
+private fun ActivityFacts(
+    store: WalletStore,
+    row: ActivityRow,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(start = BrambleLayout.taskHairlineInset, bottom = BrambleSpace.sm),
+        verticalArrangement = Arrangement.spacedBy(BrambleSpace.xs),
+    ) {
+        val counterparty = row.counterparty
+        if (counterparty != null) {
+            ActivityFact(counterparty.role, counterparty.addressLabel, mono = true) {
+                // The one clipboard path: public address only, expiring, confirmed by the store.
+                CopyButton(store, counterparty.address, counterparty.copyLabel)
+            }
+        } else {
+            row.detail?.let { ActivityFact(DETAIL_LABEL, it) }
+        }
+        row.submitted?.let { ActivityFact(SUBMITTED_LABEL, it) }
+        row.statusHint?.let { ActivityFact(STATUS_LABEL, it) }
+    }
+}
+
+/** One `dt`/`dd` pair of the expansion, with an optional trailing control. */
+@Composable
+private fun ActivityFact(
+    label: String,
+    value: String,
+    mono: Boolean = false,
+    control: @Composable () -> Unit = {},
+) {
+    val skin = LocalSkin.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = skin.muted, style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold))
+        Text(
+            value,
+            color = skin.text,
+            style = textStyle(BrambleTypeScale.caption, mono = mono),
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        control()
+    }
+}
+
+/** The expansion's fixed fact labels (`transactionRow`'s `dt`s). */
+private const val DETAIL_LABEL = "Detail"
+private const val SUBMITTED_LABEL = "Submitted"
+private const val STATUS_LABEL = "Status"
+
+/** The disclosure chevron's turn while the row is open. */
+private const val DISCLOSURE_OPEN_DEGREES = 90f
 
 /** The status ink for a row's [tone]: muted when settled, warning, positive or danger otherwise. */
 private fun toneColor(

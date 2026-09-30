@@ -75,8 +75,8 @@ class RpcClient(
 
     /**
      * The core's judgement of whether [account] is deployed, from the first endpoint that proves
-     * [network]'s chain; `UNKNOWN` when none answers, so the deploy notice then shows nothing and
-     * the privacy gates ask again. Never throws.
+     * [network]'s chain; `UNKNOWN` when none answers, so the Deploy account screen quotes anyway
+     * and the privacy gates ask again. Never throws.
      */
     suspend fun deploymentState(
         account: String,

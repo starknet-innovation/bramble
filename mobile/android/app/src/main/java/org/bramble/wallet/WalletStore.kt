@@ -84,7 +84,8 @@ class WalletStore(
 
     /**
      * The core's judgement of the active account's deployment (`WalletStoreDeploy.kt`), for the
-     * deploy notice and the privacy gates. `UNKNOWN` until read, after a lock and on account switch.
+     * Deploy account screen and the privacy gates. `UNKNOWN` until read, after a lock and on
+     * account switch.
      */
     var deployment by mutableStateOf(DeploymentState.UNKNOWN)
         internal set
@@ -94,6 +95,7 @@ class WalletStore(
 
     /** Ticks [observeActivity] while the wallet is open (WalletStoreSend.kt); cancelled on lock. */
     internal var observationTicker: Job? = null
+
     /** The top-level screen; in memory only, and back to [Route.LOCKED] on every lock. */
     var route by mutableStateOf(if (vaultWritten) Route.LOCKED else Route.ONBOARDING)
         private set

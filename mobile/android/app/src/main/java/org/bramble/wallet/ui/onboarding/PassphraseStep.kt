@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,7 +28,7 @@ import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleMotion
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
-import org.bramble.wallet.design.CheckRow
+import org.bramble.wallet.design.IconButton
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.brambleTween
@@ -38,13 +37,16 @@ import org.bramble.wallet.design.textStyle
 private const val PASSPHRASE_HINT =
     "Use at least 8 characters; 12 or more is safer. This unlocks the encrypted vault on this device."
 
-private const val WEAK_ACKNOWLEDGEMENT =
-    "This passphrase is weak. I understand it is all that protects this wallet on this device."
+private const val SHOW_PASSPHRASE = "Show passphrase"
+private const val HIDE_PASSPHRASE = "Hide passphrase"
 
 /**
- * "Create your vault passphrase", port of the iOS `PassphraseStep`. Strength, acceptability and
- * the weak acknowledgement all come from the core's `passphrase_strength`; nothing is scored here.
- * [submit] writes the vault; the typed values are cleared once it succeeds.
+ * "Create your vault passphrase", port of the iOS `PassphraseStep`. Strength and acceptability
+ * come from the core's `passphrase_strength`; nothing is scored here, and [PassphraseGate] is the
+ * whole submit gate (no weak-passphrase tick). The first field offers to show the value, as the
+ * extension's `passphrase-reveal.ts`: it starts masked and re-masks whenever the step is shown
+ * again, because the state lives only in this composition. [submit] writes the vault; the typed
+ * values are cleared once it succeeds.
  */
 @Composable
 fun PassphraseStep(
@@ -56,11 +58,9 @@ fun PassphraseStep(
     val scope = rememberCoroutineScope()
     var passphrase by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
-    var weakTicked by remember { mutableStateOf(false) }
+    var revealed by remember { mutableStateOf(false) }
     val strength = remember(passphrase) { passphraseStrength(passphrase) }
-    val needsAck = strength.needsAcknowledgement
-    LaunchedEffect(needsAck) { weakTicked = WeakAck.sync(needsAck, weakTicked) }
-    val matches = strength.acceptable && confirmation.isNotEmpty() && passphrase == confirmation
+    val ready = PassphraseGate.ready(strength, passphrase, confirmation)
     OnboardingStep(
         back = back,
         heading =
@@ -77,52 +77,41 @@ fun PassphraseStep(
                     value = passphrase,
                     onValueChange = { passphrase = it },
                     hint = PASSPHRASE_HINT,
-                )
+                    revealed = revealed,
+                ) {
+                    IconButton(
+                        if (revealed) BrambleIconName.EYE_OFF else BrambleIconName.EYE,
+                        if (revealed) HIDE_PASSPHRASE else SHOW_PASSPHRASE,
+                        tint = LocalSkin.current.muted,
+                    ) { revealed = !revealed }
+                }
                 BrambleField(
                     label = "Confirm passphrase",
                     placeholder = "Enter it again",
                     value = confirmation,
                     onValueChange = { confirmation = it },
                 )
-                PassphraseMeter(strength, meterStatus(strength, confirmation, matches), ready = matches)
-                if (strength.needsAcknowledgement) {
-                    CheckRow(
-                        WEAK_ACKNOWLEDGEMENT,
-                        checked = weakTicked,
-                        onCheckedChange = { weakTicked = it },
-                    )
-                }
+                PassphraseMeter(strength, PassphraseGate.status(strength, passphrase, confirmation), ready = ready)
             }
         },
         cta = {
             PillButton(
                 if (path == OnboardingPath.CREATE) "Continue" else "Find your accounts",
                 busy = store.busy,
-                enabled = matches && WeakAck.accepts(strength.needsAcknowledgement, weakTicked),
+                enabled = ready,
             ) {
                 scope.launch {
                     runCatching { submit(passphrase) }
                         .onSuccess {
                             passphrase = ""
                             confirmation = ""
+                            revealed = false
                         }.onFailure(store::showError)
                 }
             }
         },
     )
 }
-
-/** `applyPassphraseMeter`'s status line. */
-private fun meterStatus(
-    strength: PassphraseStrength,
-    confirmation: String,
-    matches: Boolean,
-): String =
-    when {
-        !strength.acceptable || confirmation.isEmpty() -> strength.hint
-        matches -> "${strength.hint} · Passphrases match"
-        else -> "Passphrases do not match"
-    }
 
 /** `.password-requirement`: a 4dp track filled by the meter ratio in the band's colour. */
 @Composable

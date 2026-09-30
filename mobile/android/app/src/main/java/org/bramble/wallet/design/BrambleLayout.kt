@@ -121,9 +121,6 @@ object BrambleLayout {
     /** Width of the Bramble wordmark on the welcome step. */
     val wordmarkWidth = 220.dp
 
-    /** Size of the lock icon in the welcome step note. */
-    val lockNoteIcon = 13.dp
-
     /** Height of the passphrase strength meter track. */
     val meterTrack = 4.dp
 
@@ -177,7 +174,8 @@ object BrambleLayout {
     val revealAlertIcon = 20.dp
 
     // Send screens: iOS `BrambleMetrics.Send*`, read from the side panel's send stylesheet
-    // (`.send-amount-field input` min-height, `.send-outcome-mark`, the task-list hairline inset).
+    // (`.send-amount-field input` min-height, `.send-outcome-mark`), and the task list's hairline
+    // inset (`.privacy-task-list`, iOS `BrambleMetrics.SendWorking.taskHairlineInset`).
 
     /** Minimum height of the send amount field. */
     val sendAmountMin = 52.dp
@@ -185,6 +183,6 @@ object BrambleLayout {
     /** Size of the send outcome mark. */
     val sendOutcomeMark = 76.dp
 
-    /** Leading inset of the hairline between send task rows. */
-    val sendTaskHairlineInset = 24.dp
+    /** Leading inset of the hairline between task rows, past the dot. */
+    val taskHairlineInset = 24.dp
 }

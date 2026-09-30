@@ -18,18 +18,19 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The Deploy account flow (`deployAccountFlow`, iOS `DeployAccountView`) on the offline
- * [FixtureNode]: the core's deployment plan reviews the fee, and a confirm signs once and hands
- * the write to the node. The node refuses it, so nothing is broadcast and the core drops the
- * pending record it wrote before the write left. An account the chain already has offers nothing
- * to deploy. The store reads its deployment through the same node on entry.
+ * The Deploy account flow (`bindDeploy`, iOS `DeployAccountView`) on the offline [FixtureNode]:
+ * the core's deployment plan quotes the fee as the screen opens, and the one Deploy button signs
+ * once and hands the write to the node. The node refuses it, so nothing is broadcast, the core
+ * drops the pending record it wrote before the write left, and Deploy is offered again. An account
+ * the chain already has offers nothing to deploy. The store reads its deployment through the same
+ * node on entry.
  */
 @RunWith(AndroidJUnit4::class)
 class DeployFlowTest {
     @get:Rule val rule = createComposeRule()
 
     private fun show() {
-        rule.setContent { BrambleTheme { DeployAccountScreen(appStore) {} } }
+        rule.setContent { BrambleTheme { DeployAccountScreen(appStore, viewActivity = {}) {} } }
     }
 
     private fun waitForText(
@@ -45,24 +46,22 @@ class DeployFlowTest {
     }
 
     @Test
-    fun reviewsFeeSignsOnceNoBroadcast() {
+    fun quotesOnOpenPostsOnce() {
         val node = FixtureNode(deployed = false)
         openPublicWalletOn(node)
         assertEquals(DeploymentState.UNDEPLOYED, onMainThread { deployment })
         show()
-        tap(SendCopy.reviewDeployment)
-        waitForText(SendCopy.confirmDeploymentPrefix, substring = true)
+        // No press: the fee is quoted as the screen opens.
         waitForText(SendCopy.maximumFeePrefix, substring = true)
-        assertEquals("nothing is written before Confirm", 0, node.writes.get())
+        waitForText(SendCopy.cost.uppercase())
+        assertEquals("nothing is written before Deploy", 0, node.writes.get())
 
-        rule
-            .onAllNodes(
-                hasText(SendCopy.confirmDeploymentPrefix, substring = true) and hasClickAction(),
-            )[0]
-            .performClick()
-        // The node refuses the write, so the flow fails and offers a new review.
-        waitForText(SendCopy.reviewDeployment)
+        tap(SendCopy.deployButton)
+        // The node refuses the write: the reason shows and Deploy is offered again, to re-quote.
+        rule.waitUntil(TIMEOUT_MS) { node.writes.get() == 1 && !showing(SendCopy.deploySubmitting) }
+        waitForText(SendCopy.deployButton)
         assertEquals("the signed deployment is posted exactly once", 1, node.writes.get())
+        assertFalse("a refused deployment is never reported submitted", showing(SendCopy.deploySubmittedTitle))
         val accountId = onMainThread { activeRecord?.id }.orEmpty()
         val logged = onMainThread { walletCore.activity(accountId) }
         assertFalse(
@@ -77,11 +76,12 @@ class DeployFlowTest {
         openPublicWalletOn(node)
         assertEquals(DeploymentState.DEPLOYED, onMainThread { deployment })
         show()
-        tap(SendCopy.reviewDeployment)
         waitForText(SendCopy.alreadyDeployed)
         rule.onAllNodes(hasText(SendCopy.alreadyDeployed))[0].assertIsNotEnabled()
         assertEquals(0, node.writes.get())
     }
+
+    private fun showing(text: String): Boolean = rule.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
 
     private companion object {
         const val TIMEOUT_MS = 20_000L

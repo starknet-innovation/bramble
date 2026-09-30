@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,8 +33,6 @@ import org.bramble.wallet.design.BrambleSize
 import org.bramble.wallet.design.BrambleSpace
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.BrambleWeight
-import org.bramble.wallet.design.DetailRow
-import org.bramble.wallet.design.Eyebrow
 import org.bramble.wallet.design.FlexSpacer
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.OptionCard
@@ -47,7 +44,7 @@ import org.bramble.wallet.ui.HEADLINE_TRACKING
 // Each step reproduces its extension counterpart in `onboarding-views.ts` /
 // `onboarding-surface.ts`, through the iOS OnboardingSteps: same badge, heading, lede, CTA copy.
 
-/** `.onboarding-welcome`: wordmark lockup, two actions, the local-encryption note. */
+/** `.onboarding-welcome`: the wordmark lockup and the two actions, nothing else. */
 @Composable
 fun WelcomeStep(
     create: () -> Unit,
@@ -75,14 +72,6 @@ fun WelcomeStep(
         Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
             PillButton("Create a new wallet", onClick = create)
             PillButton("Add an existing wallet", kind = PillKind.SECONDARY, onClick = recover)
-        }
-        Row(
-            Modifier.padding(top = BrambleSpace.sm),
-            horizontalArrangement = Arrangement.spacedBy(BrambleLayout.pillGap),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BrambleIcon(BrambleIconName.LOCK, skin.muted, BrambleLayout.lockNoteIcon)
-            Text("Encrypted locally on this device", color = skin.muted, style = textStyle(BrambleTypeScale.caption))
         }
     }
 }
@@ -168,7 +157,7 @@ fun RecoveryPhraseStep(
     )
 }
 
-/** `onboardingComplete()`: check mark, eyebrow, heading, the two custody details, one action. */
+/** `onboardingComplete()`: the check mark, "You’re all set", and the one action. */
 @Composable
 fun CompleteStep(open: () -> Unit) {
     val skin = LocalSkin.current
@@ -184,27 +173,12 @@ fun CompleteStep(open: () -> Unit) {
         ) {
             BrambleIcon(BrambleIconName.CHECK, skin.accentText, BrambleLayout.completeIcon)
         }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
-        ) {
-            Eyebrow("Setup complete")
-            Text(
-                "You’re all set",
-                color = skin.text,
-                style = textStyle(BrambleTypeScale.headline, BrambleWeight.heavy, HEADLINE_TRACKING),
-            )
-            Text(
-                "Your account is ready in Bramble. Receive assets, or deploy when you’re ready.",
-                color = skin.muted,
-                textAlign = TextAlign.Center,
-                style = textStyle(BrambleTypeScale.body),
-            )
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
-            DetailRow(BrambleIconName.LOCK, "Vault encrypted locally on this device")
-            DetailRow(BrambleIconName.SHIELD, "Recovery and signing material stay behind the wallet boundary")
-        }
+        Text(
+            "You’re all set",
+            color = skin.text,
+            textAlign = TextAlign.Center,
+            style = textStyle(BrambleTypeScale.headline, BrambleWeight.heavy, HEADLINE_TRACKING),
+        )
         PillButton("Open Bramble", onClick = open)
         FlexSpacer()
     }

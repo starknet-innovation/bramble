@@ -75,8 +75,11 @@ Google Maven / Maven Central. No new production dependency.
 `ErrorTextTest` (every `CoreError` → iOS string), `AddressTextTest` (now instrumented: it calls the
 core's `accountLabel`, which the host JVM cannot load),
 `QrCodeTest` (matches `qr-parity.txt`), `BackupVerifyTest` (positions, trim, case, empty, short
-phrase), `WeakAckStateTest` (tick cleared when the acknowledgement stops applying, kept while it
-applies), `RecoveryEntryTest` (lowercase, space-advance, paste spread, growth to 24),
+phrase), `PassphraseGateTest` (a weak but accepted value that matches is enough; the meter
+line), `DeployViewTest` (quote on open, one Deploy button, a failed quote quotes again, the
+receipt firms up), `ReviewFactsTest` (risks panel only when something needs saying; the Cost
+box's one combined figure and its deployment share), `RecipientBookTest` (address book, then
+folders without empty ones, the current account marked, search), `RecoveryEntryTest` (lowercase, space-advance, paste spread, growth to 24),
 `SessionGuardTest` (a lock invalidates earlier tickets), `ClipboardPolicyTest`,
 `RpcClientBoundTest` (64 KiB cap), and
 - `SourceHygieneTest`: checks on every app source for colour and dp/sp literals outside `design/`,
@@ -93,7 +96,7 @@ takes no test input). After "Open Bramble" the home screen reads public balances
 as the iOS suite does; no assertion depends on them and nothing is ever sent.
 
 `OnboardingFlowTest.createBackupAndConfirm` mirrors `testCreateBackupAndConfirm` step for step:
-"Create a new wallet" → "ui test passphrase" twice → Continue → tick mainnet ack → "Add selected
+"Create a new wallet" → "ui test passphrase" twice → Continue → "Add selected
 account" → assert "I saved my phrase" disabled → "Show recovery phrase" → read test tags
 `recovery-word-1..12` → words 3/7/11 into "Word 3/7/11" → "Backup confirmed." → Continue →
 "You’re all set" → "Open Bramble" → "Account 1" → clean up via Settings → "Remove wallet from this
@@ -117,6 +120,11 @@ an Espresso failure dumps the view tree, so results are deleted after a real run
 (`extension-parity.json` copied into `androidTest/assets` by a Gradle `Copy` task, not committed); a
 locked core refuses `sign_hash`; a wrong password raises `WrongPassword`; Sepolia's chain id
 `0x534e5f5345504f4c4941` includes STRK.
+
+Deploy account: `DeployFlowTest` (on the offline `FixtureNode`: the fee is quoted as the screen
+opens, one Deploy press posts the signed deployment exactly once, the refusal offers Deploy again;
+an account already on chain has nothing to do) and `SettingsDeployRowTest` (Home shows no deploy
+notice; Settings "This account" opens Deploy account whatever the deployment state).
 
 Security: `SecurityTest` (FLAG_SECURE, vault path, autofill exclusion, obscured touches, backup
 off), `SecretFieldTest` (full `inputType` with class bits, `imeOptions`, autofill, no saved state),
