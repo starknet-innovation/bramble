@@ -33,13 +33,20 @@ const computePortfolioParity = async (): Promise<Record<string, unknown>> => ({
   tokens: tokensBlock(),
 });
 
+// ICU builds disagree on one en-GB month: newer CLDR data abbreviates September "Sept", older
+// data (and Bun on macOS) "Sep". The extension formats through `Intl`, so the same code wrote a
+// different fixture on the Linux CI runner than on a Mac. The core spells it "Sep"; pinning that
+// spelling keeps the fixture a function of the code, not of the machine that generated it.
+const canonicalMonths = (text: string): string => text.replace(/\b(\d{2}) Sept\b/g, "$1 Sep");
+
 /**
  * The fixture text exactly as committed: JSON Lines, one `{"block","value"}` record per block, so
  * the file stays within the repository's line budget, a diff still names the block that moved,
  * and the formatter (which leaves `.jsonl` alone) never reflows generated data. The JSON
- * round-trip drops `undefined`, as every consumer expects.
+ * round-trip drops `undefined`, as every consumer expects. Month names are canonicalised
+ * (`canonicalMonths`) so the text does not depend on the generating machine's ICU data.
  */
 export const renderPortfolioParity = async (): Promise<string> =>
   Object.entries(await computePortfolioParity())
-    .map(([block, value]) => `${JSON.stringify({ block, value })}\n`)
+    .map(([block, value]) => canonicalMonths(`${JSON.stringify({ block, value })}\n`))
     .join("");
