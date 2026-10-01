@@ -5,7 +5,7 @@
  * confirmation). Composed last in ./styles.ts so its reduced-motion block wins
  * over every earlier animation and transition.
  */
-import { MOTION, RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
+import { MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -74,8 +74,60 @@ export const HOME_STYLES = `
     visibility: visible;
   }
   .drawer-head { align-items: center; display: flex; gap: ${SPACE.sm}; justify-content: space-between; }
-  .drawer-title { display: grid; gap: 1px; min-width: 0; }
+  .drawer-title { display: grid; gap: ${SPACE.xs}; justify-items: start; min-width: 0; }
   .drawer-title p { font-size: ${TYPE.caption.size}; }
+  /* The pill is the switch control here, so it takes a button's affordances
+     while keeping the pill's shape. The list is absolute so opening it does not
+     push the account rows down. */
+  .drawer-network { position: relative; }
+  .drawer-network-pill {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: ${RADIUS.full};
+    color: var(--bramble-muted);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 2px;
+    min-height: 0;
+    padding: 0;
+  }
+  .drawer-network-pill:hover { color: var(--bramble-text); }
+  .drawer-network-pill .icon { height: 14px; width: 14px; }
+  .drawer-network-pill[aria-expanded="true"] .icon { transform: rotate(180deg); }
+  /* Elevation and a hairline, never a stroke — the same structure the token
+     dropdown uses. */
+  .drawer-network-menu {
+    background: var(--bramble-panel);
+    border-radius: ${RADIUS.md};
+    box-shadow: ${SHADOW.md};
+    display: grid;
+    inset-inline-start: 0;
+    min-width: 200px;
+    padding: ${SPACE.xs};
+    position: absolute;
+    top: calc(100% + ${SPACE.xs});
+    z-index: 3;
+  }
+  .drawer-network-option {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: ${RADIUS.sm};
+    color: var(--bramble-text);
+    cursor: pointer;
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.sm};
+    justify-content: space-between;
+    min-height: 36px;
+    padding: 0 ${SPACE.sm};
+    text-align: left;
+    width: 100%;
+  }
+  .drawer-network-option:hover { background: var(--bramble-elevated); }
+  .drawer-network-option[aria-selected="true"] { color: var(--bramble-accent); }
+  .drawer-network-option .icon { height: 15px; width: 15px; }
   .drawer-list { align-content: start; display: grid; gap: 6px; }
   /* The folders are the drawer's one scroll region, so the head stays put and
      "Add account" stays reachable however many folders there are. */

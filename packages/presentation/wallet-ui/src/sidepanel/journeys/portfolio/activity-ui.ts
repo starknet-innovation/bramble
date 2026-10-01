@@ -40,6 +40,15 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
   const refreshButton = app?.querySelector<HTMLButtonElement>("#activity-refresh");
   const exportButton = app?.querySelector<HTMLButtonElement>("#activity-export");
 
+  // The explorer link and the copy control sit inside the row's <summary>, so
+  // a click on either would also toggle the row. Both presses mean exactly one
+  // thing, so neither doubles as an expander.
+  app
+    ?.querySelectorAll<HTMLElement>(".tx-disclosure > summary :is(a, button)")
+    .forEach((control) => {
+      control.addEventListener("click", (event) => event.stopPropagation());
+    });
+
   refreshButton?.addEventListener("click", () => {
     buttonBusy(refreshButton, true);
     const accountId = app?.querySelector<HTMLElement>("[data-activity-account-id]")?.dataset[

@@ -145,10 +145,10 @@ describe("the first paint", () => {
     expect(shield).toContain("Review shield");
     expect(shield).toContain("Confirm and shield");
     expect(shield).toContain("Shield complete");
-    expect(shield).not.toContain("Send to");
+    expect(shield).not.toContain('<h1 id="send-header-title">Send</h1>');
 
     const plain = sendFlow(status, account, preferences);
-    expect(plain).toContain('<h1 id="send-header-title">Send to</h1>');
+    expect(plain).toContain('<h1 id="send-header-title">Send</h1>');
     expect(plain).toContain("Review send");
     expect(plain).toContain("Confirm and send");
   });
@@ -158,7 +158,7 @@ describe("the first paint", () => {
       ...shieldIntent,
       accountId: "SN_MAIN:0xother",
     });
-    expect(foreign).toContain('<h1 id="send-header-title">Send to</h1>');
+    expect(foreign).toContain('<h1 id="send-header-title">Send</h1>');
   });
 });
 
@@ -183,7 +183,6 @@ describe("a shield shortcut", () => {
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("review");
     expect(text(app, "#send-header-title")).toBe("Review shield");
-    expect(text(app, "#send-review-heading")).toBe("Review shield");
     expect(text(app, "#send-confirm-label")).toBe("Confirm and shield");
     // The account on both ends is the user's own, so the summary names the
     // movement rather than a "recipient".

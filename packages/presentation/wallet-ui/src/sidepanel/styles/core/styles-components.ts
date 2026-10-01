@@ -235,6 +235,9 @@ ${SIGN_REQUEST_STYLES}
   .review-fee > p { margin: 0; }
   .review-fee > p:first-child { color: var(--bramble-text); }
   .review-fee-part { font-size: ${TYPE.micro.size}; }
+  /* What actually leaves the account. It is the figure the other lines add up
+     to, so it carries the body colour they are quoted against. */
+  .review-fee-total { color: var(--bramble-text); font-weight: ${WEIGHT.medium}; }
   .tx-hint { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
   /* Allowances: one grouped surface, flat rows with inset dividers. */
   .allowance-list {

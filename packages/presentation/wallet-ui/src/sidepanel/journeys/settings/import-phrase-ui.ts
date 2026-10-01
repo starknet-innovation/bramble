@@ -6,7 +6,7 @@
  * and is never logged, echoed, or stored in preferences. Reuses the first-run
  * scan binder so detection, grouping, and selection behave identically.
  */
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { bindRecoveryAccountUi } from "../onboarding/recovery-account-ui";
 import { bindRecoveryWordAssist } from "../onboarding/recovery-word-assist";
 import {
@@ -116,11 +116,10 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
       },
       (error: unknown) => {
         buttonBusy(search, false);
-        const message = errorMessage(error, "Phrase validation is unavailable");
         if (result) {
-          result.textContent = message;
+          result.textContent = errorLine(error, "Phrase validation is unavailable");
         }
-        showToast(message, "error", form);
+        showToast(errorMessage(error, "Phrase validation is unavailable"), "error", form);
       },
     );
   });

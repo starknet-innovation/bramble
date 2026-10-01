@@ -22,8 +22,7 @@ export const requiredFeeReview = async (
     return { feeReview: await estimate(), ok: true };
   } catch {
     return {
-      error:
-        "The network fee could not be estimated. Check the RPC endpoint and retry before signing.",
+      error: "Couldn't estimate the network fee, so nothing was signed. Try again.",
     };
   }
 };

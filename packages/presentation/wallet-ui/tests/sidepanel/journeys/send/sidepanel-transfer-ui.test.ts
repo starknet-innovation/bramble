@@ -6,6 +6,7 @@
  * loadActivity) are stubbed via the shared harness to steer each branch. The
  * activity refresh/export suites live in `sidepanel-activity-ui.test.ts`.
  */
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account } from "@bramble/testkit/sidepanel";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
@@ -17,6 +18,7 @@ import {
   markTransferLedgerAuthorized,
   recipientFieldError,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import { accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
   flush,
@@ -39,7 +41,7 @@ const resultText = (app: HTMLElement): string =>
   app.querySelector("#transfer-result")?.textContent ?? "";
 
 const reviewText = (app: HTMLElement): string =>
-  app.querySelector("#review-panel")?.textContent ?? "";
+  app.querySelector("#send-review-risks")?.textContent ?? "";
 
 const feeText = (app: HTMLElement): string =>
   app.querySelector("#send-review-fee")?.textContent ?? "";
@@ -121,8 +123,8 @@ describe("bindTransfer", () => {
     await flush();
     expect(calls.submitTransfer).toHaveLength(1);
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
-    expect(app.querySelector("#send-home")?.textContent).toBe("Back to home");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel("0xdeadbeef"));
+    expect(app.querySelector("#send-home")?.textContent).toBe("Back");
     expect(app.querySelector("#send-another")).toBeNull();
     // Three steps: review, authorizing, broadcasting and confirmation all rest
     // on Confirm rather than each taking a step of its own.
@@ -470,15 +472,13 @@ describe("bindTransfer", () => {
     expect(app.querySelector("#send-working-title")?.textContent).toBe("Waiting for your Ledger");
 
     markTransferLedgerAuthorized();
-    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending to Starknet");
-    expect(app.querySelector('[data-send-task="broadcast"]')?.getAttribute("data-state")).toBe(
-      "active",
-    );
+    // The device has answered, so the screen stops pointing at it.
+    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending your transaction…");
 
     resolveSubmit("0xdeadbeef");
     await flush();
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("submitted");
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel("0xdeadbeef"));
   });
 });

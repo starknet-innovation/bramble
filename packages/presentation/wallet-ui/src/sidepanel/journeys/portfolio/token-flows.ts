@@ -173,7 +173,7 @@ export const tokenDiscoverFlow = (status: WalletStatus): string =>
   flowScreen(
     "token-discover",
     `<section class="section">
-      <p class="hint">Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.</p>
+      <p class="hint">Likely-spam tokens stay hidden from Home.</p>
       ${button({
         attributes: { id: "detect-tokens" },
         icon: "refresh",
@@ -209,25 +209,21 @@ const tokenActions = (tokenId: string): string =>
     variant: "secondary",
   })}</div>`;
 
+// Deployment and funding are steps on the way to shielding, not alternatives
+// to it, so the control keeps the verb and the privacy screen it opens names
+// whichever prerequisite is in the way.
 const privacyActions = (
   tokenId: string,
   privacy: PrivacyDisclosureState,
   deployment: boolean | null,
-  fundedForFees: boolean | null = true,
 ): string => {
   const seen = deploymentKnownFromPrivacy(deployment, privacy);
   if (privacyIneligibleKind(privacy)) return "";
-  if (seen === false && fundedForFees === false)
-    return button({
-      attributes: { "data-view": "receive" },
-      icon: "qrCode",
-      label: "Fund with STRK",
-    });
   if (seen === false)
     return button({
       attributes: { "data-privacy-open": tokenId },
       icon: "shield",
-      label: "Deploy and enable",
+      label: "Shield",
     });
   if (privacy.error) return "";
   if (privacy.value?.registration === "registered")
@@ -257,7 +253,6 @@ export const tokenDetailFlow = (
     value: null,
   },
   deployment: boolean | null = null,
-  fundedForFees: boolean | null = true,
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
@@ -305,7 +300,7 @@ export const tokenDetailFlow = (
                 : ""
         }
         ${tokenActions(token.id)}
-        ${privacyActions(token.id, privacy, deployment, fundedForFees)}
+        ${privacyActions(token.id, privacy, deployment)}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>

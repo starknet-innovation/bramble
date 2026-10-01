@@ -161,6 +161,7 @@ type Calls = {
   setAccountInGroup: Array<readonly [string, string, boolean]>;
   addAccount: string[];
   startAddAccount: number;
+  setActiveNetwork: string[];
 };
 
 export type Harness = {
@@ -191,7 +192,8 @@ const buildWallet = (
   const getGroups = (): AccountGroups => withDefaultGroups(readGroups());
   // A store fault, so the failure paths (error toast, un-busied control, the
   // unchanged store) are driven by the real bindings rather than assumed.
-  const fail = <T>(): Promise<T> => Promise.reject(new WalletError("store unavailable"));
+  const fail = <T>(): Promise<T> =>
+    Promise.reject(new WalletError("The folder store is unavailable."));
   return {
     createGroup: (name: string, groupIcon: AccountGroupIcon): Promise<string> => {
       calls.createGroup.push([name, groupIcon]);
@@ -231,6 +233,10 @@ const buildWallet = (
       return Promise.resolve(newAccountId);
     },
     setActiveAccount: (): Promise<void> => Promise.resolve(),
+    setActiveNetwork: (networkId: string): Promise<WalletStatus> => {
+      calls.setActiveNetwork.push(networkId);
+      return rejects ? fail() : Promise.resolve(status);
+    },
     loadStatus: (): Promise<WalletStatus> => Promise.resolve(status),
   };
 };
@@ -269,6 +275,7 @@ export const mount = (
     removeGroup: [],
     setAccountInGroup: [],
     startAddAccount: 0,
+    setActiveNetwork: [],
   };
   const folders = createDrawerFolderState();
   const state: UiState = {

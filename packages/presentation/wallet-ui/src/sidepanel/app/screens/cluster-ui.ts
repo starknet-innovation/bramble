@@ -22,7 +22,8 @@ import type { RenderData } from "../rendering/render-cache";
 export type ClusterUiDeps = {
   readonly app: Element | null;
   readonly cache: RenderData;
-  readonly navigateHome: () => void;
+  /** Leaves the swap screen for a dock screen, from its receipt or its header. */
+  readonly leaveSwap: (view: "activity" | "home") => void;
   /**
    * Opens Send or Swap on a chosen asset. Send still asks for the recipient:
    * the asset is the only thing carried over, so the caller sets no intent —
@@ -63,7 +64,8 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     app,
     balances: () => cache.balances,
     currency: () => cache.preferences?.displayCurrency ?? "usd",
-    navigateHome: deps.navigateHome,
+    navigateActivity: () => deps.leaveSwap("activity"),
+    navigateHome: () => deps.leaveSwap("home"),
     preferences: () => cache.preferences,
     render,
     status: () => cache.status,

@@ -320,7 +320,7 @@ describe("the preparing screen", () => {
     // changed would otherwise repaint nothing and look ignored.
     const { app } = mountSurface(settled("unregistered"), {
       preparePrivacyRegistration: async () => {
-        throw new Error("prover offline");
+        throw new Error("The prover is offline.");
       },
     });
     press(app);
@@ -330,7 +330,9 @@ describe("the preparing screen", () => {
     app.querySelector<HTMLButtonElement>("#privacy-retry")?.dispatchEvent(new Event("click"));
     await flush();
 
-    expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe("prover offline");
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe(
+      "The prover is offline.",
+    );
   });
 });
 

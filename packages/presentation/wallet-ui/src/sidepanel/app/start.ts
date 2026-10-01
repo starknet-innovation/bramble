@@ -139,7 +139,7 @@ export const startWalletUi = async (
       void guardedCopyPendingClear().then(() => globalThis.close());
     });
     bindOnboardingLaunch(app, () => globalThis.close());
-    bindOnboarding({ app, render, wallet });
+    bindOnboarding({ app, now, render, wallet });
     bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });
     bindUnlock({ app, render, wallet }, () => {
       activeView = "home";
@@ -235,8 +235,8 @@ export const startWalletUi = async (
     bindClusterScreens({
       app,
       cache,
-      navigateHome: () => {
-        if (activeView === "swap") navigate("home");
+      leaveSwap: (view) => {
+        if (activeView === "swap") navigate(view);
       },
       openWithToken: (view, tokenId) => {
         [sendIntent, selectedTokenId] = [null, tokenId];

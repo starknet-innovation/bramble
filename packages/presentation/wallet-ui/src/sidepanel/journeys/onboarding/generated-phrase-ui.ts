@@ -50,7 +50,7 @@ export const bindGeneratedPhrase = (
   toggle?.addEventListener("click", () => {
     const masked = !(grid?.classList.contains("is-masked") ?? false);
     setGeneratedPhraseMasked(grid, inputs, masked);
-    toggle.lastChild?.replaceWith(masked ? "Show recovery phrase" : "Hide recovery phrase");
+    toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
     revealed ||= !masked;
     syncUnlocked();
   });
@@ -60,7 +60,7 @@ export const bindGeneratedPhrase = (
     reset: () => {
       revealed = false;
       setGeneratedPhraseMasked(grid, inputs, true);
-      toggle?.lastChild?.replaceWith("Show recovery phrase");
+      toggle?.lastChild?.replaceWith("Show");
       syncUnlocked();
     },
   };

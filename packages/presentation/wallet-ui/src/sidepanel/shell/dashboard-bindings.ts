@@ -14,7 +14,7 @@ import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
+import { buttonBusy, errorLine, errorMessage, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
 import {
@@ -73,13 +73,13 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
 
   // Everything past label and address is opt-in: the form asked for five fields
   // to record a name and an address, which is why it read as complex.
-  const pro = form?.querySelector<HTMLButtonElement>("#address-pro");
-  const proFields = form?.querySelector<HTMLElement>("#address-pro-fields");
-  pro?.addEventListener("click", () => {
-    const open = pro.getAttribute("aria-checked") !== "true";
-    pro.setAttribute("aria-checked", String(open));
-    pro.dataset["checked"] = String(open);
-    proFields?.toggleAttribute("hidden", !open);
+  const advanced = form?.querySelector<HTMLButtonElement>("#advanced-address");
+  const advancedFields = form?.querySelector<HTMLElement>("#address-advanced-fields");
+  advanced?.addEventListener("click", () => {
+    const open = advanced.getAttribute("aria-checked") !== "true";
+    advanced.setAttribute("aria-checked", String(open));
+    advanced.dataset["checked"] = String(open);
+    advancedFields?.toggleAttribute("hidden", !open);
   });
 
   const walletCardField = form?.querySelector<HTMLTextAreaElement>('[name="walletCard"]');
@@ -147,7 +147,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         (error: unknown) => {
           showToast(errorMessage(error, "Address save failed"), "error", form);
           if (result) {
-            result.textContent = errorMessage(error, "Address save failed");
+            result.textContent = errorLine(error, "Address save failed");
           }
           buttonBusy(submitButton, false);
         },
@@ -188,16 +188,16 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
 
   // Everything past the QR and the address is opt-in: receiving needs one
   // address, and the contact card and keys are for multisig coordination.
-  // Closing Pro hides the payload switch, so the QR goes back to the address
+  // Closing Advanced hides the payload switch, so the QR goes back to the address
   // with it: a card QR under "Your Starknet address" with no way to switch it
   // is not something other wallets can scan.
-  const pro = root.querySelector<HTMLButtonElement>("#receive-pro");
-  const proFields = root.querySelector<HTMLElement>("#receive-pro-fields");
-  pro?.addEventListener("click", () => {
-    const open = pro.getAttribute("aria-checked") !== "true";
-    pro.setAttribute("aria-checked", String(open));
-    pro.dataset["checked"] = String(open);
-    proFields?.toggleAttribute("hidden", !open);
+  const advanced = root.querySelector<HTMLButtonElement>("#advanced-receive");
+  const advancedFields = root.querySelector<HTMLElement>("#receive-advanced-fields");
+  advanced?.addEventListener("click", () => {
+    const open = advanced.getAttribute("aria-checked") !== "true";
+    advanced.setAttribute("aria-checked", String(open));
+    advanced.dataset["checked"] = String(open);
+    advancedFields?.toggleAttribute("hidden", !open);
     if (!open) {
       showPayload("address");
     }
@@ -324,7 +324,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         (error: unknown) => {
           showToast(errorMessage(error, "Approval failed"), "error", button);
           if (result) {
-            result.textContent = errorMessage(error, "Approval failed");
+            result.textContent = errorLine(error, "Approval failed");
           }
           // The background atomically consumes an approval before execution.
           // Repaint after any executor error so stale controls cannot decide the

@@ -64,13 +64,6 @@ export const settingsScenario: WalletScenario = {
       state: { requestSurface: "side-panel" },
     },
     {
-      content: () => walletDashboard({ preferences: journeyPreferences, view: "security" }),
-      id: "security",
-      label: "Security & permissions",
-      narrative: "External access and recovery destinations are separated before any action.",
-      state: { groups: ["external access", "recovery"] },
-    },
-    {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "network" }),
       id: "network",
       label: "Choose network",
@@ -259,7 +252,6 @@ export const settingsScenario: WalletScenario = {
     "settings",
     "appearance",
     "request-settings",
-    "security",
     "network",
     "advanced-network",
     "account",

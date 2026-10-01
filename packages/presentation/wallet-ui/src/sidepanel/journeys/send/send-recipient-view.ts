@@ -48,7 +48,7 @@ const recipientAccountRow = (
     <span class="send-recipient-copy">
       <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
       <code>${escapeHtml(accountLabel(account.address))}</code>
-      ${isSender ? "<small>Current account · shield into its private balance</small>" : ""}
+      ${isSender ? "<small>Current</small>" : ""}
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -71,7 +71,6 @@ const recipientFolder = (section: FolderSection, rows: string): string => {
       <span class="send-folder-mark">${icon("chevronRight")}</span>
     </button>
     ${rows}
-    <p class="send-folder-empty hint" data-send-folder-empty${rows === "" && !collapsed ? "" : " hidden"}>No accounts in this folder.</p>
   </div>`;
 };
 
@@ -99,7 +98,6 @@ const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
     <span class="send-recipient-copy">
       <strong>${escapeHtml(name)}</strong>
       <code>${escapeHtml(accountLabel(record.address))}</code>
-      <small>Ready Multisig account</small>
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -126,7 +124,7 @@ export const recipientStage = (
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return `<section class="send-stage send-recipient-stage" id="send-recipient-stage">
     <div class="send-origin-context">
-      <p class="send-section-title">Sending from</p>
+      <p class="send-section-title">Send from</p>
       <div class="send-origin-account">
         <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
         <span class="send-recipient-copy">
@@ -136,7 +134,7 @@ export const recipientStage = (
       </div>
     </div>
     <label class="send-search">
-      <span>Sending to</span>
+      <span>Send to</span>
       <span class="send-search-control">${icon("search")}${inputControl({
         ariaLabel: "Recipient address or saved name",
         attributes: { id: "send-recipient-search" },
@@ -154,7 +152,7 @@ export const recipientStage = (
         ${button({
           attributes: { id: "send-recipient-save" },
           icon: "book",
-          label: "Save address",
+          label: "Save",
           variant: "secondary",
         })}
       </div>
@@ -163,6 +161,7 @@ export const recipientStage = (
       ${
         accounts.length > 0 || sharedAccounts.length > 0
           ? folderSections(withDefaultGroups(preferences?.groups ?? []), accounts)
+              .filter((section) => section.accounts.length > 0)
               .map((section) =>
                 recipientFolder(
                   section,
@@ -178,7 +177,7 @@ export const recipientStage = (
               sharedAccounts.length === 0
                 ? ""
                 : `<div class="send-recipient-folder" data-send-folder="shared">
-                  <div class="send-list-heading">${icon("users")}<strong>Shared accounts</strong></div>
+                  <div class="send-list-heading">${icon("users")}<strong>Multisig accounts</strong></div>
                   ${sharedAccounts.map(multisigRecipientRow).join("")}
                 </div>`
             )

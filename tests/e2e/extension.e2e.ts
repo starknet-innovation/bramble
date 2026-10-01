@@ -55,7 +55,7 @@ test("loads the dedicated Ledger hardware session surface", async ({ extension }
   );
 
   await expect(ledger.getByRole("heading", { name: "Connect your Ledger" })).toBeVisible();
-  await expect(ledger.getByText("Secure device session")).toBeVisible();
+  await expect(ledger.getByText(/Chrome needs this tab open/)).toBeVisible();
   await expect(ledger.getByRole("button", { name: /USB cable/ })).toHaveAttribute(
     "aria-pressed",
     "true",

@@ -6,7 +6,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
-import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  PRIVACY_FUNDS_REQUIRED,
+  PrivacyBlockerError,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
 import { strkAvailableForFees } from "../../../../src/sidepanel/journeys/portfolio/home-view";
@@ -42,6 +45,7 @@ const open = (
   initial: PrivacyDisclosureState,
   wallet: Partial<Record<keyof SidepanelWallet, unknown>>,
   deployment: () => boolean | null,
+  fundedForFees?: () => boolean | null,
 ): PrivacyJourneyState[] => {
   const journeys: PrivacyJourneyState[] = [];
   const app = document.createElement("main");
@@ -52,6 +56,7 @@ const open = (
     balances: () => [],
     deployment,
     disclosure: () => initial,
+    ...(fundedForFees ? { fundedForFees } : {}),
     generation: () => 0,
     journey: () => journeys.at(-1) ?? { stage: "idle" },
     navigate: () => undefined,
@@ -97,6 +102,44 @@ describe("privacy deployment gate", () => {
     await tick();
     const last = journeys.at(-1);
     expect(last?.stage === "blocked" ? last.blocker.kind : null).toBe("ledger");
+  });
+
+  test("names the missing funds, not the deployment, when the account cannot pay", async () => {
+    // Deploying is the next step, but offering it to an account with no STRK
+    // makes the fee estimate the first thing to refuse — as a failed request
+    // rather than a screen with somewhere to go.
+    const settled: PrivacyDisclosureState = { error: null, loading: false, value: null };
+    const journeys = open(
+      settled,
+      {
+        deployAccount: async () => {
+          throw new Error("must not deploy");
+        },
+      },
+      () => false,
+      () => false,
+    );
+    await tick();
+    const last = journeys.at(-1);
+    expect(last?.stage === "blocked" ? last.blocker.kind : null).toBe("fund");
+    expect(last?.stage === "blocked" ? last.blocker.message : null).toBe(PRIVACY_FUNDS_REQUIRED);
+  });
+
+  test("keeps the deployment path when the balance is merely unknown", async () => {
+    // An unread balance is not an empty one: only a settled read that found no
+    // STRK may refuse, or a transport failure would look like an empty account.
+    const settled: PrivacyDisclosureState = { error: null, loading: false, value: null };
+    for (const funded of [null, true]) {
+      const journeys = open(
+        settled,
+        {},
+        () => false,
+        () => funded,
+      );
+      await tick();
+      const last = journeys.at(-1);
+      expect(last?.stage === "blocked" ? last.blocker.kind : null).toBe("deploy");
+    }
   });
 
   test("treats a pending registration as deployed despite a stale undeployed cache", () => {
@@ -163,8 +206,11 @@ describe("privacy deployment gate", () => {
       false,
       strkAvailableForFees({ error: "fetch failed" }),
     );
-    expect(html).toContain("Deploy and enable");
+    // An unknown balance is not a zero balance: the tile must not divert to
+    // Receive as it does for an account known to be unfunded.
+    expect(html).toContain("deploy this account first");
     expect(html).not.toContain("Fund with STRK");
+    expect(html).not.toContain('data-view="receive"');
   });
 
   test("does not ask the chain when privacy is already unavailable", async () => {
@@ -190,7 +236,7 @@ describe("privacy deployment gate", () => {
     expect(deploymentReads).toBe(0);
   });
 
-  test("offers receive on an unfunded undeployed token screen", () => {
+  test("keeps the token screen on Shield when the account cannot pay yet", () => {
     const html = tokenDetailFlow(
       status,
       token,
@@ -200,14 +246,17 @@ describe("privacy deployment gate", () => {
       "usd",
       { error: null, loading: false, value: null },
       false,
-      false,
     );
-    expect(html).toContain("Fund with STRK");
-    expect(html).toContain('data-view="receive"');
+    // The privacy journey decides which prerequisite to name, and says so on a
+    // screen with a next step; the control stays the thing the user asked for.
+    expect(html).toContain("Shield");
+    expect(html).toContain('data-privacy-open="');
+    expect(html).not.toContain("Fund with STRK");
+    expect(html).not.toContain('data-view="receive"');
     expect(html).not.toContain("Deploy and enable");
   });
 
-  test("sends an unfunded token row to receive instead of deployment", () => {
+  test("keeps the token row's private-balance line on Shield when unfunded", () => {
     const html = homeTabs(
       { balances: [balance] },
       prefs,
@@ -218,16 +267,26 @@ describe("privacy deployment gate", () => {
       false,
       false,
     );
-    expect(html).toContain("Fund with STRK");
-    expect(html).toContain('data-view="receive"');
+    // Every shielding entry point reads the same and goes to the same place;
+    // the privacy screen names the prerequisite that is actually in the way.
+    expect(html).toContain("Shield");
+    expect(html).toContain("data-privacy-register=");
+    expect(html).not.toContain("Fund with STRK");
+    expect(html).not.toContain('data-view="receive"');
     expect(html).not.toContain("Deploy and enable");
   });
 
-  test("sends an unfunded undeployed account to receive instead of deployment", () => {
+  test("keeps the tile on Shield when the account is undeployed and unfunded", () => {
+    // Funding and deployment are both steps on the way to shielding, so the
+    // tile stays one word and one destination; the privacy screen it opens
+    // names whichever prerequisite is in the way. The accessible name says so
+    // before the tap.
     const tile = shieldTile(token.id, false, false, false);
-    expect(tile).toContain("Fund with STRK");
-    expect(tile).toContain('data-view="receive"');
-    expect(tile).not.toContain("Deploy and enable");
+    expect(tile).toContain(">Shield<");
+    expect(tile).toContain('data-privacy-open="');
+    expect(tile).toContain("Shield — add STRK to this account first");
+    expect(tile).not.toContain("Fund with STRK");
+    expect(tile).not.toContain('data-view="receive"');
   });
 
   test("keeps a transport failure friendly without dropping its blocker kind", async () => {

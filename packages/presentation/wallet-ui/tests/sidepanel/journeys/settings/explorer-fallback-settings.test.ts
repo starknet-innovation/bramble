@@ -64,7 +64,7 @@ const walletStub = (calls: Array<readonly [string, boolean, string]>, fail = fal
     setExplorerFallback: async (networkId: string, enabled: boolean, apiUrl: string) => {
       calls.push([networkId, enabled, apiUrl]);
       if (fail) {
-        throw new Error("preferences unavailable");
+        throw new Error("Couldn't load your settings. Try again.");
       }
     },
   }) as unknown as SidepanelWallet;
@@ -78,7 +78,10 @@ describe("advanced endpoints explorer-fallback control", () => {
 
     expect(section).toContain("Product analytics");
     expect(section).toContain("On");
-    expect(section).toContain("on by default; turn off anytime");
+    // The default matters and stays; "turn off anytime" was true of every
+    // checkbox on the screen and told the reader nothing.
+    expect(section).toContain("on by default");
+    expect(section).not.toContain("turn off anytime");
     expect(section).toContain('id="product-analytics"');
     expect(section).toContain("checked");
   });
@@ -196,7 +199,7 @@ describe("advanced endpoints explorer-fallback control", () => {
     await tick();
 
     expect(app.querySelector("#explorer-fallback-result")?.textContent).toBe(
-      "preferences unavailable",
+      "Couldn't load your settings. Try again.",
     );
   });
 

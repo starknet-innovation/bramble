@@ -127,9 +127,7 @@ const render = (): void => {
   const brandTile = element("span", "grant-brand-mark");
   brandTile.append(brandMark());
   brand.append(brandTile, textElement("strong", "", "Bramble"));
-  const once = element("span", "grant-once");
-  once.append(element("span", "grant-once-dot"), document.createTextNode("Secure device session"));
-  header.append(brand, once);
+  header.append(brand);
 
   const hero = element("div", "grant-hero");
   const copy = element("div", "grant-copy");
@@ -138,7 +136,7 @@ const render = (): void => {
     textElement(
       "p",
       "",
-      "Chrome uses this secure tab to keep the device connection alive. It closes automatically when the wallet finishes.",
+      "Chrome needs this tab open to reach your Ledger. It closes when the wallet is done.",
     ),
   );
   hero.append(ledgerVisual(), copy);
@@ -150,7 +148,7 @@ const render = (): void => {
   const validationNotice = textElement(
     "p",
     "grant-footnote",
-    "Hardware preview · Bramble's complete physical device matrix is still in progress. Use with trusted-test funds only.",
+    "Hardware preview · Bramble has not been tested against every Ledger model.",
   );
   const methodOptions = element("div", "grant-method-options");
   const cableMethod = element("button", "grant-method");
@@ -158,12 +156,10 @@ const render = (): void => {
   cableMethod.dataset["active"] = "true";
   cableMethod.setAttribute("aria-pressed", "true");
   cableMethod.append(textElement("strong", "", "USB cable"));
-  cableMethod.append(textElement("span", "", "Primary connection method"));
   const bluetoothMethod = element("button", "grant-method");
   bluetoothMethod.type = "button";
   bluetoothMethod.setAttribute("aria-pressed", "false");
   bluetoothMethod.append(textElement("strong", "", "Bluetooth"));
-  bluetoothMethod.append(textElement("span", "", "Compatibility path for Bluetooth devices"));
   methodOptions.append(cableMethod, bluetoothMethod);
   methods.append(methodsTitle, validationNotice, methodOptions);
 
@@ -195,11 +191,7 @@ const render = (): void => {
   cancel.type = "button";
   actions.append(button, cancel);
 
-  const footnote = textElement(
-    "p",
-    "grant-footnote",
-    "Bramble validates the Starknet app, but your keys never leave your Ledger.",
-  );
+  const footnote = textElement("p", "grant-footnote", "Your keys never leave your Ledger.");
 
   const setStatus = (
     title: string,
@@ -211,6 +203,9 @@ const render = (): void => {
     status.dataset["tone"] = tone;
     statusTitle.textContent = title;
     statusCopy.textContent = message;
+    // A phase with nothing for the reader to do shows its title alone rather
+    // than an empty line under it.
+    statusCopy.hidden = message === "";
     statusDetail.hidden = detail === undefined;
     statusDetail.textContent = detail ?? "";
   };
@@ -231,12 +226,10 @@ const render = (): void => {
         ? [
             readinessStep("1", "Enable Bluetooth, then power your Ledger off and back on"),
             readinessStep("2", "Stay on the Ledger dashboard and pair it in Chrome"),
-            readinessStep("3", "Bramble will check firmware, then open Starknet"),
           ]
         : [
             readinessStep("1", "Unlock your Ledger and connect a data-capable USB cable"),
-            readinessStep("2", "Bramble will check firmware, then open Starknet"),
-            readinessStep("3", "Choose your Ledger in Chrome, then click Connect"),
+            readinessStep("2", "Choose your Ledger in Chrome, then press Connect"),
           ]),
     );
   };
@@ -311,14 +304,10 @@ const render = (): void => {
     if (failure === "permission-dismissed") {
       nextTransport = transport;
       setStatus(
+        "No Ledger selected",
         transport === "ble"
-          ? "Bluetooth pairing closed"
-          : `Chrome did not expose ${transportLabel(transport)}`,
-        transport === "ble"
-          ? "Chrome returned no compatible Ledger Bluetooth service. Choose USB above if the device is cabled."
-          : transport === "hid"
-            ? "Chrome returned no permitted Ledger HID collection. A Ledger that also exposes FIDO can be filtered by Chrome."
-            : "Chrome returned no compatible Ledger vendor interface. Check Chrome's USB-device setting and device log; reconnecting alone may not change this.",
+          ? "Chrome found no Ledger to pair with. Choose USB above if the device is cabled."
+          : "Chrome found no Ledger. Unlock the device, open the Starknet app, and try again.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "PICKER"), diagnostics),
       );
@@ -327,7 +316,7 @@ const render = (): void => {
     } else if (failure === "permission-blocked") {
       setStatus(
         "Chrome blocked device access",
-        "Reconnect the Ledger and check Chrome's device permissions for Bramble.",
+        "Reconnect the Ledger, then allow device access for Bramble in Chrome.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "POLICY"), diagnostics),
       );
@@ -337,7 +326,7 @@ const render = (): void => {
       setStatus(
         `${transportLabel(transport)} couldn't open the Ledger`,
         alternate
-          ? `Chrome could not claim that interface. Try the ${transportLabel(alternate)} compatibility transport.`
+          ? `Chrome couldn't open that connection. Try ${transportLabel(alternate)} instead.`
           : "Reconnect the Ledger, close other wallet apps, and try again.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "INTERFACE"), diagnostics),
@@ -347,7 +336,7 @@ const render = (): void => {
     } else {
       setStatus(
         "Ledger connection failed",
-        "Reconnect the cable, unlock the device, keep Starknet open, and close other wallet apps.",
+        "Reconnect the cable, unlock the device, open Starknet, and close other wallet apps.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "TRANSPORT"), diagnostics),
       );
@@ -394,7 +383,7 @@ const render = (): void => {
       }
       setStatus(
         "Checking firmware and Starknet",
-        "Bramble is checking device software and reading a public account key. Nothing is signed.",
+        "",
         "info",
         `Transport · ${transportLabel(transport)} · Firmware, app, and key handshake`,
       );

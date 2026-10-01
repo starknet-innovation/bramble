@@ -3,7 +3,10 @@
  * registration/shielding journey.
  */
 
-import { PRIVACY_DEPLOY_REQUIRED } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  PRIVACY_DEPLOY_REQUIRED,
+  PRIVACY_FUNDS_REQUIRED,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { accountDisplayName } from "../../shared/parts";
 import type { SendIntent } from "../send/send-model";
@@ -159,7 +162,15 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
       return;
     }
     if (deploymentKnownFromPrivacy(deployment ?? null, settled) === false) {
-      block(deps, tokenId, { kind: "deploy", message: PRIVACY_DEPLOY_REQUIRED }, before);
+      // Deploying is the next step, but it is not the one to offer an account
+      // that cannot pay for it: the fee estimate would be the first thing to
+      // say so, as a failed request. Only a settled read that found no STRK
+      // diverts — an unknown balance still gets the deployment path.
+      const blocker =
+        deps.fundedForFees?.() === false
+          ? ({ kind: "fund", message: PRIVACY_FUNDS_REQUIRED } as const)
+          : ({ kind: "deploy", message: PRIVACY_DEPLOY_REQUIRED } as const);
+      block(deps, tokenId, blocker, before);
       return;
     }
   }

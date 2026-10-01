@@ -31,7 +31,7 @@ describe("account drawer group interactions", () => {
     document.body.replaceChildren();
   });
 
-  test("renders no group-CRUD controls; management lives behind the Manage accounts & groups entry", () => {
+  test("renders no group-CRUD controls; management lives behind the Manage accounts & folders entry", () => {
     const harness = mount([group("briefcase", "work", "Work")], "drawer");
 
     // The lean drawer carries none of the moved group-management UI: no create
@@ -46,7 +46,7 @@ describe("account drawer group interactions", () => {
     expect(harness.container.querySelector("#drawer-manage-groups")).toBeNull();
     expect(harness.container.querySelector("#drawer-manage-groups-panel")).toBeNull();
 
-    // The single entry into management is the "Manage accounts & groups" row,
+    // The single entry into management is the "Manage accounts & folders" row,
     // which navigates to the dedicated view (data-view="account").
     const entry = harness.container.querySelector('.drawer-foot [data-view="account"]');
     expect(entry).not.toBeNull();
@@ -113,7 +113,7 @@ describe("manage-accounts group management", () => {
     );
   });
 
-  test("creates a group from the manage view's Create a group panel", async () => {
+  test("creates a folder from the manage view's Create a folder panel", async () => {
     const harness = mount([], "account");
 
     // Defaults are always listed, so the create panel starts closed. Opening it
@@ -287,7 +287,7 @@ describe("manage-accounts group management", () => {
     ).toBe("false");
   });
 
-  test("accordion: opening a group collapses the Create a group panel and vice versa", async () => {
+  test("accordion: opening a folder collapses the Create a folder panel and vice versa", async () => {
     const harness = mount([group("folder", "work", "Work")], "account");
 
     // With a group present the create panel starts collapsed.

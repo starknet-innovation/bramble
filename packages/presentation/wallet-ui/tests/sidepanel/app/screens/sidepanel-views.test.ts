@@ -159,10 +159,12 @@ describe("sidepanel views", () => {
     expect(html).toContain(`data-approval-id="${pending[0]?.id}"`);
   });
 
-  test("swap flow renders the AVNU screen skeleton with staged sections", () => {
+  test("swap flow renders the avnu screen skeleton with staged sections", () => {
     const html = dashboard("swap", status, [], preferences, { balances: [] });
 
-    expect(html).toContain("Best route via avnu");
+    // The rail names the three steps; the route is not the header's business.
+    expect(html).toMatch(/data-swap-step="edit"[\s\S]*"confirm"[\s\S]*"success"/);
+    expect(html).not.toContain("Best route via avnu");
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
     expect(html).toContain('id="swap-review"');
@@ -171,38 +173,32 @@ describe("sidepanel views", () => {
     expect(html).not.toMatch(/<dl[^>]*id="swap-confirm-receipt"/);
     expect(html).toMatch(/id="swap-warning"[^>]*hidden/);
     expect(html).toMatch(/id="swap-success"[^>]*hidden/);
-    expect(html).toContain('class="swap-success-ring"');
-    expect(html).toContain('class="swap-success-check"');
-    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
+    expect(html).toContain('class="send-success-ring"');
+    expect(html).toContain('class="send-success-check"');
+    // Swap owns its back arrow so it can step from the review to the quote.
+    expect(html).toMatch(/id="swap-header-back"[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("explains why sending is unavailable instead of failing silently", () => {
+  test("disables review when the network has no tracked token to send", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
-    expect(html).toContain("No tokens are tracked on this network yet");
     expect(html).toMatch(/id="send-review-button" type="submit" disabled/);
   });
 
   test("Home says nothing about an account that is not on chain yet", () => {
     // Home used to carry a "Deploy account" / "Fund with STRK" chip in the
     // danger colour. The first send creates the account and quotes both fees as
-    // one, so the state is normal and the shortcut lives in Security &
-    // permissions instead.
+    // one, so the state is normal and the shortcut lives in Settings instead.
     const undeployed = dashboard("home", status, [], preferences, { balances: [] }, false);
 
     expect(undeployed).not.toContain("deploy-notice");
     expect(undeployed).not.toContain("Deploy account");
     expect(undeployed).not.toContain('data-view="deploy-account"');
-    // The Shield tile's own "Fund with STRK" is a different control and stays:
-    // shielding really does need STRK, whatever the account's deploy state.
-    // The dedicated deployment flow is still reachable by its own route, and
-    // that route has a way in: the Settings hub links to Security & permissions.
-    expect(dashboard("security", status, [], preferences, { balances: [] }, false)).toContain(
-      'data-view="deploy-account"',
-    );
+    // The dedicated deployment flow is reachable from the Settings hub itself,
+    // one tap in rather than four.
     expect(dashboard("settings", status, [], preferences, { balances: [] }, false)).toContain(
-      'data-view="security"',
+      'data-view="deploy-account"',
     );
   });
 
@@ -210,9 +206,13 @@ describe("sidepanel views", () => {
     const html = dashboard("deploy-account", status, [], preferences, { balances: [] }, false);
     expect(html).toContain('id="wallet-screen-deploy-account"');
     expect(html).toContain('id="deploy-review-stage"');
-    expect(html).toContain("What will happen");
-    expect(html).toContain("Risk and recovery");
-    expect(html).toContain("Review deployment");
+    expect(html).not.toContain("What will happen");
+    expect(html).not.toContain("Risk and recovery");
+    // The receipt states the account, address and network, the header names the
+    // screen, and the fee is quoted onto it — so the control is the action.
+    expect(html).not.toContain("Deployment creates this account on-chain.");
+    expect(html).toContain(">Deploy<");
+    expect(html).not.toContain("Check fee and address");
     expect(html).toMatch(/id="deploy-success"[^>]*hidden/);
     expect(html).not.toContain("wallet-dock");
   });
@@ -220,7 +220,7 @@ describe("sidepanel views", () => {
   test("send flow reviews before it sends, without a fee-speed control", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
-    expect(html).toContain('id="review-panel"');
+    expect(html).toContain('id="send-review-risks"');
     expect(html).not.toContain('name="speed"');
     expect(html).not.toContain(">Speed<");
     expect(html).toContain("Review send");
@@ -244,14 +244,12 @@ describe("sidepanel views", () => {
     ]);
 
     expect(html).toContain('class="tx-kind-icon tx-kind-transfer accepted"');
-    expect(html).toContain("Send 1.5 ETH to");
+    expect(html).toContain("Sent 1.5 ETH");
     expect(html).toContain('id="activity-export"');
     expect(html).toContain('id="activity-refresh"');
 
     const empty = dashboard("activity", status, [], preferences, { balances: [] });
-    expect(empty).toContain(
-      "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.",
-    );
+    expect(empty).toContain("No activity yet. Transactions for this account appear here.");
     expect(empty).not.toContain("Couldn't load on-chain history");
 
     // historyUnavailable is the final positional arg: the full-screen degraded
@@ -406,7 +404,6 @@ describe("sidepanel views", () => {
     expect(backupExport).toContain('id="backup-export"');
     const backupRestore = dashboard("backup-restore", status, [], preferences, { balances: [] });
     expect(backupRestore).toContain('id="backup-import"');
-    expect(backupRestore).toContain("Saved contacts and tracked assets");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain('class="wallet-dock"');
   });

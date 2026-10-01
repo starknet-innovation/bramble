@@ -89,7 +89,7 @@ export const SwapReview: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector("#swap-confirm")).toBeVisible();
     await expect(body?.querySelector("#swap-confirm-receipt")).toHaveTextContent(
-      /Minimum received\s*19,260 STRK \(wallet-enforced\)/,
+      /Minimum received\s*19,260 STRK/,
     );
     await expect(body?.querySelectorAll(".swap-review-pair .token-logo")).toHaveLength(2);
     await expect(body?.querySelector("#swap-risk-review")).toBeEmptyDOMElement();
