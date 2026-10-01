@@ -150,11 +150,13 @@ const activityScenario: WalletScenario = {
   views: ["activity"],
 };
 
-type NftMode = "blocked" | "review" | "submitted";
+// `failed` submits like `submitted`, but the fixture chain reverts the transfer.
+type NftMode = "blocked" | "failed" | "review" | "submitted";
 
 const prepareNft =
   (mode: NftMode) =>
   async (context: FrameContext): Promise<void> => {
+    const submits = mode === "submitted" || mode === "failed";
     const wallet = createSidepanelRuntime({
       sendMessage: async (message) => {
         const type = messageType(message);
@@ -178,8 +180,13 @@ const prepareNft =
             },
           };
         }
-        if (type === "wallet.transferNft" && mode === "submitted") {
+        if (type === "wallet.transferNft" && submits) {
           return { ok: true, transactionHash: NFT_HASH };
+        }
+        // The receipt reads the network off the live status: without it the
+        // hash has no explorer link, which is how a reader looks a failure up.
+        if (type === "wallet.status") {
+          return statusFor();
         }
         if (type === "wallet.activity") {
           return {
@@ -189,7 +196,7 @@ const prepareNft =
                 hash: NFT_HASH,
                 kind: "transfer" as const,
                 networkId: "SN_MAIN" as const,
-                status: "preconfirmed" as const,
+                status: mode === "failed" ? ("reverted" as const) : ("preconfirmed" as const),
                 submittedAt: 1,
                 summary: "Transfer Bramble Test Collection #342",
               },
@@ -216,7 +223,7 @@ const prepareNft =
     }
     form.requestSubmit();
     await nextTurn();
-    if (mode === "submitted") {
+    if (submits) {
       form.requestSubmit();
       await nextTurn();
       await nextTurn();
@@ -296,9 +303,18 @@ const nftScenario: WalletScenario = {
       prepare: prepareNft("submitted"),
       state: { review: "passed", transactionHash: NFT_HASH },
     },
+    {
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      id: "failed",
+      label: "Transfer failed",
+      narrative:
+        'A transfer the chain reverts ends on the failure, the chain\'s reason, and the hash — never on "Transfer complete".',
+      prepare: prepareNft("failed"),
+      state: { chain: "reverted", review: "passed", transactionHash: NFT_HASH },
+    },
   ],
   description:
-    "NFT metadata arrival, gallery and detail quality, guarded transfer review, blocking, and submission.",
+    "NFT metadata arrival, gallery and detail quality, guarded transfer review, blocking, submission, and a reverted transfer.",
   id: "nft",
   surface: "sidepanel",
   title: "NFT loading and send",

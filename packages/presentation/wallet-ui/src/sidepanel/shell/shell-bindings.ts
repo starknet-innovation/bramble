@@ -185,6 +185,18 @@ export const awaitDeployment = async (
   return false;
 };
 
+/**
+ * What the deployment receipt says for each of the chain's answers. Exported so
+ * UI Lab paints its receipt checkpoints from the copy the binder ships rather
+ * than a restatement of it; display text only, it carries no authority.
+ */
+export const DEPLOY_RECEIPT_COPY = {
+  confirmedDescription: "This account is on Starknet and can submit transactions.",
+  confirmedTitle: "Account deployed",
+  failedTitle: "Deployment failed",
+  submittedTitle: "Deployment submitted",
+} as const;
+
 // A deployment has nothing to itemise, so its receipt states the outcome, says
 // once what now exists, and shows the hash. The network comes off the live
 // status rather than the markup, because the explorer link must match the chain
@@ -199,16 +211,7 @@ const paintDeployReceipt = async (
   paintOutcomeReceipt(
     deps.app,
     "deploy-success",
-    outcomeReceiptFor(
-      outcome,
-      {
-        confirmedDescription: "This account is on Starknet and can submit transactions.",
-        confirmedTitle: "Account deployed",
-        failedTitle: "Deployment failed",
-        submittedTitle: "Deployment submitted",
-      },
-      hash,
-    ),
+    outcomeReceiptFor(outcome, DEPLOY_RECEIPT_COPY, hash),
     status.networkId,
   );
 };

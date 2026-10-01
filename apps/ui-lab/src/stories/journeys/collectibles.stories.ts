@@ -1,4 +1,9 @@
-import { checkpointStory, LAB_META, type LabMeta } from "../../runtime/story-helpers";
+import {
+  checkpointStory,
+  failedReceiptStory,
+  LAB_META,
+  type LabMeta,
+} from "../../runtime/story-helpers";
 
 const meta: LabMeta = {
   ...LAB_META,
@@ -17,3 +22,8 @@ export const Recipient = checkpointStory("Choose recipient", "nft", "recipient")
 export const TransferReview = checkpointStory("Transfer review", "nft", "review");
 export const RecipientBlocked = checkpointStory("Recipient blocked", "nft", "blocked");
 export const Submitted = checkpointStory("Transfer submitted", "nft", "submitted");
+export const TransferFailed = failedReceiptStory("Transfer failed", "nft", "failed", {
+  id: "nft-success",
+  reason: "Starknet reverted this transaction. Review its activity details before retrying.",
+  title: "Transfer failed",
+});
