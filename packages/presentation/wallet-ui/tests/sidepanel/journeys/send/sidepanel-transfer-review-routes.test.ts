@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { routeFor } from "@bramble/transactions/send-routes";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import type { TransferFields } from "../../../../src/sidepanel/journeys/send/transfer-model";
 import {
@@ -40,7 +41,7 @@ const relayed = (): PrivacyPreparation =>
     kind: "transfer",
     payloadDigest: `sha256:${"0".repeat(64)}`,
     poolAddress: "0x1",
-    relayFee: { amount: POOL_FEE, recipient: "0x2", token: "0x3" },
+    relayFee: { amount: POOL_FEE, recipient: "0x2", token: STRK_TOKEN_ADDRESS },
     route: "private-relay",
     summaries: [],
     symbol: "STRK",
@@ -217,7 +218,7 @@ describe("route fee lines", () => {
     });
     expect(shield).toContain("Estimated fee:");
     expect(shield).toContain("Pool fee: 6 STRK");
-    expect(shield).toContain("Total: 6.01 STRK");
+    expect(shield).toContain("Total fees: 6.01 STRK");
 
     // A relayed route builds its own lines and totals the same pair. The
     // shared fixture withdraws exactly the pool charge, which is the sponsored
@@ -227,7 +228,7 @@ describe("route fee lines", () => {
       relayFee: {
         amount: `0x${(BigInt(POOL_FEE) + BigInt("0x2386f26fc10000")).toString(16)}`,
         recipient: "0x2",
-        token: "0x3",
+        token: STRK_TOKEN_ADDRESS,
       },
     } as PrivacyPreparation;
     const unshield = routeFeeHtml(routeFor("private", "public"), {
@@ -237,7 +238,7 @@ describe("route fee lines", () => {
     });
     expect(unshield).toContain("Estimated fee: 0.01 STRK");
     expect(unshield).toContain("Pool fee: 6 STRK");
-    expect(unshield).toContain("Total: 6.01 STRK");
+    expect(unshield).toContain("Total fees: 6.01 STRK");
 
     // Sponsored gas costs the pool charge and nothing else, so no total.
     const sponsored = routeFeeHtml(routeFor("private", "public"), {
@@ -246,7 +247,60 @@ describe("route fee lines", () => {
       review: review(),
     });
     expect(sponsored).toContain("Sponsored");
-    expect(sponsored).not.toContain("Total:");
+    expect(sponsored).not.toContain("Total fees:");
+  });
+
+  // #358 / #476: the relay may convert its fee into the token being sent. A
+  // converted fee is shown whole in its own token, never as STRK, and never
+  // split against or added to the pool's STRK charge.
+  test("a converted relay fee is stated in its own token with no STRK split or total", () => {
+    const usdc = {
+      ...relayed(),
+      relayFee: {
+        amount: "0x124f80",
+        asset: { decimals: 6, symbol: "USDC" },
+        recipient: "0x2",
+        token: "0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+      },
+    } as PrivacyPreparation;
+    const html = routeFeeHtml(routeFor("private", "private"), {
+      poolFeeFri: POOL_FEE,
+      preparation: usdc,
+      review: review(),
+    });
+    expect(html).toContain("Fee taken from your private balance: 1.2 USDC");
+    expect(html).not.toContain("STRK");
+    expect(html).not.toContain("Total fees:");
+    expect(html).not.toContain("Pool fee:");
+  });
+
+  test("an unrecognized relay fee token is shown raw rather than as STRK", () => {
+    const unknown = {
+      ...relayed(),
+      relayFee: { amount: "0x124f80", recipient: "0x2", token: "0x3" },
+    } as PrivacyPreparation;
+    const html = routeFeeHtml(routeFor("private", "public"), {
+      poolFeeFri: POOL_FEE,
+      preparation: unknown,
+      review: review(),
+    });
+    expect(html).toContain("Fee taken from your private balance: 0x124f80 (0x3)");
+    expect(html).not.toContain("STRK");
+  });
+
+  test("names the balance each pool fee leaves", () => {
+    const relayedHtml = routeFeeHtml(routeFor("private", "public"), {
+      poolFeeFri: POOL_FEE,
+      preparation: relayed(),
+      review: review(),
+    });
+    expect(relayedHtml).toContain("Pool fee: 6 STRK from your private balance");
+    const shield = routeFeeHtml(routeFor("public", "private"), {
+      poolFeeFri: POOL_FEE,
+      preparation: accountPreparation(),
+      review: review(),
+    });
+    expect(shield).toContain("Pool fee: 6 STRK from your public balance");
   });
 
   test("states no total when there is only one fee to state", () => {
@@ -256,7 +310,7 @@ describe("route fee lines", () => {
       review: review(),
     });
     expect(html).toContain("Estimated fee:");
-    expect(html).not.toContain("Total:");
+    expect(html).not.toContain("Total fees:");
   });
 
   test("pairs a boxed Cost with a boxed Visibility", () => {

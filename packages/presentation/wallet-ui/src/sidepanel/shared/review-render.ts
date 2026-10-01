@@ -161,7 +161,7 @@ export const reviewFeeSection = (
       // Both figures reach here as base units, but the pool quotes hex and an
       // estimate may be decimal, so each is parsed rather than compared as text.
       const total = BigInt(network.overallFee) + BigInt(poolFeeFri);
-      return `<p class="review-fee review-fee-total">Total: ${escapeHtml(
+      return `<p class="review-fee review-fee-total">Total fees: ${escapeHtml(
         formatFri(`0x${total.toString(16)}`),
       )}</p>`;
     } catch {

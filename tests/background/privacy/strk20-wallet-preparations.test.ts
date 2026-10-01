@@ -61,7 +61,54 @@ const privateDeposit = async (): Promise<Strk20DepositPreparation> => {
   return { ...unsigned, context, id: context.payloadDigest };
 };
 
+const USDT = "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8";
+
+const relayedTransfer = async (feeToken: string) => {
+  const mainnetToken: TokenConfig = { ...token, id: "SN_MAIN:ETH:0x456", networkId: "SN_MAIN" };
+  const unsigned = {
+    actions: [
+      { amount: "0x1", recipient: "0x999", token: token.address, type: "transfer" as const },
+    ],
+    amount: "1",
+    amountRaw: "1",
+    kind: "transfer" as const,
+    plan: {
+      feeAction: {
+        amount: "0x124f80",
+        recipient: "0x4",
+        token: feeToken,
+        type: "withdraw" as const,
+      },
+      mode: "private-relay" as const,
+    },
+    poolAddress: "0x123",
+    recipient: "0x999",
+    summaries: ["Send 1 ETH privately"],
+    token: mainnetToken,
+  };
+  const context = await createApprovalContext(account, strk20WalletPreparationPayload(unsigned));
+  return { ...unsigned, context, id: context.payloadDigest };
+};
+
 describe("STRK20 wallet preparation store", () => {
+  // #358: a relay fee converted out of STRK must reach the panel with its own
+  // token's display metadata, from the registry rather than preferences.
+  test("describes the relay fee token from the registry, and only when it knows it", async () => {
+    const store = createStrk20WalletPreparationStore();
+
+    expect(store.put(await relayedTransfer(USDT)).relayFee).toEqual({
+      amount: "0x124f80",
+      asset: { decimals: 6, symbol: "USDT" },
+      recipient: "0x4",
+      token: USDT,
+    });
+    expect(store.put(await relayedTransfer("0x777")).relayFee).toEqual({
+      amount: "0x124f80",
+      recipient: "0x4",
+      token: "0x777",
+    });
+  });
+
   test("returns a display-safe review and claims a deep clone exactly once", async () => {
     const store = createStrk20WalletPreparationStore();
     const value = await registration();
