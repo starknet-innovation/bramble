@@ -68,16 +68,19 @@ rather than at upload time. What differs, and why none of it is a matter of tast
 | --- | --- | --- |
 | Background | service worker | event page (Gecko has no extension service worker) |
 | Wallet panel | `side_panel` | `sidebar_action` (Gecko has no `sidePanel` API) |
+| Collectible renderer | sandboxed page | **not shipped** |
 | Ledger | supported | **not supported** |
 
-Both targets ship the same files; only the manifest differs.
+Firefox is supported from **140**, the current ESR — so both ESR lines, the release channel, and the
+forks that track either. 140 is also the first release that understands the
+`data_collection_permissions` this manifest declares, so it is the lowest honest floor rather than
+merely a cautious one.
 
-Firefox is supported from **154**, the release that added the `sandbox` manifest key. That floor is
-deliberate: the collectible renderer executes untrusted on-chain HTML and is only safe because the
-manifest gives it its own security principal and an egress-blocking policy. Below 154 Firefox
-ignores that key and the page would load with full extension privileges, so this build either ships
-it under the same guarantees Chrome gives it or refuses to install. The cost is that **ESR is
-excluded** — the current ESR is 140 and the next is 153.
+The floor and the collectible renderer are **one decision**. That page executes untrusted on-chain
+HTML and is only safe inside a manifest-declared sandbox, which Firefox gained in 154 — so it is
+withheld from the Gecko package rather than shipped where the manifest cannot sandbox it. Nothing is
+lost today: the collectibles journey is parked and no view can reach the gallery. Un-parking it means
+raising this floor back to 154 and excluding ESR again.
 
 **Ledger is not supported on Firefox.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no
 hardware transport exists.
