@@ -1,12 +1,10 @@
 /**
  * Pure self-healing for the side panel's transient account-group UI state: the
- * drawer's selected group filter, the manage-accounts expanded group, and the
- * drawer's open assign panel. Group ids are derived deterministically from the
- * name, so a stale id pointing at a deleted group (or an account that has gone
- * away) must be dropped — otherwise it could silently re-apply itself once a
- * same-named group is recreated, or reopen a panel for an account no longer on
- * the current network. Kept pure and out of the entrypoint so it can be unit
- * tested and reused without reaching for the DOM.
+ * manage-accounts expanded group. Group ids are derived deterministically from
+ * the name, so a stale id pointing at a deleted group must be dropped —
+ * otherwise it could silently re-apply itself once a same-named group is
+ * recreated. Kept pure and out of the entrypoint so it can be unit tested and
+ * reused without reaching for the DOM.
  */
 import type { AccountGroups } from "@bramble/settings/groups";
 
@@ -22,36 +20,42 @@ import type { AccountGroups } from "@bramble/settings/groups";
 export const CREATE_GROUP_PANEL = "__create__";
 
 /**
- * The transient, per-session group UI selections held in the side panel
- * entrypoint. Each is an id (or null) that only makes sense while the referenced
- * group or account still exists.
+ * The transient, per-session group UI selection held in the side panel
+ * entrypoint: an id (or null) that only makes sense while the referenced group
+ * still exists.
  */
 export type TransientGroupState = {
-  readonly drawerGroupFilter: string | null;
+  /**
+   * Drawer folders the user has collapsed. Ids of deleted folders are dropped,
+   * so a later folder that reuses the same slug does not open already closed.
+   */
+  readonly collapsedFolderIds?: readonly string[];
   readonly expandedGroupId: string | null;
-  readonly openAssignId: string | null;
 };
 
 /**
- * Returns a copy of `state` with any selection dropped that no longer resolves:
- * a group filter or expanded group whose group id is gone, or an open assign
- * panel whose account id is gone. Selections that still resolve pass through
- * unchanged. The {@link CREATE_GROUP_PANEL} sentinel is not a group id, so it is
- * kept as-is rather than healed away.
+ * Returns a copy of `state` with selections whose groups are gone removed.
+ * A selection that still resolves passes through unchanged. The
+ * {@link CREATE_GROUP_PANEL} sentinel is not a group id, so it is kept as-is
+ * rather than healed away. Collapsed folder ids are returned only when the
+ * caller passed them, and only the ids that still name a group.
  */
 export const healTransientGroupState = (
   state: TransientGroupState,
   groups: AccountGroups,
-  accountIds: readonly string[],
 ): TransientGroupState => {
-  const hasGroup = (id: string | null): boolean =>
-    id !== null && groups.some((group) => group.id === id);
-  const hasAccount = (id: string | null): boolean => id !== null && accountIds.includes(id);
-  const keepExpanded =
-    state.expandedGroupId === CREATE_GROUP_PANEL || hasGroup(state.expandedGroupId);
+  const known = new Set(groups.map((group) => group.id));
+  const keep =
+    state.expandedGroupId === CREATE_GROUP_PANEL ||
+    (state.expandedGroupId !== null && known.has(state.expandedGroupId));
+  const healed: TransientGroupState = {
+    expandedGroupId: keep ? state.expandedGroupId : null,
+  };
+  if (state.collapsedFolderIds === undefined) {
+    return healed;
+  }
   return {
-    drawerGroupFilter: hasGroup(state.drawerGroupFilter) ? state.drawerGroupFilter : null,
-    expandedGroupId: keepExpanded ? state.expandedGroupId : null,
-    openAssignId: hasAccount(state.openAssignId) ? state.openAssignId : null,
+    ...healed,
+    collapsedFolderIds: state.collapsedFolderIds.filter((id) => known.has(id)),
   };
 };

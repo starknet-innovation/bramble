@@ -71,12 +71,12 @@ const renderSeam = (
     [], // multisigIntents
     null, // selectedMultisigId
     null, // multisigClassDeclared
-    null, // drawerGroupFilter
+    undefined, // collapsedFolders
     null, // expandedGroupId
     false, // priceStale
     null, // priceAsOf
     [], // discoveredNfts
-    null, // openAssignId
+    false, // addFolderOpen
     seam.classHashVerification ?? null,
     seam.historyUnavailable ?? false,
   );

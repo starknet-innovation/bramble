@@ -121,9 +121,19 @@ describe("importPreferences trust scope", () => {
     expect(next.accountLabels).toEqual({ "SN_MAIN:0x1": "Imported label" });
     expect(next.activeNetworkId).toBe("SN_SEPOLIA");
     expect(next.displayCurrency).toBe("eur");
-    expect(next.groups).toEqual([
-      { accountIds: [], icon: "folder", id: "imported", name: "Imported" },
+    // The backup's own folder is restored, bracketed by the two default folders
+    // every stored list carries.
+    expect(next.groups?.map((group) => group.id)).toEqual([
+      "my-accounts",
+      "imported",
+      "archived-accounts",
     ]);
+    expect(next.groups?.[1]).toEqual({
+      accountIds: [],
+      icon: "folder",
+      id: "imported",
+      name: "Imported",
+    });
     expect(next.hiddenTokens).toEqual([`SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`]);
     expect(next.theme).toBe("light");
   });

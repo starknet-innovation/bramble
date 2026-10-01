@@ -20,8 +20,6 @@ export type HomeUiDeps = {
   readonly app: Element | null;
   readonly drawerOpen: () => boolean;
   readonly setDrawerOpen: (open: boolean) => void;
-  readonly drawerGroupFilter: () => string | null;
-  readonly setDrawerGroupFilter: (filter: string | null) => void;
   readonly networkId: () => string;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly selectPortfolio?: (multisigId: string | null) => void;
@@ -95,10 +93,17 @@ const bindDrawerDrag = (root: HTMLElement, isOpen: () => boolean, close: () => v
     backdrop.style.opacity = dismiss ? "0" : "1";
   };
 
+  // Account rows are HTML5 drag sources. A gesture that starts on one is the
+  // filing drag, so the sheet-dismiss gesture leaves that pointer alone.
+  const startsOnAccountRow = (event: PointerEvent): boolean => {
+    const target = event.target;
+    return target instanceof Element && target.closest("[data-drag-account]") !== null;
+  };
+
   drawer.addEventListener("pointerdown", (event: PointerEvent) => {
     // Ignore extra touch points once a gesture is in progress so a second
     // finger cannot reset the origin and jump the sheet mid-drag.
-    if (!isOpen() || event.button !== 0 || armed) {
+    if (!isOpen() || event.button !== 0 || armed || startsOnAccountRow(event)) {
       return;
     }
     armed = true;
@@ -262,21 +267,6 @@ const bindDrawer = (deps: HomeUiDeps): void => {
       }
       setOpen(false, false);
       deps.selectPortfolio?.(id);
-      void deps.wallet.loadStatus().then(deps.render);
-    });
-  });
-
-  // Folder filter chips narrow the listed accounts to a group's members; the
-  // selection persists across re-renders via the entrypoint module var, so the
-  // drawer reopens showing the same folder.
-  root.querySelectorAll<HTMLButtonElement>("[data-group-filter]").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const value = chip.dataset["groupFilter"];
-      const next = !value || value === "all" ? null : value;
-      if (next === deps.drawerGroupFilter()) {
-        return;
-      }
-      deps.setDrawerGroupFilter(next);
       void deps.wallet.loadStatus().then(deps.render);
     });
   });

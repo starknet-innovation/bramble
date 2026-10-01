@@ -10,7 +10,7 @@
  * see no seam.
  */
 
-import type { AccountGroupIcon } from "@bramble/settings/groups";
+import { type AccountGroupIcon, isDefaultGroup } from "@bramble/settings/groups";
 import { isPreferencesResponse } from "../../popup/responses/responses";
 import { responseError } from "./runtime-errors";
 
@@ -30,11 +30,11 @@ export const createAccountGroupClient = (sendMessage: GroupMessageSender) => ({
   async createGroup(name: string, icon: AccountGroupIcon): Promise<string> {
     const response = await sendMessage({ icon, name, type: "wallet.createGroup" });
     if (isPreferencesResponse(response)) {
-      // The pure model appends the new group last with a deterministic id, so
-      // the final entry is the one just created — return its id so the caller
-      // can open its members editor.
+      // The write seeds both default folders and stores the new one between
+      // them, so the archive — not the folder just created — is last. The new
+      // folder is the last entry that is not a default.
       const groups = response.preferences.groups ?? [];
-      const created = groups[groups.length - 1];
+      const created = [...groups].reverse().find((group) => !isDefaultGroup(group.id));
       if (created) {
         return created.id;
       }

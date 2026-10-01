@@ -21,6 +21,7 @@ import { isAccountId } from "@bramble/wallet-model/accounts";
  * so `icon(group.icon)` always resolves.
  */
 export const GROUP_ICONS = [
+  "wallet",
   "folder",
   "briefcase",
   "user",
@@ -177,11 +178,12 @@ export const setGroupIcon = (
 };
 
 /**
- * Removes the group with `id`. No-op when the id is unknown. Returns a new
- * array.
+ * Removes the group with `id`. No-op when the id is unknown, and for either
+ * default folder: the drawer needs both to exist, so they are renamed rather
+ * than removed. Returns a new array.
  */
 export const removeGroup = (groups: AccountGroups, id: string): AccountGroups =>
-  groups.filter((group) => group.id !== id);
+  isDefaultGroup(id) ? groups : groups.filter((group) => group.id !== id);
 
 /**
  * Files an account into (`member: true`) or out of (`member: false`) the group
@@ -232,16 +234,87 @@ export const accountGroup = (groups: AccountGroups, accountId: string): AccountG
   groups.find((group) => group.accountIds.includes(accountId)) ?? null;
 
 /**
+ * The two folders every wallet has. "My accounts" is where an account lives
+ * until it is filed somewhere else — an account in no group is shown there, so
+ * a new account needs no assignment to appear. "Archived accounts" starts
+ * empty and always sorts last.
+ *
+ * Both are structural rather than user-made: they are ensured on every read and
+ * refused by {@link removeGroup}, so the drawer always has somewhere to put an
+ * account and somewhere to move it out of the way.
+ */
+export const DEFAULT_GROUP_IDS = {
+  archived: "archived-accounts",
+  home: "my-accounts",
+} as const;
+
+const DEFAULT_GROUPS: AccountGroups = [
+  { accountIds: [], icon: "wallet", id: DEFAULT_GROUP_IDS.home, name: "My accounts" },
+  { accountIds: [], icon: "folder", id: DEFAULT_GROUP_IDS.archived, name: "Archived accounts" },
+];
+
+/**
+ * Whether a group is one of the two the wallet guarantees. A default folder can
+ * be renamed and re-iconed like any other; it cannot be deleted, because the
+ * drawer files every unassigned account into the first and offers the second as
+ * the place to put an account away.
+ */
+export const isDefaultGroup = (id: string): boolean =>
+  id === DEFAULT_GROUP_IDS.home || id === DEFAULT_GROUP_IDS.archived;
+
+/**
+ * The folder an account is shown in. An account filed into a group is shown
+ * there; one in no group is shown in the home folder, so a new account appears
+ * without a write. Returns null when `groups` has no home folder — callers
+ * that install the default groups always have one, and a list without them has
+ * nowhere to show an unfiled account.
+ */
+export const displayedAccountGroup = (
+  groups: AccountGroups,
+  accountId: string,
+): AccountGroup | null =>
+  accountGroup(groups, accountId) ??
+  groups.find((group) => group.id === DEFAULT_GROUP_IDS.home) ??
+  null;
+
+/**
+ * Returns the groups in display order with both defaults present: the home
+ * folder first, then the user's own in their existing order, then the archive
+ * last. Missing defaults are added, so a wallet that predates them — or one
+ * whose stored list is empty — reads the same as a fresh one.
+ */
+export const withDefaultGroups = (groups: AccountGroups): AccountGroups => {
+  // Already home-first and archive-last: return the input so a read that
+  // changes nothing keeps its identity.
+  if (
+    groups.length >= 2 &&
+    groups[0]?.id === DEFAULT_GROUP_IDS.home &&
+    groups.at(-1)?.id === DEFAULT_GROUP_IDS.archived &&
+    !groups.slice(1, -1).some((group) => isDefaultGroup(group.id))
+  ) {
+    return groups;
+  }
+  const known = (id: string): AccountGroup | undefined => groups.find((group) => group.id === id);
+  const home = known(DEFAULT_GROUP_IDS.home) ?? DEFAULT_GROUPS[0];
+  const archived = known(DEFAULT_GROUP_IDS.archived) ?? DEFAULT_GROUPS[1];
+  const rest = groups.filter((group) => !isDefaultGroup(group.id));
+  return home && archived ? [home, ...rest, archived] : groups;
+};
+
+/**
  * Repairs legacy data that predates the single-group model: an account listed
  * in several groups is kept in only the FIRST (in stable array order) and
  * dropped from the rest, so membership becomes exclusive without losing an
- * account entirely. Returns the input unchanged when it already satisfies the
- * invariant, preserving referential identity.
+ * account entirely. Also ensures both default folders exist and sit in display
+ * order, so every wallet reads the same whether or not it has seen them.
+ * Returns the input unchanged when it already satisfies both, preserving
+ * referential identity.
  */
 export const normalizeAccountGroups = (groups: AccountGroups): AccountGroups => {
   const claimed = new Set<string>();
+  const seeded = withDefaultGroups(groups);
   let changed = false;
-  const next = groups.map((group) => {
+  const next = seeded.map((group) => {
     const kept = group.accountIds.filter((id) => {
       if (claimed.has(id)) {
         changed = true;
@@ -252,5 +325,5 @@ export const normalizeAccountGroups = (groups: AccountGroups): AccountGroups => 
     });
     return kept.length === group.accountIds.length ? group : { ...group, accountIds: kept };
   });
-  return changed ? next : groups;
+  return changed || seeded !== groups ? next : groups;
 };

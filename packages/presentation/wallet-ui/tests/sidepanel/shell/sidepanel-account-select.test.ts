@@ -93,14 +93,12 @@ const mount = (groups: AccountGroup[] = []): Harness => {
     };
     const groupDeps: GroupControlDeps = {
       expandedGroup: () => expandedGroupId,
-      openAssign: () => null,
       rerender: async () => {
         paint();
       },
       setExpandedGroup: (id) => {
         expandedGroupId = id;
       },
-      setOpenAssign: () => undefined,
       wallet: wallet as unknown as GroupControlDeps["wallet"],
     };
     bindPickers(shellDeps);

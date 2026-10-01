@@ -1,9 +1,9 @@
 /**
  * Home bindings behaviour under happy-dom: the account drawer (escape-to-close,
- * account switch success / no-op / failure, folder-filter chips, add-account
- * success and failure), the direct-manipulation dismiss gesture (reduced-motion
- * and animated release), the two-tab portfolio, and guards that skip binding
- * on non-home markup.
+ * account switch success / no-op / failure, add-account success and failure),
+ * the direct-manipulation dismiss gesture (reduced-motion and animated
+ * release), the two-tab portfolio, and guards that skip binding on non-home
+ * markup.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { AccountGroup } from "@bramble/settings/groups";
@@ -57,7 +57,7 @@ type Handle = {
     renders: number;
     startAddAccount: number;
   };
-  readonly state: { open: boolean; filter: string | null };
+  readonly state: { open: boolean };
   readonly paint: () => void;
 };
 
@@ -67,7 +67,7 @@ const mount = (options: MountOptions = {}): Handle => {
   app.id = "app";
   document.body.append(app);
 
-  const state: Handle["state"] = { filter: null, open: false };
+  const state: Handle["state"] = { open: false };
   const calls: Handle["calls"] = {
     addAccount: [],
     renders: 0,
@@ -113,19 +113,15 @@ const mount = (options: MountOptions = {}): Handle => {
       [],
       null,
       null,
-      state.filter,
+      [],
     );
     app.replaceChildren(document.createRange().createContextualFragment(html));
     bindHomeUi({
       app,
-      drawerGroupFilter: () => state.filter,
       drawerOpen: () => state.open,
       networkId: () => "SN_MAIN",
       render: async () => {
         paint();
-      },
-      setDrawerGroupFilter: (filter) => {
-        state.filter = filter;
       },
       setDrawerOpen: (open) => {
         state.open = open;
@@ -200,21 +196,6 @@ describe("home drawer bindings", () => {
     expect(button.disabled).toBe(false);
   });
 
-  test("a folder-filter chip narrows the accounts and re-renders; re-clicking it is a no-op", async () => {
-    const h = mount();
-    const chip = el<HTMLButtonElement>(h.app, `[data-group-filter="${workGroup.id}"]`);
-    chip.click();
-    await tick();
-    expect(h.state.filter).toBe(workGroup.id);
-    const rendersAfterFilter = h.calls.renders;
-
-    // Re-clicking the same folder chip (now the active filter) is a no-op: no
-    // extra render happens.
-    el<HTMLButtonElement>(h.app, `[data-group-filter="${workGroup.id}"]`).click();
-    await tick();
-    expect(h.calls.renders).toBe(rendersAfterFilter);
-  });
-
   test("add-account closes the drawer and opens the shared account chooser", () => {
     const h = mount();
     h.state.open = true;
@@ -277,6 +258,36 @@ describe("home drawer dismiss gesture", () => {
     drawer.dispatchEvent(pointer("pointermove", 104, 16));
     drawer.dispatchEvent(pointer("pointerup", 104, 32));
     expect(h.state.open).toBe(true);
+  });
+
+  test("a horizontal drag that starts on an account row does not dismiss the drawer", () => {
+    const h = mount();
+    el<HTMLButtonElement>(h.app, "#account-trigger").click();
+    const drawer = el<HTMLElement>(h.app, ".account-drawer");
+    // The press starts on the switch control inside the drag row, which is
+    // where a filing drag actually begins.
+    const row = el(h.app, "[data-drag-account] [data-switch-account]");
+
+    row.dispatchEvent(pointer("pointerdown", 200, 0));
+    row.dispatchEvent(pointer("pointermove", 180, 16));
+    row.dispatchEvent(pointer("pointermove", 60, 32));
+    row.dispatchEvent(pointer("pointerup", 40, 48));
+
+    expect(h.state.open).toBe(true);
+    expect(drawer.style.transform).toBe("");
+  });
+
+  test("a leftward drag from a folder heading still dismisses the drawer", () => {
+    const h = mount();
+    el<HTMLButtonElement>(h.app, "#account-trigger").click();
+    const head = el(h.app, ".drawer-folder-head");
+
+    head.dispatchEvent(pointer("pointerdown", 200, 0));
+    head.dispatchEvent(pointer("pointermove", 180, 16));
+    head.dispatchEvent(pointer("pointermove", 60, 32));
+    head.dispatchEvent(pointer("pointerup", 40, 48));
+
+    expect(h.state.open).toBe(false);
   });
 
   test("with motion enabled, the release animates and the transitionend closes it", () => {
@@ -348,11 +359,9 @@ describe("home bindings guards on non-home markup", () => {
     expect(() =>
       bindHomeUi({
         app,
-        drawerGroupFilter: () => null,
         drawerOpen: () => false,
         networkId: () => "SN_MAIN",
         render: async () => undefined,
-        setDrawerGroupFilter: () => undefined,
         setDrawerOpen: () => undefined,
         wallet: {} as WalletFake,
       }),
@@ -376,11 +385,9 @@ describe("home bindings guards on non-home markup", () => {
     expect(() =>
       bindHomeUi({
         app,
-        drawerGroupFilter: () => null,
         drawerOpen: () => false,
         networkId: () => "SN_MAIN",
         render: async () => undefined,
-        setDrawerGroupFilter: () => undefined,
         setDrawerOpen: () => undefined,
         wallet: {} as WalletFake,
       }),
@@ -407,11 +414,9 @@ describe("home bindings guards on non-home markup", () => {
     const calls: string[] = [];
     bindHomeUi({
       app,
-      drawerGroupFilter: () => null,
       drawerOpen: () => false,
       networkId: () => "SN_MAIN",
       render: async () => undefined,
-      setDrawerGroupFilter: () => undefined,
       setDrawerOpen: () => undefined,
       wallet: {
         setActiveAccount: (id: string) => {
@@ -440,11 +445,9 @@ describe("home bindings guards on non-home markup", () => {
     expect(() =>
       bindHomeUi({
         app,
-        drawerGroupFilter: () => null,
         drawerOpen: () => false,
         networkId: () => "SN_MAIN",
         render: async () => undefined,
-        setDrawerGroupFilter: () => undefined,
         setDrawerOpen: () => undefined,
         wallet: {} as WalletFake,
       }),

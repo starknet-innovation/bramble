@@ -32,13 +32,11 @@ const setup = () => {
     );
     bindHomeUi({
       app,
-      drawerGroupFilter: () => null,
       drawerOpen: () => open,
       networkId: () => "SN_MAIN",
       render: async () => {
         paint();
       },
-      setDrawerGroupFilter: () => undefined,
       setDrawerOpen: (next) => {
         open = next;
       },
