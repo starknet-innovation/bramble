@@ -104,12 +104,26 @@ describe("sidepanel surface geometry", () => {
   });
 
   test("dock screens reserve only the clearance the dock needs", () => {
-    // Clearance plus the shell's bottom padding leaves the pill's own 16px
-    // gap above it. A larger reservation scrolled screens whose content
-    // already cleared the dock.
+    // Clearance plus the shell's bottom padding is exactly the dock footprint,
+    // so a screen scrolls only once its content would reach the pill. Any
+    // breathing gap on top scrolled screens whose content already cleared it.
     expect(rule(".screen:not(.flow)")).toContain(
-      `padding-bottom: calc(var(--bramble-dock-h) + ${SPACE.lg} - ${SPACE.md})`,
+      `padding-bottom: calc(var(--bramble-dock-h) - ${SPACE.md})`,
     );
+  });
+
+  test("an empty status line ending a dock screen takes no room", () => {
+    // Home and Activity end on an empty live region. Its reserved line and the
+    // gap before it were invisible space that pushed the page past the panel.
+    // Out of flow, it stays in the document, so announcements still work.
+    const trailing = rule(
+      '.screen:not(.flow) > [role="status"]:empty:last-child, .screen:not(.flow) > :last-child > [role="status"]:empty:last-child',
+    );
+    expect(trailing).toContain("position: absolute");
+    expect(trailing).not.toMatch(/display|visibility/);
+    // Mid-screen status lines keep their reserved line so a message never
+    // shifts the content below it.
+    expect(rule('[role="status"]')).toContain("min-height: 16px");
   });
 
   test("a leading warning glyph keeps a gap from its sentence", () => {
