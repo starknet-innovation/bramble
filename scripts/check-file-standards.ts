@@ -70,8 +70,11 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
 
 import { SECRET_MATERIAL_FILES } from "./file-standards-policy";
 
+// The session credential accessors and the vault decrypt count as secret
+// material too, so renaming the local that holds their result cannot carry a
+// vault read out of the approved boundary modules.
 const SECRET_MATERIAL_PATTERN =
-  /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
+  /\b(?:accountSecrets|getPassphrase|mnemonic|mnemonicPassphrase|passphrase|peekPassphrase|privateKey|readVault|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
 const SUPPRESSION_MARKERS = [
   "@ts-" + "expect-error",
   "@ts-" + "ignore",

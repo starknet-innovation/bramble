@@ -425,6 +425,42 @@ export const observedAccountContext = (
 ): Promise<ActiveAccountContext> =>
   accountContextFor(wallet, session.peekPassphrase(), preferencesStore);
 
+/** The public half of a vault account: what the poisoning check trusts. */
+export type VaultAccountAddress = Pick<AccountRef, "address" | "networkId">;
+
+/**
+ * Reads the vault's public account addresses with a passphrase the caller
+ * already holds, for the address-poisoning trust set (audit #163). Only
+ * `address` and `networkId` leave this boundary module; a failed read yields
+ * `[]`, which leaves the check as strict as the address book alone.
+ */
+export const vaultAccountAddresses = async (
+  wallet: Pick<WalletStatusReader, "readVault">,
+  passphrase: string,
+): Promise<readonly VaultAccountAddress[]> => {
+  try {
+    return (await wallet.readVault(passphrase)).accounts.map(({ address, networkId }) => ({
+      address,
+      networkId,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * {@link vaultAccountAddresses} for callers that hold no passphrase. Reads it
+ * through the non-renewing session view, so the read never extends the unlock
+ * period; a locked wallet yields `[]`.
+ */
+export const observedVaultAccountAddresses = (
+  wallet: Pick<WalletStatusReader, "readVault">,
+  session: Pick<PassiveUnlockSession, "peekPassphrase">,
+): Promise<readonly VaultAccountAddress[]> => {
+  const passphrase = session.peekPassphrase();
+  return passphrase ? vaultAccountAddresses(wallet, passphrase) : Promise.resolve([]);
+};
+
 /**
  * Builds passive extension-page status. Vault results are disclosed only to
  * the unlock that authorized the read; stale reads return locked status and

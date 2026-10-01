@@ -13,11 +13,11 @@ import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalQueue } from "../approvals/approvals";
 import { promptReconnectForStaleGrant } from "../approvals/reconnect-prompt";
+import { vaultAccountAddresses } from "../runtime/runtime-state";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import {
   type TrustedRecipientDeps,
   type TrustedRecipientSources,
-  vaultAccountsFor,
   withTrustedRecipients,
 } from "../transactions/trusted-recipients";
 
@@ -102,7 +102,7 @@ export const resolveOriginAccount = async (
   const trusted = await withTrustedRecipients(
     deps,
     preferences,
-    await vaultAccountsFor(deps.wallet, deps.session),
+    await vaultAccountAddresses(deps.wallet, passphrase),
   );
   if (!authorized.isCurrent()) return { error: "wallet locked" };
   return { account, passphrase, preferences: trusted };

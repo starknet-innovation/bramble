@@ -10,16 +10,16 @@
  *
  * Trust boundary: paid recipients come only from wallet-origin activity rows
  * (`walletPaidRecipients`); chain-discovered rows, which a third party can
- * plant, never enter the set. Failure behavior: an unreadable activity log,
- * multisig registry, or vault contributes nothing, which leaves the check
+ * plant, never enter the set. This module never touches the vault or the
+ * session: callers pass public vault account addresses they read in a secret
+ * boundary module (`vaultAccountAddresses` in runtime-state). Failure
+ * behavior: an unreadable activity log or multisig registry contributes nothing, which leaves the check
  * exactly as strict as the address book alone — a storage fault can never
  * block a send nor add trust.
  */
 import type { MultisigStore } from "@bramble/multisig/repository";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import { type NetworkAddress, walletPaidRecipients } from "@bramble/transactions/paid-recipients";
-import type { Vault } from "@bramble/vault/schema";
-import type { PassiveUnlockSession } from "../runtime/session";
 
 /**
  * Collaborators the trust inputs are read from. The multisig registry is
@@ -63,28 +63,4 @@ export const withTrustedRecipients = async <P extends object>(
     ownAccounts: [...vaultAccounts, ...multisigs].map(asNetworkAddress),
     paidRecipients: walletPaidRecipients(entries),
   };
-};
-
-/**
- * Reads the vault's public account list for {@link withTrustedRecipients} when
- * the caller does not already hold it, through the non-renewing session view
- * so the read never extends the unlock period. A locked wallet or failed read
- * yields `[]`; only public account addresses leave this function.
- */
-export const vaultAccountsFor = async (
-  wallet: { readonly readVault: (unlock: string) => Promise<Vault> },
-  session: Pick<PassiveUnlockSession, "peekPassphrase">,
-): Promise<readonly NetworkAddress[]> => {
-  const unlock = session.peekPassphrase();
-  if (!unlock) {
-    return [];
-  }
-  try {
-    return (await wallet.readVault(unlock)).accounts.map(({ address, networkId }) => ({
-      address,
-      networkId,
-    }));
-  } catch {
-    return [];
-  }
 };

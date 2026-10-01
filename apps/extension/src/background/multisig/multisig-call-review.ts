@@ -18,7 +18,8 @@ import {
   verifyCalls,
 } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import { vaultAccountsFor, withTrustedRecipients } from "../transactions/trusted-recipients";
+import { observedVaultAccountAddresses } from "../runtime/runtime-state";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import type { ArgentMultisigContext } from "./multisig-ops";
 
@@ -67,7 +68,7 @@ export const reviewArgentMultisigCalls = async (
   const preferences = await withTrustedRecipients(
     deps,
     await deps.preferencesStore.read(),
-    await vaultAccountsFor(deps.wallet, deps.session),
+    await observedVaultAccountAddresses(deps.wallet, deps.session),
   );
   const report = verifyCalls(
     normalized,

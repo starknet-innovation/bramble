@@ -33,6 +33,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // vault credential only to re-check a claimed approval's granted account
   // against the vault at decision time; never logs, persists, or returns it.
   "apps/extension/src/background/approvals/approval-claim-context.ts",
+  // Claim-time session view: wraps the session's credential accessors so a
+  // deferred executor cannot adopt a later unlock; it reads no value itself.
+  "apps/extension/src/background/approvals/approval-session.ts",
   "apps/extension/src/background/provider/add-chain-ops.ts",
   "apps/extension/src/background/approvals/approval-decisions.ts",
   "apps/extension/src/background/transactions/chain-ops.ts",

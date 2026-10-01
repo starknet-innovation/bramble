@@ -36,13 +36,12 @@ import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-
 import { resolveOriginAccount } from "../provider/provider-grant";
 import { queueInvokeApproval, type ResolvedOriginAccount } from "../provider/provider-ops";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import { networkRpcUrls } from "../runtime/runtime-state";
+import { networkRpcUrls, observedVaultAccountAddresses } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PassiveUnlockSession } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
 import {
   type TrustedRecipientDeps,
-  vaultAccountsFor,
   withTrustedRecipients,
 } from "../transactions/trusted-recipients";
 import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
@@ -371,7 +370,7 @@ const assertCurrentRecipientPolicy = async (
   const preferences = await withTrustedRecipients(
     deps,
     await deps.preferencesStore.read(),
-    await vaultAccountsFor(deps.wallet, deps.session),
+    await observedVaultAccountAddresses(deps.wallet, deps.session),
   );
   const refusal = refusePoisonedStrk20Actions(account, preferences, actions);
   if (refusal) {
