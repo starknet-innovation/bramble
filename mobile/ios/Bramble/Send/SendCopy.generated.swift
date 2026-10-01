@@ -83,7 +83,7 @@ enum SendCopy {
     static let toastConfirmed = "Transaction confirmed on Starknet"
     static let toastPreconfirmed = "Transaction pre-confirmed on Starknet"
     static let toastNotConfirmed = "Transaction was not confirmed"
-    static let rejectedMessage = "Starknet rejected this transaction. No transfer was completed."
+    static let rejectedMessage = "Starknet rejected this transaction. Nothing changed."
     static let revertedMessage = "Starknet reverted this transaction. Review its activity details before retrying."
     static let settingsThisAccount = "This account"
     static let settingsDeployRow = "Deploy account"

@@ -168,7 +168,7 @@ the hash is then plain text. A receipt labels the row "Transaction".
   not sent. <error>", beside "Copy the error", which copies that message. The default error is
   "The transaction was not sent. Your balance is unchanged.". Buttons: "Try again" and "Edit
   transaction". Toast: "Transaction was not sent". Rejected: "Starknet rejected this
-  transaction. No transfer was completed."; reverted: "Starknet reverted this transaction.
+  transaction. Nothing changed."; reverted: "Starknet reverted this transaction.
   Review its activity details before retrying." (toast "Transaction was not confirmed").
 
 ### 2.7 Deploy account (standalone, from Settings)

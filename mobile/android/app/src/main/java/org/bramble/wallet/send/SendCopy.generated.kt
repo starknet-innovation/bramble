@@ -83,7 +83,7 @@ object SendCopy {
     const val toastConfirmed = "Transaction confirmed on Starknet"
     const val toastPreconfirmed = "Transaction pre-confirmed on Starknet"
     const val toastNotConfirmed = "Transaction was not confirmed"
-    const val rejectedMessage = "Starknet rejected this transaction. No transfer was completed."
+    const val rejectedMessage = "Starknet rejected this transaction. Nothing changed."
     const val revertedMessage = "Starknet reverted this transaction. Review its activity details before retrying."
     const val settingsThisAccount = "This account"
     const val settingsDeployRow = "Deploy account"

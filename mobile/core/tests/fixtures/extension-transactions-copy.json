@@ -18,7 +18,7 @@
       {
         "outcome": {
           "kind": "failed",
-          "message": "Starknet rejected this transaction. No transfer was completed.",
+          "message": "Starknet rejected this transaction. Nothing changed.",
           "toast": "Transaction was not confirmed"
         },
         "status": "rejected"
