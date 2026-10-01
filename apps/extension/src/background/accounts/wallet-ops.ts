@@ -17,6 +17,7 @@ import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { type BalanceSnapshotStore, cachedBalances } from "../portfolio/balance-snapshots";
 import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
+import { readPortfolioBalances } from "../portfolio/portfolio-balances";
 import {
   readBalancesInput,
   readFeeReviewInput,
@@ -176,12 +177,16 @@ const handleGetBalances: WalletOpsHandler = async (deps, message) => {
       networkId: network.id,
       now: (deps.now ?? systemClock)(),
     },
-    () =>
-      deps.runtimeRpc.getTokenBalances({
-        accountAddress: context.account.address,
-        rpcUrls: networkRpcUrls(network, preferences),
-        tokens: preferences.tokens.filter((token) => token.networkId === network.id),
-      }),
+    (previous) =>
+      readPortfolioBalances(
+        deps.runtimeRpc,
+        {
+          accountAddress: context.account.address,
+          rpcUrls: networkRpcUrls(network, preferences),
+          tokens: preferences.tokens.filter((token) => token.networkId === network.id),
+        },
+        previous,
+      ),
   );
   if (!snapshot) return { error: "balance snapshot unavailable" };
   return {

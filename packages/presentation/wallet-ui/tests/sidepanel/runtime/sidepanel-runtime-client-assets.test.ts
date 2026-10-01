@@ -88,6 +88,13 @@ describe("NFT wrappers", () => {
     );
   });
 
+  test("removeToken sends the token id, resolves on preferences, throws otherwise", async () => {
+    const { sent, wallet } = captureRuntime(preferencesResponse);
+    await expect(wallet.removeToken("SN_MAIN:PRZ:0xbad")).resolves.toBeUndefined();
+    expect(sent[0]).toEqual({ tokenId: "SN_MAIN:PRZ:0xbad", type: "wallet.removeToken" });
+    await expect(runtimeReturning({}).removeToken("id-1")).rejects.toThrow("remove token failed");
+  });
+
   test("removeNft resolves on preferences and throws otherwise", async () => {
     await expect(runtimeReturning(preferencesResponse).removeNft("id-1")).resolves.toBeUndefined();
     await expect(runtimeReturning({}).removeNft("id-1")).rejects.toThrow("remove NFT failed");

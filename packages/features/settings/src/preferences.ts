@@ -49,7 +49,7 @@ import {
   normalizeStoredPreferences,
   pickImportablePreferences,
 } from "./preferences-stored";
-import { withUpsertedToken } from "./preferences-tokens";
+import { withoutToken, withUpsertedToken } from "./preferences-tokens";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /** Re-exported entry types so callers keep importing them from this store. */
@@ -276,6 +276,11 @@ export const createPreferencesStore = ({
           ...preferences,
           addressBook: preferences.addressBook.filter((stored) => stored.id !== id),
         };
+        await writePreferences(store, next);
+        return next;
+      },
+      async removeToken({ tokenId }) {
+        const next = withoutToken(await read(), tokenId);
         await writePreferences(store, next);
         return next;
       },

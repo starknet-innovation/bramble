@@ -22,7 +22,12 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
-import { readAddTokenInput, readSetTokenHiddenInput, readTokenChartInput } from "./token-inputs";
+import {
+  readAddTokenInput,
+  readRemoveTokenInput,
+  readSetTokenHiddenInput,
+  readTokenChartInput,
+} from "./token-inputs";
 
 /**
  * Dependencies shared by the token operation handlers.
@@ -173,6 +178,16 @@ const handleSetTokenHidden: TokenHandler = async (deps, message) => {
   return { ok: true, preferences: await deps.preferencesStore.setTokenHidden(input) };
 };
 
+// Recovery for a token a dapp added (Sherlock audit 134). The store refuses built-in
+// defaults and unknown ids; the router reports that refusal to the page.
+const handleRemoveToken: TokenHandler = async (deps, message) => {
+  const input = readRemoveTokenInput(message);
+  if (!input) {
+    return { error: "invalid remove token request" };
+  }
+  return { ok: true, preferences: await deps.preferencesStore.removeToken(input) };
+};
+
 const handlePrices: TokenHandler = async (deps, message) => {
   const { preferencesStore, prices } = deps;
   const input = readPricesInput(message);
@@ -221,6 +236,7 @@ const TOKEN_HANDLERS: Readonly<Record<string, TokenHandler>> = {
   "wallet.addToken": handleAddToken,
   "wallet.detectTokens": handleDetectTokens,
   "wallet.prices": handlePrices,
+  "wallet.removeToken": handleRemoveToken,
   "wallet.setTokenHidden": handleSetTokenHidden,
   "wallet.tokenChart": handleTokenChart,
 };

@@ -112,6 +112,13 @@ describe("token views", () => {
     );
   });
 
+  test("tokens flow offers Remove for added tokens but never for built-in ones", () => {
+    const html = dashboard("tokens", status, [], preferences, { balances }, null, [], [], prices);
+
+    expect(html).toContain(`data-token-remove="${spoofToken.id}"`);
+    expect(html).not.toContain(`data-token-remove="${ethToken.id}"`);
+  });
+
   test("token detail flow draws price, sparkline, and contract facts", () => {
     const html = dashboard(
       "token-detail",

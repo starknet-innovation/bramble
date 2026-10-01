@@ -299,6 +299,21 @@ export const makeKeyBoundaryHarness = async (
         "swapPreparation",
       );
     },
+    async removableTokenId() {
+      const preferences = await preferencesStore.upsertToken(
+        {
+          address: "0x0123456789abcdef",
+          decimals: 6,
+          name: "Removable Token",
+          networkId: "SN_MAIN",
+          symbol: "RMV",
+        },
+        "dapp",
+      );
+      const id = preferences.tokens.at(-1)?.id;
+      if (!id) throw new Error("removable token was not stored");
+      return id;
+    },
     tokenId: ETH.id,
     unregisterStrk20Account() {
       chainState.strk20Registered = false;

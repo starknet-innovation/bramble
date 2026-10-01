@@ -26,6 +26,7 @@ import { ec, RpcProvider } from "starknet";
 import type { NostrRelayTransport } from "../../apps/extension/src/background/multisig/nostr-relay";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { testExtension } from "./background-wallet-stub";
 
@@ -126,6 +127,8 @@ export type MultisigHarnessOptions = {
   readonly resolveSignerAccount?: () => MultisigSignerAccount;
   readonly multisigStore?: MultisigStore;
   readonly getNonce?: () => string;
+  /** Replaces the default balance read, e.g. with the real reader over a fake provider. */
+  readonly getTokenBalances?: RuntimeRpc["getTokenBalances"];
   readonly getTransactionStatuses?: (
     transactionHash: string,
   ) => Promise<
@@ -295,7 +298,9 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
       async getNftOwner() {
         return harnessAccountA.address;
       },
-      async getTokenBalances({ tokens }) {
+      async getTokenBalances(input) {
+        if (options.getTokenBalances) return options.getTokenBalances(input);
+        const { tokens } = input;
         const balance = options.deploymentBalance;
         return balance === null || balance === undefined
           ? []

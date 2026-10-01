@@ -60,6 +60,9 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async removeNft() {
     throw new Error("preferences unavailable");
   },
+  async removeToken() {
+    throw new Error("preferences unavailable");
+  },
   async renameGroup() {
     throw new Error("preferences unavailable");
   },
