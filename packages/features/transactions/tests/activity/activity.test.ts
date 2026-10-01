@@ -450,3 +450,44 @@ describe("provisional status and tracking fields", () => {
     expect(await createActivityLog({ now: () => 5, store }).list()).toEqual([]);
   });
 });
+
+// Audit #247: the sighting flag decides whether repeated not-found answers can
+// reject a transaction, so it must validate strictly and never be lost.
+describe("seenOnChain tracking flag", () => {
+  const stored = (seenOnChain: boolean | string) => ({
+    accountId: ACCOUNT_ID,
+    hash: "0x1",
+    kind: "transfer",
+    networkId: "SN_MAIN",
+    seenOnChain,
+    status: "pending",
+    submittedAt: 1,
+    summary: "Send",
+  });
+
+  test("accepts a boolean flag and rejects any other value", async () => {
+    const store = createMemoryStore();
+    await store.set("bramble:activity", [stored(true)]);
+    expect((await createActivityLog({ store }).list())[0]?.seenOnChain).toBe(true);
+    await store.set("bramble:activity", [stored("yes")]);
+    expect(await createActivityLog({ store }).list()).toEqual([]);
+  });
+
+  test("never clears a recorded sighting", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send",
+    });
+    await log.updateStatuses({ "0x1": { seenOnChain: true, status: "pending" } }, MAIN_SCOPE);
+    const after = await log.updateStatuses(
+      { "0x1": { notFoundCount: 1, seenOnChain: false, status: "pending" } },
+      MAIN_SCOPE,
+    );
+    expect(after[0]?.seenOnChain).toBe(true);
+    expect(after[0]?.notFoundCount).toBe(1);
+  });
+});

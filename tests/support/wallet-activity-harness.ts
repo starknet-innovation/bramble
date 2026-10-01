@@ -149,7 +149,12 @@ export const makeHarness = (options?: {
         return Object.fromEntries(
           hashes.map((hash) => [
             hash,
-            options?.statusReport ?? { finalizedOnL1: false, found: true, status: "accepted" },
+            options?.statusReport ?? {
+              finalizedOnL1: false,
+              found: true,
+              seen: true,
+              status: "accepted",
+            },
           ]),
         );
       },
