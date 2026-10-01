@@ -23,6 +23,8 @@ export type TransferReviewResponse = {
     readonly feeEstimateFailed: boolean;
     readonly flags: readonly { readonly code: string; readonly message: string }[];
     readonly requiresDeployment: boolean;
+    /** True when a device will be asked to sign both the deployment and the send. */
+    readonly signsTwice?: boolean;
     readonly summaries: readonly string[];
   };
 };
@@ -78,6 +80,7 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
       "feeEstimateFailed",
       "flags",
       "requiresDeployment",
+      "signsTwice",
       "summaries",
     ])
   ) {
@@ -89,6 +92,7 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
   return (
     (deploymentFee === undefined || deploymentFee === null || isFeeShape(deploymentFee)) &&
     (deploymentFailed === undefined || typeof deploymentFailed === "boolean") &&
+    (review["signsTwice"] === undefined || typeof review["signsTwice"] === "boolean") &&
     (review["fee"] === null || isFeeShape(review["fee"])) &&
     (review["feeAffordability"] === "insufficient" ||
       review["feeAffordability"] === "ok" ||

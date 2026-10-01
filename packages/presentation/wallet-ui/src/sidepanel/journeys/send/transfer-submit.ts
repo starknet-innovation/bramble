@@ -10,6 +10,7 @@
 
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { reviewFeeBlocked } from "../../shared/review-render";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
 
@@ -122,7 +123,7 @@ export const reviewedState = (
   fields: TransferFields,
   key: string,
 ): TransferState<TransferReview> => {
-  const feeFailed = review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
+  const feeFailed = reviewFeeBlocked(review);
   const blocked = review.flags.some((flag) => flag.code === "address-poisoning");
   return {
     error: blocked

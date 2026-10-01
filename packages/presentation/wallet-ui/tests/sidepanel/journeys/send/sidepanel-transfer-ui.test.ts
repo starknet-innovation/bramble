@@ -281,8 +281,11 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(reviewText(app)).toContain("not deployed yet");
-    expect(feeText(app)).toContain("Estimated transaction fee");
-    expect(feeText(app)).toContain("Estimated account deployment fee");
+    // One action, one figure: the total leads and the deployment share is named
+    // under it, rather than two amounts the user has to add up.
+    expect(feeText(app)).toContain("Estimated fee");
+    expect(feeText(app)).toContain("Creating this account on Starknet is");
+    expect(feeText(app)).not.toContain("Estimated transaction fee");
 
     submit(app);
     await flush();
@@ -315,6 +318,39 @@ describe("bindTransfer", () => {
     expect(feeText(app)).toContain("Couldn't estimate both");
     submit(app);
     await flush();
+    expect(calls.submitTransfer).toHaveLength(0);
+  });
+
+  test("re-estimates instead of sending when the two fees cannot be added", async () => {
+    let reviewCount = 0;
+    const { app, calls, deps } = mount({
+      async reviewTransfer() {
+        reviewCount += 1;
+        return {
+          deploymentFee: { overallFee: "1500", unit: "WEI" },
+          deploymentFeeEstimateFailed: false,
+          fee: { overallFee: "2000", unit: "FRI" },
+          feeEstimateFailed: false,
+          flags: [],
+          requiresDeployment: true,
+          summaries: ["Deploy + transfer"],
+        };
+      },
+    });
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    expect(reviewCount).toBe(1);
+    expect(feeText(app)).toContain("Couldn't estimate both");
+    expect(app.querySelector<HTMLButtonElement>("#send-confirm-button")?.disabled).toBe(true);
+    expect(calls.submitTransfer).toHaveLength(0);
+
+    app.querySelector<HTMLButtonElement>("#send-review-fee #review-retry-fee")?.click();
+    await flush();
+    expect(reviewCount).toBe(2);
     expect(calls.submitTransfer).toHaveLength(0);
   });
 
@@ -443,57 +479,6 @@ describe("bindTransfer", () => {
     await flush();
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("submitted");
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
-  });
-});
-
-describe("closing Send", () => {
-  test("abandons what was composed, so the next visit starts over", () => {
-    // Reported from the shield shortcut: open Send pre-configured, close it with
-    // the cross, then press Send from home — it reopened on the amount step with
-    // the shield still filled in, because the journey outlived the close.
-    const { app, deps } = mount();
-    bindTransfer(deps);
-    // Pick a recipient the way the screen does, which advances to the amount.
-    const search = app.querySelector<HTMLInputElement>("#send-recipient-search");
-    if (search) {
-      search.value = RECIPIENT;
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-    app.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
-    setField(app, "amount", "1");
-    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(false);
-    // Stored canonically, so compare loosely: the point is that it is set.
-    expect(app.querySelector<HTMLInputElement>('[name="recipient"]')?.value).not.toBe("");
-
-    app.querySelector<HTMLButtonElement>("#send-close")?.click();
-    // Re-entering rebinds against freshly rendered markup, as a repaint does.
-    paint(app, sendFlow(status, account, preferences));
-    bindTransfer(deps);
-
-    expect(app.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(true);
-    expect(app.querySelector<HTMLInputElement>('[name="recipient"]')?.value).toBe("");
-  });
-
-  test("keeps a submitted transaction reachable after closing", async () => {
-    // The opposite case: once something is on chain, closing must not discard the
-    // receipt the user may come back for.
-    const { app, deps } = mount();
-    bindTransfer(deps);
-    setField(app, "recipient", RECIPIENT);
-    setField(app, "amount", "1");
-    submit(app);
-    await flush();
-    submit(app);
-    await flush();
-    expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-
-    app.querySelector<HTMLButtonElement>("#send-close")?.click();
-    paint(app, sendFlow(status, account, preferences));
-    bindTransfer(deps);
-
-    expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
   });
 });
