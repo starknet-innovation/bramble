@@ -82,25 +82,53 @@ const protectAndSelectAccount = async (
   await sidepanel.getByRole("button", { name: "Add selected account" }).click();
 };
 
+type RecoveryRpcCall = {
+  readonly id?: string | number | null;
+  readonly method?: unknown;
+};
+
+const isRecoveryRpcCall = (value: unknown): value is RecoveryRpcCall =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Class hash and balance are the reads recovery needs: contract-not-found and a
+// zero uint256. Every other method, including one batched into the same HTTP
+// request, gets a JSON-RPC error. Aborting the connection would fail import on
+// an incidental method the scan does not use.
+const recoveryRpcResponse = (
+  call: RecoveryRpcCall,
+): {
+  readonly error?: { readonly code: number; readonly message: string };
+  readonly id: string | number | null;
+  readonly jsonrpc: "2.0";
+  readonly result?: readonly string[];
+} => {
+  const id = call.id ?? null;
+  if (call.method === "starknet_getClassHashAt") {
+    return { error: { code: 20, message: "Contract not found" }, id, jsonrpc: "2.0" };
+  }
+  if (call.method === "starknet_call") {
+    return { id, jsonrpc: "2.0", result: ["0x0", "0x0"] };
+  }
+  return { error: { code: -32601, message: "Method not found" }, id, jsonrpc: "2.0" };
+};
+
 const mockEmptyRecoveryChain = async (page: Page): Promise<() => Promise<void>> => {
   const pattern = "https://*.starknet.org/**";
   const handler = async (route: Route): Promise<void> => {
-    const request = route.request().postDataJSON() as {
-      readonly id?: unknown;
-      readonly method?: unknown;
-    };
-    const id = request.id ?? 1;
-    if (request.method === "starknet_getClassHashAt") {
+    let body: unknown;
+    try {
+      body = route.request().postDataJSON();
+    } catch {
       await route.fulfill({
-        json: { error: { code: 20, message: "Contract not found" }, id, jsonrpc: "2.0" },
+        json: { error: { code: -32700, message: "Parse error" }, id: null, jsonrpc: "2.0" },
       });
       return;
     }
-    if (request.method === "starknet_call") {
-      await route.fulfill({ json: { id, jsonrpc: "2.0", result: ["0x0", "0x0"] } });
+    if (Array.isArray(body)) {
+      await route.fulfill({ json: body.filter(isRecoveryRpcCall).map(recoveryRpcResponse) });
       return;
     }
-    await route.abort();
+    await route.fulfill({ json: recoveryRpcResponse(isRecoveryRpcCall(body) ? body : {}) });
   };
   await page.context().route(pattern, handler);
   return () => page.context().unroute(pattern, handler);
@@ -244,6 +272,29 @@ export const openPendingWalletSurface = async (
     )
     .toBeGreaterThan(0);
   await sidepanel.reload();
+};
+
+/**
+ * Opens a pending transaction review and asserts Approve stays withheld.
+ *
+ * The suite blocks egress, so the fee cannot be priced. The card must keep
+ * Approve disabled. Callers still owe the dapp a deny or the held promise
+ * stays pending; this helper does not decide the request.
+ */
+export const expectInvokeApprovalWithheld = async (
+  sidepanel: Page,
+  origin: string,
+): Promise<void> => {
+  await openPendingWalletSurface(sidepanel);
+  await expect(sidepanel.getByText("Review request")).toBeVisible();
+  await expect(sidepanel.getByText("Transaction request", { exact: true }).first()).toBeVisible();
+  await expect(sidepanel.getByTitle(origin).first()).toBeVisible();
+  await expect(
+    sidepanel.getByText(
+      "Couldn't estimate the network fee right now. Check your connection and retry before sending.",
+    ),
+  ).toBeVisible();
+  await expect(sidepanel.locator('[data-approval-action="approve"]')).toBeDisabled();
 };
 
 /**
