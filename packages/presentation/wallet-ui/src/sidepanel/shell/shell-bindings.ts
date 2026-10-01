@@ -212,13 +212,15 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
 /**
  * Binds the network picker. A network switch returns to Settings. Accounts are
  * switched in the drawer, which carries its own binding — the manage view lists
- * accounts to name and to file into folders, never to select.
+ * accounts to name and to file into folders, never to select. Only picker
+ * buttons bind: the Send form carries `data-network-id` as plain data, and
+ * binding it would turn every click inside the form into a switch.
  */
 export const bindPickers = (deps: ShellBindingDeps): void => {
   const { app, wallet, render, setActiveView } = deps;
   const result = app?.querySelector<HTMLElement>("#picker-result");
 
-  app?.querySelectorAll<HTMLButtonElement>("[data-network-id]").forEach((button) => {
+  app?.querySelectorAll<HTMLButtonElement>("button[data-network-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const networkId = button.dataset["networkId"];
       if (!networkId || button.getAttribute("aria-pressed") === "true") {
