@@ -118,6 +118,34 @@ describe("switchActiveNetwork", () => {
     expect(switched).toEqual(["SN_MAIN"]);
   });
 
+  test("selects a preferred account on the target network, ignoring one on another network", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const otherMainnet: AccountRef = { ...mainnetAccount, address: "0x7777", id: "SN_MAIN:0x7777" };
+    const setActiveCalls: string[] = [];
+    const wallet = makeWallet({
+      async readVault() {
+        return {
+          accounts: [sepoliaAccount, mainnetAccount, otherMainnet],
+          activeAccountId: sepoliaAccount.id,
+        } as unknown as Vault;
+      },
+      async setActiveAccount(input) {
+        setActiveCalls.push(input.accountId);
+        return input.accountId === otherMainnet.id ? otherMainnet : mainnetAccount;
+      },
+    });
+    const store = makePreferencesStore(defaultWalletPreferences());
+
+    await switchActiveNetwork(wallet, session, store, "SN_MAIN", undefined, {
+      preferredAccountId: otherMainnet.id,
+    });
+    await switchActiveNetwork(wallet, session, store, "SN_MAIN", undefined, {
+      preferredAccountId: sepoliaAccount.id,
+    });
+    expect(setActiveCalls).toEqual([otherMainnet.id, mainnetAccount.id]);
+  });
+
   test("returns null without touching the vault while the session is locked", async () => {
     const session = createUnlockSession();
     const switched: string[] = [];

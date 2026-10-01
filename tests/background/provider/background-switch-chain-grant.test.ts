@@ -34,8 +34,8 @@ const account: AccountRef = {
 };
 
 // `connected` is read on every call so a test can disconnect the origin
-// between queueing the switch prompt and approving it; `grants` records the
-// auto-grant the applier makes for the account the switch lands on.
+// between queueing the switch prompt and approving it; `grants` records any
+// grant the applier makes, which must stay empty: a switch never grants.
 const walletStub = (connected: () => readonly AccountRef[], grants: string[] = []) => ({
   async addDerivedAccount() {
     return account;
@@ -146,16 +146,111 @@ describe("switchChain grant gate (A-M1)", () => {
     });
   });
 
-  test("grants the landed network's account when the origin is still connected", async () => {
-    // The origin is connected through a different account than the one the
-    // switch lands on, so the applier tops the grant up with the new account —
-    // the connection survives the network change.
+  test("never grants the landed account the origin was not connected to (audit 124)", async () => {
+    // The origin holds only a Sepolia account; the switch lands on the vault's
+    // Mainnet account, which the user never connected. The card names no
+    // account, so approving it must not share one: no grant, and the standard
+    // reconnect prompt (which does name the account) is queued instead.
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const other: AccountRef = { ...account, address: "0x9999", id: "SN_MAIN:0x9999" };
+    const sepolia: AccountRef = {
+      ...account,
+      address: "0x9999",
+      id: "SN_SEPOLIA:0x9999",
+      networkId: "SN_SEPOLIA",
+    };
     const grants: string[] = [];
     const handler = createMessageHandler(
-      walletStub(() => [other], grants),
+      walletStub(() => [sepolia], grants),
+      testExtension,
+      { session },
+    );
+
+    const held = handler(switchMessage, contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+    const approved = (await handler({ id, type: "wallet.approveOrigin" }, extensionSender)) as {
+      readonly pending: readonly {
+        readonly existingGrant?: boolean;
+        readonly kind: string;
+        readonly origin: string;
+      }[];
+    };
+    await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
+    expect(grants).toEqual([]);
+    expect(approved.pending).toEqual([
+      expect.objectContaining({ existingGrant: true, kind: "connect", origin }),
+    ]);
+  });
+
+  test("does not grant an account the switch had to derive on the target network", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const sepolia: AccountRef = {
+      ...account,
+      address: "0x9999",
+      id: "SN_SEPOLIA:0x9999",
+      networkId: "SN_SEPOLIA",
+    };
+    const grants: string[] = [];
+    let derived = 0;
+    const stub = walletStub(() => [sepolia], grants);
+    const handler = createMessageHandler(
+      {
+        ...stub,
+        async ensureNetworkAccount() {
+          derived += 1;
+          return account;
+        },
+        async readVault() {
+          const vault = await stub.readVault();
+          return { ...vault, accounts: [sepolia], activeAccountId: sepolia.id };
+        },
+      },
+      testExtension,
+      { session },
+    );
+
+    const held = handler(switchMessage, contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
+    expect(derived).toBe(1);
+    expect(grants).toEqual([]);
+  });
+
+  test("lands on the account the origin already holds on the target network", async () => {
+    // Granted on both networks: the switch selects the origin's granted Mainnet
+    // account rather than the vault's first Mainnet account, and grants nothing.
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const sepolia: AccountRef = {
+      ...account,
+      address: "0x9999",
+      id: "SN_SEPOLIA:0x9999",
+      networkId: "SN_SEPOLIA",
+    };
+    const grantedMainnet: AccountRef = { ...account, address: "0x7777", id: "SN_MAIN:0x7777" };
+    const grants: string[] = [];
+    const selected: string[] = [];
+    const stub = walletStub(() => [sepolia, grantedMainnet], grants);
+    const handler = createMessageHandler(
+      {
+        ...stub,
+        async readVault() {
+          const vault = await stub.readVault();
+          return {
+            ...vault,
+            accounts: [sepolia, account, grantedMainnet],
+            activeAccountId: sepolia.id,
+          };
+        },
+        async setActiveAccount(input: { readonly accountId: string }) {
+          selected.push(input.accountId);
+          return input.accountId === grantedMainnet.id ? grantedMainnet : account;
+        },
+      },
       testExtension,
       { session },
     );
@@ -169,35 +264,8 @@ describe("switchChain grant gate (A-M1)", () => {
       pending: [],
     });
     await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
-    expect(grants).toEqual([account.id]);
-  });
-
-  test("binds the landed account grant to the approving unlock generation", async () => {
-    const session = createUnlockSession();
-    session.unlock(vaultPassphrase);
-    const other: AccountRef = { ...account, address: "0x9999", id: "SN_MAIN:0x9999" };
-    let checkedBefore = false;
-    let checkedAfter = false;
-    const wallet = {
-      ...walletStub(() => [other]),
-      async grantOrigin(input: { readonly isAuthorized?: () => boolean }) {
-        checkedBefore = input.isAuthorized?.() === true;
-        session.lock();
-        checkedAfter = input.isAuthorized?.() === true;
-        throw new Error("wallet locked");
-      },
-    };
-    const handler = createMessageHandler(wallet, testExtension, { session });
-
-    const held = handler(switchMessage, contentSender);
-    await flushHeld();
-    const id = await latestApprovalId(handler, extensionSender);
-    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      error: "approval execution failed",
-    });
-    await expect(held).resolves.toEqual({ error: "approval execution failed" });
-    expect(checkedBefore).toBe(true);
-    expect(checkedAfter).toBe(false);
+    expect(selected).toEqual([grantedMainnet.id]);
+    expect(grants).toEqual([]);
   });
 
   test("refuses a stale switch card once the origin has been disconnected", async () => {

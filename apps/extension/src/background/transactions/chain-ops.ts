@@ -308,13 +308,18 @@ export const handleChainOps = async (
 };
 
 /**
- * Applies a user-approved chain switch: sets the active network, keeps the
- * origin's grant on the new network, and returns the new chain id for the dapp.
- * Refuses with `origin not connected` when the origin is not connected at
- * approval time, so an approved card can never reconnect a disconnected site.
+ * Applies a user-approved chain switch: sets the active network and returns the
+ * new chain id for the dapp. Refuses with `origin not connected` when the origin
+ * is not connected at approval time, so an approved card can never reconnect a
+ * disconnected site. The switch never grants an account: the card names none,
+ * so the origin keeps exactly the accounts it was granted. When it holds one on
+ * the target network the switch lands there; when it holds none, the standard
+ * reconnect (connect) prompt is queued instead, which names the account to share.
  */
 export const executeSwitchChainApproval = async (
   deps: Pick<ChainOpsDeps, "activeStateCoordinator" | "preferencesStore" | "wallet"> & {
+    /** Queue for the reconnect prompt; unset (partial test stubs) queues nothing. */
+    readonly approvals?: Pick<ApprovalQueue, "request">;
     /**
      * The full session: applying the approval switches the active network, and
      * that cross-store mutation locks its own generation when it cannot be
@@ -333,29 +338,28 @@ export const executeSwitchChainApproval = async (
     }
     // A switch-chain approval carries no account context, so the shared claim
     // validator skips it and this is the only place the grant is re-checked.
-    // Read it BEFORE switching: the switch re-selects the active account, and the
-    // auto-grant below would otherwise hand the origin a fresh account — silently
-    // reconnecting a site the user disconnected by switching accounts, with no
-    // connect prompt. A revoked or disconnected origin is refused instead.
+    // Read it BEFORE switching: a revoked or disconnected origin is refused
+    // rather than having the approved card switch the network on its behalf.
     const connected = await wallet.getGrantedAccounts(input.origin, passphrase);
     if (connected.length === 0) {
       return { error: "origin not connected" };
     }
-    const account = await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
+    const held = connected.find((account) => account.networkId === input.networkId);
+    await switchActiveNetwork(
+      wallet,
+      session,
+      preferencesStore,
+      input.networkId,
+      undefined,
+      held ? { preferredAccountId: held.id } : {},
+    );
     if (!authorized.isCurrent()) {
       return { error: "wallet locked" };
     }
-    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-    if (account && !granted.some((item) => item.id === account.id)) {
-      await wallet.grantOrigin({
-        accountId: account.id,
-        isAuthorized: authorized.isCurrent,
-        origin: input.origin,
-        vaultPassphrase: passphrase,
-      });
-    }
-    if (!authorized.isCurrent()) {
-      return { error: "wallet locked" };
+    // Exposure only narrows (audit 124): an account the user never connected
+    // is not shared because they approved a network change.
+    if (!held && deps.approvals) {
+      promptReconnectForStaleGrant(deps.approvals, connected, input.origin);
     }
     return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
   });

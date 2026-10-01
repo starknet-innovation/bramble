@@ -255,6 +255,7 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
   const result = await executeSwitchChainApproval(
     {
       activeStateCoordinator: deps.activeStateCoordinator,
+      approvals: deps.approvals,
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,

@@ -277,7 +277,9 @@ describe("background network messages", () => {
     );
 
     // Switching the chain is held behind an approval; approving performs the
-    // switch and returns the new chain id to the dapp.
+    // switch and returns the new chain id to the dapp. The origin holds no
+    // Mainnet account, so the switch shares none: it queues the reconnect
+    // prompt, which names the account, instead (audit 124).
     const switchHeld = handler(
       {
         chainId: "0x534e5f4d41494e",
@@ -290,8 +292,20 @@ describe("background network messages", () => {
     const switchId = await latestApprovalId(handler, sender);
     await expect(
       handler({ id: switchId, type: "wallet.approveOrigin" }, sender),
-    ).resolves.toMatchObject({ chainId: "0x534e5f4d41494e", ok: true, pending: [] });
+    ).resolves.toMatchObject({
+      chainId: "0x534e5f4d41494e",
+      ok: true,
+      pending: [{ existingGrant: true, kind: "connect", origin: "https://example.com" }],
+    });
     await expect(switchHeld).resolves.toEqual({ chainId: "0x534e5f4d41494e", ok: true });
+    expect(grantedAccountIds).toEqual([account.id]);
+    const reconnectId = await latestApprovalId(handler, sender);
+    await expect(
+      handler(
+        { id: reconnectId, reviewedAccountId: mainnetAccount.id, type: "wallet.approveOrigin" },
+        sender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
 
     // A connected dapp invoke is queued as an approval, not auto-submitted.
     const invokeHeld = handler(
