@@ -450,6 +450,13 @@ const CALL_DECODERS: Readonly<Record<string, CallDecoder>> = {
 };
 
 /**
+ * Every entrypoint name the decoder table recognizes, derived from its keys so a
+ * spelling added to ./verify-selectors reaches selector-hash lookups (for
+ * example the SNIP-9 OutsideExecution reader) with no second edit.
+ */
+export const DECODED_ENTRYPOINTS: readonly string[] = Object.keys(CALL_DECODERS);
+
+/**
  * Decodes one call against the wallet context. Total: an unrecognized selector
  * or malformed calldata yields the opaque `unknown` summary rather than an
  * invented one.

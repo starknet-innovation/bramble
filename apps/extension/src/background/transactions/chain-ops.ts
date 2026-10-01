@@ -48,6 +48,7 @@ import {
   type PassiveUnlockSession,
   type UnlockSession,
 } from "../runtime/session";
+import { reviewOutsideExecution } from "./outside-execution-review";
 
 /**
  * Dependencies for the provider chain and signing operations.
@@ -140,6 +141,12 @@ export const executeSignApproval = async (
   } catch {
     return { error: "invalid typed data" };
   }
+  // An OutsideExecution's calls are re-reviewed against the trusted set as it
+  // is now, not as it was when the card was queued (audit 144).
+  const review = reviewOutsideExecution(input.typedData, account, preferences);
+  if (review && "error" in review) {
+    return review;
+  }
   // A keyless Ledger account signs typed data on the device (verified against
   // publicKeyX) instead of the vault; accountHashSigner makes the same choice as
   // every other submitting path. A device rejection/timeout/verify-failure, or a
@@ -221,6 +228,12 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   } catch {
     return { error: "invalid typed data" };
   }
+  // An OutsideExecution authorizes calls the site can submit later without a
+  // prompt, so it gets the invoke route's refusals and flags (audit 144).
+  const review = reviewOutsideExecution(input.typedData, account, preferences);
+  if (review && "error" in review) {
+    return review;
+  }
   // Never auto-sign: queue a per-request approval and hold this response until
   // the user decides in the side panel. The signature is computed and returned
   // through this same channel on approval, so it reaches only the requesting
@@ -228,6 +241,7 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   const approval = approvals.requestSignTypedData({
     context: await createApprovalContext(account, { typedData: input.typedData }),
     origin: input.origin,
+    ...(review ? { review } : {}),
     summary: describeTypedData(input.typedData),
     typedData: input.typedData,
   });
