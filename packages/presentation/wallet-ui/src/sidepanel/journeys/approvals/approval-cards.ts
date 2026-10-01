@@ -331,7 +331,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
     </div>
     ${reviewPanel([...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
-    ${reviewConstraints("This approval charges no fee. If the wallet pays the network fee for this route, you will review that fee separately.")}
+    ${reviewConstraints("This approval charges no public wallet fee. A relay fee, if listed above, is paid from the private balance. If the wallet pays the network fee for this route, you will review that fee separately.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
     ${decisionRow(approval, "Approve", status.locked)}

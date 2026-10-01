@@ -309,13 +309,6 @@ const importKeyStep = (): string => `
           spellcheck: false,
         })}
       </div>
-      ${textField({
-        autocomplete: "off",
-        label: "Account address (optional)",
-        name: "importKeyAddress",
-        placeholder: "0x…",
-        spellcheck: false,
-      })}
       ${networkConsequence()}
       <p id="import-key-result" role="status"></p>
     </div>

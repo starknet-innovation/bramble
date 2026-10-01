@@ -195,6 +195,9 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("0x7");
     expect(html).toContain("0x1, 0x2");
     expect(html).toContain("Relay fee action · Withdrawal");
+    // A listed relay fee is a charge, so the card must not claim there is none.
+    expect(html).not.toContain("charges no fee");
+    expect(html).toContain("no public wallet fee");
     expect(html).toContain("0x99");
     expect(html).toContain("3 actions · including relay fee");
     expect(html).toContain("public deposit approval");
