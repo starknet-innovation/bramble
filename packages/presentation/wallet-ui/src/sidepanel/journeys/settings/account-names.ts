@@ -54,7 +54,7 @@ const accountNameRow = (
         value: preferences?.accountLabels?.[stored.id] ?? "",
       })}
       <span class="account-name-meta">
-        <code title="${escapeHtml(stored.address)}">${accountLabel(stored.address)}</code>
+        <code title="${escapeHtml(stored.address)}">${escapeHtml(accountLabel(stored.address))}</code>
         ${inlineCopyButton(stored.address, `Copy ${generated} address`)}
         ${accountGroupsLine(memberGroups)}
       </span>
