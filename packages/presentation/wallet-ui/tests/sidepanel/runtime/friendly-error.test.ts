@@ -141,6 +141,28 @@ describe("friendlyError", () => {
     expect(friendlyError("group membership update failed").message).not.toContain("group");
   });
 
+  // These catch-alls wrap a submission whose outcome the wallet doesn't know.
+  // Saying it failed and inviting a retry could send the transaction twice.
+  test("submission catch-alls never claim failure or invite a blind retry", () => {
+    for (const raw of [
+      "transfer failed",
+      "swap failed",
+      "nft transfer failed",
+      "private transaction failed",
+      "deployment failed",
+      "deploy ready multisig failed",
+      "approval execution failed",
+      "wallet request failed",
+      "complete ledger sign failed",
+      "no pending ledger sign for id",
+    ]) {
+      const { message } = friendlyError(raw);
+      expect(message).not.toContain("didn't go through");
+      expect(message).not.toContain("expired");
+      expect(message.toLowerCase()).toContain("check activity");
+    }
+  });
+
   test("falls back to a generic message for empty input", () => {
     const result = friendlyError("   ");
     expect(result.message).toBe("Something went wrong. Please try again.");

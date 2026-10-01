@@ -53,6 +53,13 @@ const REFUSED = "The wallet refused that request.";
 const MULTISIG_DEPLOY_PREPARE = "Couldn't prepare the deployment. Try again.";
 const MULTISIG_BALANCES = "Couldn't load multisig balances. Check your connection and try again.";
 const OUTCOME_UNKNOWN = "The result is unknown. Check Activity before trying again.";
+// Catch-alls around a submission. The wallet doesn't know whether the
+// transaction left the device, so the copy must not claim it failed or invite
+// a retry that could send it twice.
+const SUBMISSION_UNKNOWN = (what: string): string =>
+  `${what} may not have gone through. Check Activity before trying again.`;
+// The router's own catch-all can wrap a submission, so it says the same.
+const REQUEST_UNKNOWN = "That didn't complete. If it was a transaction, check Activity before trying again.";
 const LEDGER_RETRY = "Couldn't reach your Ledger. Reconnect the device and try again.";
 const ACTIVATE_FIRST = "Activate private balances first.";
 const DEPLOY_FIRST = "Deploy this account first.";
@@ -84,10 +91,13 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["request rejected", "That request was rejected."],
   ["dapps cannot call the wallet account contract itself", "A site can't call your own account."],
   ["approval failed", REQUEST_FAILED],
-  ["approval execution failed", REQUEST_FAILED],
-  ["wallet request failed", REQUEST_FAILED],
+  ["approval execution failed", REQUEST_UNKNOWN],
+  ["wallet request failed", REQUEST_UNKNOWN],
   ["approval not found", "That request has expired. Ask the site to send it again."],
-  ["no pending ledger sign for id", "That signing request expired. Start it again."],
+  [
+    "no pending ledger sign for id",
+    "That signing request is no longer pending. Check Activity before starting again.",
+  ],
 
   // --- Something moved while the reader was reading it ---------------------
   ["approval context changed", REVIEW_MOVED],
@@ -152,7 +162,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "Couldn't verify this account's contract. Check your connection and try again.",
   ],
   ["account already deployed", "This account is already deployed."],
-  ["deployment failed", "Deployment didn't go through. Try again."],
+  ["deployment failed", SUBMISSION_UNKNOWN("The deployment")],
   ["deployment data not available", "Couldn't read this account's deployment details. Try again."],
   ["no account for selected network", "No account on this network yet. Add one to continue."],
 
@@ -218,10 +228,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["remove nft failed", "Couldn't remove that collectible. Try again."],
   ["nft update failed", "Couldn't update that collectible. Try again."],
   ["nft transfer review failed", "Couldn't prepare this transfer. Try again."],
-  ["nft transfer failed", "The transfer didn't go through. Try again."],
+  ["nft transfer failed", SUBMISSION_UNKNOWN("The transfer")],
 
   // --- Send ----------------------------------------------------------------
-  ["transfer failed", "The transfer didn't go through. Try again."],
+  ["transfer failed", SUBMISSION_UNKNOWN("The transfer")],
   ["transfer review failed", "Couldn't prepare this transfer. Try again."],
   ["recipient check unavailable", "Couldn't check that recipient. Try again."],
   ["enter an amount to send", "Enter an amount to send."],
@@ -229,7 +239,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["amount is outside the starknet field range", "That amount is too large."],
 
   // --- Swap ----------------------------------------------------------------
-  ["swap failed", "The swap didn't go through. Try again."],
+  ["swap failed", SUBMISSION_UNKNOWN("The swap")],
   ["swap preparation failed", "Couldn't prepare this swap. Get a fresh quote and try again."],
   ["swap quote failed", "Couldn't fetch a quote. Check your connection and try again."],
   ["swap build failed", "avnu couldn't prepare this swap. Get a fresh quote and try again."],
@@ -259,7 +269,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["add ledger account failed", LEDGER_RETRY],
   ["create ledger wallet failed", LEDGER_RETRY],
   ["derive ledger accounts failed", LEDGER_RETRY],
-  ["complete ledger sign failed", "Signing on your Ledger didn't finish. Try again."],
+  [
+    "complete ledger sign failed",
+    "Signing on your Ledger didn't finish. Check Activity before trying again.",
+  ],
 
   // --- Private balances ----------------------------------------------------
   ["private balances unavailable", "Couldn't load private balances. Try again."],
@@ -295,7 +308,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["shielding route unavailable", "No shielding route right now. Try again shortly."],
   ["unshielding preparation failed", "Couldn't prepare unshielding. Try again."],
   ["private send preparation failed", "Couldn't prepare this private send. Try again."],
-  ["private transaction failed", "The private transaction didn't go through. Try again."],
+  ["private transaction failed", SUBMISSION_UNKNOWN("The private transaction")],
   [
     "private sends to the sending account are not supported",
     "You can't send privately to the same account.",
@@ -390,7 +403,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ],
   ["argent multisig deployment review unavailable", MULTISIG_DEPLOY_PREPARE],
   ["review ready multisig deployment failed", MULTISIG_DEPLOY_PREPARE],
-  ["deploy ready multisig failed", "Deployment didn't go through. Try again."],
+  ["deploy ready multisig failed", SUBMISSION_UNKNOWN("The deployment")],
   [
     "signer set, threshold, and salt do not reproduce the watched multisig address",
     "These signers and threshold don't produce the watched address. Check them.",
