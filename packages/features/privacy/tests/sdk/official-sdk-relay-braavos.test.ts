@@ -77,7 +77,7 @@ test("refuses a private relay for a Braavos account before using the key", async
       } as unknown as RpcProvider;
     },
     sdk: runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       discoverNotes: async () => ({ notes: new Map() }),
       executeWithInvocation: async () => executeResult(),
     })),

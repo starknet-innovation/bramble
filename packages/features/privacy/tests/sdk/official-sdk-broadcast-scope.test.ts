@@ -37,7 +37,7 @@ const depositRequest = {
 
 const depositSdk = () =>
   runtime(() => ({
-    build: () => builder(executeResult()),
+    build: () => builder(),
     async discoverNotes() {
       return { notes: new Map() };
     },
