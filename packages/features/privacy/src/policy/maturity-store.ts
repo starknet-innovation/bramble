@@ -5,16 +5,18 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import type {
-  Strk20MaturityRecord,
-  Strk20MaturityScope,
-  Strk20MaturityStore,
+import {
+  maturityRecordNamesHash,
+  type Strk20MaturityRecord,
+  type Strk20MaturityScope,
+  type Strk20MaturityStore,
 } from "@bramble/privacy/maturity";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isNonZeroStarkFieldElement,
+  isStarkFieldElement,
   isStarknetNetworkId,
   sameFelt,
 } from "@bramble/wallet-model/networks";
@@ -24,13 +26,31 @@ const MAX_RECORDS = 100;
 
 type StoredMaturity = Strk20MaturityRecord & Strk20MaturityScope;
 
+// A submitting record either names nothing yet, or names the complete signed
+// write: hash, sender, and nonce together, each a canonical field element (the
+// nonce may be zero). A partial identity could not resolve anything and is
+// dropped like any other malformed entry.
+const isSubmittingIdentity = (value: Record<string, unknown>): boolean =>
+  value["acceptedBlock"] === undefined &&
+  ((value["transactionHash"] === undefined &&
+    value["senderAddress"] === undefined &&
+    value["nonce"] === undefined) ||
+    (typeof value["transactionHash"] === "string" &&
+      isNonZeroStarkFieldElement(value["transactionHash"]) &&
+      typeof value["senderAddress"] === "string" &&
+      isNonZeroStarkFieldElement(value["senderAddress"]) &&
+      typeof value["nonce"] === "string" &&
+      isStarkFieldElement(value["nonce"])));
+
 const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
     "acceptedBlock",
     "accountId",
     "networkId",
+    "nonce",
     "poolAddress",
+    "senderAddress",
     "state",
     "transactionHash",
   ]) &&
@@ -39,10 +59,10 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   typeof value["poolAddress"] === "string" &&
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
-  ((value["state"] === "submitting" &&
-    value["transactionHash"] === undefined &&
-    value["acceptedBlock"] === undefined) ||
+  ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
     (value["state"] === "submitted" &&
+      value["senderAddress"] === undefined &&
+      value["nonce"] === undefined &&
       typeof value["transactionHash"] === "string" &&
       isNonZeroStarkFieldElement(value["transactionHash"]) &&
       (value["acceptedBlock"] === undefined ||
@@ -60,30 +80,64 @@ const readAll = async (store: KeyValueStore): Promise<readonly StoredMaturity[]>
   return Array.isArray(value) ? value.filter(isStoredMaturity) : [];
 };
 
+const readScope = async (
+  store: KeyValueStore,
+  scope: Strk20MaturityScope,
+): Promise<Strk20MaturityRecord | null> => {
+  const entry = (await readAll(store)).find((candidate) => sameScope(candidate, scope));
+  if (!entry) {
+    return null;
+  }
+  if (entry.state === "submitting") {
+    return entry.transactionHash === undefined
+      ? { state: "submitting" }
+      : {
+          nonce: entry.nonce,
+          senderAddress: entry.senderAddress,
+          state: "submitting",
+          transactionHash: entry.transactionHash,
+        };
+  }
+  return {
+    ...(entry.acceptedBlock === undefined ? {} : { acceptedBlock: entry.acceptedBlock }),
+    state: "submitted",
+    transactionHash: entry.transactionHash,
+  };
+};
+
+const writeScope = async (
+  store: KeyValueStore,
+  scope: Strk20MaturityScope,
+  record: Strk20MaturityRecord | null,
+): Promise<void> => {
+  const retained = (await readAll(store)).filter((entry) => !sameScope(entry, scope));
+  const next = record ? [...retained, { ...scope, ...record }] : retained;
+  await store.set(STORE_KEY, next.slice(-MAX_RECORDS));
+};
+
 /**
  * Creates the session-backed maturity store.
+ *
+ * `read` stays outside the mutation queue. `replaceIfCurrentHash` does not: the
+ * comparison and the write are one queued mutation, so a resolution that
+ * observed an older marker cannot overwrite a newer send that queued first.
  */
 export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityStore =>
   serializeStoreMutations<Strk20MaturityStore>(
     {
-      async read(scope) {
-        const entry = (await readAll(store)).find((candidate) => sameScope(candidate, scope));
-        if (!entry) {
-          return null;
-        }
-        if (entry.state === "submitting") {
-          return { state: "submitting" };
-        }
-        return {
-          ...(entry.acceptedBlock === undefined ? {} : { acceptedBlock: entry.acceptedBlock }),
-          state: "submitted",
-          transactionHash: entry.transactionHash,
-        };
+      read(scope) {
+        return readScope(store, scope);
       },
-      async write(scope, record) {
-        const retained = (await readAll(store)).filter((entry) => !sameScope(entry, scope));
-        const next = record ? [...retained, { ...scope, ...record }] : retained;
-        await store.set(STORE_KEY, next.slice(-MAX_RECORDS));
+      async replaceIfCurrentHash(scope, transactionHash, record) {
+        const current = await readScope(store, scope);
+        if (!maturityRecordNamesHash(current, transactionHash)) {
+          return false;
+        }
+        await writeScope(store, scope, record);
+        return true;
+      },
+      write(scope, record) {
+        return writeScope(store, scope, record);
       },
     },
     ["read"],
