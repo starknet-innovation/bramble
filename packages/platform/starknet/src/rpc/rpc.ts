@@ -444,7 +444,10 @@ const transactionStatusEntry = async (
   transactionHash: string,
 ): Promise<readonly [string, TransactionStatusReport]> => {
   try {
-    return [transactionHash, classifyStatus(await provider.getTransactionStatus(transactionHash))];
+    return [
+      transactionHash,
+      classifyTransactionStatus(await provider.getTransactionStatus(transactionHash)),
+    ];
   } catch (error) {
     if (isTransportRpcError(error)) {
       throw error;
@@ -453,12 +456,13 @@ const transactionStatusEntry = async (
   }
 };
 
-// REVERTED execution wins over finality, including PRE_CONFIRMED.
-const classifyStatus = (receipt: {
+/** Classifies one untrusted status response. Unknown finality stays pending. */
+export const classifyTransactionStatus = (receipt: {
   readonly execution_status?: unknown;
   readonly finality_status?: unknown;
 }): TransactionStatusReport => {
   const finality = String(receipt.finality_status ?? "");
+  // REVERTED wins over finality, including PRE_CONFIRMED.
   if (String(receipt.execution_status ?? "") === "REVERTED") {
     return { finalizedOnL1: finality === "ACCEPTED_ON_L1", found: true, status: "reverted" };
   }
