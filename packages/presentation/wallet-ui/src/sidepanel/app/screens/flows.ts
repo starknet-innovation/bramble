@@ -300,6 +300,7 @@ export const simpleFlowScreen = (
     readonly preferences: WalletPreferences | null;
     readonly prices: Readonly<Record<string, number>>;
     readonly privacy: PrivacyDisclosureState;
+    readonly selectedTokenId?: string | null;
     readonly sendIntent?: SendIntent | null;
     readonly status: WalletStatus;
   },
@@ -316,6 +317,7 @@ export const simpleFlowScreen = (
         ctx.currency,
         (ctx.multisigs ?? []).map((view) => view.record),
         ctx.sendIntent ?? null,
+        ctx.selectedTokenId ?? null,
       );
     case "swap":
       return swapFlow(ctx.status, ctx.account);

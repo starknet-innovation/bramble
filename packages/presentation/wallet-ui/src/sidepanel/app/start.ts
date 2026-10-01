@@ -27,6 +27,7 @@ import { healTransientGroupState } from "../journeys/settings/group-state";
 import { bindReveal } from "../journeys/settings/reveal-ui";
 import { bindSettingsSurface } from "../journeys/settings/settings-surface";
 import { createSwapClient } from "../journeys/swap/swap-client";
+import { presetSwapPair } from "../journeys/swap/swap-ui";
 import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
@@ -236,6 +237,11 @@ export const startWalletUi = async (
       cache,
       navigateHome: () => {
         if (activeView === "swap") navigate("home");
+      },
+      openWithToken: (view, tokenId) => {
+        [sendIntent, selectedTokenId] = [null, tokenId];
+        if (view === "swap") presetSwapPair(tokenId, cache.preferences?.tokens ?? []);
+        navigate(view);
       },
       openToken: (tokenId) => {
         selectedTokenId = tokenId;
