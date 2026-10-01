@@ -14,6 +14,7 @@ import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/p
 import {
   reviewCallsList,
   reviewConstraints,
+  reviewCostNote,
   reviewFeeSection,
   reviewOutcome,
   reviewPanel,
@@ -244,7 +245,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
         },
         { "data-approval-retry-fee": approval.id },
       ) ||
-      reviewConstraints(
+      reviewCostNote(
         "The network fee is unavailable. Approval remains disabled until a fee can be reviewed.",
       )
     }

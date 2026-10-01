@@ -135,6 +135,14 @@ describe("Import private key form", () => {
     expect(textarea?.value ?? "").toBe("");
   });
 
+  test("states that the key controls the account", () => {
+    // Cut by the copy review and restored as one fact (mc-wallet #476).
+    const harness = mount(() => Promise.resolve(account.id));
+    expect(harness.container.querySelector('[role="note"]')?.textContent).toBe(
+      "Anyone with this key controls the account.",
+    );
+  });
+
   test("an empty field is a no-op that prompts for a key", async () => {
     const harness = mount(() => Promise.resolve(account.id));
 

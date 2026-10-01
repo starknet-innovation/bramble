@@ -22,7 +22,7 @@ import { icon } from "../../shared/icons";
 import { accountLabel, copyButton } from "../../shared/parts";
 import {
   formatFeeEstimate,
-  reviewConstraints,
+  reviewCostNote,
   reviewOutcome,
   reviewPanel,
 } from "../../shared/review-render";
@@ -448,7 +448,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
               ${copyButton(next.address, "Copy predicted multisig address")}
             </div>
             ${reviewPanel([], fundingRequired ? `Funding is required first. Send at least ${formatFeeEstimate(next.fee)} to the predicted address, then check again.` : "Deployment creates a new on-chain multisig account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
-            ${reviewConstraints(`Maximum network fee: ${formatFeeEstimate(next.fee)}`)}
+            ${reviewCostNote(`Maximum network fee: ${formatFeeEstimate(next.fee)}`)}
             <details class="disclosure" data-disclosure="multisig-deployment-technical">
               <summary>
                 <span class="menu-copy"><strong>Technical details</strong><small>Exact constructor authority and signer</small></span>

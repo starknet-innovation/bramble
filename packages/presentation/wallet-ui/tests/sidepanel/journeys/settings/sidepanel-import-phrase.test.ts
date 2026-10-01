@@ -127,6 +127,14 @@ describe("import-phrase flow", () => {
     document.body.replaceChildren();
   });
 
+  test("states that the phrase controls its accounts", () => {
+    // Cut by the copy review and restored as one fact (mc-wallet #476).
+    const flow = mount();
+    expect(flow.app.querySelector('[role="note"]')?.textContent).toBe(
+      "Anyone with this phrase controls its accounts.",
+    );
+  });
+
   test("pasting a whole phrase into one cell distributes it across the grid", () => {
     const flow = mount();
     // Simulate the browser paste outcome the input listener sees: the full

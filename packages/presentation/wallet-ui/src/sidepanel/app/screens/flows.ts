@@ -151,6 +151,7 @@ export const importPhraseFlow = (status: WalletStatus): string =>
   flowScreen(
     "import-phrase",
     `<section class="section">
+      <p class="review-flag" role="note">Anyone with this phrase controls its accounts.</p>
       <form id="import-phrase-form" class="stack" novalidate>
         <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
         <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
@@ -181,6 +182,7 @@ export const importKeyFlow = (status: WalletStatus): string =>
   flowScreen(
     "import-key",
     `<section class="section">
+      <p class="review-flag" role="note">Anyone with this key controls the account.</p>
       <form id="import-key-form" class="stack">
         ${selectField({
           hint: "Choose the contract that already owns this key. A different choice derives a different address.",

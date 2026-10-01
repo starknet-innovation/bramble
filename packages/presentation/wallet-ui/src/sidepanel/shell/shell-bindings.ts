@@ -24,7 +24,7 @@ import {
   outcomeReceiptFor,
   paintOutcomeReceipt,
 } from "../shared/outcome-receipt";
-import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
+import { formatFeeEstimate, reviewCostNote } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
@@ -247,7 +247,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     if (reviewPanelRoot) {
       renderFragment(
         reviewPanelRoot,
-        reviewConstraints(`Maximum network fee: ${formatFeeEstimate(estimate)}`),
+        reviewCostNote(`Maximum network fee: ${formatFeeEstimate(estimate)}`),
       );
     }
   };
@@ -255,7 +255,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   const failed = (error: unknown, fallback: string): void => {
     DEPLOYMENT_FEES.delete(target);
     const message = errorMessage(error, fallback);
-    if (reviewPanelRoot) renderFragment(reviewPanelRoot, reviewConstraints(message));
+    if (reviewPanelRoot) renderFragment(reviewPanelRoot, reviewCostNote(message));
     showToast(message, "error", target);
     scopedStatus(target, message);
     buttonBusy(target, false);

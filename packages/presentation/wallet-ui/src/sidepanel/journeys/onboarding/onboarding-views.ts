@@ -282,6 +282,7 @@ const importKeyStep = (): string => `
     ${flowBack("Back to wallet methods")}
     ${stepHead("wallet", "Import from a private key")}
     <div class="onboarding-fields">
+      <p class="review-flag" role="note">Anyone with this key controls the account.</p>
       ${selectField({
         label: "Account type",
         name: "importKeyContractType",

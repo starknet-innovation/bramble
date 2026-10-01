@@ -4,7 +4,8 @@
  * deterministic state machine to the grant tab's DOM.
  *
  * The title carries the phase; a message is added only where the reader has
- * something to do. Every phase used to narrate what the wallet was doing to
+ * something to do. The one device prompt also says nothing is signed,
+ * because a Ledger asking for approval otherwise reads as a request to sign. Every phase used to narrate what the wallet was doing to
  * the device, which said the title again in more words and made a handshake
  * look like seven events instead of one wait.
  */
@@ -26,7 +27,7 @@ const PROGRESS: Readonly<Record<LedgerTransitionPhase, LedgerTransitionProgress>
   "reconnecting-dashboard": { message: "", title: "Reconnecting to your Ledger" },
   "checking-firmware": { message: "", title: "Checking Ledger firmware" },
   "opening-starknet": {
-    message: "Confirm the prompt on your Ledger.",
+    message: "Confirm the prompt on your Ledger. No transaction is signed.",
     title: "Approve opening Starknet",
   },
   "reconnecting-starknet": { message: "", title: "Starknet is opening" },

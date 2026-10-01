@@ -51,7 +51,7 @@ export const revealFlow = (status: WalletStatus): string => {
         "reveal",
         `<section class="section" role="note">
           <p class="eyebrow">Recovery</p>
-          <p class="hint">This account’s key is on your Ledger. Recover it with the device.</p>
+          <p class="hint" id="reveal-ledger-note">This account's key is on your Ledger. To recover it, use the Ledger's own recovery phrase.</p>
         </section>`,
       )
     );
