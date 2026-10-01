@@ -416,6 +416,8 @@ ${SIGN_REQUEST_STYLES}
   }
   .reveal-value.is-masked, .gate-form textarea.is-masked { filter: blur(7px); user-select: none; }
   .verify-grid { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Words that do not match the phrase read as an error to fix, not a prompt. */
+  #verify-result.is-invalid { color: var(--bramble-danger); }
   .icon {
     fill: none;
     height: ${CONTROL.icon};
