@@ -82,6 +82,18 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
     form,
     mnemonic: () => mnemonic,
     networkId: deps.networkId,
+    // This screen survives a successful import unchanged, so wipe the phrase
+    // here: every cell, the retained copy, and the account picker.
+    onRestored: () => {
+      mnemonic = "";
+      wordAssist.hideSuggestions();
+      wordCount = fillRecoveryWords(form, inputs, [], "import");
+      syncToggleLabel();
+      if (scanSection) {
+        scanSection.hidden = true;
+      }
+      refreshWords();
+    },
     render: deps.render,
     restore: (phrase, networkId, selections) =>
       deps.wallet.importSeedAccounts(phrase, networkId, selections),
