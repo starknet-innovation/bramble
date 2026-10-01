@@ -113,21 +113,21 @@ export const bindRecoveryWordAssist = (
         }
       });
     });
+    // Tab or Enter completes a partial word only. A cell that already holds a
+    // wordlist word keeps it, even when longer words share the prefix ("act"
+    // still offers "action"): replacing a correct word would restore a
+    // different seed, or leave a checksum error retyping cannot fix.
     input.addEventListener("keydown", (event) => {
-      if (event.key !== "Tab" && event.key !== "Enter") {
+      const completes = event.key === "Enter" || (event.key === "Tab" && !event.shiftKey);
+      if (!completes || isBip39EnglishWord(input.value)) {
         return;
       }
       const first = panel.querySelector<HTMLButtonElement>(".recovery-suggestion");
       if (panel.hidden || !first) {
         return;
       }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        applySuggestion(input, first.textContent ?? "");
-      } else if (event.key === "Tab" && !event.shiftKey) {
-        event.preventDefault();
-        applySuggestion(input, first.textContent ?? "");
-      }
+      event.preventDefault();
+      applySuggestion(input, first.textContent ?? "");
     });
   }
 
