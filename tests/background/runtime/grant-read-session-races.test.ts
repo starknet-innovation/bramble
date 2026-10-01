@@ -52,6 +52,7 @@ for (const boundary of [
             })
           : (boundary.startsWith("private-") ? resolveAccount : resolveOriginAccount)(
               {
+                activity: { list: async () => [] },
                 session,
                 wallet,
                 preferencesStore: {

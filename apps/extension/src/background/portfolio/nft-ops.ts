@@ -24,6 +24,7 @@ import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import {
   type NftTarget,
   readAddNftInput,
@@ -252,7 +253,11 @@ const prepareNftTransfer = async (deps: WalletOpsDeps, input: NftTransferInput) 
   if (input.networkId !== context.networkId) {
     return { error: "switch to the NFT's network first" } as const;
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    context.accounts,
+  );
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
   // Watched NFTs are not scoped to an account, so both review and confirmation
   // prove ownership for the active account instead of trusting gallery state.

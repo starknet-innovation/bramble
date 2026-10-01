@@ -14,7 +14,7 @@
 
 import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-discovery";
 import { AVNU_MULTI_ROUTE_SWAP } from "@bramble/wallet-model/avnu-route";
-import { asFelt, sameFelt } from "@bramble/wallet-model/networks";
+import { asFelt, paddedFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import {
   canonical,
@@ -114,11 +114,22 @@ export const refuseOnAccountSelfCall = (
 /**
  * Detects address poisoning: a candidate that visually mimics a trusted
  * address (same leading and trailing digits) while being a different account.
+ * Both spellings the wallet renders are compared: the unpadded canonical form
+ * (accounts) and the 64-digit padded form (contacts), whose visible window is
+ * `0x0` plus three significant digits. Matching only the unpadded window let 15
+ * of every 16 twins of a padded contact pass (audit #242).
  */
 export const isLookalikeAddress = (candidate: string, trusted: string): boolean => {
   const left = canonical(candidate);
   const right = canonical(trusted);
-  return left !== right && shortAddress(left) === shortAddress(right);
+  if (left === right) {
+    return false;
+  }
+  const padded = (value: string): string => paddedFelt(value) ?? value;
+  return (
+    shortAddress(left) === shortAddress(right) ||
+    shortAddress(padded(left)) === shortAddress(padded(right))
+  );
 };
 
 // Each rule is a pure predicate returning the flag it raises or null; the
@@ -286,12 +297,21 @@ const addressPoisoningFlag = (recipient: string, context: VerificationContext): 
   if (!recipient) {
     return null;
   }
-  const trusted = [context.account.address, ...context.addressBook.map((entry) => entry.address)];
+  // Every address the user can be expected to recognize: this account, their
+  // other accounts, saved contacts, and recipients this wallet has paid (audit
+  // #163). Chain-discovered history is deliberately absent — see
+  // `walletPaidRecipients`.
+  const trusted = [
+    context.account.address,
+    ...(context.ownAccounts ?? []),
+    ...context.addressBook.map((entry) => entry.address),
+    ...(context.recentRecipients ?? []),
+  ];
   return trusted.some((known) => isLookalikeAddress(recipient, known))
     ? {
         code: "address-poisoning",
         message:
-          "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending.",
+          "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
       }
     : null;
 };
