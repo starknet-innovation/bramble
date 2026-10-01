@@ -1,11 +1,13 @@
 /** Shared account-address surface used by single-owner and multisig Receive. */
 import { escapeHtml } from "@bramble/core/html";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import { button, switchControl } from "@bramble/ui-kit/controls";
 import { icon } from "@bramble/ui-kit/icons";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { walletContactCard } from "@bramble/wallet-model/preferences";
 import { accountLabel, copyButton } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
+import { knownAccountType } from "../../shell/account-types";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 
 const PUBLIC_ONLY_COPY = "Public transfers only";
@@ -59,6 +61,67 @@ export const privacyPoolNotice = (
 };
 
 /**
+ * Renders the on-chain class-hash verification state. `null` is the still-loading
+ * state (kept visually distinct from a confirmed result). A `mismatch` is a
+ * security signal and names both the class deployed on-chain and the class this
+ * wallet expects, because that alert is hoisted above the collapsed Pro fields.
+ * Only an exact on-chain match reads as verified.
+ */
+export const classHashVerificationBadge = (verification: ClassHashVerification | null): string => {
+  if (verification === null) {
+    return `<p class="verify-status pending" role="status">${icon("refresh")}Verifying on-chain…</p>`;
+  }
+  switch (verification.status) {
+    case "verified":
+      return `<p class="verify-status verified" role="status">${icon("shield")}Verified on-chain</p>`;
+    case "mismatch":
+      return `<p class="verify-status mismatch" role="alert">${icon("alert")}On-chain mismatch — the contract deployed at this address runs class <code>${escapeHtml(verification.onChainClassHash)}</code>, not <code>${escapeHtml(verification.expectedClassHash)}</code>, the class this wallet expects. Do not trust this account until resolved.</p>`;
+    case "undeployed":
+      return `<p class="verify-status pending" role="status">${icon("alert")}Not deployed yet — the class hash cannot be verified on-chain until this account is deployed.</p>`;
+    case "unreachable":
+      return `<p class="verify-status pending" role="status">${icon("alert")}Could not reach the network — shown from local data and not yet verified on-chain.</p>`;
+  }
+};
+
+// A mismatch says "do not trust this account", so it is the one verdict that
+// cannot sit behind the Pro switch: Pro renders collapsed, and a security signal
+// nobody opens is a signal nobody gets. It is hoisted to the top of the card and
+// left out of the Pro rows, so exactly one badge renders either way.
+const isMismatch = (verification: ClassHashVerification | null | undefined): boolean =>
+  verification?.status === "mismatch";
+
+// The contract identifiers: the class this account runs, its familiar name when
+// the registry knows that class, and the on-chain verdict for it. Rendered
+// inside Pro beside the public keys, because a class hash answers "what am I
+// handing you" the same way the address and signer key do. Omitted entirely
+// when the caller passes no class hash (a watched multisig's Receive).
+const classHashRows = (
+  classHash: string | undefined,
+  verification: ClassHashVerification | null | undefined,
+): string => {
+  if (!classHash) {
+    return "";
+  }
+  const accountType = knownAccountType(classHash);
+  return `<div class="receive-key-row">
+      <strong>Class hash</strong>
+      <span class="receive-key-value">
+        <code title="${escapeHtml(classHash)}">${escapeHtml(accountLabel(classHash))}</code>
+        ${copyButton(classHash, "Copy class hash")}
+      </span>
+    </div>
+    ${
+      accountType
+        ? `<div class="receive-key-row">
+      <strong>Type</strong>
+      <span class="receive-key-value">${escapeHtml(accountType)}</span>
+    </div>`
+        : ""
+    }
+    ${verification === undefined || isMismatch(verification) ? "" : classHashVerificationBadge(verification)}`;
+};
+
+/**
  * Accessible names of the two QR payloads Receive can show. Shared with the
  * shell binding that swaps between them, so the label and the payload cannot
  * drift apart.
@@ -82,6 +145,10 @@ const CARD_EXPLAINER =
  */
 type ReceiveAddressViewOptions = {
   readonly address: string;
+  /** Class this account's contract runs; omitted where the caller has none. */
+  readonly classHash?: string;
+  /** On-chain verdict for that class; `null` while it is still being checked. */
+  readonly classHashVerification?: ClassHashVerification | null;
   readonly copyLabel: string;
   readonly hint: string;
   readonly networkId: StarknetNetworkId;
@@ -93,10 +160,15 @@ type ReceiveAddressViewOptions = {
 
 /**
  * Renders the canonical Receive card. Callers provide account-type context as
- * escaped presentation copy and may expose one already-public signer key.
+ * escaped presentation copy and may expose one already-public signer key. A
+ * caller that knows the account's class hash passes it too: it is public
+ * contract metadata, and Pro is where the wallet hands out the identifiers
+ * someone may need to check what they are paying into.
  */
 export const receiveAddressView = ({
   address,
+  classHash,
+  classHashVerification,
   copyLabel,
   hint,
   networkId,
@@ -116,6 +188,7 @@ export const receiveAddressView = ({
     : "";
   return `
   <div class="stack receive-address-view"${rootData}>
+    ${classHash && isMismatch(classHashVerification) ? classHashVerificationBadge(classHashVerification ?? null) : ""}
     <div class="qr-card" data-receive-qr data-qr-payload="address">${qrSvg(address, RECEIVE_QR_LABELS.address)}</div>
     <div class="receive-intro">
       <h2>Your Starknet address</h2>
@@ -166,6 +239,7 @@ export const receiveAddressView = ({
               ${copyButton(nostrPublicKey ?? "", "Copy coordination public key")}
             </span>
           </div>
+          ${classHashRows(classHash, classHashVerification)}
         </div>
       </div>`
         : `<p class="hint">${escapeHtml(hint)}</p>`

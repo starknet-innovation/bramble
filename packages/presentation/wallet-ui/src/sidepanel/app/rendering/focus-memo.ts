@@ -124,6 +124,13 @@ export const focusMemo = (doc: Document = document): readonly string[] => {
   if (group.length > 0) {
     return group;
   }
+  const accountName = active.dataset["accountName"];
+  if (accountName !== undefined) {
+    // The account-names list renders one `name="label"` field per account, so a
+    // name-only selector would reclaim focus — and re-seed the draft — into the
+    // first row whichever one was being typed in. Key on the account id.
+    return [attrSelector("data-account-name", accountName)];
+  }
   if (active.id) {
     return [`#${active.id}`];
   }

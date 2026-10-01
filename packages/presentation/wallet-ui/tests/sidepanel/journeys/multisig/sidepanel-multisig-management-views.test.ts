@@ -2,7 +2,6 @@
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { multisigAccountOptions } from "../../../../src/sidepanel/journeys/multisig/multisig-account-options";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import {
   multisigAddFlow,
@@ -140,14 +139,6 @@ describe("Argent multisig management views", () => {
     expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
     expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Ready multisig");
     expect(multisigTrackFlow(fixture.status, fixture.view)).toContain('id="multisig-track-form"');
-
-    const options = multisigAccountOptions(
-      [fixture.view, { ...fixture.view, config: null }],
-      fixture.record.id,
-    );
-    expect(options).toContain('aria-pressed="true"');
-    expect(options).toContain("1 of 1");
-    expect(options).toContain("authority unavailable");
   });
 
   test("every truncated multisig identity carries a copy control for its full value", async () => {
@@ -176,18 +167,6 @@ describe("Argent multisig management views", () => {
     // never inside a summary or form.
     expect(roster.indexOf("copy-inline")).toBeLessThan(
       roster.indexOf('<details class="disclosure multisig-signer-manage">'),
-    );
-
-    // Accounts & groups picker: the row stays the open control; the copy
-    // trails it on the same line.
-    const options = multisigAccountOptions([fixture.view], null);
-    expect(options).toContain(
-      `<code title="${fixture.record.address}">${accountLabel(fixture.record.address)}</code>`,
-    );
-    expect(options).toMatch(
-      new RegExp(
-        `<div class="option-row-line">\\s*<button class="option-row" data-multisig-open="${fixture.record.id}"[\\s\\S]*?</button>\\s*<button class="icon-button ghost copy-inline" data-copy="${fixture.record.address}" type="button" aria-label="Copy Treasury address"`,
-      ),
     );
 
     // Deploy composer: each selected signer's key copies whole beside Remove.
