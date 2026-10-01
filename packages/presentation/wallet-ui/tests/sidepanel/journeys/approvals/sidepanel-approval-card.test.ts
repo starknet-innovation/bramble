@@ -183,3 +183,42 @@ describe("OutsideExecution sign card (audit 144)", () => {
     expect(html).not.toContain(`class="review-calls"`);
   });
 });
+
+// The add-token card says when a token borrows a known ticker (audit 171).
+describe("watch-asset spoof warning (audit 171)", () => {
+  const token = {
+    address: "0x0bad00000000000000000000000000000000000000000000000000000000001",
+    decimals: 6,
+    name: "USD <b>Coin</b>",
+    networkId: "SN_MAIN" as const,
+    symbol: "USDC",
+  };
+  const watch: PendingApproval = {
+    id: WATCH_ID,
+    kind: "watch-asset",
+    origin: "https://dapp.example",
+    token,
+  };
+
+  test("warns on a ticker spoof and escapes token text", () => {
+    const html = activity([watch]);
+    expect(html).toContain("This token uses the ticker of a different, known token contract.");
+    expect(html).toContain("If added, it stays hidden until you show it.");
+    expect(html).toContain("USD &lt;b&gt;Coin&lt;/b&gt;");
+    expect(html).not.toContain("<b>Coin</b>");
+  });
+
+  test("raises no warning for the curated contract", () => {
+    const html = activity([
+      {
+        ...watch,
+        token: {
+          ...token,
+          address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+          name: "USD Coin",
+        },
+      },
+    ]);
+    expect(html).not.toContain("ticker of a different");
+  });
+});

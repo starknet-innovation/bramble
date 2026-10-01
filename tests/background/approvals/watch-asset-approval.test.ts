@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
@@ -314,5 +315,40 @@ describe("watch-asset approval lifecycle", () => {
       { event: "accountsChanged", type: "wallet.event" },
       { event: "approvalsChanged", type: "wallet.event" },
     ]);
+  });
+});
+
+// A dapp-watched token that borrows a known ticker is stored hidden, exactly as
+// wallet.addToken stores it (audit 171); an ordinary token stays visible.
+describe("watch-asset spoof handling (audit 171)", () => {
+  const SPOOF = "0x0bad00000000000000000000000000000000000000000000000000000000001";
+  const PLAIN = "0x0777000000000000000000000000000000000000000000000000000000000002";
+
+  const approveWatch = async (address: string, symbol: string) => {
+    const { handler, preferencesStore } = makeHandler(async () => ({
+      decimals: 6,
+      name: `${symbol} Token`,
+      symbol,
+    }));
+    const held = handler({ asset: { address }, origin, type: "wallet.watchAsset" }, contentSender);
+    await flushHeld();
+    const id = await pendingId(handler);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await held;
+    return preferencesStore.read();
+  };
+
+  test("hides a token that spoofs a curated ticker", async () => {
+    const preferences = await approveWatch(SPOOF, "USDC");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, SPOOF));
+    if (!stored) throw new Error("token not stored");
+    expect(preferences.hiddenTokens ?? []).toContain(stored.id);
+  });
+
+  test("keeps a non-colliding token visible", async () => {
+    const preferences = await approveWatch(PLAIN, "PLAIN");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, PLAIN));
+    if (!stored) throw new Error("token not stored");
+    expect(preferences.hiddenTokens ?? []).not.toContain(stored.id);
   });
 });

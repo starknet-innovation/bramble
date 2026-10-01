@@ -5,6 +5,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
+import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
 import { button } from "@bramble/ui-kit/controls";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
@@ -181,6 +182,24 @@ const connectCard = (approval: PendingApproval, status: WalletStatus): string =>
     )}
   </li>`;
 
+// Fixed copy per spam reason (audit 171): the card the user decides on says why
+// the token looks wrong, and that the wallet will store it hidden.
+const SPAM_WARNINGS: Readonly<Record<SpamReason, string>> = {
+  "absurd-decimals": "This token reports an implausible number of decimals.",
+  "empty-name": "This token has no name.",
+  "symbol-spoof": "This token uses the ticker of a different, known token contract.",
+};
+
+const watchAssetWarnings = (token: NonNullable<PendingApproval["token"]>): readonly string[] => {
+  const reasons = tokenSpamReasons(token);
+  return reasons.length === 0
+    ? []
+    : [
+        ...reasons.map((reason) => SPAM_WARNINGS[reason]),
+        "If added, it stays hidden until you show it.",
+      ];
+};
+
 const watchAssetCard = (approval: PendingApproval): string => {
   const token = approval.token;
   if (!token) {
@@ -193,7 +212,7 @@ const watchAssetCard = (approval: PendingApproval): string => {
       <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
       ${reviewOutcome("Add this token contract to the wallet's tracked asset list.")}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel([...watchAssetWarnings(token), ...(approval.insights ?? [])])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(approval, "Add token", false)}
   </li>`;

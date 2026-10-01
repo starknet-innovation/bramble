@@ -10,6 +10,7 @@
  * summary.
  */
 
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/avnu-route";
@@ -98,9 +99,8 @@ export const verificationContext = (
   account: Pick<AccountRef, "address" | "networkId">,
   preferences: {
     readonly addressBook: readonly AddressBookEntry[];
-    // Structurally typed rather than importing `WatchedNft`: the watched-NFT
-    // record lives in the portfolio package, which the transactions package
-    // does not depend on. Only these two fields are read, and a `WatchedNft`
+    // Structurally typed rather than importing `WatchedNft` from the
+    // portfolio package: only these two fields are read, and a `WatchedNft`
     // still satisfies the shape at every call site.
     readonly nfts?: readonly { readonly contract: string; readonly networkId: StarknetNetworkId }[];
     readonly tokens: readonly TokenConfig[];
@@ -111,7 +111,15 @@ export const verificationContext = (
   nftContracts: (preferences.nfts ?? [])
     .filter((nft) => nft.networkId === account.networkId)
     .map((nft) => nft.contract),
-  tokens: preferences.tokens.filter((token) => token.networkId === account.networkId),
+  // A tracked token that trips the spam heuristic (a ticker borrowed from a
+  // different contract, malformed metadata) is not trusted: it stays an
+  // unknown contract and its calls are summarized in raw units, never under the
+  // ticker it impersonates (audit 171). Curated contracts never trip it, so a
+  // user hiding STRK changes nothing here; `hiddenTokens` is deliberately not
+  // consulted.
+  tokens: preferences.tokens.filter(
+    (token) => token.networkId === account.networkId && !isLikelySpam(token),
+  ),
 });
 
 /**
