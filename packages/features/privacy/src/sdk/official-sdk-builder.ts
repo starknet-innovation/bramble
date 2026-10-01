@@ -114,15 +114,21 @@ export const strk20BuilderFor = (
 };
 
 /**
- * Creates the explicit registration-only builder; missing SDK support fails
- * closed before any proof or transaction can be produced.
+ * Creates the explicit registration builder; missing SDK support fails closed
+ * before any proof or transaction can be produced.
+ *
+ * `autoSetup` stays on so the registration batch also opens the account's own
+ * channel. The pinned SDK warns (`USER_LINKAGE`) when one batch opens more than
+ * one channel and the wallet refuses on any warning, so a registration that left
+ * the self channel unopened made the account's first shield to another wallet
+ * need two channels at once, and it always failed as a privacy leak.
  */
 export const strk20RegistrationBuilderFor = (transfers: SdkTransfers): SdkBuilder => {
   const builder = transfers.build({
     autoDiscover: { channels: "refresh", notes: "refresh" },
     autoRegister: false,
     autoSelectNotes: "naive",
-    autoSetup: false,
+    autoSetup: true,
     registryConst: true,
   });
   if (!builder.register) {
