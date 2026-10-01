@@ -176,7 +176,9 @@ describe("NFT send review", () => {
     expect(app.querySelector("#nft-success-description")?.textContent).toContain(
       "Not confirmed yet",
     );
-    // Held while the chain has not answered: nothing to send again yet.
+    // Nothing to send again while the chain has not answered, so the control
+    // leaves the receipt rather than sitting under it disabled.
+    expect(submitButtonOf(app).hidden).toBe(true);
     expect(submitButtonOf(app).disabled).toBe(true);
   });
 
@@ -357,6 +359,7 @@ describe("NFT transfer receipt", () => {
     // The toast is the chain's answer; the handoff is the receipt heading's job.
     expect(toastTexts("success")).toEqual(["Transaction pre-confirmed on Starknet"]);
     // The collectible has moved, so there is nothing here to send again.
+    expect(submitButtonOf(app).hidden).toBe(true);
     expect(submitButtonOf(app).disabled).toBe(true);
   });
 
@@ -396,6 +399,7 @@ describe("NFT transfer receipt", () => {
 
       // Not a dead "Confirm transfer": the collectible never moved, so the
       // control comes back as a fresh review under the receipt.
+      expect(button.hidden).toBe(false);
       expect(button.disabled).toBe(false);
       expect(button.hasAttribute("data-busy")).toBe(false);
       expect(button.textContent).toContain("Review transfer");

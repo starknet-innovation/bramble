@@ -177,6 +177,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
     form.dataset["stage"] = stage;
     form.removeAttribute("aria-busy");
     submitButton?.lastChild?.replaceWith("Review transfer");
+    submitButton?.removeAttribute("hidden");
     buttonBusy(submitButton, false);
   };
 
@@ -284,9 +285,13 @@ const bindSendForm = (deps: NftUiDeps): void => {
           const stillCurrent = (): boolean => form.isConnected && current === submission;
           form.dataset["stage"] = "submitted";
           form.removeAttribute("aria-busy");
-          // Held while the chain answers; a refusal hands it back below.
+          // The receipt's own actions are the way on, so the form's control
+          // leaves rather than sitting under it disabled — and stays disabled,
+          // so Enter in the recipient field cannot submit through it. A
+          // refusal hands it back below.
           if (submitButton) {
             submitButton.disabled = true;
+            submitButton.hidden = true;
           }
           if (reviewPanel) {
             renderFragment(
