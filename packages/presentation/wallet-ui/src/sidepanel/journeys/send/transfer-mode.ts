@@ -152,7 +152,6 @@ export const transferModeCopy = (mode: TransferMode): TransferModeCopy => COPY[m
 export const transferStageTitle = (stage: TransferStage, mode: TransferMode = "send"): string => {
   const copy = COPY[mode];
   if (stage === "recipient") return mode === "send" ? "Send to" : copy.noun;
-  if (stage === "asset") return "Select an asset";
   if (stage === "details" || stage === "reviewing") return copy.noun;
   if (stage === "review") return `Review ${copy.verb}`;
   if (stage === "authorizing") return `Authorize ${copy.verb}`;

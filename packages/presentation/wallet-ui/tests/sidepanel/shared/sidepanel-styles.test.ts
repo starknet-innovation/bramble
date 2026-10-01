@@ -90,6 +90,13 @@ describe("sidepanel styles", () => {
     );
   });
 
+  test("the send rail sizes itself from its own steps", () => {
+    // A pinned column count outlived the steps it was written for and left an
+    // empty column, which read as the rail sitting off to one side.
+    expect(SIDEPANEL_STYLES).toMatch(/\.send-progress \{[^}]*grid-auto-flow: column/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.send-progress \{[^}]*grid-template-columns/s);
+  });
+
   test("receipts, disclosures, and the segmented control carry structured content", () => {
     // Facts read as receipt rows (label left, value right, divider between),
     // advanced forms collapse behind native details disclosures, and either/or

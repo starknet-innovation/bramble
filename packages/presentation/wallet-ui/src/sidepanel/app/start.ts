@@ -26,7 +26,6 @@ import { healTransientGroupState } from "../journeys/settings/group-state";
 import { bindReveal } from "../journeys/settings/reveal-ui";
 import { bindSettingsSurface } from "../journeys/settings/settings-surface";
 import { createSwapClient } from "../journeys/swap/swap-client";
-import { bindSwap } from "../journeys/swap/swap-ui";
 import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
@@ -230,26 +229,18 @@ export const startWalletUi = async (
     });
     bindDisclosures(app);
     ledgerOnboard.bindTriggers(app);
-    bindSwap({
+    bindClusterScreens({
       app,
-      balances: () => cache.balances,
-      currency: () => cache.preferences?.displayCurrency ?? "usd",
+      cache,
       navigateHome: () => {
         if (activeView === "swap") navigate("home");
       },
-      preferences: () => cache.preferences,
-      render,
-      status: () => cache.status,
-      swap: swapClient,
-      wallet,
-    });
-    bindClusterScreens({
-      app,
       openToken: (tokenId) => {
         selectedTokenId = tokenId;
         navigate("token-detail");
       },
       render,
+      swap: swapClient,
       wallet,
     });
     privacy.bind();

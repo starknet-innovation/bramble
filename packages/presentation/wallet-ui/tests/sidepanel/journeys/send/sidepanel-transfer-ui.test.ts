@@ -124,7 +124,13 @@ describe("bindTransfer", () => {
     expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
     expect(app.querySelector("#send-home")?.textContent).toBe("Back to home");
     expect(app.querySelector("#send-another")).toBeNull();
-    expect(app.querySelector('[data-send-step="sent"]')?.getAttribute("data-state")).toBe("active");
+    // Three steps: review, authorizing, broadcasting and confirmation all rest
+    // on Confirm rather than each taking a step of its own.
+    expect(app.querySelector('[data-send-step="sent"]')).toBeNull();
+    expect(app.querySelector('[data-send-step="sign"]')).toBeNull();
+    expect(app.querySelector('[data-send-step="review"]')?.getAttribute("data-state")).toBe(
+      "active",
+    );
   });
 
   test("keeps the amount screen visible while its review is prepared", async () => {
