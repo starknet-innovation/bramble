@@ -162,21 +162,31 @@ const bindSendForm = (deps: NftUiDeps): void => {
   let requiresDeployment = false;
   let reviewedFee: TransferReviewResponse["review"]["fee"] = null;
   let reviewedDeploymentFee: TransferReviewResponse["review"]["deploymentFee"] = null;
+  // Bumped by each submission and by leaving its receipt, so a confirmation
+  // wait only ever answers for the receipt still on screen.
+  let submission = 0;
   form.dataset["stage"] = "recipient";
 
-  const resetReview = (): void => {
+  // Drops the reviewed transfer, so the next press reviews again — with a
+  // fresh fee — rather than confirming what was already sent or refused.
+  const forgetReview = (stage: string): void => {
     reviewedKey = null;
     requiresDeployment = false;
     reviewedFee = null;
     reviewedDeploymentFee = null;
-    form.dataset["stage"] = "recipient";
+    form.dataset["stage"] = stage;
     form.removeAttribute("aria-busy");
+    submitButton?.lastChild?.replaceWith("Review transfer");
+    buttonBusy(submitButton, false);
+  };
+
+  const resetReview = (): void => {
+    submission += 1;
+    forgetReview("recipient");
     recipientInput?.setCustomValidity("");
     if (reviewPanel) {
       renderFragment(reviewPanel, "");
     }
-    submitButton?.lastChild?.replaceWith("Review transfer");
-    buttonBusy(submitButton, false);
   };
 
   form.addEventListener("input", resetReview);
@@ -270,8 +280,14 @@ const bindSendForm = (deps: NftUiDeps): void => {
       )
       .then(
         async (transactionHash) => {
+          const current = ++submission;
+          const stillCurrent = (): boolean => form.isConnected && current === submission;
           form.dataset["stage"] = "submitted";
           form.removeAttribute("aria-busy");
+          // Held while the chain answers; a refusal hands it back below.
+          if (submitButton) {
+            submitButton.disabled = true;
+          }
           if (reviewPanel) {
             renderFragment(
               reviewPanel,
@@ -293,10 +309,15 @@ const bindSendForm = (deps: NftUiDeps): void => {
             ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
             hash: transactionHash,
             loadActivity: () => deps.wallet.loadActivity(),
-            stillCurrent: () => form.isConnected,
+            stillCurrent,
           }).then(async (outcome) => {
-            if (!form.isConnected) return;
+            if (!stillCurrent()) return;
             await paintNftReceipt(deps, reviewPanel, outcome, transactionHash);
+            if (!stillCurrent()) return;
+            // The chain refused it, so the collectible never moved: the control
+            // comes back as a fresh review under the receipt that says why,
+            // not as a dead "Confirm transfer".
+            if (outcome?.kind === "failed") forgetReview("failed");
             if (outcome) {
               showToast(
                 outcome.toast,
@@ -314,9 +335,6 @@ const bindSendForm = (deps: NftUiDeps): void => {
                   form.isConnected && new FormData(form).get("accountId") === fields.accountId,
               },
             );
-          }
-          if (submitButton) {
-            submitButton.disabled = true;
           }
         },
         (error: unknown) => {

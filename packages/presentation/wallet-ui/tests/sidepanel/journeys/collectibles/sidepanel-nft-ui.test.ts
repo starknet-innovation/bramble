@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { ActivityEntry } from "@bramble/transactions/activity";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { nftSendFlow } from "../../../../src/sidepanel/journeys/collectibles/nft-send-view";
 import { bindNfts, type NftUiDeps } from "../../../../src/sidepanel/journeys/collectibles/nft-ui";
@@ -15,6 +16,7 @@ import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const RECIPIENT = "0x02a3f4b1c5d6e7089a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071";
 const POISONED = "0x02a3f4b1c5d6e7999999999999999999999999999999999991b2c3d4e5f6071";
+const OTHER_RECIPIENT = "0x07c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2";
 const TRANSFER_HASH = "0x05b1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9";
 
 const status: WalletStatus = {
@@ -65,6 +67,8 @@ const mount = (
   // The status the activity log reports for the submitted hash. Omitted, the
   // chain never answers and the receipt stays on the submitted wording.
   chainStatus?: ActivityEntry["status"],
+  // Holds the chain's answer until it resolves, for what happens meanwhile.
+  chainGate?: Promise<void>,
 ) => {
   const app = document.createElement("div");
   app.replaceChildren(
@@ -77,6 +81,7 @@ const mount = (
   const wallet = {
     async loadActivity() {
       if (!chainStatus) throw new Error("activity unavailable");
+      await chainGate;
       return {
         entries: [
           {
@@ -128,6 +133,14 @@ const recipientInput = (app: Element): HTMLInputElement => {
   return input;
 };
 
+const submitButtonOf = (app: Element): HTMLButtonElement => {
+  const button = app.querySelector<HTMLButtonElement>('#nft-send-form button[type="submit"]');
+  if (!button) {
+    throw new Error("NFT send button missing");
+  }
+  return button;
+};
+
 const submit = (app: Element): void => {
   const form = app.querySelector<HTMLFormElement>("#nft-send-form");
   if (!form) {
@@ -163,6 +176,8 @@ describe("NFT send review", () => {
     expect(app.querySelector("#nft-success-description")?.textContent).toContain(
       "Not confirmed yet",
     );
+    // Held while the chain has not answered: nothing to send again yet.
+    expect(submitButtonOf(app).disabled).toBe(true);
   });
 
   test("echoes separate undeployed-account fee ceilings into NFT submission", async () => {
@@ -313,22 +328,22 @@ const toastTexts = (tone: "error" | "success"): string[] =>
   );
 
 // Reviews, confirms, and lets the confirmation wait reach the chain's answer.
-const transferTo = async (chainStatus: ActivityEntry["status"]): Promise<Element> => {
-  const { app, calls } = mount(undefined, {}, chainStatus);
-  recipientInput(app).value = RECIPIENT;
-  submit(app);
+const transferTo = async (chainStatus: ActivityEntry["status"]) => {
+  const mounted = mount(undefined, {}, chainStatus);
+  recipientInput(mounted.app).value = RECIPIENT;
+  submit(mounted.app);
   await flush();
-  submit(app);
+  submit(mounted.app);
   await flush();
   await flush();
   await flush();
-  expect(calls.transfer).toHaveLength(1);
-  return app;
+  expect(mounted.calls.transfer).toHaveLength(1);
+  return mounted;
 };
 
 describe("NFT transfer receipt", () => {
   test("a pre-confirmed transfer reads as complete", async () => {
-    const app = await transferTo("preconfirmed");
+    const { app } = await transferTo("preconfirmed");
     const receipt = app.querySelector("#nft-success");
 
     expect(app.querySelector("#nft-success-title")?.textContent).toBe("Transfer complete");
@@ -341,6 +356,8 @@ describe("NFT transfer receipt", () => {
     );
     // The toast is the chain's answer; the handoff is the receipt heading's job.
     expect(toastTexts("success")).toEqual(["Transaction pre-confirmed on Starknet"]);
+    // The collectible has moved, so there is nothing here to send again.
+    expect(submitButtonOf(app).disabled).toBe(true);
   });
 
   // The chain's two refusals. Each turns the receipt into a failure in place —
@@ -354,7 +371,7 @@ describe("NFT transfer receipt", () => {
     ],
   ] as const) {
     test(`a ${chainStatus} transfer reads as failed, not complete`, async () => {
-      const app = await transferTo(chainStatus);
+      const { app } = await transferTo(chainStatus);
       const receipt = app.querySelector("#nft-success");
 
       expect(app.querySelector("#nft-success-title")?.textContent).toBe("Transfer failed");
@@ -372,5 +389,65 @@ describe("NFT transfer receipt", () => {
       expect(toastTexts("error")).toEqual(["Transaction was not confirmed"]);
       expect(toastTexts("success")).toEqual([]);
     });
+
+    test(`a ${chainStatus} transfer can be reviewed and sent again`, async () => {
+      const { app, calls } = await transferTo(chainStatus);
+      const button = submitButtonOf(app);
+
+      // Not a dead "Confirm transfer": the collectible never moved, so the
+      // control comes back as a fresh review under the receipt.
+      expect(button.disabled).toBe(false);
+      expect(button.hasAttribute("data-busy")).toBe(false);
+      expect(button.textContent).toContain("Review transfer");
+      expect(app.querySelector("#nft-send-form")?.getAttribute("data-stage")).toBe("failed");
+
+      // The refused fee is not reused: the press reviews again first.
+      submit(app);
+      await flush();
+      expect(calls.review).toHaveLength(2);
+      expect(calls.transfer).toHaveLength(1);
+      expect(app.querySelector("#nft-success")).toBeNull();
+      expect(button.textContent).toContain("Confirm transfer");
+
+      submit(app);
+      await flush();
+      expect(calls.transfer).toHaveLength(2);
+    });
   }
+
+  test("a refusal that lands after the reader moved on leaves the new review alone", async () => {
+    let answer = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const { app, calls } = mount(undefined, {}, "reverted", gate);
+    const input = recipientInput(app);
+    input.value = RECIPIENT;
+    submit(app);
+    await flush();
+    submit(app);
+    await flush();
+    await flush();
+
+    // While the chain is still answering, the reader edits the recipient — which
+    // clears the receipt — and reviews a new transfer.
+    input.value = OTHER_RECIPIENT;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    submit(app);
+    await flush();
+    expect(submitButtonOf(app).textContent).toContain("Confirm transfer");
+
+    answer();
+    await flush();
+    await flush();
+
+    // The first transfer's refusal answers for a receipt no longer on screen.
+    expect(submitButtonOf(app).textContent).toContain("Confirm transfer");
+    expect(app.querySelector("#nft-send-form")?.getAttribute("data-stage")).toBe("review");
+    expect(toastTexts("error")).toEqual([]);
+    submit(app);
+    await flush();
+    expect(calls.transfer).toHaveLength(2);
+    expect(sameFelt(calls.transfer[1]?.[3], OTHER_RECIPIENT)).toBe(true);
+  });
 });
