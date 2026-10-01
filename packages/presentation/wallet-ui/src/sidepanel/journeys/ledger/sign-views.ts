@@ -19,16 +19,18 @@ import { ledgerAccountIndexOfPath } from "@bramble/wallet-model/ledger-path";
 import { paddedFelt } from "@bramble/wallet-model/networks";
 import type { LedgerSignRequestSummary, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountIdAddress, accountLabel } from "../../shared/parts";
+import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import type { LedgerSignView } from "./sign-session";
 
 const signerLine = (request: LedgerSignRequestSummary): string => {
   const index = ledgerAccountIndexOfPath(request.path);
   const suffix = index === null ? "" : `<span>Account ${index}</span>`;
+  const address = accountIdAddress(request.accountId);
   return `<div class="ledger-signer-line">
     <span>Signing with</span>
-    <code title="${escapeHtml(accountIdAddress(request.accountId))}">${escapeHtml(accountLabel(accountIdAddress(request.accountId)))}</code>
+    <code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>
+    ${inlineCopyButton(address, "Copy signing account address")}
     ${suffix}
   </div>`;
 };

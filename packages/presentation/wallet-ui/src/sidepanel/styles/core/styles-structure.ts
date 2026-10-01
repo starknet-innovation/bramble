@@ -72,6 +72,10 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      negative vertical margin keeps a caption or mono line at its own height,
      so a row gains a copy affordance without gaining height. */
   .icon-button.copy-inline { flex: none; margin: -6px 0; }
+  /* A shortened identifier and its inline copy control on one line, for a
+     surface whose own layout stacks its children (a name over its address). */
+  .copy-line { align-items: center; display: flex; gap: 2px; max-width: 100%; min-width: 0; }
+  .copy-line > code { min-width: 0; }
   /* Approval request facts use the same receipt grammar, but allow long
      untrusted identifiers to wrap inside the panel instead of widening it. */
   .request-detail {
