@@ -60,7 +60,11 @@ const balance: TokenBalance = {
 };
 
 /** Mounts the swap screen over the real client with a chain that reports `chainStatus`. */
-const mountSwap = (chainStatus: ActivityStatus | null) => {
+const mountSwap = (
+  chainStatus: ActivityStatus | null,
+  beforeRead: () => Promise<void> = async () => undefined,
+) => {
+  const sent: string[] = [];
   const app = document.createElement("div");
   app.id = "app";
   paint(app, swapFlow(status, account));
@@ -68,6 +72,7 @@ const mountSwap = (chainStatus: ActivityStatus | null) => {
   const swap = createSwapClient({
     async sendMessage(message: unknown) {
       const type = isRecord(message) ? message["type"] : null;
+      sent.push(String(type));
       if (type === "wallet.swapQuote") {
         return {
           ok: true,
@@ -109,28 +114,31 @@ const mountSwap = (chainStatus: ActivityStatus | null) => {
     status: () => status,
     swap,
     wallet: {
-      loadActivity: async () => ({
-        entries:
-          chainStatus === null
-            ? []
-            : [
-                {
-                  accountId: account.id,
-                  hash: HASH,
-                  kind: "swap" as const,
-                  networkId: "SN_MAIN" as const,
-                  status: chainStatus,
-                  submittedAt: 1,
-                  summary: "Swap 1 ETH for STRK",
-                },
-              ],
-        historyUnavailable: false,
-      }),
+      loadActivity: async () => {
+        await beforeRead();
+        return {
+          entries:
+            chainStatus === null
+              ? []
+              : [
+                  {
+                    accountId: account.id,
+                    hash: HASH,
+                    kind: "swap" as const,
+                    networkId: "SN_MAIN" as const,
+                    status: chainStatus,
+                    submittedAt: 1,
+                    summary: "Swap 1 ETH for STRK",
+                  },
+                ],
+          historyUnavailable: false,
+        };
+      },
       loadStatus: async () => status,
     } as unknown as SwapUiDeps["wallet"],
   };
   bindSwap(deps);
-  return app;
+  return { app, sent };
 };
 
 /** Quotes, reviews and confirms, then settles the confirmation wait. */
@@ -151,7 +159,7 @@ const onReceipt = (app: Element): boolean =>
 
 describe("swap confirmation", () => {
   test("claims completion only once the chain pre-confirms", async () => {
-    const app = mountSwap("preconfirmed");
+    const { app } = mountSwap("preconfirmed");
     await runSwap(app);
     expect(onReceipt(app)).toBe(true);
     expect(title(app)).toBe("Swap complete");
@@ -163,18 +171,47 @@ describe("swap confirmation", () => {
   test("says submitted, not complete, when the chain has not answered yet", async () => {
     // Running out of patience is not a failure and not a success: the swap is
     // on its way and the reader is told exactly that.
-    const app = mountSwap(null);
+    const { app } = mountSwap(null);
     await runSwap(app);
     expect(onReceipt(app)).toBe(true);
     expect(title(app)).toBe("Swap submitted");
     expect(app.querySelector("#swap-success-note")?.textContent).toContain("Not confirmed yet");
   });
 
-  test("keeps a reverted swap on the review with the reason", async () => {
-    const app = mountSwap("reverted");
+  // mc-wallet #476: the review's preparation is spent once Confirm ran, so
+  // staying on it left a Confirm button that did nothing. A failed swap goes
+  // back to edit and re-quotes the same amount, keeping the reason on screen.
+  test("returns a reverted swap to edit with a fresh quote and the reason", async () => {
+    const { app, sent } = mountSwap("reverted");
     await runSwap(app);
-    // No receipt: nothing was swapped, and the review is where a retry starts.
+    await flush();
     expect(onReceipt(app)).toBe(false);
+    expect(app.querySelector("#swap-edit")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#swap-confirm")?.hasAttribute("hidden")).toBe(true);
     expect(app.querySelector("#swap-result")?.textContent).toContain("reverted");
+    expect(sent.filter((type) => type === "wallet.swapQuote")).toHaveLength(2);
+    // The fresh quote can be reviewed again: a new preparation is requested.
+    app.querySelector<HTMLButtonElement>("#swap-review")?.click();
+    await flush();
+    expect(sent.filter((type) => type === "wallet.swapPrepare")).toHaveLength(2);
+  });
+
+  // mc-wallet #476: header Back during the confirmation wait used to drop to
+  // edit while the old wait kept running and could take over the next swap.
+  test("ignores header Back while the submitted swap is confirming", async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { app } = mountSwap("preconfirmed", () => held);
+    await runSwap(app);
+    document.querySelector<HTMLButtonElement>("#swap-header-back")?.click();
+    await flush();
+    expect(app.querySelector("#swap-confirm")?.hasAttribute("hidden")).toBe(false);
+    release();
+    await flush();
+    await flush();
+    expect(onReceipt(app)).toBe(true);
+    expect(title(app)).toBe("Swap complete");
   });
 });

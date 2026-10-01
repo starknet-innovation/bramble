@@ -75,6 +75,10 @@ let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 let stage: SwapStage = "edit";
 let receipt: SwapReceipt = EMPTY_SWAP_RECEIPT;
 let confirmEpoch = 0;
+// True from Confirm until the swap settles (refused, failed, or receipted).
+// Header Back is ignored meanwhile: the preparation is already spent, and an
+// abandoned wait must not take over the next swap (mc-wallet issue 476).
+let submitting = false;
 
 /** Opens the swap on a chosen sell token, clearing any in-flight quote. */
 export const presetSwapPair = (sellId: string, tokens: readonly TokenConfig[]): void => {
@@ -219,16 +223,18 @@ const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
 
 const setResult = (root: Element, text: string): void => setText(root, "swap-result", text);
 
-const requestQuote = (deps: SwapUiDeps, root: Element): void => {
+// `note` keeps a reason on screen (a failed swap's) while the fresh quote loads
+// and after it lands; a quote error still replaces it.
+const requestQuote = (deps: SwapUiDeps, root: Element, note = ""): void => {
   quote = null;
   preparation = null;
   const seq = ++quoteSeq;
   if (amountNumber() <= 0 || !sellTokenId || !buyTokenId) {
-    setResult(root, "");
+    setResult(root, note);
     applySwapUi(deps, root);
     return;
   }
-  setResult(root, "Finding the best route…");
+  setResult(root, note || "Finding the best route…");
   applySwapUi(deps, root);
   const input = { amount: amountText, buyTokenId, sellTokenId };
   deps.swap.quote(input).then(
@@ -238,7 +244,7 @@ const requestQuote = (deps: SwapUiDeps, root: Element): void => {
       }
       quote = view;
       pendingBuyAmount = null;
-      setResult(root, "");
+      setResult(root, note);
       applySwapUi(deps, root);
     },
     (error: unknown) => {
@@ -273,13 +279,16 @@ const applySelection =
     requestQuote(deps, root);
   };
 
+const swapRoot = (deps: SwapUiDeps): Element | null =>
+  deps.app?.querySelector("#wallet-screen-swap")?.parentElement ?? null;
+
 /**
  * Binds the swap screen. Safe to call on every render; when the swap screen
  * is not mounted it resets the transient stage (keeping the chosen pair) so
  * the next visit starts at a fresh edit state.
  */
 export const bindSwap = (deps: SwapUiDeps): void => {
-  const root = deps.app?.querySelector("#wallet-screen-swap")?.parentElement;
+  const root = swapRoot(deps);
   if (!root) {
     stage = "edit";
     quote = null;
@@ -288,6 +297,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     amountText = "";
     receipt = EMPTY_SWAP_RECEIPT;
     confirmEpoch += 1;
+    submitting = false;
     return;
   }
   healSelection(deps);
@@ -387,10 +397,12 @@ export const bindSwap = (deps: SwapUiDeps): void => {
   // The review stage carries no Back button, so the header's arrow steps back to
   // the quote from there and leaves the flow from anywhere else.
   root.ownerDocument.querySelector("#swap-header-back")?.addEventListener("click", () => {
+    if (submitting) return;
     if (stage !== "confirm") {
       deps.navigateHome();
       return;
     }
+    confirmEpoch += 1;
     preparation = null;
     transitionSwapStage(root.ownerDocument, stage, "edit", () => {
       stage = "edit";
@@ -405,6 +417,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
       return;
     }
     buttonBusy(confirmButton, true);
+    submitting = true;
     const restingContent = confirmButton.innerHTML;
     confirmButton.innerHTML = `${icon("refresh")}Submitting swap…`;
     const executed = quote;
@@ -414,9 +427,10 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
         const buyText = `${compactAmount(executed.buyAmount)} ${buyToken.symbol}`;
         const summary = `${sellText} → ~${buyText}`;
+        // The preparation is spent; the amount is kept until the outcome, so a
+        // failed swap can be re-quoted as it was.
         quote = null;
         preparation = null;
-        amountText = "";
         setResult(root, "");
         // The hash is a handoff, not an outcome. The screen stays on the
         // review, saying what it is doing, until the chain answers.
@@ -429,15 +443,21 @@ export const bindSwap = (deps: SwapUiDeps): void => {
           stillCurrent: () => epoch === confirmEpoch,
         });
         if (epoch !== confirmEpoch) return;
+        submitting = false;
         if (outcome?.kind === "failed") {
-          // Retryable from the review it is already on, with the reason there.
-          setResult(root, outcome.message);
+          // The review's preparation is spent, so its Confirm cannot run again:
+          // return to edit and re-quote the same amount, keeping the reason.
           showToast(outcome.toast, "error", root);
           confirmButton.innerHTML = restingContent;
           buttonBusy(confirmButton, false);
+          stage = "edit";
           await deps.render(await deps.wallet.loadStatus());
+          if (epoch !== confirmEpoch) return;
+          // The repaint may have rebuilt the screen; quote into the live one.
+          requestQuote(deps, swapRoot(deps) ?? root, outcome.message);
           return;
         }
+        amountText = "";
         receipt = swapReceiptFor(outcome, summary, transactionHash);
         transitionSwapStage(root.ownerDocument, stage, "success", () => {
           stage = "success";
@@ -447,6 +467,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         await deps.render(await deps.wallet.loadStatus());
       },
       (error: unknown) => {
+        submitting = false;
         showToast(errorMessage(error, "Swap failed"), "error", root);
         setResult(root, errorLine(error, "Swap failed"));
         confirmButton.innerHTML = restingContent;
