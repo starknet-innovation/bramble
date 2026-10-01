@@ -5,21 +5,21 @@
 # avoid making the PR author the only possible code owner.
 
 # Default owner for everything in the repo.
-*                       @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
+*                       @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
 
 # Security-sensitive boundaries — wallet crypto, encrypted storage, privileged
 # background and provider ingress, value-moving features, the CI/release
 # pipeline, and the vendoring/standards scripts
 # — always warrant maintainer review, even as the team grows.
-/.github/CODEOWNERS      @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/.github/workflows/     @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/apps/extension/src/background/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/apps/extension/src/content/    @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/apps/extension/src/provider/   @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/contracts/             @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/packages/features/privacy/     @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/packages/features/transactions/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/packages/foundation/wallet-protocol/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/packages/platform/kms-krusty/  @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/packages/platform/vault/       @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
-/scripts/               @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender
+/.github/CODEOWNERS      @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/.github/workflows/     @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/apps/extension/src/background/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/apps/extension/src/content/    @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/apps/extension/src/provider/   @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/contracts/             @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/packages/features/privacy/     @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/packages/features/transactions/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/packages/foundation/wallet-protocol/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/packages/platform/kms-krusty/  @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/packages/platform/vault/       @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
+/scripts/               @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1 @teddyjfpender @derek-flossman
