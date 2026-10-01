@@ -10,6 +10,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
+import type { ActivityEntry } from "@bramble/transactions/activity";
 import type {
   DeploymentStatusResponse,
   WalletStatus,
@@ -74,10 +75,12 @@ const click = (element: Element | null): void => {
   element.click();
 };
 
-const errorToasts = (): string[] =>
-  Array.from(document.querySelectorAll(".toast.error .toast-text")).map(
+const toastTexts = (tone: "error" | "success"): string[] =>
+  Array.from(document.querySelectorAll(`.toast.${tone} .toast-text`)).map(
     (node) => node.textContent ?? "",
   );
+
+const errorToasts = (): string[] => toastTexts("error");
 
 describe("bindDashboard", () => {
   beforeEach(() => {
@@ -255,15 +258,15 @@ describe("bindDeploy", () => {
     expect(calls).toEqual([undefined, reviewedFee]);
   });
 
-  test("submits a deployment and reports the transaction hash on the status line", async () => {
-    const container = mount(deployMarkup);
-    let deploys = 0;
-    // The background only submits under a reviewed fee: a call without one
-    // returns an estimate and never deploys (see deployment-ops).
+  // Quotes on a call without a fee and submits HASH under one — the background
+  // only submits under a reviewed fee (see deployment-ops) — then reports HASH
+  // in the activity log at `chainStatus`.
+  const deployingWallet = (chainStatus: ActivityEntry["status"]) => {
+    const calls = { deploys: 0 };
     const wallet = {
       deployAccount: async (fee?: { readonly overallFee: string; readonly unit: "FRI" }) => {
         if (!fee) return { overallFee: "1000000000000000", unit: "FRI" as const };
-        deploys += 1;
+        calls.deploys += 1;
         return HASH;
       },
       loadActivity: async () => ({
@@ -273,7 +276,7 @@ describe("bindDeploy", () => {
             hash: HASH,
             kind: "deploy" as const,
             networkId: "SN_MAIN" as const,
-            status: "preconfirmed" as const,
+            status: chainStatus,
             submittedAt: 1,
             summary: "Deploy account contract",
           },
@@ -282,14 +285,21 @@ describe("bindDeploy", () => {
       }),
       loadStatus: async () => status,
     };
+    return { calls, wallet: wallet as unknown as ShellBindingDeps["wallet"] };
+  };
+
+  // Mounts the screen, lets the quote land, presses Deploy, and lets the
+  // confirmation wait reach the chain's answer.
+  const deployTo = async (chainStatus: ActivityEntry["status"]) => {
+    const container = mount(deployMarkup);
+    const { calls, wallet } = deployingWallet(chainStatus);
     bindDeploy({
       app: container,
       confirmationDelaysMs: [0],
       render: async () => undefined,
       setActiveView: () => undefined,
-      wallet: wallet as unknown as ShellBindingDeps["wallet"],
+      wallet,
     });
-
     // The control is busy until the quote lands, so a press can only follow it.
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(true);
     await tick();
@@ -297,8 +307,13 @@ describe("bindDeploy", () => {
     await tick();
     await tick();
     await tick();
+    return { calls, container };
+  };
 
-    expect(deploys).toBe(1);
+  test("submits a deployment and reports the transaction hash on the status line", async () => {
+    const { calls, container } = await deployTo("preconfirmed");
+
+    expect(calls.deploys).toBe(1);
     expect(container.querySelector("#deploy-review-stage")?.hasAttribute("hidden")).toBe(true);
     expect(container.querySelector("#deploy-success")?.hasAttribute("hidden")).toBe(false);
     // Submitted is not deployed: the receipt firms up only once the chain says so.
@@ -307,9 +322,51 @@ describe("bindDeploy", () => {
       "can submit transactions",
     );
     expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(accountLabel(HASH));
-    expect(document.querySelectorAll(".toast.success").length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-outcome-mark="succeeded"]')?.hasAttribute("hidden")).toBe(
+      false,
+    );
+    expect(container.querySelector('[data-outcome-mark="failed"]')?.hasAttribute("hidden")).toBe(
+      true,
+    );
+    // The toast is the chain's answer; the handoff is the receipt heading's job.
+    expect(toastTexts("success")).toEqual(["Transaction pre-confirmed on Starknet"]);
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });
+
+  // The chain's two refusals. Each turns the receipt into a failure in place —
+  // heading, the chain's reason, mark, tone and toast — and never leaves
+  // "Account deployed" over a hash that did not land.
+  for (const [chainStatus, reason] of [
+    ["rejected", "Starknet rejected this transaction. Nothing changed."],
+    [
+      "reverted",
+      "Starknet reverted this transaction. Review its activity details before retrying.",
+    ],
+  ] as const) {
+    test(`a ${chainStatus} deployment reads as failed, not deployed`, async () => {
+      const { calls, container } = await deployTo(chainStatus);
+      const receipt = container.querySelector("#deploy-success");
+
+      expect(calls.deploys).toBe(1);
+      expect(receipt?.hasAttribute("hidden")).toBe(false);
+      expect(container.querySelector("#deploy-success-title")?.textContent).toBe(
+        "Deployment failed",
+      );
+      expect(container.querySelector("#deploy-success-description")?.textContent).toBe(reason);
+      // The hash stays: it is how the reader finds out why.
+      expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(accountLabel(HASH));
+      expect(receipt?.classList.contains("send-failure")).toBe(true);
+      expect(receipt?.classList.contains("send-success")).toBe(false);
+      expect(receipt?.querySelector('[data-outcome-mark="failed"]')?.hasAttribute("hidden")).toBe(
+        false,
+      );
+      expect(
+        receipt?.querySelector('[data-outcome-mark="succeeded"]')?.hasAttribute("hidden"),
+      ).toBe(true);
+      expect(errorToasts()).toEqual(["Transaction was not confirmed"]);
+      expect(toastTexts("success")).toEqual([]);
+    });
+  }
 
   test("reports a deployment failure on the status line and re-enables the button", async () => {
     const container = mount(deployMarkup);

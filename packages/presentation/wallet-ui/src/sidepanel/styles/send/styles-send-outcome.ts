@@ -119,8 +119,9 @@ export const SEND_OUTCOME_STYLES = `
     font-weight: ${WEIGHT.semibold};
   }
   /* One shrinkable column: the receipt's unbroken hash must ellipsize inside
-     the panel rather than widen the grid track past it. */
-  .send-success { grid-template-columns: minmax(0, 1fr); }
+     the panel rather than widen the grid track past it. The shared receipt
+     turns into a failure in place, so the failure tone keeps the column. */
+  .send-success, .send-failure { grid-template-columns: minmax(0, 1fr); }
   .send-outcome .send-actions { width: 100%; }
   .send-receipt {
     background: var(--bramble-panel);

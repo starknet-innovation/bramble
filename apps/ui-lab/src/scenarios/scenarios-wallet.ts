@@ -234,6 +234,7 @@ export const portfolioScenario: WalletScenario = {
             {
               confirmedDescription: "This account is on Starknet and can submit transactions.",
               confirmedTitle: "Account deployed",
+              failedTitle: "Deployment failed",
               submittedTitle: "Deployment submitted",
             },
             "0x5f2a7c19b4e86d30af51c8b27e94d6013a8f45c2e7b91d0a3c6e8f24b71d9053",
