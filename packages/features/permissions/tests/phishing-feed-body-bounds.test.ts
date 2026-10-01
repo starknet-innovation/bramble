@@ -8,11 +8,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import { type BoundedHttpFetch, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
-import {
-  createPhishingFeed,
-  DEFAULT_PHISHING_FEED_URL,
-  PHISHING_FEED_STORE_KEY,
-} from "@bramble/permissions/phishing-feed";
+import { createPhishingFeed, DEFAULT_PHISHING_FEED_URL } from "@bramble/permissions/phishing-feed";
+import { writePhishingCache } from "@bramble/permissions/phishing-feed-cache";
 import { createMemoryStore } from "@bramble/store/kv";
 
 const CHUNK_BYTES = 256 * 1024;
@@ -53,10 +50,9 @@ describe("phishing feed response bounds", () => {
 
   test("keeps the cached blocklist when the source answers over budget", async () => {
     const store = createMemoryStore();
-    await store.set(PHISHING_FEED_STORE_KEY, {
+    await writePhishingCache(store, {
       domains: ["evil.example"],
       fetchedAt: 1,
-      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
     const feed = createPhishingFeed({
