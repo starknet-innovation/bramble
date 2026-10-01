@@ -351,12 +351,19 @@ export const SEND_COMPOSE_STYLES = `
   .send-context-receipt dt,
   .send-review-facts dt { color: var(--bramble-muted); font-size: ${TYPE.label.size}; }
   /* An account row in the receipt: identity on the left, and for the two
-     accounts, the balance that account's value moves through on the right. */
+     accounts, the balance that account's value moves through on the right.
+     Its label is one short word, so the row gives the value everything the
+     label leaves rather than the generic 70% cap. On a panel too narrow for
+     the address, its copy control, and the toggle side by side, the toggle
+     wraps under the identity instead of the address being clipped. */
   .send-context-receipt dd:has(.send-route-toggle) {
     align-items: center;
     display: flex;
-    gap: ${SPACE.md};
+    flex-wrap: wrap;
+    gap: ${SPACE.xs} ${SPACE.md};
     justify-content: flex-end;
+    max-width: none;
+    padding-block: ${SPACE.xs};
   }
   /* The identity column is repainted with the chosen account's own name; a
      long single word must clip beside its toggle, not push the receipt out. */
@@ -387,9 +394,9 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-context-receipt code,
   .send-review-facts code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
-  /* The reviewed recipient: truncated address and its copy control on one
-     line, the address clipping first so the control never leaves the fact. */
-  .send-review-address { align-items: center; display: flex; gap: 2px; max-width: 100%; min-width: 0; }
+  /* The reviewed recipient sits on the shared .copy-line (address and copy
+     control on one line); the address clips first so the control never
+     leaves the fact. */
   .send-review-address code { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   #send-review-button { margin-top: auto; width: 100%; }
   /* The busy review button swaps its send glyph for the shared Liquid Dots

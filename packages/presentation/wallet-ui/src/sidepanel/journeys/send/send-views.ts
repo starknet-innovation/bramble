@@ -16,7 +16,13 @@ import type { TokenBalance, WalletStatus } from "../../../popup/responses/respon
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
-import { accountDisplayName, accountLabel, flowScreen, noAccountEmpty } from "../../shared/parts";
+import {
+  accountDisplayName,
+  accountLabel,
+  flowScreen,
+  inlineCopyButton,
+  noAccountEmpty,
+} from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { tokenDropdown } from "../../shared/token-dropdown";
 import { starknetNetworkGlyph, tokenGlyph } from "../portfolio/token-row";
@@ -107,7 +113,7 @@ const amountStage = (
         <dd>
           <span class="send-context-account">
             <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-            <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
+            ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
           </span>
           ${routeSwitch("source", "Send from the private balance")}
         </dd>
@@ -117,7 +123,7 @@ const amountStage = (
         <dd>
           <span class="send-context-account">
             <strong id="send-recipient-name">Not selected</strong>
-            <code id="send-recipient-label">—</code>
+            <span class="copy-line"><code id="send-recipient-label">—</code>${inlineCopyButton("", "Copy recipient address", { hidden: true, id: "send-recipient-copy" })}</span>
           </span>
           ${routeSwitch("destination", "Receive into the private balance")}
         </dd>

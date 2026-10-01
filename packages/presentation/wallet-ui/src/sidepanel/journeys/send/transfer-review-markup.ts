@@ -33,7 +33,7 @@ export const reviewSummaryHtml = (fields: TransferFields, mode: TransferMode = "
     <span><strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong><small>${escapeHtml(fields.fiatEstimate || "Fiat estimate unavailable")}</small></span>
   </div>
   <dl class="send-review-facts">
-    <div><dt>${mode === "send" ? "Recipient" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><span class="send-review-address"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(accountLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, mode === "send" ? "Copy recipient address" : "Copy account address")}</span></dd></div>
+    <div><dt>${mode === "send" ? "Recipient" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><span class="send-review-address copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(accountLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, mode === "send" ? "Copy recipient address" : "Copy account address")}</span></dd></div>
     ${mode === "send" ? "" : `<div><dt>Movement</dt><dd><strong>${BUCKET_NAMES[fields.source]} → ${BUCKET_NAMES[fields.destination]}</strong></dd></div>`}
   </dl>`;
 

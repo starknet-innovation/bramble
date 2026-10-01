@@ -56,6 +56,11 @@ export const restoreTransferCompose = (form: HTMLFormElement, fields: TransferFi
   };
   text("send-recipient-name", fields.recipientLabel || accountLabel(fields.recipient));
   text("send-recipient-label", accountLabel(fields.recipient));
+  const recipientCopy = form.querySelector<HTMLButtonElement>("#send-recipient-copy");
+  if (recipientCopy) {
+    recipientCopy.dataset["copy"] = fields.recipient;
+    recipientCopy.hidden = fields.recipient === "";
+  }
   text("send-selected-token-symbol", fields.tokenSymbol);
   // An empty formatted balance is one the bucket controls could not read.
   text(
