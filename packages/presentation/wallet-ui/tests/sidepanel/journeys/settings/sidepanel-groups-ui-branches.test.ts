@@ -31,7 +31,6 @@ type Harness = {
   readonly calls: WalletCalls;
   readonly rerenders: number;
   readonly expanded: (string | null)[];
-  readonly openAssign: (string | null)[];
 };
 
 // Mounts markup, wires bindGroupControls against a fake wallet whose ops either
@@ -54,7 +53,6 @@ const mount = (html: string, reject = false): Harness => {
     calls,
     container,
     expanded: [],
-    openAssign: [],
     rerenders: 0,
   };
   const settle = <T>(value: T): Promise<T> =>
@@ -85,15 +83,11 @@ const mount = (html: string, reject = false): Harness => {
 
   const deps: GroupControlDeps = {
     expandedGroup: () => null,
-    openAssign: () => null,
     rerender: async () => {
       (harness as { rerenders: number }).rerenders += 1;
     },
     setExpandedGroup: (id) => {
       harness.expanded.push(id);
-    },
-    setOpenAssign: (id) => {
-      harness.openAssign.push(id);
     },
     wallet: wallet as unknown as GroupControlDeps["wallet"],
   };
@@ -169,19 +163,15 @@ describe("bindGroupControls dataset guards", () => {
     expect(harness.container.querySelector("#a")?.getAttribute("aria-pressed")).toBe("false");
   });
 
-  test("remove/toggle/pick/assign/expand handlers bail on an empty dataset id", async () => {
+  test("remove/toggle/expand handlers bail on an empty dataset id", async () => {
     const harness = mount(
       `<button data-remove-group="" type="button"></button>
        <button data-group-toggle="" data-account="" type="button"></button>
-       <button data-group-pick="work" type="button"></button>
-       <button data-assign-toggle="" type="button"></button>
        <button data-group-expand="" type="button"></button>`,
     );
 
     click(harness.container.querySelector("[data-remove-group]"));
     click(harness.container.querySelector("[data-group-toggle]"));
-    click(harness.container.querySelector("[data-group-pick]"));
-    click(harness.container.querySelector("[data-assign-toggle]"));
     click(harness.container.querySelector("[data-group-expand]"));
     await tick();
 
@@ -189,7 +179,6 @@ describe("bindGroupControls dataset guards", () => {
     expect(harness.calls.removeGroup).toEqual([]);
     expect(harness.calls.setAccountInGroup).toEqual([]);
     expect(harness.expanded).toEqual([]);
-    expect(harness.openAssign).toEqual([]);
     expect(harness.rerenders).toBe(0);
   });
 });
@@ -279,46 +268,12 @@ describe("bindGroupControls op rejection paths", () => {
     expect(button?.disabled).toBe(false);
   });
 
-  test("folder picker: a move failure re-enables the option", async () => {
-    const harness = mount(
-      `<div class="group-toggle-list">
-         <button data-group-pick="none" data-account="0x2a" aria-pressed="true" type="button"></button>
-         <button data-group-pick="work" data-account="0x2a" aria-pressed="false" type="button"></button>
-       </div>`,
-      true,
-    );
-    const work = harness.container.querySelector<HTMLButtonElement>('[data-group-pick="work"]');
-    click(work);
-    await tick();
-
-    // Picking a concrete folder files the account into it.
-    expect(harness.calls.setAccountInGroup).toEqual([["0x2a", "work", true]]);
-    expect(hasErrorToast()).toBe(true);
-    expect(work?.disabled).toBe(false);
-  });
-
-  test("folder picker: an already-selected option is a no-op", async () => {
-    const harness = mount(
-      `<div class="group-toggle-list">
-         <button data-group-pick="work" data-account="0x2a" aria-pressed="true" type="button"></button>
-       </div>`,
-    );
-    click(harness.container.querySelector('[data-group-pick="work"]'));
-    await tick();
-    expect(harness.calls.setAccountInGroup).toEqual([]);
-  });
-
-  test("assign panel and group expander toggle their transient state open", async () => {
-    const harness = mount(
-      `<button data-assign-toggle="0x2a" type="button"></button>
-       <button data-group-expand="work" type="button"></button>`,
-    );
-    click(harness.container.querySelector("[data-assign-toggle]"));
+  test("the group expander toggles its transient state open", async () => {
+    const harness = mount(`<button data-group-expand="work" type="button"></button>`);
     click(harness.container.querySelector("[data-group-expand]"));
     await tick();
 
-    expect(harness.openAssign).toEqual(["0x2a"]);
     expect(harness.expanded).toEqual(["work"]);
-    expect(harness.rerenders).toBe(2);
+    expect(harness.rerenders).toBe(1);
   });
 });
