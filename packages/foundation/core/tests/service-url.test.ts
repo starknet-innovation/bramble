@@ -3,6 +3,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  isBoundedServiceUrlList,
   isServiceUrl,
   isWebSocketServiceUrl,
   trimTrailingSlashes,
@@ -33,5 +34,14 @@ describe("service URLs", () => {
       "https://service.example/path",
     );
     expect(trimTrailingSlashes("////")).toBe("");
+  });
+
+  test("bounds the number of entries in a dapp endpoint list (Sherlock audit 153)", () => {
+    const urls = (count: number) =>
+      Array.from({ length: count }, (_, index) => `https://rpc${index}.example`);
+    expect(isBoundedServiceUrlList(urls(4), 4)).toBe(true);
+    expect(isBoundedServiceUrlList(urls(5), 4)).toBe(false);
+    expect(isBoundedServiceUrlList([], 4)).toBe(false);
+    expect(isBoundedServiceUrlList(["ftp://rpc.example"], 4)).toBe(false);
   });
 });
