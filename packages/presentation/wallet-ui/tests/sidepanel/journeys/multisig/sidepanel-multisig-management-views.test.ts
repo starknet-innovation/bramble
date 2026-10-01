@@ -55,7 +55,7 @@ describe("Argent multisig management views", () => {
     expect(ready).toContain("Continue to approval");
     expect(ready).toContain("data-nav-back");
     expect(ready).not.toContain("data-multisig-deploy-back");
-    expect(ready).toContain("Review deployment");
+    expect(ready).toContain("Check fee and address");
     expect(ready.match(/data-multisig-deploy-step=/g)).toHaveLength(4);
     expect(ready).toContain("Participants");
     expect(ready).not.toContain("<small>Address</small>");
@@ -137,7 +137,7 @@ describe("Argent multisig management views", () => {
     ).toContain("Check the network and retry");
     expect(multisigReceiveFlow(fixture.status, null)).toContain("no longer watched");
     expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
-    expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched Ready multisig");
+    expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched multisig");
     expect(multisigTrackFlow(fixture.status, fixture.view)).toContain('id="multisig-track-form"');
   });
 

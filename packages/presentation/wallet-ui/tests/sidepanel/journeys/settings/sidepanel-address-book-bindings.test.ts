@@ -130,7 +130,7 @@ describe("bindAddressBook", () => {
     expect(submit?.disabled).toBe(false);
   });
 
-  test("keeps everything past label and address behind the Pro switch", () => {
+  test("keeps everything past label and address behind the Advanced switch", () => {
     // The form asked for five fields to record a name and an address; the rest
     // are for multisig contacts and appear only when asked for.
     const app = document.createElement("div");
@@ -142,23 +142,23 @@ describe("bindAddressBook", () => {
       wallet: {} as unknown as SidepanelWallet,
     });
 
-    const pro = app.querySelector<HTMLButtonElement>("#address-pro");
-    const fields = app.querySelector<HTMLElement>("#address-pro-fields");
+    const advanced = app.querySelector<HTMLButtonElement>("#advanced-address");
+    const fields = app.querySelector<HTMLElement>("#address-advanced-fields");
     expect(app.querySelector('[name="label"]')).not.toBeNull();
     expect(app.querySelector('[name="address"]')).not.toBeNull();
-    expect(pro?.getAttribute("aria-checked")).toBe("false");
+    expect(advanced?.getAttribute("aria-checked")).toBe("false");
     expect(fields?.hasAttribute("hidden")).toBe(true);
     // The advanced fields exist in the DOM, so a pasted wallet card still fills them.
     for (const name of ["walletCard", "nostrPublicKey", "publicKeyX"]) {
       expect(fields?.querySelector(`[name="${name}"]`)).not.toBeNull();
     }
 
-    pro?.click();
-    expect(pro?.getAttribute("aria-checked")).toBe("true");
-    expect(pro?.dataset["checked"]).toBe("true");
+    advanced?.click();
+    expect(advanced?.getAttribute("aria-checked")).toBe("true");
+    expect(advanced?.dataset["checked"]).toBe("true");
     expect(fields?.hasAttribute("hidden")).toBe(false);
 
-    pro?.click();
+    advanced?.click();
     expect(fields?.hasAttribute("hidden")).toBe(true);
   });
 

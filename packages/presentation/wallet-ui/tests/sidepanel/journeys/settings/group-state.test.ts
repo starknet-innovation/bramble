@@ -43,7 +43,7 @@ describe("healTransientGroupState", () => {
     );
   });
 
-  test("keeps the Create a group panel sentinel (not a group id) across a heal", () => {
+  test("keeps the Create a folder panel sentinel (not a group id) across a heal", () => {
     // The sentinel is a UI mode, not a deleted-group id, so it must survive.
     expect(
       healTransientGroupState({ expandedGroupId: CREATE_GROUP_PANEL }, groups).expandedGroupId,

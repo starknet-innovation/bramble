@@ -56,7 +56,7 @@ export const privacyPoolNotice = (
   const hook = deploying ? "data-privacy-deploy-register" : "data-privacy-register";
   return `<button class="privacy-pool-notice" ${hook}="" type="button">
       <span class="privacy-pool-copy"><strong>${escapeHtml(PUBLIC_ONLY_COPY)}</strong><span>${escapeHtml(deploying ? DEPLOY_FIRST_COPY : UNREGISTERED_COPY)}</span></span>
-      <strong>${deploying ? "Deploy and enable" : "Enable privacy"}</strong>
+      <strong>Enable privacy</strong>
     </button>`;
 };
 
@@ -150,10 +150,14 @@ type ReceiveAddressViewOptions = {
   /** On-chain verdict for that class; `null` while it is still being checked. */
   readonly classHashVerification?: ClassHashVerification | null;
   readonly copyLabel: string;
+  /**
+   * The wrong-network warning ("Only send … assets to this address"). Always
+   * visible beside the address, for every account type: sending on the wrong
+   * network loses funds, so it never sits behind Advanced.
+   */
   readonly hint: string;
   readonly networkId: StarknetNetworkId;
-  /** Display name of the network, shown beside the address when provided. */
-  readonly networkName?: string;
+  /** Nostr coordination public key, once derived. */
   readonly nostrPublicKey?: string;
   readonly publicKeyX?: string;
 };
@@ -172,7 +176,6 @@ export const receiveAddressView = ({
   copyLabel,
   hint,
   networkId,
-  networkName,
   nostrPublicKey,
   publicKeyX,
 }: ReceiveAddressViewOptions): string => {
@@ -196,16 +199,15 @@ export const receiveAddressView = ({
         <code id="receive-address-text" data-receive-address-text>${escapeHtml(address)}</code>
         <span class="receive-address-copy-mark" aria-hidden="true">${icon("copy")}</span>
       </button>
-      ${networkName ? `<p class="receive-network">Network: <strong>${escapeHtml(networkName)}</strong></p>` : ""}
+      <p class="hint receive-network-hint">${escapeHtml(hint)}</p>
     </div>
     ${
       publicKeyX
         ? `${switchControl({
-            attributes: { id: "receive-pro" },
-            label: "Pro",
+            attributes: { id: "advanced-receive" },
+            label: "Advanced",
           })}
-      <div class="receive-pro-fields" id="receive-pro-fields" hidden>
-        <p class="hint">${escapeHtml(hint)}</p>
+      <div class="receive-advanced-fields" id="receive-advanced-fields" hidden>
         <div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
           <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
           <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Bramble contact card</button>
@@ -242,7 +244,7 @@ export const receiveAddressView = ({
           ${classHashRows(classHash, classHashVerification)}
         </div>
       </div>`
-        : `<p class="hint">${escapeHtml(hint)}</p>`
+        : ""
     }
   </div>`;
 };

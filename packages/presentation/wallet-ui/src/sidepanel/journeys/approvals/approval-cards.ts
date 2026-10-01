@@ -222,7 +222,7 @@ const connectCard = (approval: PendingApproval, status: WalletStatus): string =>
       ${connectIdentity(status)}
       ${reviewOutcome(
         approval.existingGrant
-          ? "Adds this account to the accounts already shared with this site."
+          ? "Adds this account to the ones already shared with this site, until you disconnect it."
           : "Shares this account's address with this site until you disconnect it.",
       )}
     </div>
@@ -331,7 +331,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
     </div>
     ${reviewPanel([...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
-    ${reviewConstraints("This approval carries no public wallet fee. Wallet-funded routes require a separate exact-call fee review.")}
+    ${reviewConstraints("This approval charges no public wallet fee. A relay fee, if listed above, is paid from the private balance. If the wallet pays the network fee for this route, you will review that fee separately.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
     ${decisionRow(approval, "Approve", status.locked)}
@@ -364,7 +364,7 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Network switch request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network. Nothing changes unless you approve."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network."}</p>
       ${approvalCalls(approval) || reviewOutcome("Switch the wallet to the requested Starknet network.")}
     </div>
     ${reviewPanel(approval.insights ?? [])}
@@ -376,14 +376,14 @@ const addChainCard = (approval: PendingApproval): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Add network request")}
-      <p class="hint">This site is asking to add a custom Starknet network. Nothing is saved unless you approve.</p>
+      <p class="hint">This site is asking to add a custom Starknet network.</p>
       ${approvalCalls(approval) || reviewOutcome("Add the requested custom Starknet network to the wallet.")}
     </div>
     ${reviewPanel([
       "Custom network endpoints can observe requests sent through them. Review the network details before use.",
       ...(approval.insights ?? []),
     ])}
-    ${reviewConstraints("Adding the network does not sign a transaction or charge a fee.")}
+    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(approval, "Add network", false)}
   </li>`;
 
@@ -395,8 +395,8 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       ${reviewOutcome("Register this exact Cairo contract class on the active network from the reviewed account.")}
     </div>
     ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])], "Declaration registers code but does not deploy a contract or transfer assets.")}
-    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-      <p class="decision-label">Maximum cost and constraints</p>
+    <section class="decision-layer decision-boundary" aria-label="Cost">
+      <p class="decision-label">Cost</p>
       ${declarationDetails(approval)}
     </section>
     ${contextDisclosure(approval)}

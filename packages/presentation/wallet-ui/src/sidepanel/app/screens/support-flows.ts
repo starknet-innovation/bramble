@@ -79,10 +79,10 @@ export const addressBookFlow = (
           })}
           <span class="hint">Saving an existing address updates its label.</span>
           ${switchControl({
-            attributes: { id: "address-pro" },
-            label: "Pro",
+            attributes: { id: "advanced-address" },
+            label: "Advanced",
           })}
-          <div class="address-pro-fields" id="address-pro-fields" hidden>
+          <div class="address-advanced-fields" id="address-advanced-fields" hidden>
             ${textareaField({
               autocomplete: "off",
               className: "mono",
@@ -96,7 +96,7 @@ export const addressBookFlow = (
             ${textField({
               autocomplete: "off",
               className: "mono",
-              hint: "Authenticates encrypted multisig intent handoffs from this contact.",
+              hint: "Authenticates encrypted multisig transaction handoffs from this contact.",
               label: "Coordination public key",
               name: "nostrPublicKey",
               placeholder: "64-character Nostr public key",
@@ -125,7 +125,7 @@ export const addressBookFlow = (
         <p class="eyebrow">Saved addresses</p>
         ${
           addresses.length === 0
-            ? emptyState("No saved addresses yet. Save one to reuse it when sending.")
+            ? emptyState("No saved address yet")
             : `<ul class="address-book">${addresses
                 .map(
                   (entry) => `<li>

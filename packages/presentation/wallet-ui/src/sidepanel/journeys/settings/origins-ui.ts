@@ -5,7 +5,7 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 
 /**
  * Dependencies the connected-sites bindings close over.
@@ -37,7 +37,7 @@ export const bindConnectedSites = ({ app, render, wallet }: ConnectedSitesUiDeps
         (error: unknown) => {
           showToast(errorMessage(error, "Revoke failed"), "error", button);
           if (result) {
-            result.textContent = errorMessage(error, "Revoke failed");
+            result.textContent = errorLine(error, "Revoke failed");
           }
           buttonBusy(button, false);
         },

@@ -117,8 +117,8 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     }
   }
   button.switch-control:not(:disabled):active { background: var(--bramble-soft-press); }
-  .address-pro-fields { display: grid; gap: ${SPACE.md}; }
-  .address-pro-fields[hidden] { display: none; }
+  .address-advanced-fields { display: grid; gap: ${SPACE.md}; }
+  .address-advanced-fields[hidden] { display: none; }
   button.danger { background: var(--bramble-elevated); color: var(--bramble-danger); }
   button.danger:not(:disabled):active { background: var(--bramble-danger-soft); }
   @media (hover: hover) and (pointer: fine) {
@@ -149,6 +149,12 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     font-weight: ${WEIGHT.semibold};
   }
   .eyebrow { letter-spacing: 0.02em; text-transform: uppercase; font-size: ${TYPE.caption.size}; }
+  /* A field that carries a trailing action keeps one edge: the input fills the
+     row and the control sits over it, inside the same bottom stroke, so the
+     field reads as one control rather than a box with a button beside it. */
+  .field-with-action { align-items: center; display: flex; gap: ${SPACE.xs}; min-width: 0; }
+  .field-with-action > input { flex: 1; min-width: 0; }
+  .field-with-action > .field-action { flex: none; }
   /* A field's fill sits within 1.1:1 of the panel behind it, so the fill alone
      cannot identify the control. Clean Mono draws no rings around surfaces —
      per-side dividers are the only strokes it allows — so the edge that

@@ -12,7 +12,7 @@
  */
 
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../shared/dom";
 import { INITIAL_COLLAPSED_FOLDERS } from "./drawer-folders";
 
 /**
@@ -38,7 +38,10 @@ export type DrawerFolderDeps = {
    * so binding again leaves focus on Add or Cancel.
    */
   readonly takeFolderNameFocus: () => boolean;
-  readonly wallet: Pick<SidepanelWallet, "createGroup" | "loadStatus" | "setAccountInGroup">;
+  readonly wallet: Pick<
+    SidepanelWallet,
+    "createGroup" | "loadStatus" | "setAccountInGroup" | "setActiveNetwork"
+  >;
 };
 
 const DRAG_TYPE = "application/x-bramble-account";
@@ -169,7 +172,7 @@ const bindAddFolder = (root: Element, deps: DrawerFolderDeps): void => {
       },
       (error: unknown) => {
         buttonBusy(submit, false);
-        if (result) result.textContent = errorMessage(error, "Could not add that folder");
+        if (result) result.textContent = errorLine(error, "Could not add that folder");
       },
     );
   });
@@ -180,9 +183,43 @@ const bindAddFolder = (root: Element, deps: DrawerFolderDeps): void => {
   }
 };
 
+// The drawer's network pill and the list it opens. Switching repaints the shell
+// in place rather than navigating, so the drawer stays where the user left it.
+const bindNetworkSwitch = (root: Element, deps: DrawerFolderDeps): void => {
+  const toggle = root.querySelector<HTMLButtonElement>("[data-drawer-network-toggle]");
+  const menu = root.querySelector<HTMLElement>(".drawer-network-menu");
+  if (!toggle || !menu) {
+    return;
+  }
+  toggle.addEventListener("click", () => {
+    const open = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!open));
+    menu.toggleAttribute("hidden", open);
+  });
+  for (const option of root.querySelectorAll<HTMLButtonElement>("[data-drawer-network-id]")) {
+    option.addEventListener("click", () => {
+      const networkId = option.dataset["drawerNetworkId"];
+      if (!networkId || option.getAttribute("aria-selected") === "true") {
+        return;
+      }
+      buttonBusy(option, true);
+      void deps.wallet.setActiveNetwork(networkId).then(
+        async (status) => {
+          await deps.render(status);
+        },
+        (error: unknown) => {
+          showToast(errorMessage(error, "Network switch failed"), "error", option);
+          buttonBusy(option, false);
+        },
+      );
+    });
+  }
+};
+
 /**
- * Binds the drawer's folder controls. Safe to call on every render; a drawer
- * without folders (no account on this network) simply has nothing to bind.
+ * Binds the drawer's folder controls and its network pill. Safe to call on
+ * every render; a drawer without folders (no account on this network) simply
+ * has nothing to bind.
  */
 export const bindDrawerFolders = (deps: DrawerFolderDeps): void => {
   const root = deps.app?.querySelector(".account-drawer");
@@ -193,6 +230,7 @@ export const bindDrawerFolders = (deps: DrawerFolderDeps): void => {
   bindDragSources(root);
   bindDropTargets(root, deps);
   bindAddFolder(root, deps);
+  bindNetworkSwitch(root, deps);
 };
 
 /**

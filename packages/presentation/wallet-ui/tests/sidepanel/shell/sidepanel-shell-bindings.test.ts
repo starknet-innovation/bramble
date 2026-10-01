@@ -17,6 +17,11 @@ import type {
 } from "../../../src/popup/responses/responses";
 import type { WalletView } from "../../../src/sidepanel/app/screens/views";
 import {
+  outcomeReceiptActions,
+  outcomeReceiptSection,
+} from "../../../src/sidepanel/shared/outcome-receipt";
+import { accountLabel } from "../../../src/sidepanel/shared/parts";
+import {
   bindDashboard,
   bindDeploy,
   bindPickers,
@@ -26,6 +31,8 @@ import { registerDom, unregisterDom } from "../../support/groups-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
+
+const HASH = "0x04aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 const status: WalletStatus = {
   accountCount: 2,
@@ -134,7 +141,7 @@ describe("bindDashboard", () => {
     const lockButton = container.querySelector<HTMLButtonElement>("#lock-button");
     const wallet = {
       lockVault: async () => {
-        throw new Error("boom lock");
+        throw new Error("The vault refused to lock.");
       },
     };
     bindDashboard({
@@ -150,8 +157,10 @@ describe("bindDashboard", () => {
     await tick();
 
     expect(renders).toEqual([]);
-    expect(container.querySelector("#panel-result")?.textContent).toBe("boom lock");
-    expect(errorToasts()).toContain("boom lock");
+    expect(container.querySelector("#panel-result")?.textContent).toBe(
+      "The vault refused to lock.",
+    );
+    expect(errorToasts()).toContain("The vault refused to lock.");
     // The lock button is re-enabled so the user can retry.
     expect(lockButton?.disabled).toBe(false);
   });
@@ -162,6 +171,7 @@ describe("bindDashboard", () => {
        <button id="bad-reload" data-reload-balances type="button"></button>`,
     );
     const renders: WalletStatus[] = [];
+    const reasons: (string | undefined)[] = [];
     let mode: "ok" | "bad" = "ok";
     const wallet = {
       loadStatus: async () => {
@@ -173,8 +183,9 @@ describe("bindDashboard", () => {
     };
     bindDashboard({
       app: container,
-      render: async (next) => {
+      render: async (next, reason) => {
         renders.push(next);
+        reasons.push(reason);
       },
       setActiveView: () => undefined,
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
@@ -183,6 +194,9 @@ describe("bindDashboard", () => {
     click(container.querySelector("#ok-reload"));
     await tick();
     expect(renders).toEqual([status]);
+    // Without this the background serves the snapshot it already holds, and a
+    // refresh the user pressed returns the figures they were already looking at.
+    expect(reasons).toEqual(["action"]);
 
     mode = "bad";
     const bad = container.querySelector<HTMLButtonElement>("#bad-reload");
@@ -199,16 +213,17 @@ describe("bindDeploy", () => {
     document.body.replaceChildren();
   });
 
+  // The production receipt, so the binder writes into the shape it ships.
   const deployMarkup = `<section class="section">
       <section id="deploy-review-stage">
-        <button id="deploy-button" type="button">Review deployment</button>
+        <button id="deploy-button" type="button">Deploy</button>
         <div id="deploy-review"></div>
         <p role="status"></p>
       </section>
-      <section id="deploy-success" hidden><code id="deploy-hash"></code></section>
+      ${outcomeReceiptSection("deploy-success", outcomeReceiptActions("deploy-view-activity"))}
     </section>`;
 
-  test("shows the decision anatomy before echoing the reviewed deployment fee", async () => {
+  test("quotes the fee as the screen opens, then submits under it", async () => {
     const container = mount(deployMarkup);
     const calls: unknown[] = [];
     const reviewedFee = { overallFee: "1000000000000000", unit: "FRI" as const };
@@ -232,11 +247,11 @@ describe("bindDeploy", () => {
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
     });
 
-    click(container.querySelector("#deploy-button"));
+    // The quote is the screen's own first act, so the reader has the figure
+    // before pressing rather than as the result of pressing.
     await tick();
-    expect(container.querySelector("#deploy-review")?.textContent).toContain(
-      "Maximum cost and constraints",
-    );
+    expect(container.querySelector("#deploy-review")?.textContent).toContain("Cost");
+    expect(calls).toEqual([undefined]);
 
     click(container.querySelector("#deploy-button"));
     await tick();
@@ -246,26 +261,55 @@ describe("bindDeploy", () => {
   test("submits a deployment and reports the transaction hash on the status line", async () => {
     const container = mount(deployMarkup);
     let deploys = 0;
+    // The background only submits under a reviewed fee: a call without one
+    // returns an estimate and never deploys (see deployment-ops).
     const wallet = {
-      deployAccount: async () => {
+      deployAccount: async (fee?: { readonly overallFee: string; readonly unit: "FRI" }) => {
+        if (!fee) return { overallFee: "1000000000000000", unit: "FRI" as const };
         deploys += 1;
-        return "0xdeploytx";
+        return HASH;
       },
+      loadActivity: async () => ({
+        entries: [
+          {
+            accountId: account.id,
+            hash: HASH,
+            kind: "deploy" as const,
+            networkId: "SN_MAIN" as const,
+            status: "preconfirmed" as const,
+            submittedAt: 1,
+            summary: "Deploy account contract",
+          },
+        ],
+        historyUnavailable: false,
+      }),
+      loadStatus: async () => status,
     };
     bindDeploy({
       app: container,
+      confirmationDelaysMs: [0],
       render: async () => undefined,
       setActiveView: () => undefined,
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
     });
 
+    // The control is busy until the quote lands, so a press can only follow it.
+    expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(true);
+    await tick();
     click(container.querySelector("#deploy-button"));
+    await tick();
+    await tick();
     await tick();
 
     expect(deploys).toBe(1);
     expect(container.querySelector("#deploy-review-stage")?.hasAttribute("hidden")).toBe(true);
     expect(container.querySelector("#deploy-success")?.hasAttribute("hidden")).toBe(false);
-    expect(container.querySelector("#deploy-hash")?.textContent).toBe("0xdeploytx");
+    // Submitted is not deployed: the receipt firms up only once the chain says so.
+    expect(container.querySelector("#deploy-success-title")?.textContent).toBe("Account deployed");
+    expect(container.querySelector("#deploy-success-description")?.textContent).toContain(
+      "can submit transactions",
+    );
+    expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(accountLabel(HASH));
     expect(document.querySelectorAll(".toast.success").length).toBeGreaterThan(0);
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });
@@ -274,7 +318,7 @@ describe("bindDeploy", () => {
     const container = mount(deployMarkup);
     const wallet = {
       deployAccount: async () => {
-        throw new Error("deploy denied");
+        throw new Error("The deployment was denied.");
       },
     };
     bindDeploy({
@@ -287,8 +331,10 @@ describe("bindDeploy", () => {
     click(container.querySelector("#deploy-button"));
     await tick();
 
-    expect(container.querySelector('[role="status"]')?.textContent).toBe("deploy denied");
-    expect(errorToasts()).toContain("deploy denied");
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "The deployment was denied.",
+    );
+    expect(errorToasts()).toContain("The deployment was denied.");
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });
 });
@@ -404,7 +450,7 @@ describe("bindPickers", () => {
         container,
         {
           setActiveNetwork: async () => {
-            throw new Error("switch failed");
+            throw new Error("The network switch did not take.");
           },
         },
         sinks,
@@ -415,8 +461,10 @@ describe("bindPickers", () => {
     await tick();
 
     expect(sinks.views).toEqual([]);
-    expect(container.querySelector("#picker-result")?.textContent).toBe("switch failed");
-    expect(errorToasts()).toContain("switch failed");
+    expect(container.querySelector("#picker-result")?.textContent).toBe(
+      "The network switch did not take.",
+    );
+    expect(errorToasts()).toContain("The network switch did not take.");
     expect(button?.disabled).toBe(false);
   });
 });

@@ -181,11 +181,30 @@ const prepareNft =
         if (type === "wallet.transferNft" && mode === "submitted") {
           return { ok: true, transactionHash: NFT_HASH };
         }
+        if (type === "wallet.activity") {
+          return {
+            activity: [
+              {
+                accountId: softwareAccount.id,
+                hash: NFT_HASH,
+                kind: "transfer" as const,
+                networkId: "SN_MAIN" as const,
+                status: "preconfirmed" as const,
+                submittedAt: 1,
+                summary: "Transfer Bramble Test Collection #342",
+              },
+            ],
+            historyUnavailable: false,
+            ok: true,
+          };
+        }
         return { error: "UI Lab blocks non-fixture runtime requests" };
       },
     });
     bindNfts({
       app: context.app,
+      // The lab has no wall clock to spend: the fixture chain answers at once.
+      confirmationDelaysMs: [0],
       openDetail: () => undefined,
       render: async () => undefined,
       wallet,
@@ -199,6 +218,8 @@ const prepareNft =
     await nextTurn();
     if (mode === "submitted") {
       form.requestSubmit();
+      await nextTurn();
+      await nextTurn();
       await nextTurn();
     }
   };

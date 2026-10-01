@@ -23,6 +23,17 @@ export const errorDetails = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
 
 /**
+ * What a status line under a control shows.
+ *
+ * An error toast hands the raw string to `showToast`, which displays the
+ * friendly form and keeps the raw one behind its copy control. A status line
+ * has no copy control and no second chance, so it takes the reader-facing
+ * sentence directly — without this it printed "add token failed" in the page.
+ */
+export const errorLine = (error: unknown, fallback: string): string =>
+  friendlyError(errorMessage(error, fallback)).message;
+
+/**
  * Marks a button busy so repeated submits are impossible while work runs.
  */
 export const buttonBusy = (button: HTMLButtonElement | null | undefined, busy: boolean): void => {

@@ -53,7 +53,7 @@ describe("Argent multisig fee refresh", () => {
     expect(html).toContain("different transaction hash");
     expect(html).toContain("cannot authorize this version");
     expect(html).toContain("1 of 1 fresh approval");
-    expect(html).toContain("Delete saved intent");
+    expect(html).toContain("Delete saved transaction");
   });
 
   test("keeps one logical row and makes the fully signed attempt retryable", async () => {
@@ -258,7 +258,7 @@ describe("Argent multisig fee refresh", () => {
 
     control?.click();
     expect(removed).toEqual([]);
-    expect(control?.textContent).toBe("Confirm delete intent");
+    expect(control?.textContent).toBe("Confirm delete");
     control?.click();
     await flushMultisigUi();
     expect(removed).toEqual([fixture.intent.id]);

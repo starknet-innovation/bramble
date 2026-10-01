@@ -9,7 +9,6 @@ import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { mainnetAckSatisfied } from "./mainnet-ack";
 
 /** Dependencies the key-import binding closes over. */
 export type KeyImportUiDeps = {
@@ -35,9 +34,9 @@ export type KeyImportBinding = {
 };
 
 /**
- * Binds the import-key step: gates Continue on a non-empty key plus the
- * Mainnet acknowledgement, and creates the phrase-less vault on the shared
- * password CTA. Never retains key material outside the form field.
+ * Binds the import-key step: gates Continue on a non-empty key and creates the
+ * phrase-less vault on the shared password CTA. Never retains key material
+ * outside the form field.
  */
 export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
   const { form, wallet } = deps;
@@ -47,15 +46,12 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
   );
   const rawInput = form.querySelector<HTMLTextAreaElement>('textarea[name="importKeyRaw"]');
   const saltInput = form.querySelector<HTMLInputElement>('input[name="importKeySalt"]');
-  const ackInput = form.querySelector<HTMLInputElement>('input[name="importKeyMainnetAck"]');
   const result = form.querySelector<HTMLElement>("#import-key-result");
   let active = false;
 
   const refreshGate = (): void => {
     if (continueButton) {
-      continueButton.disabled =
-        (rawInput?.value.trim() ?? "").length === 0 ||
-        !mainnetAckSatisfied(deps.networkId(), ackInput?.checked ?? false);
+      continueButton.disabled = (rawInput?.value.trim() ?? "").length === 0;
     }
   };
 
@@ -66,8 +62,16 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
     refreshGate();
     deps.showStep("import-key");
   });
+  // The salt belongs to a Ready account: it is the DEPLOY_ACCOUNT salt that
+  // recovers an externally created one. Shown only when that contract is chosen,
+  // so the field is not a question the other account type has to read past.
+  const saltField = form.querySelector<HTMLElement>("#import-key-salt-field");
+  const syncSaltField = (): void => {
+    saltField?.toggleAttribute("hidden", contractSelect?.value !== "argent");
+  };
+  contractSelect?.addEventListener("change", syncSaltField);
+  syncSaltField();
   rawInput?.addEventListener("input", refreshGate);
-  ackInput?.addEventListener("change", refreshGate);
   continueButton?.addEventListener("click", () => {
     if (continueButton.disabled) {
       return;
@@ -84,10 +88,6 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
     const rawKey = rawInput?.value.trim() ?? "";
     if (rawKey.length === 0) {
       showToast("Enter the account's private key", "error", form);
-      return;
-    }
-    if (!mainnetAckSatisfied(deps.networkId(), ackInput?.checked ?? false)) {
-      showToast("Acknowledge the real-funds warning first", "error", form);
       return;
     }
     const salt = saltInput?.value.trim() ?? "";

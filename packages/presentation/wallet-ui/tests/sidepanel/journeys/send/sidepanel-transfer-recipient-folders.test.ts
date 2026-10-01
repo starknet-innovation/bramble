@@ -103,7 +103,8 @@ describe("Send recipient folders", () => {
     const ids = [...form.querySelectorAll("[data-send-folder]")].map((section) =>
       section.getAttribute("data-send-folder"),
     );
-    expect(ids).toEqual([DEFAULT_GROUP_IDS.home, "work", DEFAULT_GROUP_IDS.archived]);
+    // Only folders holding an account are listed, home first and the archive last.
+    expect(ids).toEqual([DEFAULT_GROUP_IDS.home, DEFAULT_GROUP_IDS.archived]);
   });
 
   test("the archive starts minimized and its rows are not listed", () => {
@@ -159,14 +160,14 @@ describe("Send recipient folders", () => {
     );
   });
 
-  test("a minimized empty folder does not show its empty hint", () => {
+  test("a folder holding nothing is not listed at all", () => {
     const app = document.createElement("div");
     app.id = "app";
-    const emptyArchive: WalletPreferences = {
+    const emptyWork: WalletPreferences = {
       ...preferences,
       groups: [{ accountIds: [], icon: "briefcase", id: "work", name: "Work" }],
     };
-    paint(app, sendFlow(status, account, emptyArchive, [], {}, {}, "usd", [], null));
+    paint(app, sendFlow(status, account, emptyWork, [], {}, {}, "usd", [], null));
     document.body.append(app);
     const form = app.querySelector<HTMLFormElement>("#transfer-form");
     if (!form) {
@@ -174,20 +175,9 @@ describe("Send recipient folders", () => {
     }
     bindTransferCompose({ form, goTo: () => undefined, onFields: () => undefined });
 
-    const archived = folder(form, DEFAULT_GROUP_IDS.archived);
-    const hint = archived.querySelector("[data-send-folder-empty]");
-    expect(archived.dataset["collapsed"]).toBe("true");
-    expect(hint?.hasAttribute("hidden")).toBe(true);
-
-    archived
-      .querySelector("[data-send-folder-toggle]")
-      ?.dispatchEvent(new Event("click", { bubbles: true }));
-    expect(hint?.hasAttribute("hidden")).toBe(false);
-
-    archived
-      .querySelector("[data-send-folder-toggle]")
-      ?.dispatchEvent(new Event("click", { bubbles: true }));
-    expect(hint?.hasAttribute("hidden")).toBe(true);
+    // There is nothing to send to inside an empty folder, so it is not offered.
+    expect(form.querySelector('[data-send-folder="work"]')).toBeNull();
+    expect(form.querySelector("[data-send-folder-empty]")).toBeNull();
   });
 
   test("a search finds an account inside the minimized archive", () => {
@@ -204,25 +194,14 @@ describe("Send recipient folders", () => {
     const form = mount();
     search(form, secondAccount.address.slice(0, 6));
 
-    // "Work" holds no account, and My accounts holds no match.
-    expect(folder(form, "work").hasAttribute("hidden")).toBe(true);
+    // My accounts holds no match for this search; the archive holds the account.
     expect(folder(form, DEFAULT_GROUP_IDS.home).hasAttribute("hidden")).toBe(true);
     expect(folder(form, DEFAULT_GROUP_IDS.archived).hasAttribute("hidden")).toBe(false);
 
     search(form, "");
-    expect(folder(form, "work").hasAttribute("hidden")).toBe(false);
     expect(folder(form, DEFAULT_GROUP_IDS.home).hasAttribute("hidden")).toBe(false);
     // Clearing the search re-minimizes the archive rather than leaving it open.
     expect(rowFor(form, secondAccount.address).hasAttribute("hidden")).toBe(true);
-  });
-
-  test("an empty folder says so only when nothing is being searched", () => {
-    const form = mount();
-    const hint = folder(form, "work").querySelector("[data-send-folder-empty]");
-    expect(hint?.hasAttribute("hidden")).toBe(false);
-
-    search(form, "zzz");
-    expect(hint?.hasAttribute("hidden")).toBe(true);
   });
 
   test("choosing a recipient from a folder still records its address", () => {

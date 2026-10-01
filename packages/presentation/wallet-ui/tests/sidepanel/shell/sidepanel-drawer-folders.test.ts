@@ -289,7 +289,7 @@ describe("account drawer folders", () => {
 
     expect(harness.container.querySelector("#drawer-folder-form")).not.toBeNull();
     expect(harness.container.querySelector("#drawer-folder-result")?.textContent).toContain(
-      "store unavailable",
+      "The folder store is unavailable.",
     );
     // The submit is released so the corrected name can be sent again.
     expect(
@@ -388,5 +388,54 @@ describe("drawer folder styles", () => {
     expect(folders).toContain("overflow-y: auto");
     const list = /\.drawer-list \{([^}]*)\}/.exec(SIDEPANEL_STYLES)?.[1] ?? "";
     expect(list).not.toContain("overflow-y");
+  });
+});
+
+describe("the drawer's network pill", () => {
+  test("names the network, not the chain, and offers the others behind it", () => {
+    const harness = mount([], "drawer");
+
+    const toggle = harness.container.querySelector("[data-drawer-network-toggle]");
+    // "Starknet Mainnet" reads as "Mainnet" here: the drawer never asks which
+    // chain, only which network.
+    expect(toggle?.textContent).toContain("Mainnet");
+    expect(toggle?.textContent).not.toContain("Starknet");
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+
+    const menu = harness.container.querySelector(".drawer-network-menu");
+    expect(menu?.hasAttribute("hidden")).toBe(true);
+    const options = [...harness.container.querySelectorAll("[data-drawer-network-id]")];
+    expect(options.map((option) => option.getAttribute("data-drawer-network-id"))).toEqual([
+      "SN_MAIN",
+      "SN_SEPOLIA",
+    ]);
+    expect(options[0]?.getAttribute("aria-selected")).toBe("true");
+  });
+
+  test("the pill opens and closes the list", () => {
+    const harness = mount([], "drawer");
+    const toggle = harness.container.querySelector("[data-drawer-network-toggle]");
+    const menu = harness.container.querySelector(".drawer-network-menu");
+
+    click(toggle);
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(menu?.hasAttribute("hidden")).toBe(false);
+
+    click(toggle);
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(menu?.hasAttribute("hidden")).toBe(true);
+  });
+
+  test("choosing another network switches, and choosing the current one does nothing", async () => {
+    const harness = mount([], "drawer");
+
+    click(harness.container.querySelector('[data-drawer-network-id="SN_MAIN"]'));
+    await harness.tick();
+    // Already on mainnet: no switch is submitted rather than a no-op write.
+    expect(harness.calls.setActiveNetwork).toEqual([]);
+
+    click(harness.container.querySelector('[data-drawer-network-id="SN_SEPOLIA"]'));
+    await harness.tick();
+    expect(harness.calls.setActiveNetwork).toEqual(["SN_SEPOLIA"]);
   });
 });

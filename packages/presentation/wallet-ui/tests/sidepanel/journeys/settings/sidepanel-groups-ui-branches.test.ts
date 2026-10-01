@@ -199,7 +199,7 @@ describe("bindGroupControls create form", () => {
     await tick();
 
     expect(harness.calls.createGroup).toEqual([]);
-    expect(errorTexts()).toContain("Enter a group name");
+    expect(errorTexts()).toContain("Enter a folder name");
   });
 
   test("re-enables the create button and toasts when the create op rejects", async () => {

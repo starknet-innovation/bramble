@@ -167,7 +167,9 @@ describe("privacy journey templates", () => {
     expect(proving).toContain('<li data-state="active"><span></span>Build registration proof');
     // Phase and elapsed time from the job's own poll, then the standing hint.
     expect(proving).toContain("Proving (attempt 2 of 3) · 1 min 35 s. Keep the wallet open.");
-    expect(proving).toContain("going back discards this preparation");
+    expect(proving).toContain("Going back discards this preparation");
+    // The task list beside it already names the step in progress.
+    expect(proving).not.toContain("Building the registration proof");
   });
 
   test("the working screen carries the submission job's progress on its liveness line", () => {
@@ -192,7 +194,7 @@ describe("privacy journey templates", () => {
 
     const fund = blocked("fund", "Not enough STRK for the <pool> fee");
     expect(fund).toContain("Go private");
-    expect(fund).toContain("Add STRK to go private");
+    expect(fund).toContain("Initialize your account");
     expect(fund).toContain('data-view="receive"');
     expect(fund).toContain("Fund with STRK");
     // The runtime's own reason is shown, escaped.
@@ -211,7 +213,7 @@ describe("privacy journey templates", () => {
 
     const pending = blocked("pending", "Registration is on its way.");
     expect(pending).toContain("Registration is on its way");
-    expect(pending).toContain("no second registration is needed");
+    expect(pending).toContain("don&#39;t register again");
     expect(pending).toContain('data-view="activity"');
     expect(pending).not.toContain('id="privacy-retry"');
 

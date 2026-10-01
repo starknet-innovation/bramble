@@ -16,8 +16,8 @@ import { textField } from "@bramble/ui-kit/fields";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { bindGuardedCopy, GUARDED_COPY_NOTE } from "../../shared/guarded-copy";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { bindGuardedCopy } from "../../shared/guarded-copy";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen } from "../../shared/parts";
 
@@ -51,7 +51,7 @@ export const revealFlow = (status: WalletStatus): string => {
         "reveal",
         `<section class="section" role="note">
           <p class="eyebrow">Recovery</p>
-          <p class="hint">This account lives on your Ledger. Its keys never leave the device, so there is no recovery phrase or private key to reveal here. Recover this account from your Ledger device itself, using the recovery phrase you set up with Ledger — not this wallet.</p>
+          <p class="hint">This account’s key is on your Ledger. Recover it with the device.</p>
         </section>`,
       )
     );
@@ -62,13 +62,13 @@ export const revealFlow = (status: WalletStatus): string => {
       "reveal",
       `<section class="section reveal-warning" role="note">
       <p class="reveal-danger">${icon("alert")}Anyone who sees these can take your funds.</p>
-      <p class="hint">Reveal only in private. Bramble will never ask you for them. They are shown once here and never leave this screen.</p>
+      <p class="hint">Reveal only in private. Bramble will never ask you for them.</p>
     </section>
     <section class="section">
       <form id="reveal-form">
         ${textField({
           autocomplete: "current-password",
-          hint: "Re-enter it to reveal. An unlocked session alone is not enough.",
+          hint: "An unlocked session is not enough.",
           label: "Confirm vault passphrase",
           minlength: MIN_VAULT_PASSPHRASE_LENGTH,
           name: "vaultPassphrase",
@@ -87,7 +87,7 @@ export const revealFlow = (status: WalletStatus): string => {
           label: "Copy recovery phrase",
           variant: "ghost",
         })}
-        <p class="hint" id="reveal-copy-note">${GUARDED_COPY_NOTE}</p>
+        <p class="hint" id="reveal-copy-note">Copy at your own risk</p>
         <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
         <code class="reveal-value is-masked" id="reveal-key"></code>
         ${
@@ -98,7 +98,7 @@ export const revealFlow = (status: WalletStatus): string => {
         ${button({
           attributes: { id: "reveal-toggle" },
           icon: "check",
-          label: "Tap to show",
+          label: "Show",
           variant: "secondary",
         })}
         <p class="hint">Write them down offline. Leaving this screen hides them again.</p>
@@ -130,7 +130,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
   toggle?.addEventListener("click", () => {
     const masked = phraseEl?.classList.toggle("is-masked") ?? true;
     keyEl?.classList.toggle("is-masked", masked);
-    toggle.lastChild?.replaceWith(masked ? "Tap to show" : "Tap to hide");
+    toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
   });
 
   form?.addEventListener("submit", (event) => {
@@ -148,7 +148,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
         }
         output?.removeAttribute("hidden");
         if (result) {
-          result.textContent = "Revealed. Tap to show, then write it down offline.";
+          result.textContent = "Write it down offline.";
         }
         form.reset();
         buttonBusy(submitButton, false);
@@ -156,7 +156,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
       (error: unknown) => {
         showToast(errorMessage(error, "Reveal failed"), "error", form);
         if (result) {
-          result.textContent = errorMessage(error, "Reveal failed");
+          result.textContent = errorLine(error, "Reveal failed");
         }
         buttonBusy(submitButton, false);
       },

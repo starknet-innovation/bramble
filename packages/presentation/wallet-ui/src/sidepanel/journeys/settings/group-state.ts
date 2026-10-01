@@ -9,7 +9,7 @@
 import type { AccountGroups } from "@bramble/settings/groups";
 
 /**
- * Sentinel `expandedGroupId` value for the manage-accounts "Create a group"
+ * Sentinel `expandedGroupId` value for the manage-accounts "Create a folder"
  * accordion panel. It shares the one expanded-panel selector with the per-group
  * editors so opening the create panel collapses any open group (and vice
  * versa) — only ever one panel expanded. The underscores keep it outside the

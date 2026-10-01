@@ -170,7 +170,10 @@ describe("recovery scan Ready gate", () => {
       groupRows("openzeppelin")[0]?.querySelector<HTMLInputElement>("input.select-check");
     expect(brambleCheckbox?.disabled).toBe(false);
     expect(brambleCheckbox?.checked).toBe(true);
-    expect(brambleGroup?.textContent).toContain("1 account detected");
+    // The count is always rendered, in the small-caps eyebrow beside the family
+    // name, so a family with nothing in it says so rather than going blank.
+    expect(brambleGroup?.textContent).toContain("1 found");
+    expect(brambleGroup?.querySelector("[data-detected]")?.className).toBe("eyebrow");
     expect(brambleGroup?.open).toBe(true);
   });
 
