@@ -65,12 +65,15 @@ export const createDeploymentCache = (
         return false;
       }
       const result = await wallet.loadDeploymentStatus();
-      if (result) {
-        const snapshot = { checkedAt, deployed: result.deployed };
-        snapshots.set(`${status.networkId}:${result.accountId}`, snapshot);
-        snapshots.set(known, snapshot);
+      // The background answers for whichever account is active when it handles
+      // the request, so a switch that lands mid-flight returns another
+      // account's verdict. Drop it rather than key it under this account: a
+      // foreign `true` would hide the deploy notice for the whole session.
+      if (!result || result.accountId !== status.activeAccountId) {
+        return null;
       }
-      return result ? result.deployed : null;
+      snapshots.set(known, { checkedAt, deployed: result.deployed });
+      return result.deployed;
     },
     noteDeployed(networkId, accountId) {
       const snapshot = { checkedAt: now(), deployed: true };
