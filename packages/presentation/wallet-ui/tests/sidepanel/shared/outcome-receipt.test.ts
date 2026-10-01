@@ -31,7 +31,10 @@ const REVERTED: ConfirmationOutcome = {
 
 const mount = (): HTMLElement => {
   const root = document.createElement("div");
-  root.innerHTML = outcomeReceiptSection("deploy-success", outcomeReceiptActions("deploy-activity"));
+  root.innerHTML = outcomeReceiptSection(
+    "deploy-success",
+    outcomeReceiptActions("deploy-activity"),
+  );
   document.body.append(root);
   return root;
 };
@@ -88,7 +91,12 @@ describe("paintOutcomeReceipt", () => {
 
   test("a confirmation shows the success mark as a status", () => {
     const root = mount();
-    paintOutcomeReceipt(root, "deploy-success", outcomeReceiptFor(SUCCEEDED, COPY, HASH), "SN_MAIN");
+    paintOutcomeReceipt(
+      root,
+      "deploy-success",
+      outcomeReceiptFor(SUCCEEDED, COPY, HASH),
+      "SN_MAIN",
+    );
 
     expect(visibleMarks(root)).toEqual(["confirmed"]);
     expect(root.querySelector("#deploy-success")?.getAttribute("role")).toBe("status");
@@ -104,7 +112,12 @@ describe("paintOutcomeReceipt", () => {
   test("a later confirmation clears an earlier failure paint", () => {
     const root = mount();
     paintOutcomeReceipt(root, "deploy-success", outcomeReceiptFor(REVERTED, COPY, HASH), "SN_MAIN");
-    paintOutcomeReceipt(root, "deploy-success", outcomeReceiptFor(SUCCEEDED, COPY, HASH), "SN_MAIN");
+    paintOutcomeReceipt(
+      root,
+      "deploy-success",
+      outcomeReceiptFor(SUCCEEDED, COPY, HASH),
+      "SN_MAIN",
+    );
 
     expect(visibleMarks(root)).toEqual(["confirmed"]);
     expect(root.querySelector("#deploy-success")?.classList.contains("send-failure")).toBe(false);

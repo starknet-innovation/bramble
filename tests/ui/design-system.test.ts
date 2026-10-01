@@ -165,7 +165,8 @@ describe("design system", () => {
     expect(markup).not.toContain('type="checkbox" name="mainnetAck"');
     const consequence = "This wallet is on Starknet Mainnet and holds real funds.";
     for (const step of ["import-key", "recovery-accounts", "accounts", "ledger"]) {
-      const section = markup.split(`data-onboarding-step="${step}"`)[1]?.split("</section>")[0] ?? "";
+      const section =
+        markup.split(`data-onboarding-step="${step}"`)[1]?.split("</section>")[0] ?? "";
       expect(section).toContain(consequence);
     }
   });

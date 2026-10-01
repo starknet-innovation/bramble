@@ -59,7 +59,8 @@ const OUTCOME_UNKNOWN = "The result is unknown. Check Activity before trying aga
 const SUBMISSION_UNKNOWN = (what: string): string =>
   `${what} may not have gone through. Check Activity before trying again.`;
 // The router's own catch-all can wrap a submission, so it says the same.
-const REQUEST_UNKNOWN = "That didn't complete. If it was a transaction, check Activity before trying again.";
+const REQUEST_UNKNOWN =
+  "That didn't complete. If it was a transaction, check Activity before trying again.";
 const LEDGER_RETRY = "Couldn't reach your Ledger. Reconnect the device and try again.";
 const ACTIVATE_FIRST = "Activate private balances first.";
 const DEPLOY_FIRST = "Deploy this account first.";

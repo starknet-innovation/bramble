@@ -21,7 +21,7 @@ import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "./backup-verify";
  * such consequence to state. It replaces the old acknowledgement tickbox with a
  * stated fact on each step that creates, imports or restores accounts.
  */
-export const MAINNET_CONSEQUENCE = "This wallet is on Starknet Mainnet and holds real funds.";
+const MAINNET_CONSEQUENCE = "This wallet is on Starknet Mainnet and holds real funds.";
 const networkConsequence = (): string =>
   DEFAULT_NETWORK.id === "SN_MAIN"
     ? `<p class="hint onboarding-network-consequence">${MAINNET_CONSEQUENCE}</p>`
