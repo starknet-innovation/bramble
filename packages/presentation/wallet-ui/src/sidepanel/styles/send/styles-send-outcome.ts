@@ -67,6 +67,12 @@ export const SEND_OUTCOME_STYLES = `
   }
   .send-success .send-outcome-mark { color: var(--bramble-positive); }
   .send-failure .send-outcome-mark { color: var(--bramble-danger); }
+  /* An unknown outcome is not a failure: warning colour and a "!" mark, never
+     the red cross that invites a retry (mc-wallet issue 382). */
+  .send-failure[data-severity="warning"] .send-outcome-mark { color: var(--bramble-warning); }
+  .send-unknown-mark,
+  .send-failure[data-severity="warning"] .send-failure-mark { display: none; }
+  .send-failure[data-severity="warning"] .send-unknown-mark { display: inline; }
   .send-failure-ring {
     animation: send-draw 420ms ${EASE.out} forwards;
     stroke-dasharray: 158;

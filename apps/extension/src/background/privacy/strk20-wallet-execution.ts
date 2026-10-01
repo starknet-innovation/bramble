@@ -27,8 +27,10 @@ import {
   type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@bramble/privacy/service";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { approvalPayloadMatchesContext } from "../approvals/approval-context";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
@@ -288,6 +290,11 @@ const executionWork = async (
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
+    // A lost relay or RPC reply may still land: say so instead of "failed",
+    // so the panel does not report it as not sent (audit #173).
+    if (error instanceof IndeterminateRpcWriteError) {
+      return submissionUnknownResponse(errorText(error, "Private transaction failed"));
+    }
     return { error: errorText(error, "Private transaction failed") };
   }
 };

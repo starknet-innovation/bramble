@@ -116,6 +116,12 @@ export type TransferInput = {
   readonly amount: string;
   /** Live authorization checked immediately before each on-chain mutation. */
   readonly isAuthorized?: () => boolean;
+  /**
+   * Journal hook; see {@link InvokeInput.onSigned}. The caller learns the
+   * signed transfer's hash before it is sent, so a send whose answer is lost
+   * can still be tracked instead of being reported as not sent.
+   */
+  readonly onSigned?: InvokeInput["onSigned"];
   readonly recipient: string;
   /** Separately reviewed ceiling for an automatic account deployment. */
   readonly reviewedDeploymentFee?: FeeEstimate;
@@ -263,6 +269,7 @@ export const submitErc20Transfer = async (
     account,
     amount,
     isAuthorized,
+    onSigned,
     recipient,
     reviewedDeploymentFee,
     reviewedFee,
@@ -280,6 +287,7 @@ export const submitErc20Transfer = async (
       account,
       calls: [call],
       ...(isAuthorized === undefined ? {} : { isAuthorized }),
+      ...(onSigned === undefined ? {} : { onSigned }),
       ...(reviewedDeploymentFee === undefined ? {} : { reviewedDeploymentFee }),
       ...(reviewedFee === undefined ? {} : { reviewedFee }),
       rpcUrls,

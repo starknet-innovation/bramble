@@ -34,6 +34,7 @@ import {
   preparationFor,
   preparedState,
   reviewedState,
+  submitRejection,
 } from "./transfer-submit";
 
 export { activityExportToast, bindActivity } from "../portfolio/activity-ui";
@@ -247,9 +248,9 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   form
     .querySelector("#send-view-activity")
     ?.addEventListener("click", () => navigate?.("activity"));
-  form
-    .querySelector("#send-pending-activity")
-    ?.addEventListener("click", () => navigate?.("activity"));
+  for (const id of ["#send-pending-activity", "#send-failure-activity"]) {
+    form.querySelector(id)?.addEventListener("click", () => navigate?.("activity"));
+  }
 
   // Polls to the last checkpoint, then hands over to "Check again".
   const confirmSubmitted = async (epoch: number): Promise<void> => {
@@ -268,10 +269,19 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       repaintActiveTransfer?.();
       return;
     }
+    // A failed outcome drops the review, so Try again reviews afresh rather
+    // than re-signing the old one (audit 247).
     transferState =
       outcome.kind === "succeeded"
         ? { ...transferState, error: "", stage: "submitted" }
-        : { ...transferState, error: outcome.message, stage: "failed" };
+        : {
+            ...transferState,
+            error: outcome.message,
+            review: null,
+            reviewedKey: null,
+            stage: "failed",
+            submissionUnknown: false,
+          };
     repaintActiveTransfer?.();
     showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
   };
@@ -281,11 +291,18 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     repaint();
     void confirmSubmitted(epoch);
   });
+  // Every failure has dropped the review, so this submit starts a new one.
   form.querySelector("#send-retry")?.addEventListener("click", () => {
-    transferState = { ...transferState, error: "", stage: "review" };
-    repaint();
+    transferState = { ...transferState, error: "" };
     form.requestSubmit();
   });
+  const settleRejection = (epoch: number, error: unknown, fallback: string): void => {
+    const rejection = submitRejection(transferState, error, fallback);
+    transferState = rejection.state;
+    repaintActiveTransfer?.();
+    if (rejection.toast) showToast(rejection.toast, "error", form);
+    if (rejection.follow) void confirmSubmitted(epoch);
+  };
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -428,17 +445,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           void confirmSubmitted(epoch);
         },
         (error: unknown) => {
-          if (epoch !== transferEpoch) return;
-          const message = errorMessage(error, "Private send failed");
-          transferState = {
-            ...transferState,
-            error: `The transaction was not sent. ${message}`,
-            privatePreparation: null,
-            reviewedKey: null,
-            stage: "failed",
-          };
-          repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error", form);
+          if (epoch === transferEpoch) settleRejection(epoch, error, "Private send failed");
         },
       );
       return;
@@ -470,15 +477,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           void confirmSubmitted(epoch);
         },
         (error: unknown) => {
-          if (epoch !== transferEpoch) return;
-          const message = errorMessage(error, "Transfer failed");
-          transferState = {
-            ...transferState,
-            error: `The transaction was not sent. ${message}`,
-            stage: "failed",
-          };
-          repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error", form);
+          if (epoch === transferEpoch) settleRejection(epoch, error, "Transfer failed");
         },
       );
   });
