@@ -20,7 +20,19 @@ export const SPACE = {
 
 /**
  * Corner radius scale for controls, cards, and pills. Generous rounding for
- * soft, premium surfaces.
+ * soft, premium surfaces. Each step has one role, so two surfaces that sit
+ * side by side on a screen always share a corner:
+ *
+ * - `lg` — every card: receipts, review panels, callouts, disclosures, grouped
+ *   lists, and the send/swap composer cards.
+ * - `md` — fields, standalone rows, and their hover fills.
+ * - `sm` — compact controls and marks inside a card (toggles, icon choices).
+ * - `full` — pills, chips, avatars, and the dock.
+ * - `xl` — full-page chrome only: the onboarding card and the account
+ *   drawer's edge.
+ *
+ * A row inside a grouped card takes no radius of its own: the card clips its
+ * outer corners, so a fill never shows a second, mismatched curve.
  */
 export const RADIUS = {
   full: "999px",

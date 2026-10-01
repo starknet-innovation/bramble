@@ -115,10 +115,12 @@ export const BASE_STYLES = `
   }
   .screen > * { max-width: 100%; min-width: 0; }
   /* Dock screens scroll their content UNDER the anchored bottom bar. Reserve
-     clearance below the content equal to the bar footprint plus a breathing
-     gap, so the last row never hides beneath it at any scroll position. Flow
-     screens carry no dock. */
-  .screen:not(.flow) { padding-bottom: calc(var(--bramble-dock-h) + ${SPACE.lg}); }
+     clearance below the content equal to the bar footprint, topped up so that
+     with the shell's own bottom padding the last row clears the pill by the
+     same gap the pill keeps from the panel edge. Reserving more than that made
+     a screen whose content already cleared the dock scroll by a few pixels.
+     Flow screens carry no dock. */
+  .screen:not(.flow) { padding-bottom: calc(var(--bramble-dock-h) + ${DOCK_OFFSET} - ${SPACE.md}); }
 
   /* Layout primitives */
   .row, .address-line, .context-line, .callout, .token-row {
@@ -143,17 +145,15 @@ export const BASE_STYLES = `
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     min-width: 0;
   }
-  /* Section heads share the 8px horizontal inset of the de-boxed list rows
-     beneath them, so headings and row content sit on one left edge. The same
-     inset applies to heading rows (a .row leading with an h2) so the Activity
-     screen's titles line up with the transaction text below them. */
+  /* Section heads sit on the page's text column with no inset of their own:
+     de-boxed list rows (tokens, activity) put their content on that same
+     column and bleed only their hover fill past it, so a heading, its rows,
+     and the cards around them share one left edge. */
   .section-head {
     align-items: baseline;
     display: flex;
     justify-content: space-between;
-    padding: 0 ${SPACE.sm};
   }
-  .section > .row:has(> h2) { padding: 0 ${SPACE.sm}; }
   .section-head h2 { font-size: ${TYPE.body.size}; font-weight: 700; }
   .activity-head h1 {
     font-size: ${TYPE.display.size};
@@ -391,8 +391,13 @@ export const BASE_STYLES = `
     gap: 0;
     overflow: hidden;
   }
-  /* Grouped rows keep the rounded hover of a standalone row: the group's
-     corners clip the card, the fill inside it stays the kit's rounded shape. */
+  /* A row inside a group is a cell of the card, not a rounded control of its
+     own: it takes no radius, so the group's corners clip the first and last
+     fills to the card's curve and a selected or hovered row never shows a
+     second, tighter curve against the card edge or its neighbour's divider. */
+  :is(.menu-list, .option-list) > :is(button.menu-row, a.menu-row, button.option-row, .option-row-line) {
+    border-radius: 0;
+  }
   /* A row that is itself a control (select this account) carries its copy
      action beside it on one line, never inside it; the line is the row — it
      carries the selected and hover fill so the copy action sits inside the
@@ -411,9 +416,8 @@ export const BASE_STYLES = `
     right: 0;
     top: 0;
   }
-  /* A row is a rounded control on its own (Manage tokens, a lone option) and
-     inside a grouped list alike: the group clips its outer corners, and the
-     hover fill keeps the kit's rounding within it. */
+  /* A standalone row (Manage tokens, a lone option) is a rounded control;
+     inside a grouped list the rule above squares it into a cell. */
   button.menu-row, button.option-row, a.menu-row {
     align-items: center;
     background: transparent;

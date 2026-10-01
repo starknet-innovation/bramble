@@ -47,7 +47,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-origin-account {
     align-items: center;
     background: var(--bramble-elevated);
-    border-radius: ${RADIUS.lg};
+    border-radius: ${RADIUS.md};
     display: flex;
     min-height: ${SIZE.control};
     padding-left: ${SPACE.md};
@@ -88,19 +88,28 @@ export const SEND_COMPOSE_STYLES = `
     line-height: ${TYPE.title.line};
     margin: 0;
   }
+  /* The search box is one field made of an icon and an input, so the box, not
+     the input, carries the field's radius and its bottom edge. Left on the
+     input, the edge stopped short of the icon and curled up at the input's
+     own corner, reading as a broken underline. */
   .send-search-control {
     align-items: center;
     background: var(--bramble-elevated);
-    border-radius: ${RADIUS.lg};
+    border-bottom: 1px solid var(--bramble-border);
+    border-radius: ${RADIUS.md};
     display: flex;
     gap: ${SPACE.sm};
     min-height: ${SIZE.control};
+    overflow: hidden;
     padding-left: ${SPACE.md};
   }
   .send-search-control > .icon { color: var(--bramble-muted); flex: none; }
   .send-search-control input {
+    align-self: stretch;
     background: transparent;
-    border-radius: 0 ${RADIUS.lg} ${RADIUS.lg} 0;
+    border-bottom: 0;
+    border-radius: 0;
+    min-height: 0;
     padding-left: 0;
   }
   .send-search-control input:focus-visible { outline: 0; }
@@ -201,7 +210,7 @@ export const SEND_COMPOSE_STYLES = `
   #send-recipient-continue { width: 100%; }
   .send-amount-card {
     background: var(--bramble-panel);
-    border-radius: ${RADIUS.xl};
+    border-radius: ${RADIUS.lg};
     display: grid;
     gap: ${SPACE.md};
     padding: ${SPACE.lg};

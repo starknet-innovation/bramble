@@ -159,6 +159,9 @@ describe("sidepanel home", () => {
     expect(html).toContain("Manage tokens");
     expect(html).toContain("1 not shown");
     expect(html).not.toContain("Hidden tokens");
+    // Every balance is hidden, so the panel has no list for the row to follow.
+    expect(html).not.toContain('class="token-list"');
+    expect(html).toContain('<button class="menu-row" data-view="tokens"');
   });
 
   test("Activity stays a top-level dock destination instead of a portfolio tab", () => {
