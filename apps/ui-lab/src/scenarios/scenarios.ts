@@ -299,11 +299,14 @@ const nftScenario: WalletScenario = {
     },
     {
       content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      // The id predates the receipt waiting for the chain; the fixture chain
+      // confirms at once, so the checkpoint is the confirmed receipt.
       id: "submitted",
-      label: "Transfer submitted",
-      narrative: "Confirmation returns a transaction hash and never bypasses review.",
+      label: "Transfer complete",
+      narrative:
+        "Reached only through the review: once the chain confirms the transfer, the receipt says it is complete, where the collectible went, and the hash.",
       prepare: prepareNft("submitted"),
-      state: { review: "passed", transactionHash: NFT_HASH },
+      state: { chain: "preconfirmed", review: "passed", transactionHash: NFT_HASH },
     },
     {
       content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
