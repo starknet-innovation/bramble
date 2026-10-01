@@ -208,11 +208,17 @@ const successStage = (copy: TransferModeCopy): string => `
     <div class="send-outcome-copy">
       <p class="send-outcome-kicker">Confirmed on Starknet</p>
       <h2 id="send-success-title">${escapeHtml(copy.successTitle)}</h2>
-      <p id="send-success-summary"></p>
-      <code id="send-success-hash"></code>
+    </div>
+    <div class="send-receipt">
+      <p class="send-receipt-summary" id="send-success-summary"></p>
+      <div class="send-receipt-tx">
+        <span class="send-receipt-label">Transaction</span>
+        <span class="send-receipt-address" id="send-success-tx"></span>
+      </div>
+      <a class="send-explorer-link" id="send-success-explorer" target="_blank" rel="noopener noreferrer" hidden>View on Starkscan${icon("externalLink")}</a>
     </div>
     <div class="send-actions">
-      ${button({ attributes: { id: "send-view-activity" }, icon: "activity", label: "View activity" })}
+      ${button({ attributes: { id: "send-view-activity" }, icon: "activity", label: "View in Activity tab" })}
       ${button({ attributes: { id: "send-home" }, label: "Back to home", variant: "secondary" })}
     </div>
   </section>`;
@@ -245,7 +251,7 @@ const pendingStage = (): string => `
     </div>
     <div class="send-actions">
       ${button({ attributes: { id: "send-check-again" }, label: "Check confirmation" })}
-      ${button({ attributes: { id: "send-pending-activity" }, icon: "activity", label: "View activity", variant: "secondary" })}
+      ${button({ attributes: { id: "send-pending-activity" }, icon: "activity", label: "View in Activity tab", variant: "secondary" })}
     </div>
   </section>`;
 
@@ -266,6 +272,17 @@ const openingAsset = (
     seedTokenId === null ? undefined : assets.find((candidate) => candidate.id === seedTokenId);
   return seeded ?? assets[0];
 };
+
+// The sending account travels on the form: its address drives the mode and
+// the receipt, and its display name labels it there the way the rest of the
+// wallet names it. Empty without an account, which nothing can send from.
+const senderAttributes = (
+  account: AccountRef | null,
+  preferences: WalletPreferences | null,
+): string =>
+  account
+    ? `data-sender="${escapeHtml(account.address)}" data-sender-label="${escapeHtml(accountDisplayName(account, preferences))}"`
+    : 'data-sender="" data-sender-label=""';
 
 /**
  * Renders the recipient-first Send flow and every deterministic checkpoint.
@@ -316,7 +333,7 @@ export const sendFlow = (
         ${account ? "" : noAccountEmpty(status)}
         ${account && assets.length === 0 ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.") : ""}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" data-sender="${escapeHtml(account?.address ?? "")}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" ${senderAttributes(account, preferences)} data-network-id="${escapeHtml(status.networkId)}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
@@ -356,7 +373,7 @@ export const sendFlow = (
             ${pendingStage()}
             ${successStage(copy)}
             ${failureStage(copy)}
-            <p class="send-result" id="transfer-result" role="status" aria-live="assertive"></p>
+            <p class="send-result" id="transfer-result" role="alert" aria-live="assertive"></p>
           </div>
         </form>
       </section>`,
