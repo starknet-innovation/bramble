@@ -35,13 +35,8 @@ export type TransferBucketsDeps = {
   readonly route: () => SendRouteResolution;
 };
 
-const LABELS: Readonly<Record<ValueBucket, string>> = {
-  private: "Private",
-  public: "Public",
-};
-
-// The button states which balance is in use; its title states what pressing it
-// does, since a self-labelling toggle cannot show both at once.
+// The switch is labelled "Private" and carries its state in aria-checked, so
+// its title only has to say what pressing it does.
 const HINTS: Readonly<Record<ValueBucket, string>> = {
   private: "Switch to the public balance",
   public: "Switch to the private balance",
@@ -92,8 +87,9 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
     const blocked = incomplete ? undefined : view.blocked;
     for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
       const bucket = readBucket(form, legOf(button));
-      button.textContent = LABELS[bucket];
       button.dataset["bucket"] = bucket;
+      button.setAttribute("aria-checked", String(bucket === "private"));
+      button.dataset["checked"] = String(bucket === "private");
       button.title = HINTS[bucket];
     }
     container?.classList.toggle("muted", blocked !== undefined);
@@ -130,9 +126,14 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
   // private, and left Max's fallback reading the wrong pot — so every pick is
   // re-measured against the source bucket here, and the state re-read, before
   // the gate runs. The row's own handler runs first (the click bubbles up), so
-  // by the time this fires the picked token is already in the form.
+  // by the time this fires the picked token is already in the form. The pick
+  // arrives as a dropdown option; the hidden fact rows are matched too so a
+  // surface that still renders them as buttons keeps the same behaviour.
   const followAsset = (event: Event): void => {
-    if (!(event.target instanceof Element) || event.target.closest("[data-send-asset]") === null) {
+    if (
+      !(event.target instanceof Element) ||
+      event.target.closest("[data-send-asset], [data-token-option]") === null
+    ) {
       return;
     }
     showBalance();

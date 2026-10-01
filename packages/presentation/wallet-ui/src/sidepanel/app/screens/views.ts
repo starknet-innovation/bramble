@@ -48,6 +48,7 @@ import {
 } from "../../journeys/multisig/multisig-views";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
 import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
+import { tokenCatalogFlow } from "../../journeys/portfolio/token-catalog-view";
 import {
   DEFAULT_CURRENCY,
   tokenAddFlow,
@@ -225,6 +226,9 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
   }
   if (activeView === "token-add") {
     return tokenAddFlow(context.status);
+  }
+  if (activeView === "token-catalog") {
+    return tokenCatalogFlow(context.status);
   }
   if (activeView === "token-discover") {
     return tokenDiscoverFlow(context.status);

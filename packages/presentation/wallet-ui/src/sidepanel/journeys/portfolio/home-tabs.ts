@@ -395,13 +395,6 @@ export const homeTabs = (
             variant: "ghost",
           })}
           ${button({
-            attributes: { "data-view": "settings", role: "menuitem", tabindex: "-1" },
-            className: "portfolio-menu-item",
-            icon: "settings",
-            label: "Wallet settings",
-            variant: "ghost",
-          })}
-          ${button({
             attributes: {
               "data-reload-balances": true,
               id: "refresh-button",

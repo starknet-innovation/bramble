@@ -10,7 +10,7 @@ import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import { transitionSendStage } from "./send-transition";
 import { bindTransferBuckets } from "./transfer-buckets-ui";
 import { bindTransferCompose, sendFormInput } from "./transfer-compose-ui";
-import type { TransferState } from "./transfer-model";
+import type { TransferExitView, TransferState } from "./transfer-model";
 import {
   CONFIRMATION_DELAYS_MS,
   confirmationOutcome,
@@ -54,7 +54,7 @@ export type TransferUiDeps = {
   readonly app: Element | null;
   readonly back?: () => void;
   readonly confirmationDelaysMs?: readonly number[];
-  readonly navigate?: (view: "activity" | "home" | "multisig-deploy") => void;
+  readonly navigate?: (view: TransferExitView) => void;
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
@@ -175,8 +175,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   };
   form.ownerDocument.querySelector("#send-close")?.addEventListener("click", exit);
   form.ownerDocument.querySelector("#send-header-back")?.addEventListener("click", () => {
-    if (transferState.stage === "asset") goTo("details");
-    else if (transferState.stage === "details") goTo("recipient");
+    if (transferState.stage === "details") goTo("recipient");
     else if (transferState.stage === "review" || transferState.stage === "reviewing") editDetails();
     else exit();
   });
@@ -222,6 +221,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     onFields: (fields) => {
       transferState = { ...transferState, fields };
     },
+    navigate: (view) => deps.navigate?.(view),
     spendable: () => transferSpendable(routeContext()),
   });
   bindTransferBuckets({

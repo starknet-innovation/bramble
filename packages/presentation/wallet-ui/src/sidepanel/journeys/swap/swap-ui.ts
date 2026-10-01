@@ -30,7 +30,7 @@ import {
   type SwapQuoteView,
   swapValueDeltaPercent,
 } from "./swap-client";
-import { bindSwapPicker, repaintSwapPicker, setPickerSide } from "./swap-picker";
+import { bindSwapTokenDropdowns } from "./swap-picker";
 import { type SwapStage, transitionSwapStage } from "./swap-transition";
 import { swapConfirmReceipt, swapQuoteDetails } from "./swap-views";
 
@@ -334,7 +334,6 @@ export const bindSwap = (deps: SwapUiDeps): void => {
   const root = deps.app?.querySelector("#wallet-screen-swap")?.parentElement;
   if (!root) {
     stage = "edit";
-    setPickerSide(null);
     quote = null;
     preparation = null;
     pendingBuyAmount = null;
@@ -378,17 +377,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     }
     requestQuote(deps, root);
   });
-  root.querySelector("#swap-sell-token")?.addEventListener("click", () => {
-    setPickerSide("sell");
-    repaintSwapPicker(deps, root);
-    root.querySelector<HTMLInputElement>("#swap-picker-search")?.focus();
-  });
-  root.querySelector("#swap-buy-token")?.addEventListener("click", () => {
-    setPickerSide("buy");
-    repaintSwapPicker(deps, root);
-    root.querySelector<HTMLInputElement>("#swap-picker-search")?.focus();
-  });
-  bindSwapPicker(deps, root, applySelection(deps, root));
+  bindSwapTokenDropdowns(deps, root, applySelection(deps, root));
   root.querySelector("#swap-review")?.addEventListener("click", () => {
     const sellToken = tokenById(deps, sellTokenId);
     const buyToken = tokenById(deps, buyTokenId);

@@ -37,10 +37,16 @@ export const friendlyReviewError = (error: unknown): string => {
 };
 
 /**
+ * Screens Send can hand off to by name: where a finished or abandoned send
+ * lands, and the two screens its composition controls open (the address book
+ * for a new recipient, token management for a token it does not list).
+ */
+export type TransferExitView = "activity" | "address-book" | "home" | "multisig-deploy" | "tokens";
+
+/**
  * Deterministic screens owned by the Send state machine.
  */
 export type TransferStage =
-  | "asset"
   | "authorizing"
   | "broadcasting"
   | "confirming"
