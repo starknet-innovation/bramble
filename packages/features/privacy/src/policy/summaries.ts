@@ -1,6 +1,7 @@
 /** Review summaries and invoke conversion for STRK20 wire values. */
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action, Strk20InvokeCall } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20SubmissionPlan } from "./submission-plan";
@@ -11,10 +12,17 @@ const shortAddress = (value: string): string =>
 /**
  * Builds display-only summaries from validated actions; approval identity stays
  * bound to the exact structured payload, never this text.
+ *
+ * A `deposit` that names a recipient other than `depositor` credits that
+ * account's private balance, so it is summarized as a payment naming the payee
+ * rather than as a shield. Without a `depositor` a recipient-bearing deposit is
+ * always summarized as a payment: the self case is only claimed when proven.
  */
-export const summarizeStrk20Action = (action: Strk20Action): string => {
+export const summarizeStrk20Action = (action: Strk20Action, depositor?: string): string => {
   if (action.type === "deposit") {
-    return `Deposit ${action.amount} to private balance (${shortAddress(action.token)})`;
+    return action.recipient === undefined || sameFelt(action.recipient, depositor)
+      ? `Deposit ${action.amount} to private balance (${shortAddress(action.token)})`
+      : `Pay ${action.amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
   }
   if (action.type === "withdraw") {
     return `Withdraw ${action.amount} to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;

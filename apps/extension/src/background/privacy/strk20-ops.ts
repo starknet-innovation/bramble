@@ -258,7 +258,7 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
     origin: input.origin,
     request: { actions: input.actions, simulate: input.simulate, type: "prepare" },
     summaries: [
-      ...input.actions.map(summarizeStrk20Action),
+      ...input.actions.map((action) => summarizeStrk20Action(action, resolved.account.address)),
       input.simulate
         ? "Simulate only — no submittable proof"
         : "Generate a submittable private proof for this site",
@@ -310,7 +310,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
       summaries: [
-        ...input.actions.map(summarizeStrk20Action),
+        ...input.actions.map((action) => summarizeStrk20Action(action, resolved.account.address)),
         summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
       ],
     });
