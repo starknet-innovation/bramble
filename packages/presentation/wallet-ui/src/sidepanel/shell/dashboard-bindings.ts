@@ -185,6 +185,24 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       option.setAttribute("aria-pressed", String(option.dataset["receivePayload"] === payload));
     }
   };
+
+  // Everything past the QR and the address is opt-in: receiving needs one
+  // address, and the contact card and keys are for multisig coordination.
+  // Closing Pro hides the payload switch, so the QR goes back to the address
+  // with it: a card QR under "Your Starknet address" with no way to switch it
+  // is not something other wallets can scan.
+  const pro = root.querySelector<HTMLButtonElement>("#receive-pro");
+  const proFields = root.querySelector<HTMLElement>("#receive-pro-fields");
+  pro?.addEventListener("click", () => {
+    const open = pro.getAttribute("aria-checked") !== "true";
+    pro.setAttribute("aria-checked", String(open));
+    pro.dataset["checked"] = String(open);
+    proFields?.toggleAttribute("hidden", !open);
+    if (!open) {
+      showPayload("address");
+    }
+  });
+
   for (const option of options) {
     option.addEventListener("click", () => {
       const payload = option.dataset["receivePayload"];
