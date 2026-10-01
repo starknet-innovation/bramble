@@ -203,15 +203,6 @@ export const PRIVACY_STYLES = `
     top: 6px;
     width: 5px;
   }
-  .privacy-warning {
-    background: var(--bramble-elevated);
-    border-radius: ${RADIUS.sm};
-    color: var(--bramble-muted);
-    font-size: ${TYPE.caption.size};
-    line-height: ${TYPE.caption.line};
-    margin: 0;
-    padding: ${SPACE.md};
-  }
   .privacy-token-context,
   .privacy-network {
     align-items: center;

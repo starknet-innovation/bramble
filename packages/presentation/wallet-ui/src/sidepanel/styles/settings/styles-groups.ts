@@ -84,7 +84,7 @@ export const GROUP_STYLES = `
   .new-group-form, .edit-group-form { display: grid; gap: ${SPACE.sm}; }
   .group-name-input {
     background: var(--bramble-elevated);
-    border-radius: ${RADIUS.sm};
+    border-radius: ${RADIUS.md};
     color: var(--bramble-text);
     min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
