@@ -22,17 +22,12 @@ beforeEach(() => document.body.replaceChildren());
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-const mount = (
-  html: string,
-  wallet: Partial<SidepanelWallet>,
-  activeAccountId: string | null = "SN_MAIN:0x1",
-) => {
+const mount = (html: string, wallet: Partial<SidepanelWallet>) => {
   const app = document.createElement("div");
   app.innerHTML = html;
   document.body.append(app);
   const calls = { add: 0, render: 0 };
   const deps: SettingsUiDeps = {
-    activeAccountId: () => activeAccountId,
     app,
     expandedGroup: () => null,
     networkId: () => "SN_MAIN",
@@ -50,10 +45,12 @@ const mount = (
 };
 
 describe("settings UI bindings", () => {
-  test("saves and clears account labels, then rerenders", async () => {
+  test("saves and clears the name of the account whose row was submitted", async () => {
     const updates: Array<readonly [string, string]> = [];
     const { app, calls, deps } = mount(
-      '<form id="label-form"><input name="label" value=" Daily " /><button type="submit">Save</button></form><p id="label-result"></p>',
+      `<form data-account-name-form="SN_MAIN:0x1"><input name="label" value=" Daily " /><button type="submit">Save</button></form>
+       <form data-account-name-form="SN_MAIN:0x2"><input name="label" value="Savings" /><button type="submit">Save</button></form>
+       <p id="label-result"></p>`,
       {
         setAccountLabel: async (accountId, label) => {
           updates.push([accountId, label]);
@@ -62,31 +59,39 @@ describe("settings UI bindings", () => {
     );
     bindAccountLabel(deps);
 
-    app.querySelector<HTMLFormElement>("form")?.requestSubmit();
+    const first = app.querySelector<HTMLFormElement>('[data-account-name-form="SN_MAIN:0x1"]');
+    first?.requestSubmit();
     await tick();
 
     expect(updates).toEqual([["SN_MAIN:0x1", "Daily"]]);
     expect(calls.render).toBe(1);
 
-    const input = app.querySelector<HTMLInputElement>('input[name="label"]');
+    // The second row writes its own account, not whichever one is active: every
+    // account on the screen is renameable and they must not cross.
+    app.querySelector<HTMLFormElement>('[data-account-name-form="SN_MAIN:0x2"]')?.requestSubmit();
+    await tick();
+    expect(updates[1]).toEqual(["SN_MAIN:0x2", "Savings"]);
+
+    const input = first?.querySelector<HTMLInputElement>('input[name="label"]');
     if (input) {
       input.value = " ";
     }
-    app.querySelector<HTMLFormElement>("form")?.requestSubmit();
+    first?.requestSubmit();
     await tick();
-    expect(updates[1]).toEqual(["SN_MAIN:0x1", ""]);
+    expect(updates[2]).toEqual(["SN_MAIN:0x1", ""]);
   });
 
-  test("fails closed without an account and restores the label form after rejection", async () => {
+  test("fails closed without an account id and restores the row after rejection", async () => {
     let calls = 0;
+    // A row that names no account writes nothing: the id comes from the form, so
+    // a malformed one can never fall back to renaming some other account.
     const noAccount = mount(
-      '<form id="label-form"><input name="label" value="Daily" /><button type="submit">Save</button></form>',
+      '<form data-account-name-form=""><input name="label" value="Daily" /><button type="submit">Save</button></form>',
       {
         setAccountLabel: async () => {
           calls += 1;
         },
       },
-      null,
     );
     bindAccountLabel(noAccount.deps);
     noAccount.app.querySelector<HTMLFormElement>("form")?.requestSubmit();
@@ -94,7 +99,7 @@ describe("settings UI bindings", () => {
     expect(calls).toBe(0);
 
     const rejected = mount(
-      '<form id="label-form"><input name="label" value="Daily" /><button type="submit">Save</button></form><p id="label-result"></p>',
+      '<form data-account-name-form="SN_MAIN:0x1"><input name="label" value="Daily" /><button type="submit">Save</button></form><p id="label-result"></p>',
       {
         setAccountLabel: async () => {
           throw new Error("Label service unavailable");

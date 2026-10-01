@@ -28,7 +28,6 @@ describe("appearance settings", () => {
       },
     } as unknown as SidepanelWallet;
     bindAppearance({
-      activeAccountId: () => null,
       app,
       expandedGroup: () => null,
       networkId: () => "SN_MAIN",

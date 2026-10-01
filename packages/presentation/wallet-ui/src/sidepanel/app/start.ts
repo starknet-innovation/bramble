@@ -81,7 +81,6 @@ export const startWalletUi = async (
   const selectedNftId: string | null = null;
   let selectedMultisigId: string | null = null;
   let selectedMultisigIntentId: string | null = null;
-  let lastAccountId: string | null = null;
   let lastNetworkId = "SN_MAIN";
   let lastScene = "";
   let lastContent = "";
@@ -198,7 +197,6 @@ export const startWalletUi = async (
       wallet,
     });
     bindSettingsSurface({
-      activeAccountId: () => lastAccountId,
       app,
       existingAccountIds: () => new Set(cache.status.accounts.map((account) => account.id)),
       expandedGroup: () => expandedGroupId,
@@ -276,7 +274,6 @@ export const startWalletUi = async (
   const paint = (): void => {
     const { status } = cache;
     lastNetworkId = status.networkId;
-    lastAccountId = status.activeAccountId;
     if (activeView !== "send") {
       sendIntent = null;
     }

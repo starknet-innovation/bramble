@@ -12,6 +12,7 @@ import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { accountFlow, backupFlow, sendFlow } from "../../../../src/sidepanel/app/screens/flows";
+import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
 const status: WalletStatus = {
   accountCount: 1,
@@ -29,22 +30,37 @@ const status: WalletStatus = {
 // friendly label, so knownAccountType(...) is non-null and the type block renders.
 const OZ_CLASS_HASH = "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
 
-describe("accountFlow account-type block", () => {
-  test("renders the account type when the class hash is recognised", () => {
+describe("receive flow account-type block", () => {
+  test("renders the class hash and its type when the class hash is recognised", () => {
     const knownAccount: AccountRef = { ...account, classHash: OZ_CLASS_HASH };
     const knownStatus: WalletStatus = { ...status, accounts: [knownAccount] };
 
-    const html = accountFlow(knownStatus, knownAccount, preferences);
+    const html = dashboard("receive", knownStatus, [], preferences, { balances: [] });
 
-    // The identifiers render as a receipt: a "Type" row carries the label.
-    expect(html).toContain("<dt>Type</dt>");
+    // The identifiers sit with the public keys behind Pro: a "Class hash" row
+    // with its copy control, then a "Type" row naming the recognised contract.
+    expect(html).toContain("<strong>Class hash</strong>");
+    expect(html).toContain(`data-copy="${OZ_CLASS_HASH}"`);
+    expect(html).toContain("<strong>Type</strong>");
     expect(html).toContain("Bramble Account (OpenZeppelin AccountUpgradeable)");
   });
 
   test("omits the account type for an unrecognised class hash", () => {
-    // The default fixture account carries an arbitrary (unknown) class hash.
-    const html = accountFlow(status, account, preferences);
-    expect(html).not.toContain("<dt>Type</dt>");
+    // The default fixture account carries an arbitrary (unknown) class hash, so
+    // the hash is still shown and copyable while the type row drops out.
+    const html = dashboard("receive", status, [], preferences, { balances: [] });
+    expect(html).toContain("<strong>Class hash</strong>");
+    expect(html).not.toContain("<strong>Type</strong>");
+  });
+
+  test("keeps the account identifiers off the manage-accounts screen", () => {
+    // They moved to Receive wholesale: the manage screen names accounts and
+    // files them into folders, and hands out no identifiers at all.
+    const html = accountFlow(status, preferences);
+    expect(html).not.toContain(account.classHash);
+    expect(html).not.toContain(account.publicKeyX);
+    expect(html).not.toContain("Signer public key");
+    expect(html).not.toContain("verify-status");
   });
 });
 

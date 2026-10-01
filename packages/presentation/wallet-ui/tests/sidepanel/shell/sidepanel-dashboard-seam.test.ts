@@ -110,31 +110,31 @@ describe("dashboard umbrella-merge seam", () => {
     expect(reachableHome).not.toContain("On-chain history unavailable");
   });
 
-  test("threads the class-hash verification through to the account flow badge", () => {
-    const verified = renderSeam("account", { classHashVerification: VERIFIED });
+  test("threads the class-hash verification through to the Receive flow badge", () => {
+    const verified = renderSeam("receive", { classHashVerification: VERIFIED });
     expect(verified).toContain("verify-status verified");
     expect(verified).toContain("Verified on-chain");
 
-    const mismatch = renderSeam("account", { classHashVerification: MISMATCH });
+    const mismatch = renderSeam("receive", { classHashVerification: MISMATCH });
     expect(mismatch).toContain("verify-status mismatch");
     expect(mismatch).toContain("On-chain mismatch");
 
     // null is the honest still-loading state — never a silent verified badge.
-    const pending = renderSeam("account", { classHashVerification: null });
+    const pending = renderSeam("receive", { classHashVerification: null });
     expect(pending).toContain("verify-status pending");
     expect(pending).not.toContain("Verified on-chain");
   });
 
   test("routes the two seam params to distinct screens (no cross-contamination)", () => {
     // A swap or mis-route of the trailing pair would surface the wrong artifact
-    // on the wrong screen. The account flow must show the verification badge but
-    // never the activity history notice, even when historyUnavailable is set.
-    const accountView = renderSeam("account", {
+    // on the wrong screen. Receive must show the verification badge but never
+    // the activity history notice, even when historyUnavailable is set.
+    const receiveView = renderSeam("receive", {
       classHashVerification: VERIFIED,
       historyUnavailable: true,
     });
-    expect(accountView).toContain("Verified on-chain");
-    expect(accountView).not.toContain("load on-chain history");
+    expect(receiveView).toContain("Verified on-chain");
+    expect(receiveView).not.toContain("load on-chain history");
 
     // The activity screen must show the history notice but never the
     // verification badge, even when a verification result is threaded in.

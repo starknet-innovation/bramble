@@ -99,7 +99,6 @@ const mount = (options?: { readonly validate?: boolean }) => {
     validateMnemonic: () => Promise.resolve(options?.validate ?? true),
   } as unknown as SidepanelWallet;
   bindImportPhrase({
-    activeAccountId: () => null,
     app,
     existingAccountIds: () => new Set([accountAt(0, "openzeppelin").id]),
     expandedGroup: () => null,
