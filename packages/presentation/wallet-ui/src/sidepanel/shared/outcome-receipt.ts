@@ -92,7 +92,7 @@ export const outcomeReceiptSection = (id: string): string => `
     </div>
     <div class="send-actions" data-outcome-actions="succeeded">
       ${button({ attributes: { "data-outcome-action": "activity" }, icon: "activity", label: "View in Activity tab" })}
-      ${button({ attributes: { "data-view": "home" }, label: "Back", variant: "secondary" })}
+      ${button({ attributes: { "data-outcome-action": "home", "data-view": "home" }, label: "Back", variant: "secondary" })}
     </div>
     <div class="send-actions" data-outcome-actions="failed" hidden>
       ${button({ attributes: { "data-outcome-action": "retry" }, label: "Try again" })}
@@ -101,21 +101,33 @@ export const outcomeReceiptSection = (id: string): string => `
   </section>`;
 
 /**
- * Wires the receipt's own controls for `id`; Back needs nothing, because it
- * navigates through the shared `data-view` handler. `retry` is the journey's:
- * each starts again from its own review, so a refused fee is never reused.
- * Call once per rendered section — every call adds listeners.
+ * Wires the receipt's own controls for `id`. `retry` is the journey's: each
+ * starts again from its own review, so a refused fee is never reused.
+ *
+ * Back carries `data-view`, which the shell binds once per render. A receipt
+ * that is part of the rendered screen (the deployment) leaves it to that and
+ * omits `home`; one inserted after the render (the NFT transfer) passes `home`,
+ * or its Back does nothing. Passing `home` for a receipt the shell also binds
+ * would navigate twice. Call once per rendered section — every call adds
+ * listeners.
  */
 export const bindOutcomeReceipt = (
   root: ParentNode,
   id: string,
-  actions: { readonly activity: () => void; readonly retry: () => void },
+  actions: {
+    readonly activity: () => void;
+    readonly home?: () => void;
+    readonly retry: () => void;
+  },
 ): void => {
   const section = root.querySelector(`#${id}`);
   section?.querySelectorAll('[data-outcome-action="activity"]').forEach((control) => {
     control.addEventListener("click", actions.activity);
   });
   section?.querySelector('[data-outcome-action="retry"]')?.addEventListener("click", actions.retry);
+  if (actions.home) {
+    section?.querySelector('[data-outcome-action="home"]')?.addEventListener("click", actions.home);
+  }
 };
 
 /**

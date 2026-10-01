@@ -212,6 +212,8 @@ const prepareNft =
       app: context.app,
       // The lab has no wall clock to spend: the fixture chain answers at once.
       confirmationDelaysMs: [0],
+      // The receipt's ways off report to the event log, as Swap's do.
+      navigate: (view) => context.emit({ detail: `navigate ${view}`, kind: "state" }),
       openDetail: () => undefined,
       render: async () => undefined,
       wallet,

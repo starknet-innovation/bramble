@@ -373,6 +373,20 @@ describe("NFT transfer receipt", () => {
     expect(actionsShown(app, "failed")).toBe(false);
   });
 
+  // The receipt is rendered after the shell binds its `data-view` controls,
+  // so its ways off are the binding's to wire, or they do nothing.
+  test("the receipt's Activity and Back both leave the transfer", async () => {
+    const { app, navigations } = await transferTo("preconfirmed");
+    const [activity, back] = Array.from(
+      app.querySelectorAll<HTMLButtonElement>('[data-outcome-actions="succeeded"] button'),
+    );
+    expect(back?.textContent).toBe("Back");
+
+    activity?.click();
+    back?.click();
+    expect(navigations).toEqual(["activity", "home"]);
+  });
+
   // The chain's two refusals. Each turns the receipt into a failure in place —
   // heading, the chain's reason, mark, tone and toast — and never leaves
   // "Transfer complete" over a collectible that did not move.
