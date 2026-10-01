@@ -204,6 +204,7 @@ const paintDeployReceipt = async (
       {
         confirmedDescription: "This account is on Starknet and can submit transactions.",
         confirmedTitle: "Account deployed",
+        failedTitle: "Deployment failed",
         submittedTitle: "Deployment submitted",
       },
       hash,
