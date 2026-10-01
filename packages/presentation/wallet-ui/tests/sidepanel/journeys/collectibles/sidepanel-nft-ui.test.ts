@@ -78,6 +78,7 @@ const mount = (
   );
   document.body.append(app);
   const calls: Calls = { review: [], transfer: [] };
+  const navigations: string[] = [];
   const wallet = {
     async loadActivity() {
       if (!chainStatus) throw new Error("activity unavailable");
@@ -118,11 +119,14 @@ const mount = (
   bindNfts({
     app,
     ...(chainStatus ? { confirmationDelaysMs: [0] } : {}),
+    navigate: (view) => {
+      navigations.push(view);
+    },
     openDetail: () => undefined,
     render: async () => undefined,
     wallet: wallet as unknown as NftUiDeps["wallet"],
   });
-  return { app, calls };
+  return { app, calls, navigations };
 };
 
 const recipientInput = (app: Element): HTMLInputElement => {
@@ -324,6 +328,10 @@ describe("NFT send review", () => {
   });
 });
 
+// Which of the receipt's two sets of actions shows.
+const actionsShown = (app: Element, tone: "failed" | "succeeded"): boolean =>
+  app.querySelector(`[data-outcome-actions="${tone}"]`)?.hasAttribute("hidden") === false;
+
 const toastTexts = (tone: "error" | "success"): string[] =>
   Array.from(document.querySelectorAll(`.toast.${tone} .toast-text`)).map(
     (node) => node.textContent ?? "",
@@ -361,6 +369,8 @@ describe("NFT transfer receipt", () => {
     // The collectible has moved, so there is nothing here to send again.
     expect(submitButtonOf(app).hidden).toBe(true);
     expect(submitButtonOf(app).disabled).toBe(true);
+    expect(actionsShown(app, "succeeded")).toBe(true);
+    expect(actionsShown(app, "failed")).toBe(false);
   });
 
   // The chain's two refusals. Each turns the receipt into a failure in place —
@@ -393,24 +403,34 @@ describe("NFT transfer receipt", () => {
       expect(toastTexts("success")).toEqual([]);
     });
 
-    test(`a ${chainStatus} transfer can be reviewed and sent again`, async () => {
-      const { app, calls } = await transferTo(chainStatus);
+    test(`a ${chainStatus} transfer leads with Try again, which reviews afresh`, async () => {
+      const { app, calls, navigations } = await transferTo(chainStatus);
       const button = submitButtonOf(app);
 
-      // Not a dead "Confirm transfer": the collectible never moved, so the
-      // control comes back as a fresh review under the receipt.
-      expect(button.hidden).toBe(false);
-      expect(button.disabled).toBe(false);
-      expect(button.hasAttribute("data-busy")).toBe(false);
-      expect(button.textContent).toContain("Review transfer");
+      // One primary: the receipt's Try again. The form's control stays off the
+      // receipt, and Activity, where the failure is looked up, steps down.
+      expect(button.hidden).toBe(true);
+      expect(button.disabled).toBe(true);
       expect(app.querySelector("#nft-send-form")?.getAttribute("data-stage")).toBe("failed");
+      expect(actionsShown(app, "failed")).toBe(true);
+      expect(actionsShown(app, "succeeded")).toBe(false);
+      const [retry, activity] = Array.from(
+        app.querySelectorAll<HTMLButtonElement>('[data-outcome-actions="failed"] button'),
+      );
+      expect(retry?.textContent).toBe("Try again");
+      expect(retry?.classList.contains("secondary")).toBe(false);
+      expect(activity?.textContent).toContain("View in Activity tab");
+      expect(activity?.classList.contains("secondary")).toBe(true);
+      activity?.click();
+      expect(navigations).toEqual(["activity"]);
 
-      // The refused fee is not reused: the press reviews again first.
-      submit(app);
+      // The same recipient, reviewed afresh: the refused fee is not reused.
+      retry?.click();
       await flush();
       expect(calls.review).toHaveLength(2);
       expect(calls.transfer).toHaveLength(1);
       expect(app.querySelector("#nft-success")).toBeNull();
+      expect(button.hidden).toBe(false);
       expect(button.textContent).toContain("Confirm transfer");
 
       submit(app);

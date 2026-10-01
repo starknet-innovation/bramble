@@ -10,7 +10,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation, type ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { buttonBusy, errorLine, errorMessage, renderFragment, showToast } from "../../shared/dom";
 import {
-  outcomeReceiptActions,
+  bindOutcomeReceipt,
   outcomeReceiptFor,
   outcomeReceiptSection,
   paintOutcomeReceipt,
@@ -167,8 +167,8 @@ const bindSendForm = (deps: NftUiDeps): void => {
   let submission = 0;
   form.dataset["stage"] = "recipient";
 
-  // Drops the reviewed transfer, so the next press reviews again — with a
-  // fresh fee — rather than confirming what was already sent or refused.
+  // Drops the reviewed transfer, so nothing can confirm its fee again: the
+  // next press reviews afresh.
   const forgetReview = (stage: string): void => {
     reviewedKey = null;
     requiresDeployment = false;
@@ -176,11 +176,9 @@ const bindSendForm = (deps: NftUiDeps): void => {
     reviewedDeploymentFee = null;
     form.dataset["stage"] = stage;
     form.removeAttribute("aria-busy");
-    submitButton?.lastChild?.replaceWith("Review transfer");
-    submitButton?.removeAttribute("hidden");
-    buttonBusy(submitButton, false);
   };
 
+  // Back to the recipient: clears any receipt and hands the control back.
   const resetReview = (): void => {
     submission += 1;
     forgetReview("recipient");
@@ -188,6 +186,9 @@ const bindSendForm = (deps: NftUiDeps): void => {
     if (reviewPanel) {
       renderFragment(reviewPanel, "");
     }
+    submitButton?.lastChild?.replaceWith("Review transfer");
+    submitButton?.removeAttribute("hidden");
+    buttonBusy(submitButton, false);
   };
 
   form.addEventListener("input", resetReview);
@@ -285,23 +286,25 @@ const bindSendForm = (deps: NftUiDeps): void => {
           const stillCurrent = (): boolean => form.isConnected && current === submission;
           form.dataset["stage"] = "submitted";
           form.removeAttribute("aria-busy");
-          // The receipt's own actions are the way on, so the form's control
-          // leaves rather than sitting under it disabled — and stays disabled,
-          // so Enter in the recipient field cannot submit through it. A
-          // refusal hands it back below.
+          // The receipt's own actions are the way on — Try again included, on
+          // a refusal — so the form's control leaves rather than sitting under
+          // it disabled, and stays disabled so Enter in the recipient field
+          // cannot submit through it.
           if (submitButton) {
             submitButton.disabled = true;
             submitButton.hidden = true;
           }
           if (reviewPanel) {
-            renderFragment(
-              reviewPanel,
-              outcomeReceiptSection("nft-success", outcomeReceiptActions("nft-view-activity")),
-            );
+            renderFragment(reviewPanel, outcomeReceiptSection("nft-success"));
             reviewPanel.querySelector("#nft-success")?.removeAttribute("hidden");
-            reviewPanel
-              .querySelector("#nft-view-activity")
-              ?.addEventListener("click", () => deps.navigate?.("activity"));
+            bindOutcomeReceipt(reviewPanel, "nft-success", {
+              activity: () => deps.navigate?.("activity"),
+              // The same recipient, reviewed afresh: a new fee, then Confirm.
+              retry: () => {
+                resetReview();
+                form.requestSubmit();
+              },
+            });
           }
           if (result) {
             result.textContent = "";
@@ -319,9 +322,9 @@ const bindSendForm = (deps: NftUiDeps): void => {
             if (!stillCurrent()) return;
             await paintNftReceipt(deps, reviewPanel, outcome, transactionHash);
             if (!stillCurrent()) return;
-            // The chain refused it, so the collectible never moved: the control
-            // comes back as a fresh review under the receipt that says why,
-            // not as a dead "Confirm transfer".
+            // The chain refused it, so the collectible never moved and the
+            // receipt's Try again is the way on. The refused review is dropped
+            // rather than kept to confirm again.
             if (outcome?.kind === "failed") forgetReview("failed");
             if (outcome) {
               showToast(

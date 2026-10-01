@@ -56,7 +56,7 @@ import {
 } from "../../journeys/settings/settings-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
-import { outcomeReceiptActions, outcomeReceiptSection } from "../../shared/outcome-receipt";
+import { outcomeReceiptSection } from "../../shared/outcome-receipt";
 import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
@@ -134,7 +134,7 @@ const deployAccountFlow = (
               })}
               <p id="deploy-result" role="status"></p>
             </section>
-            ${outcomeReceiptSection("deploy-success", outcomeReceiptActions("deploy-view-activity"))}`
+            ${outcomeReceiptSection("deploy-success")}`
           : noAccountEmpty(status)
       }
     </section>`,

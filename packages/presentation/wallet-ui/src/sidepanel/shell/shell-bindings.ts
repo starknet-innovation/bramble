@@ -19,7 +19,11 @@ import {
   scopedStatus,
   showToast,
 } from "../shared/dom";
-import { outcomeReceiptFor, paintOutcomeReceipt } from "../shared/outcome-receipt";
+import {
+  bindOutcomeReceipt,
+  outcomeReceiptFor,
+  paintOutcomeReceipt,
+} from "../shared/outcome-receipt";
 import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
 
@@ -257,10 +261,8 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     buttonBusy(target, false);
   };
 
-  // Quoted once per mounted screen. The binder runs on every paint, and the
-  // repaint that follows the quote would otherwise ask for another.
-  if (!QUOTED_DEPLOYMENTS.has(target) && !target.disabled) {
-    QUOTED_DEPLOYMENTS.add(target);
+  // Without a fee, the background quotes rather than deploys.
+  const quote = (): void => {
     buttonBusy(target, true);
     scopedStatus(target, "Estimating fee…");
     void deps.wallet.deployAccount().then(
@@ -271,11 +273,28 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       },
       (error: unknown) => failed(error, "Could not estimate the deployment fee"),
     );
+  };
+
+  // Quoted once per mounted screen. The binder runs on every paint, and the
+  // repaint that follows the quote would otherwise ask for another.
+  if (!QUOTED_DEPLOYMENTS.has(target) && !target.disabled) {
+    QUOTED_DEPLOYMENTS.add(target);
+    quote();
   }
 
-  deps.app
-    ?.querySelector("#deploy-view-activity")
-    ?.addEventListener("click", () => deps.setActiveView("activity"));
+  if (deps.app) {
+    bindOutcomeReceipt(deps.app, "deploy-success", {
+      activity: () => deps.setActiveView("activity"),
+      // A refused deployment changed nothing, so retrying is the screen it
+      // started on, quoted afresh: the refused fee is not offered again.
+      retry: () => {
+        successStage?.setAttribute("hidden", "");
+        reviewStage?.removeAttribute("hidden");
+        if (reviewPanelRoot) renderFragment(reviewPanelRoot, "");
+        quote();
+      },
+    });
+  }
   target.addEventListener("click", () => {
     buttonBusy(target, true);
     scopedStatus(target, "Submitting deployment…");
