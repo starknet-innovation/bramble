@@ -204,6 +204,34 @@ describe("Receive address and wallet card", () => {
     ).toBe("true");
   });
 
+  test("shows the wrong-network warning by default, outside the Advanced fields", () => {
+    const app = render();
+    bindReceiveWalletCard({
+      app,
+      render: async () => undefined,
+      wallet: { loadNostrPublicKey: async () => "11".repeat(32) } as unknown as SidepanelWallet,
+    });
+
+    const hints = [...app.querySelectorAll<HTMLElement>("p.hint")].filter(
+      (hint) => hint.textContent === "Share this account.",
+    );
+    // Rendered once, and not inside anything hidden: sending on the wrong
+    // network loses funds, so the warning never waits behind Advanced.
+    expect(hints).toHaveLength(1);
+    expect(hints[0]?.closest("[hidden]")).toBeNull();
+    expect(hints[0]?.closest("#receive-advanced-fields")).toBeNull();
+  });
+
+  test("shows the warning for an account without a signer key too", () => {
+    const html = receiveAddressView({
+      address: account.address,
+      copyLabel: "Copy address",
+      hint: "Multisig.",
+      networkId: account.networkId,
+    });
+    expect(html.match(/Multisig\./g)).toHaveLength(1);
+  });
+
   test("keeps the contact card and the keys behind the Advanced switch", () => {
     const app = render();
     bindReceiveWalletCard({
