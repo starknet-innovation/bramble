@@ -10,6 +10,9 @@ import { applyOutcomeHash } from "../../shared/outcome-hash";
 import { reviewFeeBlocked } from "../../shared/review-render";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
+  TRANSFER_FAILURE_TITLE,
+  TRANSFER_SENT_FAILURE_REASON,
+  TRANSFER_SENT_FAILURE_TITLE,
   type TransferMode,
   transferModeCopy,
   transferModeFor,
@@ -256,7 +259,19 @@ export const applyTransferUi = (
     applyOutcomeHash(form, id, state.transactionHash ?? "", form.dataset["sendNetwork"] ?? "");
   }
   if (state.stage === "failed") {
-    const reason = state.error || "The transaction was not sent. Your balance is unchanged.";
+    // A hash means it was submitted: the chain rejected or reverted it, so the
+    // heading must not say "not sent", and the balance may have paid a fee.
+    const submitted = Boolean(state.transactionHash);
+    setText(
+      form,
+      "send-failure-title",
+      submitted ? TRANSFER_SENT_FAILURE_TITLE : TRANSFER_FAILURE_TITLE,
+    );
+    const reason =
+      state.error ||
+      (submitted
+        ? TRANSFER_SENT_FAILURE_REASON
+        : "The transaction was not sent. Your balance is unchanged.");
     setText(form, "send-failure-copy", reason);
     // What is worth taking to support is the reason, not the identifier the
     // transaction never got. The hash, when there is one, copies from its own
