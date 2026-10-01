@@ -8,6 +8,7 @@ import type { NftOwnership } from "@bramble/starknet/rpc-assets";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -26,64 +27,83 @@ const account: AccountRef = {
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
-const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
+const ledgerAccount: AccountRef = {
+  ...account,
+  derivation: {
+    accountIndex: 0,
+    eip2645application: LEDGER_EIP2645_APPLICATION,
+    kind: "ledger",
+    path: ledgerAccountPath(0),
+  },
+};
 const vaultPassphrase = "correct horse battery staple";
 const sender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
 };
 
-const walletStub = {
+const stubFor = (acct: AccountRef) => ({
   async addDerivedAccount() {
-    return account;
+    return acct;
   },
   async createAccount() {
-    return account;
+    return acct;
   },
   async ensureNetworkAccount() {
-    return account;
+    return acct;
   },
   async getGrantedAccounts() {
-    return [account];
+    return [acct];
   },
   async generateMnemonic() {
     return "unused";
   },
   async grantOrigin() {
-    return [account];
+    return [acct];
   },
   async readVault() {
-    return vault;
+    return { accounts: [acct], activeAccountId: acct.id } as unknown as Vault;
   },
   async setActiveAccount() {
-    return account;
+    return acct;
   },
   async signHash() {
-    return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+    return { publicKey: acct.publicKeyX, r: "0x1", s: "0x2" };
   },
   async status() {
     return {
       accountCount: 1,
-      activeAccountId: account.id,
+      activeAccountId: acct.id,
       hasVault: true,
       locked: false,
       ready: false,
     };
   },
-};
-
-const makeHarness = (options?: { readonly owner?: string; readonly ownership?: NftOwnership }) => {
+});
+const makeHarness = (options?: {
+  readonly account?: AccountRef;
+  readonly deployed?: boolean;
+  readonly owner?: string;
+  readonly ownership?: NftOwnership;
+}) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const invokeCalls: (readonly unknown[])[] = [];
   const ownership = options?.ownership;
-  const handler = createMessageHandler(walletStub, testExtension, {
+  const handler = createMessageHandler(stubFor(options?.account ?? account), testExtension, {
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     runtimeRpc: makeRuntimeRpc({
       ...(ownership
         ? {
             async getNftOwnership() {
               return ownership;
+            },
+          }
+        : {}),
+      ...(options?.deployed === false
+        ? {
+            async getDeploymentStatus() {
+              return false;
             },
           }
         : {}),
@@ -182,12 +202,36 @@ describe("NFT gallery messages", () => {
         feeEstimateFailed: false,
         flags: [],
         requiresDeployment: false,
+        signsTwice: false,
       },
     });
     const summaries = (response as { review: { summaries: readonly string[] } }).review.summaries;
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toContain("Send NFT #5");
     expect(invokeCalls).toHaveLength(0);
+  });
+
+  test("tells a Ledger user the NFT send signs twice when it also deploys the account", async () => {
+    // The ERC-20 review already says so; the NFT review feeds the same renderer
+    // and must not leave the second device prompt as a surprise.
+    const review = { contract: CONTRACT, networkId: "SN_MAIN", recipient: "0x777", tokenId: "5" };
+    const ledger = await makeHarness({ account: ledgerAccount, deployed: false }).handler(
+      { ...review, type: "wallet.reviewNftTransfer" },
+      sender,
+    );
+    expect(ledger).toMatchObject({
+      ok: true,
+      review: { requiresDeployment: true, signsTwice: true },
+    });
+
+    const software = await makeHarness({ deployed: false }).handler(
+      { ...review, type: "wallet.reviewNftTransfer" },
+      sender,
+    );
+    expect(software).toMatchObject({
+      ok: true,
+      review: { requiresDeployment: true, signsTwice: false },
+    });
   });
 
   test("watches and sends an ERC1155 edition through safe_transfer_from", async () => {

@@ -1,7 +1,6 @@
 /** Side-panel template and navigation contract checks. */
 import { describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
-import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard, WALLET_VIEWS } from "../../../../src/sidepanel/app/screens/views";
 import {
@@ -182,35 +181,26 @@ describe("sidepanel views", () => {
     expect(html).toMatch(/id="send-review-button" type="submit" disabled/);
   });
 
-  test("shows a deployment recovery chip only when the account is not deployed", () => {
+  test("Home says nothing about an account that is not on chain yet", () => {
+    // Home used to carry a "Deploy account" / "Fund with STRK" chip in the
+    // danger colour. The first send creates the account and quotes both fees as
+    // one, so the state is normal and the shortcut lives in Security &
+    // permissions instead.
     const undeployed = dashboard("home", status, [], preferences, { balances: [] }, false);
-    const deployed = dashboard("home", status, [], preferences, { balances: [] }, true);
-    const unknown = dashboard("home", status, [], preferences, { balances: [] }, null);
 
-    expect(undeployed).toContain('class="deploy-notice"');
-    expect(deployed).not.toContain('class="deploy-notice"');
-    expect(unknown).not.toContain('class="deploy-notice"');
-  });
-
-  test("deploying stays disabled until the account can pay the fee in STRK", () => {
-    // Fees are paid in STRK, so only a STRK balance unlocks deployment.
-    const strkBalance = {
-      address: STRK_TOKEN_ADDRESS,
-      balance: "0x1",
-      decimals: 18,
-      formatted: "0.000000000000000001",
-      id: `SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`,
-      name: "Starknet Token",
-      networkId: "SN_MAIN" as const,
-      symbol: "STRK",
-    };
-    const empty = dashboard("home", status, [], preferences, { balances: [] }, false);
-    const funded = dashboard("home", status, [], preferences, { balances: [strkBalance] }, false);
-
-    expect(empty).toContain('data-view="receive"');
-    expect(empty).toContain("Fund with STRK");
-    expect(funded).toContain('data-view="deploy-account"');
-    expect(funded).toContain("Deploy account");
+    expect(undeployed).not.toContain("deploy-notice");
+    expect(undeployed).not.toContain("Deploy account");
+    expect(undeployed).not.toContain('data-view="deploy-account"');
+    // The Shield tile's own "Fund with STRK" is a different control and stays:
+    // shielding really does need STRK, whatever the account's deploy state.
+    // The dedicated deployment flow is still reachable by its own route, and
+    // that route has a way in: the Settings hub links to Security & permissions.
+    expect(dashboard("security", status, [], preferences, { balances: [] }, false)).toContain(
+      'data-view="deploy-account"',
+    );
+    expect(dashboard("settings", status, [], preferences, { balances: [] }, false)).toContain(
+      'data-view="security"',
+    );
   });
 
   test("deploys a single-signer account in a dedicated transaction flow", () => {

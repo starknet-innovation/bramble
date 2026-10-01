@@ -42,12 +42,6 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     justify-content: center;
     width: 34px;
   }
-  .deploy-notice { display: grid; gap: 2px; justify-items: start; }
-  button.deploy-chip { color: var(--bramble-danger); }
-  @media (hover: hover) and (pointer: fine) {
-    button.deploy-chip:not(:disabled):hover { background: var(--bramble-danger-soft); }
-  }
-  button.deploy-chip:not(:disabled):active { background: var(--bramble-danger-soft); }
   .callout-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .callout-copy strong { font-size: ${TYPE.body.size}; }
   .callout-copy p { font-size: ${TYPE.caption.size}; }
@@ -219,6 +213,11 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
 ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
+  /* The total is what the account pays; the deployment share explains it and
+     sits quieter, so the figure a user acts on is the one that reads first. */
+  .review-fee > p { margin: 0; }
+  .review-fee > p:first-child { color: var(--bramble-text); }
+  .review-fee-part { font-size: ${TYPE.micro.size}; }
   .tx-hint { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
   /* Allowances: one grouped surface, flat rows with inset dividers. */
   .allowance-list {
