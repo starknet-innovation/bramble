@@ -18,6 +18,7 @@ import {
 import { estimateExactInvokeFee } from "./invoke-fee";
 import {
   argentQueryAccount,
+  IndeterminateRpcWriteError,
   krustyAccount,
   matchingAcceptedRpcWriteHash,
   type StarkHashSigner,
@@ -199,6 +200,16 @@ const invokeJournal = (onSigned: InvokeInput["onSigned"], senderAddress: string)
   };
 };
 
+// A failure after an automatic deployment names the deployment, whose fee is
+// spent. A lost invoke reply stays indeterminate so callers never offer a
+// blind retry of a transaction that may already be on chain (audit #173).
+const postDeploymentFailure = (deploymentHash: string, error: unknown): WalletError => {
+  const message = `Account deployment ${deploymentHash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.`;
+  return error instanceof IndeterminateRpcWriteError
+    ? new IndeterminateRpcWriteError(message)
+    : new WalletError(message);
+};
+
 /**
  * Signs and submits generic Starknet invoke calls exactly once after selecting
  * a chain-matching RPC endpoint. Once submission starts, transport ambiguity
@@ -276,13 +287,16 @@ export const submitInvokeTransaction = async (
             isAuthorized,
           );
       const invokeHashIndex = capturedTransactionHashes.length;
-      const details = {
-        ...(await journal.pin(starknetAccount)),
-        ...(resourceBounds === null ? {} : { resourceBounds }),
-        ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
-        tip: "0x0",
-      };
       try {
+        // The nonce read runs inside the deployment-aware handler: if it fails
+        // right after a fresh deployment, the user must still learn that the
+        // deployment (and its fee) went through (mc-wallet #474 item 3).
+        const details = {
+          ...(await journal.pin(starknetAccount)),
+          ...(resourceBounds === null ? {} : { resourceBounds }),
+          ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
+          tip: "0x0",
+        };
         assertAuthorized(isAuthorized);
         journal.arm();
         const result = await starknetAccount.execute(
@@ -297,12 +311,7 @@ export const submitInvokeTransaction = async (
           ),
         };
       } catch (error) {
-        if (deployment) {
-          throw new WalletError(
-            `Account deployment ${deployment.transactionHash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.`,
-          );
-        }
-        throw error;
+        throw deployment ? postDeploymentFailure(deployment.transactionHash, error) : error;
       }
     },
     makeProvider,

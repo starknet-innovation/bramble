@@ -291,4 +291,24 @@ describe("resolving a stuck privacy write", () => {
     expect(await backing.read(scope)).toEqual(newer);
     expect(reads.some((read) => read.startsWith("wait:"))).toBe(false);
   });
+
+  test("fails closed when a newer send replaces the marker during the receipt wait", async () => {
+    const store = await seeded({ state: "submitted", transactionHash: "0x456" });
+    const newer: Strk20MaturityRecord = { state: "submitted", transactionHash: "0x789" };
+    const { provider: base } = node({
+      blocks: [100],
+      receipt: { block_number: 50, success: true },
+    });
+    const provider = Object.assign(Object.create(base) as RpcProvider, {
+      waitForTransaction: async () => {
+        // A serialized submission moves the scope to its own transaction
+        // while this caller is still waiting on the old one.
+        await store.write(scope, newer);
+        return { block_number: 50, isSuccess: () => true };
+      },
+    });
+
+    await expect(runtimeFor(store).provingBlock(provider, scope)).rejects.toThrow(STATUS_UNKNOWN);
+    expect(await store.read(scope)).toEqual(newer);
+  });
 });

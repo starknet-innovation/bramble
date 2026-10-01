@@ -1,7 +1,8 @@
 /** Auto-deploy invoke ordering and durable-side-effect disclosure. */
 
 import { describe, expect, test } from "bun:test";
-import { submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { type InvokeInput, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { type Call, CallData, hash, logger, type RpcProvider } from "starknet";
 
@@ -44,13 +45,22 @@ type Seen = {
   signedHashes: string[];
 };
 
-const undeployedProvider = (invokeHash: string | null): { provider: RpcProvider; seen: Seen } => {
+const undeployedProvider = (
+  invokeHash: string | null,
+  nonceAfterDeploy: "ok" | "fails" = "ok",
+): { provider: RpcProvider; seen: Seen } => {
   const seen: Seen = { deploys: 0, estimateBatchSizes: [], invokes: 0, signedHashes: [] };
   const channel = new Proxy(
     {
       async deployAccount() {
         seen.deploys += 1;
         return { transaction_hash: seen.signedHashes[0] };
+      },
+      async getNonceForAddress() {
+        if (nonceAfterDeploy === "fails" && seen.deploys > 0) {
+          throw Object.assign(new Error("internal error"), { baseError: { code: -32603 } });
+        }
+        return "0x0";
       },
       async getEstimateFee(invocations: readonly unknown[]) {
         seen.estimateBatchSizes.push(invocations.length);
@@ -74,7 +84,6 @@ const undeployedProvider = (invokeHash: string | null): { provider: RpcProvider;
         const responses: Readonly<Record<string, unknown>> = {
           getBlockWithTxs: { block_number: 1, timestamp: 1, transactions: [] },
           getChainId: "0x534e5f4d41494e",
-          getNonceForAddress: "0x0",
           specVersion: "0.8.1",
         };
         return async () => responses[String(property)];
@@ -100,10 +109,12 @@ const submit = async (
   provider: RpcProvider,
   reviewedFee: string,
   signedHashes: string[],
+  onSigned?: InvokeInput["onSigned"],
 ): Promise<unknown> =>
   submitInvokeTransaction(
     {
       account,
+      ...(onSigned ? { onSigned } : {}),
       calls,
       reviewedDeploymentFee: { overallFee: "100000", unit: "FRI" },
       reviewedFee: { overallFee: reviewedFee, unit: "FRI" },
@@ -129,13 +140,17 @@ describe("auto-deployed invoke submission", () => {
   });
 
   test.each([
-    ["a rejected invoke", null],
-    ["a malformed invoke success hash", "not-a-hash"],
-  ])("reports the accepted deployment hash after %s", async (_label, invokeHash) => {
+    ["a rejected invoke", null, false],
+    ["a malformed invoke success hash", "not-a-hash", true],
+  ])("reports the accepted deployment hash after %s", async (_label, invokeHash, unknown) => {
     const { provider, seen } = undeployedProvider(invokeHash);
     const result = await submit(provider, "100000", seen.signedHashes);
 
     expect(result).toBeInstanceOf(Error);
+    // Audit #173: an invoke whose outcome is unknown must stay typed as
+    // indeterminate after the deployment re-wrap, or the Send screen offers
+    // a blind re-sign of a transfer that may already be on chain.
+    expect(result instanceof IndeterminateRpcWriteError).toBe(unknown);
     expect((result as Error).message).toContain(
       `Account deployment ${seen.signedHashes[0]} completed`,
     );
@@ -143,5 +158,21 @@ describe("auto-deployed invoke submission", () => {
     expect(seen.estimateBatchSizes).toEqual([2, 1]);
     expect(seen.deploys).toBe(1);
     expect(seen.invokes).toBe(1);
+  });
+
+  test("names the completed deployment when the invoke nonce read fails after it", async () => {
+    const { provider, seen } = undeployedProvider("0xcafe", "fails");
+    const journaled: unknown[] = [];
+    const result = await submit(provider, "100000", seen.signedHashes, async (signed) => {
+      journaled.push(signed);
+    });
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain(
+      `Account deployment ${seen.signedHashes[0]} completed`,
+    );
+    expect(seen.deploys).toBe(1);
+    expect(seen.invokes).toBe(0);
+    expect(journaled).toEqual([]);
   });
 });
