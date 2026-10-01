@@ -1,0 +1,467 @@
+{
+  "status": {
+    "judged": [
+      {
+        "reply": {
+          "result": {
+            "execution_status": "SUCCEEDED",
+            "finality_status": "RECEIVED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "pending"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "REVERTED",
+            "finality_status": "RECEIVED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "reverted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "finality_status": "RECEIVED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "pending"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "SUCCEEDED",
+            "finality_status": "CANDIDATE"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "pending"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "REVERTED",
+            "finality_status": "CANDIDATE"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "reverted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "finality_status": "CANDIDATE"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "pending"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "SUCCEEDED",
+            "finality_status": "PRE_CONFIRMED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "preconfirmed"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "REVERTED",
+            "finality_status": "PRE_CONFIRMED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "reverted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "finality_status": "PRE_CONFIRMED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "preconfirmed"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "SUCCEEDED",
+            "finality_status": "ACCEPTED_ON_L2"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "accepted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "REVERTED",
+            "finality_status": "ACCEPTED_ON_L2"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "reverted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "finality_status": "ACCEPTED_ON_L2"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "accepted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "SUCCEEDED",
+            "finality_status": "ACCEPTED_ON_L1"
+          }
+        },
+        "report": {
+          "finalizedOnL1": true,
+          "found": true,
+          "status": "accepted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "REVERTED",
+            "finality_status": "ACCEPTED_ON_L1"
+          }
+        },
+        "report": {
+          "finalizedOnL1": true,
+          "found": true,
+          "status": "reverted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "finality_status": "ACCEPTED_ON_L1"
+          }
+        },
+        "report": {
+          "finalizedOnL1": true,
+          "found": true,
+          "status": "accepted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "SUCCEEDED",
+            "finality_status": "REJECTED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "rejected"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "REVERTED",
+            "finality_status": "REJECTED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "reverted"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "finality_status": "REJECTED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "rejected"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "SUCCEEDED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "pending"
+        }
+      },
+      {
+        "reply": {
+          "result": {
+            "execution_status": "REVERTED"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "reverted"
+        }
+      },
+      {
+        "reply": {
+          "result": {}
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "pending"
+        }
+      },
+      {
+        "reply": {
+          "error": {
+            "code": 29,
+            "message": "Transaction hash not found"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": false,
+          "status": "pending"
+        }
+      },
+      {
+        "reply": {
+          "error": {
+            "code": 1,
+            "message": "transaction hash not found"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": false,
+          "status": "pending"
+        }
+      },
+      {
+        "reply": {
+          "error": {
+            "code": 24,
+            "message": "Block not found"
+          }
+        },
+        "report": {
+          "finalizedOnL1": false,
+          "found": true,
+          "status": "pending"
+        }
+      }
+    ],
+    "monotonic": [
+      {
+        "current": "pending",
+        "merged": "pending",
+        "observed": "pending"
+      },
+      {
+        "current": "pending",
+        "merged": "preconfirmed",
+        "observed": "preconfirmed"
+      },
+      {
+        "current": "pending",
+        "merged": "accepted",
+        "observed": "accepted"
+      },
+      {
+        "current": "pending",
+        "merged": "rejected",
+        "observed": "rejected"
+      },
+      {
+        "current": "pending",
+        "merged": "reverted",
+        "observed": "reverted"
+      },
+      {
+        "current": "preconfirmed",
+        "merged": "preconfirmed",
+        "observed": "pending"
+      },
+      {
+        "current": "preconfirmed",
+        "merged": "preconfirmed",
+        "observed": "preconfirmed"
+      },
+      {
+        "current": "preconfirmed",
+        "merged": "accepted",
+        "observed": "accepted"
+      },
+      {
+        "current": "preconfirmed",
+        "merged": "rejected",
+        "observed": "rejected"
+      },
+      {
+        "current": "preconfirmed",
+        "merged": "reverted",
+        "observed": "reverted"
+      },
+      {
+        "current": "accepted",
+        "merged": "accepted",
+        "observed": "pending"
+      },
+      {
+        "current": "accepted",
+        "merged": "accepted",
+        "observed": "preconfirmed"
+      },
+      {
+        "current": "accepted",
+        "merged": "accepted",
+        "observed": "accepted"
+      },
+      {
+        "current": "accepted",
+        "merged": "rejected",
+        "observed": "rejected"
+      },
+      {
+        "current": "accepted",
+        "merged": "reverted",
+        "observed": "reverted"
+      },
+      {
+        "current": "rejected",
+        "merged": "rejected",
+        "observed": "pending"
+      },
+      {
+        "current": "rejected",
+        "merged": "rejected",
+        "observed": "preconfirmed"
+      },
+      {
+        "current": "rejected",
+        "merged": "rejected",
+        "observed": "accepted"
+      },
+      {
+        "current": "rejected",
+        "merged": "rejected",
+        "observed": "rejected"
+      },
+      {
+        "current": "rejected",
+        "merged": "rejected",
+        "observed": "reverted"
+      },
+      {
+        "current": "reverted",
+        "merged": "reverted",
+        "observed": "pending"
+      },
+      {
+        "current": "reverted",
+        "merged": "reverted",
+        "observed": "preconfirmed"
+      },
+      {
+        "current": "reverted",
+        "merged": "reverted",
+        "observed": "accepted"
+      },
+      {
+        "current": "reverted",
+        "merged": "reverted",
+        "observed": "rejected"
+      },
+      {
+        "current": "reverted",
+        "merged": "reverted",
+        "observed": "reverted"
+      }
+    ],
+    "notFoundThreshold": 3,
+    "fastObservationPeriodMinutes": 1,
+    "unresolvedWindowMs": 3600000,
+    "l1FinalityWindowMs": 604800000,
+    "maxAlertsPerDrain": 5,
+    "notices": [
+      {
+        "message": "Bramble could not confirm \"Send 1.5 STRK to 0x1…0x1\". Check it on an explorer before retrying.",
+        "status": "pending",
+        "summary": "Send 1.5 STRK to 0x1…0x1"
+      },
+      {
+        "message": "Bramble could not confirm \"Send 1.5 STRK to 0x1…0x1\". Check it on an explorer before retrying.",
+        "status": "preconfirmed",
+        "summary": "Send 1.5 STRK to 0x1…0x1"
+      },
+      {
+        "message": "Bramble could not confirm \"Send 1.5 STRK to 0x1…0x1\". Check it on an explorer before retrying.",
+        "status": "accepted",
+        "summary": "Send 1.5 STRK to 0x1…0x1"
+      },
+      {
+        "message": "Starknet dropped \"Send 1.5 STRK to 0x1…0x1\" after confirming it. The transaction did not happen.",
+        "status": "rejected",
+        "summary": "Send 1.5 STRK to 0x1…0x1"
+      },
+      {
+        "message": "Starknet reverted \"Send 1.5 STRK to 0x1…0x1\" after confirming it. Check its activity details before retrying.",
+        "status": "reverted",
+        "summary": "Send 1.5 STRK to 0x1…0x1"
+      }
+    ],
+    "slowObservationPeriodMinutes": 15
+  }
+}

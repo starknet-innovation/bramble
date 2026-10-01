@@ -75,18 +75,23 @@ const activityState = (candidate: RecoveryAccountCandidate): string => {
     : "No on-chain activity found";
 };
 
-// A Braavos account is restored to be seen, not yet used: say so before the
-// user picks it, rather than after a send fails. It is never offered for
-// deployment either, since Bramble does not deploy Braavos accounts.
-const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
+/**
+ * The hint under one discovered account row. A Braavos account is restored to be seen, not yet
+ * used: say so before the user picks it, rather than after a send fails. It is never offered for
+ * deployment either, since Bramble does not deploy Braavos accounts. Exported so the mobile parity
+ * fixture pins the native apps to the same wording.
+ */
+export const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
   if (duplicate) return "Already in this wallet";
   if (candidate.account.accountContractType !== "braavos") return activityState(candidate);
   return `${candidate.deployed ? "Deployed on Starknet" : "Funded, not deployed"} · view only for now`;
 };
 
-// Two Argent releases at one index are two accounts. Name the release on any
-// but the one Bramble creates, so rows that share an index can be told apart.
-const candidateTitle = (candidate: RecoveryAccountCandidate): string => {
+/**
+ * The title of one discovered account row. Two Argent releases at one index are two accounts, so
+ * any release but the one Bramble creates is named. Exported for the mobile parity fixture.
+ */
+export const candidateTitle = (candidate: RecoveryAccountCandidate): string => {
   const { account } = candidate;
   const title = `Account ${account.derivation.accountIndex}`;
   if (
@@ -99,11 +104,13 @@ const candidateTitle = (candidate: RecoveryAccountCandidate): string => {
   return release ? `${title} · Argent ${release}` : title;
 };
 
-// Bramble creates only Bramble accounts: any other candidate with no on-chain
-// history would be a brand-new deployment in a family Bramble does not create,
-// so it is listed but not selectable. Deployed or funded (counterfactual)
-// accounts in those families stay importable.
-const selectable = (candidate: RecoveryAccountCandidate): boolean =>
+/**
+ * Whether a discovered row may be checked. Bramble creates only Bramble accounts: any other
+ * candidate with no on-chain history would be a brand-new deployment in a family Bramble does not
+ * create, so it is listed but not selectable. Deployed or funded (counterfactual) accounts in
+ * those families stay importable. Exported for the mobile parity fixture.
+ */
+export const selectable = (candidate: RecoveryAccountCandidate): boolean =>
   candidate.account.accountContractType === "openzeppelin" ||
   candidate.deployed ||
   candidate.funded;

@@ -317,6 +317,52 @@ describe("Nostr multisig relay", () => {
     ).resolves.toEqual([giftWrap]);
   });
 
+  // Mobile parity (mobile/docs/nostr-multisig.md §3.4): malformed frames are ignored, not fatal.
+  test("ignores an oversized frame and keeps reading the subscription", async () => {
+    const giftWrap = event("99".repeat(32));
+    const factory = socketFactory([], (frame, socket) => {
+      socket.onmessage?.(
+        new MessageEvent("message", {
+          data: JSON.stringify(["NOTICE", "x".repeat(140_001)]),
+        }),
+      );
+      socket.onmessage?.(new MessageEvent("message", { data: "not json" }));
+      socket.onmessage?.(
+        new MessageEvent("message", { data: JSON.stringify(["EVENT", frame[1], {}, 1, 2]) }),
+      );
+      socket.onmessage?.(
+        new MessageEvent("message", { data: JSON.stringify(["EVENT", frame[1], giftWrap]) }),
+      );
+      socket.onmessage?.(new MessageEvent("message", { data: JSON.stringify(["EOSE", frame[1]]) }));
+    });
+
+    await expect(
+      syncNostrGiftWraps(RECIPIENT, 1, {
+        relayUrls: ["wss://relay.team.example"],
+        socketFactory: factory,
+      }),
+    ).resolves.toEqual([giftWrap]);
+  });
+
+  // Mobile parity: a relay that fails after sending events keeps them.
+  test("keeps the events a relay sent before a socket error", async () => {
+    const wraps = [event("01".repeat(32)), event("02".repeat(32))];
+    const factory = socketFactory([], (frame, socket) => {
+      for (const wrap of wraps) {
+        socket.onmessage?.(
+          new MessageEvent("message", { data: JSON.stringify(["EVENT", frame[1], wrap]) }),
+        );
+      }
+      socket.onerror?.(new Event("error"));
+    });
+
+    const candidates = await syncNostrGiftWraps(RECIPIENT, 1, {
+      relayUrls: ["wss://relay.team.example"],
+      socketFactory: factory,
+    });
+    expect(candidates).toHaveLength(2);
+  });
+
   test("round-trips a gift wrap through one user-selected relay", async () => {
     const relayUrl = "wss://relay.team.example/multisig";
     const stored: ReturnType<typeof event>[] = [];

@@ -1,0 +1,223 @@
+{
+  "accounts": [
+    {
+      "accountIndex": 0,
+      "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_SEPOLIA",
+      "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+      "signatureR": "0x6a4ee14cdd66ba20473b5ad91c73401f71ffd77fe1afa042eaa0877e5a091bd",
+      "signatureS": "0x3d18b5fb72c48c6e963e6da191d917c24fe01bd588b7ec9b985426770c57abf"
+    },
+    {
+      "accountIndex": 1,
+      "address": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_SEPOLIA",
+      "publicKeyX": "0x7873b5322cbee02f90349e3dea6af8daa6e26dec9b13940b7ab7358617f32bd",
+      "signatureR": "0x2de57205bbfe957c6052bd4205e44429dc5b4ac4c5c8e794bff8066d01c9f75",
+      "signatureS": "0x25d984d9a0003f2c91336dd74b1d581971944f0a0b3f24dd048b403d8ba2515"
+    },
+    {
+      "accountIndex": 0,
+      "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_MAIN",
+      "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+      "signatureR": "0x6a4ee14cdd66ba20473b5ad91c73401f71ffd77fe1afa042eaa0877e5a091bd",
+      "signatureS": "0x3d18b5fb72c48c6e963e6da191d917c24fe01bd588b7ec9b985426770c57abf"
+    }
+  ],
+  "dekSlot": {
+    "password": "parity-dek-slot-password",
+    "plaintext": {
+      "dek": "WlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlo="
+    },
+    "scope": "bramble.mobile.dek.v1",
+    "sealed": {
+      "cipher": "AES-256-GCM",
+      "commit": "IFG/JpU7ltOecFN/Gc9Aww==",
+      "data": "XLHwfPb1V1jja4FD3t4LusBNKqx/ZNkGon3KDtMTmDARe7WBOtuc09qbxUFRdB2tP+Up4xz/9HR/gPiU3e4l8rJ0NOpkig==",
+      "iterations": 600000,
+      "iv": "7qPbVdjVbqAcMa4T",
+      "kdf": "PBKDF2-SHA-256",
+      "lineage": "e7ea8d2b0c67c30ed067417df17d2758",
+      "salt": "sE6z2kHgfg476/Qvg64FOg==",
+      "scope": "bramble.mobile.dek.v1",
+      "version": 3
+    }
+  },
+  "envelope": {
+    "password": "parity-vector-password",
+    "plaintext": {
+      "hello": "bramble",
+      "n": 7
+    },
+    "scope": "bramble.parity",
+    "sealed": {
+      "cipher": "AES-256-GCM",
+      "commit": "CsBHt6BQ0Cenb9eNsyflrg==",
+      "data": "VytNJdM22UDgY1pQsgrOU63k7eCVE/EKMLoFO1Rnkh4uKe1jI/XWim4=",
+      "iterations": 600000,
+      "iv": "ELQx7XJnLyBpAzzG",
+      "kdf": "PBKDF2-SHA-256",
+      "lineage": "0c555becf302a0691fdafe45cc443c42",
+      "salt": "CmvNPNO3aNUtdLJOnfOuKw==",
+      "scope": "bramble.parity",
+      "version": 3
+    }
+  },
+  "messageHash": "0x3f2d1b0a99887766554433221100ffeeddccbbaa99887766554433221100abc",
+  "mnemonic": "habit hope tip crystal because grunt nation idea electric witness alert like",
+  "ui": {
+    "avatars": [
+      {
+        "address": "0x0",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-1)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"6\" transform=\"translate(6 -2) rotate(216 18 18) scale(1)\" fill=\"var(--bramble-account-avatar-0)\" /> <g class=\"avatar-character\" transform=\"translate(0 0) rotate(6 18 18)\" fill=\"var(--bramble-account-avatar-paper)\" stroke=\"var(--bramble-account-avatar-paper)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M15 19c2 1 4 1 6 0\" fill=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"13\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"21\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "0x1",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-2)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"6\" transform=\"translate(7 -3) rotate(217 18 18) scale(1.1)\" fill=\"var(--bramble-account-avatar-1)\" /> <g class=\"avatar-character\" transform=\"translate(3.5 -1) rotate(7 18 18)\" fill=\"var(--bramble-account-avatar-ink)\" stroke=\"var(--bramble-account-avatar-ink)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M15 20c2 1 4 1 6 0\" fill=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"12\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"22\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-1)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"36\" transform=\"translate(-4 -4) rotate(228 18 18) scale(1)\" fill=\"var(--bramble-account-avatar-0)\" /> <g class=\"avatar-character\" transform=\"translate(-4 0) rotate(8 18 18)\" fill=\"var(--bramble-account-avatar-paper)\" stroke=\"var(--bramble-account-avatar-paper)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M15 19c2 1 4 1 6 0\" fill=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"11\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"23\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-3)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"36\" transform=\"translate(-2 -2) rotate(346 18 18) scale(1.1)\" fill=\"var(--bramble-account-avatar-2)\" /> <g class=\"avatar-character\" transform=\"translate(-2 -3) rotate(-6 18 18)\" fill=\"var(--bramble-account-avatar-ink)\" stroke=\"var(--bramble-account-avatar-ink)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M15 20c2 1 4 1 6 0\" fill=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"13\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"21\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-2)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"36\" transform=\"translate(3 3) rotate(341 18 18) scale(1.2)\" fill=\"var(--bramble-account-avatar-1)\" /> <g class=\"avatar-character\" transform=\"translate(-5 0) rotate(-1 18 18)\" fill=\"var(--bramble-account-avatar-ink)\" stroke=\"var(--bramble-account-avatar-ink)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M15 21c2 1 4 1 6 0\" fill=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"13\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"21\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-2)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"6\" transform=\"translate(7 1) rotate(353 18 18) scale(1.2)\" fill=\"var(--bramble-account-avatar-1)\" /> <g class=\"avatar-character\" transform=\"translate(3.5 -3) rotate(-3 18 18)\" fill=\"var(--bramble-account-avatar-ink)\" stroke=\"var(--bramble-account-avatar-ink)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M15 21c2 1 4 1 6 0\" fill=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"11\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"23\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-0)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"6\" transform=\"translate(5 5) rotate(215 18 18) scale(1.2)\" fill=\"var(--bramble-account-avatar-3)\" /> <g class=\"avatar-character\" transform=\"translate(7 6) rotate(5 18 18)\" fill=\"var(--bramble-account-avatar-paper)\" stroke=\"var(--bramble-account-avatar-paper)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M13 21a1 .75 0 0 0 10 0\" stroke=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"14\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"20\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "0xabcdef",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-2)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"6\" transform=\"translate(7 7) rotate(93 18 18) scale(1)\" fill=\"var(--bramble-account-avatar-1)\" /> <g class=\"avatar-character\" transform=\"translate(3.5 3.5) rotate(3 18 18)\" fill=\"var(--bramble-account-avatar-ink)\" stroke=\"var(--bramble-account-avatar-ink)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M13 19a1 .75 0 0 0 10 0\" stroke=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"11\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"23\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "0x123456789",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-0)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"6\" transform=\"translate(5 5) rotate(211 18 18) scale(1.1)\" fill=\"var(--bramble-account-avatar-3)\" /> <g class=\"avatar-character\" transform=\"translate(3 3) rotate(-1 18 18)\" fill=\"var(--bramble-account-avatar-paper)\" stroke=\"var(--bramble-account-avatar-paper)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M13 20a1 .75 0 0 0 10 0\" stroke=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"13\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"21\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      },
+      {
+        "address": "not an address",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\" preserveAspectRatio=\"xMidYMid slice\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-1)\" /> <rect class=\"avatar-head\" width=\"36\" height=\"36\" rx=\"6\" transform=\"translate(6 -2) rotate(216 18 18) scale(1)\" fill=\"var(--bramble-account-avatar-0)\" /> <g class=\"avatar-character\" transform=\"translate(0 0) rotate(6 18 18)\" fill=\"var(--bramble-account-avatar-paper)\" stroke=\"var(--bramble-account-avatar-paper)\" stroke-linecap=\"round\"> <path class=\"avatar-mouth\" d=\"M15 19c2 1 4 1 6 0\" fill=\"none\" /> <g class=\"avatar-eyes\" stroke=\"none\"> <rect x=\"13\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> <rect x=\"21\" y=\"14\" width=\"1.5\" height=\"2\" rx=\"1\" /> </g> </g> </svg>"
+      }
+    ],
+    "passphrases": [
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "empty",
+        "ratio": 0,
+        "value": ""
+      },
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "weak",
+        "ratio": 0.08,
+        "value": "a"
+      },
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "weak",
+        "ratio": 0.32641942487090914,
+        "value": "short"
+      },
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "        x"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.32641942487090914,
+        "value": "aaaaaaaa"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.5222710797934547,
+        "value": "abcdefgh"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.5222710797934547,
+        "value": "password"
+      },
+      {
+        "acceptable": true,
+        "hint": "Fair",
+        "level": "fair",
+        "ratio": 0.7442745387983594,
+        "value": "Password1"
+      },
+      {
+        "acceptable": true,
+        "hint": "Fair",
+        "level": "fair",
+        "ratio": 0.9124799456015206,
+        "value": "Password1!"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "correct horse battery staple"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "correct horse battery staple!9"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "Tr0ub4dor&3"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "ünïcödé-pässphrase"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.39409329057487913,
+        "value": "🔒🔒🔒🔒🔒🔒🔒🔒🔒"
+      },
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ]
+  }
+}

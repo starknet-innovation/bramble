@@ -148,6 +148,12 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   changelog: "bun run scripts/generate-changelog.ts",
   "dev:session": "bun run tests/e2e/dev-session.ts",
   format: "biome check --write .",
+  // Regenerate the mobile wallet's single-sourced tokens/networks and its extension-parity vectors.
+  "mobile:assets": "bun run scripts/generate-mobile-assets.ts",
+  "mobile:parity": "bun run scripts/generate-mobile-parity-vectors.ts",
+  // Pinned strict SwiftLint/ktlint/detekt (mobile/scripts/lint-tools.sh). Kept out of `check`:
+  // it needs macOS and a JDK, and `check` must pass on Linux CI and machines without them.
+  "mobile:lint": "bash mobile/scripts/lint.sh all",
   "package:extension": "bun run scripts/package-extension.ts",
   "package:extension:firefox": "bun run scripts/package-extension.ts --target=firefox",
   "release:publish": "bun run scripts/publish-chrome-web-store.ts",
