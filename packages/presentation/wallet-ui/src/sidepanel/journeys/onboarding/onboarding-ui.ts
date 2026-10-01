@@ -1,26 +1,37 @@
 /** First-run recovery, account preview, and persistence bindings. */
 
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
+import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { BACKUP_VERIFY_COPY, backupVerifyState } from "./backup-verify";
+import {
+  BACKUP_VERIFY_COPY,
+  backupVerifyPositions,
+  backupVerifyState,
+  DEFAULT_BACKUP_VERIFY_POSITIONS,
+} from "./backup-verify";
 import { bindBackupVerification } from "./backup-verify-bind";
 import { bindGeneratedPhrase } from "./generated-phrase-ui";
 import { bindKeyImport } from "./import-key-ui";
-import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
 import { applyPassphraseMeter } from "./passphrase-meter";
+import { bindPassphraseReveal } from "./passphrase-reveal";
 import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
 import { bindRecoveryWordAssist } from "./recovery-word-assist";
 import { fillRecoveryWords, recoveryWordsFrom, setRecoveryWordCount } from "./recovery-word-state";
-import { createWeakPassphraseAck } from "./weak-passphrase-ack";
 
 /** Dependencies the onboarding binding closes over. */
 export type OnboardingUiDeps = {
   readonly app: Element | null;
+  /**
+   * The composition root's clock, used only to vary which words the backup
+   * confirmation asks for. Without one the default positions are asked every
+   * time, which is what fixtures and tests want.
+   */
+  readonly now?: (() => number) | null;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly wallet: SidepanelWallet;
 };
@@ -53,9 +64,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const recoveryResult = form.querySelector<HTMLElement>("#recovery-result");
   const generateResult = form.querySelector<HTMLElement>("#generate-result");
   const result = form.querySelector<HTMLElement>("#form-result");
-  const weakAck = createWeakPassphraseAck(form, "", passphraseInput, () => refreshPassword());
-  const ackContainer = form.querySelector<HTMLElement>("#mainnet-ack");
-  const ackCheckbox = form.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
   const recoveryContinue = form.querySelector<HTMLButtonElement>("#recovery-continue");
   const generatedContinue = form.querySelector<HTMLButtonElement>("#generated-continue");
   const verifyContinue = form.querySelector<HTMLButtonElement>("#verify-continue");
@@ -76,6 +84,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let previewMatchesInput = false;
   let previewGeneration = 0;
   let mnemonicGeneration = 0;
+  let verifyPositions: readonly number[] = DEFAULT_BACKUP_VERIFY_POSITIONS;
   const accountContractType = () =>
     isCreatableAccountContractType(accountContractInput?.value) ? accountContractInput.value : null;
 
@@ -157,7 +166,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   const passwordOk = (): boolean => {
     const value = passphraseInput?.value ?? "";
-    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "") && weakAck.ok();
+    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
   };
 
   const invalidatePreview = (): void => {
@@ -172,7 +181,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     const value = passphraseInput?.value ?? "";
     const confirmation = confirmationInput?.value ?? "";
     const matches = value === confirmation && confirmation.length > 0;
-    weakAck.sync();
     applyPassphraseMeter(
       { requirement: passwordRequirement, result: passwordResult },
       value,
@@ -189,7 +197,24 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   };
 
   const verifyAnswers = () => verifyInputs.map((input) => input.value);
-  const verificationState = () => backupVerifyState(mnemonic, verifyAnswers());
+  const verificationState = () => backupVerifyState(mnemonic, verifyAnswers(), verifyPositions);
+
+  // Each generated phrase is confirmed at its own positions, so a second wallet
+  // is never confirmed with the words the first one taught. The field's visible
+  // label is its accessible name, so relabelling it is the whole change.
+  const applyVerifyPositions = (phrase: string): void => {
+    verifyPositions = backupVerifyPositions(
+      phrase.trim().split(/\s+/).filter(Boolean).length,
+      deps.now?.() ?? 0,
+    );
+    verifyInputs.forEach((input, index) => {
+      const position = verifyPositions[index];
+      const label = input.closest("label")?.querySelector("span");
+      if (label && position !== undefined) {
+        label.textContent = `Word ${position}`;
+      }
+    });
+  };
   const verificationSatisfied = () => verificationState() === "confirmed";
 
   // A mismatch shows on commit (blur/Enter) or a Continue attempt, never mid-typing.
@@ -203,7 +228,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     }
   };
 
-  const selectedNetworkId = (): string => MAINNET_NETWORK_ID;
+  const selectedNetworkId = (): string => DEFAULT_NETWORK.id;
   const recoveryAccounts = bindRecoveryAccountUi({
     form,
     mnemonic: () => mnemonic,
@@ -212,26 +237,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     vaultPassphrase: () => passphraseInput?.value ?? "",
     wallet,
   });
-  const ackSatisfied = (): boolean =>
-    mainnetAckSatisfied(selectedNetworkId(), ackCheckbox?.checked ?? false);
-
   const refreshAccountGate = (): void => {
     if (submitButton) {
-      submitButton.disabled = !(
-        walletReady &&
-        accountSelected &&
-        previewMatchesInput &&
-        ackSatisfied()
-      );
+      submitButton.disabled = !(walletReady && accountSelected && previewMatchesInput);
     }
-  };
-
-  const syncNetworkGate = (): void => {
-    if (ackContainer) {
-      ackContainer.hidden = false;
-    }
-    previewMatchesInput = false;
-    refreshAccountGate();
   };
 
   app?.querySelectorAll<HTMLButtonElement>("[data-onboarding-back]").forEach((button) => {
@@ -303,6 +312,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           return;
         }
         mnemonic = generated.trim();
+        applyVerifyPositions(mnemonic);
         keyImport.deactivate();
         passwordContinue?.lastChild?.replaceWith("Review account");
         requiresVerification = true;
@@ -362,7 +372,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     showStep("recovery-accounts");
     recoveryAccounts.start();
   });
-  ackCheckbox?.addEventListener("change", refreshAccountGate);
   accountButton?.addEventListener("click", () => {
     accountSelected = !(accountButton.getAttribute("aria-pressed") === "true");
     accountButton.setAttribute("aria-pressed", String(accountSelected));
@@ -410,7 +419,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         if (passphraseResult) {
           passphraseResult.textContent = "";
         }
-        syncNetworkGate();
         previewMatchesInput = true;
         refreshAccountGate();
         showStep("accounts");
@@ -438,13 +446,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       }
       return;
     }
-    if (!ackSatisfied()) {
-      if (result) {
-        result.textContent = "Confirm you understand this wallet can hold real funds.";
-      }
-      showToast("Acknowledge the real-funds warning first", "error", form);
-      return;
-    }
     buttonBusy(submitButton, true);
     const contractType = accountContractType();
     if (!contractType) {
@@ -470,7 +471,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       );
   });
 
-  syncNetworkGate();
+  bindPassphraseReveal(form);
+  refreshAccountGate();
   refreshRecovery();
   refreshPassword();
 };

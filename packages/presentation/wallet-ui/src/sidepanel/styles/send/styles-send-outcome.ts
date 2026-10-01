@@ -4,17 +4,7 @@
  * outcome stage with its reduced-motion fallbacks. Split from the compose
  * layer (./styles-send-compose.ts) by stage so each file stays readable.
  */
-import {
-  CONTROL,
-  EASE,
-  MOTION,
-  RADIUS,
-  SHADOW,
-  SIZE,
-  SPACE,
-  TYPE,
-  WEIGHT,
-} from "@bramble/ui-kit/tokens";
+import { CONTROL, EASE, RADIUS, SHADOW, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Send review/outcome stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -27,58 +17,29 @@ export const SEND_OUTCOME_STYLES = `
     padding: ${SPACE.lg};
   }
   .proposal-review-stack { display: grid; gap: ${SPACE.sm}; }
-  .send-review-hero {
+  /* The facts list leads the review now, so it carries no rule above its first
+     row; the hairline between rows still separates From, To and Amount. */
+  .send-review-facts { margin: 0; }
+  .send-review-amount {
     align-items: center;
-    display: grid;
-    gap: ${SPACE.md};
-    grid-template-columns: ${SIZE.mark} minmax(0, 1fr);
-    padding-bottom: ${SPACE.lg};
+    display: inline-flex;
+    gap: ${SPACE.sm};
   }
-  .send-review-token,
-  .send-review-token > svg,
-  .send-review-token .token-mark { height: ${SIZE.mark}; width: ${SIZE.mark}; }
-  .send-review-hero > span:last-child { display: grid; gap: ${SPACE.xs}; }
-  .send-review-hero strong {
-    font-size: ${TYPE.display.size};
-    font-variant-numeric: tabular-nums;
-  }
-  .send-review-hero small { color: var(--bramble-muted); }
-  .send-review-facts { border-top: 1px solid var(--bramble-hairline); margin: 0; }
+  .send-review-amount > svg,
+  .send-review-amount .token-logo,
+  .send-review-amount .token-mark { height: ${SIZE.pill}; width: ${SIZE.pill}; }
+  .send-review-amount strong { font-variant-numeric: tabular-nums; }
+  /* Cost and Visibility are two answers, so they are two boxes: the container
+     only spaces them. */
   .send-review-fee {
-    background: var(--bramble-panel);
-    border-radius: ${RADIUS.lg};
     display: grid;
     gap: ${SPACE.sm};
-    padding: ${SPACE.md} ${SPACE.lg};
   }
   .send-review-fee:empty { display: none; }
-  .send-review-disclosure {
+  .send-review-fee > .decision-layer {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
-    overflow: hidden;
-  }
-  .send-review-disclosure summary {
-    align-items: center;
-    cursor: pointer;
-    display: flex;
-    font-size: ${TYPE.body.size};
-    font-weight: ${WEIGHT.semibold};
-    justify-content: space-between;
-    list-style: none;
-    min-height: ${SIZE.rowCompact};
-    padding: 0 ${SPACE.lg};
-  }
-  .send-review-disclosure summary::-webkit-details-marker { display: none; }
-  .send-review-disclosure summary .icon {
-    color: var(--bramble-muted);
-    transition: transform ${MOTION.tabMs}ms ${EASE.out};
-  }
-  .send-review-disclosure[open] summary .icon { transform: rotate(180deg); }
-  .send-review-disclosure-body {
-    border-top: 1px solid var(--bramble-hairline);
-    display: grid;
-    gap: ${SPACE.md};
-    padding: ${SPACE.md};
+    padding: ${SPACE.md} ${SPACE.lg};
   }
   .send-review-note { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; }
 
@@ -132,14 +93,35 @@ export const SEND_OUTCOME_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
+  .send-outcome-hash {
+    align-items: center;
+    display: inline-flex;
+    gap: ${SPACE.xs};
+    justify-content: center;
+    min-width: 0;
+  }
+  /* The failure outcome keeps its reason and the control that copies it on one
+     line, so the copy sits with the text it takes rather than under it. */
+  .send-outcome-reason {
+    align-items: start;
+    display: inline-flex;
+    gap: ${SPACE.xs};
+    justify-content: center;
+    min-width: 0;
+  }
+  .send-outcome-reason p { margin: 0; min-width: 0; }
+  .send-outcome-hash a { color: inherit; text-decoration: none; }
+  .send-outcome-hash a[href] code { text-decoration: underline; text-underline-offset: 2px; }
+  .send-outcome-hash a[href]:hover code { color: var(--bramble-accent); }
   .send-outcome-kicker {
     color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.semibold};
   }
   /* One shrinkable column: the receipt's unbroken hash must ellipsize inside
-     the panel rather than widen the grid track past it. */
-  .send-success { grid-template-columns: minmax(0, 1fr); }
+     the panel rather than widen the grid track past it. The shared receipt
+     turns into a failure in place, so the failure tone keeps the column. */
+  .send-success, .send-failure { grid-template-columns: minmax(0, 1fr); }
   .send-outcome .send-actions { width: 100%; }
   .send-receipt {
     background: var(--bramble-panel);
@@ -182,7 +164,6 @@ export const SEND_OUTCOME_STYLES = `
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .send-review-disclosure summary .icon { transition: none; }
     .send-failure-ring, .send-failure-mark { animation: none; stroke-dashoffset: 0; }
   }
 `;

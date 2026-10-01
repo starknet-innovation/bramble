@@ -5,7 +5,7 @@ import { inputControl, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "@bramble/ui-kit/icons";
 import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountAvatar, accountLabel } from "../../shared/parts";
 import type { MultisigClient } from "./multisig-runtime";
 
@@ -252,9 +252,8 @@ export const bindMultisigParticipantPicker = (
         source: "Account address",
       });
     } catch (error) {
-      const message = errorMessage(error, "Signer key lookup failed");
-      result.textContent = message;
-      showToast(message, "error", confirm);
+      result.textContent = errorLine(error, "Couldn't look up that signer");
+      showToast(errorMessage(error, "Signer key lookup failed"), "error", confirm);
     } finally {
       buttonBusy(confirm, false);
     }

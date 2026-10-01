@@ -10,7 +10,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { compactAmount, tokenGlyph } from "./token-row";
 
 /**
@@ -66,7 +66,7 @@ const bindAddToken = (deps: TokensUiDeps): void => {
       (error: unknown) => {
         showToast(errorMessage(error, "Add token failed"), "error", form);
         if (result) {
-          result.textContent = errorMessage(error, "Add token failed");
+          result.textContent = errorLine(error, "Add token failed");
         }
         buttonBusy(submitButton, false);
       },
@@ -118,7 +118,7 @@ const bindDetect = (deps: TokensUiDeps): void => {
       (error: unknown) => {
         showToast(errorMessage(error, "Token detection failed"), "error", button);
         if (status) {
-          status.textContent = errorMessage(error, "Token detection failed");
+          status.textContent = errorLine(error, "Token detection failed");
         }
         buttonBusy(button, false);
       },

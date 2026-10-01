@@ -53,14 +53,14 @@ export const Receive: LabStory = {
       "true",
     );
     await expect(body?.querySelector('[data-receive-payload="card"]')).toBeEnabled();
-    // The contact card, the keys, and the payload switch wait behind Pro; the
+    // The contact card, the keys, and the payload switch wait behind Advanced; the
     // QR stays on the address until the user asks for the card.
-    const pro = body?.querySelector<HTMLButtonElement>("#receive-pro");
-    if (!pro) throw new Error("Missing receive Pro switch");
-    await expect(pro).toHaveAttribute("aria-checked", "false");
-    await expect(body?.querySelector("#receive-pro-fields")).not.toBeVisible();
-    await userEvent.click(pro);
-    await expect(body?.querySelector("#receive-pro-fields")).toBeVisible();
+    const advanced = body?.querySelector<HTMLButtonElement>("#advanced-receive");
+    if (!advanced) throw new Error("Missing receive Advanced switch");
+    await expect(advanced).toHaveAttribute("aria-checked", "false");
+    await expect(body?.querySelector("#receive-advanced-fields")).not.toBeVisible();
+    await userEvent.click(advanced);
+    await expect(body?.querySelector("#receive-advanced-fields")).toBeVisible();
     await expect(body?.querySelector(".receive-public-key [data-copy]")).toHaveAttribute(
       "data-copy",
     );
@@ -140,12 +140,12 @@ export const AddressBook: LabStory = {
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     // Label and address are the whole form; the wallet card and the keys wait
-    // behind Pro, so saving a contact never reads as a five-field task.
-    const pro = body?.querySelector<HTMLButtonElement>("#address-pro");
-    if (!pro) throw new Error("Missing address book Pro switch");
+    // behind Advanced, so saving a contact never reads as a five-field task.
+    const advanced = body?.querySelector<HTMLButtonElement>("#advanced-address");
+    if (!advanced) throw new Error("Missing address book Advanced switch");
     await expect(body?.querySelector('input[name="address"]')).toBeVisible();
     await expect(body?.querySelector('textarea[name="walletCard"]')).not.toBeVisible();
-    await userEvent.click(pro);
+    await userEvent.click(advanced);
     await expect(body?.querySelector('textarea[name="walletCard"]')).toBeVisible();
     await expect(body?.querySelector('input[name="nostrPublicKey"]')).toBeVisible();
     await expect(body?.querySelector(".address-book")).toHaveTextContent(

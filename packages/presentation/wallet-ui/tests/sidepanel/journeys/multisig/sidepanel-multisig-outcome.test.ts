@@ -153,7 +153,7 @@ test("explains an already-deployed review without exposing the RPC payload", asy
   await flushMultisigUi();
 
   const message =
-    "This multisig is already deployed. Open it from Shared accounts instead of deploying it again.";
+    "This multisig is already deployed. Open it from Multisigs instead of deploying it again.";
   expect(app.querySelector("#multisig-deploy-result")?.textContent).toBe(message);
   expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe(message);
   expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();

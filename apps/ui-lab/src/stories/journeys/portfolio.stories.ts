@@ -1,4 +1,9 @@
-import { checkpointStory, LAB_META, type LabMeta } from "../../runtime/story-helpers";
+import {
+  checkpointStory,
+  failedReceiptStory,
+  LAB_META,
+  type LabMeta,
+} from "../../runtime/story-helpers";
 
 const meta: LabMeta = {
   ...LAB_META,
@@ -27,6 +32,12 @@ export const DeployAccount = checkpointStory(
   "portfolio",
   "deploy-account",
 );
+export const DeploySubmitted = checkpointStory("Account deployed", "portfolio", "deploy-submitted");
+export const DeployFailed = failedReceiptStory("Deployment failed", "portfolio", "deploy-failed", {
+  id: "deploy-success",
+  reason: "Starknet rejected this transaction. Nothing changed.",
+  title: "Deployment failed",
+});
 export const PricesOffline = checkpointStory("Prices unavailable", "portfolio", "prices-offline");
 export const BalanceFailed = checkpointStory(
   "Balance refresh failed",

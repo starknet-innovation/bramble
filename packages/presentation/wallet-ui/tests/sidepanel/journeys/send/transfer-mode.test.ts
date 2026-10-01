@@ -60,15 +60,15 @@ describe("transferModeFor", () => {
 
 describe("mode copy", () => {
   test("titles every checkpoint in the mode's own words", () => {
-    expect(transferStageTitle("recipient")).toBe("Send to");
+    expect(transferStageTitle("recipient")).toBe("Send");
     expect(transferStageTitle("details", "shield")).toBe("Shield");
     expect(transferStageTitle("reviewing", "unshield")).toBe("Unshield");
     expect(transferStageTitle("review", "shield")).toBe("Review shield");
-    expect(transferStageTitle("authorizing", "unshield")).toBe("Authorize unshield");
+    // Authorizing, broadcasting and confirming read as one wait.
+    expect(transferStageTitle("authorizing", "unshield")).toBe("Unshielding");
     expect(transferStageTitle("broadcasting", "shield")).toBe("Shielding");
+    expect(transferStageTitle("confirming", "shield")).toBe("Shielding");
     expect(transferStageTitle("failed", "shield")).toBe("Shield failed");
-    // Chain-side checkpoints are the same for every mode.
-    expect(transferStageTitle("confirming", "shield")).toBe("Confirming");
     expect(transferStageTitle("submitted", "unshield")).toBe("Confirmed");
   });
 

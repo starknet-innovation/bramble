@@ -36,6 +36,12 @@ export type TextFieldProps = FieldBase & {
   readonly minlength?: number;
   readonly placeholder?: string;
   readonly spellcheck?: boolean;
+  /**
+   * Markup placed inside the field, after the input: a reveal toggle, a unit,
+   * a clear control. The caller owns it entirely, including its accessible
+   * name; this only says where it sits.
+   */
+  readonly trailing?: string;
   readonly type?: "file" | "number" | "password" | "text" | "url";
   readonly value?: string;
 };
@@ -111,8 +117,9 @@ export const textField = ({
   type = "text",
   value,
   spellcheck,
+  trailing,
 }: TextFieldProps): string =>
-  `<label><span${labelHidden ? ' class="sr-only"' : ""}>${escapeHtml(label)}</span><input${className ? ` class="${uiClassNames(className)}"` : ""} name="${escapeHtml(name)}" type="${type}"${accept ? ` accept="${escapeHtml(accept)}"` : ""}${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${autocapitalize ? ` autocapitalize="${autocapitalize}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${list ? ` list="${escapeHtml(list)}"` : ""}${max === undefined ? "" : ` max="${max}"`}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${min === undefined ? "" : ` min="${min}"`}${minlength === undefined ? "" : ` minlength="${minlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${required ? " required" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />${fieldHint(hint)}</label>`;
+  `<label><span${labelHidden ? ' class="sr-only"' : ""}>${escapeHtml(label)}</span>${trailing ? '<span class="field-with-action">' : ""}<input${className ? ` class="${uiClassNames(className)}"` : ""} name="${escapeHtml(name)}" type="${type}"${accept ? ` accept="${escapeHtml(accept)}"` : ""}${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${autocapitalize ? ` autocapitalize="${autocapitalize}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${list ? ` list="${escapeHtml(list)}"` : ""}${max === undefined ? "" : ` max="${max}"`}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${min === undefined ? "" : ` min="${min}"`}${minlength === undefined ? "" : ` minlength="${minlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${required ? " required" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />${trailing ? `${trailing}</span>` : ""}${fieldHint(hint)}</label>`;
 
 /**
  * Shared multiline field configuration.

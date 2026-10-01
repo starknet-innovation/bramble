@@ -200,37 +200,14 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     padding: ${SPACE.sm} ${SPACE.md};
   }
   button#swap-review.swap-risk { background: var(--bramble-danger); color: var(--bramble-bg); }
-  /* Success moment: the ring draws itself, the check follows, the copy rises
-     beneath — a felt confirmation, held briefly before the flow returns home
-     on its own. Stroke-draw keyframes settle to their end state (forwards) and
-     collapse to static marks under reduced motion via the home layer. */
-  .swap-success { gap: ${SPACE.sm}; justify-items: center; padding-top: 56px; text-align: center; }
-  .swap-success-mark { color: var(--bramble-positive); display: inline-flex; height: 72px; width: 72px; }
-  .swap-success-mark svg {
-    fill: none;
-    height: 100%;
-    stroke: currentColor;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 3.2;
-    width: 100%;
+  /* The swap receipt is the Send outcome component (.send-outcome .send-success),
+     so the mark, the heading size, the receipt card and the actions are one
+     definition rather than two that drifted — a swap used to end on a smaller
+     heading than a send did. Only the figures below are swap's own. */
+  .swap-success .send-receipt-summary {
+    font-variant-numeric: tabular-nums;
+    font-weight: ${WEIGHT.semibold};
   }
-  .swap-success-ring {
-    animation: swap-draw 480ms var(--ease-out) 60ms forwards;
-    stroke-dasharray: 158;
-    stroke-dashoffset: 158;
-  }
-  .swap-success-check {
-    animation: swap-draw 300ms var(--ease-out) 460ms forwards;
-    stroke-dasharray: 32;
-    stroke-dashoffset: 32;
-  }
-  @keyframes swap-draw { to { stroke-dashoffset: 0; } }
-  .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint {
-    animation: rise-in 260ms var(--ease-out) both;
-  }
-  .swap-success .swap-success-summary { animation-delay: 60ms; font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.semibold}; }
-  .swap-success .hint { animation-delay: 120ms; }
   @media (prefers-reduced-motion: reduce) {
     html[data-swap-transition]::view-transition-group(swap-stage),
     html[data-swap-transition]::view-transition-old(swap-stage),

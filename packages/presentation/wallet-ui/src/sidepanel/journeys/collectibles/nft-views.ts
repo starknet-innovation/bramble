@@ -2,7 +2,7 @@
  * NFT gallery and detail flow screens. The gallery auto-lists the NFTs the
  * active account owns — discovered through the configured indexer and re-proven
  * on-chain in the background — merged with any manually watched collectibles,
- * hides spam behind a toggle, and keeps the manual "Watch an NFT" form for
+ * hides spam behind a toggle, and keeps the manual "Watch a collectible" form for
  * tokens auto-discovery does not surface. Each entry renders a collection/token-id
  * caption; its remote image loads immediately only for solicited (manually
  * watched) NFTs, while unsolicited auto-discovered ones show a placeholder until
@@ -432,11 +432,11 @@ export const nftDetailFlow = (
     account?.address ?? null,
   );
   return (
-    flowHeader("NFT", status, nft ? nft.title : "") +
+    flowHeader("Collectible", status, nft ? nft.title : "") +
     flowScreen(
       "nft-detail",
       nft === null
-        ? `<section class="section">${emptyState("This NFT is no longer watched.")}</section>`
+        ? `<section class="section">${emptyState("This collectible is no longer watched.")}</section>`
         : `<section class="section">
             ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft, true, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
             ${nft.description ? `<p class="lede">${escapeHtml(nft.description)}</p>` : ""}

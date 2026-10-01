@@ -42,7 +42,7 @@ const createGroupRow = (open: boolean): string => `
   <li class="group-manage-row">
     <button class="group-expand" type="button" data-group-expand="${CREATE_GROUP_PANEL}" aria-expanded="${open}" aria-controls="group-create-panel">
       <span class="group-manage-icon">${icon("plus")}</span>
-      <span class="group-manage-copy"><strong>Create a group</strong></span>
+      <span class="group-manage-copy"><strong>Create a folder</strong></span>
       <span class="group-expand-mark">${icon(open ? "chevronDown" : "chevronRight")}</span>
     </button>
     <div class="group-members" id="group-create-panel"${open ? "" : " hidden"}>
@@ -162,7 +162,7 @@ export const groupsSection = (
   const createOpen = expandedGroupId === CREATE_GROUP_PANEL || groups.length === 0;
   return `
   <section class="section">
-    <p class="eyebrow">Groups</p>
+    <p class="eyebrow">Folders</p>
     <ul class="group-manage-list">
       ${createGroupRow(createOpen)}
       ${groups

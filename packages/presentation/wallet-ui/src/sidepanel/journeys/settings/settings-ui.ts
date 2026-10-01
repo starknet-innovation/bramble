@@ -4,7 +4,7 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { buildInfo } from "../../shell/build-info";
 import { bindGroupControls } from "./group-ui";
 
@@ -57,7 +57,7 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
         (error: unknown) => {
           showToast(errorMessage(error, "Name update failed"), "error", form);
           if (result) {
-            result.textContent = errorMessage(error, "Name update failed");
+            result.textContent = errorLine(error, "Name update failed");
           }
           buttonBusy(submitButton, false);
         },
@@ -188,7 +188,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       (error: unknown) => {
         showToast(errorMessage(error, "Currency update failed"), "error", currencySelect);
         if (result) {
-          result.textContent = errorMessage(error, "Currency update failed");
+          result.textContent = errorLine(error, "Currency update failed");
         }
         currencySelect.disabled = false;
       },
@@ -310,7 +310,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
         (error: unknown) => {
           showToast(errorMessage(error, "Backup restore failed"), "error", importButton);
           if (result) {
-            result.textContent = errorMessage(error, "Backup restore failed");
+            result.textContent = errorLine(error, "Backup restore failed");
           }
           buttonBusy(importButton, false);
         },

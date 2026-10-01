@@ -19,7 +19,6 @@ export const RequestBehavior = checkpointStory(
   "settings-security",
   "request-settings",
 );
-export const Security = checkpointStory("Security & permissions", "settings-security", "security");
 export const Network = checkpointStory("Choose network", "settings-security", "network");
 export const AdvancedEndpoints = checkpointStory(
   "Advanced endpoints",

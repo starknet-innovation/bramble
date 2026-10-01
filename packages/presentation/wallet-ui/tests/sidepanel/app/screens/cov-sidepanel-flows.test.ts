@@ -105,9 +105,9 @@ describe("sendFlow list callbacks", () => {
     // The recipient screen leads with where the value is coming from, rendered
     // like a recipient row but static — the origin is the active account.
     expect(html).toMatch(
-      /send-origin-context[\s\S]*?Sending from[\s\S]*?send-recipient-avatar[\s\S]*?Amber Walrus/,
+      /send-origin-context[\s\S]*?Send from[\s\S]*?send-recipient-avatar[\s\S]*?Amber Walrus/,
     );
-    expect(html).toContain("<span>Sending to</span>");
+    expect(html).toContain("<span>Send to</span>");
     expect(html).toMatch(
       /<dt>Network<\/dt><dd class="network-inline-value">[\s\S]*?class="token-logo"/,
     );
@@ -121,7 +121,6 @@ describe("sendFlow list callbacks", () => {
 
   test("disables the form and lists no tokens when the network has none", () => {
     const html = sendFlow(status, account, preferences);
-    expect(html).toContain("No tokens are tracked on this network yet");
     expect(html).toMatch(/id="send-token-trigger"[^>]*disabled/);
   });
 
@@ -146,7 +145,6 @@ describe("sendFlow list callbacks", () => {
     const html = sendFlow(status, account, preferences, [], {}, {}, "usd", sharedAccounts);
     expect(html).toContain('data-send-recipient="0x999"');
     expect(html).toContain("Operations");
-    expect(html).toContain("Ready Multisig account");
     expect(html).not.toContain('data-send-recipient="0x888"');
   });
 });

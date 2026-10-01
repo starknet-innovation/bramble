@@ -27,7 +27,6 @@ const render = (): HTMLElement => {
         copyLabel: "Copy account address",
         hint: "Share this account.",
         networkId: account.networkId,
-        networkName: "Starknet Sepolia",
         publicKeyX: account.publicKeyX,
       }),
     ),
@@ -77,7 +76,7 @@ const option = (app: HTMLElement, payload: "address" | "card"): HTMLButtonElemen
 };
 
 describe("Receive address and wallet card", () => {
-  test("paints the address QR, the full address, and the network before any derivation", () => {
+  test("paints the address QR and the full address before any derivation", () => {
     const app = render();
 
     expect(qrLabel(app)).toBe("QR code for your Starknet address");
@@ -85,7 +84,8 @@ describe("Receive address and wallet card", () => {
       "address",
     );
     expect(app.querySelector("[data-receive-address-text]")?.textContent).toBe(account.address);
-    expect(app.querySelector(".receive-network")?.textContent).toContain("Starknet Sepolia");
+    // The network is named once, by the header pill — not again under the address.
+    expect(app.querySelector(".receive-network")).toBeNull();
     expect(option(app, "address").getAttribute("aria-pressed")).toBe("true");
     expect(option(app, "card").disabled).toBe(true);
     expect(app.querySelector<HTMLButtonElement>("[data-wallet-card-copy]")?.disabled).toBe(true);
@@ -154,7 +154,6 @@ describe("Receive address and wallet card", () => {
       copyLabel: "Copy address",
       hint: "Multisig.",
       networkId: account.networkId,
-      networkName: "Starknet Sepolia",
     });
     expect(html).toContain("QR code for your Starknet address");
     expect(html).not.toContain("data-receive-payload-switch");
@@ -190,14 +189,14 @@ describe("Receive address and wallet card", () => {
       wallet: { loadNostrPublicKey: async () => "11".repeat(32) } as unknown as SidepanelWallet,
     });
     await settle();
-    const pro = app.querySelector<HTMLButtonElement>("#receive-pro");
+    const advanced = app.querySelector<HTMLButtonElement>("#advanced-receive");
     const qr = app.querySelector<HTMLElement>("[data-receive-qr]");
 
-    pro?.click();
+    advanced?.click();
     app.querySelector<HTMLButtonElement>('[data-receive-payload="card"]')?.click();
     expect(qr?.dataset["qrPayload"]).toBe("card");
 
-    pro?.click();
+    advanced?.click();
     expect(qr?.dataset["qrPayload"]).toBe("address");
     expect(qrLabel(app)).toBe("QR code for your Starknet address");
     expect(
@@ -205,7 +204,7 @@ describe("Receive address and wallet card", () => {
     ).toBe("true");
   });
 
-  test("keeps the contact card and the keys behind the Pro switch", () => {
+  test("keeps the contact card and the keys behind the Advanced switch", () => {
     const app = render();
     bindReceiveWalletCard({
       app,
@@ -213,9 +212,9 @@ describe("Receive address and wallet card", () => {
       wallet: { loadNostrPublicKey: async () => "11".repeat(32) } as unknown as SidepanelWallet,
     });
 
-    const pro = app.querySelector<HTMLButtonElement>("#receive-pro");
-    const fields = app.querySelector<HTMLElement>("#receive-pro-fields");
-    expect(pro?.getAttribute("aria-checked")).toBe("false");
+    const advanced = app.querySelector<HTMLButtonElement>("#advanced-receive");
+    const fields = app.querySelector<HTMLElement>("#receive-advanced-fields");
+    expect(advanced?.getAttribute("aria-checked")).toBe("false");
     expect(fields?.hasAttribute("hidden")).toBe(true);
     // The QR and the address stay out in front of it.
     expect(app.querySelector("[data-receive-qr]")).not.toBeNull();
@@ -224,11 +223,11 @@ describe("Receive address and wallet card", () => {
     expect(fields?.querySelector("[data-receive-payload-switch]")).not.toBeNull();
     expect(fields?.querySelector("[data-nostr-key-row]")).not.toBeNull();
 
-    pro?.click();
-    expect(pro?.getAttribute("aria-checked")).toBe("true");
+    advanced?.click();
+    expect(advanced?.getAttribute("aria-checked")).toBe("true");
     expect(fields?.hasAttribute("hidden")).toBe(false);
 
-    pro?.click();
+    advanced?.click();
     expect(fields?.hasAttribute("hidden")).toBe(true);
   });
 });
@@ -237,13 +236,13 @@ describe("Receive carries the account's contract identifiers", () => {
   test("shows the class hash with its copy control inside Pro, beside the keys", () => {
     const app = renderWithClassHash(null);
 
-    const pro = app.querySelector("#receive-pro-fields");
-    expect(pro?.textContent).toContain("Class hash");
-    expect(pro?.querySelector(`[data-copy="${account.classHash}"]`)).not.toBeNull();
+    const advanced = app.querySelector("#receive-advanced-fields");
+    expect(advanced?.textContent).toContain("Class hash");
+    expect(advanced?.querySelector(`[data-copy="${account.classHash}"]`)).not.toBeNull();
     // The verdict is honest while it is still being checked: pending, never a
     // silent "verified".
-    expect(pro?.querySelector(".verify-status.pending")).not.toBeNull();
-    expect(pro?.textContent).not.toContain("Verified on-chain");
+    expect(advanced?.querySelector(".verify-status.pending")).not.toBeNull();
+    expect(advanced?.textContent).not.toContain("Verified on-chain");
   });
 
   test("reports an on-chain mismatch as an assertive alert, outside the collapsed Pro fields", () => {
@@ -264,7 +263,7 @@ describe("Receive carries the account's contract identifiers", () => {
     );
     // Pro renders collapsed, so "do not trust this account" cannot live inside
     // it — and it renders once, not once in each place.
-    expect(app.querySelector("#receive-pro-fields")?.contains(alert ?? null)).toBe(false);
+    expect(app.querySelector("#receive-advanced-fields")?.contains(alert ?? null)).toBe(false);
     expect(app.querySelectorAll(".verify-status").length).toBe(1);
   });
 
@@ -273,14 +272,14 @@ describe("Receive carries the account's contract identifiers", () => {
       const app = renderWithClassHash({ onChainClassHash: account.classHash, status });
       const badge = app.querySelector(".verify-status");
       expect(app.querySelectorAll(".verify-status").length).toBe(1);
-      expect(app.querySelector("#receive-pro-fields")?.contains(badge ?? null)).toBe(true);
+      expect(app.querySelector("#receive-advanced-fields")?.contains(badge ?? null)).toBe(true);
     }
   });
 
   test("omits the rows entirely for a caller with no class hash (watched multisig)", () => {
     const app = render();
 
-    expect(app.querySelector("#receive-pro-fields")?.textContent).not.toContain("Class hash");
+    expect(app.querySelector("#receive-advanced-fields")?.textContent).not.toContain("Class hash");
     expect(app.querySelector(".verify-status")).toBeNull();
   });
 });

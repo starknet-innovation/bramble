@@ -69,7 +69,10 @@ describe("onboarding views", () => {
     expect(html).toContain('data-add-kind="import-phrase"');
     expect(html).toContain('data-add-kind="import-key"');
     expect(html).toContain('data-add-kind="restore-ready-ledger"');
-    expect(html).toContain("Ready’s derivation path");
+    // The option names the wallet the account came from; where on the device
+    // it is read from is the wallet's business, not the reader's.
+    expect(html).toContain("Ready (Argent X)");
+    expect(html).not.toContain("derivation path");
     expect((html.match(/data-add-kind="/g) ?? []).length).toBe(3);
   });
 
@@ -133,7 +136,7 @@ describe("onboarding views", () => {
     expect(html).not.toContain("Ready accounts");
     expect(html).toContain("Select accounts");
     // Only the active Bramble candidate counts as detected.
-    expect(html).toContain("1 account detected");
+    expect(html).toContain("1 found");
     expect(html).toContain("Account 0");
     expect(html).toContain("Deployed");
     expect(html).toContain("1.5 STRK");
@@ -164,7 +167,7 @@ describe("onboarding views", () => {
     const html = ledgerAccountPicker(candidates, [ready(12).id], undefined, "argentx");
     expect(html).toContain("Select Ready accounts");
     expect(html).toContain("Ready accounts");
-    expect(html).toContain("Ready’s derivation path");
+    expect(html).not.toContain("derivation path");
     // Ready numbers Ledger accounts after the wallet's other accounts.
     expect(html).toContain("Show more");
     expect(html).toContain("a few pages in");
@@ -173,7 +176,7 @@ describe("onboarding views", () => {
     expect(html).not.toContain("data-account-group");
     expect(html).not.toContain("Bramble accounts");
     expect(html).not.toContain("<details");
-    expect(html).toContain("1 account detected");
+    expect(html).toContain("1 found");
     expect(html).toContain("Account 12");
     expect(html).toContain(`data-ledger-toggle="${ready(12).id}"`);
     // An idle Ready index is listed but not selectable, as on the Ledger route.

@@ -156,7 +156,7 @@ export const multisigDeployFlow = (
   selectedMultisig: ArgentMultisigView | null = null,
 ): string => {
   const flowTitle =
-    selectedMultisig?.deployed === false ? "Complete multisig setup" : "Create multisig";
+    selectedMultisig?.deployed === false ? "Complete multisig setup" : "Create a multisig account";
   if (!account) {
     return flowHeader(flowTitle, status) + flowScreen("multisig-deploy", noAccountEmpty(status));
   }
@@ -251,7 +251,7 @@ export const multisigDeployFlow = (
                     ? '<p class="hint" role="note">Confirm the original signers. The review will verify that they reproduce the watched address.</p>'
                     : ""
               }
-              ${textField({ label: "Shared account name (optional)", maxlength: 48, name: "name", value: selectedMultisig?.record.name ?? "" })}
+              ${textField({ label: "Multisig name (optional)", maxlength: 48, name: "name", value: selectedMultisig?.record.name ?? "" })}
               <section class="multisig-signer-set" aria-labelledby="multisig-signer-set-title">
             <div class="multisig-signer-set-head">
               <strong id="multisig-signer-set-title">Signer set</strong>
@@ -342,7 +342,7 @@ export const multisigDeployFlow = (
             </div>
             <div id="multisig-deploy-review" aria-live="polite"></div>
             <div class="multisig-deploy-actions">
-              ${button({ disabled: classState !== true || !deploymentSigner, label: "Review deployment", type: "submit" })}
+              ${button({ disabled: classState !== true || !deploymentSigner, label: "Check fee and address", type: "submit" })}
             </div>
             <p id="multisig-deploy-result" role="status"></p>
           </div>

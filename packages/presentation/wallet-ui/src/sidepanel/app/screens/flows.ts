@@ -29,8 +29,6 @@ import {
   noAccountEmpty,
   type WalletView,
 } from "../../shared/parts";
-import { reviewOutcome, reviewPanel } from "../../shared/review-render";
-import { knownAccountType } from "../../shell/account-types";
 
 // Fees use STRK and registration invokes a deployed account. Deployment blocks
 // only on a conclusive `false`, so a fresh read does not flicker into the form.
@@ -55,10 +53,10 @@ import {
   backupExportFlow,
   backupRestoreFlow,
   requestSettingsFlow,
-  securityFlow,
 } from "../../journeys/settings/settings-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
+import { outcomeReceiptSection } from "../../shared/outcome-receipt";
 import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
@@ -87,7 +85,6 @@ const receiveFlow = (
               copyLabel: "Copy address",
               hint: `Only send ${status.network} assets to this address.`,
               networkId: status.networkId,
-              networkName: status.network,
               publicKeyX: account.publicKeyX,
             })
           : noAccountEmpty(status)
@@ -107,18 +104,13 @@ const deployAccountFlow = (
   preferences: WalletPreferences | null,
   deployment: boolean | null,
 ): string =>
-  flowHeader(
-    "Deploy account",
-    status,
-    account ? accountDisplayName(account, preferences) : undefined,
-  ) +
+  flowHeader("Deploy account", status) +
   flowScreen(
     "deploy-account",
     `<section class="section">
       ${
         account
           ? `<section class="section" id="deploy-review-stage">
-              ${reviewOutcome("Deploy this account contract on Starknet so it can submit transactions.")}
               ${receipt([
                 { label: "Account", value: accountDisplayName(account, preferences) },
                 {
@@ -131,34 +123,18 @@ const deployAccountFlow = (
                   value: accountLabel(account.address),
                   valueStyle: "code",
                 },
-                {
-                  label: "Contract",
-                  value: knownAccountType(account.classHash) ?? "Starknet account",
-                },
                 { label: "Network", value: networkDisplayName(status.network) },
               ])}
-              ${reviewPanel([], "Deployment creates this account on-chain. Its address and signing authority do not change.")}
               <div id="deploy-review" aria-live="polite"></div>
               ${button({
                 attributes: { id: "deploy-button" },
                 disabled: deployment !== false,
                 icon: "check",
-                label: deployment === true ? "Account already deployed" : "Review deployment",
+                label: deployment === true ? "Account already deployed" : "Deploy",
               })}
               <p id="deploy-result" role="status"></p>
             </section>
-            <section class="send-outcome send-success" id="deploy-success" role="status" aria-live="polite" hidden>
-              <span class="send-outcome-mark" aria-hidden="true">
-                <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
-              </span>
-              <div class="send-outcome-copy">
-                <p class="send-outcome-kicker">Submitted to Starknet</p>
-                <h2>Deployment submitted</h2>
-                <p>Your account will be ready once Starknet confirms this transaction.</p>
-                <code id="deploy-hash"></code>
-              </div>
-              ${button({ attributes: { "data-view": "home" }, icon: "home", label: "Back to home" })}
-            </section>`
+            ${outcomeReceiptSection("deploy-success")}`
           : noAccountEmpty(status)
       }
     </section>`,
@@ -175,7 +151,6 @@ export const importPhraseFlow = (status: WalletStatus): string =>
   flowScreen(
     "import-phrase",
     `<section class="section">
-      <p class="review-flag" role="note">Anyone with this phrase controls its accounts. Type it only on a device you trust.</p>
       <form id="import-phrase-form" class="stack" novalidate>
         <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
         <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
@@ -186,7 +161,7 @@ export const importPhraseFlow = (status: WalletStatus): string =>
           label: "Find its accounts",
         })}
         <div id="import-phrase-scan" hidden>
-${recoveryScanFields("import the selected accounts")}
+${recoveryScanFields()}
           ${button({
             attributes: { id: "recover-accounts-button" },
             disabled: true,
@@ -206,7 +181,6 @@ export const importKeyFlow = (status: WalletStatus): string =>
   flowScreen(
     "import-key",
     `<section class="section">
-      <p class="review-flag" role="note">Anyone with this key controls the account. Paste it only on a device you trust.</p>
       <form id="import-key-form" class="stack">
         ${selectField({
           hint: "Choose the contract that already owns this key. A different choice derives a different address.",
@@ -246,12 +220,12 @@ export const importKeyFlow = (status: WalletStatus): string =>
   );
 
 /**
- * Manage accounts & groups flow: the single management surface reached from the
- * drawer's "Manage accounts & groups" entry and the Settings menu. Name every
+ * Manage accounts & folders flow: the single management surface reached from the
+ * drawer's "Manage accounts & folders" entry and the Settings menu. Name every
  * account on this network, add one, and manage groups (create/rename/
  * change-icon/delete plus bulk assignment) in the Groups accordion.
  * `expandedGroupId` selects the one open Groups panel — a group's bulk members
- * editor or the "Create a group" panel (null = all collapsed). Both default
+ * editor or the "Create a folder" panel (null = all collapsed). Both default
  * folders are shown even when the wallet has never stored a group, matching the
  * drawer, so they can be renamed here.
  *
@@ -269,7 +243,7 @@ export const accountFlow = (
   // halves read the same seeded folder list, so a wallet that has never stored
   // a group still shows "My accounts" and "Archived accounts" on both.
   return (
-    flowHeader("Accounts & groups", status) +
+    flowHeader("Accounts & folders", status) +
     flowScreen(
       "account",
       accountNamesSection(status, preferences, groups) +
@@ -351,8 +325,6 @@ export const simpleFlowScreen = (
       return appearanceFlow(ctx.status, ctx.preferences);
     case "request-settings":
       return requestSettingsFlow(ctx.status, ctx.preferences);
-    case "security":
-      return securityFlow(ctx.status);
     case "backup-export":
       return backupExportFlow(ctx.status);
     case "backup-restore":

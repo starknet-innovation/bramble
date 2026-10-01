@@ -1,23 +1,23 @@
 /**
  * NFT detail send coverage through the real DOM binding: the first submit is a
  * read-only review, the second matching submit broadcasts, editing invalidates
- * the review, and a poisoning flag never unlocks confirmation.
+ * the review, a poisoning flag never unlocks confirmation, and the receipt
+ * reports the chain's answer — complete, or the failure it was.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
-import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { nftSendFlow } from "../../../../src/sidepanel/journeys/collectibles/nft-send-view";
 import { bindNfts, type NftUiDeps } from "../../../../src/sidepanel/journeys/collectibles/nft-ui";
-import {
-  nftGalleryFlow,
-  nftWatchFlow,
-} from "../../../../src/sidepanel/journeys/collectibles/nft-views";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const RECIPIENT = "0x02a3f4b1c5d6e7089a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071";
 const POISONED = "0x02a3f4b1c5d6e7999999999999999999999999999999999991b2c3d4e5f6071";
+const OTHER_RECIPIENT = "0x07c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2";
+const TRANSFER_HASH = "0x05b1c2d3e4f5061728394a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9";
 
 const status: WalletStatus = {
   accountCount: 1,
@@ -39,14 +39,6 @@ const nft: DiscoveredNft = {
   name: "Everai #5",
   networkId: "SN_MAIN",
   tokenId: "5",
-};
-
-const airdrop: DiscoveredNft = {
-  ...nft,
-  contract: "0x7330000",
-  id: "SN_MAIN:0x7330000:11",
-  name: "Airdrop #11",
-  tokenId: "11",
 };
 
 beforeAll(registerDom);
@@ -72,6 +64,11 @@ const mount = (
     readonly review?: Error;
     readonly transfer?: Error;
   } = {},
+  // The status the activity log reports for the submitted hash. Omitted, the
+  // chain never answers and the receipt stays on the submitted wording.
+  chainStatus?: ActivityEntry["status"],
+  // Holds the chain's answer until it resolves, for what happens meanwhile.
+  chainGate?: Promise<void>,
 ) => {
   const app = document.createElement("div");
   app.replaceChildren(
@@ -81,7 +78,26 @@ const mount = (
   );
   document.body.append(app);
   const calls: Calls = { review: [], transfer: [] };
+  const navigations: string[] = [];
   const wallet = {
+    async loadActivity() {
+      if (!chainStatus) throw new Error("activity unavailable");
+      await chainGate;
+      return {
+        entries: [
+          {
+            accountId: account.id,
+            hash: TRANSFER_HASH,
+            kind: "invoke" as const,
+            networkId: "SN_MAIN" as const,
+            status: chainStatus,
+            submittedAt: 1,
+            summary: "Send NFT #5",
+          },
+        ],
+        historyUnavailable: false,
+      };
+    },
     async loadStatus() {
       return status;
     },
@@ -97,16 +113,20 @@ const mount = (
       if (failures.transfer) {
         throw failures.transfer;
       }
-      return "0xdeadbeef";
+      return TRANSFER_HASH;
     },
   };
   bindNfts({
     app,
+    ...(chainStatus ? { confirmationDelaysMs: [0] } : {}),
+    navigate: (view) => {
+      navigations.push(view);
+    },
     openDetail: () => undefined,
     render: async () => undefined,
     wallet: wallet as unknown as NftUiDeps["wallet"],
   });
-  return { app, calls };
+  return { app, calls, navigations };
 };
 
 const recipientInput = (app: Element): HTMLInputElement => {
@@ -115,6 +135,14 @@ const recipientInput = (app: Element): HTMLInputElement => {
     throw new Error("recipient input missing");
   }
   return input;
+};
+
+const submitButtonOf = (app: Element): HTMLButtonElement => {
+  const button = app.querySelector<HTMLButtonElement>('#nft-send-form button[type="submit"]');
+  if (!button) {
+    throw new Error("NFT send button missing");
+  }
+  return button;
 };
 
 const submit = (app: Element): void => {
@@ -146,10 +174,16 @@ describe("NFT send review", () => {
     submit(app);
     await flush();
     expect(calls.transfer).toHaveLength(1);
-    expect(app.querySelector("#nft-send-result")?.textContent).toContain(
-      "Confirmation is tracked in Activity",
+    // Submitted is not delivered: the receipt opens on what the hash proves and
+    // firms up only once the chain reports the transfer.
+    expect(app.querySelector("#nft-success-title")?.textContent).toBe("Transfer submitted");
+    expect(app.querySelector("#nft-success-description")?.textContent).toContain(
+      "Not confirmed yet",
     );
-    expect(app.querySelector("#nft-review-panel")?.textContent).toContain("Submitted to Starknet");
+    // Nothing to send again while the chain has not answered, so the control
+    // leaves the receipt rather than sitting under it disabled.
+    expect(submitButtonOf(app).hidden).toBe(true);
+    expect(submitButtonOf(app).disabled).toBe(true);
   });
 
   test("echoes separate undeployed-account fee ceilings into NFT submission", async () => {
@@ -294,170 +328,164 @@ describe("NFT send review", () => {
   });
 });
 
-describe("NFT gallery bindings", () => {
-  test("binds add, open, hide, spam, remove, and broken-image behavior", async () => {
-    const watchedPreferences: WalletPreferences = {
-      ...preferences,
-      nfts: [
-        {
-          contract: nft.contract,
-          id: nft.id,
-          label: nft.name,
-          networkId: nft.networkId,
-          tokenId: nft.tokenId,
-        },
-        {
-          contract: "0x6220000",
-          id: "SN_MAIN:0x6220000:9",
-          networkId: "SN_MAIN",
-          spam: true,
-          tokenId: "9",
-        },
-      ],
-    };
-    const app = document.createElement("div");
-    app.replaceChildren(
-      document
-        .createRange()
-        .createContextualFragment(
-          nftGalleryFlow(status, account, watchedPreferences, [nft, airdrop]) +
-            nftWatchFlow(status, account),
-        ),
+// Which of the receipt's two sets of actions shows.
+const actionsShown = (app: Element, tone: "failed" | "succeeded"): boolean =>
+  app.querySelector(`[data-outcome-actions="${tone}"]`)?.hasAttribute("hidden") === false;
+
+const toastTexts = (tone: "error" | "success"): string[] =>
+  Array.from(document.querySelectorAll(`.toast.${tone} .toast-text`)).map(
+    (node) => node.textContent ?? "",
+  );
+
+// Reviews, confirms, and lets the confirmation wait reach the chain's answer.
+const transferTo = async (chainStatus: ActivityEntry["status"]) => {
+  const mounted = mount(undefined, {}, chainStatus);
+  recipientInput(mounted.app).value = RECIPIENT;
+  submit(mounted.app);
+  await flush();
+  submit(mounted.app);
+  await flush();
+  await flush();
+  await flush();
+  expect(mounted.calls.transfer).toHaveLength(1);
+  return mounted;
+};
+
+describe("NFT transfer receipt", () => {
+  test("a pre-confirmed transfer reads as complete", async () => {
+    const { app } = await transferTo("preconfirmed");
+    const receipt = app.querySelector("#nft-success");
+
+    expect(app.querySelector("#nft-success-title")?.textContent).toBe("Transfer complete");
+    expect(app.querySelector("#nft-success-description")?.textContent).toBe(
+      "The collectible is now held by the recipient.",
     );
-    document.body.append(app);
-
-    const added: unknown[][] = [];
-    const spammed: unknown[][] = [];
-    const removed: string[] = [];
-    const opened: string[] = [];
-    let renders = 0;
-    bindNfts({
-      app,
-      openDetail: (id) => {
-        opened.push(id);
-      },
-      render: async () => {
-        renders += 1;
-      },
-      wallet: {
-        async addNft(...args: unknown[]) {
-          added.push(args);
-        },
-        async loadStatus() {
-          return status;
-        },
-        async removeNft(id: string) {
-          removed.push(id);
-        },
-        async setNftSpam(...args: unknown[]) {
-          spammed.push(args);
-        },
-      } as unknown as NftUiDeps["wallet"],
-    });
-
-    app.querySelector<HTMLButtonElement>(`[data-nft-open="${nft.id}"]`)?.click();
-    expect(opened).toEqual([nft.id]);
-
-    const image = app.querySelector<HTMLImageElement>("img.nft-image");
-    image?.dispatchEvent(new Event("error"));
-    expect(image?.classList.contains("nft-image--broken")).toBe(true);
-
-    app.querySelector<HTMLButtonElement>(`[data-nft-hide="${airdrop.id}"]`)?.click();
-    app.querySelector<HTMLButtonElement>(`[data-nft-spam="${nft.id}"]`)?.click();
-    app.querySelector<HTMLButtonElement>(`[data-remove-nft="${nft.id}"]`)?.click();
-
-    const form = app.querySelector<HTMLFormElement>("#nft-form");
-    const contract = form?.querySelector<HTMLInputElement>('input[name="contract"]');
-    const tokenId = form?.querySelector<HTMLInputElement>('input[name="tokenId"]');
-    const label = form?.querySelector<HTMLInputElement>('input[name="label"]');
-    if (!form || !contract || !tokenId || !label) {
-      throw new Error("NFT add form missing");
-    }
-    contract.value = " 0x0444 ";
-    tokenId.value = "12";
-    label.value = "Manual #12";
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-
-    await flush();
-    await flush();
-    expect(added).toContainEqual([
-      airdrop.contract,
-      airdrop.tokenId,
-      airdrop.networkId,
-      airdrop.name,
-    ]);
-    expect(added).toContainEqual(["0x444", "12", "SN_MAIN", "Manual #12"]);
-    expect(spammed).toContainEqual([airdrop.id, true]);
-    expect(spammed).toContainEqual([nft.id, true]);
-    expect(removed).toEqual([nft.id]);
-    expect(renders).toBeGreaterThanOrEqual(4);
+    expect(receipt?.classList.contains("send-success")).toBe(true);
+    expect(receipt?.querySelector('[data-outcome-mark="succeeded"]')?.hasAttribute("hidden")).toBe(
+      false,
+    );
+    // The toast is the chain's answer; the handoff is the receipt heading's job.
+    expect(toastTexts("success")).toEqual(["Transaction pre-confirmed on Starknet"]);
+    // The collectible has moved, so there is nothing here to send again.
+    expect(submitButtonOf(app).hidden).toBe(true);
+    expect(submitButtonOf(app).disabled).toBe(true);
+    expect(actionsShown(app, "succeeded")).toBe(true);
+    expect(actionsShown(app, "failed")).toBe(false);
   });
 
-  test("recovers each gallery control after a wallet failure", async () => {
-    const watchedPreferences: WalletPreferences = {
-      ...preferences,
-      nfts: [
-        {
-          contract: nft.contract,
-          id: nft.id,
-          label: nft.name,
-          networkId: nft.networkId,
-          tokenId: nft.tokenId,
-        },
-      ],
-    };
-    const app = document.createElement("div");
-    app.replaceChildren(
-      document
-        .createRange()
-        .createContextualFragment(
-          nftGalleryFlow(status, account, watchedPreferences, [nft, airdrop]) +
-            nftWatchFlow(status, account),
-        ),
+  // The receipt is rendered after the shell binds its `data-view` controls,
+  // so its ways off are the binding's to wire, or they do nothing.
+  test("the receipt's Activity and Back both leave the transfer", async () => {
+    const { app, navigations } = await transferTo("preconfirmed");
+    const [activity, back] = Array.from(
+      app.querySelectorAll<HTMLButtonElement>('[data-outcome-actions="succeeded"] button'),
     );
-    document.body.append(app);
-    bindNfts({
-      app,
-      openDetail: () => undefined,
-      render: async () => undefined,
-      wallet: {
-        async addNft(...args: unknown[]) {
-          throw new Error(args[0] === airdrop.contract ? "Hide failed" : "Ownership failed");
-        },
-        async loadStatus() {
-          return status;
-        },
-        async removeNft() {
-          throw new Error("Removal failed");
-        },
-        async setNftSpam() {
-          throw new Error("Spam update failed");
-        },
-      } as unknown as NftUiDeps["wallet"],
+    expect(back?.textContent).toBe("Back");
+
+    activity?.click();
+    back?.click();
+    expect(navigations).toEqual(["activity", "home"]);
+  });
+
+  // The chain's two refusals. Each turns the receipt into a failure in place —
+  // heading, the chain's reason, mark, tone and toast — and never leaves
+  // "Transfer complete" over a collectible that did not move.
+  for (const [chainStatus, reason] of [
+    ["rejected", "Starknet rejected this transaction. Nothing changed."],
+    [
+      "reverted",
+      "Starknet reverted this transaction. Review its activity details before retrying.",
+    ],
+  ] as const) {
+    test(`a ${chainStatus} transfer reads as failed, not complete`, async () => {
+      const { app } = await transferTo(chainStatus);
+      const receipt = app.querySelector("#nft-success");
+
+      expect(app.querySelector("#nft-success-title")?.textContent).toBe("Transfer failed");
+      expect(app.querySelector("#nft-success-description")?.textContent).toBe(reason);
+      // The hash stays: it is how the reader finds out why.
+      expect(app.querySelector("#nft-success-hash")?.textContent).not.toBe("");
+      expect(receipt?.classList.contains("send-failure")).toBe(true);
+      expect(receipt?.classList.contains("send-success")).toBe(false);
+      expect(receipt?.querySelector('[data-outcome-mark="failed"]')?.hasAttribute("hidden")).toBe(
+        false,
+      );
+      expect(
+        receipt?.querySelector('[data-outcome-mark="succeeded"]')?.hasAttribute("hidden"),
+      ).toBe(true);
+      expect(toastTexts("error")).toEqual(["Transaction was not confirmed"]);
+      expect(toastTexts("success")).toEqual([]);
     });
 
-    const hide = app.querySelector<HTMLButtonElement>(`[data-nft-hide="${airdrop.id}"]`);
-    const spam = app.querySelector<HTMLButtonElement>(`[data-nft-spam="${nft.id}"]`);
-    const remove = app.querySelector<HTMLButtonElement>(`[data-remove-nft="${nft.id}"]`);
-    hide?.click();
-    spam?.click();
-    remove?.click();
+    test(`a ${chainStatus} transfer leads with Try again, which reviews afresh`, async () => {
+      const { app, calls, navigations } = await transferTo(chainStatus);
+      const button = submitButtonOf(app);
 
-    const form = app.querySelector<HTMLFormElement>("#nft-form");
-    const contract = form?.querySelector<HTMLInputElement>('input[name="contract"]');
-    const tokenId = form?.querySelector<HTMLInputElement>('input[name="tokenId"]');
-    if (!form || !contract || !tokenId) {
-      throw new Error("NFT add form missing");
-    }
-    contract.value = "0x444";
-    tokenId.value = "12";
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      // One primary: the receipt's Try again. The form's control stays off the
+      // receipt, and Activity, where the failure is looked up, steps down.
+      expect(button.hidden).toBe(true);
+      expect(button.disabled).toBe(true);
+      expect(app.querySelector("#nft-send-form")?.getAttribute("data-stage")).toBe("failed");
+      expect(actionsShown(app, "failed")).toBe(true);
+      expect(actionsShown(app, "succeeded")).toBe(false);
+      const [retry, activity] = Array.from(
+        app.querySelectorAll<HTMLButtonElement>('[data-outcome-actions="failed"] button'),
+      );
+      expect(retry?.textContent).toBe("Try again");
+      expect(retry?.classList.contains("secondary")).toBe(false);
+      expect(activity?.textContent).toContain("View in Activity tab");
+      expect(activity?.classList.contains("secondary")).toBe(true);
+      activity?.click();
+      expect(navigations).toEqual(["activity"]);
 
+      // The same recipient, reviewed afresh: the refused fee is not reused.
+      retry?.click();
+      await flush();
+      expect(calls.review).toHaveLength(2);
+      expect(calls.transfer).toHaveLength(1);
+      expect(app.querySelector("#nft-success")).toBeNull();
+      expect(button.hidden).toBe(false);
+      expect(button.textContent).toContain("Confirm transfer");
+
+      submit(app);
+      await flush();
+      expect(calls.transfer).toHaveLength(2);
+    });
+  }
+
+  test("a refusal that lands after the reader moved on leaves the new review alone", async () => {
+    let answer = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const { app, calls } = mount(undefined, {}, "reverted", gate);
+    const input = recipientInput(app);
+    input.value = RECIPIENT;
+    submit(app);
+    await flush();
+    submit(app);
     await flush();
     await flush();
-    expect(hide?.disabled).toBe(false);
-    expect(spam?.disabled).toBe(false);
-    expect(remove?.disabled).toBe(false);
-    expect(app.querySelector("#nft-result")?.textContent).toBe("Ownership failed");
+
+    // While the chain is still answering, the reader edits the recipient — which
+    // clears the receipt — and reviews a new transfer.
+    input.value = OTHER_RECIPIENT;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    submit(app);
+    await flush();
+    expect(submitButtonOf(app).textContent).toContain("Confirm transfer");
+
+    answer();
+    await flush();
+    await flush();
+
+    // The first transfer's refusal answers for a receipt no longer on screen.
+    expect(submitButtonOf(app).textContent).toContain("Confirm transfer");
+    expect(app.querySelector("#nft-send-form")?.getAttribute("data-stage")).toBe("review");
+    expect(toastTexts("error")).toEqual([]);
+    submit(app);
+    await flush();
+    expect(calls.transfer).toHaveLength(2);
+    expect(sameFelt(calls.transfer[1]?.[3], OTHER_RECIPIENT)).toBe(true);
   });
 });

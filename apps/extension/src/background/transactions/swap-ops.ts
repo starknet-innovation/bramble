@@ -206,7 +206,7 @@ const swapPrepareResponse = async (
     if (!reviewedFee) {
       return {
         error:
-          "The network fee could not be estimated. Check the RPC endpoint and retry before signing.",
+          "Couldn't estimate the network fee for this swap, so nothing was prepared. The quote may have moved, or the account may not hold enough to cover the swap and its fee. Try again, or reduce the amount.",
       };
     }
     const minBuyText = formatTokenAmount(policy.route.minBuyAmount, buyToken.decimals);

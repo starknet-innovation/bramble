@@ -16,6 +16,10 @@
  * boundary.
  */
 export const SECRET_MATERIAL_FILES = new Set([
+  // Translates raw background diagnostics into reader-facing sentences. Three
+  // of its lookup keys name secret-material fields because that is the exact
+  // text the background threw; nothing here reads, logs, or persists one.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy.ts",
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Privileged first-run boundary: the phrase is validated through Krusty and
@@ -100,11 +104,13 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Setup strength meter: reads the typed vault credential only to score and
   // describe it; nothing is stored, logged, or sent.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-meter.ts",
+  // Show/hide on a passphrase being created: names the field in its own
+  // accessible label and flips the input type. It never reads the value.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-reveal.ts",
   // Weak-credential acknowledgement shared by the software and Ledger setup
   // flows: reads the typed vault credential only to decide whether to reveal a
   // checkbox and whether the step may proceed. It holds no reference to the
   // value, stores nothing, and sends nothing.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/weak-passphrase-ack.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   // Recovery discovery keeps the phrase and vault credential only in the
   // first-run DOM closure and forwards them to the privileged background.

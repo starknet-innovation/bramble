@@ -8,7 +8,7 @@ import {
   STRK_TOKEN_ADDRESS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
@@ -43,9 +43,8 @@ const run = (
       await rerender(deps);
     },
     (error: unknown) => {
-      const message = errorMessage(error, "Ready multisig request failed");
-      setResult(deps, resultId, message);
-      showToast(message, "error", button ?? deps.app);
+      setResult(deps, resultId, errorLine(error, "That request didn't go through"));
+      showToast(errorMessage(error, "Ready multisig request failed"), "error", button ?? deps.app);
       buttonBusy(button, false);
     },
   );
@@ -129,7 +128,7 @@ const bindList = (deps: MultisigUiDeps): void => {
           throw error;
         }
         deps.openList();
-        return "Ready multisig removed from this wallet";
+        return "Multisig removed from this wallet";
       });
     });
   });
@@ -244,7 +243,7 @@ const preparedCall = (form: HTMLFormElement) => {
     );
     const balance = String(data.get("tokenBalance") ?? "");
     if (balance && amount > BigInt(balance)) {
-      throw new Error("Amount exceeds the shared account balance");
+      throw new Error("Amount exceeds the multisig account balance");
     }
     const call = buildErc20TransferCall(
       normalizeFeltInput(String(data.get("tokenAddress") ?? "")),

@@ -1,5 +1,14 @@
+import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { SidepanelWallet } from "@bramble/wallet-ui/lab";
-import { bindAddressBook, bindHomeUi, bindReceiveWalletCard } from "@bramble/wallet-ui/lab";
+import {
+  bindAddressBook,
+  bindHomeUi,
+  bindReceiveWalletCard,
+  confirmationOutcome,
+  DEPLOY_RECEIPT_COPY,
+  outcomeReceiptFor,
+  paintOutcomeReceipt,
+} from "@bramble/wallet-ui/lab";
 import { softwareAccount, statusFor } from "../fixtures/fixtures";
 import {
   allowances,
@@ -15,6 +24,24 @@ import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 
 const NOSTR_PUBLIC_KEY = "22".repeat(32);
+const DEPLOY_HASH = "0x5f2a7c19b4e86d30af51c8b27e94d6013a8f45c2e7b91d0a3c6e8f24b71d9053";
+
+// The stage the binder reveals once the chain answers the deployment, painted
+// through the writer and the copy the binder uses, because the fixture runtime
+// submits nothing. The answer comes off the production status table, so a
+// failure checkpoint shows the reason a reader would.
+const paintDeployAnswer =
+  (chainStatus: ActivityEntry["status"]) =>
+  (context: FrameContext): void => {
+    context.app.querySelector("#deploy-review-stage")?.setAttribute("hidden", "");
+    context.app.querySelector("#deploy-success")?.removeAttribute("hidden");
+    paintOutcomeReceipt(
+      context.app,
+      "deploy-success",
+      outcomeReceiptFor(confirmationOutcome(chainStatus), DEPLOY_RECEIPT_COPY, DEPLOY_HASH),
+      "SN_MAIN",
+    );
+  };
 
 const hydrateReceiveCard = async (context: FrameContext): Promise<void> => {
   bindReceiveWalletCard({
@@ -67,7 +94,7 @@ const openDrawer = (context: FrameContext): void => {
   trigger.click();
 };
 
-// The Pro switch that reveals the wallet card and the keys is production
+// The Advanced switch that reveals the wallet card and the keys is production
 // behaviour, so the checkpoint binds the real form; saving is out of scope here.
 const bindFixtureAddressBook = (context: FrameContext): void => {
   bindAddressBook({
@@ -198,8 +225,40 @@ export const portfolioScenario: WalletScenario = {
       id: "deploy-account",
       label: "Deploy account review",
       narrative:
-        "Single-signer deployment uses a dedicated transaction review and receipt rather than expanding Home.",
-      state: { accountDeployment: "required", task: "review deployment" },
+        "The fee is quoted onto the screen, so Deploy is a decision the reader already has the number for.",
+      state: { accountDeployment: "required", task: "deploy" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          view: "deploy-account",
+        }),
+      id: "deploy-submitted",
+      label: "Account deployed",
+      narrative:
+        "The receipt every settled transaction ends on: what happened, one line saying what it means, and the identifier.",
+      prepare: paintDeployAnswer("preconfirmed"),
+      state: { accountDeployment: "confirmed", task: "receipt" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          view: "deploy-account",
+        }),
+      id: "deploy-failed",
+      label: "Deployment failed",
+      narrative:
+        'A deployment the chain rejects turns the same receipt into the failure: its mark, the chain\'s reason, and the hash to look it up by — never "Account deployed".',
+      prepare: paintDeployAnswer("rejected"),
+      state: { accountDeployment: "required", chain: "rejected", task: "receipt" },
     },
     {
       content: () =>
@@ -365,7 +424,7 @@ export const assetsScenario: WalletScenario = {
       id: "address-book",
       label: "Address book",
       narrative:
-        "Label and address are the whole form; a shared wallet card and the manual key fields wait behind Pro.",
+        "Label and address are the whole form; a shared wallet card and the manual key fields wait behind Advanced.",
       prepare: bindFixtureAddressBook,
       state: { coordination: "ready", import: "wallet card", saved: 1 },
     },

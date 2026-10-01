@@ -3,6 +3,7 @@
  * only accepted activity reaches the green receipt, while reverted and delayed
  * statuses retain distinct recovery states.
  */
+
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
@@ -10,14 +11,14 @@ import type { ActivityStatus } from "@bramble/transactions/activity";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/journeys/send/send-views";
 import {
-  CONFIRMATION_DELAYS_MS,
-  confirmationOutcome,
-} from "../../../../src/sidepanel/journeys/send/transfer-model";
-import {
   bindTransfer,
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
-import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
+import {
+  CONFIRMATION_DELAYS_MS,
+  confirmationOutcome,
+} from "../../../../src/sidepanel/shared/confirm-submitted";
+import { accountDisplayName, accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x1234";
@@ -135,7 +136,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   test("reads the receipt as sender sent amount to recipient, with copy and explorer", async () => {
@@ -152,12 +153,14 @@ describe("Send confirmation outcomes", () => {
       account.address,
       RECIPIENT,
     ]);
+    // The hash row is the shared outcome hash: shortened, linked to the
+    // explorer, and copyable in full.
     expect(
-      app.querySelector<HTMLElement>('#send-success-tx [aria-label="Copy transaction hash"]')
-        ?.dataset["copy"],
+      app.querySelector<HTMLElement>('#send-success [aria-label="Copy transaction hash"]')?.dataset[
+        "copy"
+      ],
     ).toBe(HASH);
-    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-explorer");
-    expect(explorer?.hidden).toBe(false);
+    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-hash-link");
     expect(explorer?.getAttribute("href")).toBe(`https://starkscan.co/tx/${HASH}`);
     expect(explorer?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(app.querySelector("#send-view-activity")?.textContent).toBe("View in Activity tab");
@@ -192,14 +195,60 @@ describe("Send confirmation outcomes", () => {
     expect(app.querySelector("#transfer-result")?.textContent).toBe("");
   });
 
-  test("hides the explorer link on a network without an explorer", async () => {
-    const { app, form } = mountOutcome("accepted");
-    // Devnet has no public explorer; the form carries the network it rendered for.
-    form.dataset["networkId"] = "SN_DEVNET";
+  test("the failure control copies the error, and no hash row is left empty", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+    const { app, form } = mountOutcome("rejected");
     await submitTwice(form);
-    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-explorer");
-    expect(explorer?.hidden).toBe(true);
+    expect(form.dataset["stage"]).toBe("failed");
+    const reason = app.querySelector("#send-failure-copy")?.textContent ?? "";
+    expect(reason.length).toBeGreaterThan(0);
+    // What is worth taking to support is the reason, not the identifier — this
+    // control used to copy the hash, which a failure usually does not have.
+    app.querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy the error"]')?.click();
+    await flush();
+    expect(copied).toEqual([reason]);
+    // A chain rejection does have a hash, so its row stays.
+    expect(
+      app
+        .querySelector("#send-failure-hash")
+        ?.closest(".send-outcome-hash")
+        ?.hasAttribute("hidden"),
+    ).toBe(false);
+  });
+
+  test("withdraws the hash row from an outcome that never got one", async () => {
+    const { app, form } = mountOutcome("accepted");
+    // Before any submission every outcome row is empty; showing one would be an
+    // empty line beside a control that copies nothing.
+    for (const id of ["send-success-hash", "send-pending-hash", "send-failure-hash"]) {
+      expect(
+        app.querySelector(`#${id}`)?.closest(".send-outcome-hash")?.hasAttribute("hidden"),
+      ).toBe(true);
+    }
+    await submitTwice(form);
+    expect(
+      app
+        .querySelector("#send-success-hash")
+        ?.closest(".send-outcome-hash")
+        ?.hasAttribute("hidden"),
+    ).toBe(false);
+  });
+
+  test("leaves the hash unlinked on a network without an explorer", async () => {
+    const { app, form } = mountOutcome("accepted");
+    // Devnet has no public explorer; the form carries the network it rendered
+    // for, under its own key — `data-network-id` on a Send container is what
+    // once made every click inside the flow navigate to Settings.
+    form.dataset["sendNetwork"] = "SN_DEVNET";
+    await submitTwice(form);
+    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-hash-link");
     expect(explorer?.hasAttribute("href")).toBe(false);
+    // The hash and its copy control stay: only the link is withheld.
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   // The point of the fast-confirmation work: a pre-confirmation is a real
@@ -210,7 +259,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   test("shows the failure recovery state when Starknet rejects", async () => {
@@ -233,7 +282,8 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("pending");
     expect(app.querySelector("#send-pending")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-pending-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-pending-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-pending-hash")?.getAttribute("title")).toBe(HASH);
   });
 });
 
