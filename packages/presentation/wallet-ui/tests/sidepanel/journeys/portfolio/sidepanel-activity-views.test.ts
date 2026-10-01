@@ -380,7 +380,7 @@ describe("activity journey boundaries", () => {
           amount: "1",
           hash: "0x124",
           kind: "invoke",
-          summary: "Swap 1 STRK for ~2.5 USDC via AVNU",
+          summary: "Swap 1 STRK for ~2.5 USDC via avnu",
           token: "STRK",
         },
         { ...transaction, hash: "0x125", kind: "invoke", summary: "Unstake 10 STRK" },

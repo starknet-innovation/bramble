@@ -16,24 +16,12 @@ import type { TokenBalance, WalletStatus } from "../../../popup/responses/respon
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
-import {
-  accountAvatar,
-  accountDisplayName,
-  accountLabel,
-  flowScreen,
-  noAccountEmpty,
-} from "../../shared/parts";
+import { accountDisplayName, accountLabel, flowScreen, noAccountEmpty } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { tokenDropdown } from "../../shared/token-dropdown";
-import { multisigDisplayName } from "../multisig/multisig-views";
 import { starknetNetworkGlyph, tokenGlyph } from "../portfolio/token-row";
-import {
-  type SendAsset,
-  type SendIntent,
-  sendAssets,
-  sendBalanceLine,
-  sendRecipientAccounts,
-} from "./send-model";
+import { type SendAsset, type SendIntent, sendAssets, sendBalanceLine } from "./send-model";
+import { recipientStage } from "./send-recipient-view";
 import {
   type TransferMode,
   type TransferModeCopy,
@@ -73,118 +61,6 @@ const sendProgress = (copy: TransferModeCopy): string => `
       <span class="send-step-mark">3</span><span>Confirm</span>
     </li>
   </ol>`;
-
-const recipientAccountRow = (
-  account: AccountRef,
-  preferences: WalletPreferences | null,
-  isSender = false,
-): string => `
-  <button class="send-recipient-row" type="button"
-    data-send-recipient="${escapeHtml(account.address)}"
-    data-send-recipient-label="${escapeHtml(accountDisplayName(account, preferences))}"
-    data-send-search="${escapeHtml(`${accountDisplayName(account, preferences)} ${account.address}`.toLowerCase())}">
-    <span class="send-recipient-avatar">${accountAvatar(account.address)}</span>
-    <span class="send-recipient-copy">
-      <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
-      <code>${escapeHtml(accountLabel(account.address))}</code>
-      ${isSender ? "<small>Current account · shield into its private balance</small>" : ""}
-    </span>
-    ${icon("chevronRight")}
-  </button>`;
-
-const addressBookRow = (entry: NonNullable<WalletPreferences["addressBook"]>[number]): string => `
-  <button class="send-recipient-row" type="button"
-    data-send-recipient="${escapeHtml(entry.address)}"
-    data-send-recipient-label="${escapeHtml(entry.label)}"
-    data-send-search="${escapeHtml(`${entry.label} ${entry.address}`.toLowerCase())}">
-    <span class="send-recipient-avatar">${accountAvatar(entry.address)}</span>
-    <span class="send-recipient-copy">
-      <strong>${escapeHtml(entry.label)}</strong>
-      <code>${escapeHtml(accountLabel(entry.address))}</code>
-    </span>
-    ${icon("chevronRight")}
-  </button>`;
-
-const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
-  const name = multisigDisplayName(record);
-  return `
-  <button class="send-recipient-row" type="button"
-    data-send-recipient="${escapeHtml(record.address)}"
-    data-send-recipient-label="${escapeHtml(name)}"
-    data-send-search="${escapeHtml(`${name} multisig ${record.address}`.toLowerCase())}">
-    <span class="send-recipient-avatar">${accountAvatar(record.address)}</span>
-    <span class="send-recipient-copy">
-      <strong>${escapeHtml(name)}</strong>
-      <code>${escapeHtml(accountLabel(record.address))}</code>
-      <small>Ready Multisig account</small>
-    </span>
-    ${icon("chevronRight")}
-  </button>`;
-};
-
-const recipientStage = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  preferences: WalletPreferences | null,
-  multisigs: readonly ArgentMultisigRecord[],
-): string => {
-  const accounts = sendRecipientAccounts(status.accounts, status.networkId);
-  const sharedAccounts = multisigs.filter((record) => record.networkId === status.networkId);
-  const contacts =
-    preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
-  return `<section class="send-stage send-recipient-stage" id="send-recipient-stage">
-    <div class="send-origin-context">
-      <p class="send-section-title">Sending from</p>
-      <div class="send-origin-account">
-        <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
-        <span class="send-recipient-copy">
-          <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-          <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
-        </span>
-      </div>
-    </div>
-    <label class="send-search">
-      <span>Sending to</span>
-      <span class="send-search-control">${icon("search")}${inputControl({
-        ariaLabel: "Recipient address or saved name",
-        attributes: { id: "send-recipient-search" },
-        autocomplete: "off",
-        className: "mono",
-        placeholder: "Address or saved name",
-        spellcheck: false,
-        type: "search",
-      })}</span>
-    </label>
-    <div class="send-recipient-list" data-send-recipient-panel="contacts">
-      <div class="send-list-heading">${icon("book")}<strong>Address book</strong></div>
-      ${contacts.map(addressBookRow).join("")}
-      <div id="send-recipient-save-row" hidden>
-        ${button({
-          attributes: { id: "send-recipient-save" },
-          icon: "book",
-          label: "Save address",
-          variant: "secondary",
-        })}
-      </div>
-    </div>
-    <div class="send-recipient-list" data-send-recipient-panel="accounts">
-      <div class="send-list-heading">${icon("wallet")}<strong>My accounts</strong></div>
-      ${
-        accounts.length > 0 || sharedAccounts.length > 0
-          ? accounts
-              .map((stored) => recipientAccountRow(stored, preferences, stored.id === account?.id))
-              .join("") + sharedAccounts.map(multisigRecipientRow).join("")
-          : emptyState("No other accounts are available on this network.")
-      }
-    </div>
-    <p class="send-recipient-empty" id="send-recipient-empty" hidden>No matching recipient.</p>
-    ${button({
-      attributes: { id: "send-recipient-continue" },
-      disabled: account === null,
-      label: "Continue with address",
-    })}
-  </section>`;
-};
 
 // The dropdown shows a ticker; composing needs the token's decimals, balance
 // and price. Those travel in one hidden element per token, keyed by the same id

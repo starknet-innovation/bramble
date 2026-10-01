@@ -112,7 +112,7 @@ export const tokensFlow = (
       "tokens",
       `<section class="section">
         <div class="menu-list" role="group" aria-label="Token actions">
-          ${walletMenuRow("token-catalog", "Pick tokens from the AVNU list", "coins")}
+          ${walletMenuRow("token-catalog", "Pick tokens from the avnu list", "coins")}
           ${walletMenuRow("token-add", "Add by contract", "plus")}
           ${walletMenuRow("token-discover", "Find held tokens", "search")}
         </div>
