@@ -204,6 +204,7 @@ const paintDeployReceipt = async (
       {
         confirmedDescription: "This account is on Starknet and can submit transactions.",
         confirmedTitle: "Account deployed",
+        failedTitle: "Deployment failed",
         submittedTitle: "Deployment submitted",
       },
       hash,
@@ -287,25 +288,27 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           buttonBusy(target, false);
           return;
         }
-        showToast("Deployment submitted", "success", target);
         reviewStage?.setAttribute("hidden", "");
         successStage?.removeAttribute("hidden");
         scopedStatus(target, "");
         buttonBusy(target, false);
         // Submitted is not deployed. The receipt says only what the chain has
-        // answered for, so it opens on the submitted wording and firms up once
-        // the account is actually on-chain.
+        // answered for, so it opens on the submitted wording and turns into
+        // the deployment or its failure once the chain answers.
         await paintDeployReceipt(deps, null, response);
-        await paintDeployReceipt(
-          deps,
-          await awaitConfirmation({
-            ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
-            hash: response,
-            loadActivity: () => deps.wallet.loadActivity(),
-            stillCurrent: () => successStage?.isConnected === true,
-          }),
-          response,
-        );
+        const outcome = await awaitConfirmation({
+          ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
+          hash: response,
+          loadActivity: () => deps.wallet.loadActivity(),
+          stillCurrent: () => successStage?.isConnected === true,
+        });
+        if (successStage?.isConnected !== true) return;
+        await paintDeployReceipt(deps, outcome, response);
+        // As Send and Swap do, the toast is the chain's answer rather than the
+        // handoff, which the receipt heading already states.
+        if (outcome) {
+          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", target);
+        }
       },
       (error: unknown) => failed(error, "Deployment failed"),
     );

@@ -10,7 +10,8 @@
  *
  * The title and description follow the chain's answer, never the handoff — see
  * ./confirm-submitted. A receipt that says "complete" beside a hash nothing has
- * confirmed is the failure this shape exists to prevent.
+ * confirmed, or beside one the chain rejected or reverted, is the failure this
+ * shape exists to prevent.
  */
 
 import { escapeHtml } from "@bramble/core/html";
@@ -21,40 +22,60 @@ import { applyOutcomeHash, outcomeHashRow } from "./outcome-hash";
 
 /** What one settled transaction is allowed to claim. */
 export type OutcomeReceipt = {
-  /** One line saying what now exists or moved. */
+  /** One line saying what now exists or moved, or why the chain refused it. */
   readonly description: string;
+  /** The chain rejected or reverted it: the receipt carries the failure mark. */
+  readonly failed: boolean;
   readonly hash: string;
   readonly title: string;
 };
 
 /**
- * Builds the receipt from the chain's answer. `null` is the journey running out
- * of patience — neither success nor failure — so the wording drops to what is
- * certain: it was submitted, and it is not confirmed yet.
+ * Builds the receipt from the chain's answer, which has three endings, the same
+ * three Swap has. Succeeded: the confirmed wording. Failed — rejected or
+ * reverted: the failure title over the chain's reason, so a transaction that
+ * did not land never reads as one that did. `null`, the journey running out of
+ * patience — neither success nor failure: the wording drops to what is certain,
+ * that it was submitted and is not confirmed yet.
  */
 export const outcomeReceiptFor = (
   outcome: ConfirmationOutcome | null,
   copy: {
     readonly confirmedDescription: string;
     readonly confirmedTitle: string;
+    readonly failedTitle: string;
     readonly submittedTitle: string;
   },
   hash: string,
-): OutcomeReceipt => ({
-  description: outcome ? copy.confirmedDescription : "Not confirmed yet. Follow it in Activity.",
-  hash,
-  title: outcome ? copy.confirmedTitle : copy.submittedTitle,
-});
+): OutcomeReceipt => {
+  if (!outcome) {
+    return {
+      description: "Not confirmed yet. Follow it in Activity.",
+      failed: false,
+      hash,
+      title: copy.submittedTitle,
+    };
+  }
+  return outcome.kind === "failed"
+    ? { description: outcome.message, failed: true, hash, title: copy.failedTitle }
+    : { description: copy.confirmedDescription, failed: false, hash, title: copy.confirmedTitle };
+};
 
 /**
  * Renders the section for `id`, hidden until its journey reveals it. `actions`
  * is the caller's own markup, so each screen offers the next step that suits
  * it; every screen gets the same mark, heading and identifier row.
+ *
+ * Both marks ship and the paint shows one: the receipt opens before the chain
+ * answers, so it has to be able to turn into a failure in place.
  */
 export const outcomeReceiptSection = (id: string, actions: string): string => `
   <section class="send-outcome send-success" id="${id}" role="status" aria-live="polite" hidden>
-    <span class="send-outcome-mark" aria-hidden="true">
+    <span class="send-outcome-mark" data-outcome-mark="succeeded" aria-hidden="true">
       <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
+    </span>
+    <span class="send-outcome-mark" data-outcome-mark="failed" aria-hidden="true" hidden>
+      <svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg>
     </span>
     <div class="send-outcome-copy">
       <h2 id="${id}-title"></h2>
@@ -80,7 +101,8 @@ export const outcomeReceiptActions = (activityId: string): string =>
   )}`;
 
 /**
- * Writes the receipt into the section for `id`. Safe to call on every paint.
+ * Writes the receipt into the section for `id`, mark and tone included. Safe
+ * to call on every paint.
  */
 export const paintOutcomeReceipt = (
   root: ParentNode,
@@ -88,6 +110,15 @@ export const paintOutcomeReceipt = (
   receipt: OutcomeReceipt,
   networkId: string,
 ): void => {
+  const section = root.querySelector(`#${id}`);
+  section?.classList.toggle("send-success", !receipt.failed);
+  section?.classList.toggle("send-failure", receipt.failed);
+  section
+    ?.querySelector('[data-outcome-mark="succeeded"]')
+    ?.toggleAttribute("hidden", receipt.failed);
+  section
+    ?.querySelector('[data-outcome-mark="failed"]')
+    ?.toggleAttribute("hidden", !receipt.failed);
   setText(root, `${id}-title`, receipt.title);
   setText(root, `${id}-description`, receipt.description);
   applyOutcomeHash(root, `${id}-hash`, receipt.hash, networkId);

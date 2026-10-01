@@ -52,6 +52,7 @@ const paintNftReceipt = async (
       {
         confirmedDescription: "The collectible is now held by the recipient.",
         confirmedTitle: "Transfer complete",
+        failedTitle: "Transfer failed",
         submittedTitle: "Transfer submitted",
       },
       hash,
@@ -269,7 +270,6 @@ const bindSendForm = (deps: NftUiDeps): void => {
       )
       .then(
         async (transactionHash) => {
-          showToast("Transfer submitted", "success", deps.app);
           form.dataset["stage"] = "submitted";
           form.removeAttribute("aria-busy");
           if (reviewPanel) {
@@ -286,14 +286,25 @@ const bindSendForm = (deps: NftUiDeps): void => {
             result.textContent = "";
           }
           // Submitted is not delivered. The receipt opens on what is certain
-          // and firms up once the chain reports the transfer.
+          // and turns into the transfer or its failure once the chain answers;
+          // as in Send and Swap, only that answer is toasted.
           await paintNftReceipt(deps, reviewPanel, null, transactionHash);
           void awaitConfirmation({
             ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
             hash: transactionHash,
             loadActivity: () => deps.wallet.loadActivity(),
             stillCurrent: () => form.isConnected,
-          }).then((outcome) => paintNftReceipt(deps, reviewPanel, outcome, transactionHash));
+          }).then(async (outcome) => {
+            if (!form.isConnected) return;
+            await paintNftReceipt(deps, reviewPanel, outcome, transactionHash);
+            if (outcome) {
+              showToast(
+                outcome.toast,
+                outcome.kind === "succeeded" ? "success" : "error",
+                deps.app,
+              );
+            }
+          });
           if (requiresDeployment) {
             void watchDeployment(
               { render: deps.render, wallet: deps.wallet },
