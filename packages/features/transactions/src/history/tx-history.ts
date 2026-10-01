@@ -123,6 +123,13 @@ const transferDirection = (parties: TransferParties, account: string): TransferD
  * token generation are discoverable. The counterparty is the other party to the
  * transfer, canonicalized to `0x`-hex; a zero address (mint/burn) is kept so
  * received-by-mint activity is not silently hidden.
+ *
+ * A zero-amount transfer is dropped in both directions (audit #163): on OZ
+ * ERC20 tokens anyone may call `transfer_from(victim, lookalike, 0)` with no
+ * allowance, and a lookalike may send the victim 0, so such an event proves
+ * nothing about the account and exists only to plant a copyable lookalike
+ * counterparty in the feed. The user's own zero-value sends keep their local
+ * wallet-recorded row, which owns the hash in {@link mergeActivity}.
  */
 export const decodeTransferEvent = (
   event: HistoryEvent,
@@ -142,7 +149,7 @@ export const decodeTransferEvent = (
   const parties = readTransferParties(event);
   const txHash =
     typeof event.transaction_hash === "string" ? canonicalFelt(event.transaction_hash) : null;
-  if (parties === null || txHash === null) {
+  if (parties === null || txHash === null || BigInt(parties.amountRaw) === 0n) {
     return null;
   }
   if (!isSafeBlockNumber(event.block_number)) {

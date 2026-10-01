@@ -38,26 +38,41 @@ import type { StarkscanTransfer } from "./starkscan-types";
 import { MAX_HISTORY_ENTRIES, onChainActivityEntry, type TransferDirection } from "./tx-history";
 import { scanTransactionHistory, type TransactionHistoryScan } from "./tx-history-scan";
 
+// The token a transfer moved, and whether the user tracks it. An untracked
+// token is any contract that emitted a Transfer naming the account, so nothing
+// it reports about the other party is trustworthy.
 const matchingToken = (
   tokens: readonly TokenConfig[],
   transfer: StarkscanTransfer,
   networkId: TransactionHistoryScan["networkId"],
-): TokenConfig | null => {
+): { readonly token: TokenConfig; readonly tracked: boolean } | null => {
   const configured = tokens.find((token) => sameFelt(token.address, transfer.tokenAddress));
   if (configured !== undefined) {
-    return configured;
+    return { token: configured, tracked: true };
   }
   if (!isSafeDecimals(transfer.tokenDecimals)) {
     return null;
   }
+  const address = canonicalFelt(transfer.tokenAddress) ?? transfer.tokenAddress;
   return {
-    address: canonicalFelt(transfer.tokenAddress) ?? transfer.tokenAddress,
-    decimals: transfer.tokenDecimals,
-    id: `starkscan:${networkId}:${canonicalFelt(transfer.tokenAddress) ?? transfer.tokenAddress}`,
-    name: "Untracked token",
-    networkId,
-    symbol: "TOKEN",
+    token: {
+      address,
+      decimals: transfer.tokenDecimals,
+      id: `starkscan:${networkId}:${address}`,
+      name: "Untracked token",
+      networkId,
+      symbol: "TOKEN",
+    },
+    tracked: false,
   };
+};
+
+const isZeroAmount = (value: string): boolean => {
+  try {
+    return BigInt(value) === 0n;
+  } catch {
+    return true;
+  }
 };
 
 const transferDirection = (
@@ -80,12 +95,18 @@ const toActivity = (
   if (transfer.standard !== "erc20") {
     return null;
   }
-  const token = matchingToken(input.tokens, transfer, input.networkId);
+  const matched = matchingToken(input.tokens, transfer, input.networkId);
   const direction = transferDirection(transfer, input.account);
   const timestampMs = Date.parse(transfer.timestampIso);
+  const amountRaw = transfer.amount ?? transfer.rawValue;
+  // Audit #163: a zero-amount leg (either direction) and an outgoing leg of an
+  // untracked token are both free for a third party to fabricate, and exist
+  // only to plant a lookalike "Sent to" / "Received from" row in the feed.
   if (
-    token === null ||
+    matched === null ||
     direction === null ||
+    isZeroAmount(amountRaw) ||
+    (!matched.tracked && direction.direction === "out") ||
     !Number.isSafeInteger(timestampMs) ||
     timestampMs < 0
   ) {
@@ -94,7 +115,7 @@ const toActivity = (
   const entry = onChainActivityEntry({
     accountId: input.accountId,
     decoded: {
-      amountRaw: transfer.amount ?? transfer.rawValue,
+      amountRaw,
       blockNumber: transfer.blockNumber,
       counterparty: canonicalFelt(direction.counterparty) ?? direction.counterparty,
       direction: direction.direction,
@@ -102,9 +123,14 @@ const toActivity = (
     },
     networkId: input.networkId,
     timestampMs,
-    token,
+    token: matched.token,
   });
-  return isActivityEntry(entry) ? entry : null;
+  // An incoming untracked-token row stays visible, but without a stored
+  // counterparty the feed offers no one-click copy of whatever address the
+  // arbitrary contract named as the sender.
+  const { counterparty: _untrusted, ...withoutCounterparty } = entry;
+  const kept = matched.tracked ? entry : withoutCounterparty;
+  return isActivityEntry(kept) ? kept : null;
 };
 
 /**
