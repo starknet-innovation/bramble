@@ -20,6 +20,10 @@ import {
   type RevealUiDeps,
   revealFlow,
 } from "../../../../src/sidepanel/journeys/settings/reveal-ui";
+import {
+  GUARDED_COPY_NOTE,
+  GUARDED_COPY_NOTE_NO_CLEAR,
+} from "../../../../src/sidepanel/shared/guarded-copy";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -208,6 +212,30 @@ describe("bindReveal", () => {
     expect(copied).toEqual([MNEMONIC, ""]);
 
     Object.defineProperty(window, "setTimeout", { configurable: true, value: realSetTimeout });
+  });
+
+  test("warns what the clipboard does beside the copy control", () => {
+    // The copy review cut this to "Copy at your own risk", which states no fact
+    // (mc-wallet #476): other apps can read it, it may sync, and the clear.
+    const { container } = mount({
+      resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+    });
+    expect(container.querySelector("#reveal-copy-note")?.textContent).toBe(GUARDED_COPY_NOTE);
+  });
+
+  test("does not promise the clipboard clear where the browser refuses it", () => {
+    const happy = (window as unknown as { happyDOM: { setURL: (url: string) => void } }).happyDOM;
+    happy.setURL("moz-extension://bramble/sidepanel.html");
+    try {
+      const { container } = mount({
+        resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+      });
+      expect(container.querySelector("#reveal-copy-note")?.textContent).toBe(
+        GUARDED_COPY_NOTE_NO_CLEAR,
+      );
+    } finally {
+      happy.setURL("about:blank");
+    }
   });
 
   test("refuses to copy before anything has been revealed", async () => {
