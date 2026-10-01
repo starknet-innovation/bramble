@@ -7,11 +7,25 @@
 import { BRAMBLE_WORDMARK } from "@bramble/ui-kit/brand-mark";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { inputControl, selectField, textareaField, textField } from "@bramble/ui-kit/fields";
+import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "./backup-verify";
+
+/**
+ * The consequence of the network every first-run wallet is created on. The
+ * binder pins onboarding to DEFAULT_NETWORK, so the line follows it: on Starknet
+ * Mainnet it says the wallet holds real funds; on a testnet default there is no
+ * such consequence to state. It replaces the old acknowledgement tickbox with a
+ * stated fact on each step that creates, imports or restores accounts.
+ */
+export const MAINNET_CONSEQUENCE = "This wallet is on Starknet Mainnet and holds real funds.";
+const networkConsequence = (): string =>
+  DEFAULT_NETWORK.id === "SN_MAIN"
+    ? `<p class="hint onboarding-network-consequence">${MAINNET_CONSEQUENCE}</p>`
+    : "";
 
 const flowBack = (label: string): string =>
   iconButton({
@@ -302,6 +316,7 @@ const importKeyStep = (): string => `
         placeholder: "0x…",
         spellcheck: false,
       })}
+      ${networkConsequence()}
       <p id="import-key-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -357,6 +372,7 @@ const recoveryAccountsStep = (): string => `
     ${stepHead("wallet", "Find your accounts")}
     <div class="onboarding-fields">
 ${recoveryScanFields()}
+      ${networkConsequence()}
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -385,6 +401,7 @@ const accountStep = (): string => `
         </span>
         <span class="onboarding-account-check">${icon("check")}</span>
       </button>
+      ${networkConsequence()}
       <p id="form-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -403,6 +420,7 @@ const ledgerStep = (status: WalletStatus): string => `
     ${stepHead("lock", "Choose a password")}
     <form id="ledger-setup-form" class="onboarding-fields">
       ${passwordFields("ledger")}
+      ${networkConsequence()}
       <p id="ledger-passphrase-result" role="status"></p>
       <div class="onboarding-step-cta">
         ${button({

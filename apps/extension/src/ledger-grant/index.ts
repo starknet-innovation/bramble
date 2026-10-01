@@ -148,7 +148,7 @@ const render = (): void => {
   const validationNotice = textElement(
     "p",
     "grant-footnote",
-    "Hardware preview · Bramble has not been tested against every Ledger model.",
+    "Hardware preview · Bramble has not been tested against every Ledger model. Use test funds only.",
   );
   const methodOptions = element("div", "grant-method-options");
   const cableMethod = element("button", "grant-method");
