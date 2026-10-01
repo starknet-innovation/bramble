@@ -13,7 +13,7 @@
  * Ledger paths, Stark hashes, public app/key responses, and raw signatures can
  * cross it. Private keys and device identifiers never do.
  */
-import { isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   isLedgerBrokerResponse,
   type LedgerBrokerCommand,
@@ -222,15 +222,37 @@ const requirePublicKeyResponse = (value: unknown) => {
   };
 };
 
+const SIGNATURE_RESPONSE_KEYS = ["errorMessage", "r", "returnCode", "s"] as const;
+const LEDGER_STATUS_OK = 0x9000;
+
+const isRecoveryByte = (value: unknown): boolean =>
+  value === undefined ||
+  (typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 0xff);
+
+const isSignatureBytes = (value: unknown): value is Uint8Array =>
+  value instanceof Uint8Array && value.length === 32;
+
+// The pinned @ledgerhq/hw-app-starknet `signHash` reply carries a recovery
+// byte `v` next to `r`/`s` on every branch (and `v` is present but undefined
+// when the device returns only 65 data bytes). `v` is accepted and dropped:
+// the host verifies `(r, s)` itself. Any other unknown key still fails closed.
+// A non-OK status is forwarded with empty `r`/`s` so the shared signing
+// helper classifies it (rejected on device, blind signing disabled) instead
+// of reporting a generic device error.
 const requireSignatureResponse = (value: unknown) => {
-  const response = requireBaseResponse(value);
-  if (
-    Object.keys(response).length !== 4 ||
-    !(response["r"] instanceof Uint8Array) ||
-    response["r"].length !== 32 ||
-    !(response["s"] instanceof Uint8Array) ||
-    response["s"].length !== 32
-  ) {
+  const { v, ...response } = requireBaseResponse(value);
+  if (!hasOnlyKnownKeys(response, SIGNATURE_RESPONSE_KEYS) || !isRecoveryByte(v)) {
+    throw new LedgerRejection("unexpected-device-error");
+  }
+  if (response.returnCode !== LEDGER_STATUS_OK) {
+    return {
+      errorMessage: response.errorMessage,
+      r: new Uint8Array(0),
+      returnCode: response.returnCode,
+      s: new Uint8Array(0),
+    };
+  }
+  if (!isSignatureBytes(response["r"]) || !isSignatureBytes(response["s"])) {
     throw new LedgerRejection("unexpected-device-error");
   }
   return {
