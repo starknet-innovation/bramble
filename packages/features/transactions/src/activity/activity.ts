@@ -13,6 +13,7 @@ import {
   type StarknetNetworkId,
   sameFelt,
 } from "@bramble/wallet-model/networks";
+import { isSnip9DetailForKind, type Snip9RelayDetail } from "./relay-detail";
 
 export { activityToCsv } from "./activity-csv";
 
@@ -102,7 +103,7 @@ export type ActivityEntry = {
    * declaration apart from a call — they are different transaction types on
    * chain and carry different meaning in an audit.
    */
-  readonly kind: "declare" | "deploy" | "invoke" | "transfer";
+  readonly kind: "declare" | "deploy" | "invoke" | "relay-signed" | "transfer";
   readonly networkId: StarknetNetworkId;
   /**
    * Consecutive `TXN_HASH_NOT_FOUND` observations. Reset by any answer that
@@ -110,13 +111,13 @@ export type ActivityEntry = {
    */
   readonly notFoundCount?: number;
   /**
-   * Provenance: `"wallet"` only on rows this wallet recorded for a transaction
-   * it submitted itself (see the background's `recordSubmittedActivity`). Rows
-   * discovered from chain history or an explorer never carry it, so a
-   * third-party event that names this account cannot pose as a payment the
-   * user made. Absent on legacy rows, which are treated as unknown origin.
+   * Provenance: `"wallet"` only on rows this wallet recorded for a submission
+   * of its own (see `recordSubmittedActivity`); `"relay"` on an execution a
+   * scan found on chain, which never counts as a payment the user made. Rows
+   * discovered elsewhere never carry `"wallet"`, so a third-party event that
+   * names this account cannot pose as a payment. Absent on legacy rows.
    */
-  readonly origin?: "wallet";
+  readonly origin?: "wallet" | "relay";
   /**
    * True once a status read returned a real finality for this hash. Only a
    * transaction the wallet has seen can be judged gone after repeated
@@ -124,6 +125,7 @@ export type ActivityEntry = {
    * window lapses.
    */
   readonly seenOnChain?: boolean;
+  readonly snip9?: Snip9RelayDetail;
   readonly status: ActivityStatus;
   readonly submittedAt: number;
   readonly summary: string;
@@ -229,7 +231,11 @@ const isNotFoundCount = (value: unknown): value is number | undefined =>
   value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
 
 const isActivityKind = (value: unknown): value is ActivityEntry["kind"] =>
-  value === "declare" || value === "deploy" || value === "invoke" || value === "transfer";
+  value === "declare" ||
+  value === "deploy" ||
+  value === "invoke" ||
+  value === "relay-signed" ||
+  value === "transfer";
 
 const isOptionalDetail = (value: unknown): value is string | undefined =>
   value === undefined || (typeof value === "string" && value.length > 0 && value.length <= 200);
@@ -252,6 +258,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "notFoundCount",
     "origin",
     "seenOnChain",
+    "snip9",
     "status",
     "submittedAt",
     "summary",
@@ -276,7 +283,8 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
   (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
   isNotFoundCount(value["notFoundCount"]) &&
-  (value["origin"] === undefined || value["origin"] === "wallet");
+  isSnip9DetailForKind(value["snip9"], value["kind"]) &&
+  (value["origin"] === undefined || value["origin"] === "wallet" || value["origin"] === "relay");
 
 const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry[]> => {
   const stored = await store.get(ACTIVITY_STORE_KEY);

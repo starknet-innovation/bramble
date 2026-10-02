@@ -63,6 +63,22 @@ describe("observation tiers", () => {
     }
   });
 
+  test("never watches a signed-for-relay row, which has no transaction of its own", () => {
+    const signed = entry({
+      kind: "relay-signed",
+      status: "pending",
+      summary: "Signed for relay",
+    });
+    expect(isObserved(signed, 1_000)).toBe(false);
+    expect(isObservedAt(signed, "fast", 1_000)).toBe(false);
+    expect(isObservedAt(signed, "slow", 1_000)).toBe(false);
+    // Recorded accepted (a signature, not a submit), so it is never retired
+    // with a "could not confirm" notice either.
+    expect(expiredObservations([{ ...signed, status: "accepted" }], UNRESOLVED_WINDOW_MS)).toEqual(
+      [],
+    );
+  });
+
   test("bounds each tier by its own window", () => {
     expect(isObserved(entry(), UNRESOLVED_WINDOW_MS - 1)).toBe(true);
     expect(isObserved(entry(), UNRESOLVED_WINDOW_MS)).toBe(false);

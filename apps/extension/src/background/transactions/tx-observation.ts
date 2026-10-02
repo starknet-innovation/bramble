@@ -71,6 +71,12 @@ export const SLOW_OBSERVATION_PERIOD_MINUTES = 15;
 export type ObservationTier = "fast" | "slow";
 
 const tierFor = (entry: ActivityEntry): ObservationTier | null => {
+  // A "signed for relay" row records a local signing with no transaction of
+  // its own: there is nothing to poll, and a not-found answer would surface a
+  // false "dropped" notice. Never observe it.
+  if (entry.kind === "relay-signed") {
+    return null;
+  }
   if (isUnresolvedActivityStatus(entry.status)) {
     return "fast";
   }
