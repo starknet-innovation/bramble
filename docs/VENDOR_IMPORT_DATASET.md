@@ -177,6 +177,23 @@ seeds' recorded addresses on the first run:
   scan shapes through the ETH-seeded scheme (Krusty's `deriveArgentLegacyKeypair`)
   on the address axis.
 
+## Phase 3 status — matrix live on mainnet (2026-10-02)
+
+34 fixtures, zero errors, every detectability class represented (D1 ×4, D2 ×20,
+D3 ×4, D4 ×3, D5 ×3): the class-era and upgrade ladder, funded-undeployed
+probes in ETH/STRK/native USDC, used-and-emptied, gap and past-window indices,
+simulated guardian states (set / removed / escape pending / owner-escape
+pending), Braavos deploys at both indices plus 2FA-at-deploy with a real P-256
+key, custom-salt and UDC-unique D4 shapes, a funded custom-salt counterfactual
+(D5), the 25th-word fixture, a Bramble-axis control, the cross-vendor account,
+and the nine app-made ground-truth accounts. Ledger of record:
+`tools/vendor-dataset/manifest.json`. Two Braavos tooling facts worth keeping:
+fee estimation must run with validation on (the constructor parses the
+signature, so SKIP_VALIDATE's empty signature reverts), and the deploy
+signature carries the full `AdditionalDeploymentParams` struct poseidon-signed
+out-of-band. Pending: owner-rotation pass 2 after the escape security period,
+and the verification run against a Bramble build.
+
 ## Phases
 
 0. **Research** (this document): pin derivation + deploy shapes from vendor source.
