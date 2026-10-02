@@ -4,11 +4,15 @@
  * them and run its recipient rules; anything unreadable fails closed.
  */
 import { describe, expect, test } from "bun:test";
-import { outsideExecutionCalls } from "@bramble/transactions/outside-execution-calls";
+import {
+  outsideExecutionCalls,
+  outsideExecutionDetails,
+} from "@bramble/transactions/outside-execution-calls";
 import { constants, hash, outsideExecution } from "starknet";
 
 const TOKEN = "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-const OPTIONS = { caller: "ANY_CALLER", execute_after: 1, execute_before: 999_999_999_999 };
+const CALLER = "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+const OPTIONS = { caller: CALLER, execute_after: 1, execute_before: 999_999_999_999 };
 const calls = [
   { calldata: ["0xabc", "0x5", "0x0"], contractAddress: TOKEN, entrypoint: "transfer" },
   { calldata: ["0xdef", "0x7", "0x0"], contractAddress: TOKEN, entrypoint: "approve" },
@@ -79,5 +83,54 @@ describe("outsideExecutionCalls", () => {
     expect(outsideExecutionCalls(badFelt)).toBe("malformed");
 
     expect(outsideExecutionCalls({ primaryType: "OutsideExecution" })).toBe("malformed");
+  });
+});
+
+describe("outsideExecutionDetails", () => {
+  for (const version of ["1", "2"] as const) {
+    test(`reads the binds a v${version} message covers`, () => {
+      expect(outsideExecutionDetails(envelope(version), "0x1234")).toEqual({
+        callCount: 2,
+        caller: CALLER,
+        messageHash: "0x1234",
+        nonce: "0x1",
+        revision: version,
+      });
+    });
+  }
+
+  test("canonicalizes the signer's message hash", () => {
+    expect(outsideExecutionDetails(envelope("1"), "4660")).toMatchObject({
+      messageHash: "0x1234",
+    });
+  });
+
+  test("leaves a plain SNIP-12 message alone", () => {
+    expect(outsideExecutionDetails({ message: {}, primaryType: "Mail" }, "0x1")).toBeNull();
+    expect(outsideExecutionDetails("not typed data", "0x1")).toBeNull();
+  });
+
+  test("fails closed on a missing, ambiguous or unreadable field", () => {
+    expect(outsideExecutionDetails({ primaryType: "OutsideExecution" }, "0x1")).toBe("malformed");
+
+    const badNonce = envelope("2") as { message: Record<string, unknown> };
+    badNonce.message["Nonce"] = { nested: true };
+    expect(outsideExecutionDetails(badNonce, "0x1")).toBe("malformed");
+
+    const badCaller = envelope("1") as { message: Record<string, unknown> };
+    badCaller.message["caller"] = { nested: true };
+    expect(outsideExecutionDetails(badCaller, "0x1")).toBe("malformed");
+
+    const ambiguous = envelope("1") as { message: Record<string, unknown> };
+    ambiguous.message["Calls"] = [];
+    expect(outsideExecutionDetails(ambiguous, "0x1")).toBe("malformed");
+
+    const badCall = envelope("2") as { message: { Calls: Record<string, unknown>[] } };
+    const first = badCall.message.Calls[0];
+    if (!first) throw new Error("fixture");
+    first["Calldata"] = "0x1";
+    expect(outsideExecutionDetails(badCall, "0x1")).toBe("malformed");
+
+    expect(outsideExecutionDetails(envelope("1"), "not-a-felt")).toBe("malformed");
   });
 });
