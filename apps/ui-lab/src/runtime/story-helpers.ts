@@ -65,3 +65,36 @@ export const checkpointStory = (
   name,
   play: async ({ canvasElement }) => assertCheckpointReady(canvasElement),
 });
+
+/**
+ * A receipt checkpoint the chain refused: beyond rendering, the failure mark
+ * shows and the success mark does not, under the failure heading and the
+ * chain's reason, and Try again is the one primary action. Guards the shared
+ * receipt against painting "complete" over a transaction that did not land.
+ */
+export const failedReceiptStory = (
+  name: string,
+  scenarioId: string,
+  checkpointId: string,
+  receipt: { readonly id: string; readonly reason: string; readonly title: string },
+): LabStory => ({
+  args: { checkpointId, scenarioId },
+  name,
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const section = body?.querySelector(`#${receipt.id}`);
+    await expect(section?.querySelector('[data-outcome-mark="failed"]')).toBeVisible();
+    await expect(section?.querySelector('[data-outcome-mark="succeeded"]')).not.toBeVisible();
+    await expect(body?.querySelector(`#${receipt.id}-title`)).toHaveTextContent(receipt.title);
+    await expect(body?.querySelector(`#${receipt.id}-description`)).toHaveTextContent(
+      receipt.reason,
+    );
+    const actions = section?.querySelector('[data-outcome-actions="failed"]');
+    await expect(actions).toBeVisible();
+    await expect(section?.querySelector('[data-outcome-actions="succeeded"]')).not.toBeVisible();
+    const primary = Array.from(actions?.querySelectorAll("button:not(.secondary)") ?? []);
+    await expect(primary.map((control) => control.textContent?.trim())).toEqual(["Try again"]);
+  },
+});

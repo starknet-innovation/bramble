@@ -72,7 +72,7 @@ The lab has 162 deterministic checkpoints across 15 scenario families:
 | --- | --- |
 | Full-screen onboarding | Welcome, import method, phrase entry, local passphrase, account selection, generated-backup verification, Ledger protection, and completion. |
 | Returning unlock | Locked, request-waiting, and failed-authentication side-panel states. |
-| Home and portfolio | Ready, tabs, account drawer, undeployed, offline, error, and empty-network states. |
+| Home and portfolio | Ready, tabs, account drawer, undeployed, deployment receipt and failure, offline, error, and empty-network states. |
 | Send lifecycle | Details, review latency, fee failure, signing, broadcast, and receipt. |
 | Swap lifecycle | Picker, quote latency, route sanity, frozen review, failure, and submission. |
 | Private balances and actions | Explicit disclosure, registration, empty notes, shielding, selective and complete balance sharing, private transfer and public withdrawal, dapp-specific anonymizers, AVNU private swap, scoped sub-accounts, proof liveness, success, service failure, missing configuration, locked requests, and Ledger fail-closed behavior. |
@@ -82,7 +82,7 @@ The lab has 162 deterministic checkpoints across 15 scenario families:
 | dApp request takeover | Foreground takeover, receipt-token watch, explicit review-later behavior, and a dedicated parked-request list. |
 | Account-isolated Activity | Account switching, immediate clearing, refresh, restoration, and separation from dApp decisions. |
 | Assets and permissions | Receive, focused add/detect token journeys, token detail, address book, and ERC20 allowances. |
-| NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, and submission. |
+| NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, submission, and a reverted transfer. |
 | Argent multisig | Empty/setup, deployment availability, shared portfolio, collecting/ready/stale intents, signer-authority drift, exact review, and sync recovery. |
 | Settings and security | Focused appearance, request, network/endpoint, account/import, connected-site, backup/export/restore, and security boundaries. |
 

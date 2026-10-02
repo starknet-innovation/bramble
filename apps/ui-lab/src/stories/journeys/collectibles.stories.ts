@@ -1,4 +1,12 @@
-import { checkpointStory, LAB_META, type LabMeta } from "../../runtime/story-helpers";
+import { expect } from "storybook/test";
+import {
+  assertCheckpointReady,
+  checkpointStory,
+  failedReceiptStory,
+  LAB_META,
+  type LabMeta,
+  type LabStory,
+} from "../../runtime/story-helpers";
 
 const meta: LabMeta = {
   ...LAB_META,
@@ -16,4 +24,18 @@ export const Hidden = checkpointStory("Hidden collectibles", "nft", "hidden");
 export const Recipient = checkpointStory("Choose recipient", "nft", "recipient");
 export const TransferReview = checkpointStory("Transfer review", "nft", "review");
 export const RecipientBlocked = checkpointStory("Recipient blocked", "nft", "blocked");
-export const Submitted = checkpointStory("Transfer submitted", "nft", "submitted");
+// The label names what the screen shows, so the play holds the heading to it.
+export const Submitted: LabStory = {
+  ...checkpointStory("Transfer complete", "nft", "submitted"),
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("#nft-success-title")).toHaveTextContent("Transfer complete");
+  },
+};
+export const TransferFailed = failedReceiptStory("Transfer failed", "nft", "failed", {
+  id: "nft-success",
+  reason: "Starknet reverted this transaction. Review its activity details before retrying.",
+  title: "Transfer failed",
+});

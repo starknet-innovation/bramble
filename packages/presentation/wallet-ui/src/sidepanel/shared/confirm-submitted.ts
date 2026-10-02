@@ -31,13 +31,15 @@ export type ConfirmationOutcome =
   | { readonly kind: "succeeded"; readonly toast: string };
 
 // One row per status a journey acts on. Statuses absent here — `pending`, and
-// no status observed yet — mean keep waiting.
+// no status observed yet — mean keep waiting. A failure's message is read
+// under every journey's failure heading, so it must be true of a send, a swap,
+// a deployment and an NFT transfer alike.
 const CONFIRMATION_OUTCOMES: Partial<Record<ActivityEntry["status"], ConfirmationOutcome>> = {
   accepted: { kind: "succeeded", toast: "Transaction confirmed on Starknet" },
   preconfirmed: { kind: "succeeded", toast: "Transaction pre-confirmed on Starknet" },
   rejected: {
     kind: "failed",
-    message: "Starknet rejected this transaction. No transfer was completed.",
+    message: "Starknet rejected this transaction. Nothing changed.",
     toast: "Transaction was not confirmed",
   },
   reverted: {

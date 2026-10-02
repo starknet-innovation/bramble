@@ -51,6 +51,7 @@ const bind = (app: Element): void => {
   document.body.append(app);
   bindNfts({
     app,
+    navigate: () => undefined,
     openDetail: () => undefined,
     render: async () => undefined,
     wallet: {

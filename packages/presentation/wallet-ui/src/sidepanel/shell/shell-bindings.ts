@@ -19,7 +19,11 @@ import {
   scopedStatus,
   showToast,
 } from "../shared/dom";
-import { outcomeReceiptFor, paintOutcomeReceipt } from "../shared/outcome-receipt";
+import {
+  bindOutcomeReceipt,
+  outcomeReceiptFor,
+  paintOutcomeReceipt,
+} from "../shared/outcome-receipt";
 import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
 
@@ -185,6 +189,18 @@ export const awaitDeployment = async (
   return false;
 };
 
+/**
+ * What the deployment receipt says for each of the chain's answers. Exported so
+ * UI Lab paints its receipt checkpoints from the copy the binder ships rather
+ * than a restatement of it; display text only, it carries no authority.
+ */
+export const DEPLOY_RECEIPT_COPY = {
+  confirmedDescription: "This account is on Starknet and can submit transactions.",
+  confirmedTitle: "Account deployed",
+  failedTitle: "Deployment failed",
+  submittedTitle: "Deployment submitted",
+} as const;
+
 // A deployment has nothing to itemise, so its receipt states the outcome, says
 // once what now exists, and shows the hash. The network comes off the live
 // status rather than the markup, because the explorer link must match the chain
@@ -199,16 +215,7 @@ const paintDeployReceipt = async (
   paintOutcomeReceipt(
     deps.app,
     "deploy-success",
-    outcomeReceiptFor(
-      outcome,
-      {
-        confirmedDescription: "This account is on Starknet and can submit transactions.",
-        confirmedTitle: "Account deployed",
-        failedTitle: "Deployment failed",
-        submittedTitle: "Deployment submitted",
-      },
-      hash,
-    ),
+    outcomeReceiptFor(outcome, DEPLOY_RECEIPT_COPY, hash),
     status.networkId,
   );
 };
@@ -254,10 +261,8 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     buttonBusy(target, false);
   };
 
-  // Quoted once per mounted screen. The binder runs on every paint, and the
-  // repaint that follows the quote would otherwise ask for another.
-  if (!QUOTED_DEPLOYMENTS.has(target) && !target.disabled) {
-    QUOTED_DEPLOYMENTS.add(target);
+  // Without a fee, the background quotes rather than deploys.
+  const quote = (): void => {
     buttonBusy(target, true);
     scopedStatus(target, "Estimating fee…");
     void deps.wallet.deployAccount().then(
@@ -268,11 +273,28 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       },
       (error: unknown) => failed(error, "Could not estimate the deployment fee"),
     );
+  };
+
+  // Quoted once per mounted screen. The binder runs on every paint, and the
+  // repaint that follows the quote would otherwise ask for another.
+  if (!QUOTED_DEPLOYMENTS.has(target) && !target.disabled) {
+    QUOTED_DEPLOYMENTS.add(target);
+    quote();
   }
 
-  deps.app
-    ?.querySelector("#deploy-view-activity")
-    ?.addEventListener("click", () => deps.setActiveView("activity"));
+  if (deps.app) {
+    bindOutcomeReceipt(deps.app, "deploy-success", {
+      activity: () => deps.setActiveView("activity"),
+      // A refused deployment changed nothing, so retrying is the screen it
+      // started on, quoted afresh: the refused fee is not offered again.
+      retry: () => {
+        successStage?.setAttribute("hidden", "");
+        reviewStage?.removeAttribute("hidden");
+        if (reviewPanelRoot) renderFragment(reviewPanelRoot, "");
+        quote();
+      },
+    });
+  }
   target.addEventListener("click", () => {
     buttonBusy(target, true);
     scopedStatus(target, "Submitting deployment…");
@@ -288,25 +310,27 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           buttonBusy(target, false);
           return;
         }
-        showToast("Deployment submitted", "success", target);
         reviewStage?.setAttribute("hidden", "");
         successStage?.removeAttribute("hidden");
         scopedStatus(target, "");
         buttonBusy(target, false);
         // Submitted is not deployed. The receipt says only what the chain has
-        // answered for, so it opens on the submitted wording and firms up once
-        // the account is actually on-chain.
+        // answered for, so it opens on the submitted wording and turns into
+        // the deployment or its failure once the chain answers.
         await paintDeployReceipt(deps, null, response);
-        await paintDeployReceipt(
-          deps,
-          await awaitConfirmation({
-            ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
-            hash: response,
-            loadActivity: () => deps.wallet.loadActivity(),
-            stillCurrent: () => successStage?.isConnected === true,
-          }),
-          response,
-        );
+        const outcome = await awaitConfirmation({
+          ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
+          hash: response,
+          loadActivity: () => deps.wallet.loadActivity(),
+          stillCurrent: () => successStage?.isConnected === true,
+        });
+        if (successStage?.isConnected !== true) return;
+        await paintDeployReceipt(deps, outcome, response);
+        // As Send and Swap do, the toast is the chain's answer rather than the
+        // handoff, which the receipt heading already states.
+        if (outcome) {
+          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", target);
+        }
       },
       (error: unknown) => failed(error, "Deployment failed"),
     );
@@ -317,14 +341,16 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
  * Binds the network picker. A network switch returns to Settings. Accounts are
  * switched in the drawer, which carries its own binding — the manage view lists
  * accounts to name and to file into folders, never to select. Only picker
- * buttons bind: matching the attribute alone once caught the Send form, which
- * carried its network as plain data, and turned every click inside it into a
- * switch.
+ * buttons bind: the Send form carries `data-network-id` as plain data, and
+ * binding it would turn every click inside the form into a switch.
  */
 export const bindPickers = (deps: ShellBindingDeps): void => {
   const { app, wallet, render, setActiveView } = deps;
   const result = app?.querySelector<HTMLElement>("#picker-result");
 
+  // Buttons only. The attribute alone once matched a form that carried the
+  // network for its own reasons, and every click inside it bubbled up here —
+  // switching network and leaving for settings.
   app?.querySelectorAll<HTMLButtonElement>("button[data-network-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const networkId = button.dataset["networkId"];
