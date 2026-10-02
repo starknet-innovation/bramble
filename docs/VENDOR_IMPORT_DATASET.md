@@ -9,6 +9,47 @@ and reach the scripts through environment variables at run time.
 Interactive combination map ("tree of life"):
 https://claude.ai/artifact/2Mba3kTgzJzZkvrWbu7J42
 
+## Runbook — setting the dataset up (state as of 2026-10-02)
+
+Ground rules first: the password manager holds the authoritative copy of every
+seed; `.env.vendor-seeds.local` is the scripts' working copy. These phrases are
+research material from the day they enter that file — never reuse them for real
+funds, keep balances at dust, and never let the words into chat, commits, or
+issues (addresses are public and fine).
+
+**Done:** R1 (Ready, 5 accounts: #1 deployed 0.4.0, #2 smart/backend-salted,
+#3–5 recorded) and B1 (Braavos, 4 accounts: #1 deployed + 2FA, #2 deployed,
+#3 funded-undeployed with 2.3 STRK, #4 recorded). Calibration passed against
+both.
+
+**Manual steps remaining (~15 min, ~$10, in the apps):**
+1. Ready account 2 (`0x01af449d…`): fund ~$3 and make one outgoing transfer so
+   it deploys — that turns the guardian-in-constructor specimen on, and pins
+   Argent's real guardian value for every simulated one.
+2. Ready account 3 (`0x04e0c443…`): send ~2 USDC and **nothing else** — it is
+   currently empty. Its whole purpose is holding only a token the ETH/STRK
+   balance probe cannot see. Never transact from it.
+3. Optional: X1 — generate a fresh seed, import it into both apps, record one
+   address per app. Two minutes, no funds.
+
+**Script seeds (2 min, no apps):** generate one fresh 12-word phrase per empty
+slot (`READY_MATRIX`, `BRAAVOS_MATRIX`, `GAPS`, `SEED_DEPLOYER`) — the
+calibration project has `gen-seed.ts` for this — store each in the password
+manager, paste into the env file. These seeds never touch a vendor app; the
+Phase-3 script derives and deploys everything from them. Set
+`BRAMBLE_DATASET_PASSPHRASE` to any word only if the 25th-word dimension should
+run.
+
+**Deployer funding (~$150, after the seeds exist):** the script derives the
+deployer account from `BRAMBLE_DATASET_SEED_DEPLOYER` and prints its address —
+no raw private key changes hands. Send roughly $110 in STRK (all v3 fees are
+paid in STRK, and most fixture dust is STRK), $20 in ETH, $20 in USDC. Expect
+most of it to stay locked in fixtures permanently.
+
+**Then hands off:** Phase 3 deploys the matrix and writes the manifest;
+verification is `bun run build`, load `dist/` at `chrome://extensions`, import
+each seed on the recovery screen, and diff what it lists against the manifest.
+
 ## Detectability classes
 
 Every account in the manifest carries one:
