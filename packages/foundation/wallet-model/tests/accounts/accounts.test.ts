@@ -12,6 +12,9 @@ import {
   isAccountIdForNetwork,
   isAccountRef,
   isKeylessAccount,
+  isLegacyV10AccountRef,
+  isRecoverableAccountRef,
+  recoveryLadderIndex,
 } from "@bramble/wallet-model/accounts";
 import {
   LEDGER_EIP2645_APPLICATION,
@@ -165,4 +168,39 @@ test("record contract fields keep a salt for every family whose address uses one
   });
   expect(accountContractFields("argent", undefined)).toBeNull();
   expect(accountContractFields("braavos", undefined)).toBeNull();
+});
+
+test("a Ready-scheme account record is x-only and schema-gated (issue 505)", () => {
+  const argentx = {
+    accountContractType: "argent" as const,
+    address: "0x123",
+    classHash: argentClassHash,
+    deploymentSalt: "0x456",
+    derivation: { addressIndex: 4, kind: "argentx-bip44" as const },
+    id: "SN_MAIN:0x123",
+    networkId: "SN_MAIN" as const,
+    publicKeyX: "0x456",
+  };
+  expect(isAccountRef(argentx)).toBe(true);
+  expect(isRecoverableAccountRef(argentx)).toBe(true);
+  // The scheme yields no Y coordinate, so carrying one is a forgery.
+  expect(isAccountRef({ ...argentx, publicKeyY: "0x789" })).toBe(false);
+  // And the wallet's own kind still requires it.
+  expect(isAccountRef({ ...derived, publicKeyY: undefined })).toBe(false);
+  // An account-axis field on the Ready scheme is not a coordinate it has.
+  expect(isAccountRef({ ...argentx, derivation: { ...argentx.derivation, accountIndex: 0 } })).toBe(
+    false,
+  );
+  // No v10 writer produced the kind: the v10 validator must refuse it.
+  expect(isLegacyV10AccountRef(argentx)).toBe(false);
+  expect(isLegacyV10AccountRef(derived)).toBe(true);
+  // One ladder position per candidate, whichever axis the scheme walks.
+  expect(recoveryLadderIndex(argentx)).toBe(4);
+  expect(recoveryLadderIndex(derived)).toBe(0);
+  expect(
+    recoveryLadderIndex({
+      ...derived,
+      derivation: { ...derived.derivation, addressIndex: 7 },
+    }),
+  ).toBe(7);
 });

@@ -127,6 +127,7 @@ const knownViewingKey = await kms.deriveStrk20ViewingKey(
 );
 
 if (
+  !("publicKeyY" in knownAccount) ||
   knownAccount.address !== referenceAccount.address ||
   knownAccount.publicKeyX !== referenceAccount.publicKeyX ||
   knownAccount.publicKeyY !== referenceAccount.publicKeyY ||

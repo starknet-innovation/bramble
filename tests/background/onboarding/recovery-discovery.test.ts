@@ -8,6 +8,7 @@ import {
   ARGENT_ACCOUNT_CLASS_HASH,
   type DerivedAccountRef,
   OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+  recoveryLadderIndex,
 } from "@bramble/wallet-model/accounts";
 import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
@@ -107,12 +108,12 @@ describe("recovery discovery", () => {
     expect(requestedTokenSymbols.every((symbols) => symbols.join(",") === "ETH,STRK")).toBe(true);
     expect(
       (manual as { readonly candidates: readonly RecoveryAccountCandidate[] }).candidates.map(
-        ({ account }) => `${account.accountContractType}:${account.derivation.accountIndex}`,
+        ({ account }) => `${account.accountContractType}:${recoveryLadderIndex(account)}`,
       ),
     ).toContain("openzeppelin:42");
     expect(
       (manual as { readonly candidates: readonly RecoveryAccountCandidate[] }).candidates.map(
-        ({ account }) => `${account.accountContractType}:${account.derivation.accountIndex}`,
+        ({ account }) => `${account.accountContractType}:${recoveryLadderIndex(account)}`,
       ),
     ).toContain("argent:42");
     expect(
@@ -126,6 +127,54 @@ describe("recovery discovery", () => {
           .concat(["openzeppelin:42", "argent:42", "braavos:42"]),
       ),
     );
+  });
+
+  test("walks Ready's ladder for every Argent release and the wallet's own for the pinned one", async () => {
+    // Issue 505: Ready derives on an ETH-seeded tree, so the vendor shapes must
+    // carry the argentx scheme, while one extra shape keeps accounts this
+    // wallet itself created on its own ladder discoverable.
+    const argentShapes: Array<string | undefined> = [];
+    const braavosShapes: Array<string | undefined> = [];
+    const deps = {
+      activeStateCoordinator: createActiveStateCoordinator(),
+      preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+      recoveryDiscovery: createRecoveryDiscoveryCache(),
+      runtimeRpc: {
+        ...defaultRuntimeRpc,
+        async getDeploymentStatus() {
+          return false;
+        },
+        async getTokenBalances({
+          tokens,
+        }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
+          return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
+        },
+      },
+      session: createUnlockSession(),
+      wallet: {
+        ...walletStub,
+        async previewAccount(input: AccountDerivationInput) {
+          if (input.accountContractType === "argent") argentShapes.push(input.derivation);
+          if (input.accountContractType === "braavos") braavosShapes.push(input.derivation);
+          return accountFor(input);
+        },
+      },
+    };
+
+    await handleOnboardingOps(deps, "wallet.discoverRecoveryAccounts", {
+      manualIndex: 0,
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      networkId: "SN_MAIN",
+      type: "wallet.discoverRecoveryAccounts",
+    });
+
+    const vendor = argentShapes.filter((shape) => shape === "argentx-bip44");
+    const own = argentShapes.filter((shape) => shape === undefined);
+    expect(vendor.length).toBe(deploymentClasses("argent").length);
+    expect(own.length).toBe(1);
+    // Braavos never names a scheme; the vault maps its family to the vendor axis.
+    expect(braavosShapes.every((shape) => shape === undefined)).toBe(true);
+    expect(braavosShapes.length).toBe(deploymentClasses("braavos").length);
   });
 
   test("previews every Argent release an account could have been deployed with", async () => {

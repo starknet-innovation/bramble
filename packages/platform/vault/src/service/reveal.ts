@@ -21,7 +21,9 @@ export const activeAccountSecrets = (vault: Vault): RevealedSecrets => {
   }
   const account = vault.accounts.find((stored) => stored.id === accountId);
   const seedId =
-    account?.derivation.kind === "starknet-bip44" ? account.derivation.seedId : undefined;
+    account?.derivation.kind === "starknet-bip44" || account?.derivation.kind === "argentx-bip44"
+      ? account.derivation.seedId
+      : undefined;
   if (seedId === undefined) {
     return { mnemonic: vault.mnemonic, privateKey: signingKey.privateKey };
   }

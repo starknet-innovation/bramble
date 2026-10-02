@@ -4,9 +4,9 @@ import { canonicalFelt, sameFelt } from "../networks/networks";
 import { ARGENT_ACCOUNT_CLASS_HASH, deploymentClasses } from "./account-families";
 import {
   type AccountContractType,
-  type DerivedAccountRef,
   isAccountContractType,
-  isDerivedAccountRef,
+  isRecoverableAccountRef,
+  type RecoverableAccountRef,
 } from "./accounts";
 
 /** Shared recovery bounds consumed by input validation, scanning, and UI. */
@@ -32,11 +32,21 @@ export type RecoveryAccountSelection = {
   readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
   readonly classHash?: string;
+  readonly derivation?: RecoveryDerivationKind;
 };
+
+/**
+ * Which key ladder a selection's index walks. Absent means the family's own
+ * vendor scheme — Ready's ETH-seeded address axis for Argent (issue 505), the
+ * BIP-44 address axis for Braavos, this wallet's hardened account axis for
+ * OpenZeppelin — so only an Argent account created by this wallet on its own
+ * ladder needs to spell `starknet-bip44` out.
+ */
+export type RecoveryDerivationKind = "argentx-bip44" | "starknet-bip44";
 
 /** One derived account and the chain evidence that made it discoverable. */
 export type RecoveryAccountCandidate = {
-  readonly account: DerivedAccountRef;
+  readonly account: RecoverableAccountRef;
   readonly deployed: boolean;
   readonly funded: boolean;
 };
@@ -73,10 +83,23 @@ const hasSelectableClass = (
  */
 export const isRecoveryAccountSelection = (value: unknown): value is RecoveryAccountSelection =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountContractType", "accountIndex", "classHash"]) &&
+  hasOnlyKnownKeys(value, ["accountContractType", "accountIndex", "classHash", "derivation"]) &&
   isAccountContractType(value["accountContractType"]) &&
   isRecoveryAccountIndex(value["accountIndex"]) &&
-  hasSelectableClass(value["accountContractType"], value["classHash"]);
+  hasSelectableClass(value["accountContractType"], value["classHash"]) &&
+  hasSelectableDerivation(value["accountContractType"], value["derivation"]);
+
+// Only Argent accounts exist on two ladders (the vendor's and this wallet's
+// own); every other family walks exactly one, so naming a scheme there is
+// either redundant or wrong, and wrong fails closed.
+const hasSelectableDerivation = (
+  accountContractType: AccountContractType,
+  derivation: unknown,
+): boolean => {
+  if (derivation === undefined) return true;
+  if (derivation !== "argentx-bip44" && derivation !== "starknet-bip44") return false;
+  return derivation === "starknet-bip44" || accountContractType === "argent";
+};
 
 /**
  * The identity of one recovery coordinate, used to reject duplicate selections.
@@ -85,7 +108,22 @@ export const isRecoveryAccountSelection = (value: unknown): value is RecoveryAcc
  * and an unpadded spelling of one hash do not read as two coordinates.
  */
 export const recoverySelectionKey = (selection: RecoveryAccountSelection): string =>
-  [selection.accountContractType, selectionClass(selection), selection.accountIndex].join(":");
+  [
+    selection.accountContractType,
+    selectionDerivation(selection),
+    selectionClass(selection),
+    selection.accountIndex,
+  ].join(":");
+
+/**
+ * The key ladder a selection restores on, with the family default applied
+ * (issue 505): Argent means Ready's scheme unless the selection names this
+ * wallet's own ladder. Single-sourced so the duplicate check, the scan, and
+ * the vault derivation can never disagree about what an index means.
+ */
+export const selectionDerivation = (selection: RecoveryAccountSelection): RecoveryDerivationKind =>
+  selection.derivation ??
+  (selection.accountContractType === "argent" ? "argentx-bip44" : "starknet-bip44");
 
 // An absent Argent class means the release this wallet creates, so it has to key
 // the same as naming that release outright; otherwise one account, selected
@@ -103,6 +141,6 @@ const selectionClass = (selection: RecoveryAccountSelection): string => {
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["account", "deployed", "funded"]) &&
-  isDerivedAccountRef(value["account"]) &&
+  isRecoverableAccountRef(value["account"]) &&
   typeof value["deployed"] === "boolean" &&
   typeof value["funded"] === "boolean";

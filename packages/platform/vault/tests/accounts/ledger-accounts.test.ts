@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@bramble/vault/accounts";
-import { isVaultV2, isVaultV8, isVaultV10, type Vault } from "@bramble/vault/schema";
+import { isVaultV2, isVaultV8, isVaultV11, type Vault } from "@bramble/vault/schema";
 import { isAccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath, READY_EIP2645_APPLICATION } from "@bramble/wallet-model/ledger-path";
 import { sameFelt } from "@bramble/wallet-model/networks";
@@ -208,8 +208,8 @@ describe("keyless account in the vault schema", () => {
   };
 
   test("a current vault admits a keyless Ledger account with no signing key", () => {
-    const vault: Vault = { ...base, schemaVersion: 10 };
-    expect(isVaultV10(vault)).toBe(true);
+    const vault: Vault = { ...base, schemaVersion: 11 };
+    expect(isVaultV11(vault)).toBe(true);
   });
 
   test("a Ledger account is rejected at the legacy v2 schema", () => {
@@ -218,9 +218,9 @@ describe("keyless account in the vault schema", () => {
 
   test("a Ledger account carrying a signing key is rejected", () => {
     expect(
-      isVaultV10({
+      isVaultV11({
         ...base,
-        schemaVersion: 10,
+        schemaVersion: 11,
         signingKeys: [{ accountId: ledgerAccount.id, privateKey: "0x1" }],
       }),
     ).toBe(false);
@@ -238,14 +238,14 @@ describe("keyless account in the vault schema", () => {
       publicKeyY: "0x4",
     };
     expect(
-      isVaultV10({
+      isVaultV11({
         accounts: [hdAccount],
         accountSecrets: [],
         activeAccountId: hdAccount.id,
         importedSeeds: [],
         mnemonic: null,
         originGrants: [],
-        schemaVersion: 10,
+        schemaVersion: 11,
         signingKeys: [],
       }),
     ).toBe(false);
@@ -305,11 +305,11 @@ describe("keyless account in the vault schema", () => {
       ...base,
       accounts: [readyAccount],
       activeAccountId: readyAccount.id,
-      schemaVersion: 10,
+      schemaVersion: 11,
     };
-    expect(isVaultV10(vault)).toBe(true);
+    expect(isVaultV11(vault)).toBe(true);
     expect(
-      isVaultV10({
+      isVaultV11({
         ...vault,
         accounts: [
           {

@@ -68,7 +68,7 @@ const wallet = {
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin: ORIGIN }],
-      schemaVersion: 10 as const,
+      schemaVersion: 11 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
     };
   },
