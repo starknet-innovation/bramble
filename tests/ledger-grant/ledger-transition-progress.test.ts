@@ -5,7 +5,10 @@
  * a Ledger asking for approval otherwise reads as one.
  */
 import { describe, expect, test } from "bun:test";
-import { ledgerTransitionProgress } from "../../apps/extension/src/ledger-grant/transition-progress";
+import {
+  LEDGER_HANDSHAKE_PROGRESS,
+  ledgerTransitionProgress,
+} from "../../apps/extension/src/ledger-grant/transition-progress";
 
 describe("Ledger transition progress", () => {
   test("asks for device confirmation only while opening Starknet", () => {
@@ -14,6 +17,13 @@ describe("Ledger transition progress", () => {
       title: "Approve opening Starknet",
     });
     expect(ledgerTransitionProgress("confirming-starknet").title).toBe("Confirming Starknet");
+  });
+
+  test("the handshake that starts the wait says nothing is signed", () => {
+    expect(LEDGER_HANDSHAKE_PROGRESS).toEqual({
+      message: "No transaction is signed.",
+      title: "Checking firmware and Starknet",
+    });
   });
 
   test("leaves every other phase without a message", () => {

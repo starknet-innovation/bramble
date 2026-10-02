@@ -44,7 +44,7 @@ import {
   transportForConnectionMethod,
 } from "./grant-flow";
 import { LEDGER_GRANT_STYLES } from "./styles";
-import { ledgerTransitionProgress } from "./transition-progress";
+import { LEDGER_HANDSHAKE_PROGRESS, ledgerTransitionProgress } from "./transition-progress";
 
 type GrantChrome = {
   readonly tabs?: {
@@ -382,8 +382,8 @@ const render = (): void => {
         activeTransportKind = transport;
       }
       setStatus(
-        "Checking firmware and Starknet",
-        "",
+        LEDGER_HANDSHAKE_PROGRESS.title,
+        LEDGER_HANDSHAKE_PROGRESS.message,
         "info",
         `Transport · ${transportLabel(transport)} · Firmware, app, and key handshake`,
       );
