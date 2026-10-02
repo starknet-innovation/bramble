@@ -42,6 +42,7 @@ import {
   providerStrk20Commitment,
 } from "../privacy/strk20-bridge";
 import type { ProviderMethod } from "./methods";
+import { isApiVersion } from "./versions";
 
 /**
  * Page-facing account view: only the already-public address and network id.
@@ -77,11 +78,10 @@ export type ProviderDeploymentData = {
 };
 
 /**
- * API_VERSION pattern accepted from dapps (semantic version, including a
- * prerelease suffix used by published Wallet-API release candidates).
+ * API_VERSION pattern accepted from dapps, re-exported from its single source
+ * in versions.ts so existing `results` consumers keep one import.
  */
-export const API_VERSION_PATTERN =
-  /^[0-9]+\.[0-9]+(?:\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)?$/;
+export { API_VERSION_PATTERN } from "./versions";
 
 /**
  * Spec declare result carried to the page (`{ transaction_hash, class_hash }`),
@@ -212,10 +212,7 @@ export const readApiVersionParam = (params: Json | undefined): string | null | u
   if (params["api_version"] === undefined) {
     return undefined;
   }
-  return typeof params["api_version"] === "string" &&
-    API_VERSION_PATTERN.test(params["api_version"])
-    ? params["api_version"]
-    : null;
+  return isApiVersion(params["api_version"]) ? params["api_version"] : null;
 };
 
 /**
@@ -228,9 +225,7 @@ export const isRequestAccountsParams = (params: Json | undefined): boolean =>
   (isRecord(params) &&
     hasOnlyKnownKeys(params, ["api_version", "silent_mode"]) &&
     (params["silent_mode"] === undefined || typeof params["silent_mode"] === "boolean") &&
-    (params["api_version"] === undefined ||
-      (typeof params["api_version"] === "string" &&
-        API_VERSION_PATTERN.test(params["api_version"]))));
+    (params["api_version"] === undefined || isApiVersion(params["api_version"])));
 
 /**
  * Narrows an unknown value to a spec declare result whose `transaction_hash` is

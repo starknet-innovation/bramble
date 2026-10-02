@@ -8,6 +8,9 @@
  *  - SUPPORTED_WALLET_API: wallet-API versions (API_VERSION values), as reported
  *    by wallet_supportedWalletApi and negotiated via the optional api_version
  *    param on every method.
+ * It also owns the API_VERSION grammar a dapp's version string is checked
+ * against. This module imports nothing, so every param parser can reach that
+ * grammar without an import cycle through the result parsers.
  */
 
 /**
@@ -20,3 +23,18 @@ export const SUPPORTED_SPECS: readonly [string, ...string[]] = ["0.10.0"];
  * Wallet-API versions this wallet implements (API_VERSION values).
  */
 export const SUPPORTED_WALLET_API: readonly [string, ...string[]] = ["0.10.4-rc.0"];
+
+/**
+ * API_VERSION pattern accepted from dapps (semantic version, including a
+ * prerelease suffix used by published Wallet-API release candidates).
+ */
+export const API_VERSION_PATTERN =
+  /^[0-9]+\.[0-9]+(?:\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)?$/;
+
+/**
+ * True when `value` is a well-formed API_VERSION string. Shape only: whether
+ * the version is supported is a separate check against SUPPORTED_WALLET_API.
+ * Pure predicate over untrusted page input; never throws.
+ */
+export const isApiVersion = (value: unknown): value is string =>
+  typeof value === "string" && API_VERSION_PATTERN.test(value);

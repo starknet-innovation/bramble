@@ -53,6 +53,36 @@ describe("strk20 bridge params", () => {
     });
   });
 
+  test("accepts the optional valid_until and api_version and drops them", () => {
+    for (const extra of [
+      { valid_until: 1_790_000_000 },
+      { valid_until: 0 },
+      { api_version: "0.10.4" },
+      { api_version: "0.10.4-rc.2", valid_until: 1_790_000_000 },
+    ]) {
+      expect(
+        toRuntimeMessage(request("wallet_strk20Balances", { tokens: [token], ...extra }), origin),
+      ).toEqual({ origin, tokens: [token], type: "wallet.strk20Balances" });
+    }
+  });
+
+  test("rejects a malformed valid_until or api_version", () => {
+    for (const extra of [
+      { valid_until: -1 },
+      { valid_until: 1.5 },
+      { valid_until: "1790000000" },
+      { valid_until: Number.MAX_SAFE_INTEGER + 1 },
+      { valid_until: null },
+      { api_version: "not.a.version.x" },
+      { api_version: 10 },
+      { authorization: "forever" },
+    ]) {
+      expect(
+        toRuntimeMessage(request("wallet_strk20Balances", { tokens: [token], ...extra }), origin),
+      ).toBeNull();
+    }
+  });
+
   test("maps prepare params with a default simulate flag", () => {
     expect(
       toRuntimeMessage(

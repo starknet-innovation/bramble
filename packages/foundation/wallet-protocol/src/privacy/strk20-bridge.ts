@@ -10,6 +10,7 @@ import {
   JSON_BUDGETS,
   type Json,
 } from "@bramble/core/json";
+import { isApiVersion } from "../provider/versions";
 import {
   isStrk20BalanceEntry,
   isStrk20CallAndProof,
@@ -32,12 +33,24 @@ export type {
   Strk20Proof,
 } from "./strk20";
 
+// The spec's `valid_until` Timestamp: a non-negative integer of Unix seconds.
+const isUnixSeconds = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
 /**
- * Parses `wallet_strk20Balances` params (`{ tokens: ADDRESS[] }`) into the
- * validated token list, or null when malformed.
+ * Parses `wallet_strk20Balances` params (`{ tokens: ADDRESS[], valid_until?,
+ * api_version? }`) into the validated token list, or null when malformed.
+ * The two optional params are shape-checked, then dropped. `valid_until` only
+ * requests an authorization window, which the spec leaves to the wallet; here
+ * every read is its own user approval and grants nothing past that read, so
+ * no request can widen what a dapp learns. `api_version` is not negotiated
+ * beyond the discovery methods, matching wallet_getPermissions.
  */
 export const readStrk20BalancesParams = (params: Json | undefined): readonly string[] | null =>
-  isRecord(params) && hasOnlyKnownKeys(params, ["tokens"])
+  isRecord(params) &&
+  hasOnlyKnownKeys(params, ["api_version", "tokens", "valid_until"]) &&
+  (params["api_version"] === undefined || isApiVersion(params["api_version"])) &&
+  (params["valid_until"] === undefined || isUnixSeconds(params["valid_until"]))
     ? readStrk20Tokens(params["tokens"])
     : null;
 
