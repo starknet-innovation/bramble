@@ -3,11 +3,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-  type WalletPreferencesStore,
-} from "@bramble/settings/preferences";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import type { Vault } from "@bramble/vault/schema";
 import { findVaultAccount } from "@bramble/vault/vault-account";
@@ -33,82 +29,9 @@ const networkOptions = (): readonly NetworkOption[] =>
   }));
 
 /**
- * Fallback preferences store used by tests that do not wire browser storage.
+ * Re-exported fallback preferences store so callers keep one import path.
  */
-export const unavailablePreferencesStore: WalletPreferencesStore = {
-  async addCustomNetwork() {
-    throw new Error("preferences unavailable");
-  },
-  async addNft() {
-    throw new Error("preferences unavailable");
-  },
-  async createGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async importPreferences() {
-    throw new Error("preferences unavailable");
-  },
-  async read() {
-    return defaultWalletPreferences();
-  },
-  async removeAddress() {
-    throw new Error("preferences unavailable");
-  },
-  async removeGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async removeNft() {
-    throw new Error("preferences unavailable");
-  },
-  async removeToken() {
-    throw new Error("preferences unavailable");
-  },
-  async renameGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async setAccountInGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async setExplorerFallback() {
-    throw new Error("preferences unavailable");
-  },
-  async setGroupIcon() {
-    throw new Error("preferences unavailable");
-  },
-  async setAccountLabel() {
-    throw new Error("preferences unavailable");
-  },
-  async setDisplay() {
-    throw new Error("preferences unavailable");
-  },
-  async setNftIndexerUrl() {
-    throw new Error("preferences unavailable");
-  },
-  async setNostrRelayUrl() {
-    throw new Error("preferences unavailable");
-  },
-  async setNftSpam() {
-    throw new Error("preferences unavailable");
-  },
-  async saveAddress() {
-    throw new Error("preferences unavailable");
-  },
-  async setActiveNetwork(networkId) {
-    return { ...defaultWalletPreferences(), activeNetworkId: networkId };
-  },
-  async setRpcOverride() {
-    throw new Error("preferences unavailable");
-  },
-  async setStrk20NetworkConfig() {
-    throw new Error("preferences unavailable");
-  },
-  async setTokenHidden() {
-    throw new Error("preferences unavailable");
-  },
-  async upsertToken() {
-    throw new Error("preferences unavailable");
-  },
-};
+export { unavailablePreferencesStore } from "./unavailable-preferences-store";
 
 /**
  * Ordered RPC endpoints for a network, preferring the user's custom override
