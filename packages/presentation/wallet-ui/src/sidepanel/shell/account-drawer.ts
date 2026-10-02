@@ -71,7 +71,7 @@ const drawerAccountRow = (
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
-          <code title="${escapeHtml(stored.address)}">${accountLabel(stored.address)}</code>
+          <code title="${escapeHtml(stored.address)}">${escapeHtml(accountLabel(stored.address))}</code>
           ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.record.name ?? "selected multisig")}</span>` : ""}
         </span>
         ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}

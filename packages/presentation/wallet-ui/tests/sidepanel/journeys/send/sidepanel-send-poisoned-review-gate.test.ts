@@ -83,7 +83,7 @@ const mount = (poisoned: boolean) => {
               {
                 code: "address-poisoning" as const,
                 message:
-                  "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending.",
+                  "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
               },
             ]
           : [],

@@ -42,6 +42,7 @@ import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import { failureNoticeMessage } from "../transactions/tx-observation";
 import { handleActivity } from "./activity-ops";
 import { submitReviewedAccountDeployment } from "./deployment-ops";
@@ -118,7 +119,10 @@ const transferContext = async (
   if (!token || token.networkId !== account.networkId) {
     return { error: "token unavailable" } as const;
   }
-  return { account, authorized, preferences, token, vaultPassphrase } as const;
+  // The recipient rule judges against every address the user knows: their
+  // accounts, contacts, and the recipients this wallet has paid (audit #163).
+  const trusted = await withTrustedRecipients(deps, preferences, vault.accounts);
+  return { account, authorized, preferences: trusted, token, vaultPassphrase } as const;
 };
 
 /**

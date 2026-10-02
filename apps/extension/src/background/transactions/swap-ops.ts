@@ -42,6 +42,7 @@ import { recordSubmittedActivity } from "./activity-recording";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
+import { withTrustedRecipients } from "./trusted-recipients";
 
 /**
  * Dependencies for the swap handler: the shared wallet-ops set plus the avnu
@@ -63,7 +64,11 @@ const swapPair = async (
   if (context.error !== undefined) {
     return { error: context.error } as const;
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    context.accounts,
+  );
   const tokenById = (id: string): TokenConfig | undefined =>
     preferences.tokens.find((token) => token.id === id && token.networkId === context.networkId);
   const sellToken = tokenById(input.sellTokenId);
@@ -258,7 +263,11 @@ const swapExecuteResponse = async (
     return { error: context.error };
   }
   const authorized = captureSessionAuthorization(deps.session);
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    context.accounts,
+  );
   if (
     context.account.id !== preparation.context.accountId ||
     context.networkId !== preparation.context.networkId ||

@@ -88,13 +88,13 @@ describe("Starkscan wallet adapters", () => {
       actionContext: null,
       amount: "1",
       blockNumber: 12,
-      fromAddress: ACCOUNT,
+      fromAddress: OTHER,
       logIndex: 1,
       rawValue: "1",
       sourceTier: "finalized",
       standard: "erc20",
       timestampIso: "2026-07-24T11:29:01.000Z",
-      toAddress: OTHER,
+      toAddress: ACCOUNT,
       tokenAddress: "0x123",
       tokenDecimals: 0,
       tokenId: null,
@@ -117,7 +117,7 @@ describe("Starkscan wallet adapters", () => {
       );
 
     const [entry] = await read("FAKE");
-    expect(entry?.summary).toBe("Sent 1 TOKEN to 0x1176…f3d8");
+    expect(entry?.summary).toBe("Received 1 TOKEN from 0x1176…f3d8");
     expect(entry?.summary).not.toContain(transfer.tokenName);
     expect(entry?.summary).not.toContain("FAKE");
   });

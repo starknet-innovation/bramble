@@ -13,6 +13,7 @@ import {
   type PhishingFeedResponse,
   parsePhishingFeed,
 } from "@bramble/permissions/phishing-feed";
+import { readPhishingCache, writePhishingCache } from "@bramble/permissions/phishing-feed-cache";
 import { createMemoryStore } from "@bramble/store/kv";
 
 const okResponse = (body: unknown): PhishingFeedResponse => ({
@@ -79,19 +80,24 @@ describe("createPhishingFeed refresh + cache", () => {
     expect([...domains]).toEqual(["feed-bad.com"]);
     expect([...feed.blockedDomains()]).toEqual(["feed-bad.com"]);
     expect(await store.get(PHISHING_FEED_STORE_KEY)).toEqual({
+      chunks: 1,
+      count: 1,
+      fetchedAt: 1_000,
+      schemaVersion: 2,
+      source: DEFAULT_PHISHING_FEED_URL,
+    });
+    expect(await readPhishingCache(store, DEFAULT_PHISHING_FEED_URL, 1_000)).toEqual({
       domains: ["feed-bad.com"],
       fetchedAt: 1_000,
-      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
   });
 
   test("serves a fresh cache without hitting the network", async () => {
     const store = createMemoryStore();
-    await store.set(PHISHING_FEED_STORE_KEY, {
+    await writePhishingCache(store, {
       domains: ["cached-bad.com"],
       fetchedAt: 10_000,
-      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
     const { calls, fetch } = scriptedFetch([new Error("network must not be used")]);
@@ -104,10 +110,9 @@ describe("createPhishingFeed refresh + cache", () => {
 
   test("refetches once the cache is older than the TTL", async () => {
     const store = createMemoryStore();
-    await store.set(PHISHING_FEED_STORE_KEY, {
+    await writePhishingCache(store, {
       domains: ["stale.com"],
       fetchedAt: 0,
-      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
     const { calls, fetch } = scriptedFetch([okResponse({ blocklist: ["fresh.com"] })]);
@@ -119,21 +124,20 @@ describe("createPhishingFeed refresh + cache", () => {
   });
 
   test.each([
-    ["unknown field", { extra: true }],
-    ["wrong schema version", { schemaVersion: 2 }],
+    ["unknown manifest field", { extra: true }],
+    ["legacy schema version", { schemaVersion: 1 }],
     ["wrong source", { source: "https://attacker.example/list.json" }],
     ["future timestamp", { fetchedAt: 20_001 }],
-    ["malformed domain", { domains: ["good.example", "com"] }],
-    ["duplicate domain", { domains: ["bad.example", "BAD.EXAMPLE"] }],
+    ["count mismatch", { count: 2 }],
   ])("rejects a cache with %s and refreshes from the authenticated source", async (_, override) => {
     const store = createMemoryStore();
-    await store.set(PHISHING_FEED_STORE_KEY, {
+    await writePhishingCache(store, {
       domains: ["cached-bad.com"],
       fetchedAt: 10_000,
-      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
-      ...override,
     });
+    const manifest = (await store.get(PHISHING_FEED_STORE_KEY)) as Record<string, never>;
+    await store.set(PHISHING_FEED_STORE_KEY, { ...manifest, ...override });
     const { calls, fetch } = scriptedFetch([okResponse({ blocklist: ["fresh-safe.example"] })]);
     const feed = createPhishingFeed({ fetch, now: () => 20_000, store });
 
@@ -141,15 +145,34 @@ describe("createPhishingFeed refresh + cache", () => {
     expect(calls).toEqual([DEFAULT_PHISHING_FEED_URL]);
     expect([...feed.blockedDomains()]).not.toContain("cached-bad.com");
   });
+
+  test.each([
+    ["malformed domain", { domains: ["good.example", "com"] }],
+    ["duplicate domain", { domains: ["bad.example", "bad.example"] }],
+    ["non-normalized domain", { domains: ["BAD.EXAMPLE"] }],
+    ["foreign generation", { fetchedAt: 9_999 }],
+    ["wrong index", { index: 1 }],
+  ])("rejects a cache whose chunk has a %s", async (_, override) => {
+    const store = createMemoryStore();
+    await writePhishingCache(store, {
+      domains: ["cached-bad.com"],
+      fetchedAt: 10_000,
+      source: DEFAULT_PHISHING_FEED_URL,
+    });
+    const key = `${PHISHING_FEED_STORE_KEY}:chunk:0`;
+    const chunk = (await store.get(key)) as Record<string, never>;
+    await store.set(key, { ...chunk, ...override });
+
+    expect(await readPhishingCache(store, DEFAULT_PHISHING_FEED_URL, 20_000)).toBeNull();
+  });
 });
 
 describe("createPhishingFeed fallback chain (fail-safe)", () => {
   test("unreachable source keeps the last cached list", async () => {
     const store = createMemoryStore();
-    await store.set(PHISHING_FEED_STORE_KEY, {
+    await writePhishingCache(store, {
       domains: ["cached-bad.com"],
       fetchedAt: 0,
-      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
     const sevenHours = 7 * 60 * 60 * 1000;
@@ -161,10 +184,9 @@ describe("createPhishingFeed fallback chain (fail-safe)", () => {
 
   test("a non-ok or malformed response also falls back to the cache", async () => {
     const store = createMemoryStore();
-    await store.set(PHISHING_FEED_STORE_KEY, {
+    await writePhishingCache(store, {
       domains: ["cached-bad.com"],
       fetchedAt: 0,
-      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
     const sevenHours = 7 * 60 * 60 * 1000;

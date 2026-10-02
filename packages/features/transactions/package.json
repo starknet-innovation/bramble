@@ -15,6 +15,7 @@
     "./fee-funds": "./src/routing/fee-funds.ts",
     "./ledger-verify": "./src/routing/ledger-verify.ts",
     "./outside-execution-calls": "./src/routing/outside-execution-calls.ts",
+    "./paid-recipients": "./src/activity/paid-recipients.ts",
     "./send-routes": "./src/routing/send-routes.ts",
     "./starkscan": "./src/history/starkscan.ts",
     "./starkscan-parsers": "./src/history/starkscan-parsers.ts",
