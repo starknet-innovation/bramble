@@ -72,6 +72,7 @@ const providerDeps = (locked: boolean): ProviderOpsDeps => {
     session.unlock(vaultPassphrase);
   }
   return {
+    activity: { list: async () => [] },
     allowanceStore: memoryAllowanceStore(),
     approvals: createApprovalQueue(),
     extension: chromiumExtension(EXTENSION_ID),

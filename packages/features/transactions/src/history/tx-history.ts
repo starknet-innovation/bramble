@@ -123,6 +123,13 @@ const transferDirection = (parties: TransferParties, account: string): TransferD
  * token generation are discoverable. The counterparty is the other party to the
  * transfer, canonicalized to `0x`-hex; a zero address (mint/burn) is kept so
  * received-by-mint activity is not silently hidden.
+ *
+ * A zero-amount transfer is dropped in both directions (audit #163): on OZ
+ * ERC20 tokens anyone may call `transfer_from(victim, lookalike, 0)` with no
+ * allowance, and a lookalike may send the victim 0, so such an event proves
+ * nothing about the account and exists only to plant a copyable lookalike
+ * counterparty in the feed. The user's own zero-value sends keep their local
+ * wallet-recorded row, which owns the hash in {@link mergeActivity}.
  */
 export const decodeTransferEvent = (
   event: HistoryEvent,
@@ -142,7 +149,7 @@ export const decodeTransferEvent = (
   const parties = readTransferParties(event);
   const txHash =
     typeof event.transaction_hash === "string" ? canonicalFelt(event.transaction_hash) : null;
-  if (parties === null || txHash === null) {
+  if (parties === null || txHash === null || BigInt(parties.amountRaw) === 0n) {
     return null;
   }
   if (!isSafeBlockNumber(event.block_number)) {
@@ -221,6 +228,41 @@ const txKey = (entry: ActivityEntry): string =>
 // free-form token symbol and make two distinct legs alias.
 const legKey = (entry: ActivityEntry): string =>
   `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
+
+// The symbol the explorer lane gives a token the wallet does not track.
+const UNTRACKED_TOKEN_SYMBOL = "TOKEN";
+
+const isZeroAmountLabel = (amount: string | undefined): boolean =>
+  amount !== undefined && /^0(?:\.0*)?$/.test(amount);
+
+/**
+ * Applies the planted-row rule of {@link decodeTransferEvent} and the explorer
+ * lane to rows already persisted before it existed (audit #163). Stored rows
+ * reach {@link mergeActivity} as `local` and are kept unconditionally, so a
+ * zero-value or untracked-token "Sent to" row planted under an older version
+ * would otherwise keep offering a one-click copy of the lookalike until the
+ * per-scope cap evicted it. Rows this wallet recorded itself (`origin:
+ * "wallet"`) are never touched. For rows of unknown origin: zero-amount
+ * transfers and outgoing untracked-token transfers are dropped, and an
+ * incoming untracked-token transfer keeps its row but loses its counterparty.
+ */
+export const withoutPlantedRows = (entries: readonly ActivityEntry[]): readonly ActivityEntry[] =>
+  entries.flatMap((entry): readonly ActivityEntry[] => {
+    if (entry.origin === "wallet" || entry.kind !== "transfer") {
+      return [entry];
+    }
+    if (isZeroAmountLabel(entry.amount)) {
+      return [];
+    }
+    if (entry.token !== UNTRACKED_TOKEN_SYMBOL) {
+      return [entry];
+    }
+    if (entry.summary.startsWith("Sent ")) {
+      return [];
+    }
+    const { counterparty: _untrusted, ...withoutCounterparty } = entry;
+    return [withoutCounterparty];
+  });
 
 /**
  * Merges the wallet's locally recorded activity with transactions discovered on

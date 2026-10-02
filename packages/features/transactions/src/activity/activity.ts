@@ -110,6 +110,14 @@ export type ActivityEntry = {
    */
   readonly notFoundCount?: number;
   /**
+   * Provenance: `"wallet"` only on rows this wallet recorded for a transaction
+   * it submitted itself (see the background's `recordSubmittedActivity`). Rows
+   * discovered from chain history or an explorer never carry it, so a
+   * third-party event that names this account cannot pose as a payment the
+   * user made. Absent on legacy rows, which are treated as unknown origin.
+   */
+  readonly origin?: "wallet";
+  /**
    * True once a status read returned a real finality for this hash. Only a
    * transaction the wallet has seen can be judged gone after repeated
    * not-found answers; an unseen one stays pending until its observation
@@ -242,6 +250,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "kind",
     "networkId",
     "notFoundCount",
+    "origin",
     "seenOnChain",
     "status",
     "submittedAt",
@@ -266,7 +275,8 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   isFailureNotice(value["failureNotice"]) &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
   (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
-  isNotFoundCount(value["notFoundCount"]);
+  isNotFoundCount(value["notFoundCount"]) &&
+  (value["origin"] === undefined || value["origin"] === "wallet");
 
 const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry[]> => {
   const stored = await store.get(ACTIVITY_STORE_KEY);

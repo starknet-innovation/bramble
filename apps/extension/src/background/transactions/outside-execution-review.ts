@@ -19,6 +19,7 @@ import {
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-responses";
 import { allowanceOwner } from "../portfolio/allowance-recording";
+import type { TrustedRecipientSources } from "./trusted-recipients";
 
 /**
  * What the sign card shows for an OutsideExecution: risk flags and one decoded
@@ -39,12 +40,16 @@ export type OutsideExecutionReview = {
  * while the card is open. `allowances` is the recorded allowance log, read the
  * same way the invoke route reads it, so an `increase_allowance` that tops up a
  * standing allowance is flagged on its cumulative total; omitted, the review
- * flags each call on its own amount (refusals never depend on it).
+ * flags each call on its own amount (refusals never depend on it). Production
+ * callers pass preferences enriched by `withTrustedRecipients`, so a lookalike
+ * of the user's own accounts or of a recipient this wallet paid is refused here
+ * exactly as on the invoke route (audit 163).
  */
 export const reviewOutsideExecution = (
   typedData: unknown,
   account: AccountRef,
-  preferences: Pick<WalletPreferences, "addressBook" | "dappTokenIds" | "nfts" | "tokens">,
+  preferences: Pick<WalletPreferences, "addressBook" | "dappTokenIds" | "nfts" | "tokens"> &
+    Partial<TrustedRecipientSources>,
   allowances: readonly AllowanceRecord[] = [],
 ): OutsideExecutionReview | { readonly error: string } | null => {
   const calls = outsideExecutionCalls(typedData);

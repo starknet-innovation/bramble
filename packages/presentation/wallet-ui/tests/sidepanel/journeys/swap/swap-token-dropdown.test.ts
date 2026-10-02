@@ -121,6 +121,22 @@ describe("swap token dropdowns", () => {
     document.body.replaceChildren();
   });
 
+  // Audit #248: the shared dropdown swallows Enter in its search field so it
+  // can never implicitly submit an enclosing form with a stale selection.
+  test("Enter in the search field is consumed", async () => {
+    const { picks, root } = await mount("SN_MAIN");
+    const field = root.querySelector<HTMLInputElement>("#swap-sell-options [data-token-search]");
+    if (!field) throw new Error("search field unavailable");
+    const event = new window.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+    });
+    field.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(picks).toEqual([]);
+  });
+
   test("search matches the catalog name and the contract address", async () => {
     const { root } = await mount("SN_MAIN");
     const field = root.querySelector<HTMLInputElement>("#swap-sell-options [data-token-search]");

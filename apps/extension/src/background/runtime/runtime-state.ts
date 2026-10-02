@@ -3,11 +3,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-  type WalletPreferencesStore,
-} from "@bramble/settings/preferences";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import type { Vault } from "@bramble/vault/schema";
 import { findVaultAccount } from "@bramble/vault/vault-account";
@@ -33,82 +29,9 @@ const networkOptions = (): readonly NetworkOption[] =>
   }));
 
 /**
- * Fallback preferences store used by tests that do not wire browser storage.
+ * Re-exported fallback preferences store so callers keep one import path.
  */
-export const unavailablePreferencesStore: WalletPreferencesStore = {
-  async addCustomNetwork() {
-    throw new Error("preferences unavailable");
-  },
-  async addNft() {
-    throw new Error("preferences unavailable");
-  },
-  async createGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async importPreferences() {
-    throw new Error("preferences unavailable");
-  },
-  async read() {
-    return defaultWalletPreferences();
-  },
-  async removeAddress() {
-    throw new Error("preferences unavailable");
-  },
-  async removeGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async removeNft() {
-    throw new Error("preferences unavailable");
-  },
-  async removeToken() {
-    throw new Error("preferences unavailable");
-  },
-  async renameGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async setAccountInGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async setExplorerFallback() {
-    throw new Error("preferences unavailable");
-  },
-  async setGroupIcon() {
-    throw new Error("preferences unavailable");
-  },
-  async setAccountLabel() {
-    throw new Error("preferences unavailable");
-  },
-  async setDisplay() {
-    throw new Error("preferences unavailable");
-  },
-  async setNftIndexerUrl() {
-    throw new Error("preferences unavailable");
-  },
-  async setNostrRelayUrl() {
-    throw new Error("preferences unavailable");
-  },
-  async setNftSpam() {
-    throw new Error("preferences unavailable");
-  },
-  async saveAddress() {
-    throw new Error("preferences unavailable");
-  },
-  async setActiveNetwork(networkId) {
-    return { ...defaultWalletPreferences(), activeNetworkId: networkId };
-  },
-  async setRpcOverride() {
-    throw new Error("preferences unavailable");
-  },
-  async setStrk20NetworkConfig() {
-    throw new Error("preferences unavailable");
-  },
-  async setTokenHidden() {
-    throw new Error("preferences unavailable");
-  },
-  async upsertToken() {
-    throw new Error("preferences unavailable");
-  },
-};
+export { unavailablePreferencesStore } from "./unavailable-preferences-store";
 
 /**
  * Ordered RPC endpoints for a network, preferring the user's custom override
@@ -424,6 +347,42 @@ export const observedAccountContext = (
   preferencesStore: WalletPreferencesStore,
 ): Promise<ActiveAccountContext> =>
   accountContextFor(wallet, session.peekPassphrase(), preferencesStore);
+
+/** The public half of a vault account: what the poisoning check trusts. */
+export type VaultAccountAddress = Pick<AccountRef, "address" | "networkId">;
+
+/**
+ * Reads the vault's public account addresses with a passphrase the caller
+ * already holds, for the address-poisoning trust set (audit #163). Only
+ * `address` and `networkId` leave this boundary module; a failed read yields
+ * `[]`, which leaves the check as strict as the address book alone.
+ */
+export const vaultAccountAddresses = async (
+  wallet: Pick<WalletStatusReader, "readVault">,
+  passphrase: string,
+): Promise<readonly VaultAccountAddress[]> => {
+  try {
+    return (await wallet.readVault(passphrase)).accounts.map(({ address, networkId }) => ({
+      address,
+      networkId,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * {@link vaultAccountAddresses} for callers that hold no passphrase. Reads it
+ * through the non-renewing session view, so the read never extends the unlock
+ * period; a locked wallet yields `[]`.
+ */
+export const observedVaultAccountAddresses = (
+  wallet: Pick<WalletStatusReader, "readVault">,
+  session: Pick<PassiveUnlockSession, "peekPassphrase">,
+): Promise<readonly VaultAccountAddress[]> => {
+  const passphrase = session.peekPassphrase();
+  return passphrase ? vaultAccountAddresses(wallet, passphrase) : Promise.resolve([]);
+};
 
 /**
  * Builds passive extension-page status. Vault results are disclosed only to

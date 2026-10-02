@@ -7,21 +7,31 @@
  */
 
 import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalQueue } from "../approvals/approvals";
 import { promptReconnectForStaleGrant } from "../approvals/reconnect-prompt";
+import { vaultAccountAddresses } from "../runtime/runtime-state";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
+import {
+  type TrustedRecipientDeps,
+  type TrustedRecipientSources,
+  withTrustedRecipients,
+} from "../transactions/trusted-recipients";
 
 /**
  * The active-network account resolved for an origin's live connection grant,
- * together with the passphrase and preferences read while resolving it.
+ * together with the passphrase and preferences read while resolving it. The
+ * preferences carry the address-poisoning trust inputs (the user's own
+ * accounts and paid recipients, audit #163) so every dapp route that judges a
+ * recipient uses the same trusted set as the wallet's own sends.
  */
 export type ResolvedOriginAccount = {
   readonly account: AccountRef;
   readonly passphrase: string;
-  readonly preferences: WalletPreferences;
+  readonly preferences: WalletPreferences & TrustedRecipientSources;
 };
 
 /**
@@ -29,12 +39,16 @@ export type ResolvedOriginAccount = {
  * dapp handlers and the held-approval executor satisfy this shape.
  */
 type GrantResolverDeps = {
+  /** Read only for the address-poisoning trust inputs (paid recipients). */
+  readonly activity: Pick<ActivityLog, "list">;
   /**
    * Optional: fresh dapp requests queue a reconnect prompt through it when a
    * formerly granted origin no longer resolves. The held-approval executor
    * omits it (and pins `expected`), so post-consent execution never prompts.
    */
   readonly approvals?: ApprovalQueue;
+  /** Optional: watched shared accounts also count as the user's own. */
+  readonly multisigStore?: TrustedRecipientDeps["multisigStore"];
   readonly preferencesStore: WalletPreferencesStore;
   readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
@@ -85,7 +99,13 @@ export const resolveOriginAccount = async (
     }
     return { error: "origin not connected" };
   }
-  return { account, passphrase, preferences };
+  const trusted = await withTrustedRecipients(
+    deps,
+    preferences,
+    await vaultAccountAddresses(deps.wallet, passphrase),
+  );
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
+  return { account, passphrase, preferences: trusted };
 };
 
 // Builds the fee-review target from a resolved grant. The signer is constructed

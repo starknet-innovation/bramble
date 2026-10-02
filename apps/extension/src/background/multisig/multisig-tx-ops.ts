@@ -22,7 +22,6 @@ import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { reviewArgentMultisigCalls } from "./multisig-call-review";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
@@ -38,7 +37,10 @@ import {
   sortedArgentMultisigSignatures,
 } from "./multisig-inputs";
 import { currentArgentIntentContext } from "./multisig-intent-context";
-import { recoverSubmittedArgentIntent } from "./multisig-operation-recovery";
+import {
+  recordSubmittedIntentActivity,
+  recoverSubmittedArgentIntent,
+} from "./multisig-operation-recovery";
 import {
   type ArgentMultisigContext,
   configSnapshot,
@@ -468,13 +470,8 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
       }),
     )
     .catch(() => {});
-  await recordSubmittedActivity(deps.activity, {
-    accountId: submission.intent.accountId,
-    hash: transactionHash,
-    kind: "invoke",
-    networkId: submission.resolved.context.record.networkId,
-    summary: submission.intent.summary,
-  });
+  const { networkId } = submission.resolved.context.record;
+  await recordSubmittedIntentActivity(deps, submission.intent, networkId, transactionHash);
   return { intent: submitted, ok: true, transactionHash };
 };
 
