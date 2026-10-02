@@ -99,11 +99,12 @@ const sepolia: AccountRef = {
 // A stateful vault that answers getGrantedAccounts through the real
 // active-account-only policy, so a test cannot pass on a grant list the vault
 // could never return. `grants` and `derived` record writes; the switch must
-// never grant.
+// never grant. `otherGrants` are stored grants held by other origins.
 const vaultWallet = (input: {
   readonly accounts: readonly AccountRef[];
   readonly active: string;
   readonly grant: readonly string[];
+  readonly otherGrants?: Vault["originGrants"];
 }) => {
   let accounts = [...input.accounts];
   let active = input.active;
@@ -115,7 +116,7 @@ const vaultWallet = (input: {
     activeAccountId: active,
     importedSeeds: [],
     mnemonic: null,
-    originGrants: [{ accountIds: [...input.grant], origin }],
+    originGrants: [...(input.otherGrants ?? []), { accountIds: [...input.grant], origin }],
     schemaVersion: 10,
     signingKeys: [],
   });
@@ -286,6 +287,22 @@ describe("switchChain grant gate (A-M1)", () => {
     expect(visible).toEqual([grantedMainnet]);
   });
 
+  test("keeps the active account when it is already on the target network", async () => {
+    // The active Mainnet account is connected and the grant also covers an
+    // earlier Mainnet account, which the stored-grant lookup would prefer. A
+    // switch to the network the wallet is already on must not hop accounts.
+    const grantedMainnet: AccountRef = { ...account, address: "0x7777", id: "SN_MAIN:0x7777" };
+    const vault = vaultWallet({
+      accounts: [sepolia, grantedMainnet, account],
+      active: account.id,
+      grant: [account.id, grantedMainnet.id],
+    });
+    const { approved, visible } = await approveSwitch(vault.wallet);
+    expect(approved).toEqual({ chainId: MAINNET_CHAIN_ID, ok: true, pending: [] });
+    expect(vault.activeId()).toBe(account.id);
+    expect(visible).toEqual([account]);
+  });
+
   test("ignores a grant id the vault holds on another network", async () => {
     // Granted only on Sepolia: none of its ids may steer the Mainnet landing.
     const vault = vaultWallet({
@@ -295,6 +312,28 @@ describe("switchChain grant gate (A-M1)", () => {
     });
     await approveSwitch(vault.wallet);
     expect(vault.activeId()).toBe(account.id);
+  });
+
+  test("never lands on an account another origin's grant covers (audit 124)", async () => {
+    // Only a different site holds a Mainnet account. That grant says nothing
+    // about this origin, so the switch must not steer onto it: it lands on the
+    // vault's default Mainnet account and, since this origin holds none there,
+    // queues the reconnect prompt instead of sharing anything.
+    const otherMainnet: AccountRef = { ...account, address: "0x8888", id: "SN_MAIN:0x8888" };
+    const vault = vaultWallet({
+      accounts: [sepolia, account, otherMainnet],
+      active: sepolia.id,
+      grant: [sepolia.id],
+      otherGrants: [{ accountIds: [otherMainnet.id], origin: "https://other.example" }],
+    });
+    const { approved, held, visible } = await approveSwitch(vault.wallet);
+    await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
+    expect(vault.activeId()).toBe(account.id);
+    expect(vault.grants).toEqual([]);
+    expect(visible).toEqual([]);
+    expect(approved.pending).toEqual([
+      expect.objectContaining({ existingGrant: true, kind: "connect", origin }),
+    ]);
   });
 
   test("refuses a stale switch card once the origin has been disconnected", async () => {
