@@ -392,5 +392,284 @@
       "ERROR: RpcError: RPC: starknet_estimateFee with params {\n  \"request\": [\n    {\n      \"type\": \"DEPLOY_ACCOUNT\",\n      \"constructor_calldata\": [\n        \"0x60b2e6595df443be9738876d2d373519486b4c0c7f447c0872ee8e",
       "deployed 0x4fde4866162b16bb27dad2e04e42158b0dcedaf9f149c373c7e7e07343b57d5"
     ]
+  },
+  "braavos-matrix/4": {
+    "id": "braavos-matrix/4",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 4,
+    "address": "0x3dcd701c6b50d114e6d2263110ef5db2148d44edda7a3173dc3ee15c5eb2ed7",
+    "pubkey": "0x3fd6ad9407cada6e68c683aae0260a3a35d77cfa61cacc3d0691cc3cf7ca923",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "found by address; stark-key signing must be refused while the strong signer is active",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+      "secp256r1": {
+        "x": "0xae55311fe954f6e206ed49ce1375ea4b146c7cf70cd0260b8bbf58d494fa6370",
+        "y": "0x5d906e0689ca1ca6e36da79e36dd0a3ebdcc6b654ac4a086a36facf2662b75ef"
+      }
+    },
+    "log": [
+      "fee float 0x45511bc50fbae9994936b59a3a2796d40b06ce46b7e2d981f1cf4ef754aed2",
+      "deployed-with-2fa 0x454467046c7b45d72bd143b0fa55a0648c37ad5a04767ca3240bdb11112206f"
+    ]
+  },
+  "ready-matrix/16": {
+    "id": "ready-matrix/16",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 16,
+    "address": "0x5145502dd5493a7f4e722681530ad75b467bc2dfec29aab8dc03cc12f2df793",
+    "pubkey": "0x794dd41a0cf6e2dda547a17c2394e3c4cdb57e4b8fe2d9816778b9ae644deab",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "seed-owned key, unguessable address (salt != pubkey) — indexer-only",
+    "detectability": "D4",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0xb4a3b1e5a17",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x5e5e83d6be402e39849359ae29b0ccb2e4e65dc7f10458171cd7fed5c81e4b3",
+      "deployed 0x44a268f90b1dd4b82b750f6326fbe55324ffd4727c4853fa09bf72b3392b9b5"
+    ]
+  },
+  "ready-matrix/17": {
+    "id": "ready-matrix/17",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 17,
+    "address": "0x4d7657a476a1d7a7575e51c346e830bdefa27422484d637a1aa22a0cbf78af8",
+    "pubkey": "0x132afe5d26e490fbe02cbec9c5cae8eef36da99b16e8737baa886366559d8f7",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "deployed by the dataset deployer via UDC unique=1 — deployer folds into the address",
+    "detectability": "D4",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "deployedBy": "UDC unique=1",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "udc-deployed 0x5f68b16bbb39ea59ce19e370f21089e8672533016ebb0b1483d04a979a54a12"
+    ]
+  },
+  "ready-matrix/18": {
+    "id": "ready-matrix/18",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 18,
+    "address": "0x3d412831143ecbab3bd79b578372d4b87dbae3b243d5892ec739fa44e3c27c6",
+    "pubkey": "0x60bd77a593ac683a0bd94d406a97b30f2e9925b758ba1bd9941e25a66904f65",
+    "classAtDeploy": null,
+    "expected": "funded at a custom-salt counterfactual — invisible from the seed by any method",
+    "detectability": "D5",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "salt": "0x5eed5a17",
+      "funded": "STRK"
+    },
+    "log": [
+      "funded 0x4675b38da3bb122191982d337383343776a1edcc7ff54e9c3025a78f04a8a31"
+    ]
+  },
+  "passphrase/0": {
+    "id": "passphrase/0",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 0,
+    "address": "0xd83ad21e62fefea0573bf5f814a403e744b2a5e7c2bdb16c50c44fd5ae102e",
+    "pubkey": "0x1da9b47d1caf215cd54b9dfa2179fa8e6379fe1286fb7a7e720d9a0b13292cf",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "same words + 25th word = disjoint account universe; found only if import asks for a passphrase",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0xbfb02316112ac1d206ff88f82adc45385b84fc8edf3424f18b7f4d11a0029a",
+      "deployed 0x167718f2378628b41edc7eab21b4862e176de4f433723052abe0c03659912c2"
+    ],
+    "passphrase": true
+  },
+  "control/bramble-axis-1": {
+    "id": "control/bramble-axis-1",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 1,
+    "address": "0x42717863866f4883cbbfcf9edf97a417be76ec65969d916c7e499a66487ef94",
+    "pubkey": "0x53b1ed2ed54c8b1db68c1ed56c9ae827ea2a8e3d4c55a539071d3ac218a621e",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "control: on Bramble's current ladder, so today's scan MUST find it",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x7f3f5d05dca4d61c93af16d7778e328baac924185df91ebde52c0d2430614c3",
+      "deployed 0x8a9821dc721ba7799294a69ef8288e41a8ec81f7f18a094e93e5c0bfbcbce0"
+    ]
+  },
+  "ground-truth/ready-1": {
+    "id": "ground-truth/ready-1",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 0,
+    "address": "0x1a51de858dec150f4db134113b42c69374eaafd25e87efa3509be6dec267954",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-made, deployed 0.4.0",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": []
+  },
+  "ground-truth/ready-2": {
+    "id": "ground-truth/ready-2",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 1,
+    "address": "0x1af449dd78f05ca52c3d23404ab9fc84996e7097f61c6c31449deca4b5cf002",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "smart account, backend salt; guardian 0x7601f48c…",
+    "detectability": "D4",
+    "backedBy": "vendor-backend",
+    "state": {
+      "appMade": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": []
+  },
+  "ground-truth/ready-3": {
+    "id": "ground-truth/ready-3",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 2,
+    "address": "0x4e0c443cf394448b179264b5e334c32d22814b094db72de53c35f58bbe360b1",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "discarded in the Ready UI, empty; still the seed's account",
+    "detectability": "D5",
+    "backedBy": "vendor-backend",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  },
+  "ground-truth/ready-4": {
+    "id": "ground-truth/ready-4",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 4,
+    "address": "0x797212051516b6be4c9e5d21fe6d185308539c5533f8d012b33ba4453333042",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-recorded, untouched",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  },
+  "ground-truth/ready-5": {
+    "id": "ground-truth/ready-5",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 5,
+    "address": "0x37ad76acb262e7766dc5c63f20c8086020435440c6295f8d9f78cf45744ae6e",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-recorded, untouched",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  },
+  "ground-truth/braavos-1": {
+    "id": "ground-truth/braavos-1",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN",
+    "vendorDerivation": "braavos-direct",
+    "index": 0,
+    "address": "0x165d85b4d79f5a31cd25f109a453938bd007d67604c4dc55e9bb4e19acf17b7",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-made, deployed, 2FA (+3FA if enrolled)",
+    "detectability": "D1",
+    "backedBy": "vendor-backend",
+    "state": {
+      "appMade": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": []
+  },
+  "ground-truth/braavos-2": {
+    "id": "ground-truth/braavos-2",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN",
+    "vendorDerivation": "braavos-direct",
+    "index": 1,
+    "address": "0x10d1aa580966bf51ba812de9846beeccc4e7d609284171b692180594fe8b9f6",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-made, deployed plain",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": []
+  },
+  "ground-truth/braavos-3": {
+    "id": "ground-truth/braavos-3",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN",
+    "vendorDerivation": "braavos-direct",
+    "index": 2,
+    "address": "0x45070a872b80d5c60a28a5a0982199bf75383d686241e2cd0134a94f89aac60",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-made, 2.3 STRK, undeployed",
+    "detectability": "D3",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  },
+  "ground-truth/braavos-4": {
+    "id": "ground-truth/braavos-4",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN",
+    "vendorDerivation": "braavos-direct",
+    "index": 3,
+    "address": "0x5bebe794bfb7d0a507d662cf508dab62a6e0447c0aec278d5079cc0e205c21",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-recorded, untouched",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
   }
 }
