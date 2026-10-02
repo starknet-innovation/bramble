@@ -18,7 +18,7 @@ import {
 describe("official STRK20 SDK submission redaction", () => {
   test("surfaces an account-mode deposit rejection without echoing the request body", async () => {
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },

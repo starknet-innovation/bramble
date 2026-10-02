@@ -24,7 +24,7 @@ describe("official STRK20 SDK read retries", () => {
     let attempts = 0;
     const pauses: (readonly [number, number | undefined])[] = [];
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         attempts += 1;
         if (attempts === 1) {
@@ -53,7 +53,7 @@ describe("official STRK20 SDK read retries", () => {
     let attempts = 0;
     const pauses: number[] = [];
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         attempts += 1;
         throw rateLimitError("1");
@@ -95,7 +95,7 @@ describe("official STRK20 SDK read retries", () => {
       },
       providerFor: throttledProviderFor,
       sdk: runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),
@@ -114,7 +114,7 @@ describe("official STRK20 SDK read retries", () => {
     let attempts = 0;
     const pauses: (readonly [number, number | undefined])[] = [];
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         attempts += 1;
         if (attempts === 1) {

@@ -381,7 +381,7 @@ describe("private send fee lines", () => {
   const relayFeeHtml = (amount: string, poolFeeFri?: string): string =>
     routeFeeHtml(routeFor("private", "private"), {
       ...(poolFeeFri === undefined ? {} : { poolFeeFri }),
-      preparation: { relayFee: { amount } } as never,
+      preparation: { relayFee: { amount, token: STRK_TOKEN_ADDRESS } } as never,
       review: null,
     });
 

@@ -361,6 +361,7 @@ export const createOfficialStrk20Service = ({
             },
             config: paymaster,
             ...(http ? { http } : {}),
+            isAuthorized: input.isAuthorized,
             nowSeconds: nowSeconds(),
             plan: privatePlan,
             proof: callAndProof.proof,

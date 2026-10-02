@@ -23,6 +23,7 @@ import {
   type PreparationProgress,
   runPreparationJob,
 } from "./privacy-preparation-job";
+import { type PrivacyRelayFee, readPrivacyRelayFee } from "./privacy-relay-fee";
 
 /**
  * Receives the progress of a tracked job on every poll while it runs. Optional
@@ -76,11 +77,7 @@ export type PrivacyPreparation = {
   readonly poolFeeFri?: string;
   readonly recipient?: string;
   readonly route: "private-relay" | "public-account";
-  readonly relayFee?: {
-    readonly amount: string;
-    readonly recipient: string;
-    readonly token: string;
-  };
+  readonly relayFee?: PrivacyRelayFee;
   readonly summaries: readonly string[];
   readonly symbol: string;
   readonly tokenId: string;
@@ -128,22 +125,6 @@ const readAuthorization = (value: unknown): PaymasterAuthorizationReview | null 
   };
 };
 
-const readRelayFee = (value: unknown): NonNullable<PrivacyPreparation["relayFee"]> | null => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["amount", "recipient", "token"]) ||
-    typeof value["amount"] !== "string" ||
-    !isStarkFieldElement(value["amount"]) ||
-    typeof value["recipient"] !== "string" ||
-    !isNonZeroStarkFieldElement(value["recipient"]) ||
-    typeof value["token"] !== "string" ||
-    !isNonZeroStarkFieldElement(value["token"])
-  ) {
-    return null;
-  }
-  return { amount: value["amount"], recipient: value["recipient"], token: value["token"] };
-};
-
 const isPoolFee = (value: unknown): value is string => {
   if (typeof value !== "string") {
     return false;
@@ -180,7 +161,8 @@ const readPreparation = (
   const value = response["strk20Preparation"];
   const authorization =
     value["authorization"] === undefined ? undefined : readAuthorization(value["authorization"]);
-  const relayFee = value["relayFee"] === undefined ? undefined : readRelayFee(value["relayFee"]);
+  const relayFee =
+    value["relayFee"] === undefined ? undefined : readPrivacyRelayFee(value["relayFee"]);
   if (
     !hasOnlyKnownKeys(value, [
       "amount",
