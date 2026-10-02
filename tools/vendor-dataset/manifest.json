@@ -1,0 +1,292 @@
+{
+  "ready-matrix/0": {
+    "id": "ready-matrix/0",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 0,
+    "address": "0x5fcda56e8be4531ca7c1d51049e49687b222d13c239a678f14832d0458b3702",
+    "pubkey": "0x6e2c06e5756712d89e8d9e515a8137eb9a9d6a004128524549ddf8249aa6234",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found once #505 fixed (0.4.0, deployed)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x5bfc39dd44408b10c52c095b2349540e2abe0c64ada3e823d6a0eede292ecb2",
+      "deployed 0x1b4daf9e19089cd33be6fb2e1eaf40e4de97caba842858735fcc2887acee93b"
+    ]
+  },
+  "ready-matrix/2": {
+    "id": "ready-matrix/2",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 2,
+    "address": "0x2104368826212cd8f7a50f1a4bd6406010b48e35baf6fb482a766bc65734ea3",
+    "pubkey": "0x5b90928711fedb0f82e75e79f53ed54f8b4485e3c922e6ee65123e2a1928855",
+    "classAtDeploy": "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+    "expected": "found once #505 fixed (0.3.0, view-only)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003"
+    },
+    "log": [
+      "fee float 0x5f31cd322f9a0015a68d0a5c104b8039cb0c9221af8c2fce323c7a72eede40d",
+      "deployed 0x6f8a5fa0b0821d8a933fc3d9986a836da59f329b470d6f5adfaf7eeabec046f"
+    ]
+  },
+  "ready-matrix/4": {
+    "id": "ready-matrix/4",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 4,
+    "address": "0x122e539a8c679484a7dd514c38c5aa6f2cfcda59c83c05e71fd094cbd77962b",
+    "pubkey": "0x69f1578fd86f03f0be1bc9b0c1b51ac848977a0b4f0645f998f9dc128996f3b",
+    "classAtDeploy": "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
+    "expected": "found once #505 fixed (0.3.1, view-only)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b"
+    },
+    "log": [
+      "fee float 0x71e7e0930cafb984b23b4d632a67afbb483d96343cf764ae504fe6509870951",
+      "deployed 0x1bb2618a8311a536bcb5a5521129e889e9e1bc8dd9396a877a985273f954147"
+    ]
+  },
+  "ready-matrix/5": {
+    "id": "ready-matrix/5",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 5,
+    "address": "0x7cc7967a52e2464b40e9a7a5c0cacef23778cb598434344548375a24f88e944",
+    "pubkey": "0x33dc2179e880b5ac6053ca68489e5f60235473afdd78d443444aea0b0abf064",
+    "classAtDeploy": null,
+    "expected": "found once #505 fixed (undeployed, ETH balance probe)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "ETH"
+    },
+    "log": [
+      "funded ETH 0x28e76c16cafd17705cea26af679603a879bff723e843ae477db1faebdcc3f72"
+    ]
+  },
+  "ready-matrix/6": {
+    "id": "ready-matrix/6",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 6,
+    "address": "0x2baaa2e2914ff88b280032d1c712696f46a1d19ee1573edfd994f1fe9ad7531",
+    "pubkey": "0x3a85797a7c68ba29047e35da20ea643691225564ad2faecdab22171c8a045b8",
+    "classAtDeploy": null,
+    "expected": "found once #505 fixed (undeployed, STRK balance probe)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "STRK"
+    },
+    "log": [
+      "funded STRK 0x282e6ce4ac42657ebfd1221740f44160ffd0d1380775710f7fcd1cc3119ff94"
+    ]
+  },
+  "ready-matrix/9": {
+    "id": "ready-matrix/9",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 9,
+    "address": "0xbd90f0b669a72ed89285733d50201611653dc2cc00184de2b921f93766487b",
+    "pubkey": "0x399053a7d13a60a9f63556c51cc33c6b0469e3bbd01014465b0a2fcd44769aa",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found once #505 fixed (deployed, used, near-zero balance)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x46663860f6808e09ec375a5df5e7190290ef46a94e6bf33b1fb28f762807b4a",
+      "deployed 0x558ecdf54f89232fa1552b8d25da16c630a155c9d6c186537019634b42eb1e",
+      "swept 0x7c68fdcecdf9249f8997c38a968072e67801419801ccb1772c1074945ae58be"
+    ]
+  },
+  "gaps/7": {
+    "id": "gaps/7",
+    "seed": "BRAMBLE_DATASET_SEED_GAPS",
+    "vendorDerivation": "ready-double",
+    "index": 7,
+    "address": "0x30513445d23be034a409eefa3eb60ab720795d0c3279a93102fe3b28b3ca2ac",
+    "pubkey": "0x108a62c8d360b17eca43c99895df6fe6a5cc948dfe1b91de6bdc2110591db1f",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found after a 7-index gap (#504 + #505)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x4a63029eebbe8efb3a23bc75769dfa1aafaa74017dafe8800198083378a01e1",
+      "deployed 0xa74b067f866bf7c1bc1ec1c51d8afd4754c649c6dd817f1a38e437ff02c4a2"
+    ]
+  },
+  "gaps/25": {
+    "id": "gaps/25",
+    "seed": "BRAMBLE_DATASET_SEED_GAPS",
+    "vendorDerivation": "ready-double",
+    "index": 25,
+    "address": "0x1ee0027e8f786ded98848a069b3cbc10d6853c9698aae06f24b2c29213a5a10",
+    "pubkey": "0x6b321569d09c7c47cd9c61965eb8b071e894df6b6c751dc9790b52cf8b9e736",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found past the old 0-19 window only via #504's extension",
+    "detectability": "D3",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x51fde99f0831c9bc6e5686ba49691bfd5d8eb60cf5fa35864ec4a57919846f0",
+      "deployed 0x5285ebfbc6ef2ff4650217b45e3ae1285630fefab5ae711504b6333ff70d0dc"
+    ]
+  },
+  "ready-matrix/7": {
+    "id": "ready-matrix/7",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 7,
+    "address": "0x750f660b93383da77fb68c676004544a10121a8a096c8d830114b33d332137e",
+    "pubkey": "0x176e87a322ec271e9b6fb1c3b2e35baf62cf34e8594f0d58f601643bb1c477a",
+    "classAtDeploy": null,
+    "expected": "missed by ETH/STRK probe despite holding native USDC (needs richer probes)",
+    "detectability": "D3",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "USDC-native"
+    },
+    "log": [
+      "funded USDC 0x1ea6b78ba2ec762cd6dfc92507fcb3ed9f300487d22332afe13bd0da10e5836"
+    ]
+  },
+  "ready-matrix/3": {
+    "id": "ready-matrix/3",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 3,
+    "address": "0x2ed080626ab83319e14424f9a878d1bd259be7fe61c0c25af5ded22f3de7fac",
+    "pubkey": "0x7e61f6a2c53324043f699ff52cffb929672e2eda85c6b900fd8a4725d306f79",
+    "classAtDeploy": "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+    "expected": "address only derivable via the 0.3.0 shape; live class is 0.4.0",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x4f8312ab9ddb49675e7ab8f8aac5e2823893256ca77f45dd1f0ec27739e4e0f",
+      "deployed 0x37f3c15a5a4d0ccc4edfbfffb5ed195f55cbd8ab13a271926a0a0088ddd6143",
+      "upgraded 0x2df738bf022889a475135c5591bf1519a720de6e6024efc2fbc3a839da394f7"
+    ]
+  },
+  "ready-matrix/11": {
+    "id": "ready-matrix/11",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 11,
+    "address": "0x6806346090ac047ddff967b2ce1b3ef65ff071c4015dfa62b6d207b34ba0ccc",
+    "pubkey": "0x3657cc59045f126f41de797f1240a95f0c263e75f25a78f16b2d6cf9c303ea3",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found; signing must be refused while get_guardian != 0",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "guardian": "0x2606cf4247920814d1592c12cc5001c7b0f720f16182a3c7d3bce5cff987a72"
+    },
+    "log": [
+      "fee float 0x6ac463368375b2f1def34fda053d04dc7cde1abb1718563f60ecf00062a8563",
+      "deployed 0x184ed46840edd792396c3b3e2f1ba1d90703e8d948c37747d4c55c41bed3c88",
+      "guardian set 0x7ab3ddfb2df95a5eb6c719fef32fa5594fc3e04e376d8aefd29bc082f52d7ee"
+    ]
+  },
+  "ready-matrix/12": {
+    "id": "ready-matrix/12",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 12,
+    "address": "0xd536533dff72853d5dbd055e527dc3370d0fba70ce2f5e0834b9e315e49d7a",
+    "pubkey": "0x1f4209e07a9a3368fb4883b009ecbfb10c4b0bb861ab9be2451126559c58fb7",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found and signable; a cached guardian verdict would wrongly exclude it",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "guardian": null,
+      "hadGuardian": true
+    },
+    "log": [
+      "fee float 0x51099938cd7c3ec5108d2067a21f22350e5fb40fb3df9503bdc14939d22d8e9",
+      "deployed 0x1276cd016d1d182f5f22c3beb2e9f7f9f43a78dc47b9ebf814950af312281e9",
+      "guardian set 0x38f10bce1612eeba3adff2e01b50a08f7dc06f9c1a6439e328b92d2e07a6cee",
+      "guardian removed 0x768aed7c19b111fe96e2f9015f07eac8b2bef7bac28e8f1cfc0580aab2072e5"
+    ]
+  },
+  "ready-matrix/13": {
+    "id": "ready-matrix/13",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 13,
+    "address": "0x4b617a8240cd8282151ea030243ad1960797703f70a7030cc6247c96afcc134",
+    "pubkey": "0x7403649cddd0bf2c2cf34b160a4e5c2223edb7ada32820c36f40fc60ff7a0e0",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found; mid-escape account a wallet may import in-flight",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "guardian": "0x2606cf4247920814d1592c12cc5001c7b0f720f16182a3c7d3bce5cff987a72",
+      "escape": "guardian-escape pending"
+    },
+    "log": [
+      "fee float 0x1bcf0799ec916cedabda60153e6bb754d1186ef741b1f3f9059cb5836d1a426",
+      "deployed 0x3d69a6b50ad88ed5caea2f4ea0136b1a93708397518820508297017d4db2e4d",
+      "guardian set 0x5444f4c867325ff84c10dc29d5c5281358b7154f3bf738b19013cb501ef7263",
+      "escape triggered 0x31e0ac5450e195401ce317ead2a282ae33a4a54478bc050b01f74c60932c9f"
+    ]
+  },
+  "ready-matrix/14": {
+    "id": "ready-matrix/14",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 14,
+    "address": "0x7a36ab2573c3a9eeca82cfb2a6edcc707e5e292646699a32b80845c9c4196b2",
+    "pubkey": "0x55ed40165b2f4fd244f75205b07f27b434e36551b5db8142cb5fdcc1d4cb11",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "after pass 2 the live owner key is foreign to the seed (D5 for ownership)",
+    "detectability": "D5",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "guardian": "0x2606cf4247920814d1592c12cc5001c7b0f720f16182a3c7d3bce5cff987a72",
+      "escape": "owner-escape pending",
+      "newOwnerAfterPass2": "0xdf3413e83c7048010014e81cc301a0efdd0149ad4c307def99ba46160f23fb"
+    },
+    "log": [
+      "fee float 0x385b7dec3d6cd5e7b2749e435c815b9c6ed5782e1688be1af41d199bf30923f",
+      "deployed 0x3821d76a0373cc48c0398c19e232ea50b7c4fc8f924d3f61038cc5a3519bbd",
+      "guardian set 0x3616fdc0fb1cda04396b822bbd5da160c038f62d1f30951f4dd1565a657503b",
+      "owner escape triggered 0x571c495692bcc96a94a8e4238297598d1f223ab4bfdd20352738c2e1e576366"
+    ]
+  }
+}
