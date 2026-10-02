@@ -116,8 +116,13 @@ seeds' recorded addresses on the first run:
 - **Ready**: recorded accounts 1/3/4/5 match the **double derivation** at indices
   0/2/4/5 (live class 0.4.0 for the deployed one). The smart (email-guardian)
   account consumed index 1 and its backend-salted address matches no computed shape,
-  as predicted. Index 3 was consumed in-app by nothing we recorded — real-world
-  index gaps happen inside one vendor session.
+  as predicted. The smart account (key index 1, backend-salted address
+  `0x01af449d…`) is not yet deployed — findable only through Argent's backend until
+  it is; once deployed, its on-chain `get_owner` should equal the double-derivation
+  index-1 pubkey and its `get_guardian` pins Argent's real guardian value for the
+  manifest. Index 3 was burned by an **aborted** "create smart account" flow —
+  backing out of the dialog still consumes a key index, so real-world index gaps
+  arise inside one vendor session without the user ever seeing an account.
 - **Empirical verdict on Bramble today**: on the Braavos seed it finds exactly
   account #1 (index 0, the single overlapping coordinate) and misses #2–4; on the
   Ready seed it finds **nothing at any index** — the double derivation means no
