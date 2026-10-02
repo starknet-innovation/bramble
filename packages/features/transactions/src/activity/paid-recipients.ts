@@ -34,10 +34,12 @@ export type NetworkAddress = {
 export const MAX_PAID_RECIPIENTS_PER_NETWORK = 50;
 
 /**
- * Returns the distinct counterparties of wallet-submitted transfers, newest
- * first, at most {@link MAX_PAID_RECIPIENTS_PER_NETWORK} per network. Pure; a
- * row that is not a wallet-origin transfer with a valid non-zero felt
- * counterparty is skipped, never trusted.
+ * Returns the distinct counterparties of wallet-submitted rows, newest first,
+ * at most {@link MAX_PAID_RECIPIENTS_PER_NETWORK} per network. Any kind counts
+ * (ERC20 transfers, NFT sends and single-payment multisig intents all record a
+ * counterparty) because `origin` is writer-controlled, so relaxing the kind
+ * adds no attacker input. Pure; a row that is not wallet-origin with a valid
+ * non-zero felt counterparty is skipped, never trusted.
  */
 export const walletPaidRecipients = (
   entries: readonly ActivityEntry[],
@@ -47,7 +49,7 @@ export const walletPaidRecipients = (
   const result: NetworkAddress[] = [];
   const newestFirst = [...entries].sort((left, right) => right.submittedAt - left.submittedAt);
   for (const entry of newestFirst) {
-    if (entry.origin !== "wallet" || entry.kind !== "transfer" || !entry.counterparty) {
+    if (entry.origin !== "wallet" || !entry.counterparty) {
       continue;
     }
     const address = canonicalFelt(entry.counterparty);

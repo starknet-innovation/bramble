@@ -23,6 +23,7 @@ import { reviewArgentMultisigCalls } from "../../apps/extension/src/background/m
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { paidCounterparty } from "../../apps/extension/src/background/transactions/activity-recording";
 import { testExtension } from "../support/background-wallet-stub";
 import {
   POISONING_CONTACT,
@@ -115,6 +116,9 @@ const makeHandler = async (options: { readonly seed?: readonly ActivityEntry[] }
       async getDeploymentStatus() {
         return true;
       },
+      async getNftOwnership() {
+        return { balance: "1", standard: "ERC721" as const };
+      },
       async getTokenBalances() {
         return [];
       },
@@ -189,6 +193,30 @@ describe("public send: recipients the wallet paid (#163)", () => {
     const harness = await makeHandler({ seed: [chainRow(PAID_TWIN)] });
     expect(await harness.reviewFlags(PAID)).not.toContain("address-poisoning");
     await expect(harness.send(PAID)).resolves.toMatchObject({ ok: true });
+  });
+
+  test("a recipient paid through the NFT send is trusted too", async () => {
+    const harness = await makeHandler();
+    await expect(
+      harness.handler(
+        {
+          contract: ETH,
+          networkId: "SN_MAIN",
+          recipient: PAID,
+          reviewedFee: { overallFee: "1", unit: "FRI" },
+          tokenId: "7",
+          type: "wallet.transferNft",
+        },
+        extensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    const [recorded] = await harness.activity.list();
+    expect(recorded).toMatchObject({ counterparty: PAID, kind: "invoke", origin: "wallet" });
+
+    await expect(harness.send(PAID_TWIN)).resolves.toEqual({
+      error: expect.stringContaining("an address you saved or paid"),
+    });
+    expect(harness.submitted).toEqual(["invoke"]);
   });
 
   test("a legacy row without provenance contributes nothing", async () => {
@@ -320,5 +348,24 @@ describe("multisig review uses the same trusted set (#163)", () => {
       error: expect.stringContaining("closely mimics"),
     });
     await expect(review(PAID)).resolves.toMatchObject({ summary: expect.any(String) });
+  });
+});
+
+describe("paidCounterparty", () => {
+  const transfer = (recipient: string) => ({
+    calldata: [recipient, "0x1", "0x0"],
+    contractAddress: ETH,
+    entrypoint: "transfer",
+  });
+
+  test("names the payee of a single known-recipient call, canonicalized", () => {
+    expect(paidCounterparty([transfer(PAID)])).toEqual({ counterparty: canonicalFelt(PAID) ?? "" });
+  });
+
+  test("records nothing for a multicall, an unknown selector, or a zero recipient", () => {
+    expect(paidCounterparty([transfer(PAID), transfer(SECOND.address)])).toEqual({});
+    expect(paidCounterparty([{ ...transfer(PAID), entrypoint: "mint" }])).toEqual({});
+    expect(paidCounterparty([transfer("0x0")])).toEqual({});
+    expect(paidCounterparty([])).toEqual({});
   });
 });

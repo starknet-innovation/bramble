@@ -369,6 +369,8 @@ const handleTransferNft = async (
   });
   await recordSubmittedActivity(deps.activity, {
     accountId: context.account.id,
+    // The NFT's recipient is a payee like an ERC20 send's (audit #163).
+    counterparty: input.recipient,
     hash: result.transactionHash,
     kind: "invoke",
     networkId: context.networkId,

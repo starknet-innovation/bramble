@@ -35,12 +35,19 @@ describe("walletPaidRecipients", () => {
     ).toEqual([{ address: "0xabc", networkId: "SN_MAIN" }]);
   });
 
-  test("ignores chain-discovered, legacy, non-transfer, and zero counterparties", () => {
+  test("keeps the payee of a wallet-origin NFT or multisig send (an invoke row)", () => {
+    expect(walletPaidRecipients([row({ counterparty: "0xdef", kind: "invoke" })])).toEqual([
+      { address: "0xdef", networkId: "SN_MAIN" },
+    ]);
+  });
+
+  test("ignores chain-discovered, legacy, counterparty-less, and zero counterparties", () => {
     const { origin: _legacy, ...legacy } = row({});
+    const { counterparty: _none, ...withoutCounterparty } = row({ kind: "invoke" });
     expect(
       walletPaidRecipients([
         legacy,
-        row({ kind: "invoke" }),
+        withoutCounterparty,
         row({ counterparty: "0x0" }),
         row({ counterparty: "not-a-felt" }),
       ]),
