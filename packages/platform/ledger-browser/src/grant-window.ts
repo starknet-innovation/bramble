@@ -171,24 +171,32 @@ const requireBaseResponse = (
   };
 };
 
+const LEDGER_STATUS_OK = 0x9000;
+const isVersionByte = (part: unknown): part is number =>
+  typeof part === "number" && Number.isSafeInteger(part) && part >= 0 && part <= 0xff;
+
+// A non-OK status is forwarded with a neutral version (0.0.0) so the shared
+// client classifies it (no app open, rejected) instead of reporting a generic
+// device error: the pinned library returns status words like BadCla as replies
+// whose version parts are present but undefined. Any other key, or a part that
+// is neither undefined nor a byte, still fails closed; 0x9000 needs all three.
 const requireVersionResponse = (value: unknown) => {
-  const response = requireBaseResponse(value);
-  const parts = [response["major"], response["minor"], response["patch"]];
+  const { major, minor, patch, ...response } = requireBaseResponse(value);
+  const parts = [major, minor, patch];
   if (
-    Object.keys(response).length !== 5 ||
-    !parts.every(
-      (part) => typeof part === "number" && Number.isSafeInteger(part) && part >= 0 && part <= 0xff,
-    )
+    !hasOnlyKnownKeys(response, ["errorMessage", "returnCode"]) ||
+    !parts.every((part) => part === undefined || isVersionByte(part))
   ) {
     throw new LedgerRejection("unexpected-device-error");
   }
-  return {
-    errorMessage: response.errorMessage,
-    major: response["major"] as number,
-    minor: response["minor"] as number,
-    patch: response["patch"] as number,
-    returnCode: response.returnCode,
-  };
+  const { errorMessage, returnCode } = response;
+  if (returnCode !== LEDGER_STATUS_OK) {
+    return { errorMessage, major: 0, minor: 0, patch: 0, returnCode };
+  }
+  if (!isVersionByte(major) || !isVersionByte(minor) || !isVersionByte(patch)) {
+    throw new LedgerRejection("unexpected-device-error");
+  }
+  return { errorMessage, major, minor, patch, returnCode };
 };
 
 const requireOsVersionResponse = (value: unknown) => {
@@ -206,8 +214,19 @@ const requireOsVersionResponse = (value: unknown) => {
   return { targetId: value["targetId"], version: value["version"] };
 };
 
+const PUBLIC_KEY_RESPONSE_KEYS = ["errorMessage", "publicKey", "returnCode"] as const;
+
+// As for the version: a non-OK status (the library's empty `publicKey`) is
+// forwarded with an empty key for the shared client to classify.
 const requirePublicKeyResponse = (value: unknown) => {
   const response = requireBaseResponse(value);
+  if (!hasOnlyKnownKeys(response, PUBLIC_KEY_RESPONSE_KEYS)) {
+    throw new LedgerRejection("unexpected-device-error");
+  }
+  if (response.returnCode !== LEDGER_STATUS_OK) {
+    const { errorMessage, returnCode } = response;
+    return { errorMessage, publicKey: new Uint8Array(0), returnCode };
+  }
   if (
     Object.keys(response).length !== 3 ||
     !(response["publicKey"] instanceof Uint8Array) ||
@@ -223,7 +242,6 @@ const requirePublicKeyResponse = (value: unknown) => {
 };
 
 const SIGNATURE_RESPONSE_KEYS = ["errorMessage", "r", "returnCode", "s"] as const;
-const LEDGER_STATUS_OK = 0x9000;
 
 const isRecoveryByte = (value: unknown): boolean =>
   value === undefined ||

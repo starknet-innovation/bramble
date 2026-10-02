@@ -14,7 +14,11 @@ import {
   requestDeviceGrant,
 } from "@bramble/ledger-browser/grant-window";
 import { newStarknetClient } from "@bramble/ledger-browser/webhid";
-import { ledgerSignHashOnDevice } from "@bramble/ledger-protocol/client";
+import {
+  ledgerAppVersion,
+  ledgerPublicKeyX,
+  ledgerSignHashOnDevice,
+} from "@bramble/ledger-protocol/client";
 import type { LedgerDeviceSession } from "@bramble/ledger-protocol/session";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
@@ -63,6 +67,7 @@ const browser: GrantBrowser = {
 /** Opens a grant session whose broker answers `signHash` through `signHash`. */
 const openSession = async (
   signHash: (path: string, hash: string) => Promise<unknown>,
+  silent: Readonly<Record<string, () => Promise<unknown>>> = {},
 ): Promise<LedgerDeviceSession> => {
   const make = channelBus();
   const panelEnd = make();
@@ -82,6 +87,7 @@ const openSession = async (
       returnCode: 0x9000,
     }),
     signHash,
+    ...silent,
   };
   const pending = requestDeviceGrant(browser, {
     channel: () => panelEnd,
@@ -207,5 +213,79 @@ describe("pinned StarknetClient through the grant broker", () => {
       code: "rejected-on-device",
     });
     await rejected.close();
+  });
+});
+
+// The silent reads have the same problem as signHash had: the pinned library
+// returns a non-OK status word as a reply, with undefined version parts or an
+// empty key. The grant tab must let the shared client classify it, as the
+// cable path does, rather than report a generic device error.
+describe("grant-tab silent reads with a non-OK status", () => {
+  const unsigned = async (): Promise<unknown> => ({});
+
+  test("a closed Starknet app reads as no app open, not a device error", async () => {
+    for (const returnCode of [0x6e00, 0x6e01]) {
+      const session = await openSession(unsigned, {
+        getAppVersion: async () => ({
+          errorMessage: "CLA not supported",
+          major: undefined,
+          minor: undefined,
+          patch: undefined,
+          returnCode,
+        }),
+        getPubKey: async () => ({
+          errorMessage: "CLA not supported",
+          publicKey: new Uint8Array(0),
+          returnCode,
+        }),
+      });
+      await expect(ledgerAppVersion(session.client)).rejects.toMatchObject({ code: "no-app-open" });
+      await expect(ledgerPublicKeyX(session.client, PATH)).rejects.toMatchObject({
+        code: "no-app-open",
+      });
+      await session.close();
+    }
+  });
+
+  test("the pinned library's replies over a closed app classify the same way", async () => {
+    // Every APDU answers BadCla, as a device with the Starknet app closed does.
+    const transport = {
+      close: async (): Promise<void> => undefined,
+      send: async (): Promise<Buffer> => Buffer.from([0x6e, 0x00]),
+    };
+    const closedApp = newStarknetClient(transport);
+    const session = await openSession(unsigned, {
+      getAppVersion: () => closedApp.getAppVersion(),
+      getPubKey: () => closedApp.getPubKey(PATH, false),
+    });
+    await expect(ledgerAppVersion(session.client)).rejects.toMatchObject({ code: "no-app-open" });
+    await expect(ledgerPublicKeyX(session.client, PATH)).rejects.toMatchObject({
+      code: "no-app-open",
+    });
+    await session.close();
+  });
+
+  test("still fails closed on unknown keys and on a bad OK payload", async () => {
+    const replies: Readonly<Record<string, () => Promise<unknown>>>[] = [
+      { getAppVersion: async () => ({ errorMessage: "", extra: 1, returnCode: 0x6e00 }) },
+      { getAppVersion: async () => ({ errorMessage: "", major: 2, returnCode: 0x9000 }) },
+      { getPubKey: async () => ({ errorMessage: "", extra: 1, returnCode: 0x6e00 }) },
+      {
+        getPubKey: async () => ({
+          errorMessage: "",
+          publicKey: new Uint8Array(0),
+          returnCode: 0x9000,
+        }),
+      },
+    ];
+    for (const silent of replies) {
+      const session = await openSession(unsigned, silent);
+      const read =
+        "getAppVersion" in silent
+          ? session.client.getAppVersion()
+          : session.client.getPubKey(PATH, false);
+      await expect(read).rejects.toMatchObject({ code: "unexpected-device-error" });
+      await session.close();
+    }
   });
 });
