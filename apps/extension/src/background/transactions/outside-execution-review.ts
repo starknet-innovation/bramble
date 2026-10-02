@@ -7,6 +7,8 @@
  */
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { AllowanceRecord } from "@bramble/transactions/allowance-store";
+import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import { outsideExecutionCalls } from "@bramble/transactions/outside-execution-calls";
 import {
   refuseOnAccountSelfCall,
@@ -16,6 +18,7 @@ import {
 } from "@bramble/transactions/verify";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-responses";
+import { allowanceOwner } from "../portfolio/allowance-recording";
 
 /**
  * What the sign card shows for an OutsideExecution: risk flags and one decoded
@@ -33,12 +36,16 @@ export type OutsideExecutionReview = {
  * the account contract itself, or a lookalike recipient, and the review
  * otherwise. Callers must not queue or sign on an `{ error }` result. Run it at
  * queue time and again before signing: the address book can gain a contact
- * while the card is open.
+ * while the card is open. `allowances` is the recorded allowance log, read the
+ * same way the invoke route reads it, so an `increase_allowance` that tops up a
+ * standing allowance is flagged on its cumulative total; omitted, the review
+ * flags each call on its own amount (refusals never depend on it).
  */
 export const reviewOutsideExecution = (
   typedData: unknown,
   account: AccountRef,
   preferences: Pick<WalletPreferences, "addressBook" | "nfts" | "tokens">,
+  allowances: readonly AllowanceRecord[] = [],
 ): OutsideExecutionReview | { readonly error: string } | null => {
   const calls = outsideExecutionCalls(typedData);
   if (calls === null) {
@@ -47,7 +54,12 @@ export const reviewOutsideExecution = (
   if (calls === "malformed") {
     return { error: "invalid typed data" };
   }
-  const report = verifyCalls(calls, verificationContext(account, preferences));
+  const trusted = verificationContext(account, preferences);
+  const report = verifyCalls(
+    calls,
+    trusted,
+    standingAllowanceTotals(allowances, allowanceOwner(account), trusted),
+  );
   const refusal =
     refuseOnAccountSelfCall(calls, account.address) ?? refuseOnPoisonedRecipient(report);
   if (refusal) {

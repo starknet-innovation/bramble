@@ -11,6 +11,7 @@ import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
 import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
+import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import type { Vault } from "@bramble/vault/schema";
 import {
   networkIdForChainId,
@@ -56,6 +57,12 @@ import { reviewOutsideExecution } from "./outside-execution-review";
  */
 export type ChainOpsDeps = {
   readonly activeStateCoordinator?: ActiveStateCoordinator;
+  /**
+   * Recorded allowance log, read for OutsideExecution risk flags only (an
+   * unreadable log flags each call on its own amount). Optional so partial
+   * test stubs stay valid.
+   */
+  readonly allowanceStore?: Pick<AllowanceStore, "list">;
   readonly approvals: ApprovalQueue;
   readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
@@ -230,8 +237,14 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
     return { error: "invalid typed data" };
   }
   // An OutsideExecution authorizes calls the site can submit later without a
-  // prompt, so it gets the invoke route's refusals and flags (audit 144).
-  const review = reviewOutsideExecution(input.typedData, account, preferences);
+  // prompt, so it gets the invoke route's refusals and flags (audit 144),
+  // including the standing-allowance totals the invoke route flags against.
+  const review = reviewOutsideExecution(
+    input.typedData,
+    account,
+    preferences,
+    (await deps.allowanceStore?.list().catch(() => [])) ?? [],
+  );
   if (review && "error" in review) {
     return review;
   }

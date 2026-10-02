@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
+import { type AllowanceStore, memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { constants, outsideExecution } from "starknet";
 import { setApprovalNotifier } from "../../../apps/extension/src/background/approvals/approval-notifier";
@@ -108,13 +109,14 @@ const outside = (calls: readonly Call[], version: "1" | "2" = "2"): unknown =>
     ),
   );
 
-const setup = () => {
+const setup = (allowanceStore: AllowanceStore = memoryAllowanceStore()) => {
   setApprovalNotifier(() => undefined);
   signed = 0;
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
   const handler = createMessageHandler(wallet, chromiumExtension("ext"), {
+    allowanceStore,
     preferencesStore,
     session,
   });
@@ -135,8 +137,21 @@ const setup = () => {
         readonly pending: readonly unknown[];
       }
     ).pending;
-  return { handler, pending, preferencesStore, sign, signNow };
+  // The risk-flag codes on the one queued card.
+  const queuedFlags = async () => {
+    await flushHeld();
+    const [queued] = await waitForPendingApprovals<{
+      readonly flags?: readonly { readonly code: string }[];
+      readonly id: string;
+    }>(handler, page);
+    return queued?.flags?.map((flag) => flag.code) ?? [];
+  };
+  return { handler, pending, preferencesStore, queuedFlags, sign, signNow };
 };
+
+// 2^127 base units: one grant stays below the unlimited threshold (2^128 - 2),
+// two of them cross it.
+const HALF_U128 = "0x80000000000000000000000000000000";
 
 describe("OutsideExecution sign route (audit 144)", () => {
   for (const version of ["1", "2"] as const) {
@@ -205,6 +220,78 @@ describe("OutsideExecution sign route (audit 144)", () => {
     expect(queued?.summaries).toHaveLength(2);
     expect(queued?.summaries?.[0]).toBe("OutsideExecution · Account.execute_from_outside");
     expect(queued?.summaries?.[1]).toContain("Allow");
+  });
+
+  // The selector-to-name map covers every decoded entrypoint, not only
+  // transfer/approve: v1 carries raw selector hashes and decimal calldata.
+  test("refuses a v1 transfer_from to a lookalike, with decimal calldata", async () => {
+    const { pending, signNow } = setup();
+    const typed = outside(
+      [
+        {
+          calldata: [account.address, LOOKALIKE, "0x1", "0x0"],
+          contractAddress: ETH,
+          entrypoint: "transfer_from",
+        },
+      ],
+      "1",
+    ) as { readonly message: { readonly calls: { calldata: string[] }[] } };
+    for (const call of typed.message.calls) {
+      call.calldata = call.calldata.map((felt) => BigInt(felt).toString(10));
+    }
+    await expect(signNow(typed)).resolves.toEqual({
+      error: expect.stringContaining("closely mimics"),
+    });
+    expect(await pending()).toEqual([]);
+  });
+
+  test("flags increase_allowance grants that add up to an unlimited allowance", async () => {
+    const { queuedFlags, sign } = setup();
+    const grant = {
+      calldata: [CONTACT, HALF_U128, "0x0"],
+      contractAddress: ETH,
+      entrypoint: "increase_allowance",
+    };
+    void sign(outside([grant, grant]));
+    expect(await queuedFlags()).toContain("unlimited-approval");
+  });
+
+  test("flags a small increase_allowance that tops up a standing allowance", async () => {
+    // The same input the invoke route reviews against: the recorded allowance
+    // log, so a top-up over an existing near-unlimited allowance is flagged.
+    const allowances = memoryAllowanceStore();
+    await allowances.record({
+      accountId: account.id,
+      amount: (2n ** 128n - 10n).toString(10),
+      networkId: "SN_MAIN",
+      spender: CONTACT,
+      token: ETH,
+    });
+    const { queuedFlags, sign } = setup(allowances);
+    void sign(
+      outside([
+        {
+          calldata: [CONTACT, "0x64", "0x0"],
+          contractAddress: ETH,
+          entrypoint: "increase_allowance",
+        },
+      ]),
+    );
+    expect(await queuedFlags()).toContain("unlimited-approval");
+  });
+
+  test("does not flag the same small increase_allowance with no standing allowance", async () => {
+    const { queuedFlags, sign } = setup();
+    void sign(
+      outside([
+        {
+          calldata: [CONTACT, "0x64", "0x0"],
+          contractAddress: ETH,
+          entrypoint: "increase_allowance",
+        },
+      ]),
+    );
+    expect(await queuedFlags()).not.toContain("unlimited-approval");
   });
 
   test("refuses at approval when a contact added meanwhile makes the payee a lookalike", async () => {
