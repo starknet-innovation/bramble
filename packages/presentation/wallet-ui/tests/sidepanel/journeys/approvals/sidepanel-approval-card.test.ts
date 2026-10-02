@@ -147,3 +147,78 @@ describe("invoke approval card fee review (#189)", () => {
     );
   });
 });
+
+// An OutsideExecution sign card lists the calls it authorizes and the same risk
+// flags an invoke card shows, all escaped (audit 144).
+describe("OutsideExecution sign card (audit 144)", () => {
+  const SIGN_ID = "d03e7ff3-75bb-4d9d-a393-2b2c2a2a2b36";
+  const sign: PendingApproval = {
+    flags: [{ code: "unlimited-approval", message: "Unlimited <b>approval</b> for 0xabc…" }],
+    id: SIGN_ID,
+    kind: "sign-typed-data",
+    origin: "https://dapp.example",
+    summaries: ["OutsideExecution · Account.execute_from_outside", "Allow <i>0xabc</i> to spend"],
+    typedData: { message: {}, primaryType: "Mail" },
+  };
+
+  test("renders decoded call summaries and risk flags, escaped", () => {
+    const html = activity([sign]);
+    expect(html).toContain("Sign request");
+    expect(html).toContain("Allow &lt;i&gt;0xabc&lt;/i&gt; to spend");
+    expect(html).toContain("Unlimited &lt;b&gt;approval&lt;/b&gt; for 0xabc…");
+    expect(html).not.toContain("<i>0xabc</i>");
+    expect(html).not.toContain("<b>approval</b>");
+  });
+
+  test("a plain message lists no calls", () => {
+    const html = activity([
+      {
+        id: SIGN_ID,
+        kind: "sign-typed-data",
+        origin: sign.origin,
+        summaries: ["Mail · Example"],
+        typedData: sign.typedData,
+      },
+    ]);
+    expect(html).not.toContain(`class="review-calls"`);
+  });
+});
+
+// The add-token card says when a token borrows a known ticker (audit 171).
+describe("watch-asset spoof warning (audit 171)", () => {
+  const token = {
+    address: "0x0bad00000000000000000000000000000000000000000000000000000000001",
+    decimals: 6,
+    name: "USD <b>Coin</b>",
+    networkId: "SN_MAIN" as const,
+    symbol: "USDC",
+  };
+  const watch: PendingApproval = {
+    id: WATCH_ID,
+    kind: "watch-asset",
+    origin: "https://dapp.example",
+    token,
+  };
+
+  test("warns on a ticker spoof and escapes token text", () => {
+    const html = activity([watch]);
+    expect(html).toContain("This token uses the ticker of a different, known token contract.");
+    expect(html).toContain("If added, it stays hidden until you show it.");
+    expect(html).toContain("USD &lt;b&gt;Coin&lt;/b&gt;");
+    expect(html).not.toContain("<b>Coin</b>");
+  });
+
+  test("raises no warning for the curated contract", () => {
+    const html = activity([
+      {
+        ...watch,
+        token: {
+          ...token,
+          address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+          name: "USD Coin",
+        },
+      },
+    ]);
+    expect(html).not.toContain("ticker of a different");
+  });
+});

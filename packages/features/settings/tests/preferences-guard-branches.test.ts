@@ -67,6 +67,6 @@ describe("preferences store validation guards", () => {
   });
 
   test("upsertToken rejects a malformed token", async () => {
-    await expect(store().upsertToken({} as never)).rejects.toThrow("Invalid token");
+    await expect(store().upsertToken({} as never, "user")).rejects.toThrow("Invalid token");
   });
 });

@@ -13,10 +13,12 @@
 
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type FeeEstimate, sameFeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import { withTokenId } from "@bramble/wallet-model/preferences";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
@@ -112,7 +114,17 @@ const applyWatchAsset: ApproveApplier = async (deps, { approval }) => {
   if (!approval.token) {
     return reject(NOT_FOUND);
   }
-  await deps.preferencesStore.upsertToken(approval.token);
+  // Recorded as dapp-supplied (audit 171): its metadata came from the site, so
+  // the call reviewer does not trust it unless it matches a curated token.
+  await deps.preferencesStore.upsertToken(approval.token, "dapp");
+  // Same rule as wallet.addToken: a dapp-suggested token that borrows a known
+  // ticker or carries malformed metadata is stored hidden.
+  if (isLikelySpam(approval.token)) {
+    await deps.preferencesStore.setTokenHidden({
+      hidden: true,
+      tokenId: withTokenId(approval.token).id,
+    });
+  }
   return {
     respond: (listPending) => ({ ok: true, pending: listPending() }),
     settle: { ok: true, watched: true },
@@ -255,6 +267,7 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
   const result = await executeSwitchChainApproval(
     {
       activeStateCoordinator: deps.activeStateCoordinator,
+      approvals: deps.approvals,
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,

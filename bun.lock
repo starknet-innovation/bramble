@@ -203,6 +203,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@bramble/core": "workspace:*",
+        "@bramble/portfolio": "workspace:*",
         "@bramble/starknet": "workspace:*",
         "@bramble/store": "workspace:*",
         "@bramble/wallet-model": "workspace:*",

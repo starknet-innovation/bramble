@@ -110,7 +110,7 @@ const handleAddToken: TokenHandler = async (deps, message) => {
   if (!record) {
     return { error: "unsupported token symbol" };
   }
-  const preferencesWithToken = await preferencesStore.upsertToken(record);
+  const preferencesWithToken = await preferencesStore.upsertToken(record, "user");
   // Run the full spam heuristics (not just the symbol regex) so a spoofed or
   // malformed token is still added but hidden by default rather than
   // presented as trusted; the user can always reveal it later.

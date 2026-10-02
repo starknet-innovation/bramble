@@ -11,6 +11,8 @@ import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
 import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
+import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import type { Vault } from "@bramble/vault/schema";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
@@ -48,12 +50,19 @@ import {
   type PassiveUnlockSession,
   type UnlockSession,
 } from "../runtime/session";
+import { reviewOutsideExecution } from "./outside-execution-review";
 
 /**
  * Dependencies for the provider chain and signing operations.
  */
 export type ChainOpsDeps = {
   readonly activeStateCoordinator?: ActiveStateCoordinator;
+  /**
+   * Recorded allowance log, read for OutsideExecution risk flags only (an
+   * unreadable log flags each call on its own amount). Optional so partial
+   * test stubs stay valid.
+   */
+  readonly allowanceStore?: Pick<AllowanceStore, "list">;
   readonly approvals: ApprovalQueue;
   readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
@@ -140,6 +149,12 @@ export const executeSignApproval = async (
   } catch {
     return { error: "invalid typed data" };
   }
+  // An OutsideExecution's calls are re-reviewed against the trusted set as it
+  // is now, not as it was when the card was queued (audit 144).
+  const review = reviewOutsideExecution(input.typedData, account, preferences);
+  if (review && "error" in review) {
+    return review;
+  }
   // A keyless Ledger account signs typed data on the device (verified against
   // publicKeyX) instead of the vault; accountHashSigner makes the same choice as
   // every other submitting path. A device rejection/timeout/verify-failure, or a
@@ -221,6 +236,18 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   } catch {
     return { error: "invalid typed data" };
   }
+  // An OutsideExecution authorizes calls the site can submit later without a
+  // prompt, so it gets the invoke route's refusals and flags (audit 144),
+  // including the standing-allowance totals the invoke route flags against.
+  const review = reviewOutsideExecution(
+    input.typedData,
+    account,
+    preferences,
+    (await deps.allowanceStore?.list().catch(() => [])) ?? [],
+  );
+  if (review && "error" in review) {
+    return review;
+  }
   // Never auto-sign: queue a per-request approval and hold this response until
   // the user decides in the side panel. The signature is computed and returned
   // through this same channel on approval, so it reaches only the requesting
@@ -228,6 +255,7 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   const approval = approvals.requestSignTypedData({
     context: await createApprovalContext(account, { typedData: input.typedData }),
     origin: input.origin,
+    ...(review ? { review } : {}),
     summary: describeTypedData(input.typedData),
     typedData: input.typedData,
   });
@@ -307,14 +335,49 @@ export const handleChainOps = async (
   return handler ? handler(deps, message, sender) : null;
 };
 
+// The id of a vault account on `networkId` that `origin`'s stored grant
+// covers, or undefined when the grant holds none there.
+const heldAccountOn = (
+  vault: Pick<Vault, "accounts" | "originGrants">,
+  origin: string,
+  networkId: StarknetNetworkId,
+): string | undefined => {
+  const grantIds = vault.originGrants.find((grant) => grant.origin === origin)?.accountIds ?? [];
+  return vault.accounts.find(
+    (account) => account.networkId === networkId && grantIds.includes(account.id),
+  )?.id;
+};
+
+// Queues the reconnect prompt only when the account the switch landed on is
+// really outside the origin's grant, never for a dapp still connected after it.
+const promptWhenLandedOutsideGrant = async (
+  deps: Pick<ChainOpsDeps, "wallet"> & { readonly approvals?: Pick<ApprovalQueue, "request"> },
+  origin: string,
+  passphrase: string,
+  connected: readonly unknown[],
+): Promise<void> => {
+  if (!deps.approvals) {
+    return;
+  }
+  const landed = await deps.wallet.getGrantedAccounts(origin, passphrase);
+  if (landed.length === 0) {
+    promptReconnectForStaleGrant(deps.approvals, connected, origin);
+  }
+};
+
 /**
- * Applies a user-approved chain switch: sets the active network, keeps the
- * origin's grant on the new network, and returns the new chain id for the dapp.
- * Refuses with `origin not connected` when the origin is not connected at
- * approval time, so an approved card can never reconnect a disconnected site.
+ * Applies a user-approved chain switch: sets the active network and returns the
+ * new chain id for the dapp. Refuses with `origin not connected` when the origin
+ * is not connected at approval time, so an approved card can never reconnect a
+ * disconnected site. The switch never grants an account: the card names none,
+ * so the origin keeps exactly the accounts it was granted. When it holds one on
+ * the target network the switch lands there; when it holds none, the standard
+ * reconnect (connect) prompt is queued instead, which names the account to share.
  */
 export const executeSwitchChainApproval = async (
   deps: Pick<ChainOpsDeps, "activeStateCoordinator" | "preferencesStore" | "wallet"> & {
+    /** Queue for the reconnect prompt; unset (partial test stubs) queues nothing. */
+    readonly approvals?: Pick<ApprovalQueue, "request">;
     /**
      * The full session: applying the approval switches the active network, and
      * that cross-store mutation locks its own generation when it cannot be
@@ -333,30 +396,33 @@ export const executeSwitchChainApproval = async (
     }
     // A switch-chain approval carries no account context, so the shared claim
     // validator skips it and this is the only place the grant is re-checked.
-    // Read it BEFORE switching: the switch re-selects the active account, and the
-    // auto-grant below would otherwise hand the origin a fresh account — silently
-    // reconnecting a site the user disconnected by switching accounts, with no
-    // connect prompt. A revoked or disconnected origin is refused instead.
+    // Read it BEFORE switching: a revoked or disconnected origin is refused
+    // rather than having the approved card switch the network on its behalf.
     const connected = await wallet.getGrantedAccounts(input.origin, passphrase);
     if (connected.length === 0) {
       return { error: "origin not connected" };
     }
-    const account = await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
+    // `connected` is at most the active account (the page-visible view), so the
+    // account the origin holds on the target network comes from its stored
+    // grant, which keeps every account the user ever approved for it.
+    const held = heldAccountOn(await wallet.readVault(passphrase), input.origin, input.networkId);
     if (!authorized.isCurrent()) {
       return { error: "wallet locked" };
     }
-    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-    if (account && !granted.some((item) => item.id === account.id)) {
-      await wallet.grantOrigin({
-        accountId: account.id,
-        isAuthorized: authorized.isCurrent,
-        origin: input.origin,
-        vaultPassphrase: passphrase,
-      });
-    }
+    await switchActiveNetwork(
+      wallet,
+      session,
+      preferencesStore,
+      input.networkId,
+      undefined,
+      held ? { preferredAccountId: held } : {},
+    );
     if (!authorized.isCurrent()) {
       return { error: "wallet locked" };
     }
+    // Exposure only narrows (audit 124): an account the user never connected
+    // is not shared because they approved a network change.
+    await promptWhenLandedOutsideGrant(deps, input.origin, passphrase, connected);
     return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
   });
 };

@@ -282,13 +282,20 @@ const selectNetworkAccount = async (
   networkId: StarknetNetworkId,
   passphrase: string,
   authorized: () => boolean,
+  preferredAccountId?: string,
 ): Promise<AccountRef | null> => {
   const vault = await wallet.readVault(passphrase);
   requireCurrentNetworkSwitch(authorized);
-  const account = accountForNetwork(vault, networkId, vault.activeAccountId);
-  if (account?.id === vault.activeAccountId) {
-    return account;
+  const fallback = accountForNetwork(vault, networkId, vault.activeAccountId);
+  if (fallback?.id === vault.activeAccountId) {
+    return fallback;
   }
+  // A preferred account wins over "first on the network" only when it really
+  // is a vault account on the target network; anything else is ignored.
+  const account =
+    vault.accounts.find(
+      (stored) => stored.id === preferredAccountId && stored.networkId === networkId,
+    ) ?? fallback;
   if (account) {
     const selected = await wallet.setActiveAccount({
       accountId: account.id,
@@ -310,6 +317,10 @@ const selectNetworkAccount = async (
 
 /**
  * Switches the active network and selects or derives the matching wallet account.
+ * When the vault's active account is not on the target network, an optional
+ * `preferredAccountId` on that network is selected ahead of the first account
+ * there (a dapp switch lands on an account the origin already holds); an id
+ * that is unknown or on another network is ignored.
  */
 export const switchActiveNetwork = async (
   wallet: WalletStatusReader,
@@ -317,6 +328,7 @@ export const switchActiveNetwork = async (
   preferencesStore: WalletPreferencesStore,
   networkId: StarknetNetworkId,
   coordinator?: ActiveStateCoordinator,
+  options: { readonly preferredAccountId?: string } = {},
 ): Promise<AccountRef | null> =>
   runActiveStateMutation(coordinator, async () => {
     // The plain preference is the durable selection intent. Writing it first
@@ -336,7 +348,14 @@ export const switchActiveNetwork = async (
       passphrase,
       generation,
       "Unlock session changed during network switch",
-      (vaultPassphrase) => selectNetworkAccount(wallet, networkId, vaultPassphrase, authorized),
+      (vaultPassphrase) =>
+        selectNetworkAccount(
+          wallet,
+          networkId,
+          vaultPassphrase,
+          authorized,
+          options.preferredAccountId,
+        ),
     );
   });
 
