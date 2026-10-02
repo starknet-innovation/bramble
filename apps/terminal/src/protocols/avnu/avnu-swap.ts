@@ -21,6 +21,7 @@ import {
 } from "@bramble/wallet-model/networks";
 import { type Call, CallData, cairo } from "starknet";
 import { WalletError } from "../support/errors";
+import { boundedFetch } from "../support/bounded-network";
 import { isRecord, isStringArray } from "../support/json";
 import { AVNU_ADDRESSES } from "../constants";
 
@@ -161,9 +162,10 @@ export const buildQuotesUrl = (base: string, request: AvnuQuoteRequest): string 
   return `${base.replace(/\/+$/, "")}/${AVNU_QUOTES_PATH}?${query.toString()}`;
 };
 
-// Fetches `url` and returns the parsed JSON body, throwing `onFailure` on a
-// transport error, a non-ok response, or an unparseable body so callers surface a
-// stable wallet error instead of leaking transport detail.
+// Fetches `url` through the bounded terminal network boundary and returns the
+// parsed JSON body, throwing `onFailure` on a transport error, a non-ok
+// response, an oversized body, a deadline, or an unparseable body so callers
+// surface a stable wallet error instead of leaking transport detail.
 const fetchJson = async (
   url: string,
   init: RequestInit | undefined,
@@ -171,11 +173,12 @@ const fetchJson = async (
 ): Promise<unknown> => {
   let response: Response;
   try {
-    response = await fetch(url, init);
+    response = await boundedFetch(url, init);
   } catch {
     throw new WalletError(onFailure);
   }
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new WalletError(onFailure);
   }
   try {

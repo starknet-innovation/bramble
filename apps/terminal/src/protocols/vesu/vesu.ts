@@ -15,6 +15,7 @@
  */
 import type { Call } from "starknet";
 import { WalletError } from "../support/errors";
+import { boundedFetch } from "../support/bounded-network";
 import { isRecord } from "../support/json";
 import { isNonZeroStarkFieldElement, sameAddress } from "../support/networks";
 import { VESU_API_BASE, VESU_LENDING_ENABLED } from "../constants";
@@ -38,14 +39,15 @@ const assertLendingEnabled = (): void => {
   }
 };
 
-// Fetches and parses the Vesu pool config over HTTP, mapping any transport or
-// shape failure to a stable WalletError.
+// Fetches and parses the Vesu pool config through the bounded network boundary,
+// mapping any transport, deadline, size or shape failure to a stable WalletError.
 const fetchVesuPool = async (poolId: string) => {
   const url = `${VESU_API_BASE}/pools/${poolId}`;
   let body: unknown;
   try {
-    const response = await fetch(url);
+    const response = await boundedFetch(url);
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
       throw new WalletError("Vesu pool request failed");
     }
     body = await response.json();
