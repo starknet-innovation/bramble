@@ -17,23 +17,31 @@
  * The overwrite runs a minute after the click, with no user activation. The
  * manifest does not request `clipboardWrite`, and Firefox refuses such a write
  * from an extension page, so there the wallet never promises a clear (see
- * {@link guardedCopyCanClear}). Anywhere a clear is attempted and refused, the
- * user is told and the refusal is never reported as a successful clear.
+ * {@link guardedCopyCanClear}). Anywhere a clear is refused or cannot run, the
+ * user is told and the phrase is never reported as cleared.
  */
 import { showToast } from "./dom";
 
+/** The clear outcome when nothing secret was copied: there is nothing to clear. */
+const NOTHING_COPIED: Promise<boolean> = Promise.resolve(true);
+
+/** The clear outcome when the phrase was copied where no clear can run. */
+const NOT_CLEARED: Promise<boolean> = Promise.resolve(false);
+
 /**
- * Resolves once the latest scheduled overwrite has been attempted: `true` when
- * it cleared the clipboard (or nothing was scheduled), `false` when refused.
+ * Resolves once the latest copy's overwrite has been attempted: `true` when it
+ * cleared the clipboard (or nothing was copied), `false` when the clear was
+ * refused or the browser cannot clear at all, so the phrase is still there.
  */
-let pendingClear: Promise<boolean> = Promise.resolve(true);
+let pendingClear: Promise<boolean> = NOTHING_COPIED;
 let clearGeneration = 0;
 let clearPending = false;
 
 /**
  * Resolves when the latest guarded-copy overwrite has been attempted, with
  * whether it actually cleared the clipboard. Already `true` when nothing was
- * scheduled. A clear superseded by a newer copy resolves with the newer one's
+ * copied, and already `false` after a copy on a page that cannot clear
+ * (Firefox), because the phrase stays on the clipboard. A clear superseded by a newer copy resolves with the newer one's
  * outcome. The copied text never leaves the page that wrote it.
  */
 export const guardedCopyPendingClear = (): Promise<boolean> => pendingClear;
@@ -51,7 +59,7 @@ export const guardedCopyClearIsPending = (): boolean => clearPending;
 export const resetGuardedCopyClearForTests = (): void => {
   clearGeneration += 1;
   clearPending = false;
-  pendingClear = Promise.resolve(true);
+  pendingClear = NOTHING_COPIED;
 };
 
 /**
@@ -97,9 +105,10 @@ export const guardedCopyNote = (view: Window | null | undefined): string =>
 
 /**
  * Closes the onboarding page once the latest clipboard clear has run, saying
- * on `status` why it is still open meanwhile. A refused clear keeps the page
- * open and tells the user to overwrite the clipboard themselves, rather than
- * closing as if the phrase were gone.
+ * on `status` why it is still open meanwhile. A refused clear, or a copy on a
+ * page that cannot clear (Firefox), keeps the page open and tells the user to
+ * overwrite the clipboard themselves, rather than closing as if the phrase
+ * were gone.
  */
 export const closeAfterGuardedClear = (status: HTMLElement | null, close: () => void): void => {
   const target = status;
@@ -135,6 +144,11 @@ export const bindGuardedCopy = (button: HTMLButtonElement | null, read: () => st
     void clipboard.writeText(text).then(
       () => {
         if (!guardedCopyCanClear(view)) {
+          // No clear will run, so the phrase stays on the clipboard: an older
+          // copy's pending clear must not be reported as clearing this one.
+          clearGeneration += 1;
+          clearPending = false;
+          pendingClear = NOT_CLEARED;
           showToast("Copied — copy something else afterwards to overwrite it", "success", button);
           return;
         }

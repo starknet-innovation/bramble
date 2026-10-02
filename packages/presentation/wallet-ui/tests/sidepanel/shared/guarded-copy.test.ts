@@ -199,6 +199,41 @@ describe("browsers that cannot clear the clipboard", () => {
     expect(toast("success")).not.toContain("cleared");
     expect(toast("success")).toContain("copy something else");
     expect(guardedCopyNote(window as unknown as Window)).toBe(GUARDED_COPY_NOTE_NO_CLEAR);
+    // The phrase is still on the clipboard, so it is never reported as cleared.
+    expect(await guardedCopyPendingClear()).toBe(false);
+  });
+
+  test("onboarding completion does not close silently after a Firefox copy", async () => {
+    setUrl("moz-extension://bramble/onboarding.html");
+    const { button } = control();
+    button.click();
+    await tick();
+    const status = document.createElement("p");
+    let closed = 0;
+    closeAfterGuardedClear(status, () => {
+      closed += 1;
+    });
+    await tick();
+    expect(closed).toBe(0);
+    expect(status.textContent).toBe(
+      "Couldn't clear the clipboard. Copy something else to overwrite it. Then close this tab.",
+    );
+  });
+
+  test("a Firefox copy supersedes an older pending clear's outcome", async () => {
+    setUrl("chrome-extension://bramble/onboarding.html");
+    const { button } = control();
+    button.click();
+    await tick();
+    setUrl("moz-extension://bramble/onboarding.html");
+    button.click();
+    await tick();
+    // The older timer must neither clear the newer copy nor report it cleared.
+    clears[0]?.();
+    await tick();
+    expect(copied).toEqual(["first phrase words", "first phrase words"]);
+    expect(guardedCopyClearIsPending()).toBe(false);
+    expect(await guardedCopyPendingClear()).toBe(false);
   });
 
   test("a Chromium extension page keeps the one-minute clear and its note", () => {
