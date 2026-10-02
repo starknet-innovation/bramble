@@ -28,7 +28,7 @@ type RuntimeApi = {
         message: unknown,
         sender: RuntimeSender,
         sendResponse: (response: unknown) => void,
-      ) => true,
+      ) => true | Promise<unknown>,
     ) => void;
   };
   readonly sendMessage?: (message: unknown) => Promise<unknown>;

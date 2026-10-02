@@ -32,6 +32,7 @@ import type { WalletEventMessage } from "@bramble/wallet-protocol/events";
 import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
 import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import {
+  buildTarget,
   createBrowserLocalStore,
   createBrowserSessionStore,
   createBrowserSyncStore,
@@ -65,6 +66,7 @@ import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createMessageHandler } from "./routing/messages";
 import type { BackgroundBrowser } from "./runtime/background-browser";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
+import { respondToMessage } from "./runtime/message-response";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
 import {
   createActiveStateCoordinator,
@@ -443,16 +445,16 @@ const openApprovalSurface = createApprovalSurfaceOpener({
 bindToolbarActivation(extensionApi, () => approvalSurfacePreference);
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   openApprovalSurface(message, sender);
-  void runtimeReady
-    .then(() => handleMessage(message, sender))
-    .then(
-      (response) => {
-        sendResponse(response);
-        broadcastWalletEvents(message, response);
-      },
-      () => {
-        sendResponse({ error: "wallet request failed" });
-      },
-    );
-  return true;
+  // A held approval must outlive the request that queued it. Chromium keeps the
+  // service worker alive for a listener that returns `true` and answers later;
+  // Firefox's non-persistent event page has no such rule and stays alive only
+  // while the listener's returned Promise is pending, so the build target picks
+  // the shape and the caller receives the same response either way.
+  return respondToMessage({
+    after: (response) => broadcastWalletEvents(message, response),
+    failure: { error: "wallet request failed" },
+    send: sendResponse,
+    target: buildTarget(),
+    work: runtimeReady.then(() => handleMessage(message, sender)),
+  });
 });

@@ -130,6 +130,14 @@ export const hardenSyncAccess = async (): Promise<boolean> =>
 declare const __MC_BUILD_TARGET__: string | undefined;
 
 /**
+ * The build this bundle was produced for, or undefined when it is unstamped
+ * (tests, and any bundle the build script did not stamp). Callers compare it
+ * against an exact target and treat anything else as the safe Chromium shape.
+ */
+export const buildTarget = (): string | undefined =>
+  typeof __MC_BUILD_TARGET__ === "string" ? __MC_BUILD_TARGET__ : undefined;
+
+/**
  * Whether a failed storage lockdown is fatal.
  *
  * Chromium implements `storage.setAccessLevel`, so on that target a lockdown
@@ -159,9 +167,7 @@ declare const __MC_BUILD_TARGET__: string | undefined;
  */
 export const lockdownIsEnforceable = (target: string | undefined): boolean => target !== "firefox";
 
-const LOCKDOWN_IS_ENFORCEABLE = lockdownIsEnforceable(
-  typeof __MC_BUILD_TARGET__ === "string" ? __MC_BUILD_TARGET__ : undefined,
-);
+const LOCKDOWN_IS_ENFORCEABLE = lockdownIsEnforceable(buildTarget());
 
 /**
  * Requires all wallet storage areas to be unavailable to untrusted extension
