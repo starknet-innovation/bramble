@@ -21,6 +21,7 @@
     "./privacy-blocker": "./src/privacy/privacy-blocker.ts",
     "./strk20": "./src/privacy/strk20.ts",
     "./submission-unknown": "./src/transactions/submission-unknown.ts",
+    "./typed-data-params": "./src/provider/typed-data-params.ts",
     "./strk20-bridge": "./src/privacy/strk20-bridge.ts",
     "./watch-asset": "./src/transactions/watch-asset.ts",
     "./versions": "./src/provider/versions.ts"
