@@ -248,6 +248,10 @@ describe("bindDeploy", () => {
     // before pressing rather than as the result of pressing.
     await tick();
     expect(container.querySelector("#deploy-review")?.textContent).toContain("Cost");
+    // The quote is a fee line, so the box is "Cost", not "Cost and limits".
+    expect(container.querySelector("#deploy-review section")?.getAttribute("aria-label")).toBe(
+      "Cost",
+    );
     expect(calls).toEqual([undefined]);
 
     click(container.querySelector("#deploy-button"));
