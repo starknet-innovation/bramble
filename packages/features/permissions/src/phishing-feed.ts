@@ -25,19 +25,21 @@ import {
   fetchBoundedJson,
   HTTP_BODY_LIMITS,
 } from "@bramble/core/http-json";
-import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
+import {
+  MAX_PHISHING_DOMAINS,
+  normalizePhishingDomain,
+  readPhishingCache,
+  writePhishingCache,
+} from "./phishing-feed-cache";
+
+export { PHISHING_FEED_STORE_KEY } from "./phishing-feed-cache";
 
 // Clock boundary for this module: the feed's TTL is the only time it reads, and
 // callers may inject their own clock. Kept local so the phishing feed does not
 // depend on an unrelated feature package for a one-line reader.
 const systemClock = (): number => Date.now();
-
-/**
- * Browser-storage key for the cached phishing feed. Plain (non-secret) data.
- */
-export const PHISHING_FEED_STORE_KEY = "bramble:phishing-feed";
-const PHISHING_CACHE_VERSION = 1;
 
 /**
  * Default maintained source: MetaMask's eth-phishing-detect config, the
@@ -51,10 +53,6 @@ export const DEFAULT_PHISHING_FEED_URL =
 // worker warms the feed on startup, so in practice the list refreshes on the
 // first wake after the TTL lapses.
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
-// Bounds the in-memory set and persisted cache so a hostile or oversized feed
-// cannot exhaust storage; well above the size of current public web3 lists.
-const MAX_DOMAINS = 100_000;
-const HOST_PATTERN = /^[a-z0-9.-]+$/;
 
 /**
  * Minimal HTTP response subset consumed from the injected fetch: the shared
@@ -74,23 +72,15 @@ export type PhishingFeedFetch = BoundedHttpFetch;
 
 /**
  * The live feed: a synchronous snapshot accessor for enforcement plus an async
- * refresh the background drives on a cadence.
+ * refresh the background drives on a cadence. `cacheWriteFailed` reports
+ * whether the most recent attempt to persist a fetched list failed (for
+ * example on a storage quota error), so the failure is observable rather than
+ * silently costing the next worker wake its cached protection.
  */
 export type PhishingFeed = {
   readonly blockedDomains: () => ReadonlySet<string>;
+  readonly cacheWriteFailed: () => boolean;
   readonly refresh: () => Promise<ReadonlySet<string>>;
-};
-
-type PhishingCache = {
-  readonly domains: readonly string[];
-  readonly fetchedAt: number;
-  readonly schemaVersion: typeof PHISHING_CACHE_VERSION;
-  readonly source: string;
-};
-
-const normalizeDomain = (value: string): string | null => {
-  const domain = value.trim().toLowerCase().replace(/\.$/, "");
-  return domain.includes(".") && HOST_PATTERN.test(domain) ? domain : null;
 };
 
 /**
@@ -113,57 +103,17 @@ export const parsePhishingFeed = (body: unknown): readonly string[] | null => {
     if (typeof entry !== "string") {
       continue;
     }
-    const domain = normalizeDomain(entry);
+    const domain = normalizePhishingDomain(entry);
     if (domain === null || seen.has(domain)) {
       continue;
     }
     seen.add(domain);
     domains.push(domain);
-    if (domains.length >= MAX_DOMAINS) {
+    if (domains.length >= MAX_PHISHING_DOMAINS) {
       break;
     }
   }
   return domains;
-};
-
-const readPhishingCache = (
-  value: unknown,
-  expectedSource: string,
-  currentTime: number,
-): PhishingCache | null => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["domains", "fetchedAt", "schemaVersion", "source"]) ||
-    !Array.isArray(value["domains"]) ||
-    value["domains"].length > MAX_DOMAINS ||
-    typeof value["fetchedAt"] !== "number" ||
-    !Number.isFinite(value["fetchedAt"]) ||
-    value["fetchedAt"] < 0 ||
-    value["fetchedAt"] > currentTime ||
-    value["schemaVersion"] !== PHISHING_CACHE_VERSION ||
-    value["source"] !== expectedSource
-  ) {
-    return null;
-  }
-  const domains: string[] = [];
-  const seen = new Set<string>();
-  for (const entry of value["domains"]) {
-    if (typeof entry !== "string") {
-      return null;
-    }
-    const domain = normalizeDomain(entry);
-    if (domain === null || seen.has(domain)) {
-      return null;
-    }
-    seen.add(domain);
-    domains.push(domain);
-  }
-  return {
-    domains,
-    fetchedAt: value["fetchedAt"],
-    schemaVersion: PHISHING_CACHE_VERSION,
-    source: expectedSource,
-  };
 };
 
 /**
@@ -187,15 +137,11 @@ export const createPhishingFeed = ({
   readonly ttlMs?: number;
 }): PhishingFeed => {
   let snapshot: ReadonlySet<string> = new Set();
+  let writeFailed = false;
 
   const setSnapshot = (domains: readonly string[]): ReadonlySet<string> => {
     snapshot = new Set(domains);
     return snapshot;
-  };
-
-  const readCache = async (currentTime: number): Promise<PhishingCache | null> => {
-    const stored = await store.get(PHISHING_FEED_STORE_KEY).catch(() => undefined);
-    return readPhishingCache(stored, source, currentTime);
   };
 
   // Never throws: a non-ok status, a transport error, an over-budget body, an
@@ -213,9 +159,10 @@ export const createPhishingFeed = ({
 
   return {
     blockedDomains: () => snapshot,
+    cacheWriteFailed: () => writeFailed,
     async refresh() {
       const currentTime = now();
-      const cache = await readCache(currentTime);
+      const cache = await readPhishingCache(store, source, currentTime);
       if (cache) {
         // Promote the last good list into memory before any network work, so a
         // slow or failing fetch still leaves the cached protection in place.
@@ -230,14 +177,14 @@ export const createPhishingFeed = ({
         // with the bundled baseline list still enforced by isBlockedOrigin).
         return snapshot;
       }
-      await store
-        .set(PHISHING_FEED_STORE_KEY, {
-          domains: fetched,
-          fetchedAt: now(),
-          schemaVersion: PHISHING_CACHE_VERSION,
-          source,
-        })
-        .catch(() => undefined);
+      // Persisting is best effort for this refresh (the fetched list is live
+      // either way) but the failure is recorded, not swallowed.
+      try {
+        await writePhishingCache(store, { domains: fetched, fetchedAt: now(), source });
+        writeFailed = false;
+      } catch {
+        writeFailed = true;
+      }
       return setSnapshot(fetched);
     },
   };

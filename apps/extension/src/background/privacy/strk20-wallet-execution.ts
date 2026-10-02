@@ -37,6 +37,7 @@ import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-
 import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import type { Strk20WalletExecuteResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
@@ -132,9 +133,15 @@ const assertCurrentRecipientPolicy = async (
   preparation: Exclude<Strk20WalletPreparation, { readonly kind: "register" }>,
   context: ActivePrivacyContext,
 ): Promise<void> => {
+  // Fresh preferences (a contact saved since review counts), with the same
+  // own-account and paid-recipient trust inputs the context was built with.
   const refusal = refusePoisonedStrk20Actions(
     context.accountContext.account,
-    await deps.preferencesStore.read(),
+    await withTrustedRecipients(
+      deps,
+      await deps.preferencesStore.read(),
+      context.preferences.ownAccounts,
+    ),
     preparation.actions,
   );
   if (refusal) {

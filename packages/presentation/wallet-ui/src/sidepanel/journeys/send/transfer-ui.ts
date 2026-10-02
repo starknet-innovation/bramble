@@ -10,7 +10,7 @@ import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import { transitionSendStage } from "./send-transition";
 import { bindTransferBuckets } from "./transfer-buckets-ui";
-import { bindTransferCompose, sendFormInput } from "./transfer-compose-ui";
+import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transfer-compose-ui";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
   friendlyReviewError,
@@ -174,8 +174,11 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   };
   form.ownerDocument.querySelector("#send-close")?.addEventListener("click", exit);
   form.ownerDocument.querySelector("#send-header-back")?.addEventListener("click", () => {
-    if (transferState.stage === "details") goTo("recipient");
-    else if (transferState.stage === "review" || transferState.stage === "reviewing") editDetails();
+    if (transferState.stage === "details") {
+      clearSendRecipient(form);
+      goTo("recipient");
+    } else if (transferState.stage === "review" || transferState.stage === "reviewing")
+      editDetails();
     else exit();
   });
   const recipients = createRecipientStatus({

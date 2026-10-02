@@ -30,8 +30,30 @@ export type VerificationContext = {
    * from {@link verificationContext}, which always fills it in.
    */
   readonly nftContracts?: readonly string[];
+  /**
+   * The user's other wallet accounts and watched shared accounts on this
+   * network. Optional: absent means only `account` is known as the user's own.
+   */
+  readonly ownAccounts?: readonly string[];
+  /**
+   * Recipients this wallet itself has paid on this network (wallet-origin
+   * activity only, never chain-discovered rows). Optional: absent means no
+   * payment history is consulted.
+   */
+  readonly recentRecipients?: readonly string[];
   readonly tokens: readonly TokenConfig[];
 };
+
+type NetworkScopedAddress = {
+  readonly address: string;
+  readonly networkId: StarknetNetworkId;
+};
+
+const addressesOn = (
+  entries: readonly NetworkScopedAddress[] | undefined,
+  networkId: StarknetNetworkId,
+): readonly string[] =>
+  (entries ?? []).filter((entry) => entry.networkId === networkId).map((entry) => entry.address);
 
 /**
  * Builds the wallet context the verifier checks calls against, scoped to the
@@ -43,7 +65,8 @@ export type VerificationContext = {
  * the dapp invoke, and the privacy pool routes all scope the trusted set the
  * same way; a fourth local copy of these filters is how a contact saved on
  * another network once made a foreign recipient read as trusted. Pure — it only
- * filters the preferences it is handed and never reads storage itself.
+ * filters the preferences it is handed and never reads storage itself; the
+ * optional own-account and paid-recipient lists are network-filtered here too.
  */
 export const verificationContext = (
   account: Pick<AccountRef, "address" | "networkId">,
@@ -55,6 +78,10 @@ export const verificationContext = (
     // portfolio package: only these two fields are read, and a `WatchedNft`
     // still satisfies the shape at every call site.
     readonly nfts?: readonly { readonly contract: string; readonly networkId: StarknetNetworkId }[];
+    // Background-derived trust sources (see the background's
+    // `withTrustedRecipients`); absent on contexts built without them.
+    readonly ownAccounts?: readonly NetworkScopedAddress[];
+    readonly paidRecipients?: readonly NetworkScopedAddress[];
     readonly tokens: readonly TokenConfig[];
   },
 ): VerificationContext => ({
@@ -63,6 +90,8 @@ export const verificationContext = (
   nftContracts: (preferences.nfts ?? [])
     .filter((nft) => nft.networkId === account.networkId)
     .map((nft) => nft.contract),
+  ownAccounts: addressesOn(preferences.ownAccounts, account.networkId),
+  recentRecipients: addressesOn(preferences.paidRecipients, account.networkId),
   tokens: preferences.tokens.filter(
     (token) =>
       token.networkId === account.networkId &&

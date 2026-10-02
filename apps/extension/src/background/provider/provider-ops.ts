@@ -60,6 +60,11 @@ import { trackWatchAsset, type WatchAssetAdmission } from "./watch-asset";
  */
 export type ProviderOpsDeps = {
   /**
+   * Activity log, read only for the address-poisoning trust inputs (recipients
+   * this wallet has paid, audit #163) when an origin's account is resolved.
+   */
+  readonly activity: Pick<ActivityLog, "list">;
+  /**
    * Allowance log, read (never written) here: it is what the pre-sign review
    * knows already stands for a `(token, spender)` pair, so an increase is judged
    * against the grant beneath it rather than on its own.
