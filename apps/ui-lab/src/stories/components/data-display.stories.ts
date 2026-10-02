@@ -1,6 +1,6 @@
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import { receipt } from "@bramble/ui-kit/content";
-import { balanceRow, transactionRow } from "@bramble/wallet-ui/lab";
+import { balanceRow, relayLinks, transactionRow } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
 import {
   balances,
@@ -75,6 +75,51 @@ const activityExamples: readonly ActivityEntry[] = [
   },
 ];
 
+// Relay rows: a local "signed for relay" authorisation and the execution a scan
+// found for it. The pair shares a nonce, so relayLinks pairs them for display;
+// the third row is a signed message still waiting for a relayer. Hashes and the
+// dapp origin use the real shapes (a 62 digit felt, a full origin URL) so the
+// wrapping and truncation of the rows are exercised, not just short specimens.
+const RELAY_MESSAGE_HASH = `0x0${"9f1a".repeat(15)}0`;
+const RELAY_EXECUTION_HASH = `0x0${"9f2b".repeat(15)}0`;
+const RELAY_UNLINKED_HASH = `0x0${"9f3c".repeat(15)}0`;
+const DAPP_ORIGIN = "https://relayer.example.org/dapp/outside-execution/approve?session=9f1a2b";
+const relaySigned: ActivityEntry = {
+  ...bareAccepted,
+  hash: RELAY_MESSAGE_HASH,
+  kind: "relay-signed",
+  snip9: {
+    callCount: 1,
+    caller: "0x0",
+    dappOrigin: DAPP_ORIGIN,
+    messageHash: RELAY_MESSAGE_HASH,
+    nonce: "0x2a",
+    revision: "2",
+  },
+  status: "accepted",
+  summary: "Signed for relay",
+};
+const relayExecution: ActivityEntry = {
+  ...bareAccepted,
+  counterparty: RECIPIENT_ADDRESS,
+  hash: RELAY_EXECUTION_HASH,
+  kind: "invoke",
+  origin: "relay",
+  snip9: { callCount: 1, caller: "0x0", nonce: "0x2a", revision: "2" },
+  status: "accepted",
+  summary: "Relayed execution",
+};
+const unlinkedSigned: ActivityEntry = {
+  ...bareAccepted,
+  hash: RELAY_UNLINKED_HASH,
+  kind: "relay-signed",
+  snip9: { callCount: 2, caller: "0x0", nonce: "0x3b", revision: "1" },
+  status: "accepted",
+  summary: "Signed for relay",
+};
+const relayPair: readonly ActivityEntry[] = [relaySigned, relayExecution];
+const relayPairLinks = relayLinks(relayPair);
+
 export const Receipts: CatalogStory = {
   render: (args) =>
     catalogFrame(
@@ -128,15 +173,28 @@ export const ActivityRows: CatalogStory = {
     catalogFrame(
       "Activity rows",
       "Activity is account-partitioned and concise: a 16px glyph and the verb name the event, the counterparty or asset pair sits flush beneath, the signed fiat delta and asset amount trail on the right, the token mark trails, only an unsettled row names its status, and the verb opens the transaction on Starkscan.",
-      catalogGroup(
-        "Transaction types",
-        "Distinct outline glyphs make transfers, swaps, staking, rewards, and other contract interactions scannable before reading; a row prices itself only when its token and price are both known.",
-        catalogSample(
-          "Activity rows",
-          `<ul class="tx-list">${activityExamples.map((entry) => transactionRow(entry, pricing)).join("")}</ul>`,
-          "catalog-card-limit",
+      [
+        catalogGroup(
+          "Transaction types",
+          "Distinct outline glyphs make transfers, swaps, staking, rewards, and other contract interactions scannable before reading; a row prices itself only when its token and price are both known.",
+          catalogSample(
+            "Activity rows",
+            `<ul class="tx-list">${activityExamples.map((entry) => transactionRow(entry, pricing)).join("")}</ul>`,
+            "catalog-card-limit",
+          ),
         ),
-      ),
+        catalogGroup(
+          "Relayed SNIP-9",
+          "A signed-for-relay authorisation has no transaction of its own, so it shows its message hash without an explorer link or copy control and pairs with the execution found by nonce; a discovered execution keeps its explorer link, and an unrelayed signed message says so.",
+          catalogSample(
+            "Signed and relayed",
+            `<ul class="tx-list">${[...relayPair, unlinkedSigned]
+              .map((entry) => transactionRow(entry, pricing, relayPairLinks.get(entry) ?? null))
+              .join("")}</ul>`,
+            "catalog-card-limit",
+          ),
+        ),
+      ].join(""),
       args.theme,
     ),
 };

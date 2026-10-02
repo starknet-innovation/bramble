@@ -19,6 +19,7 @@
     "./send-routes": "./src/routing/send-routes.ts",
     "./starkscan": "./src/history/starkscan.ts",
     "./starkscan-parsers": "./src/history/starkscan-parsers.ts",
+    "./starkscan-relay": "./src/history/starkscan-relay.ts",
     "./starkscan-types": "./src/history/starkscan-types.ts",
     "./starkscan-wallet": "./src/history/starkscan-wallet.ts",
     "./tx-history": "./src/history/tx-history.ts",

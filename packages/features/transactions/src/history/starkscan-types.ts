@@ -50,6 +50,36 @@ export type StarkscanAddressTransaction = {
 };
 
 /**
+ * One decoded account call inside a certified transaction detail. Only the
+ * framing the SNIP-9 reader needs is kept: the callee, the selector, and how
+ * many felts of calldata the call carried. The felts themselves stay in the
+ * transaction's raw `calldata`, indexed by these lengths, so the detail never
+ * duplicates an unbounded blob per call.
+ */
+export type StarkscanAccountCall = {
+  readonly calldataLength: number;
+  readonly contractAddress: string;
+  readonly selector: string | null;
+};
+
+/**
+ * Certified transaction detail for one transaction hash. `calldata` is the raw
+ * transaction calldata; `accountCalls` segments it into the decoded calls (in
+ * order) so a caller can slice out the exact calldata of the call it needs.
+ */
+export type StarkscanTransactionDetail = {
+  readonly accountCalls: readonly StarkscanAccountCall[];
+  readonly blockNumber: number;
+  readonly calldata: readonly string[];
+  readonly executionStatus: string | null;
+  readonly finalityStatus: string | null;
+  readonly fromAddress: string | null;
+  readonly timestampIso: string;
+  readonly txHash: string;
+  readonly txType: string | null;
+};
+
+/**
  * Address activity leg returned by the normalized activity feed.
  */
 export type StarkscanAddressActivity = {

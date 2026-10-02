@@ -23,6 +23,7 @@ import {
   parseStarkscanHoldings,
   parseStarkscanPage,
   parseStarkscanTokenBalance,
+  parseStarkscanTransactionDetail,
   parseStarkscanTransfer,
 } from "./starkscan-parsers";
 import type {
@@ -37,6 +38,7 @@ import type {
   StarkscanPageOptions,
   StarkscanTokenBalance,
   StarkscanTokenHoldings,
+  StarkscanTransactionDetail,
   StarkscanTransfer,
 } from "./starkscan-types";
 
@@ -150,6 +152,14 @@ export type StarkscanClient = {
     address: string,
     options?: StarkscanPageOptions,
   ) => Promise<StarkscanPage<StarkscanContractEvent>>;
+  /**
+   * Certified detail for one transaction hash, including raw calldata and the
+   * decoded account calls used to find a SNIP-9 outside execution.
+   */
+  readonly getTransactionDetail: (
+    chainId: StarkscanChainId,
+    txHash: string,
+  ) => Promise<StarkscanTransactionDetail>;
   readonly getBlocks: (
     chainId: StarkscanChainId,
     options?: StarkscanPageOptions,
@@ -164,6 +174,14 @@ const inputAddress = (value: string): string => {
   const canonical = canonicalFelt(value);
   if (canonical === null || !isNonZeroStarkFieldElement(canonical)) {
     throw new StarkscanError("Invalid Starkscan address", null);
+  }
+  return canonical;
+};
+
+const inputTransactionHash = (value: string): string => {
+  const canonical = canonicalFelt(value);
+  if (canonical === null || !isNonZeroStarkFieldElement(canonical)) {
+    throw new StarkscanError("Invalid Starkscan transaction hash", null);
   }
   return canonical;
 };
@@ -413,5 +431,7 @@ export const createStarkscanClient = ({
         (value) => parseStarkscanPage(value, parseStarkscanEvent),
         pageQuery(options),
       ),
+    getTransactionDetail: (chainId, txHash) =>
+      request(chainId, `tx/${inputTransactionHash(txHash)}`, parseStarkscanTransactionDetail),
   };
 };

@@ -111,6 +111,25 @@ const privateAppearance = (summary: string): ActivityAppearance => {
  */
 export const activityAppearance = (entry: ActivityEntry): ActivityAppearance => {
   const summary = entry.summary.toLowerCase();
+  // Relay rows are decided by their stored kind and origin, not by wording: a
+  // "signed for relay" row is an authorisation with no transaction of its own,
+  // and an origin-"relay" row is an execution a scan found on chain.
+  if (entry.kind === "relay-signed")
+    return {
+      direction: null,
+      icon: "keyRound",
+      label: "Signed for relay",
+      title: "Signed for relay",
+      type: "other",
+    };
+  if (entry.origin === "relay")
+    return {
+      direction: null,
+      icon: "link",
+      label: "Relayed execution",
+      title: "Relayed execution",
+      type: "other",
+    };
   if (SWAP.test(summary))
     return {
       direction: "out",
@@ -250,6 +269,12 @@ const activityDetail = (
 ): string | null => {
   if (counterparty) {
     return `${COUNTERPARTY_PREPOSITION[counterparty.role]} ${accountLabel(counterparty.address)}`;
+  }
+  // Relay rows carry their own meaning in the title; the signed row's dapp
+  // origin belongs in the expansion (see transactionRow), not in a detail line
+  // repeating the verb.
+  if (entry.kind === "relay-signed" || entry.origin === "relay") {
+    return null;
   }
   const summary = compactSummary(entry.summary.trim());
   if (appearance.type === "swap") {

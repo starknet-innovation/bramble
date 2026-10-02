@@ -129,8 +129,9 @@ describe("explorer-first transaction history", () => {
     const entries = await historyWith(explorer.client)(historyInput, () => workingRpc(trace));
 
     expect(entries.map((entry) => entry.hash)).toEqual([EXPLORER_HASH]);
-    expect(trace).toEqual(["gateway"]);
-    expect(explorer.urls).toHaveLength(1);
+    // Transfers, then the transaction summaries the relay discovery reads.
+    expect(trace).toEqual(["gateway", "gateway"]);
+    expect(explorer.urls).toHaveLength(2);
     expect(explorer.urls[0]).toContain(`address=${ACCOUNT}`);
   });
 
@@ -140,7 +141,7 @@ describe("explorer-first transaction history", () => {
     const entries = await historyWith(explorer.client)(historyInput, () => workingRpc(trace));
 
     expect(entries).toEqual([]);
-    expect(trace).toEqual(["gateway"]);
+    expect(trace).toEqual(["gateway", "gateway"]);
   });
 
   test("falls back to the RPC scan strictly after an explorer failure", async () => {
@@ -210,7 +211,7 @@ describe("explorer-first transaction history", () => {
     }))(historyInput, () => workingRpc(trace));
 
     expect(entries.map((entry) => entry.hash)).toEqual([EXPLORER_HASH]);
-    expect(trace).toEqual(["gateway"]);
+    expect(trace).toEqual(["gateway", "gateway"]);
   });
 
   test("a preferences read that throws fails closed to the RPC scan", async () => {
@@ -265,7 +266,7 @@ describe("explorer-first transaction history", () => {
 
     expect(entries.map((entry) => entry.hash)).toEqual([EXPLORER_HASH]);
     expect(selections).toEqual(["SN_MAIN:https://explorer.example/v1"]);
-    expect(configured.urls).toHaveLength(1);
+    expect(configured.urls).toHaveLength(2);
     expect(bundled.urls).toEqual([]);
   });
 });

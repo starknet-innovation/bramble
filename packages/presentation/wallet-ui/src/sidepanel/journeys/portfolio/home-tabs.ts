@@ -31,6 +31,7 @@ import {
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
 import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
+import { type RelayLink, relayLinks } from "./activity-links";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import {
   type PrivateBreakdown,
@@ -132,6 +133,28 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
   preconfirmed: "pre-confirmed",
 };
 
+// The expansion lines for a "signed for relay" row: the dapp origin, and either
+// the execution a scan linked to it or an honest "not relayed yet" note. Only
+// the signed row needs them; an execution row already names its relayer as the
+// counterparty.
+const relayLinkDetail = (entry: ActivityEntry, link: RelayLink | null): string => {
+  if (entry.kind !== "relay-signed") {
+    return "";
+  }
+  const origin = entry.snip9?.dappOrigin;
+  const originRow = origin ? `<div><dt>Requested by</dt><dd>${escapeHtml(origin)}</dd></div>` : "";
+  if (link === null) {
+    return `${originRow}<div><dt>Status</dt><dd>Waiting for a relayer to submit it. It is not on chain yet.</dd></div>`;
+  }
+  const executed = explorerTransactionUrl(link.counterpart.networkId, link.counterpart.hash);
+  // Same anatomy as the summary's hash link: a muted anchor around the mono code,
+  // so the paired execution reads like every other transaction hash in the feed.
+  const reference = executed
+    ? `<a class="tx-hash" href="${escapeHtml(executed)}" target="_blank" rel="noopener noreferrer"><code>${escapeHtml(accountLabel(link.counterpart.hash))}</code></a>`
+    : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(link.counterpart.hash))}</code>`;
+  return `${originRow}<div><dt>Executed</dt><dd>${reference}</dd></div>`;
+};
+
 /**
  * Renders one recorded transaction row for the account-partitioned Activity
  * dock and its design-system specimen, in the design kit's transaction-row
@@ -149,14 +172,22 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * A recorded counterparty shows truncated with a quiet copy control that
  * carries the full stored address (the row itself is not a button, so the
  * control nests nowhere). Without `pricing` the fiat delta is simply absent.
+ * A `link` pairs a "signed for relay" row with the execution a scan found.
  */
-export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing): string => {
+export const transactionRow = (
+  entry: ActivityEntry,
+  pricing?: ActivityPricing,
+  link: RelayLink | null = null,
+): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
   const label = STATUS_LABEL[entry.status] ?? entry.status;
   const row = activityRowModel(entry, pricing);
-  // Devnet has no explorer, so the outbound link is simply absent there rather
-  // than pointing somewhere that cannot resolve the hash.
-  const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
+  // A "signed for relay" row has no transaction of its own: its hash is a
+  // SNIP-12 message hash, so there is no explorer page and nothing to copy as a
+  // transaction hash. Devnet has no explorer, so the link is simply absent
+  // there rather than pointing somewhere that cannot resolve the hash.
+  const isSignedForRelay = entry.kind === "relay-signed";
+  const explorer = isSignedForRelay ? null : explorerTransactionUrl(entry.networkId, entry.hash);
   const statusLabel = `${row.label}, ${label}`;
   // Status leads the clock on the tooltip and in the accessible name; the time
   // is not printed on the row itself.
@@ -189,7 +220,7 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
                 ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
                 : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
             }
-            ${inlineCopyButton(entry.hash, "Copy transaction hash")}
+            ${isSignedForRelay ? "" : inlineCopyButton(entry.hash, "Copy transaction hash")}
           </span>
         </span>
         ${
@@ -209,6 +240,7 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
                 ? `<div><dt>Detail</dt><dd>${escapeHtml(row.detail)}</dd></div>`
                 : ""
           }
+          ${relayLinkDetail(entry, link)}
           ${when === "" ? "" : `<div><dt>Submitted</dt><dd>${escapeHtml(when)}</dd></div>`}
           ${hint ? `<div><dt>Status</dt><dd>${escapeHtml(hint)}</dd></div>` : ""}
         </dl>
@@ -236,15 +268,20 @@ export const transactionGroups = (
   todayKey: number | null = null,
 ): string => {
   const groups: Array<{ readonly key: number | null; readonly label: string; rows: string[] }> = [];
+  const links = relayLinks(entries);
   for (const entry of entries) {
     const date = formatUtcDate(entry.submittedAt);
     const key = date === null ? null : utcDayKey(entry.submittedAt);
     const current = groups.at(-1);
     if (current && current.key === key) {
-      current.rows.push(transactionRow(entry, pricing));
+      current.rows.push(transactionRow(entry, pricing, links.get(entry) ?? null));
     } else {
       const label = key === null || date === null ? "Undated" : dayLabel(key, date, todayKey);
-      groups.push({ key, label, rows: [transactionRow(entry, pricing)] });
+      groups.push({
+        key,
+        label,
+        rows: [transactionRow(entry, pricing, links.get(entry) ?? null)],
+      });
     }
   }
   return groups

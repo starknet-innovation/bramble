@@ -34,6 +34,7 @@ import {
 } from "@bramble/wallet-model/preferences";
 
 import type { StarkscanClient } from "./starkscan";
+import { discoverSnip9Executions } from "./starkscan-relay";
 import type { StarkscanTransfer } from "./starkscan-types";
 import { MAX_HISTORY_ENTRIES, onChainActivityEntry, type TransferDirection } from "./tx-history";
 import { scanTransactionHistory, type TransactionHistoryScan } from "./tx-history-scan";
@@ -134,8 +135,15 @@ const toActivity = (
 };
 
 /**
- * Reads recent account transfers from Starkscan and converts only validated
- * ERC20 legs into the wallet's existing activity schema. Devnet stays RPC-only.
+ * Reads recent account transfers and relayed SNIP-9 executions from Starkscan
+ * and converts only validated rows into the wallet's existing activity schema.
+ * Devnet stays RPC-only.
+ *
+ * Transfer discovery needs tracked tokens; relay discovery reads transaction
+ * summaries and decoded account calls, so it does not depend on ERC-20
+ * movement. A relay discovery failure (a beta endpoint, a rate limit, a shape
+ * this build does not understand) degrades only that source: the transfer rows
+ * still return.
  */
 export const getStarkscanTransactionHistory = async (
   client: StarkscanClient,
@@ -150,8 +158,14 @@ export const getStarkscanTransactionHistory = async (
   const entries = page.items
     .map((transfer) => toActivity(transfer, input))
     .filter((entry): entry is ActivityEntry => entry !== null);
+  const relayed = await discoverSnip9Executions(client, input).catch(
+    (): readonly ActivityEntry[] => [],
+  );
+  // Both sources are keyed per leg: a transfer by its (hash, token,
+  // counterparty, amount) tuple, a relayed execution by its transaction hash
+  // and relayer alone, so a rescan of either is idempotent.
   const byLeg = new Map<string, ActivityEntry>();
-  for (const entry of entries) {
+  for (const entry of [...entries, ...relayed]) {
     const key = `${entry.hash}\u0000${entry.token ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
     if (!byLeg.has(key)) {
       byLeg.set(key, entry);

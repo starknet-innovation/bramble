@@ -5,6 +5,7 @@ import { isBaseUnitsAmount, isRecord } from "@bramble/core/json";
 import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 import type {
+  StarkscanAccountCall,
   StarkscanAddressActivity,
   StarkscanAddressSummary,
   StarkscanAddressTransaction,
@@ -15,10 +16,12 @@ import type {
   StarkscanTokenBalance,
   StarkscanTokenHolding,
   StarkscanTokenHoldings,
+  StarkscanTransactionDetail,
   StarkscanTransfer,
 } from "./starkscan-types";
 
 const MAX_PAGE_LIMIT = 200;
+const MAX_ACCOUNT_CALLS = 64;
 const invalidResponse = (): never => {
   throw new Error("Invalid Starkscan response");
 };
@@ -108,6 +111,38 @@ export const parseStarkscanAddressTransaction = (value: unknown): StarkscanAddre
     transferCount: integerValue(row["transferCount"]),
     operationKind: nullableString(row["operationKind"]),
     operationLabel: nullableString(row["operationLabel"]),
+  };
+};
+
+const parseAccountCall = (value: unknown): StarkscanAccountCall => {
+  const row = recordValue(value);
+  return {
+    calldataLength: integerValue(row["calldataLength"]),
+    contractAddress: feltValue(row["to"]),
+    selector: nullableFelt(row["selector"]),
+  };
+};
+
+/**
+ * Parses a certified transaction detail. The raw calldata and the decoded
+ * account-call framing are both bounded so a hostile explorer cannot stream an
+ * unbounded blob into the worker.
+ */
+export const parseStarkscanTransactionDetail = (value: unknown): StarkscanTransactionDetail => {
+  const row = recordValue(value);
+  if (!Array.isArray(row["accountCalls"]) || row["accountCalls"].length > MAX_ACCOUNT_CALLS) {
+    return invalidResponse();
+  }
+  return {
+    accountCalls: row["accountCalls"].map(parseAccountCall),
+    blockNumber: integerValue(row["blockNumber"]),
+    calldata: stringArray(row["calldata"], true),
+    executionStatus: nullableString(row["executionStatus"]),
+    finalityStatus: nullableString(row["finalityStatus"]),
+    fromAddress: nullableFelt(row["fromAddress"]),
+    timestampIso: stringValue(row["timestampIso"]),
+    txHash: feltValue(row["txHash"]),
+    txType: nullableString(row["txType"]),
   };
 };
 

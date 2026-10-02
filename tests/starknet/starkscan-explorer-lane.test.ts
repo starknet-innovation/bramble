@@ -216,6 +216,7 @@ describe("explorer gateway lane is opt-in per network", () => {
     });
 
     expect(await history(historyInput, failingRpc)).toHaveLength(1);
-    expect(explorer.urls).toHaveLength(1);
+    // Transfers, then the transaction summaries the relay discovery reads.
+    expect(explorer.urls).toHaveLength(2);
   });
 });
