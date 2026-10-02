@@ -37,6 +37,9 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
   const lengthToggle = form.querySelector<HTMLButtonElement>("#phrase-length-toggle");
   let wordCount: 12 | 24 = 12;
   let mnemonic = "";
+  // Bumped by the post-import wipe, so a validation still in flight from a
+  // Search pressed during the import cannot put the phrase back afterwards.
+  let searchGeneration = 0;
 
   const wordAssist = bindRecoveryWordAssist(inputs, form);
   const refreshWords = (): void => {
@@ -86,9 +89,10 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
     // here: every cell, the retained copy, and the account picker.
     onRestored: () => {
       mnemonic = "";
+      searchGeneration += 1;
       wordAssist.hideSuggestions();
+      // Back to 12 cells; the fill also resets the length toggle label.
       wordCount = fillRecoveryWords(form, inputs, [], "import");
-      syncToggleLabel();
       if (scanSection) {
         scanSection.hidden = true;
       }
@@ -107,8 +111,20 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
       return;
     }
     buttonBusy(search, true);
+    const attempt = searchGeneration;
+    const superseded = (): boolean => {
+      if (attempt === searchGeneration) {
+        return false;
+      }
+      buttonBusy(search, false);
+      refreshWords();
+      return true;
+    };
     void deps.wallet.validateMnemonic(phrase).then(
       (valid) => {
+        if (superseded()) {
+          return;
+        }
         buttonBusy(search, false);
         if (!valid) {
           if (result) {
@@ -127,6 +143,9 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
         scan.start();
       },
       (error: unknown) => {
+        if (superseded()) {
+          return;
+        }
         buttonBusy(search, false);
         if (result) {
           result.textContent = errorLine(error, "Phrase validation is unavailable");
