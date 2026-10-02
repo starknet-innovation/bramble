@@ -15,6 +15,7 @@ import {
   verificationContext,
   verifyCalls,
 } from "@bramble/transactions/verify";
+import { shortAddress } from "@bramble/transactions/verify-decode";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { paddedFelt, sameFelt } from "@bramble/wallet-model/networks";
 
@@ -52,6 +53,23 @@ describe("isLookalikeAddress padded window (audit #242)", () => {
 
   test("the existing unpadded 4+4 window still flags", () => {
     expect(isLookalikeAddress(`0x555a${"f".repeat(55)}bbcc`, CONTACT)).toBe(true);
+  });
+
+  test("a partially padded spelling that renders like the padded contact is flagged", () => {
+    // 62 significant digits sharing only "555" + "bbcc" with the contact: its
+    // canonical (0x555b) and fully padded (0x0055) windows both differ, yet the
+    // one-leading-zero spelling an attacker hands out shows 0x0555…bbcc, and a
+    // typed recipient is labelled with exactly that spelling.
+    const spelling = `0x0555b${"1".repeat(54)}bbcc`;
+    expect(shortAddress(spelling)).toBe(shortAddress(paddedFelt(CONTACT) ?? CONTACT));
+    expect(isLookalikeAddress(spelling, CONTACT)).toBe(true);
+  });
+
+  test("a contact with two leading zeros is matched in every intermediate spelling", () => {
+    const contact = `0x0055${"a".repeat(56)}cafe`;
+    // 61 significant digits: `0x00` + "55f" padded, `0x055f` with one zero.
+    expect(isLookalikeAddress(`0x55f${"3".repeat(54)}cafe`, contact)).toBe(true);
+    expect(isLookalikeAddress(`0x55b${"3".repeat(55)}cafe`, contact)).toBe(true);
   });
 
   test("an address sharing neither window is not flagged", () => {
