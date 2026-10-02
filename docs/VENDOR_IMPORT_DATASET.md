@@ -194,6 +194,28 @@ signature carries the full `AdditionalDeploymentParams` struct poseidon-signed
 out-of-band. Pending: owner-rotation pass 2 after the escape security period,
 and the verification run against a Bramble build.
 
+## Phase 4 — first verification run (2026-10-02): 4/34
+
+The built wallet (release/v0.10.5 head) imported every dataset seed through its
+real onboarding UI against live mainnet (`tools/vendor-dataset/verify-dataset.ts`,
+scorecard in `verification.json`). It surfaced **exactly the four D1 fixtures
+and nothing else** — every fixture behaved as its detectability class predicts,
+with zero off-class results:
+
+- **Found (4, all D1):** the Bramble-axis control, the two scripted Braavos
+  index-0 accounts, and the real app-made Braavos #1 ("Deployed · view only").
+- **Missed (20 × D2):** everything behind the derivation bugs and table gaps —
+  the entire Ready population (both real and scripted, #505), Braavos index 1+
+  (vendor axis), the gap fixture at index 7, the passphrase universe.
+- **Missed (4 × D3):** the USDC-only and past-window fixtures — richer probes
+  (#504 covers `gaps/25`).
+- **Missed (3 × D4, 3 × D5):** confirmed unreachable without an indexer /
+  confirmed invisible, as designed.
+
+The scorecard doubles as the acceptance test for the fixes: #505 should flip
+the twenty D2 rows, #504 flips `gaps/25`, probe work flips the remaining D3s,
+and D4 stays a deliberate architecture decision. One command re-runs it.
+
 ## Phases
 
 0. **Research** (this document): pin derivation + deploy shapes from vendor source.
