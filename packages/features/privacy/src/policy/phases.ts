@@ -53,6 +53,16 @@ export type Strk20PhaseReport = {
  */
 export type Strk20PhaseSink = (report: Strk20PhaseReport) => void;
 
+/**
+ * The reason a job poll receives when the worker that ran the job is gone (or
+ * the id was never this worker's). Kind-neutral: the background registry
+ * cannot know whether the lost job was a review or a submission, so the panel
+ * recognises this exact text and decides — an execution that may have
+ * broadcast is reported as status unknown, never as "not sent".
+ */
+export const STRK20_JOB_INTERRUPTED =
+  "The private operation was interrupted because the wallet's background worker stopped. Try again.";
+
 const PHASES: ReadonlySet<string> = new Set<string>(STRK20_PHASES);
 
 /**

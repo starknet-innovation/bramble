@@ -6,8 +6,8 @@
  * one is pinned here rather than inferred from the reconciler's behaviour:
  * pre-confirmed and pending are watched hot and expire in an hour, L2-accepted
  * transactions are watched slowly until L1 proof, a single not-found is noise,
- * three consecutive not-founds are a failure, and no transaction ever owes the
- * user more than one notice.
+ * three consecutive not-founds fail only a transaction already seen on chain,
+ * and no transaction ever owes the user more than one notice.
  */
 import { describe, expect, test } from "bun:test";
 import type { TransactionStatusReport } from "@bramble/starknet/rpc";
@@ -37,6 +37,7 @@ const entry = (overrides: Partial<ActivityEntry> = {}): ActivityEntry => ({
 const report = (overrides: Partial<TransactionStatusReport> = {}): TransactionStatusReport => ({
   finalizedOnL1: false,
   found: true,
+  seen: true,
   status: "accepted",
   ...overrides,
 });
@@ -97,26 +98,32 @@ describe("reconciled outcome", () => {
     expect(reconciledOutcome(entry(), report())).toEqual({
       finalizedOnL1: false,
       notFoundCount: 0,
+      seenOnChain: true,
       status: "accepted",
     });
     expect(
       reconciledOutcome(entry({ status: "accepted" }), report({ finalizedOnL1: true })),
-    ).toEqual({ finalizedOnL1: true, notFoundCount: 0, status: "accepted" });
+    ).toEqual({ finalizedOnL1: true, notFoundCount: 0, seenOnChain: true, status: "accepted" });
   });
 
   test("does not demote progress or erase observed L1 finality", () => {
     expect(reconciledOutcome(entry({ status: "accepted" }), report({ status: "pending" }))).toEqual(
-      { finalizedOnL1: false, notFoundCount: 0, status: "accepted" },
+      { finalizedOnL1: false, notFoundCount: 0, seenOnChain: true, status: "accepted" },
     );
     expect(
       reconciledOutcome(entry({ status: "preconfirmed" }), report({ status: "pending" })),
-    ).toEqual({ finalizedOnL1: false, notFoundCount: 0, status: "preconfirmed" });
+    ).toEqual({
+      finalizedOnL1: false,
+      notFoundCount: 0,
+      seenOnChain: true,
+      status: "preconfirmed",
+    });
     expect(
       reconciledOutcome(
         entry({ finalizedOnL1: true, status: "accepted" }),
         report({ finalizedOnL1: false, status: "accepted" }),
       ),
-    ).toEqual({ finalizedOnL1: true, notFoundCount: 0, status: "accepted" });
+    ).toEqual({ finalizedOnL1: true, notFoundCount: 0, seenOnChain: true, status: "accepted" });
   });
 
   test("owes the user a notice when a confirmed transaction later fails", () => {
@@ -127,6 +134,7 @@ describe("reconciled outcome", () => {
         failureNotice: "pending",
         finalizedOnL1: false,
         notFoundCount: 0,
+        seenOnChain: true,
         status: "reverted",
       });
     }
@@ -161,6 +169,59 @@ describe("reconciled outcome", () => {
       notFoundCount: NOT_FOUND_FAILURE_THRESHOLD,
       status: "rejected",
     });
+  });
+});
+
+// Audit #247: a just-broadcast transaction can be unknown to a lagging or
+// sibling node for a moment. Only a transaction the wallet has seen on chain
+// may be declared gone after repeated not-found answers.
+describe("not-found answers for a transaction never seen on chain", () => {
+  const notFoundTimes = (start: ActivityEntry, count: number): ActivityEntry => {
+    let current = start;
+    for (let index = 0; index < count; index += 1) {
+      current = { ...current, ...reconciledOutcome(current, report({ found: false })) };
+    }
+    return current;
+  };
+
+  test("keeps an unseen pending entry pending after three misses", () => {
+    const after = notFoundTimes(entry({ status: "pending" }), NOT_FOUND_FAILURE_THRESHOLD);
+    expect(after.status).toBe("pending");
+    expect(after.notFoundCount).toBe(NOT_FOUND_FAILURE_THRESHOLD);
+    expect(after.failureNotice).toBeUndefined();
+  });
+
+  test("rejects a pending entry that was seen once and then vanished", () => {
+    const seen = {
+      ...entry({ status: "pending" }),
+      ...reconciledOutcome(entry({ status: "pending" }), report({ status: "pending" })),
+    };
+    expect(seen.seenOnChain).toBe(true);
+    expect(notFoundTimes(seen, NOT_FOUND_FAILURE_THRESHOLD).status).toBe("rejected");
+  });
+
+  test("does not count a found answer without a parsed finality as a sighting", () => {
+    const outcome = reconciledOutcome(
+      entry({ status: "pending" }),
+      report({ seen: false, status: "pending" }),
+    );
+    expect(outcome.seenOnChain).toBeUndefined();
+    const after = notFoundTimes(
+      { ...entry({ status: "pending" }), ...outcome },
+      NOT_FOUND_FAILURE_THRESHOLD,
+    );
+    expect(after.status).toBe("pending");
+  });
+
+  test("keeps the pre-confirmed drop semantics for legacy rows without the flag", () => {
+    const after = notFoundTimes(entry({ status: "preconfirmed" }), NOT_FOUND_FAILURE_THRESHOLD);
+    expect(after.status).toBe("rejected");
+    expect(after.failureNotice).toBe("pending");
+  });
+
+  test("leaves an unseen entry to the observation window's honest notice", () => {
+    const stale = notFoundTimes(entry({ status: "pending" }), NOT_FOUND_FAILURE_THRESHOLD);
+    expect(expiredObservations([stale], UNRESOLVED_WINDOW_MS)).toEqual([stale]);
   });
 });
 

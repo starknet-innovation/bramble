@@ -263,6 +263,7 @@ describe("requestDeviceGrant", () => {
         r: new Uint8Array(32),
         returnCode: 0x9000,
         s: new Uint8Array(32),
+        v: 1,
       },
     });
     expect(await signature).toMatchObject({

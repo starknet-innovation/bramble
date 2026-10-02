@@ -98,6 +98,12 @@ export type TransferState<Review> = {
   readonly review: Review | null;
   readonly reviewedKey: string | null;
   readonly stage: TransferStage;
+  /**
+   * True on a `failed` stage whose submission may still land (its reply was
+   * lost and no hash was captured). The receipt then says the status is
+   * unknown and offers Activity instead of Try again.
+   */
+  readonly submissionUnknown: boolean;
   readonly transactionHash: string | null;
 };
 
@@ -113,6 +119,7 @@ export const initialTransferState = <Review>(): TransferState<Review> => ({
   review: null,
   reviewedKey: null,
   stage: "recipient",
+  submissionUnknown: false,
   transactionHash: null,
 });
 

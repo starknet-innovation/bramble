@@ -32,7 +32,7 @@ const preferences: WalletPreferences = {
 const found = (
   status: TransactionStatusReport["status"],
   finalizedOnL1 = false,
-): TransactionStatusReport => ({ finalizedOnL1, found: true, status });
+): TransactionStatusReport => ({ finalizedOnL1, found: true, seen: true, status });
 
 const makeDeps = (
   entries: readonly ActivityEntry[],
@@ -129,6 +129,25 @@ describe("background reconciliation", () => {
     expect(polled).toEqual([["0xabc"]]);
   });
 
+  // Audit #247: three quick not-found answers (a lagging node right after
+  // broadcast) must not permanently reject a send that later lands.
+  test("keeps a just-broadcast send pending through early misses until it lands", async () => {
+    const reports: Record<string, TransactionStatusReport> = {
+      "0xabc": { finalizedOnL1: false, found: false, seen: false, status: "pending" },
+    };
+    const { deps } = makeDeps([entry({ status: "pending" })], reports);
+    const scope = { accountId: ACCOUNT, networkId: "SN_MAIN" as const };
+    for (const at of [0, 250, 750]) {
+      await reconcileScope(deps, scope, at);
+    }
+    expect((await statusOf(deps, "0xabc"))?.status).toBe("pending");
+    reports["0xabc"] = found("accepted");
+    await reconcileScope(deps, scope, 1_000);
+    const stored = await statusOf(deps, "0xabc");
+    expect(stored?.status).toBe("accepted");
+    expect(stored?.failureNotice).toBeUndefined();
+  });
+
   test("records a notice when an accepted transaction later reverts", async () => {
     const { deps } = makeDeps([entry({ status: "accepted" })], { "0xabc": found("reverted") });
     await reconcileObserved(deps, "slow", 1_000);
@@ -207,7 +226,7 @@ describe("background reconciliation", () => {
             return { "0xabc": found("accepted") };
           }
           return {
-            "0xabc": { finalizedOnL1: false, found: false, status: "pending" },
+            "0xabc": { finalizedOnL1: false, found: false, seen: false, status: "pending" },
           };
         },
       } as unknown as ReconcileDeps["runtimeRpc"],

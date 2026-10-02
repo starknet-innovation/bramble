@@ -20,7 +20,8 @@
 
 import { isStrk20JobId } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { isStrk20Phase, type Strk20Phase } from "@bramble/privacy/phases";
+import { isStrk20Phase, STRK20_JOB_INTERRUPTED, type Strk20Phase } from "@bramble/privacy/phases";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 
 /**
  * How often the panel asks after a proof it is waiting on. Each poll is a short
@@ -141,6 +142,46 @@ export const runPreparationJob = async (
     await pause(PREPARATION_POLL_MS);
     response = await send({ jobId: job.id, type: "wallet.strk20PreparationStatus" });
     job = readRunningJob(response);
+  }
+  return response;
+};
+
+/**
+ * What a confirmed private execution reports when its worker was lost after
+ * the job may have broadcast. Named so the screens can be tested against it.
+ */
+export const PRIVATE_EXECUTION_UNKNOWN =
+  "The wallet's background worker stopped while sending this private transaction, so its status is unknown. Check Activity before trying again.";
+
+/**
+ * {@link runPreparationJob} for a confirmed execution, which may broadcast.
+ * Losing the worker there — the channel failing ({@link PREPARATION_CHANNEL_LOST})
+ * or a poll answered with the background's {@link STRK20_JOB_INTERRUPTED} — does
+ * not mean nothing was sent, so both reject with a {@link SubmissionUnknownError}
+ * (no hash: the panel never learned one) instead of a plain failure that would
+ * read as "not sent" and invite a blind re-send (audit 173). Every other reply
+ * is returned for the caller to validate as usual.
+ */
+export const runExecutionJob = async (
+  sendMessage: (message: unknown) => Promise<unknown>,
+  start: Readonly<Record<string, unknown>>,
+  options: PreparationJobOptions = {},
+): Promise<unknown> => {
+  let response: unknown;
+  try {
+    response = await runPreparationJob(sendMessage, start, options);
+  } catch (error) {
+    if (error instanceof Error && error.message === PREPARATION_CHANNEL_LOST) {
+      throw new SubmissionUnknownError(PRIVATE_EXECUTION_UNKNOWN, null);
+    }
+    throw error;
+  }
+  if (
+    isRecord(response) &&
+    hasOnlyKnownKeys(response, ["error"]) &&
+    response["error"] === STRK20_JOB_INTERRUPTED
+  ) {
+    throw new SubmissionUnknownError(PRIVATE_EXECUTION_UNKNOWN, null);
   }
   return response;
 };

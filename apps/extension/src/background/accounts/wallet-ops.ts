@@ -2,6 +2,7 @@
 
 import type { MultisigStore } from "@bramble/multisig/repository";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@bramble/starknet/rpc";
 import { type ActivityLog, systemClock } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
@@ -13,6 +14,7 @@ import {
 } from "@bramble/transactions/verify";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { type BalanceSnapshotStore, cachedBalances } from "../portfolio/balance-snapshots";
@@ -320,31 +322,55 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
   if (!input.reviewedFee) {
     return FEE_REVIEW_REQUIRED;
   }
-  // The fee the review step showed, echoed back by the panel, is the ceiling this
-  // send may sign under (MCW-V09-119); one whose cost ran past it is refused.
-  const result = await deps.runtimeRpc.submitErc20Transfer({
-    account,
-    amount: input.amount,
-    isAuthorized: authorized.isCurrent,
-    recipient: input.recipient,
-    ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
-    reviewedFee: input.reviewedFee,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: accountHashSigner(deps, account, vaultPassphrase),
-    speed: input.speed,
-    token,
-  });
-  await recordSubmittedActivity(deps.activity, {
+  const activityFor = (hash: string) => ({
     accountId: account.id,
     amount: input.amount,
     counterparty: input.recipient,
-    hash: result.transactionHash,
-    kind: "transfer",
+    hash,
+    kind: "transfer" as const,
     networkId: account.networkId,
     summary: report.calls[0]?.summary ?? `Send ${token.symbol}`,
     token: token.symbol,
   });
-  return { ok: true, transactionHash: result.transactionHash };
+  // The hash of the invoke as signed, captured before it is sent. Only used when
+  // the reply is lost, so the transfer stays traceable (audit #173).
+  let signedHash: string | undefined;
+  let transactionHash: string;
+  try {
+    // The fee the review step showed, echoed back by the panel, is the ceiling this
+    // send may sign under (MCW-V09-119); one whose cost ran past it is refused.
+    const result = await deps.runtimeRpc.submitErc20Transfer({
+      account,
+      amount: input.amount,
+      isAuthorized: authorized.isCurrent,
+      onSigned: async (signed) => {
+        signedHash = signed.transactionHash;
+      },
+      recipient: input.recipient,
+      ...(input.reviewedDeploymentFee
+        ? { reviewedDeploymentFee: input.reviewedDeploymentFee }
+        : {}),
+      reviewedFee: input.reviewedFee,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+      signHash: accountHashSigner(deps, account, vaultPassphrase),
+      speed: input.speed,
+      token,
+    });
+    transactionHash = result.transactionHash;
+  } catch (error) {
+    if (!(error instanceof IndeterminateRpcWriteError)) {
+      throw error;
+    }
+    // The transfer may already be on chain. Record it as pending so Activity
+    // and the reconciler can follow it, and tell the panel the outcome is
+    // unknown so it never offers a blind re-send.
+    if (signedHash !== undefined) {
+      await recordSubmittedActivity(deps.activity, activityFor(signedHash));
+    }
+    return submissionUnknownResponse(error.message, signedHash);
+  }
+  await recordSubmittedActivity(deps.activity, activityFor(transactionHash));
+  return { ok: true, transactionHash };
 };
 
 /**

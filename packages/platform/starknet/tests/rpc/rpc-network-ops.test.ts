@@ -176,11 +176,11 @@ describe("getTransactionStatuses", () => {
       },
     );
 
-  const found = (status: TransactionStatus, finalizedOnL1 = false): TransactionStatusReport => ({
-    finalizedOnL1,
-    found: true,
-    status,
-  });
+  const found = (
+    status: TransactionStatus,
+    finalizedOnL1 = false,
+    seen = true,
+  ): TransactionStatusReport => ({ finalizedOnL1, found: true, seen, status });
 
   test("classifies reverted, rejected, accepted, and pending statuses", async () => {
     const statuses = await getTransactionStatuses(
@@ -244,7 +244,7 @@ describe("getTransactionStatuses", () => {
         }),
     );
     expect(statuses).toEqual({
-      "0xbare": found("pending"),
+      "0xbare": found("pending", false, false),
       "0xl1": found("accepted", true),
     });
   });
@@ -267,7 +267,7 @@ describe("getTransactionStatuses", () => {
         ),
     );
     expect(statuses).toEqual({
-      "0xmissing": { finalizedOnL1: false, found: false, status: "pending" },
+      "0xmissing": { finalizedOnL1: false, found: false, seen: false, status: "pending" },
     });
   });
 
@@ -281,7 +281,8 @@ describe("getTransactionStatuses", () => {
         },
       ),
     );
-    expect(statuses).toEqual({ "0xodd": found("pending") });
+    // Found, not seen: an odd RPC error is no sighting (audit 247).
+    expect(statuses).toEqual({ "0xodd": found("pending", false, false) });
   });
 
   test("propagates a transport failure so the caller can degrade", async () => {

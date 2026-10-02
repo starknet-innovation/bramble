@@ -21,6 +21,7 @@ import { responseError } from "../../runtime/runtime-errors";
 import {
   type PreparationJobOptions,
   type PreparationProgress,
+  runExecutionJob,
   runPreparationJob,
 } from "./privacy-preparation-job";
 import { type PrivacyRelayFee, readPrivacyRelayFee } from "./privacy-relay-fee";
@@ -340,7 +341,13 @@ export const createPrivacyRuntimeClient = (
       // The hash is the job's stored outcome: a poll after settlement returns it
       // again and submits nothing, and the one-time claim behind it means the
       // same preparation cannot be executed twice.
-      const response = await job({ preparationId, type: "wallet.strk20Execute" }, onProgress);
+      // A lost worker here may already have broadcast, so it rejects as
+      // status unknown rather than as a failure (see runExecutionJob).
+      const response = await runExecutionJob(
+        sendMessage,
+        { preparationId, type: "wallet.strk20Execute" },
+        { ...options, ...(onProgress ? { onProgress } : {}) },
+      );
       if (
         isRecord(response) &&
         hasOnlyKnownKeys(response, ["ok", "transactionHash"]) &&
