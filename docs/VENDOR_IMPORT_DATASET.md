@@ -102,6 +102,29 @@ against Argent's backend** (`ARGENT_SMART_ACCOUNT_DISCOVERY_URL`,
 - Braavos 1.1.0 implementation: does `isKnownAccountClass` reject it live?
 - Braavos withdrawal-limit / deferred-removal state surfaces for the manifest.
 
+## Phase 2 status — calibration PASSED (2026-10-02)
+
+An independent reimplementation (scratchpad `dataset/calib/derive.ts`; @scure/bip32,
+@scure/bip39, @scure/starknet, starknet.js — no Krusty) reproduced the ground-truth
+seeds' recorded addresses on the first run:
+
+- **Braavos**: all four recorded accounts match the vendor derivation at indices 0–3,
+  with deploy class `0x03d16c7a…` (the table's "braavos 1.0.0") — the current app
+  does **not** use the `0x13bfe…` base class for its counterfactual addresses. Live
+  class of the two deployed accounts: `0x3957f9f5…` ("braavos current"). The
+  funded-undeployed account is confirmed undeployed on chain.
+- **Ready**: recorded accounts 1/3/4/5 match the **double derivation** at indices
+  0/2/4/5 (live class 0.4.0 for the deployed one). The smart (email-guardian)
+  account consumed index 1 and its backend-salted address matches no computed shape,
+  as predicted. Index 3 was consumed in-app by nothing we recorded — real-world
+  index gaps happen inside one vendor session.
+- **Empirical verdict on Bramble today**: on the Braavos seed it finds exactly
+  account #1 (index 0, the single overlapping coordinate) and misses #2–4; on the
+  Ready seed it finds **nothing at any index** — the double derivation means no
+  Ready software key ever appears on Bramble's ladder. Fix direction: derive Argent
+  scan shapes through the ETH-seeded scheme (Krusty's `deriveArgentLegacyKeypair`)
+  on the address axis.
+
 ## Phases
 
 0. **Research** (this document): pin derivation + deploy shapes from vendor source.
