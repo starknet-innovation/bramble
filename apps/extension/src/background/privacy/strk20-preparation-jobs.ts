@@ -33,6 +33,7 @@
 import { isStrk20JobId } from "@bramble/core/ids";
 import {
   isStrk20Phase,
+  STRK20_JOB_INTERRUPTED,
   type Strk20PhaseReport,
   type Strk20PhaseSink,
 } from "@bramble/privacy/phases";
@@ -57,14 +58,6 @@ const MAX_SETTLED_JOBS = 8;
  * lifecycle guidance uses to hold a worker open through long work.
  */
 export const STRK20_JOB_KEEPALIVE_MS = 20_000;
-
-/**
- * The reason a poll receives when the worker that ran its job is gone. Named
- * so the panel can show it verbatim and tests can pin it. Kind-neutral: the
- * registry cannot know whether the lost job was a review or a submission.
- */
-export const STRK20_JOB_INTERRUPTED =
-  "The private operation was interrupted because the wallet's background worker stopped. Try again.";
 
 // Which route a job runs: the diagnostics lane it is aggregated under.
 type Strk20JobKind = PrivacyJobKind;

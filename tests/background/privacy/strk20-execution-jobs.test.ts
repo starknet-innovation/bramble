@@ -12,13 +12,13 @@
  * on every later execute, and idempotent on every later poll of the hash.
  */
 import { describe, expect, test } from "bun:test";
+import { STRK20_JOB_INTERRUPTED } from "@bramble/privacy/phases";
 import type { Strk20Service } from "@bramble/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
-import { STRK20_JOB_INTERRUPTED } from "../../../apps/extension/src/background/privacy/strk20-preparation-jobs";
 import { flushHeld } from "../../support/held";
 import {
   awaitStrk20Job,
