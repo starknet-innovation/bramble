@@ -43,10 +43,16 @@ export type SendDisclosure = "amount" | "recipient" | "sender";
 export type PoolRegistration = "pending" | "registered" | "unknown" | "unregistered";
 
 /**
- * Everything a route decision depends on. Balances are raw token units;
- * `sourceStrkBalanceRaw` is the STRK held in the *source* bucket, which is what
- * the pool fee is charged against, and equals `sourceTokenBalanceRaw` when the
- * token being sent is STRK.
+ * Everything a route decision depends on. Balances are raw token units.
+ *
+ * `feeTokenAddress` is the token the pool fee will be charged in, as the relay
+ * route selects it: the token being sent when a converted fee can be bounded,
+ * otherwise the configured fee token. `poolFeeFri` is that charge when the fee
+ * token is STRK, and `convertedFeeCeilingRaw` is the bounded charge in the fee
+ * token's own units otherwise (`null` while it is still unknown).
+ * `sourceFeeBalanceRaw` is the balance of `feeTokenAddress` in the *source*
+ * bucket, and equals `sourceTokenBalanceRaw` when the fee token is the token
+ * being sent.
  *
  * Either balance may be `null`, meaning not known yet — the account's balances
  * have not loaded, or the selected asset is absent from the list. A required
@@ -55,7 +61,17 @@ export type PoolRegistration = "pending" | "registered" | "unknown" | "unregiste
  */
 export type SendRouteInput = {
   readonly amountRaw: bigint;
+  /**
+   * The bounded converted fee in `feeTokenAddress` base units, when that token
+   * is not STRK so no on-chain value denominates it. `null` while it is still
+   * unknown. Ignored when the fee token is STRK, where `poolFeeFri` is exact.
+   */
+  readonly convertedFeeCeilingRaw: bigint | null;
   readonly destination: ValueBucket;
+  /** The token the pool fee is charged in, as the relay route selects it. */
+  readonly feeTokenAddress: string;
+  /** Display symbol of `feeTokenAddress`, for gate wording. */
+  readonly feeTokenSymbol: string;
   readonly poolFeeFri: bigint | null;
   readonly recipient: string | null;
   readonly recipientRegistration: PoolRegistration;
@@ -63,7 +79,8 @@ export type SendRouteInput = {
   readonly senderAddress: string;
   readonly senderRegistration: PoolRegistration;
   readonly source: ValueBucket;
-  readonly sourceStrkBalanceRaw: bigint | null;
+  /** The source bucket's balance of `feeTokenAddress`. */
+  readonly sourceFeeBalanceRaw: bigint | null;
   readonly sourceTokenBalanceRaw: bigint | null;
   readonly tokenAddress: string;
   readonly tokenSymbol: string;
@@ -206,28 +223,35 @@ const recipientBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlo
 const shortOf = (balance: bigint | null, needed: bigint): boolean =>
   balance !== null && needed > balance;
 
-// The pool fee is charged in STRK out of the source bucket. When the token being
-// sent is not STRK, the fee competes with a different balance, so it gets its own
-// check and its own wording.
-const feeBlocker = (
-  input: SendRouteInput,
-  poolFeeFri: bigint,
-  tokenIsStrk: boolean,
-): SendRouteBlocker | null => {
-  if (tokenIsStrk) {
+// The pool fee's amount in the token it is charged in. STRK is the exact
+// on-chain charge; any other token is the bounded ceiling derived from an
+// independent price, so reserving it never understates what the relay may take.
+const poolFeeAmountIn = (input: SendRouteInput): bigint | null =>
+  sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)
+    ? input.poolFeeFri
+    : input.convertedFeeCeilingRaw;
+
+const feeInSentToken = (input: SendRouteInput): boolean =>
+  sameFelt(input.feeTokenAddress, input.tokenAddress);
+
+const feeAssetLabel = (input: SendRouteInput): string =>
+  `${input.source === "private" ? "private " : ""}${input.feeTokenSymbol}`;
+
+// The pool fee leaves the source bucket in `feeTokenAddress`. When that is the
+// token being sent, the amount and the fee come out of one pot and are checked
+// together in `amountBlocker`; otherwise the fee competes with a different
+// balance, so it gets its own check and its own wording.
+const feeBlocker = (input: SendRouteInput, feeAmount: bigint): SendRouteBlocker | null => {
+  if (feeInSentToken(input)) {
     return null;
   }
-  if (input.sourceStrkBalanceRaw === null) {
-    return wait(`Checking your ${input.source === "private" ? "private " : ""}STRK balance…`);
+  if (input.sourceFeeBalanceRaw === null) {
+    return wait(`Checking your ${feeAssetLabel(input)} balance…`);
   }
-  if (!shortOf(input.sourceStrkBalanceRaw, poolFeeFri)) {
+  if (!shortOf(input.sourceFeeBalanceRaw, feeAmount)) {
     return null;
   }
-  return refuse(
-    input.source === "private"
-      ? "Not enough private STRK to cover the pool fee"
-      : "Not enough STRK to cover the pool fee",
-  );
+  return refuse(`Not enough ${feeAssetLabel(input)} to cover the pool fee`);
 };
 
 const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocker | null => {
@@ -246,25 +270,28 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
       ? refuse(shortfall(input, route))
       : null;
   }
-  if (input.poolFeeFri === null) {
-    // The fee is governance-set and read live, so an unknown fee cannot be
+  const feeAmount = poolFeeAmountIn(input);
+  if (feeAmount === null) {
+    // The charge is governance-set and read live, so an unknown fee cannot be
     // reasoned about: block until it lands rather than compose an amount that
     // the pool would reject.
     return wait("Checking the pool fee…");
   }
-  const tokenIsStrk = sameFelt(input.tokenAddress, STRK_TOKEN_ADDRESS);
-  // The fee always leaves the source bucket, so when the token *is* STRK the
-  // amount and the fee come out of one pot and must fit together.
-  const needed = input.amountRaw + (tokenIsStrk ? input.poolFeeFri : 0n);
+  // The fee always leaves the source bucket. When it is charged in the token
+  // being sent, the amount and the fee come out of one pot and must fit
+  // together; otherwise only the amount is checked here and the fee balance is
+  // checked on its own.
+  const samePot = feeInSentToken(input);
+  const needed = input.amountRaw + (samePot ? feeAmount : 0n);
   if (shortOf(input.sourceTokenBalanceRaw, needed)) {
     return refuse(shortfall(input, route));
   }
-  return feeBlocker(input, input.poolFeeFri, tokenIsStrk);
+  return samePot ? null : feeBlocker(input, feeAmount);
 };
 
 const shortfall = (input: SendRouteInput, route: SendRoute): string => {
   const asset = input.source === "private" ? `private ${input.tokenSymbol}` : input.tokenSymbol;
-  return route.poolFeeRequired && sameFelt(input.tokenAddress, STRK_TOKEN_ADDRESS)
+  return route.poolFeeRequired && feeInSentToken(input)
     ? `Not enough ${asset} for this amount plus the pool fee`
     : `Not enough ${asset}`;
 };
@@ -294,7 +321,14 @@ export const resolveSendRoute = (input: SendRouteInput): SendRouteResolution => 
  */
 export const spendableForRoute = (
   route: SendRoute,
-  input: Pick<SendRouteInput, "poolFeeFri" | "sourceTokenBalanceRaw" | "tokenAddress">,
+  input: Pick<
+    SendRouteInput,
+    | "convertedFeeCeilingRaw"
+    | "feeTokenAddress"
+    | "poolFeeFri"
+    | "sourceTokenBalanceRaw"
+    | "tokenAddress"
+  >,
 ): bigint | null => {
   if (input.sourceTokenBalanceRaw === null) {
     return null;
@@ -302,12 +336,15 @@ export const spendableForRoute = (
   if (!route.poolFeeRequired) {
     return input.sourceTokenBalanceRaw;
   }
-  if (input.poolFeeFri === null) {
+  const feeAmount = sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)
+    ? input.poolFeeFri
+    : input.convertedFeeCeilingRaw;
+  if (feeAmount === null) {
     return null;
   }
-  if (!sameFelt(input.tokenAddress, STRK_TOKEN_ADDRESS)) {
+  if (!sameFelt(input.feeTokenAddress, input.tokenAddress)) {
     return input.sourceTokenBalanceRaw;
   }
-  const spendable = input.sourceTokenBalanceRaw - input.poolFeeFri;
+  const spendable = input.sourceTokenBalanceRaw - feeAmount;
   return spendable > 0n ? spendable : 0n;
 };

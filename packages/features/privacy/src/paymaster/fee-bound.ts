@@ -145,3 +145,25 @@ export const preferredStrk20FeeToken = (
   );
   return deposited ? fallback : candidate;
 };
+
+/**
+ * The fee token a Send affordability gate should reserve against, mirroring the
+ * preference {@link preferredStrk20FeeToken} applies at quote time so the panel
+ * and the submission path agree on which balance pays.
+ *
+ * The quote selects the token being sent when a converted fee can be bounded
+ * from an independent reference, and otherwise falls back to the configured fee
+ * token. `convertedCeiling` is that bound for `token`, already derived from the
+ * reference; a `null` ceiling means no bound exists, so the fee stays on the
+ * fallback exactly as the quote would leave it. Keeping this selection here, a
+ * pure function beside the quote's own preference, is what stops the two
+ * disagreeing about which balance a fee leaves.
+ */
+export const strk20SendFeeModel = (input: {
+  readonly convertedCeiling: bigint | null;
+  readonly fallbackFeeToken: string;
+  readonly token: string;
+}): { readonly convertedCeiling: bigint | null; readonly feeToken: string } =>
+  sameFelt(input.token, input.fallbackFeeToken) || input.convertedCeiling === null
+    ? { convertedCeiling: null, feeToken: input.fallbackFeeToken }
+    : { convertedCeiling: input.convertedCeiling, feeToken: input.token };
