@@ -128,6 +128,64 @@ describe("recovery discovery", () => {
     );
   });
 
+  test("keeps scanning a full tail past the last active index", async () => {
+    // Issue 503: a fixed 0-19 window silently misses a user whose accounts sit
+    // near its edge. Activity at index 19 must extend the scan to index 39,
+    // and only a quiet tail of defaultCount indices may end it.
+    const deployedAddress = accountFor({
+      accountContractType: "openzeppelin",
+      accountIndex: 19,
+      mnemonic: "",
+    }).address;
+    const previewedIndexes = new Set<number>();
+    const deps = {
+      activeStateCoordinator: createActiveStateCoordinator(),
+      preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+      recoveryDiscovery: createRecoveryDiscoveryCache(),
+      runtimeRpc: {
+        ...defaultRuntimeRpc,
+        async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
+          return accountAddress === deployedAddress;
+        },
+        async getTokenBalances({
+          tokens,
+        }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
+          return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
+        },
+      },
+      session: createUnlockSession(),
+      wallet: {
+        ...walletStub,
+        async previewAccount(input: AccountDerivationInput) {
+          previewedIndexes.add(input.accountIndex ?? 0);
+          return accountFor(input);
+        },
+      },
+    };
+    const message = {
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      networkId: "SN_MAIN",
+      type: "wallet.discoverRecoveryAccounts",
+    };
+
+    const responses: Array<{ complete: boolean; nextIndex: number }> = [];
+    for (let batch = 0; batch < 12; batch += 1) {
+      const response = (await handleOnboardingOps(deps, message.type, message)) as {
+        complete: boolean;
+        nextIndex: number;
+      };
+      responses.push({ complete: response.complete, nextIndex: response.nextIndex });
+      if (response.complete) break;
+    }
+
+    // The old window's edge no longer completes the scan…
+    expect(responses.find(({ nextIndex }) => nextIndex === 20)).toMatchObject({ complete: false });
+    // …and a quiet tail of defaultCount indices past index 19 does.
+    expect(responses.at(-1)).toMatchObject({ complete: true, nextIndex: 40 });
+    expect(previewedIndexes.has(39)).toBe(true);
+    expect(previewedIndexes.has(40)).toBe(false);
+  });
+
   test("previews every Argent release an account could have been deployed with", async () => {
     // A Ready account deployed at Argent 0.3.x keeps that address forever,
     // whatever it upgrades to. Scanning only the release this wallet creates
