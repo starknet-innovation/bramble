@@ -158,10 +158,16 @@ seeds' recorded addresses on the first run:
   0/2/4/5 (live class 0.4.0 for the deployed one). The smart (email-guardian)
   account consumed index 1 and its backend-salted address matches no computed shape,
   as predicted. The smart account (key index 1, backend-salted address
-  `0x01af449d…`) is not yet deployed — findable only through Argent's backend until
-  it is; once deployed, its on-chain `get_owner` should equal the double-derivation
-  index-1 pubkey and its `get_guardian` pins Argent's real guardian value for the
-  manifest. Index 3 was burned by an **aborted** "create smart account" flow —
+  `0x01af449d…`) is now deployed at 0.4.0 and the D4 case is proven end to end:
+  its address matches no computable shape, yet `get_owner` equals the
+  double-derivation index-1 pubkey exactly — the account provably belongs to the
+  seed while remaining invisible to address probing. Argent's real guardian value,
+  the reference for every simulated guardian in the matrix:
+  `0x7601f48c44bb108938ab8cc1578d0696cf17c04715b93f607757af07faa7e9b`
+  (plain felt, `get_guardian_backup` 0). Separately, R1 account 3 (`0x04e0c443…`,
+  key index 2) was discarded in the Ready UI — the seed still controls it, making
+  it the "hidden in vendor UI, still the seed's account" specimen; the USDC-only
+  fixture moves to the matrix seeds. Index 3 was burned by an **aborted** "create smart account" flow —
   backing out of the dialog still consumes a key index, so real-world index gaps
   arise inside one vendor session without the user ever seeing an account.
 - **Empirical verdict on Bramble today**: on the Braavos seed it finds exactly
