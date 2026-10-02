@@ -19,11 +19,17 @@ import { createMemoryStore } from "@bramble/store/kv";
 import { type ActivityEntry, memoryActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { createApprovalContext } from "../../apps/extension/src/background/approvals/approval-context";
 import { reviewArgentMultisigCalls } from "../../apps/extension/src/background/multisig/multisig-call-review";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { paidCounterparty } from "../../apps/extension/src/background/transactions/activity-recording";
+import {
+  createSwapPreparationStore,
+  type SwapPreparationStore,
+  swapPreparationPayload,
+} from "../../apps/extension/src/background/transactions/swap-preparations";
 import { testExtension } from "../support/background-wallet-stub";
 import {
   POISONING_CONTACT,
@@ -71,7 +77,12 @@ const chainRow = (counterparty: string): ActivityEntry => ({
   token: "ETH",
 });
 
-const makeHandler = async (options: { readonly seed?: readonly ActivityEntry[] } = {}) => {
+const makeHandler = async (
+  options: {
+    readonly seed?: readonly ActivityEntry[];
+    readonly swapPreparations?: SwapPreparationStore;
+  } = {},
+) => {
   const session = createUnlockSession();
   session.unlock(passphrase);
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
@@ -109,6 +120,7 @@ const makeHandler = async (options: { readonly seed?: readonly ActivityEntry[] }
   const handler = createMessageHandler(wallet as never, testExtension, {
     activity,
     preferencesStore,
+    ...(options.swapPreparations ? { swapPreparations: options.swapPreparations } : {}),
     runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "1", unit: "FRI" };
@@ -241,6 +253,55 @@ describe("public send: the user's other accounts and padded contacts", () => {
       error: expect.stringContaining("closely mimics"),
     });
     expect(harness.submitted).toEqual([]);
+  });
+});
+
+describe("NFT send and swap execute use the same trusted set (#163)", () => {
+  test("an NFT send to a lookalike of a paid recipient is refused", async () => {
+    const harness = await makeHandler();
+    await harness.send(PAID);
+    await expect(
+      harness.handler(
+        {
+          contract: ETH,
+          networkId: "SN_MAIN",
+          recipient: PAID_TWIN,
+          reviewedFee: { overallFee: "1", unit: "FRI" },
+          tokenId: "7",
+          type: "wallet.transferNft",
+        },
+        extensionSender,
+      ),
+    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
+    expect(harness.submitted).toEqual(["erc20"]);
+  });
+
+  test("a frozen swap route paying a lookalike of a paid recipient is refused at execute", async () => {
+    // buildPolicy refuses any aggregator build carrying a transfer, so the
+    // execute gate is reached here by freezing such a route directly: it is
+    // the second line of defence and must judge against the full trusted set.
+    const swapPreparations = createSwapPreparationStore();
+    const harness = await makeHandler({ swapPreparations });
+    await harness.send(PAID);
+    const unsigned = {
+      amount: "1",
+      buyAmount: "1",
+      buySymbol: "STRK",
+      calls: [
+        { calldata: [PAID_TWIN, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
+      ],
+      flags: [],
+      minBuyAmount: "1",
+      reviewedFee: { overallFee: "1", unit: "FRI" as const },
+      sellSymbol: "ETH",
+      summaries: ["Swap"],
+    };
+    const context = await createApprovalContext(account, swapPreparationPayload(unsigned));
+    const { id } = swapPreparations.put({ ...unsigned, context, id: context.payloadDigest });
+    await expect(
+      harness.handler({ preparationId: id, type: "wallet.swapExecute" }, extensionSender),
+    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
+    expect(harness.submitted).toEqual(["erc20"]);
   });
 });
 
