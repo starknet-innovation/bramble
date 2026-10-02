@@ -63,8 +63,10 @@ const balance: TokenBalance = {
 const mountSwap = (
   chainStatus: ActivityStatus | null,
   beforeRead: () => Promise<void> = async () => undefined,
+  execute: () => Promise<unknown> = async () => ({ ok: true, transactionHash: HASH }),
 ) => {
   const sent: string[] = [];
+  const navigated: string[] = [];
   const app = document.createElement("div");
   app.id = "app";
   paint(app, swapFlow(status, account));
@@ -99,7 +101,7 @@ const mountSwap = (
           },
         };
       }
-      return { ok: true, transactionHash: HASH };
+      return execute();
     },
   });
   const deps: SwapUiDeps = {
@@ -108,7 +110,9 @@ const mountSwap = (
     confirmationDelaysMs: [0],
     currency: () => "usd",
     navigateActivity: () => undefined,
-    navigateHome: () => undefined,
+    navigateHome: () => {
+      navigated.push("home");
+    },
     preferences: () => preferences,
     render: async () => undefined,
     status: () => status,
@@ -138,7 +142,7 @@ const mountSwap = (
     } as unknown as SwapUiDeps["wallet"],
   };
   bindSwap(deps);
-  return { app, sent };
+  return { app, deps, navigated, sent };
 };
 
 /** Quotes, reviews and confirms, then settles the confirmation wait. */
@@ -149,6 +153,18 @@ const runSwap = async (app: Element): Promise<void> => {
   await flush();
   app.querySelector<HTMLButtonElement>("#swap-confirm-button")?.click();
   await flush();
+  await flush();
+};
+
+const visible = (app: Element, selector: string): boolean =>
+  app.querySelector(selector)?.hasAttribute("hidden") === false;
+
+/** Reviews the current quote, then presses the header's Back arrow. */
+const reviewAndBack = async (app: Element): Promise<void> => {
+  app.querySelector<HTMLButtonElement>("#swap-review")?.click();
+  await flush();
+  expect(visible(app, "#swap-confirm")).toBe(true);
+  document.querySelector<HTMLButtonElement>("#swap-header-back")?.click();
   await flush();
 };
 
@@ -213,5 +229,93 @@ describe("swap confirmation", () => {
     await flush();
     expect(onReceipt(app)).toBe(true);
     expect(title(app)).toBe("Swap complete");
+  });
+
+  test("ignores header Back while execute() is still in flight", async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { app, navigated } = mountSwap("preconfirmed", undefined, async () => {
+      await held;
+      return { ok: true, transactionHash: HASH };
+    });
+    await runSwap(app);
+    document.querySelector<HTMLButtonElement>("#swap-header-back")?.click();
+    await flush();
+    expect(navigated).toEqual([]);
+    expect(visible(app, "#swap-confirm")).toBe(true);
+    release();
+    await flush();
+    await flush();
+    expect(onReceipt(app)).toBe(true);
+  });
+
+  // The submitting hold must end with the swap, or header Back stays dead on
+  // the next review.
+  test("header Back steps off the next review after a refused execute", async () => {
+    const { app, navigated, sent } = mountSwap("preconfirmed", undefined, async () => ({
+      error: "swap preparation changed",
+    }));
+    await runSwap(app);
+    expect(visible(app, "#swap-edit")).toBe(true);
+    await reviewAndBack(app);
+    expect(visible(app, "#swap-edit")).toBe(true);
+    expect(visible(app, "#swap-confirm")).toBe(false);
+    expect(navigated).toEqual([]);
+    expect(sent.filter((type) => type === "wallet.swapQuote")).toHaveLength(3);
+  });
+
+  test("header Back works on a fresh visit after leaving mid-confirmation", async () => {
+    const never = new Promise<void>(() => undefined);
+    const { app, deps } = mountSwap("preconfirmed", () => never);
+    await runSwap(app);
+    expect(visible(app, "#swap-confirm")).toBe(true);
+    // Leaving the screen unmounts it; the abandoned wait never settles.
+    app.remove();
+    bindSwap({ ...deps, app: document.createElement("div") });
+    const next = mountSwap("preconfirmed");
+    next.app.querySelector<HTMLButtonElement>("#swap-max")?.click();
+    await flush();
+    await reviewAndBack(next.app);
+    expect(visible(next.app, "#swap-edit")).toBe(true);
+    expect(next.navigated).toEqual([]);
+  });
+});
+
+// Audit #173, swap sibling: a lost reply may already be on chain, so the swap
+// is never re-quoted into a second swap of the same amount.
+describe("swap with a lost reply", () => {
+  const unknown = (transactionHash?: string) => async () => ({
+    error:
+      "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+    submissionUnknown: true,
+    ...(transactionHash ? { transactionHash } : {}),
+  });
+
+  test("follows the signed hash to the chain's answer", async () => {
+    const { app, sent } = mountSwap("preconfirmed", undefined, unknown(HASH));
+    await runSwap(app);
+    expect(onReceipt(app)).toBe(true);
+    expect(title(app)).toBe("Swap complete");
+    expect(sent.filter((type) => type === "wallet.swapQuote")).toHaveLength(1);
+  });
+
+  test("says status unknown without a hash and offers Activity, not a re-quote", async () => {
+    const { app, sent } = mountSwap(null, undefined, unknown());
+    await runSwap(app);
+    await flush();
+    expect(onReceipt(app)).toBe(true);
+    expect(title(app)).toBe("Status unknown");
+    expect(app.querySelector("#swap-success-note")?.textContent).toContain("status is unknown");
+    expect(visible(app, "#swap-edit")).toBe(false);
+    expect(visible(app, "#swap-confirm")).toBe(false);
+    expect(visible(app, "#swap-view-activity")).toBe(true);
+    expect(app.querySelector("#swap-success .send-receipt-tx")?.hasAttribute("hidden")).toBe(true);
+    expect(app.querySelector("#swap-success .send-outcome-mark")?.hasAttribute("hidden")).toBe(
+      true,
+    );
+    expect(sent.filter((type) => type === "wallet.swapQuote")).toHaveLength(1);
+    expect(sent.filter((type) => type === "wallet.swapPrepare")).toHaveLength(1);
   });
 });
