@@ -24,7 +24,7 @@ import {
   outcomeReceiptFor,
   paintOutcomeReceipt,
 } from "../shared/outcome-receipt";
-import { formatFeeEstimate, reviewConstraints } from "../shared/review-render";
+import { formatFeeEstimate, reviewCostNote } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
@@ -247,15 +247,21 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     if (reviewPanelRoot) {
       renderFragment(
         reviewPanelRoot,
-        reviewConstraints(`Maximum network fee: ${formatFeeEstimate(estimate)}`),
+        reviewCostNote(`Maximum network fee: ${formatFeeEstimate(estimate)}`),
       );
     }
   };
 
-  const failed = (error: unknown, fallback: string): void => {
+  // Only a failed quote belongs in the Cost box: it is why there is no fee.
+  // A failed submission (RPC, nonce, revert) is not fee information, so it
+  // empties the box (the spent quote is gone and Deploy quotes again) and is
+  // reported on the status line and toast instead.
+  const failed = (error: unknown, fallback: string, stage: "quote" | "submit"): void => {
     DEPLOYMENT_FEES.delete(target);
     const message = errorMessage(error, fallback);
-    if (reviewPanelRoot) renderFragment(reviewPanelRoot, reviewConstraints(message));
+    if (reviewPanelRoot) {
+      renderFragment(reviewPanelRoot, stage === "quote" ? reviewCostNote(message) : "");
+    }
     showToast(message, "error", target);
     scopedStatus(target, message);
     buttonBusy(target, false);
@@ -271,7 +277,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         scopedStatus(target, "");
         buttonBusy(target, false);
       },
-      (error: unknown) => failed(error, "Could not estimate the deployment fee"),
+      (error: unknown) => failed(error, "Could not estimate the deployment fee", "quote"),
     );
   };
 
@@ -332,7 +338,8 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", target);
         }
       },
-      (error: unknown) => failed(error, "Deployment failed"),
+      // Without a quote in hand this press only asked for one.
+      (error: unknown) => failed(error, "Deployment failed", reviewedFee ? "submit" : "quote"),
     );
   });
 };

@@ -194,6 +194,15 @@ describe("bindApprovals echoes the fee the card painted", () => {
 
     expect(await clickApprove(invokeApproval())).toEqual([]);
   });
+
+  test("a card with no fee state says why under Cost, not Cost and limits", () => {
+    const { feeEstimateFailed: _failed, ...unpriced } = invokeApproval();
+    const html = approvalCard(unpriced, STATUS);
+    // Why there is no fee is a fee line, so it sits under "Cost" alone.
+    expect(html).toContain('aria-label="Cost"');
+    expect(html).not.toContain("Cost and limits");
+    expect(html).toContain("The network fee is unavailable.");
+  });
 });
 
 // The fee-retry affordance on a queued invoke card asks the background to

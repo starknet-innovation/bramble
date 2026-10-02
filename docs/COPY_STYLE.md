@@ -82,6 +82,10 @@ discount every label.
 
 > ~~"Maximum cost and constraints"~~ → **"Cost"**
 
+The reverse holds too: a box that states what a decision does not charge or still authorizes —
+"the signed result can still authorize site-specific actions" — is not fee information, so it
+says **"Cost and limits"**.
+
 ### 8. A number lives in one place
 
 > ~~"This route returns 4.2% less value than you pay. Small orders can route poorly — try a larger amount or a different pair."~~ → **"High slippage risk"**
@@ -143,10 +147,12 @@ the weight of:
 
 > Anyone with these words controls the wallet and its funds. Bramble cannot recover them for you.
 
-The import screens do not. "Anyone with this key controls the account. Paste it only on a device
-you trust" arrives as the user is already pasting a key they already own onto a device they
-already chose — too late to be advice, so it reads as scolding. Both private-key import screens
-and the in-wallet phrase import carried a version of it; all three are gone.
+The import screens keep the consequence and drop the advice. "Paste it only on a device you
+trust" arrives as the user is already pasting a key they already own onto a device they already
+chose — too late to be advice, so it reads as scolding. The fact before it is not advice, and
+cutting it lost the one thing those screens must say, so both private-key import screens and the
+in-wallet phrase import carry a single line: "Anyone with this key controls the account" ("this
+phrase controls its accounts").
 
 **Empty states open with what is absent**, then what to do about it if there is anything to do.
 "No tracked balances yet. Add or detect tokens to see them here."

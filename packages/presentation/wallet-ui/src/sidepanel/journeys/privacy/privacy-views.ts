@@ -49,7 +49,8 @@ type PreparingStep = Extract<PrivacyJourneyState, { readonly stage: "preparing" 
 // what the list cannot and is empty when there is nothing to add. Backing out
 // is safe — the background finishes the proof it started and never executes an
 // abandoned preparation — but the proof is discarded, which is worth a line
-// before someone spends minutes on it twice.
+// before someone spends minutes on it twice. The proof wait also says nothing
+// is signed yet: minutes of "preparing" otherwise read as signing underway.
 const PREPARING_COPY: Readonly<
   Record<PreparingStep, { readonly body: string; readonly hint: string; readonly title: string }>
 > = {
@@ -59,7 +60,7 @@ const PREPARING_COPY: Readonly<
     title: "Checking private balances",
   },
   proving: {
-    body: "Going back discards this preparation.",
+    body: "No transaction is signed or sent until you confirm the review. Going back discards this preparation.",
     hint: PROVING_HINT,
     title: "Preparing to go private",
   },
