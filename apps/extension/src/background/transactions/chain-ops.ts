@@ -5,12 +5,14 @@
  */
 
 import { walletErrorMessage } from "@bramble/core/errors";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
 import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
+import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import type { Vault } from "@bramble/vault/schema";
 import {
@@ -43,6 +45,7 @@ import {
   networkRpcUrls,
   runActiveStateMutation,
   switchActiveNetwork,
+  vaultAccountAddresses,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import {
@@ -51,12 +54,18 @@ import {
   type UnlockSession,
 } from "../runtime/session";
 import { reviewOutsideExecution } from "./outside-execution-review";
+import { withTrustedRecipients } from "./trusted-recipients";
 
 /**
  * Dependencies for the provider chain and signing operations.
  */
 export type ChainOpsDeps = {
   readonly activeStateCoordinator?: ActiveStateCoordinator;
+  /**
+   * Activity log, read for the recipients this wallet paid: the OutsideExecution
+   * review refuses their lookalikes as the invoke route does (audit 163).
+   */
+  readonly activity: Pick<ActivityLog, "list">;
   /**
    * Recorded allowance log, read for OutsideExecution risk flags only (an
    * unreadable log flags each call on its own amount). Optional so partial
@@ -71,6 +80,8 @@ export type ChainOpsDeps = {
    * test stubs stay valid; a Ledger typed-data sign with no queue fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /** Watched shared accounts, trusted as the user's own; optional like the invoke route's. */
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   /**
    * Non-renewing session view: every handler here is reachable from a page on
@@ -106,7 +117,10 @@ const describeTypedData = (typedData: unknown): string => {
  * signature, or an error response the caller can deliver back to the dapp.
  */
 export const executeSignApproval = async (
-  deps: Pick<ChainOpsDeps, "ledgerSignQueue" | "preferencesStore" | "session" | "wallet"> & {
+  deps: Pick<
+    ChainOpsDeps,
+    "activity" | "ledgerSignQueue" | "multisigStore" | "preferencesStore" | "session" | "wallet"
+  > & {
     /** Overrides endpoint construction. Unset, each endpoint builds its own client. */
     readonly rpcProviderFor?: (nodeUrl: string) => RpcProvider;
   },
@@ -150,8 +164,15 @@ export const executeSignApproval = async (
     return { error: "invalid typed data" };
   }
   // An OutsideExecution's calls are re-reviewed against the trusted set as it
-  // is now, not as it was when the card was queued (audit 144).
-  const review = reviewOutsideExecution(input.typedData, account, preferences);
+  // is now, not as it was when the card was queued (audit 144), including the
+  // own accounts and paid recipients the invoke route trusts (audit 163).
+  const trusted = await withTrustedRecipients(
+    deps,
+    preferences,
+    await vaultAccountAddresses(wallet, passphrase),
+  );
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
+  const review = reviewOutsideExecution(input.typedData, account, trusted);
   if (review && "error" in review) {
     return review;
   }
@@ -239,10 +260,12 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   // An OutsideExecution authorizes calls the site can submit later without a
   // prompt, so it gets the invoke route's refusals and flags (audit 144),
   // including the standing-allowance totals the invoke route flags against.
+  // The trusted set is the invoke route's: contacts plus the user's own
+  // accounts and the recipients this wallet paid (audit 163).
   const review = reviewOutsideExecution(
     input.typedData,
     account,
-    preferences,
+    await withTrustedRecipients(deps, preferences, await vaultAccountAddresses(wallet, passphrase)),
     (await deps.allowanceStore?.list().catch(() => [])) ?? [],
   );
   if (review && "error" in review) {
