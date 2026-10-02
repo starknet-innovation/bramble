@@ -360,7 +360,7 @@
     "address": "0x4bff176c9426c57519057513c1635cebc905ffeb334b9b5515f55414329a58c",
     "pubkey": "0x51af56241a90565cda7d72927cc5729804d974d61492636438720d09dbcd5f0",
     "classAtDeploy": null,
-    "expected": "undeployed, native-USDC only — invisible to the ETH/STRK probe",
+    "expected": "undeployed, native-USDC only \u2014 invisible to the ETH/STRK probe",
     "detectability": "D3",
     "backedBy": "none",
     "state": {
@@ -425,7 +425,7 @@
     "address": "0x5145502dd5493a7f4e722681530ad75b467bc2dfec29aab8dc03cc12f2df793",
     "pubkey": "0x794dd41a0cf6e2dda547a17c2394e3c4cdb57e4b8fe2d9816778b9ae644deab",
     "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
-    "expected": "seed-owned key, unguessable address (salt != pubkey) — indexer-only",
+    "expected": "seed-owned key, unguessable address (salt != pubkey) \u2014 indexer-only",
     "detectability": "D4",
     "backedBy": "none",
     "state": {
@@ -446,7 +446,7 @@
     "address": "0x4d7657a476a1d7a7575e51c346e830bdefa27422484d637a1aa22a0cbf78af8",
     "pubkey": "0x132afe5d26e490fbe02cbec9c5cae8eef36da99b16e8737baa886366559d8f7",
     "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
-    "expected": "deployed by the dataset deployer via UDC unique=1 — deployer folds into the address",
+    "expected": "deployed by the dataset deployer via UDC unique=1 \u2014 deployer folds into the address",
     "detectability": "D4",
     "backedBy": "none",
     "state": {
@@ -466,7 +466,7 @@
     "address": "0x3d412831143ecbab3bd79b578372d4b87dbae3b243d5892ec739fa44e3c27c6",
     "pubkey": "0x60bd77a593ac683a0bd94d406a97b30f2e9925b758ba1bd9941e25a66904f65",
     "classAtDeploy": null,
-    "expected": "funded at a custom-salt counterfactual — invisible from the seed by any method",
+    "expected": "funded at a custom-salt counterfactual \u2014 invisible from the seed by any method",
     "detectability": "D5",
     "backedBy": "none",
     "state": {
@@ -544,7 +544,7 @@
     "address": "0x1af449dd78f05ca52c3d23404ab9fc84996e7097f61c6c31449deca4b5cf002",
     "pubkey": "",
     "classAtDeploy": null,
-    "expected": "smart account, backend salt; guardian 0x7601f48c…",
+    "expected": "smart account, backend salt; guardian 0x7601f48c\u2026",
     "detectability": "D4",
     "backedBy": "vendor-backend",
     "state": {
@@ -647,7 +647,7 @@
     "pubkey": "",
     "classAtDeploy": null,
     "expected": "app-made, 2.3 STRK, undeployed",
-    "detectability": "D3",
+    "detectability": "D2",
     "backedBy": "none",
     "state": {
       "appMade": true,
