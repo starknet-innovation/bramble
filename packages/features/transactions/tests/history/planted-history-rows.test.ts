@@ -6,9 +6,14 @@
  * or "Received" row with a one-click copy of the attacker's lookalike address.
  */
 import { describe, expect, test } from "bun:test";
+import type { ActivityEntry } from "@bramble/transactions/activity";
 import { createStarkscanClient } from "@bramble/transactions/starkscan";
 import { getStarkscanTransactionHistory } from "@bramble/transactions/starkscan-wallet";
-import { decodeTransferEvent, TRANSFER_EVENT_KEY } from "@bramble/transactions/tx-history";
+import {
+  decodeTransferEvent,
+  TRANSFER_EVENT_KEY,
+  withoutPlantedRows,
+} from "@bramble/transactions/tx-history";
 import { collectTransactionHistory, type HistoryRpc } from "@bramble/transactions/tx-history-scan";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 
@@ -144,5 +149,44 @@ describe("Starkscan history lane", () => {
   test("a tracked non-zero transfer is kept with its counterparty", async () => {
     const [entry] = await readStarkscan([starkscanTransfer({})]);
     expect(entry?.counterparty).toBe(LOOKALIKE);
+  });
+});
+
+describe("rows persisted before the filter", () => {
+  const row = (overrides: Partial<ActivityEntry>): ActivityEntry => ({
+    accountId: `SN_MAIN:${ACCOUNT}`,
+    amount: "1",
+    counterparty: LOOKALIKE,
+    hash: "0x10",
+    kind: "transfer",
+    networkId: "SN_MAIN",
+    status: "accepted",
+    submittedAt: 1,
+    summary: "Sent 1 STRK to 0x1176…f3d8",
+    token: "STRK",
+    ...overrides,
+  });
+
+  test("planted zero-value and outgoing untracked-token rows are dropped", () => {
+    expect(withoutPlantedRows([row({ amount: "0" })])).toEqual([]);
+    expect(withoutPlantedRows([row({ amount: "0", summary: "Received 0 STRK from x" })])).toEqual(
+      [],
+    );
+    expect(withoutPlantedRows([row({ summary: "Sent 1 TOKEN to x", token: "TOKEN" })])).toEqual([]);
+  });
+
+  test("an incoming untracked-token row stays but loses its copyable counterparty", () => {
+    const [kept] = withoutPlantedRows([
+      row({ summary: "Received 5 TOKEN from x", token: "TOKEN" }),
+    ]);
+    expect(kept?.summary).toBe("Received 5 TOKEN from x");
+    expect(kept?.counterparty).toBeUndefined();
+  });
+
+  test("wallet-recorded rows and genuine tracked transfers are untouched", () => {
+    const own = row({ amount: "0", origin: "wallet" });
+    const genuine = row({});
+    const call = row({ amount: "0", kind: "invoke" });
+    expect(withoutPlantedRows([own, genuine, call])).toEqual([own, genuine, call]);
   });
 });

@@ -322,4 +322,33 @@ describe("background reconciliation", () => {
       "0xdef",
     ]);
   });
+
+  test("history merge purges rows planted before the decoder filter (audit #163)", async () => {
+    const LOOKALIKE = "0x49d3ff1111111111111111111111111111111111111111111111111114dc8";
+    const planted = entry({
+      amount: "0",
+      counterparty: LOOKALIKE,
+      hash: "0x501",
+      status: "accepted",
+      summary: "Sent 0 ETH to 0x49d3…4dc8",
+      token: "ETH",
+    });
+    const spam = entry({
+      amount: "9",
+      counterparty: LOOKALIKE,
+      hash: "0x502",
+      status: "accepted",
+      summary: "Received 9 TOKEN from 0x49d3…4dc8",
+      token: "TOKEN",
+    });
+    const { deps } = makeDeps([planted, spam], {});
+    const scope = { accountId: ACCOUNT, networkId: "SN_MAIN" } as const;
+
+    const merged = await mergeReconciledHistory(deps, scope, []);
+
+    expect(merged.map((row) => row.hash)).toEqual(["0x502"]);
+    const stored = await deps.activity.list();
+    expect(stored.map((row) => row.hash)).toEqual(["0x502"]);
+    expect(stored.some((row) => row.counterparty === LOOKALIKE)).toBe(false);
+  });
 });

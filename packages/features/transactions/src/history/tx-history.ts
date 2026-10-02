@@ -229,6 +229,41 @@ const txKey = (entry: ActivityEntry): string =>
 const legKey = (entry: ActivityEntry): string =>
   `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
 
+// The symbol the explorer lane gives a token the wallet does not track.
+const UNTRACKED_TOKEN_SYMBOL = "TOKEN";
+
+const isZeroAmountLabel = (amount: string | undefined): boolean =>
+  amount !== undefined && /^0(?:\.0*)?$/.test(amount);
+
+/**
+ * Applies the planted-row rule of {@link decodeTransferEvent} and the explorer
+ * lane to rows already persisted before it existed (audit #163). Stored rows
+ * reach {@link mergeActivity} as `local` and are kept unconditionally, so a
+ * zero-value or untracked-token "Sent to" row planted under an older version
+ * would otherwise keep offering a one-click copy of the lookalike until the
+ * per-scope cap evicted it. Rows this wallet recorded itself (`origin:
+ * "wallet"`) are never touched. For rows of unknown origin: zero-amount
+ * transfers and outgoing untracked-token transfers are dropped, and an
+ * incoming untracked-token transfer keeps its row but loses its counterparty.
+ */
+export const withoutPlantedRows = (entries: readonly ActivityEntry[]): readonly ActivityEntry[] =>
+  entries.flatMap((entry): readonly ActivityEntry[] => {
+    if (entry.origin === "wallet" || entry.kind !== "transfer") {
+      return [entry];
+    }
+    if (isZeroAmountLabel(entry.amount)) {
+      return [];
+    }
+    if (entry.token !== UNTRACKED_TOKEN_SYMBOL) {
+      return [entry];
+    }
+    if (entry.summary.startsWith("Sent ")) {
+      return [];
+    }
+    const { counterparty: _untrusted, ...withoutCounterparty } = entry;
+    return [withoutCounterparty];
+  });
+
 /**
  * Merges the wallet's locally recorded activity with transactions discovered on
  * chain, sorted newest-first. A locally submitted transaction collapses every

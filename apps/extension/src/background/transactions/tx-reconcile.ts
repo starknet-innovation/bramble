@@ -20,7 +20,7 @@ import {
   type ActivityScope,
   activityForScope,
 } from "@bramble/transactions/activity";
-import { mergeActivity } from "@bramble/transactions/tx-history";
+import { mergeActivity, withoutPlantedRows } from "@bramble/transactions/tx-history";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
@@ -173,7 +173,10 @@ export const mergeReconciledHistory = (
   onChain: readonly ActivityEntry[],
 ): Promise<readonly ActivityEntry[]> =>
   runReconciliation(async () => {
-    const merged = mergeActivity(activityForScope(await deps.activity.list(), scope), onChain);
+    // Stored rows planted before audit #163's decoder filter are purged here,
+    // and replaceScope writes the cleaned scope back.
+    const stored = withoutPlantedRows(activityForScope(await deps.activity.list(), scope));
+    const merged = mergeActivity(stored, onChain);
     await deps.activity.replaceScope?.(merged, scope).catch(() => undefined);
     return merged;
   });
