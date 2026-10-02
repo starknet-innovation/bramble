@@ -195,6 +195,15 @@ export const tokenSpamReasons = (token: SpamCandidate): readonly SpamReason[] =>
  */
 export const isLikelySpam = (token: SpamCandidate): boolean => tokenSpamReasons(token).length > 0;
 
+// Every curated token on every network, so the per-entry network comparison in
+// isCuratedToken is the single network guard: the same contract and ticker on
+// another network (ETH/STRK share addresses everywhere; a mainnet-only token
+// does not exist on Sepolia) must not match.
+const CURATED_TOKENS: readonly RegistryToken[] = [
+  ...Object.values(REGISTRY).flat(),
+  ...DEFAULT_TOKENS,
+];
+
 /**
  * Checks whether a token is exactly a curated one: a registry or default-tracked
  * token on the same network with the same contract, ticker, and decimals. Used
@@ -203,7 +212,7 @@ export const isLikelySpam = (token: SpamCandidate): boolean => tokenSpamReasons(
  * contract under a site-supplied ticker or decimals) is not curated.
  */
 export const isCuratedToken = (token: SpamCandidate): boolean =>
-  [...REGISTRY[token.networkId], ...DEFAULT_TOKENS].some(
+  CURATED_TOKENS.some(
     (known) =>
       known.networkId === token.networkId &&
       sameFelt(known.address, token.address) &&
