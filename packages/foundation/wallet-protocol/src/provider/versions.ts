@@ -38,3 +38,13 @@ export const API_VERSION_PATTERN =
  */
 export const isApiVersion = (value: unknown): value is string =>
   typeof value === "string" && API_VERSION_PATTERN.test(value);
+
+/**
+ * True when a method's optional `api_version` param is absent or well-formed.
+ * Every non-discovery param parser checks it this way, then drops it: only the
+ * discovery methods negotiate a version, so a valid one never changes the
+ * runtime message and a malformed one fails the whole request closed. Pure
+ * predicate over untrusted page input; never throws.
+ */
+export const isOptionalApiVersion = (value: unknown): boolean =>
+  value === undefined || isApiVersion(value);

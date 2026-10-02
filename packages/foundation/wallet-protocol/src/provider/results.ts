@@ -42,7 +42,7 @@ import {
   providerStrk20Commitment,
 } from "../privacy/strk20-bridge";
 import type { ProviderMethod } from "./methods";
-import { isApiVersion } from "./versions";
+import { isApiVersion, isOptionalApiVersion } from "./versions";
 
 /**
  * Page-facing account view: only the already-public address and network id.
@@ -225,7 +225,7 @@ export const isRequestAccountsParams = (params: Json | undefined): boolean =>
   (isRecord(params) &&
     hasOnlyKnownKeys(params, ["api_version", "silent_mode"]) &&
     (params["silent_mode"] === undefined || typeof params["silent_mode"] === "boolean") &&
-    (params["api_version"] === undefined || isApiVersion(params["api_version"])));
+    isOptionalApiVersion(params["api_version"]));
 
 /**
  * Narrows an unknown value to a spec declare result whose `transaction_hash` is
@@ -254,34 +254,18 @@ export const providerStringArrayResult = (result: unknown): readonly string[] | 
 
 /**
  * Reads a spec switch-chain param (`{ chainId }`) matching the CHAIN_ID pattern.
- * The spec-defined optional `silent_mode` (boolean) is accepted so a conforming
- * request carrying it is not rejected; the flag itself is not acted on here.
+ * The spec-defined optional `silent_mode` (boolean) and `api_version` are
+ * accepted so a conforming request carrying them is not rejected; neither is
+ * acted on here, and a malformed value still rejects the request.
  */
 export const providerSwitchChainId = (params: Json | undefined): string | null =>
   isRecord(params) &&
-  hasOnlyKnownKeys(params, ["chainId", "silent_mode"]) &&
+  hasOnlyKnownKeys(params, ["api_version", "chainId", "silent_mode"]) &&
   (params["silent_mode"] === undefined || typeof params["silent_mode"] === "boolean") &&
+  isOptionalApiVersion(params["api_version"]) &&
   isHexChainId(params["chainId"])
     ? params["chainId"]
     : null;
-
-/**
- * Extracts the SNIP-12 typed data from sign params, accepting the spec
- * `{ typed_data }` wrapper, the legacy `{ typedData }` wrapper, and a bare
- * typed-data object passed directly as params.
- */
-export const readTypedDataParam = (params: Json | undefined): Json | null => {
-  if (params === undefined) {
-    return null;
-  }
-  if (isRecord(params) && Object.hasOwn(params, "typed_data") && isJson(params["typed_data"])) {
-    return params["typed_data"];
-  }
-  if (isRecord(params) && Object.hasOwn(params, "typedData") && isJson(params["typedData"])) {
-    return params["typedData"];
-  }
-  return params;
-};
 
 // Pads a list of felts to PADDED_FELT, returning null if any entry will not pad.
 const padFeltList = (values: readonly unknown[]): string[] | null => {
