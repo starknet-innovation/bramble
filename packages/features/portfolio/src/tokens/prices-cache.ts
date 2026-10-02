@@ -110,9 +110,22 @@ export const cacheCovers = (cache: PriceCache, wanted: readonly string[]): boole
   return wanted.every((address) => known.has(address));
 };
 
+/** A copy of `record` without the given keys. */
+const withoutKeys = <T>(
+  record: Readonly<Record<string, T>>,
+  keys: ReadonlySet<string>,
+): Record<string, T> =>
+  Object.fromEntries(Object.entries(record).filter(([key]) => !keys.has(key)));
+
 /**
  * Folds the answered outcomes into the cache, stamping a refresh time only on
  * the addresses that actually answered so a failed leg keeps its old age.
+ *
+ * An address the feed answered without a usable price (an empty body, or an
+ * entry missing a currency) loses its previously cached price: the refresh
+ * stamp vouches for what the cache now holds, so it must not freshen an old
+ * price the feed no longer stands behind. Keeping it would let a months-old
+ * STRK price bound the STRK20 relay fee as if current (mc-wallet #357).
  */
 export const mergeAnsweredPrices = (
   cache: PriceCache,
@@ -127,12 +140,15 @@ export const mergeAnsweredPrices = (
     {},
     ...answered.map((outcome) => (outcome.ok ? outcome.changes : {})),
   ) as Record<string, number>;
+  const unpriced = new Set(
+    answered.map((outcome) => outcome.address).filter((address) => fetched[address] === undefined),
+  );
   return {
-    changes: { ...(cache.changes ?? {}), ...fetchedChanges },
+    changes: { ...withoutKeys(cache.changes ?? {}, unpriced), ...fetchedChanges },
     checked: [
       ...new Set([...(cache.checked ?? []), ...answered.map((outcome) => outcome.address)]),
     ],
-    prices: { ...cache.prices, ...fetched },
+    prices: { ...withoutKeys(cache.prices, unpriced), ...fetched },
     refreshed: {
       ...(cache.refreshed ?? {}),
       ...Object.fromEntries(answered.map((outcome) => [outcome.address, answeredAt])),

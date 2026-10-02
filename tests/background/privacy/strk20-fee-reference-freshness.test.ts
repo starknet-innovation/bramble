@@ -19,12 +19,19 @@ const notOk = (): HttpResponse => ({ json: async () => ({}), ok: false });
 
 const harness = () => {
   const clock = { value: 1_000 };
-  const feed = { strkUp: true, strkUsd: 10 };
+  const feed: { strkBody: "price" | "empty" | "usd-only"; strkUp: boolean; strkUsd: number } = {
+    strkBody: "price",
+    strkUp: true,
+    strkUsd: 10,
+  };
   const service = createPriceService({
     http: async (url) => {
       if (url.toLowerCase().includes(STRK_KEY)) {
         const usd = feed.strkUsd;
-        return feed.strkUp ? ok({ [STRK_TOKEN_ADDRESS]: { eur: usd, gbp: usd, usd } }) : notOk();
+        if (!feed.strkUp) return notOk();
+        if (feed.strkBody === "empty") return ok({});
+        if (feed.strkBody === "usd-only") return ok({ [STRK_TOKEN_ADDRESS]: { usd } });
+        return ok({ [STRK_TOKEN_ADDRESS]: { eur: usd, gbp: usd, usd } });
       }
       return ok({ [USDC]: { eur: 1, gbp: 1, usd: 1 } });
     },
@@ -71,4 +78,19 @@ describe("createStrk20FeeReference over a partially refreshed price cache", () =
     // 6 STRK at $0.10 is 0.6 USDC, not the 60 USDC the day-0 price would give.
     await expect(h.quote()).resolves.toBe(600_000n);
   });
+
+  // A 200 that carries no usable STRK price is an answer, but not a price: it
+  // must not stamp the old price as current (mc-wallet #357).
+  for (const body of ["empty", "usd-only"] as const) {
+    test(`a 200 whose STRK body is ${body} does not freshen the old price`, async () => {
+      const h = harness();
+      await expect(h.quote()).resolves.toBe(60_000_000n);
+      h.clock.value += 90 * DAY;
+      h.feed.strkBody = body;
+      h.feed.strkUsd = 0.1;
+      await expect(h.quote()).resolves.toBeNull();
+      h.clock.value += 1_000;
+      await expect(h.quote()).resolves.toBeNull();
+    });
+  }
 });
