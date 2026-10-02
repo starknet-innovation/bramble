@@ -6,6 +6,8 @@
  * switch prompt can never reconnect an origin the user has disconnected.
  */
 import { describe, expect, test } from "bun:test";
+import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
+import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
@@ -87,6 +89,96 @@ const walletStub = (connected: () => readonly AccountRef[], grants: string[] = [
 
 const switchMessage = { chainId: MAINNET_CHAIN_ID, origin, type: "wallet.switchChain" as const };
 
+const sepolia: AccountRef = {
+  ...account,
+  address: "0x9999",
+  id: "SN_SEPOLIA:0x9999",
+  networkId: "SN_SEPOLIA",
+};
+
+// A stateful vault that answers getGrantedAccounts through the real
+// active-account-only policy, so a test cannot pass on a grant list the vault
+// could never return. `grants` and `derived` record writes; the switch must
+// never grant.
+const vaultWallet = (input: {
+  readonly accounts: readonly AccountRef[];
+  readonly active: string;
+  readonly grant: readonly string[];
+}) => {
+  let accounts = [...input.accounts];
+  let active = input.active;
+  const grants: string[] = [];
+  const derived: string[] = [];
+  const snapshot = (): Vault => ({
+    accounts,
+    accountSecrets: [],
+    activeAccountId: active,
+    importedSeeds: [],
+    mnemonic: null,
+    originGrants: [{ accountIds: [...input.grant], origin }],
+    schemaVersion: 10,
+    signingKeys: [],
+  });
+  const wallet = {
+    ...walletStub(() => []),
+    async ensureNetworkAccount() {
+      accounts = [...accounts, account];
+      derived.push(account.id);
+      active = account.id;
+      return account;
+    },
+    async getGrantedAccounts(target: string) {
+      const current = snapshot();
+      return grantedAccountIdsFor(current, target).flatMap((id) =>
+        current.accounts.filter((stored) => stored.id === id),
+      );
+    },
+    async grantOrigin(grant: { readonly accountId?: string }) {
+      grants.push(grant.accountId ?? active);
+      return [];
+    },
+    async readVault() {
+      return snapshot();
+    },
+    async setActiveAccount(selection: { readonly accountId: string }) {
+      active = selection.accountId;
+      return accounts.find((stored) => stored.id === active) ?? account;
+    },
+  };
+  return { activeId: () => active, derived, grants, wallet };
+};
+
+type ApprovedSwitch = {
+  readonly chainId?: string;
+  readonly ok?: boolean;
+  readonly pending: readonly {
+    readonly existingGrant?: boolean;
+    readonly kind: string;
+    readonly origin: string;
+  }[];
+};
+
+// Queues a Mainnet switch from the dapp, approves it in the panel, and reads
+// what the page can see afterwards without another prompt.
+const approveSwitch = async (wallet: ReturnType<typeof vaultWallet>["wallet"]) => {
+  const session = createUnlockSession();
+  session.unlock(vaultPassphrase);
+  const handler = createMessageHandler(wallet, testExtension, { session });
+  const held = handler(switchMessage, contentSender);
+  await flushHeld();
+  const id = await latestApprovalId(handler, extensionSender);
+  const approved = (await handler(
+    { id, type: "wallet.approveOrigin" },
+    extensionSender,
+  )) as ApprovedSwitch;
+  const visible = (
+    (await handler({ origin, type: "wallet.getGrantedAccounts" }, contentSender)) as {
+      readonly accounts: readonly AccountRef[];
+    }
+  ).accounts;
+  return { approved, held, visible };
+};
+
 describe("switchChain grant gate (A-M1)", () => {
   test("lets a connected origin switch the active network after approval", async () => {
     const session = createUnlockSession();
@@ -151,121 +243,58 @@ describe("switchChain grant gate (A-M1)", () => {
     // Mainnet account, which the user never connected. The card names no
     // account, so approving it must not share one: no grant, and the standard
     // reconnect prompt (which does name the account) is queued instead.
-    const session = createUnlockSession();
-    session.unlock(vaultPassphrase);
-    const sepolia: AccountRef = {
-      ...account,
-      address: "0x9999",
-      id: "SN_SEPOLIA:0x9999",
-      networkId: "SN_SEPOLIA",
-    };
-    const grants: string[] = [];
-    const handler = createMessageHandler(
-      walletStub(() => [sepolia], grants),
-      testExtension,
-      { session },
-    );
-
-    const held = handler(switchMessage, contentSender);
-    await flushHeld();
-    const id = await latestApprovalId(handler, extensionSender);
-    const approved = (await handler({ id, type: "wallet.approveOrigin" }, extensionSender)) as {
-      readonly pending: readonly {
-        readonly existingGrant?: boolean;
-        readonly kind: string;
-        readonly origin: string;
-      }[];
-    };
+    const vault = vaultWallet({
+      accounts: [sepolia, account],
+      active: sepolia.id,
+      grant: [sepolia.id],
+    });
+    const { approved, held, visible } = await approveSwitch(vault.wallet);
     await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
-    expect(grants).toEqual([]);
+    expect(vault.grants).toEqual([]);
+    expect(vault.activeId()).toBe(account.id);
+    expect(visible).toEqual([]);
     expect(approved.pending).toEqual([
       expect.objectContaining({ existingGrant: true, kind: "connect", origin }),
     ]);
   });
 
   test("does not grant an account the switch had to derive on the target network", async () => {
-    const session = createUnlockSession();
-    session.unlock(vaultPassphrase);
-    const sepolia: AccountRef = {
-      ...account,
-      address: "0x9999",
-      id: "SN_SEPOLIA:0x9999",
-      networkId: "SN_SEPOLIA",
-    };
-    const grants: string[] = [];
-    let derived = 0;
-    const stub = walletStub(() => [sepolia], grants);
-    const handler = createMessageHandler(
-      {
-        ...stub,
-        async ensureNetworkAccount() {
-          derived += 1;
-          return account;
-        },
-        async readVault() {
-          const vault = await stub.readVault();
-          return { ...vault, accounts: [sepolia], activeAccountId: sepolia.id };
-        },
-      },
-      testExtension,
-      { session },
-    );
-
-    const held = handler(switchMessage, contentSender);
-    await flushHeld();
-    const id = await latestApprovalId(handler, extensionSender);
-    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    const vault = vaultWallet({ accounts: [sepolia], active: sepolia.id, grant: [sepolia.id] });
+    const { held, visible } = await approveSwitch(vault.wallet);
     await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
-    expect(derived).toBe(1);
-    expect(grants).toEqual([]);
+    expect(vault.derived).toEqual([account.id]);
+    expect(vault.grants).toEqual([]);
+    expect(visible).toEqual([]);
   });
 
   test("lands on the account the origin already holds on the target network", async () => {
-    // Granted on both networks: the switch selects the origin's granted Mainnet
-    // account rather than the vault's first Mainnet account, and grants nothing.
-    const session = createUnlockSession();
-    session.unlock(vaultPassphrase);
-    const sepolia: AccountRef = {
-      ...account,
-      address: "0x9999",
-      id: "SN_SEPOLIA:0x9999",
-      networkId: "SN_SEPOLIA",
-    };
+    // The page only ever sees the active (Sepolia) account, so the account it
+    // holds on Mainnet is read from the stored grant: the switch selects it
+    // over the vault's first Mainnet account, grants nothing, and queues no
+    // reconnect prompt because the dapp is still connected after the switch.
     const grantedMainnet: AccountRef = { ...account, address: "0x7777", id: "SN_MAIN:0x7777" };
-    const grants: string[] = [];
-    const selected: string[] = [];
-    const stub = walletStub(() => [sepolia, grantedMainnet], grants);
-    const handler = createMessageHandler(
-      {
-        ...stub,
-        async readVault() {
-          const vault = await stub.readVault();
-          return {
-            ...vault,
-            accounts: [sepolia, account, grantedMainnet],
-            activeAccountId: sepolia.id,
-          };
-        },
-        async setActiveAccount(input: { readonly accountId: string }) {
-          selected.push(input.accountId);
-          return input.accountId === grantedMainnet.id ? grantedMainnet : account;
-        },
-      },
-      testExtension,
-      { session },
-    );
-
-    const held = handler(switchMessage, contentSender);
-    await flushHeld();
-    const id = await latestApprovalId(handler, extensionSender);
-    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      chainId: MAINNET_CHAIN_ID,
-      ok: true,
-      pending: [],
+    const vault = vaultWallet({
+      accounts: [sepolia, account, grantedMainnet],
+      active: sepolia.id,
+      grant: [sepolia.id, grantedMainnet.id],
     });
+    const { approved, held, visible } = await approveSwitch(vault.wallet);
+    expect(approved).toEqual({ chainId: MAINNET_CHAIN_ID, ok: true, pending: [] });
     await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
-    expect(selected).toEqual([grantedMainnet.id]);
-    expect(grants).toEqual([]);
+    expect(vault.activeId()).toBe(grantedMainnet.id);
+    expect(vault.grants).toEqual([]);
+    expect(visible).toEqual([grantedMainnet]);
+  });
+
+  test("ignores a grant id the vault holds on another network", async () => {
+    // Granted only on Sepolia: none of its ids may steer the Mainnet landing.
+    const vault = vaultWallet({
+      accounts: [sepolia, account],
+      active: sepolia.id,
+      grant: [sepolia.id],
+    });
+    await approveSwitch(vault.wallet);
+    expect(vault.activeId()).toBe(account.id);
   });
 
   test("refuses a stale switch card once the origin has been disconnected", async () => {

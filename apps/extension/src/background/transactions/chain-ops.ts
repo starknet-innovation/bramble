@@ -11,6 +11,7 @@ import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
 import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
+import type { Vault } from "@bramble/vault/schema";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
@@ -321,6 +322,36 @@ export const handleChainOps = async (
   return handler ? handler(deps, message, sender) : null;
 };
 
+// The id of a vault account on `networkId` that `origin`'s stored grant
+// covers, or undefined when the grant holds none there.
+const heldAccountOn = (
+  vault: Pick<Vault, "accounts" | "originGrants">,
+  origin: string,
+  networkId: StarknetNetworkId,
+): string | undefined => {
+  const grantIds = vault.originGrants.find((grant) => grant.origin === origin)?.accountIds ?? [];
+  return vault.accounts.find(
+    (account) => account.networkId === networkId && grantIds.includes(account.id),
+  )?.id;
+};
+
+// Queues the reconnect prompt only when the account the switch landed on is
+// really outside the origin's grant, never for a dapp still connected after it.
+const promptWhenLandedOutsideGrant = async (
+  deps: Pick<ChainOpsDeps, "wallet"> & { readonly approvals?: Pick<ApprovalQueue, "request"> },
+  origin: string,
+  passphrase: string,
+  connected: readonly unknown[],
+): Promise<void> => {
+  if (!deps.approvals) {
+    return;
+  }
+  const landed = await deps.wallet.getGrantedAccounts(origin, passphrase);
+  if (landed.length === 0) {
+    promptReconnectForStaleGrant(deps.approvals, connected, origin);
+  }
+};
+
 /**
  * Applies a user-approved chain switch: sets the active network and returns the
  * new chain id for the dapp. Refuses with `origin not connected` when the origin
@@ -358,23 +389,27 @@ export const executeSwitchChainApproval = async (
     if (connected.length === 0) {
       return { error: "origin not connected" };
     }
-    const held = connected.find((account) => account.networkId === input.networkId);
+    // `connected` is at most the active account (the page-visible view), so the
+    // account the origin holds on the target network comes from its stored
+    // grant, which keeps every account the user ever approved for it.
+    const held = heldAccountOn(await wallet.readVault(passphrase), input.origin, input.networkId);
+    if (!authorized.isCurrent()) {
+      return { error: "wallet locked" };
+    }
     await switchActiveNetwork(
       wallet,
       session,
       preferencesStore,
       input.networkId,
       undefined,
-      held ? { preferredAccountId: held.id } : {},
+      held ? { preferredAccountId: held } : {},
     );
     if (!authorized.isCurrent()) {
       return { error: "wallet locked" };
     }
     // Exposure only narrows (audit 124): an account the user never connected
     // is not shared because they approved a network change.
-    if (!held && deps.approvals) {
-      promptReconnectForStaleGrant(deps.approvals, connected, input.origin);
-    }
+    await promptWhenLandedOutsideGrant(deps, input.origin, passphrase, connected);
     return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
   });
 };

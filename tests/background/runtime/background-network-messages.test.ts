@@ -180,9 +180,11 @@ describe("background network messages", () => {
           activeAccountId = mainnetAccount.id;
           return mainnetAccount;
         },
+        // The real vault rule: a page sees at most the active account, and
+        // only while the grant covers it.
         async getGrantedAccounts(origin: string) {
-          return origin === "https://example.com"
-            ? accounts.filter((stored) => grantedAccountIds.includes(stored.id))
+          return origin === "https://example.com" && grantedAccountIds.includes(activeAccountId)
+            ? accounts.filter((stored) => stored.id === activeAccountId)
             : [];
         },
         async generateMnemonic() {
