@@ -1,7 +1,7 @@
 /**
  * Token management and detail flow screens. The tokens flow adds custom
- * tokens, auto-detects held registry tokens, and hides or reveals tracked
- * ones; the detail flow shows price, a self-drawn 7-day sparkline, holdings,
+ * tokens, auto-detects held registry tokens, hides or reveals tracked ones,
+ * and removes ones that are not built in; the detail flow shows price, a self-drawn 7-day sparkline, holdings,
  * and contract facts. Pure templates — bindings live in ./tokens-ui.ts.
  */
 
@@ -13,9 +13,9 @@ import type {
   WalletPreferences,
 } from "@bramble/settings/preferences";
 import { emptyState, receipt } from "@bramble/ui-kit/content";
-import { button } from "@bramble/ui-kit/controls";
+import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { isDefaultToken, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -88,6 +88,16 @@ const trackedRow = (
       ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
     </div>
     ${toggle}
+    ${
+      isDefaultToken(token)
+        ? ""
+        : iconButton({
+            attributes: { "data-token-remove": token.id },
+            icon: "x",
+            label: `Remove ${token.symbol}`,
+            tone: "danger",
+          })
+    }
   </li>`;
 };
 

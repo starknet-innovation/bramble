@@ -1,7 +1,7 @@
 /**
  * Bindings for the tokens flow and token detail navigation: add a custom
- * token, auto-detect held tokens with one-tap add, hide or reveal tracked
- * tokens, and open a token's detail screen from a balance row.
+ * token, auto-detect held tokens with one-tap add, hide, reveal or remove
+ * tracked tokens, and open a token's detail screen from a balance row.
  */
 
 import { escapeHtml } from "@bramble/core/html";
@@ -149,6 +149,30 @@ const bindToggles = (deps: TokensUiDeps): void => {
   });
 };
 
+// Removal is the way out of a token a dapp added (Sherlock audit 134); the
+// background refuses built-in tokens even if a stale row offers the control.
+const bindRemove = (deps: TokensUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-token-remove]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tokenId = button.dataset["tokenRemove"];
+      if (!tokenId) {
+        return;
+      }
+      buttonBusy(button, true);
+      void deps.wallet.removeToken(tokenId).then(
+        async () => {
+          showToast("Token removed", "success", deps.app);
+          await rerender(deps);
+        },
+        (error: unknown) => {
+          showToast(errorMessage(error, "Couldn't remove that token"), "error", deps.app);
+          buttonBusy(button, false);
+        },
+      );
+    });
+  });
+};
+
 const bindOpenDetail = (deps: TokensUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-token-detail]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -167,5 +191,6 @@ export const bindTokens = (deps: TokensUiDeps): void => {
   bindAddToken(deps);
   bindDetect(deps);
   bindToggles(deps);
+  bindRemove(deps);
   bindOpenDetail(deps);
 };

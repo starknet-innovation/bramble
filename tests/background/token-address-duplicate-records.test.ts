@@ -137,6 +137,33 @@ describe("token address canonicalization", () => {
     expect(new Set(numeric).size).toBe(numeric.length);
   });
 
+  test("re-adding a tracked address that now reports another symbol changes nothing", async () => {
+    // A token contract can rename itself, or a dapp-supplied symbol can differ
+    // from the chain's. Either way the id differs, so only an address check
+    // stops a second record, and a hide flag for a record that never existed.
+    const { handler, preferencesStore } = makeHandler();
+    const ADDRESS = "0x0000000000000000000000000000000000000000000000000000000000000abc";
+    await preferencesStore.upsertToken(
+      {
+        address: ADDRESS,
+        decimals: 18,
+        name: "Prize Token",
+        networkId: "SN_MAIN",
+        symbol: "PRZ",
+      },
+      "user",
+    );
+    const before = await preferencesStore.read();
+
+    await expect(
+      handler({ address: ADDRESS, type: "wallet.addToken" }, sender),
+    ).resolves.toMatchObject({ ok: true });
+
+    const after = await preferencesStore.read();
+    expect(after.tokens).toEqual(before.tokens);
+    expect(after.hiddenTokens ?? []).toEqual(before.hiddenTokens ?? []);
+  });
+
   test("derives the stored hide id from the shared builder", async () => {
     const { preferencesStore } = makeHandler();
     const seeded = (await preferencesStore.read()).tokens.find(

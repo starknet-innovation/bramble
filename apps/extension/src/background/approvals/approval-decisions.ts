@@ -11,6 +11,7 @@
  * decision instead of substituting its own figure.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
 import { isLikelySpam } from "@bramble/portfolio/token-registry";
@@ -110,20 +111,31 @@ const settleExecutor = (result: RuntimeResponse): ApplyResult => ({
   status: "settle",
 });
 
+// The store treats an address already tracked on the network as watched
+// without writing (a second origin's card for the same token) and refuses past
+// its added-token cap; that refusal reaches the dapp and the panel as is.
 const applyWatchAsset: ApproveApplier = async (deps, { approval }) => {
   if (!approval.token) {
     return reject(NOT_FOUND);
   }
   // Recorded as dapp-supplied (audit 171): its metadata came from the site, so
   // the call reviewer does not trust it unless it matches a curated token.
-  await deps.preferencesStore.upsertToken(approval.token, "dapp");
+  let stored: Awaited<ReturnType<WalletPreferencesStore["upsertToken"]>>;
+  try {
+    stored = await deps.preferencesStore.upsertToken(approval.token, "dapp");
+  } catch (error) {
+    if (error instanceof WalletError) {
+      return reject({ error: error.message });
+    }
+    throw error;
+  }
   // Same rule as wallet.addToken: a dapp-suggested token that borrows a known
-  // ticker or carries malformed metadata is stored hidden.
-  if (isLikelySpam(approval.token)) {
-    await deps.preferencesStore.setTokenHidden({
-      hidden: true,
-      tokenId: withTokenId(approval.token).id,
-    });
+  // ticker or carries malformed metadata is stored hidden. Only when the card
+  // wrote its own record: an address already tracked under another id is left
+  // as it is, and a hide flag for the card's id would point at nothing.
+  const tokenId = withTokenId(approval.token).id;
+  if (isLikelySpam(approval.token) && stored.tokens.some((token) => token.id === tokenId)) {
+    await deps.preferencesStore.setTokenHidden({ hidden: true, tokenId });
   }
   return {
     respond: (listPending) => ({ ok: true, pending: listPending() }),

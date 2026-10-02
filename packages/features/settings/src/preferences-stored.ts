@@ -45,6 +45,7 @@ import {
   withTokenId,
 } from "@bramble/wallet-model/preferences";
 import { type AccountGroups, isAccountGroups } from "./groups";
+import { compactStoredCustomNetworks } from "./preferences-custom-networks";
 import type { WalletPreferences } from "./preferences-types";
 
 const PREFERENCE_KEYS: readonly string[] = [
@@ -279,6 +280,8 @@ const normalizedAccountGroups = (value: unknown): unknown =>
  * from them, and records that name the same address on the same network are
  * collapsed to one — carrying hidden-token and dapp-token ids across the
  * rename so a token hidden (or dapp-supplied) before the collapse stays so.
+ * Stored custom networks are shrunk to their bounded shape (Sherlock audit
+ * 153), so a record a dapp filled is written back small on the next mutation.
  *
  * Deterministic and total: a non-record value, or a collection this build
  * cannot read, is returned untouched for {@link isWalletPreferences} to reject.
@@ -293,11 +296,14 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
   const tokens = rebuildCollection(value["tokens"], rebuiltToken);
   const addressBook = rebuildCollection(value["addressBook"], rebuiltContact);
   const hasAccountAliases = value["accountLabels"] !== undefined || value["groups"] !== undefined;
-  if (!tokens && !addressBook && !hasAccountAliases) {
+  const customNetworks = compactStoredCustomNetworks(value["customNetworks"]);
+  const networksChanged = customNetworks !== value["customNetworks"];
+  if (!tokens && !addressBook && !hasAccountAliases && !networksChanged) {
     return value;
   }
   return {
     ...value,
+    ...(networksChanged ? { customNetworks } : {}),
     ...(value["accountLabels"] === undefined
       ? {}
       : { accountLabels: normalizedAccountLabels(value["accountLabels"]) }),

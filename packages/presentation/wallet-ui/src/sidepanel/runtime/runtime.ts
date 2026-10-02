@@ -287,6 +287,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "token visibility update failed");
     },
+    async removeToken(tokenId: string): Promise<void> {
+      const response = await sendMessage({ tokenId, type: "wallet.removeToken" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "remove token failed");
+    },
     async loadPendingApprovals(): Promise<readonly PendingApproval[]> {
       // Per-entry: one malformed prompt must not blank the queue (MCW-V09-106).
       return readPendingApprovals(await sendMessage({ type: "wallet.pendingApprovals" })) ?? [];

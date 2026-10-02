@@ -56,3 +56,17 @@ export const readSetTokenHiddenInput = (
   message["tokenId"].length <= 200
     ? { hidden: message["hidden"], tokenId: message["tokenId"] }
     : null;
+
+/**
+ * Parses a request to stop tracking one token, keyed by preference token id.
+ * Whether the token may be removed is decided by the preferences store.
+ */
+export const readRemoveTokenInput = (message: unknown): { readonly tokenId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["tokenId", "type"]) &&
+  message["type"] === "wallet.removeToken" &&
+  typeof message["tokenId"] === "string" &&
+  message["tokenId"].length > 0 &&
+  message["tokenId"].length <= 200
+    ? { tokenId: message["tokenId"] }
+    : null;

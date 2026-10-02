@@ -53,6 +53,8 @@ export type KeyBoundaryLiveIds = {
   readonly multisigSubmitIntentId: string;
   /** Id of the watched NFT seeded into the preferences store. */
   readonly nftId: string;
+  /** Tracks a fresh non-default token and returns its id, for removal. */
+  readonly removableTokenId: () => Promise<string>;
   /** Queues an unanswered dapp invoke approval and returns its id. */
   readonly invokeApprovalId: () => Promise<string>;
   /** Runs a private-send preparation and returns its one-time id. */

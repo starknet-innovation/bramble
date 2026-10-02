@@ -54,6 +54,16 @@ export const isServiceUrlList = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.length > 0 && value.every(isServiceUrl) && hasUniqueStrings(value);
 
 /**
+ * Checks an endpoint list a dapp sent: an {@link isServiceUrlList} with at most
+ * `maxEntries` entries. The count bound keeps one approval from writing
+ * hundreds of kilobytes of URLs into stored preferences (Sherlock audit 153).
+ */
+export const isBoundedServiceUrlList = (
+  value: unknown,
+  maxEntries: number,
+): value is readonly string[] => isServiceUrlList(value) && value.length <= maxEntries;
+
+/**
  * Checks an optional endpoint list: absent, or a well-formed
  * {@link isServiceUrlList}. Anything else — an empty list, a malformed entry, a
  * repeat — is rejected.

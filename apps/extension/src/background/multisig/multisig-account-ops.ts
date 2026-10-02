@@ -3,6 +3,7 @@ import type { TokenBalance } from "@bramble/starknet/rpc";
 import { systemClock } from "@bramble/transactions/activity";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { cachedBalances } from "../portfolio/balance-snapshots";
+import { readPortfolioBalances } from "../portfolio/portfolio-balances";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
@@ -101,14 +102,18 @@ const multisigBalances = async (
       networkId: context.record.networkId,
       now: (deps.now ?? systemClock)(),
     },
-    async (): Promise<readonly TokenBalance[]> =>
-      deps.runtimeRpc.getTokenBalances({
-        accountAddress: context.record.address,
-        rpcUrls: context.rpcUrls,
-        tokens: (await deps.preferencesStore.read()).tokens.filter(
-          (token) => token.networkId === context.record.networkId,
-        ),
-      }),
+    async (previous): Promise<readonly TokenBalance[]> =>
+      readPortfolioBalances(
+        deps.runtimeRpc,
+        {
+          accountAddress: context.record.address,
+          rpcUrls: context.rpcUrls,
+          tokens: (await deps.preferencesStore.read()).tokens.filter(
+            (token) => token.networkId === context.record.networkId,
+          ),
+        },
+        previous,
+      ),
   );
   if (!snapshot) return { error: "multisig balance snapshot unavailable" };
   return {

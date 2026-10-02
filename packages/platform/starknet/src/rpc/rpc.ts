@@ -2,11 +2,12 @@
  * Starknet RPC wallet operations backed by starknet-js and Krusty signatures.
  */
 import { WalletError } from "@bramble/core/errors";
-import { isDecimalAmountText, isSafeDecimals } from "@bramble/core/json";
+import { isSafeDecimals } from "@bramble/core/json";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import { type Call, CallData, cairo, type RpcProvider, shortString } from "starknet";
+import { parseTokenAmount } from "./balances";
 import type { FeeEstimate } from "./fee-bounds";
 import {
   isTransactionNotFoundError,
@@ -14,9 +15,7 @@ import {
   type StarkHashSigner,
   withRpcFallback,
 } from "./provider";
-import { decodeUint256Response } from "./rpc-assets";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
-import type { TokenBalance } from "./token-balance";
 
 /**
  * Re-exported declare-transaction submission so callers keep one RPC import path.
@@ -42,6 +41,15 @@ export {
   getDeploymentStatus,
   submitAccountDeployment,
 } from "../transactions/deployment";
+/**
+ * Re-exported amount helpers and balance reads so callers keep one RPC import path.
+ */
+export {
+  type BalanceInput,
+  formatTokenAmount,
+  getTokenBalances,
+  parseTokenAmount,
+} from "./balances";
 /**
  * Re-exported provider helpers so existing callers keep one import path.
  */
@@ -92,15 +100,6 @@ export { isTokenBalance, type TokenBalance } from "./token-balance";
 export type TransferSubmission = {
   readonly call: Call;
   readonly transactionHash: string;
-};
-
-/**
- * Inputs for reading tracked ERC20 balances.
- */
-export type BalanceInput = {
-  readonly accountAddress: string;
-  readonly rpcUrls: readonly string[];
-  readonly tokens: readonly TokenConfig[];
 };
 
 /**
@@ -166,52 +165,6 @@ export type TransactionStatusReport = {
   readonly status: TransactionStatus;
 };
 
-const pow10 = (decimals: number): bigint => 10n ** BigInt(decimals);
-
-/**
- * Parses a decimal token amount into raw integer ERC20 units. The terminal
- * consumer of every amount the reader boundaries admit, so it applies their
- * grammars (`isDecimalAmountText`, `isSafeDecimals`) rather than its own copies.
- * Throws {@link WalletError} on a value either rule rejects, on more fraction
- * digits than the token has, and on a non-positive result.
- */
-export const parseTokenAmount = (amount: string, decimals: number): bigint => {
-  const trimmed = amount.trim();
-  if (!isSafeDecimals(decimals) || !isDecimalAmountText(trimmed)) {
-    throw new WalletError("Invalid transfer amount");
-  }
-
-  const [whole = "0", fraction = ""] = trimmed.split(".");
-  if (fraction.length > decimals) {
-    throw new WalletError("Too many decimal places");
-  }
-  const raw = BigInt(whole) * pow10(decimals) + BigInt(fraction.padEnd(decimals, "0") || "0");
-  if (raw <= 0n) {
-    throw new WalletError("Transfer amount must be greater than zero");
-  }
-  return raw;
-};
-
-/**
- * Formats raw integer ERC20 units into a decimal display string.
- */
-export const formatTokenAmount = (raw: bigint, decimals: number): string => {
-  const base = pow10(decimals);
-  const whole = raw / base;
-  const fraction = (raw % base).toString().padStart(decimals, "0").replace(/0+$/, "");
-  return fraction.length === 0 ? whole.toString() : `${whole.toString()}.${fraction}`;
-};
-
-const parseUint256Response = (response: readonly string[]): bigint => {
-  const value = decodeUint256Response(response);
-  if (value === null) {
-    throw new WalletError("Invalid token balance response");
-  }
-  return value;
-};
-
-const BALANCE_READ_CONCURRENCY = 4;
-
 /**
  * Builds an ERC20 transfer call without signing or broadcasting it.
  */
@@ -228,48 +181,6 @@ export const buildErc20TransferCall = (
     contractAddress: tokenAddress,
     entrypoint: "transfer",
   };
-};
-
-/**
- * Reads ERC20 balances through Starknet RPC.
- */
-export const getTokenBalances = async (
-  { accountAddress, rpcUrls, tokens }: BalanceInput,
-  makeProvider?: (nodeUrl: string) => RpcProvider,
-): Promise<readonly TokenBalance[]> => {
-  if (!isNonZeroStarkFieldElement(accountAddress)) {
-    throw new WalletError("Invalid account address");
-  }
-  return withRpcFallback(
-    rpcUrls,
-    async (provider) => {
-      const balances: TokenBalance[] = [];
-      for (let index = 0; index < tokens.length; index += BALANCE_READ_CONCURRENCY) {
-        balances.push(
-          ...(await Promise.all(
-            tokens.slice(index, index + BALANCE_READ_CONCURRENCY).map(async (token) => {
-              const response = await provider.callContract(
-                {
-                  calldata: CallData.compile([accountAddress]),
-                  contractAddress: token.address,
-                  entrypoint: "balanceOf",
-                },
-                "latest",
-              );
-              const balance = parseUint256Response(response);
-              return {
-                ...token,
-                balance: balance.toString(),
-                formatted: formatTokenAmount(balance, token.decimals),
-              };
-            }),
-          )),
-        );
-      }
-      return balances;
-    },
-    makeProvider,
-  );
 };
 
 /**

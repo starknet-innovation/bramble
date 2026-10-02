@@ -82,6 +82,11 @@ export type WalletPreferencesStore = {
   readonly removeAddress: (id: string) => Promise<WalletPreferences>;
   readonly removeGroup: (input: { readonly id: string }) => Promise<WalletPreferences>;
   readonly removeNft: (id: string) => Promise<WalletPreferences>;
+  /**
+   * Removes a tracked token that is not a built-in default, with its hidden
+   * flag. Throws for an unknown id or a default token.
+   */
+  readonly removeToken: (input: { readonly tokenId: string }) => Promise<WalletPreferences>;
   readonly renameGroup: (input: {
     readonly id: string;
     readonly name: string;

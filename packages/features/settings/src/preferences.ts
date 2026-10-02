@@ -12,11 +12,7 @@ import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountId } from "@bramble/wallet-model/accounts";
-import {
-  isCustomNetwork,
-  isCustomRpcUrl,
-  normalizeChainId,
-} from "@bramble/wallet-model/custom-network";
+import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
 import {
   DEFAULT_NETWORK,
   DEFAULT_TOKENS,
@@ -35,6 +31,7 @@ import {
   withTokenId,
 } from "@bramble/wallet-model/preferences";
 import { normalizeAccountGroups } from "./groups";
+import { withCustomNetwork } from "./preferences-custom-networks";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
   withAccountInGroup,
@@ -49,7 +46,7 @@ import {
   normalizeStoredPreferences,
   pickImportablePreferences,
 } from "./preferences-stored";
-import { withUpsertedToken } from "./preferences-tokens";
+import { withoutToken, withUpsertedToken } from "./preferences-tokens";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /** Re-exported entry types so callers keep importing them from this store. */
@@ -67,6 +64,10 @@ export type {
 } from "@bramble/wallet-model/preferences";
 /** Explorer-lane resolver colocated with the preferences it reads. */
 export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
+/** Custom-network count bound, re-exported with the store that applies it. */
+export { MAX_CUSTOM_NETWORKS } from "./preferences-custom-networks";
+/** Added-token count bound, re-exported with the store that applies it. */
+export { MAX_ADDED_TOKENS_PER_NETWORK } from "./preferences-tokens";
 /** Re-exported store schema and capability types. */
 export type {
   TokenSource,
@@ -216,15 +217,7 @@ export const createPreferencesStore = ({
   return serializeStoreMutations<WalletPreferencesStore>(
     {
       async addCustomNetwork(network) {
-        if (!isCustomNetwork(network)) {
-          throw new WalletError("Invalid custom network");
-        }
-        const preferences = await read();
-        const key = normalizeChainId(network.chainId);
-        const existing = (preferences.customNetworks ?? []).filter(
-          (stored) => normalizeChainId(stored.chainId) !== key,
-        );
-        const next = { ...preferences, customNetworks: [...existing, network] };
+        const next = withCustomNetwork(await read(), network);
         await writePreferences(store, next);
         return next;
       },
@@ -276,6 +269,11 @@ export const createPreferencesStore = ({
           ...preferences,
           addressBook: preferences.addressBook.filter((stored) => stored.id !== id),
         };
+        await writePreferences(store, next);
+        return next;
+      },
+      async removeToken({ tokenId }) {
+        const next = withoutToken(await read(), tokenId);
         await writePreferences(store, next);
         return next;
       },
@@ -473,8 +471,11 @@ export const createPreferencesStore = ({
         return next;
       },
       async upsertToken(token, source) {
-        const next = withUpsertedToken(await read(), token, source);
-        await writePreferences(store, next);
+        const preferences = await read();
+        const next = withUpsertedToken(preferences, token, source);
+        if (next !== preferences) {
+          await writePreferences(store, next);
+        }
         return next;
       },
     },
