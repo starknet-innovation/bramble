@@ -53,6 +53,7 @@ const mount = (
     accountContractType: AccountContractType,
     deploymentSalt?: string,
   ) => Promise<string>,
+  repaint = true,
 ): Harness => {
   document.body.replaceChildren();
   const container = document.createElement("div");
@@ -85,7 +86,8 @@ const mount = (
       refresh: () => Promise.resolve(status),
       render: async () => {
         renders += 1;
-        paint();
+        // The real paint loop skips an unchanged scene, leaving the old form.
+        if (repaint) paint();
       },
       setExpandedGroup: () => undefined,
       startAddAccount: () => undefined,
@@ -133,6 +135,34 @@ describe("Import private key form", () => {
       '#import-key-form textarea[name="rawKey"]',
     );
     expect(textarea?.value ?? "").toBe("");
+  });
+
+  test("success leaves the form ready when the paint loop does not repaint", async () => {
+    let attempts = 0;
+    const harness = mount(() => {
+      attempts += 1;
+      return attempts === 1
+        ? Promise.reject(new Error("Account already exists"))
+        : Promise.resolve(account.id);
+    }, false);
+    submitKey(harness.container, PASTED_KEY);
+    await tick();
+    const result = harness.container.querySelector("#import-key-result");
+    expect(result?.textContent).toBe("Account already exists");
+
+    submitKey(harness.container, PASTED_KEY);
+    await tick();
+    expect(harness.renderCount()).toBe(1);
+    const button = harness.container.querySelector<HTMLButtonElement>(
+      '#import-key-form button[type="submit"]',
+    );
+    // Not stuck busy, and the earlier failure no longer sits under the success.
+    expect(button?.disabled).toBe(false);
+    expect(button?.hasAttribute("data-busy")).toBe(false);
+    expect(result?.textContent).toBe("");
+    expect(
+      harness.container.querySelector<HTMLTextAreaElement>('textarea[name="rawKey"]')?.value,
+    ).toBe("");
   });
 
   test("states that the key controls the account", () => {
