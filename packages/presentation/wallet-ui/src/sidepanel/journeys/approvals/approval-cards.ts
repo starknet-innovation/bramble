@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { button } from "@bramble/ui-kit/controls";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
@@ -137,7 +138,11 @@ const strk20ActionParameters = (
   index: number,
 ): string => {
   if (action.type === "deposit") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · Deposit</strong><dl class="request-detail"><div><dt>Token</dt><dd>${exactAddress(action.token, `Copy action ${index + 1} token address`)}</dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div></dl></section>`;
+    const recipient =
+      action.recipient === undefined
+        ? ""
+        : `<div><dt>Recipient</dt><dd>${exactAddress(action.recipient, `Copy action ${index + 1} recipient address`)}</dd></div>`;
+    return `<section class="strk20-action-review"><strong>Action ${index + 1} · Deposit</strong><dl class="request-detail"><div><dt>Token</dt><dd>${exactAddress(action.token, `Copy action ${index + 1} token address`)}</dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div>${recipient}</dl></section>`;
   }
   if (action.type === "withdraw" || action.type === "transfer") {
     return `<section class="strk20-action-review"><strong>Action ${index + 1} · ${action.type === "withdraw" ? "Withdraw" : "Private transfer"}</strong><dl class="request-detail"><div><dt>Token</dt><dd>${exactAddress(action.token, `Copy action ${index + 1} token address`)}</dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div><div><dt>Recipient</dt><dd>${exactAddress(action.recipient, `Copy action ${index + 1} recipient address`)}</dd></div></dl></section>`;
@@ -186,6 +191,23 @@ const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => 
         "This mixed batch includes a public deposit approval, linking this account to the private relay transaction. Split the deposit and private actions if that linkage is not intended.",
       ]
     : [];
+};
+
+// A deposit naming a recipient credits that account's private balance, so a
+// site can dress a payment up as a shield. Only a recipient proven equal to the
+// approval's bound account reads as a self-deposit; with no bound account the
+// card cannot prove that, so it warns.
+const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[] => {
+  const account = approval.context ? accountIdAddress(approval.context.accountId) : undefined;
+  return (approval.actionReviews ?? []).flatMap((action) =>
+    action.type === "deposit" &&
+    action.recipient !== undefined &&
+    !sameFelt(action.recipient, account)
+      ? [
+          `This deposit pays ${accountLabel(action.recipient)}: the amount becomes that account's private note, not your private balance.`,
+        ]
+      : [],
+  );
 };
 
 const requestIdentity = (origin: string, kind: string): string => {
@@ -330,7 +352,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       ${status.locked ? '<p class="hint">Unlock the wallet to review this private transaction.</p>' : ""}
       ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
     </div>
-    ${reviewPanel([...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
+    ${reviewPanel([...strk20DepositPayeeWarnings(approval), ...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
     ${reviewConstraints("This approval charges no public wallet fee. A relay fee, if listed above, is paid from the private balance. If the wallet pays the network fee for this route, you will review that fee separately.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
@@ -353,7 +375,7 @@ const strk20DisclosureCard = (
       ${status.locked ? `<p class="hint">${copy.lockedHint}</p>` : ""}
       ${approvalCalls(approval) || reviewOutcome(copy.hint)}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel([...strk20DepositPayeeWarnings(approval), ...(approval.insights ?? [])])}
     ${reviewConstraints("This approval carries no transaction fee. Any later transaction requires its own review.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
