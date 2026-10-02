@@ -15,7 +15,7 @@ import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
 import { flowHeader, flowScreen, formatFri } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
-import { reviewPanel } from "../../shared/review-render";
+import { formatFeeEstimate, reviewPanel } from "../../shared/review-render";
 import type { PrivacyBlockerKind, PrivacyJourneyState } from "./privacy-model";
 import { type PreparationProgress, preparationProgressText } from "./privacy-preparation-job";
 
@@ -115,7 +115,7 @@ const preparationDetails = (
         {
           label: "Maximum network fee",
           value: preparation.networkFee
-            ? formatFri(preparation.networkFee.overallFee)
+            ? formatFeeEstimate(preparation.networkFee)
             : preparation.route === "private-relay"
               ? "Sponsored"
               : "Unavailable",
