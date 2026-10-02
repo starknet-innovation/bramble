@@ -13,6 +13,7 @@ import {
 } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { ActivityLog } from "@bramble/transactions/activity";
+import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -88,12 +89,15 @@ type Strk20OpsHandler = (
 const actionTokenAddresses = (actions: readonly Strk20Action[]): readonly string[] =>
   actions.flatMap((action) => ("token" in action ? [action.token] : []));
 
+// Card labels come from the same network-scoped, spam- and source-filtered
+// trusted set the call reviewer uses, never raw preferences: a dapp-watched or
+// spoof token must not lend its ticker to a card (audit 171).
 const reviewAssetsFor = (
   resolved: ResolvedAccount,
   addresses: readonly string[],
 ): readonly { readonly address: string; readonly symbol: string }[] =>
-  resolved.preferences.tokens
-    .filter((token) => addresses.some((address) => sameFelt(address, token.address)))
+  verificationContext(resolved.account, resolved.preferences)
+    .tokens.filter((token) => addresses.some((address) => sameFelt(address, token.address)))
     .map((token) => ({ address: token.address, symbol: token.symbol }));
 
 const queueDisclosure = async (
