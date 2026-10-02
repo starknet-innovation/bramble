@@ -5,7 +5,8 @@
  * matching events yields an empty feed, and a block whose timestamp cannot be
  * read is dropped rather than dated with a guess.
  */
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
 import { MAX_HISTORY_ENTRIES, TRANSFER_EVENT_KEY } from "@bramble/transactions/tx-history";
 import {
   collectTransactionHistory,
@@ -438,6 +439,13 @@ const scanProviderArgs = {
 };
 
 describe("scanTransactionHistory block-timestamp degradation", () => {
+  // Both cases share one RPC URL and the first deliberately fails it with a
+  // transport error, which puts that URL on the process-wide failover cooldown.
+  // Clear it here so each case is self-contained rather than relying on the
+  // repository preload: run alone (`bun test` inside this package, no preload),
+  // the second case otherwise finds no available endpoint and throws.
+  beforeEach(resetRpcEndpointCooldownsForTests);
+
   test("a block-timestamp transport error surfaces as history unavailable, not a shortened feed", async () => {
     await expect(
       scanTransactionHistory(scanProviderArgs, () =>
