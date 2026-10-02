@@ -14,6 +14,7 @@ import { withRpcFallback } from "@bramble/starknet/provider";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import { outsideExecutionDetails } from "@bramble/transactions/outside-execution-calls";
 import type { Vault } from "@bramble/vault/schema";
 import {
   networkIdForChainId,
@@ -53,6 +54,7 @@ import {
   type PassiveUnlockSession,
   type UnlockSession,
 } from "../runtime/session";
+import { recordRelaySignature } from "./activity-recording";
 import { reviewOutsideExecution } from "./outside-execution-review";
 import { withTrustedRecipients } from "./trusted-recipients";
 
@@ -62,10 +64,11 @@ import { withTrustedRecipients } from "./trusted-recipients";
 export type ChainOpsDeps = {
   readonly activeStateCoordinator?: ActiveStateCoordinator;
   /**
-   * Activity log, read for the recipients this wallet paid: the OutsideExecution
-   * review refuses their lookalikes as the invoke route does (audit 163).
+   * Activity log: read for the recipients this wallet paid (the OutsideExecution
+   * review refuses their lookalikes as the invoke route does, audit 163), and
+   * written to journal a locally signed SNIP-9 OutsideExecution for #299.
    */
-  readonly activity: Pick<ActivityLog, "list">;
+  readonly activity: Pick<ActivityLog, "list" | "recordRelaySignature">;
   /**
    * Recorded allowance log, read for OutsideExecution risk flags only (an
    * unreadable log flags each call on its own amount). Optional so partial
@@ -109,6 +112,32 @@ const describeTypedData = (typedData: unknown): string => {
       : {};
   const name = typeof domain["name"] === "string" ? domain["name"] : "";
   return name ? `${primaryType} · ${name}` : primaryType;
+};
+
+/**
+ * Journals a locally signed OutsideExecution (#299): records only when the
+ * typed data is an OutsideExecution whose layout reads exactly, so a malformed
+ * envelope plants nothing. The exact hash the signer committed to is the row's
+ * identity, which lets a later scan link the relayed execution back to it.
+ * Best effort: a storage failure must not fail the signer.
+ */
+const journalSignedOutsideExecution = async (
+  activity: Pick<ActivityLog, "recordRelaySignature">,
+  input: { readonly origin: string; readonly typedData: unknown },
+  account: { readonly id: string; readonly networkId: StarknetNetworkId },
+  messageHash: string,
+): Promise<void> => {
+  const detail = outsideExecutionDetails(input.typedData, messageHash);
+  if (detail === null || detail === "malformed") {
+    return;
+  }
+  await recordRelaySignature(activity, {
+    accountId: account.id,
+    hash: messageHash,
+    networkId: account.networkId,
+    snip9: { ...detail, dappOrigin: input.origin },
+    summary: "Signed for relay",
+  });
 };
 
 /**
@@ -196,6 +225,7 @@ export const executeSignApproval = async (
       );
     }
     const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
+    await journalSignedOutsideExecution(deps.activity, input, account, messageHash);
     return {
       ok: true,
       signature: serializeAccountSignature(account.accountContractType, signature),

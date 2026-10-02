@@ -1,6 +1,10 @@
 /**
  * Local activity log for transactions this wallet submitted. Plain data kept
  * outside the encrypted vault; the clock stays injectable for tests.
+ *
+ * This public module owns the clock boundary and the persistent store. The
+ * entry model lives in `./activity-model` and is re-exported here so callers
+ * keep importing `@bramble/transactions/activity`.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
@@ -8,14 +12,34 @@ import { serializeStoreMutations } from "@bramble/store/mutation";
 import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@bramble/transactions/alerts";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
-  isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
   sameFelt,
 } from "@bramble/wallet-model/networks";
-import { isSnip9DetailForKind, type Snip9RelayDetail } from "./relay-detail";
+import {
+  type ActivityEntry,
+  type ActivityHistoryState,
+  type ActivityOutcome,
+  type ActivityScope,
+  activityForScope,
+  isActivityEntry,
+  matchesScope,
+  monotonicActivityStatus,
+} from "./activity-model";
+import type { Snip9RelayDetail } from "./relay-detail";
 
 export { activityToCsv } from "./activity-csv";
+export {
+  type ActivityEntry,
+  type ActivityHistoryState,
+  type ActivityOutcome,
+  type ActivityScope,
+  type ActivityStatus,
+  activityForScope,
+  isActivityEntry,
+  isUnresolvedActivityStatus,
+  monotonicActivityStatus,
+} from "./activity-model";
 
 /**
  * Browser storage key for the activity log.
@@ -34,125 +58,17 @@ const MAX_SYNC_SCOPES = 50;
 export const systemClock = (): number => Date.now();
 
 /**
- * Lifecycle status of a submitted transaction.
- *
- * `preconfirmed` is provisional: the block proposer executed the transaction
- * (so a revert is already visible) but consensus has not committed its block.
- * `accepted` covers both `ACCEPTED_ON_L2` and `ACCEPTED_ON_L1`; L1 finality is
- * carried by {@link ActivityEntry.finalizedOnL1} instead of a separate status,
- * so the feed never grows a third success tier.
+ * The parts a caller supplies to record a locally signed SNIP-9
+ * `OutsideExecution`. `hash` is the canonical SNIP-12 message hash the signed
+ * message committed to, and is also the dedup key; `snip9.messageHash` must
+ * carry the same value so the stored row revalidates.
  */
-export type ActivityStatus = "accepted" | "pending" | "preconfirmed" | "rejected" | "reverted";
-
-/**
- * Whether a status can still change on chain. Pre-confirmed and pending
- * transactions are both unresolved; `accepted` is a real outcome even though
- * reconciliation keeps watching it until L1 finality. Single source of truth —
- * do not re-derive this comparison at call sites.
- */
-export const isUnresolvedActivityStatus = (status: ActivityStatus): boolean =>
-  status === "pending" || status === "preconfirmed";
-
-/**
- * Resolves two status observations without allowing stale asynchronous reads
- * to demote chain progress or overwrite a terminal failure.
- */
-export const monotonicActivityStatus = (
-  current: ActivityStatus,
-  observed: ActivityStatus,
-): ActivityStatus => {
-  const terminal = (status: ActivityStatus): boolean =>
-    status === "rejected" || status === "reverted";
-  if (terminal(current)) {
-    return current;
-  }
-  if (terminal(observed)) {
-    return observed;
-  }
-  const progress = (status: ActivityStatus): number =>
-    status === "accepted" ? 2 : status === "preconfirmed" ? 1 : 0;
-  return progress(observed) >= progress(current) ? observed : current;
-};
-
-/**
- * One recorded transaction. The `amount`, `counterparty`, and `token` fields
- * are optional so entries stored before they existed still load and export;
- * absent values fall back to blank CSV cells. The three tracking fields below
- * are internal bookkeeping for background reconciliation and are never
- * rendered; they are optional for the same reason.
- */
-export type ActivityEntry = {
+export type RelaySignatureRecord = {
   readonly accountId: string;
-  readonly amount?: string;
-  readonly counterparty?: string;
-  /**
-   * Set to `"pending"` when reconciliation observes a failure the user has
-   * already moved past, and flipped to `"delivered"` once the side panel has
-   * shown it. Absent means there is nothing to tell the user.
-   */
-  readonly failureNotice?: "delivered" | "pending";
-  /**
-   * True once the chain reported `ACCEPTED_ON_L1`. Reconciliation's terminal
-   * condition; not a user-visible state.
-   */
-  readonly finalizedOnL1?: boolean;
   readonly hash: string;
-  /**
-   * What the account submitted. `"declare"` is its own kind rather than being
-   * folded into `"invoke"` so the feed and the CSV export can tell a class
-   * declaration apart from a call — they are different transaction types on
-   * chain and carry different meaning in an audit.
-   */
-  readonly kind: "declare" | "deploy" | "invoke" | "relay-signed" | "transfer";
   readonly networkId: StarknetNetworkId;
-  /**
-   * Consecutive `TXN_HASH_NOT_FOUND` observations. Reset by any answer that
-   * finds the transaction, so ordinary RPC noise never accumulates.
-   */
-  readonly notFoundCount?: number;
-  /**
-   * Provenance: `"wallet"` only on rows this wallet recorded for a submission
-   * of its own (see `recordSubmittedActivity`); `"relay"` on an execution a
-   * scan found on chain, which never counts as a payment the user made. Rows
-   * discovered elsewhere never carry `"wallet"`, so a third-party event that
-   * names this account cannot pose as a payment. Absent on legacy rows.
-   */
-  readonly origin?: "wallet" | "relay";
-  /**
-   * True once a status read returned a real finality for this hash. Only a
-   * transaction the wallet has seen can be judged gone after repeated
-   * not-found answers; an unseen one stays pending until its observation
-   * window lapses.
-   */
-  readonly seenOnChain?: boolean;
-  readonly snip9?: Snip9RelayDetail;
-  readonly status: ActivityStatus;
-  readonly submittedAt: number;
+  readonly snip9: Snip9RelayDetail;
   readonly summary: string;
-  readonly token?: string;
-};
-
-/**
- * The reconciled result written back for one hash. Policy (which transition
- * deserves a user-visible notice, when a disappearance counts as failure) is
- * decided by the caller; this store only applies what it is handed.
- */
-export type ActivityOutcome = {
-  readonly failureNotice?: "pending";
-  readonly finalizedOnL1?: boolean;
-  readonly notFoundCount?: number;
-  readonly seenOnChain?: boolean;
-  readonly status: ActivityStatus;
-};
-
-/**
- * Account and network boundary for a single activity feed. Both fields remain
- * explicit so callers cannot accidentally treat an account id as globally
- * scoped if its representation changes in a future vault schema.
- */
-export type ActivityScope = {
-  readonly accountId: string;
-  readonly networkId: StarknetNetworkId;
 };
 
 /**
@@ -175,6 +91,13 @@ export type ActivityLog = {
     >,
   ) => Promise<void>;
   /**
+   * Records a locally signed SNIP-9 `OutsideExecution` as an accepted
+   * `"relay-signed"` row, deduplicated by its message hash. Optional only so
+   * narrow injected test doubles remain compatible; persistent stores and the
+   * in-memory test default implement it.
+   */
+  readonly recordRelaySignature?: (entry: RelaySignatureRecord) => Promise<void>;
+  /**
    * Atomically returns the entries carrying an undelivered failure notice and
    * marks them delivered, so a notice surfaces exactly once even if two panels
    * drain concurrently. Delivery is scoped to one account/network and bounded
@@ -196,10 +119,6 @@ export type ActivityLog = {
   ) => Promise<readonly ActivityEntry[]>;
 };
 
-/**
- * Last on-chain history attempt retained for one account scope.
- */
-export type ActivityHistoryState = { readonly syncedAt: number; readonly unavailable: boolean };
 type ActivityHistorySync = ActivityHistoryState & ActivityScope;
 
 const isHistorySync = (value: unknown): value is ActivityHistorySync =>
@@ -217,92 +136,10 @@ const readHistorySyncs = async (store: KeyValueStore): Promise<readonly Activity
   return Array.isArray(stored) ? stored.filter(isHistorySync).slice(-MAX_SYNC_SCOPES) : [];
 };
 
-const isActivityStatus = (value: unknown): value is ActivityStatus =>
-  value === "accepted" ||
-  value === "pending" ||
-  value === "preconfirmed" ||
-  value === "rejected" ||
-  value === "reverted";
-
-const isFailureNotice = (value: unknown): value is ActivityEntry["failureNotice"] =>
-  value === undefined || value === "delivered" || value === "pending";
-
-const isNotFoundCount = (value: unknown): value is number | undefined =>
-  value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
-
-const isActivityKind = (value: unknown): value is ActivityEntry["kind"] =>
-  value === "declare" ||
-  value === "deploy" ||
-  value === "invoke" ||
-  value === "relay-signed" ||
-  value === "transfer";
-
-const isOptionalDetail = (value: unknown): value is string | undefined =>
-  value === undefined || (typeof value === "string" && value.length > 0 && value.length <= 200);
-
-/**
- * Checks stored activity entries before trusting them. The detail fields are
- * optional, so older entries that predate them still validate.
- */
-export const isActivityEntry = (value: unknown): value is ActivityEntry =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, [
-    "accountId",
-    "amount",
-    "counterparty",
-    "failureNotice",
-    "finalizedOnL1",
-    "hash",
-    "kind",
-    "networkId",
-    "notFoundCount",
-    "origin",
-    "seenOnChain",
-    "snip9",
-    "status",
-    "submittedAt",
-    "summary",
-    "token",
-  ]) &&
-  isStarknetNetworkId(value["networkId"]) &&
-  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
-  typeof value["hash"] === "string" &&
-  isStarkFieldElement(value["hash"]) &&
-  isActivityKind(value["kind"]) &&
-  isActivityStatus(value["status"]) &&
-  typeof value["submittedAt"] === "number" &&
-  Number.isSafeInteger(value["submittedAt"]) &&
-  value["submittedAt"] >= 0 &&
-  typeof value["summary"] === "string" &&
-  value["summary"].length > 0 &&
-  value["summary"].length <= 200 &&
-  isOptionalDetail(value["amount"]) &&
-  isOptionalDetail(value["counterparty"]) &&
-  isOptionalDetail(value["token"]) &&
-  isFailureNotice(value["failureNotice"]) &&
-  (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
-  (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
-  isNotFoundCount(value["notFoundCount"]) &&
-  isSnip9DetailForKind(value["snip9"], value["kind"]) &&
-  (value["origin"] === undefined || value["origin"] === "wallet" || value["origin"] === "relay");
-
 const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry[]> => {
   const stored = await store.get(ACTIVITY_STORE_KEY);
   return Array.isArray(stored) ? stored.filter(isActivityEntry) : [];
 };
-
-const matchesScope = (entry: ActivityEntry, scope: ActivityScope): boolean =>
-  entry.accountId === scope.accountId && entry.networkId === scope.networkId;
-
-/**
- * Selects the rows that belong to one account on one network. The persistent
- * store may contain many scopes, but no UI or status reconciliation boundary
- * should consume the unfiltered list.
- */
-export const activityForScope = (
-  entries: readonly ActivityEntry[],
-  scope: ActivityScope,
-): readonly ActivityEntry[] => entries.filter((entry) => matchesScope(entry, scope));
 
 const entriesAfterRecord = (
   entries: readonly ActivityEntry[],
@@ -387,11 +224,22 @@ const drainFailureNotices = (
   };
 };
 
+// Builds the accepted row a signed OutsideExecution is journalled as. Returns
+// null when the assembled row would not revalidate, so a malformed input never
+// reaches storage.
+const relaySignedEntry = (
+  entry: RelaySignatureRecord,
+  submittedAt: number,
+): ActivityEntry | null => {
+  const next: ActivityEntry = { ...entry, kind: "relay-signed", status: "accepted", submittedAt };
+  return isActivityEntry(next) ? next : null;
+};
+
 /**
  * Creates the persistent activity log.
  */
 export const createActivityLog = ({
-  now = () => Date.now(),
+  now = systemClock,
   store,
 }: {
   readonly now?: () => number;
@@ -412,6 +260,14 @@ export const createActivityLog = ({
       async record(entry) {
         const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
         if (!isActivityEntry(next)) {
+          return;
+        }
+        const entries = await readEntries(store);
+        await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
+      },
+      async recordRelaySignature(entry) {
+        const next = relaySignedEntry(entry, now());
+        if (!next) {
           return;
         }
         const entries = await readEntries(store);
@@ -468,6 +324,13 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
     },
     async record(entry) {
       const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
+      entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
+    },
+    async recordRelaySignature(entry) {
+      const next = relaySignedEntry(entry, now());
+      if (!next) {
+        return;
+      }
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
     },
     async markHistorySynced(scope, syncedAt, unavailable) {

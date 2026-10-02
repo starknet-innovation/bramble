@@ -28,6 +28,23 @@ export const recordSubmittedActivity = async (
 };
 
 /**
+ * Records a locally signed SNIP-9 OutsideExecution without letting a storage
+ * failure rewrite the response the caller already produced. The signed result
+ * remains authoritative; a missed journal row is recoverable from chain
+ * history on a later scan.
+ */
+export const recordRelaySignature = async (
+  activity: Pick<ActivityLog, "recordRelaySignature">,
+  entry: Parameters<NonNullable<ActivityLog["recordRelaySignature"]>>[0],
+): Promise<void> => {
+  try {
+    await activity.recordRelaySignature?.(entry);
+  } catch {
+    // The signed result is already computed. Its delivery must survive.
+  }
+};
+
+/**
  * The `counterparty` to record for a wallet-submitted call set that pays one
  * recipient, so the payee joins the paid-recipient trust set (audit #163).
  * Only a single call whose selector has a known recipient position counts: a
