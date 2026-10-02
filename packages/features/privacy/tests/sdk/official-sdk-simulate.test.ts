@@ -8,6 +8,7 @@
  * exactly like a real proof, and still yield only an unsubmittable empty proof.
  */
 import { describe, expect, test } from "bun:test";
+import type { SdkBuilder } from "@bramble/privacy/official-sdk-runtime";
 import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
@@ -55,6 +56,11 @@ const leakingSimulate = async (options: unknown): Promise<unknown> => {
   return executeResult();
 };
 
+// Compile-time pin: re-adding `simulate` to the reviewed builder subset turns
+// this type into `true`, which `false` cannot satisfy, so tsc fails the check.
+type BuilderExposesSimulate = "simulate" extends keyof SdkBuilder ? true : false;
+const builderExposesSimulate: BuilderExposesSimulate = false;
+
 const withdrawal = {
   ...context,
   actions: [{ amount: "0x1", recipient: "0x999", token, type: "withdraw" as const }],
@@ -94,6 +100,26 @@ describe("STRK20 simulate keeps the viewing key off the RPC node", () => {
         expect(typeof felt === "string" && sameFelt(felt, viewingKey)).toBe(false);
       }
     }
+  });
+
+  test("the reviewed builder type has no simulate, and a simulation never calls one", async () => {
+    expect(builderExposesSimulate).toBe(false);
+    const simulateCalls: unknown[] = [];
+    const sdk = runtime(() => ({
+      build: () => ({
+        ...builder(),
+        simulate: async (options: unknown) => {
+          simulateCalls.push(options);
+          return executeResult();
+        },
+      }),
+      discoverNotes: async () => ({ notes: new Map() }),
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({ providerFor: strk20ProviderFor(), sdk });
+
+    await service.prepare(withdrawal);
+    expect(simulateCalls).toEqual([]);
   });
 
   test("a prover refusal of a simulation surfaces as a proving-stage error", async () => {
