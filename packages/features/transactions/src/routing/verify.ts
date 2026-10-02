@@ -13,6 +13,7 @@
  */
 
 import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-discovery";
+import { AVNU_MULTI_ROUTE_SWAP } from "@bramble/wallet-model/avnu-route";
 import { asFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import {
@@ -50,8 +51,10 @@ export {
  */
 export type RiskFlagCode =
   | "address-poisoning"
+  | "foreign-beneficiary"
   | "operator-approval"
   | "self-transfer"
+  | "undecoded-swap"
   | "unknown-contract"
   | "unlimited-approval";
 
@@ -293,6 +296,46 @@ const addressPoisoningFlag = (recipient: string, context: VerificationContext): 
     : null;
 };
 
+// A swap that pays its proceeds anywhere but the signing account is how a
+// connected page takes the whole output of a swap the user approves, behind a
+// line naming the genuine router. Read from the selector's beneficiary felt,
+// not from the decode, so it still fires on a span the decoder refused.
+const foreignBeneficiaryFlag = (
+  beneficiary: string,
+  context: VerificationContext,
+): RiskFlag | null =>
+  beneficiary && !sameFelt(beneficiary, context.account.address)
+    ? {
+        code: "foreign-beneficiary",
+        message: `This swap pays its proceeds to ${shortAddress(canonical(beneficiary))}, not to this account. Reject it unless you meant to send them there.`,
+      }
+    : null;
+
+const UNDECODED_SWAP_FLAG: RiskFlag = {
+  code: "undecoded-swap",
+  message:
+    "The wallet could not read this swap's payee or minimum output. Reject it unless you trust this site.",
+};
+
+// The payee rules for one call. A swap into the signing account is the ordinary
+// case, so on the swap selector the self-send note gives way to the
+// foreign-beneficiary warning and, when the pinned decoder refused the span, to
+// the flag saying the payee and floor were never shown. Poisoning applies to
+// every selector that names a payee.
+const recipientFlags = (
+  call: Call,
+  decoded: DecodedCall,
+  recipient: string,
+  context: VerificationContext,
+): readonly (RiskFlag | null)[] =>
+  call.entrypoint === AVNU_MULTI_ROUTE_SWAP
+    ? [
+        decoded.kind === "swap" ? null : UNDECODED_SWAP_FLAG,
+        foreignBeneficiaryFlag(recipient, context),
+        addressPoisoningFlag(recipient, context),
+      ]
+    : [selfTransferFlag(recipient, context), addressPoisoningFlag(recipient, context)];
+
 // `unlimitedApproval` and `operatorApproval` are decided across the whole
 // transaction rather than from this call alone, so a grant split into several
 // increases still raises the flag on the call that completes it.
@@ -315,8 +358,7 @@ const flagsForCall = (
     unknownContractFlag(call, known),
     raised.unlimitedApproval ? UNLIMITED_APPROVAL_FLAG : null,
     raised.operatorApproval ? OPERATOR_APPROVAL_FLAG : null,
-    selfTransferFlag(recipient, context),
-    addressPoisoningFlag(recipient, context),
+    ...recipientFlags(call, decoded, recipient, context),
   ];
   return candidates.filter((flag): flag is RiskFlag => flag !== null);
 };

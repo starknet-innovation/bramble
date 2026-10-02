@@ -12,6 +12,7 @@
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/avnu-route";
 import {
   asFelt,
   canonicalFelt,
@@ -35,7 +36,8 @@ import {
  * `approve` grants or raises an ERC20 spending allowance, `nft-approval` grants
  * transfer rights over ONE item of a collection the wallet watches,
  * `operator-approval` grants transfer rights over an ENTIRE collection,
- * `transfer` moves value, and `unknown` is a call the wallet cannot describe.
+ * `transfer` moves value, `swap` is an AVNU route whose payee and minimum
+ * output were decoded, and `unknown` is a call the wallet cannot describe.
  * Each grant has its own kind so no risk rule has to infer authority from a
  * summary string.
  */
@@ -43,6 +45,7 @@ export type DecodedCallKind =
   | "approve"
   | "nft-approval"
   | "operator-approval"
+  | "swap"
   | "transfer"
   | "unknown";
 
@@ -381,6 +384,36 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
   };
 };
 
+// A route amount with the token it is in: decimals and symbol for a tracked
+// token, base units and the token's address otherwise, so the line never
+// states a quantity without saying what it is a quantity of.
+const routeAmountLabel = (amount: bigint, tokenAddress: string, context: VerificationContext) => {
+  const token = tokenFor(context.tokens, tokenAddress);
+  return token ? amountLabel(amount, token) : `${amount} units of ${shortAddress(tokenAddress)}`;
+};
+
+// AVNU multi_route_swap, read through the wallet's one pinned route decoder —
+// the same one the wallet-built swap is bound with — so a dapp-sent swap states
+// the payee and the floor the chain will enforce instead of "Call
+// multi_route_swap on 0x…". Calldata that is not all strings, or that the
+// decoder cannot consume exactly, returns null and stays opaque; the verifier
+// flags that fallback rather than letting it read as an ordinary call.
+const decodeAvnuSwapCall: CallDecoder = (call, calldata, context) => {
+  const felts = calldata.filter((felt): felt is string => typeof felt === "string");
+  const route = felts.length === calldata.length ? decodeAvnuRoute(call.entrypoint, felts) : null;
+  if (route === null) {
+    return null;
+  }
+  const sell = routeAmountLabel(route.sellAmount, route.sellToken, context);
+  const floor = routeAmountLabel(route.minBuyAmount, route.buyToken, context);
+  return {
+    contractAddress: call.contractAddress,
+    entrypoint: call.entrypoint,
+    kind: "swap",
+    summary: `Swap ${sell} for at least ${floor}, paid to ${shortAddress(route.beneficiary)}`,
+  };
+};
+
 const decodeUnknownCall = (call: Call): DecodedCall => ({
   contractAddress: call.contractAddress,
   entrypoint: call.entrypoint,
@@ -412,6 +445,7 @@ const CALL_DECODERS: Readonly<Record<string, CallDecoder>> = {
       decodeErc1155BatchTransferCall,
     ]),
   ),
+  [AVNU_MULTI_ROUTE_SWAP]: decodeAvnuSwapCall,
   transfer: decodeTransferOrApproveCall,
 };
 

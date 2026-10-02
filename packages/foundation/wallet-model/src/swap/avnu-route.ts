@@ -84,7 +84,14 @@ const SELL_AMOUNT_INDEX = 1;
 const BUY_TOKEN_INDEX = 3;
 const BUY_AMOUNT_INDEX = 4;
 const MIN_BUY_AMOUNT_INDEX = 6;
-const BENEFICIARY_INDEX = 8;
+/**
+ * Felt offset of `beneficiary`, the account a `multi_route_swap` pays its
+ * proceeds to, in the pinned layout above. Exported so the pre-sign reviewer's
+ * recipient vocabulary reads the payee from this one pin instead of a second
+ * literal; it is a position only, and says nothing about whether the rest of
+ * the span decodes.
+ */
+export const AVNU_BENEFICIARY_FELT_INDEX = 8;
 const INTEGRATOR_FEE_BPS_INDEX = 9;
 const INTEGRATOR_FEE_RECIPIENT_INDEX = 10;
 const ROUTES_LENGTH_INDEX = 11;
@@ -233,7 +240,7 @@ export const decodeAvnuRoute = (
   const buyToken = addressAt(calldata, BUY_TOKEN_INDEX);
   const buyAmount = uint256At(calldata, BUY_AMOUNT_INDEX);
   const minBuyAmount = uint256At(calldata, MIN_BUY_AMOUNT_INDEX);
-  const beneficiary = addressAt(calldata, BENEFICIARY_INDEX);
+  const beneficiary = addressAt(calldata, AVNU_BENEFICIARY_FELT_INDEX);
   const integratorFeeBps = feltAt(calldata, INTEGRATOR_FEE_BPS_INDEX);
   const integratorFeeRecipient = addressAt(calldata, INTEGRATOR_FEE_RECIPIENT_INDEX);
   if (
