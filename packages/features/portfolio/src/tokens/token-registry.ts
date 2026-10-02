@@ -9,6 +9,7 @@
  */
 
 import {
+  DEFAULT_TOKENS,
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
   sameFelt,
@@ -193,3 +194,19 @@ export const tokenSpamReasons = (token: SpamCandidate): readonly SpamReason[] =>
  * default.
  */
 export const isLikelySpam = (token: SpamCandidate): boolean => tokenSpamReasons(token).length > 0;
+
+/**
+ * Checks whether a token is exactly a curated one: a registry or default-tracked
+ * token on the same network with the same contract, ticker, and decimals. Used
+ * to keep a dapp-suggested token trusted only when the wallet already vouches
+ * for every field the review reads from it; any mismatch (including a real
+ * contract under a site-supplied ticker or decimals) is not curated.
+ */
+export const isCuratedToken = (token: SpamCandidate): boolean =>
+  [...REGISTRY[token.networkId], ...DEFAULT_TOKENS].some(
+    (known) =>
+      known.networkId === token.networkId &&
+      sameFelt(known.address, token.address) &&
+      known.symbol === token.symbol &&
+      known.decimals === token.decimals,
+  );

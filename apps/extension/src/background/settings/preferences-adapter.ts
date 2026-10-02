@@ -67,6 +67,6 @@ export const createBackgroundPreferences = ({
     setRpcOverride: async (input) => (await required()).setRpcOverride(input),
     setStrk20NetworkConfig: async (input) => (await required()).setStrk20NetworkConfig(input),
     setTokenHidden: async (input) => (await required()).setTokenHidden(input),
-    upsertToken: async (input) => (await required()).upsertToken(input),
+    upsertToken: async (input, source) => (await required()).upsertToken(input, source),
   };
 };

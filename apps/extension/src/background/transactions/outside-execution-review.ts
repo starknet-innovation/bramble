@@ -44,7 +44,7 @@ export type OutsideExecutionReview = {
 export const reviewOutsideExecution = (
   typedData: unknown,
   account: AccountRef,
-  preferences: Pick<WalletPreferences, "addressBook" | "nfts" | "tokens">,
+  preferences: Pick<WalletPreferences, "addressBook" | "dappTokenIds" | "nfts" | "tokens">,
   allowances: readonly AllowanceRecord[] = [],
 ): OutsideExecutionReview | { readonly error: string } | null => {
   const calls = outsideExecutionCalls(typedData);

@@ -10,7 +10,7 @@
  * summary.
  */
 
-import { isLikelySpam } from "@bramble/portfolio/token-registry";
+import { isCuratedToken, isLikelySpam } from "@bramble/portfolio/token-registry";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/avnu-route";
@@ -99,6 +99,8 @@ export const verificationContext = (
   account: Pick<AccountRef, "address" | "networkId">,
   preferences: {
     readonly addressBook: readonly AddressBookEntry[];
+    /** Ids of dapp-added tokens (wallet_watchAsset) the user never added themselves. */
+    readonly dappTokenIds?: readonly string[];
     // Structurally typed rather than importing `WatchedNft` from the
     // portfolio package: only these two fields are read, and a `WatchedNft`
     // still satisfies the shape at every call site.
@@ -111,16 +113,23 @@ export const verificationContext = (
   nftContracts: (preferences.nfts ?? [])
     .filter((nft) => nft.networkId === account.networkId)
     .map((nft) => nft.contract),
-  // A tracked token that trips the spam heuristic (a ticker borrowed from a
-  // different contract, malformed metadata) is not trusted: it stays an
-  // unknown contract and its calls are summarized in raw units, never under the
-  // ticker it impersonates (audit 171). Curated contracts never trip it, so a
-  // user hiding STRK changes nothing here; `hiddenTokens` is deliberately not
-  // consulted.
   tokens: preferences.tokens.filter(
-    (token) => token.networkId === account.networkId && !isLikelySpam(token),
+    (token) =>
+      token.networkId === account.networkId &&
+      isTrustedToken(token, preferences.dappTokenIds ?? []),
   ),
 });
+
+// A tracked token that trips the spam heuristic (a ticker borrowed from a
+// different contract, malformed metadata) is not trusted, and neither is one a
+// dapp added unless it is exactly a curated token: the spam heuristic only
+// knows the curated tickers (none on Sepolia or devnet), so a site-named token
+// would otherwise lend its ticker and decimals anywhere else (audit 171). An
+// untrusted token stays an unknown contract and its calls are summarized in raw
+// units. User-added and curated tokens stay trusted; `hiddenTokens` is
+// deliberately not consulted, so a user hiding STRK changes nothing here.
+const isTrustedToken = (token: TokenConfig, dappTokenIds: readonly string[]): boolean =>
+  !isLikelySpam(token) && (!dappTokenIds.includes(token.id) || isCuratedToken(token));
 
 /**
  * Abbreviates an address for display as `0x1234…abcd`.

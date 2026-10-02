@@ -63,3 +63,59 @@ describe("spoofed token trust (audit 171)", () => {
     expect(report.calls[0]?.summary).toContain("STRK");
   });
 });
+
+// Dapp-added tokens (audit 171): trusted only when exactly curated, on every
+// network; the spam heuristic alone cannot see a spoof where no curated ticker
+// exists (Sepolia, devnet, uncurated mainnet tickers).
+describe("dapp-added token trust (audit 171)", () => {
+  const sepoliaAccount = { ...account, networkId: "SN_SEPOLIA" as const };
+  const sepoliaStrkSpoof: TokenConfig = {
+    ...spoof,
+    decimals: 18,
+    id: `SN_SEPOLIA:STRK:${SPOOF}`,
+    name: "Starknet Token",
+    networkId: "SN_SEPOLIA",
+    symbol: "STRK",
+  };
+  const trusted = (
+    target: Pick<AccountRef, "address" | "networkId">,
+    tokens: readonly TokenConfig[],
+    dappTokenIds: readonly string[],
+  ) => verificationContext(target, { addressBook: [], dappTokenIds, tokens }).tokens;
+
+  test("a dapp-added Sepolia token named STRK is not trusted", () => {
+    expect(trusted(sepoliaAccount, [sepoliaStrkSpoof], [sepoliaStrkSpoof.id])).toEqual([]);
+  });
+
+  test("a token tracked on another network is not trusted", () => {
+    expect(trusted(sepoliaAccount, [usdc], [])).toEqual([]);
+  });
+
+  test("the same token added by the user stays trusted", () => {
+    expect(trusted(sepoliaAccount, [sepoliaStrkSpoof], [])).toEqual([sepoliaStrkSpoof]);
+  });
+
+  test("a dapp-added uncurated mainnet ticker is not trusted", () => {
+    const lords = token(SPOOF, "LORDS", 18, "Lords");
+    expect(trusted(account, [lords], [lords.id])).toEqual([]);
+  });
+
+  test("a dapp-added exact curated token stays trusted", () => {
+    expect(trusted(account, [usdc], [usdc.id])).toEqual([usdc]);
+  });
+
+  test("a dapp-added curated contract under site-supplied decimals is not trusted", () => {
+    const misdeclared = token(REAL_USDC, "USDC", 18, "USD Coin");
+    expect(trusted(account, [misdeclared], [misdeclared.id])).toEqual([]);
+  });
+
+  test("a dapp-added default-tracked token stays trusted on Sepolia", () => {
+    const sepoliaStrk: TokenConfig = {
+      ...strk,
+      id: `SN_SEPOLIA:STRK:${STRK_TOKEN_ADDRESS}`,
+      name: "Sepolia Starknet Token",
+      networkId: "SN_SEPOLIA",
+    };
+    expect(trusted(sepoliaAccount, [sepoliaStrk], [sepoliaStrk.id])).toEqual([sepoliaStrk]);
+  });
+});

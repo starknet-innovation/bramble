@@ -30,7 +30,6 @@ import {
   isDisplayCurrency,
   isLabel,
   isThemeChoice,
-  isTokenConfig,
   isTokenId,
   withAddressBookId,
   withTokenId,
@@ -50,6 +49,7 @@ import {
   normalizeStoredPreferences,
   pickImportablePreferences,
 } from "./preferences-stored";
+import { withUpsertedToken } from "./preferences-tokens";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /** Re-exported entry types so callers keep importing them from this store. */
@@ -69,6 +69,7 @@ export type {
 export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
 /** Re-exported store schema and capability types. */
 export type {
+  TokenSource,
   WalletPreferences,
   WalletPreferencesStore,
 } from "./preferences-types";
@@ -471,14 +472,8 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
-      async upsertToken(token) {
-        const nextToken = withTokenId(token);
-        if (!isTokenConfig(nextToken)) {
-          throw new WalletError("Invalid token");
-        }
-        const preferences = await read();
-        const tokens = preferences.tokens.filter((stored) => stored.id !== nextToken.id);
-        const next = { ...preferences, tokens: [...tokens, nextToken] };
+      async upsertToken(token, source) {
+        const next = withUpsertedToken(await read(), token, source);
         await writePreferences(store, next);
         return next;
       },

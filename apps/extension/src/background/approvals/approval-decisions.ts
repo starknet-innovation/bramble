@@ -114,9 +114,11 @@ const applyWatchAsset: ApproveApplier = async (deps, { approval }) => {
   if (!approval.token) {
     return reject(NOT_FOUND);
   }
-  await deps.preferencesStore.upsertToken(approval.token);
-  // Same rule as wallet.addToken (audit 171): a dapp-suggested token that
-  // borrows a known ticker or carries malformed metadata is stored hidden.
+  // Recorded as dapp-supplied (audit 171): its metadata came from the site, so
+  // the call reviewer does not trust it unless it matches a curated token.
+  await deps.preferencesStore.upsertToken(approval.token, "dapp");
+  // Same rule as wallet.addToken: a dapp-suggested token that borrows a known
+  // ticker or carries malformed metadata is stored hidden.
   if (isLikelySpam(approval.token)) {
     await deps.preferencesStore.setTokenHidden({
       hidden: true,

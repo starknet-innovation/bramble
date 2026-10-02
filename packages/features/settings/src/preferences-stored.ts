@@ -53,6 +53,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "approvalSurface",
   "addressBook",
   "customNetworks",
+  "dappTokenIds",
   "displayCurrency",
   "explorerApiUrls",
   "explorerFallback",
@@ -86,6 +87,7 @@ const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
+  (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
@@ -219,16 +221,17 @@ const rebuildCollection = (
   return { entries, renames };
 };
 
-// Only rewritten when the stored field is actually a list; an absent
-// hiddenTokens must stay absent rather than becoming an explicit `undefined`
-// the JSON guard would then reject.
-const remapHiddenTokens = (
+// Only rewritten when the stored field is actually a list; an absent token-id
+// list (hiddenTokens, dappTokenIds) must stay absent rather than becoming an
+// explicit `undefined` the JSON guard would then reject.
+const remapTokenIds = (
+  key: "dappTokenIds" | "hiddenTokens",
   value: unknown,
   renames: ReadonlyMap<string, string>,
-): { readonly hiddenTokens: readonly unknown[] } | Record<string, never> =>
+): Readonly<Record<string, readonly unknown[]>> =>
   Array.isArray(value)
     ? {
-        hiddenTokens: [
+        [key]: [
           ...new Set(
             (value as readonly unknown[]).map((id) =>
               typeof id === "string" ? (renames.get(id) ?? id) : id,
@@ -274,8 +277,8 @@ const normalizedAccountGroups = (value: unknown): unknown =>
  * Brings a stored preferences record to the current entry shape without any
  * user action: token and contact addresses are canonicalized, ids re-derived
  * from them, and records that name the same address on the same network are
- * collapsed to one — carrying hidden-token ids across the rename so a token
- * hidden before the collapse stays hidden.
+ * collapsed to one — carrying hidden-token and dapp-token ids across the
+ * rename so a token hidden (or dapp-supplied) before the collapse stays so.
  *
  * Deterministic and total: a non-record value, or a collection this build
  * cannot read, is returned untouched for {@link isWalletPreferences} to reject.
@@ -301,7 +304,11 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
     ...(value["groups"] === undefined ? {} : { groups: normalizedAccountGroups(value["groups"]) }),
     ...(addressBook ? { addressBook: addressBook.entries } : {}),
     ...(tokens
-      ? { ...remapHiddenTokens(value["hiddenTokens"], tokens.renames), tokens: tokens.entries }
+      ? {
+          ...remapTokenIds("hiddenTokens", value["hiddenTokens"], tokens.renames),
+          ...remapTokenIds("dappTokenIds", value["dappTokenIds"], tokens.renames),
+          tokens: tokens.entries,
+        }
       : {}),
   };
 };
