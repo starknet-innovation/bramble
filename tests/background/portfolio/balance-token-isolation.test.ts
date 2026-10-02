@@ -156,6 +156,28 @@ describe("wallet.removeToken recovery (Sherlock audit 134)", () => {
     expect(response.balances.map((balance) => balance.symbol).sort()).toEqual(["ETH", "STRK"]);
   });
 
+  test("a removed token does not come back from the last snapshot", async () => {
+    const { advance, chain, harness } = await setup();
+    for (const token of mainnetDefaults) chain.amounts.set(token.address, 1n);
+    chain.amounts.set(BAD, 5n);
+    const first = (await harness.handler(
+      { refresh: true, type: "wallet.getBalances" },
+      harnessExtensionSender,
+    )) as BalancesResponse;
+    expect(balanceOf(first, BAD)).toBe("5");
+
+    const tokenId = first.balances.find((balance) => sameFelt(balance.address, BAD))?.id;
+    await harness.handler({ tokenId, type: "wallet.removeToken" }, harnessExtensionSender);
+    advance(5_000);
+    const second = (await harness.handler(
+      { refresh: true, type: "wallet.getBalances" },
+      harnessExtensionSender,
+    )) as BalancesResponse;
+    expect(second.stale).toBe(false);
+    expect(balanceOf(second, BAD)).toBeUndefined();
+    expect(second.balances.map((balance) => balance.symbol).sort()).toEqual(["ETH", "STRK"]);
+  });
+
   test("refuses a built-in token and keeps it tracked", async () => {
     const { harness } = await setup();
     const eth = (await harness.preferencesStore.read()).tokens.find(
@@ -166,6 +188,19 @@ describe("wallet.removeToken recovery (Sherlock audit 134)", () => {
     ).resolves.toEqual({ error: "Built-in tokens can't be removed" });
     expect(
       (await harness.preferencesStore.read()).tokens.some((token) => token.id === eth?.id),
+    ).toBe(true);
+  });
+
+  test("refuses a request carrying unknown keys and keeps the token", async () => {
+    const { harness } = await setup();
+    const tokenId = (await harness.preferencesStore.read()).tokens.find((token) =>
+      sameFelt(token.address, BAD),
+    )?.id;
+    await expect(
+      harness.handler({ all: true, tokenId, type: "wallet.removeToken" }, harnessExtensionSender),
+    ).resolves.toEqual({ error: "invalid remove token request" });
+    expect(
+      (await harness.preferencesStore.read()).tokens.some((token) => token.id === tokenId),
     ).toBe(true);
   });
 

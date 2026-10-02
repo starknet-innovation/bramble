@@ -98,6 +98,28 @@ describe("getTokenBalances with isolateTokenFailures", () => {
     expect(failover.some((entry) => entry.startsWith("https://up.example"))).toBe(true);
   });
 
+  test("a transport fault on one token fails over even when the others read", async () => {
+    // The down node answers ETH and STRK but drops the connection on BAD. That
+    // must move the whole read to the next node, not carry BAD forward.
+    const seen: string[] = [];
+    const balances = await getTokenBalances(
+      {
+        accountAddress: ACCOUNT_ADDRESS,
+        isolateTokenFailures: true,
+        rpcUrls: ["https://down.example", "https://up.example"],
+        tokens: TOKENS.slice(0, 3),
+      },
+      (nodeUrl) =>
+        providerWith(
+          (call) =>
+            nodeUrl.includes("down") && isBad(call) ? new TypeError("fetch failed") : undefined,
+          seen,
+        )(nodeUrl),
+    );
+    expect(balances.map((balance) => balance.symbol)).toEqual(["ETH", "STRK", "BAD"]);
+    expect(seen).toContain(`https://up.example:${BAD_ADDRESS}`);
+  });
+
   test("throws when every token fails rather than reporting an empty portfolio", async () => {
     await expect(
       getTokenBalances(
