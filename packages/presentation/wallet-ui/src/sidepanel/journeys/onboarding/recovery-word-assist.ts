@@ -122,12 +122,22 @@ export const bindRecoveryWordAssist = (
       if (!completes || isBip39EnglishWord(input.value)) {
         return;
       }
+      // The panel must still describe this cell's value: a paste fills the
+      // cells without an input event and leaves the old panel up, and its
+      // first word would otherwise overwrite whatever was pasted.
       const first = panel.querySelector<HTMLButtonElement>(".recovery-suggestion");
-      if (panel.hidden || !first) {
+      const prefix = input.value.trim().toLowerCase();
+      const word = first?.textContent ?? "";
+      if (
+        panel.hidden ||
+        activeInput !== input ||
+        prefix.length === 0 ||
+        !word.startsWith(prefix)
+      ) {
         return;
       }
       event.preventDefault();
-      applySuggestion(input, first.textContent ?? "");
+      applySuggestion(input, word);
     });
   }
 

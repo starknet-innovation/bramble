@@ -87,6 +87,55 @@ describe("recovery word assist keyboard completion", () => {
     expect(document.activeElement).toBe(second);
   });
 
+  test("a stale panel left by a paste never rewrites the pasted word", () => {
+    const [first] = mount();
+    if (!first) throw new Error("missing input");
+    first.focus();
+    first.value = "ab";
+    first.dispatchEvent(new window.Event("input", { bubbles: true }));
+    expect(suggestionsShown()).toBeGreaterThan(0);
+    // A paste fills the cell programmatically (no input event), with a typo
+    // that is not a wordlist word, and the "ab" panel is still up.
+    first.value = "zbandon";
+    const event = new window.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+    });
+    first.dispatchEvent(event);
+    expect(first.value).toBe("zbandon");
+    expect(event.defaultPrevented).toBe(false);
+    // A cell the paste left empty is not filled from the stale panel either.
+    first.value = "";
+    const empty = new window.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Tab",
+    });
+    first.dispatchEvent(empty);
+    expect(first.value).toBe("");
+    expect(empty.defaultPrevented).toBe(false);
+  });
+
+  test("a panel opened for another cell never completes this one", () => {
+    const [first, second] = mount();
+    if (!first || !second) throw new Error("missing inputs");
+    first.focus();
+    first.value = "ab";
+    first.dispatchEvent(new window.Event("input", { bubbles: true }));
+    expect(suggestionsShown()).toBeGreaterThan(0);
+    // The second cell receives a keydown while the first cell's panel is up.
+    second.value = "ab";
+    const event = new window.KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Tab",
+    });
+    second.dispatchEvent(event);
+    expect(second.value).toBe("ab");
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   test("Shift+Tab never applies a suggestion", () => {
     const [first] = mount();
     if (!first) throw new Error("missing input");
