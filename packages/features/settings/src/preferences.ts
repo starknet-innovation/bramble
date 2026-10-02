@@ -66,6 +66,8 @@ export type {
 export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
 /** Custom-network count bound, re-exported with the store that applies it. */
 export { MAX_CUSTOM_NETWORKS } from "./preferences-custom-networks";
+/** Added-token count bound, re-exported with the store that applies it. */
+export { MAX_ADDED_TOKENS_PER_NETWORK } from "./preferences-tokens";
 /** Re-exported store schema and capability types. */
 export type {
   TokenSource,
@@ -469,8 +471,11 @@ export const createPreferencesStore = ({
         return next;
       },
       async upsertToken(token, source) {
-        const next = withUpsertedToken(await read(), token, source);
-        await writePreferences(store, next);
+        const preferences = await read();
+        const next = withUpsertedToken(preferences, token, source);
+        if (next !== preferences) {
+          await writePreferences(store, next);
+        }
         return next;
       },
     },

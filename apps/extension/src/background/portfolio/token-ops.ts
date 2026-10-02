@@ -103,6 +103,16 @@ const handleAddToken: TokenHandler = async (deps, message) => {
   }
   const preferences = await preferencesStore.read();
   const network = STARKNET_NETWORKS[preferences.activeNetworkId];
+  // An address already tracked stays one record, whatever symbol the contract
+  // reports now; re-adding it is a no-op rather than a second balance row. A
+  // record a dapp supplied (audit 171) goes on, so the store replaces it with
+  // the chain's metadata and the user's add is what makes it trusted.
+  const tracked = preferences.tokens.find(
+    (token) => token.networkId === network.id && sameFelt(token.address, input.address),
+  );
+  if (tracked && !(preferences.dappTokenIds ?? []).includes(tracked.id)) {
+    return { ok: true, preferences };
+  }
   const metadata = await fetchTokenMetadata(
     runtimeRpc,
     input.address,
