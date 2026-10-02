@@ -13,6 +13,7 @@ import {
   preferredStrk20FeeToken,
   resolveStrk20FeeBound,
   reviewedFeeCeiling,
+  strk20SendFeeModel,
   withinFeeBound,
 } from "@bramble/privacy/fee-bound";
 import {
@@ -190,5 +191,52 @@ describe("preferredStrk20FeeToken", () => {
 
   test("honours a configured fallback other than STRK", () => {
     expect(preferredStrk20FeeToken([], USDC)).toBe(USDC);
+  });
+});
+
+/**
+ * The fee token the Send affordability gate reserves against must match the one
+ * the quote above selects, or the gate blocks a send the relay would accept, or
+ * reserves the wrong balance.
+ */
+describe("strk20SendFeeModel", () => {
+  test("follows the sent token when a converted ceiling bounds the fee", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: 7n,
+        fallbackFeeToken: STRK_TOKEN_ADDRESS,
+        token: USDC,
+      }),
+    ).toEqual({ convertedCeiling: 7n, feeToken: USDC });
+  });
+
+  test("falls back to the fee token when the sent token is the fee token", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: 7n,
+        fallbackFeeToken: STRK_TOKEN_ADDRESS,
+        token: STRK_TOKEN_ADDRESS,
+      }),
+    ).toEqual({ convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS });
+  });
+
+  test("falls back when no independent reference bounds a conversion", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: null,
+        fallbackFeeToken: STRK_TOKEN_ADDRESS,
+        token: USDC,
+      }),
+    ).toEqual({ convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS });
+  });
+
+  test("honours a configured fallback other than STRK", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: null,
+        fallbackFeeToken: USDC,
+        token: STRK_TOKEN_ADDRESS,
+      }),
+    ).toEqual({ convertedCeiling: null, feeToken: USDC });
   });
 });
