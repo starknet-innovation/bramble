@@ -97,7 +97,9 @@ describe("recipient search Enter (audit #248)", () => {
   test("Enter on an invalid entry stays on the recipient step", async () => {
     const { app, calls, deps } = mount();
     bindTransfer(deps);
-    const event = pressEnter(typeRecipient(app, "not-an-address"));
+    // Neither a felt nor a well-formed Starknet name (the space is not a legal
+    // name character), so nothing is offered to resolve or to review.
+    const event = pressEnter(typeRecipient(app, "not a valid entry"));
     await flush();
     expect(event.defaultPrevented).toBe(true);
     expect(app.querySelector<HTMLFormElement>("#transfer-form")?.dataset["stage"]).not.toBe(

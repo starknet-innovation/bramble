@@ -34,6 +34,8 @@ type SendMode =
   | "fee-failure"
   | "pending"
   | "recipient"
+  | "recipient-name"
+  | "recipient-name-missing"
   | "review"
   | "reviewing"
   | "submitted";
@@ -127,6 +129,15 @@ const prepareSend =
         if (type === "wallet.activity") {
           return fixtureActivity(mode, context, unresolved);
         }
+        if (type === "wallet.resolveStarkName") {
+          context.emit({ detail: "fixture Starknet name resolution", kind: "response" });
+          // One name is registered in the fixture; anything else is the naming
+          // contract's own zero answer, so the not-found state is reachable too.
+          const name = (message as { readonly name?: unknown }).name;
+          return name === "altaga.braavos.stark"
+            ? { ok: true, resolution: { address: RECIPIENT_ADDRESS, status: "resolved" } }
+            : { ok: true, resolution: { status: "not-found" } };
+        }
         return { error: "UI Lab blocks non-fixture runtime requests" };
       },
     });
@@ -140,6 +151,23 @@ const prepareSend =
       wallet,
     });
     if (mode === "recipient") {
+      return;
+    }
+    if (mode === "recipient-name" || mode === "recipient-name-missing") {
+      // A typed Starknet name is resolved by the fixture before the checkpoint
+      // settles: the resolved address becomes the recipient and the typed name
+      // is its visible label, the same state the real wallet reaches once the
+      // background answers. The missing variant types an unregistered name, so
+      // the field's own not-found note is the state on screen.
+      const search = context.app.querySelector<HTMLInputElement>("#send-recipient-search");
+      if (!search) {
+        throw new Error("Missing production Send recipient field");
+      }
+      search.value =
+        mode === "recipient-name-missing" ? "nobody.braavos.stark" : "altaga.braavos.stark";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      context.app.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
+      await nextTurn();
       return;
     }
     context.app.querySelector<HTMLElement>(`[data-send-recipient="${RECIPIENT_ADDRESS}"]`)?.click();
@@ -200,6 +228,16 @@ export const sendScenario: WalletScenario = {
       "recipient",
       "Choose recipient",
       "Accounts and saved contacts establish who will receive funds before amount entry.",
+    ),
+    sendCheckpoint(
+      "recipient-name",
+      "Recipient by name",
+      "A typed Starknet name resolves to an address, which becomes the recipient while the typed name stays as its label.",
+    ),
+    sendCheckpoint(
+      "recipient-name-missing",
+      "Name not found",
+      "An unregistered name commits no recipient and says so in the field's own note.",
     ),
     sendCheckpoint(
       "details",

@@ -16,6 +16,16 @@ const meta: LabMeta = {
 export default meta;
 
 export const SendRecipient = checkpointStory("Send · recipient", "send", "recipient");
+export const SendRecipientByName = checkpointStory(
+  "Send · recipient by name",
+  "send",
+  "recipient-name",
+);
+export const SendRecipientNameMissing = checkpointStory(
+  "Send · name not found",
+  "send",
+  "recipient-name-missing",
+);
 export const SendDetails = checkpointStory("Send · amount", "send", "details");
 export const SendAsset = checkpointStory("Send · asset picker", "send", "asset");
 export const SendReview = checkpointStory("Send · review", "send", "review");

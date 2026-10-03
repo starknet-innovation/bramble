@@ -3,9 +3,11 @@
  */
 
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import type { StarkNameResolution } from "@bramble/starknet/stark-name";
 import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
 import {
   isHexChainId,
+  isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
 } from "@bramble/wallet-model/networks";
@@ -411,3 +413,46 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   value["ok"] === true &&
   isAccountId(value["accountId"]) &&
   typeof value["deployed"] === "boolean";
+
+/**
+ * A typed Starknet name resolved by the background. `resolution` is a
+ * discriminated outcome: only `resolved` carries an address, and that address
+ * must be a nonzero felt, so a malformed envelope can never be read as a
+ * recipient.
+ */
+export type StarkNameResolutionResponse = {
+  readonly ok: true;
+  readonly resolution: StarkNameResolution;
+};
+
+const isStarkNameResolution = (value: unknown): value is StarkNameResolution => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  switch (value["status"]) {
+    case "resolved":
+      return (
+        hasOnlyKnownKeys(value, ["address", "status"]) &&
+        typeof value["address"] === "string" &&
+        isNonZeroStarkFieldElement(value["address"])
+      );
+    case "not-found":
+    case "unreachable":
+    case "unsupported-network":
+      return hasOnlyKnownKeys(value, ["status"]);
+    default:
+      return false;
+  }
+};
+
+/**
+ * Checks a name-resolution response before the recipient step trusts it.
+ */
+export const isStarkNameResolutionResponse = (
+  value: unknown,
+): value is StarkNameResolutionResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "resolution"]) &&
+  value["ok"] === true &&
+  isStarkNameResolution(value["resolution"]);

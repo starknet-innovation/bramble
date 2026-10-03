@@ -104,6 +104,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
   { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
   {
+    message: { name: "fricoben.stark", type: "wallet.resolveStarkName" },
+    sender: extensionSender,
+  },
+  {
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.deploymentData" },
     sender: contentSender,
   },

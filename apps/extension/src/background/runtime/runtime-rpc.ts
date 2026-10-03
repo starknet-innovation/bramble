@@ -70,6 +70,7 @@ import {
   type TransactionStatusInput,
   type TransferInput,
 } from "@bramble/starknet/rpc";
+import { type ResolveStarkNameInput, resolveStarkName } from "@bramble/starknet/stark-name";
 import {
   type ExternalAllowanceScan,
   readTrackedAllowances,
@@ -202,6 +203,12 @@ export type RuntimeRpc = {
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;
+  /**
+   * Resolves a Starknet ID name (a typed `name.stark`) to an account address on
+   * the active network's endpoints. Optional so existing RPC stubs stay valid;
+   * when absent the name resolution handler reports the surface unavailable.
+   */
+  readonly resolveStarkName?: (input: ResolveStarkNameInput) => ReturnType<typeof resolveStarkName>;
   readonly submitAccountDeployment: (
     input: DeployAccountInput,
   ) => ReturnType<typeof submitAccountDeployment>;
@@ -323,6 +330,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),
+  resolveStarkName,
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,

@@ -20,6 +20,7 @@
     "./snip12-merkle": "./src/transactions/snip12-merkle.ts",
     "./snip12-scalars": "./src/transactions/snip12-scalars.ts",
     "./snip12-vocabulary": "./src/transactions/snip12-vocabulary.ts",
+    "./stark-name": "./src/rpc/stark-name.ts",
     "./typed-data": "./src/transactions/typed-data.ts"
   },
   "scripts": {

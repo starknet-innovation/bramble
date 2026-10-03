@@ -13,6 +13,7 @@ import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
+import type { StarkNameResolution } from "@bramble/starknet/stark-name";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { SwapCatalogToken } from "@bramble/transactions/avnu";
@@ -289,6 +290,17 @@ type ClassHashVerificationResponse = {
 };
 
 /**
+ * A typed Starknet ID name resolved on the active network. `resolution` carries
+ * the discriminated {@link StarkNameResolution} outcome so the UI can
+ * distinguish resolved / not-found / unsupported-network / unreachable without
+ * re-reading the chain.
+ */
+type StarkNameResolutionResponse = {
+  readonly ok: true;
+  readonly resolution: StarkNameResolution;
+};
+
+/**
  * Supported spec or wallet-API version list returned through the dapp provider
  * bridge for the discovery methods.
  */
@@ -415,6 +427,7 @@ export type RuntimeResponse =
   | DeclareResponse
   | ChainIdResponse
   | ClassHashVerificationResponse
+  | StarkNameResolutionResponse
   | ConnectedSitesResponse
   | CreateAccountResponse
   | DeploymentDataResponse

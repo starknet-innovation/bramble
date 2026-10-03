@@ -203,6 +203,12 @@ export const makeWallet = (
       calls.reviewTransfer.push(args);
       return feeReview;
     },
+    async resolveStarkName() {
+      // Benign default: no name resolves, so a suite that drives the shared
+      // Send binding never has a name accidentally commit an address. Suites
+      // that assert resolution override this per test.
+      return { ok: true, resolution: { status: "not-found" } };
+    },
     async submitTransfer(...args: unknown[]) {
       calls.submitTransfer.push(args);
       return "0xdeadbeef";

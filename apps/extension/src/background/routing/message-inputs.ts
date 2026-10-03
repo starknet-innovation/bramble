@@ -71,6 +71,24 @@ const readInvokeCall = (value: unknown): Call | null => {
 export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
   isRecord(message) && hasOnlyKnownKeys(message, ["type"]) && message["type"] === type;
 
+// A Starknet name is a dotted list of 1-48 character labels plus the `.stark`
+// suffix; the bound leaves comfortable room while keeping an untrusted string
+// out of the RPC call.
+const MAX_STARK_NAME_CHARACTERS = 128;
+
+/**
+ * Parses the name-resolution reader's typed Starknet name.
+ */
+export const readStarkNameInput = (message: unknown): { readonly name: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["name", "type"]) &&
+  message["type"] === "wallet.resolveStarkName" &&
+  typeof message["name"] === "string" &&
+  message["name"].trim().length > 0 &&
+  message["name"].length <= MAX_STARK_NAME_CHARACTERS
+    ? { name: message["name"] }
+    : null;
+
 /**
  * Parses the balance reader's optional local-snapshot request.
  */

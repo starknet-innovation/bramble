@@ -126,6 +126,15 @@ export const SEND_COMPOSE_STYLES = `
     .send-amount-field input:not(:disabled):hover { background: transparent; }
   }
   .send-recipient-list, .send-asset-list { display: grid; gap: ${SPACE.sm}; }
+  /* The name-resolution readout sits directly under the field that caused it:
+     the resolving line while the read runs, and the reason it did not commit
+     when it fails. Muted, because it annotates the field rather than warning. */
+  .send-recipient-note {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.label.size};
+    line-height: ${TYPE.label.line};
+    margin: 0;
+  }
   .send-list-heading {
     align-items: center;
     color: var(--bramble-muted);

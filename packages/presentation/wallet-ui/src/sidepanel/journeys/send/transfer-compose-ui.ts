@@ -4,6 +4,7 @@
  * to the parent transfer state machine.
  */
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import type { StarkNameResolutionResponse } from "../../../popup/responses/responses";
 import { formatFiat } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
 import { bindTokenDropdown } from "../../shared/token-dropdown";
@@ -16,6 +17,7 @@ import {
   tokenInputFiat,
 } from "./send-model";
 import {
+  isStarkName,
   recipientFieldError,
   type TransferExitView,
   type TransferFields,
@@ -184,10 +186,17 @@ const bindRecipientControls = (
   goTo: (stage: TransferStage) => void,
   onFields: (fields: TransferFields) => void,
   navigate?: (view: TransferExitView) => void,
+  resolveName?: (name: string) => Promise<StarkNameResolutionResponse | null>,
 ): void => {
   const search = form.querySelector<HTMLInputElement>("#send-recipient-search");
   const continueButton = form.querySelector<HTMLButtonElement>("#send-recipient-continue");
   const saveRow = form.querySelector<HTMLElement>("#send-recipient-save-row");
+  const note = form.querySelector<HTMLElement>("#send-recipient-note");
+  const setNote = (message: string): void => {
+    if (!note) return;
+    note.textContent = message;
+    note.toggleAttribute("hidden", message.length === 0);
+  };
   const updateSearch = (): void => {
     const query = search?.value.trim().toLowerCase() ?? "";
     let visible = 0;
@@ -209,14 +218,25 @@ const bindRecipientControls = (
     });
     form.querySelector("#send-recipient-empty")?.toggleAttribute("hidden", visible > 0);
     const typed = search?.value ?? "";
-    const valid = recipientFieldError(typed) === null;
-    if (continueButton) continueButton.disabled = !valid;
+    // A bare address, or a Starknet name the background can resolve, is enough
+    // to step forward; anything else keeps the step from advancing.
+    const addressValid = recipientFieldError(typed) === null;
+    const nameValid = !addressValid && isStarkName(typed);
+    if (continueButton) continueButton.disabled = !(addressValid || nameValid);
     // Offered only for an address that is both usable and not already known,
     // so saving is a deliberate act on a new recipient rather than a way to
-    // duplicate a contact under a second name.
-    saveRow?.toggleAttribute("hidden", !(navigate && valid && isUnlistedRecipient(form, typed)));
+    // duplicate a contact under a second name. A name is never offered: the
+    // address book holds addresses, and a name only becomes one once resolved.
+    saveRow?.toggleAttribute(
+      "hidden",
+      !(navigate && addressValid && isUnlistedRecipient(form, typed)),
+    );
   };
-  search?.addEventListener("input", updateSearch);
+  search?.addEventListener("input", () => {
+    // A new keystroke retires the previous name's resolving or error note.
+    setNote("");
+    updateSearch();
+  });
   // Folder state is DOM-local: the recipient stage is toggled rather than
   // re-rendered, so a collapse survives without threading state through the
   // entrypoint the way the drawer does.
@@ -240,6 +260,7 @@ const bindRecipientControls = (
     }
   });
   const choose = (address: string, label: string): void => {
+    setNote("");
     setSendFormValue(form, "recipient", address);
     setSendFormValue(form, "recipientLabel", label);
     onFields(transferFields(form));
@@ -250,25 +271,80 @@ const bindRecipientControls = (
       choose(row.dataset["sendRecipient"] ?? "", row.dataset["sendRecipientLabel"] ?? ""),
     );
   });
-  // Commits the typed address as the recipient. Shared by "Continue with
-  // address" and Enter in the search field: without the latter, Enter fell
+  // Reads a name-resolution failure into the same short, literal note the
+  // resolving step shows. A resolved outcome never reaches here.
+  const resolutionFailure = (
+    response: StarkNameResolutionResponse | null,
+    name: string,
+  ): string => {
+    if (response === null) {
+      return `Could not resolve ${name}.`;
+    }
+    switch (response.resolution.status) {
+      case "not-found":
+        return `No address found for ${name}.`;
+      case "unreachable":
+        return `Could not reach the network to resolve ${name}.`;
+      case "unsupported-network":
+        return "Starknet names are not available on this network.";
+      default:
+        return `Could not resolve ${name}.`;
+    }
+  };
+  // Commits the typed value as the recipient. A bare address is taken as is; a
+  // Starknet name is resolved to an address first, and only the resolved
+  // address is reviewed (its label stays the typed name). Shared by "Continue
+  // with address" and Enter in the search field: without the latter, Enter fell
   // through to implicit form submission and reviewed the PREVIOUSLY chosen
   // hidden recipient, not the address on screen (audit 248).
-  const commitTyped = (): void => {
-    const address = search?.value.trim() ?? "";
-    if (recipientFieldError(address)) {
+  let resolving = false;
+  const commitTyped = async (): Promise<void> => {
+    if (resolving) return;
+    const typed = search?.value.trim() ?? "";
+    if (recipientFieldError(typed) === null) {
+      // A pasted address that is already on the screen reads as the row it
+      // matches, the same as tapping that row would.
+      choose(typed, knownRecipientLabel(form, typed) || accountLabel(typed));
+      return;
+    }
+    if (!isStarkName(typed) || !resolveName) {
       search?.focus();
       return;
     }
-    // A pasted address that is already on the screen reads as the row it
-    // matches, the same as tapping that row would.
-    choose(address, knownRecipientLabel(form, address) || accountLabel(address));
+    resolving = true;
+    if (continueButton) continueButton.disabled = true;
+    setNote(`Resolving ${typed}…`);
+    let response: StarkNameResolutionResponse | null = null;
+    try {
+      response = await resolveName(typed);
+    } catch {
+      // A thrown resolver is the same failure as a malformed reply: no address
+      // is committed, and the field says so rather than staying stuck on
+      // "Resolving".
+      response = null;
+    } finally {
+      resolving = false;
+    }
+    // A repaint or close while the read was in flight leaves this form
+    // detached; a resolution that lands there must not commit a recipient.
+    if (!form.isConnected) return;
+    if (response?.resolution.status === "resolved") {
+      choose(response.resolution.address, typed);
+      return;
+    }
+    // Re-enable the control for the current text (which is still a valid name)
+    // before showing why the last attempt did not commit.
+    updateSearch();
+    setNote(resolutionFailure(response, typed));
+    search?.focus();
   };
-  continueButton?.addEventListener("click", commitTyped);
+  continueButton?.addEventListener("click", () => {
+    void commitTyped();
+  });
   search?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      commitTyped();
+      void commitTyped();
     }
   });
   updateSearch();
@@ -370,6 +446,7 @@ export const bindTransferCompose = ({
   goTo,
   navigate,
   onFields,
+  resolveName,
   spendable,
 }: {
   readonly form: HTMLFormElement;
@@ -377,10 +454,12 @@ export const bindTransferCompose = ({
   readonly onFields: (fields: TransferFields) => void;
   /** Leaves Send for another screen: the address book, or token management. */
   readonly navigate?: (view: TransferExitView) => void;
+  /** Resolves a typed Starknet name to an address; absent disables name entry. */
+  readonly resolveName?: (name: string) => Promise<StarkNameResolutionResponse | null>;
   /** Raw spendable units for the composed route; `null` withholds Max/Half. */
   readonly spendable?: () => bigint | null;
 }): void => {
-  bindRecipientControls(form, goTo, onFields, navigate);
+  bindRecipientControls(form, goTo, onFields, navigate, resolveName);
   bindAssetControls(form, onFields, navigate);
   bindAmountControls(form, onFields, spendable);
 };

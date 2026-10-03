@@ -383,4 +383,7 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     async verifyAccountClassHash() {
       return { onChainClassHash: account.classHash, status: "verified" };
     },
+    async resolveStarkName() {
+      return { address: account.address, status: "resolved" };
+    },
   });

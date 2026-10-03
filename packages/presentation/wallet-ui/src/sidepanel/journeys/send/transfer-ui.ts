@@ -224,6 +224,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       transferState = { ...transferState, fields };
     },
     navigate: (view) => deps.navigate?.(view),
+    resolveName: (name) => wallet.resolveStarkName(name),
     spendable: () => transferSpendable(routeContext()),
   });
   bindTransferBuckets({

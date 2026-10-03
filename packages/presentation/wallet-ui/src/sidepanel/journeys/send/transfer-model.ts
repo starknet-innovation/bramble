@@ -4,6 +4,7 @@
  * explicit and independently testable.
  */
 
+import { normalizeStarkName } from "@bramble/starknet/stark-name";
 import type { ValueBucket } from "@bramble/transactions/send-routes";
 import { isStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { errorMessage } from "../../shared/dom";
@@ -26,6 +27,15 @@ const INVALID_REVIEW_ERRORS = new Set([
  */
 export const recipientFieldError = (recipient: string): string | null =>
   isStarkFieldElement(normalizeFeltInput(recipient)) ? null : INVALID_RECIPIENT_MESSAGE;
+
+/**
+ * True when the text is a syntactically valid Starknet name (for example
+ * `name.stark` or `name.braavos.stark`). A name is not an address: it is only
+ * offered to the background for resolution, and the address it resolves to is
+ * what a review is built from. A bare hex address is judged by
+ * {@link recipientFieldError} instead.
+ */
+export const isStarkName = (value: string): boolean => normalizeStarkName(value) !== null;
 
 /**
  * Maps a malformed-recipient background error onto the same friendly copy.
