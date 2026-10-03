@@ -66,7 +66,7 @@ import { startRefreshLifecycle } from "./sync/lifecycle";
 import type { RefreshReason } from "./sync/refresh-scheduler";
 import { createMutationRuntime } from "./sync/runtime-refresh";
 
-/** Starts the wallet with injected Ledger and clock (`now` only dates the activity feed); fails closed without its runtime or root. */
+/** Starts the wallet with injected Ledger and clock (`now` dates the activity feed and times the privacy settle watch); fails closed without its runtime or root. */
 export const startWalletUi = async (
   ledgerConnector: LedgerConnector,
   extensionApi?: WalletUiBrowser,
@@ -192,6 +192,7 @@ export const startWalletUi = async (
       back: goBack,
       navigate: (view) => navigate(view),
       onPrivateSendSettled: () => privacy.invalidate(),
+      onPrivateSendConfirmed: () => privacy.markPrivateSendSettled(),
       privacy: () => privacy.disclosure(),
       publicBalances: () => ("balances" in cache.balances ? cache.balances.balances : []),
       render,
@@ -403,6 +404,7 @@ export const startWalletUi = async (
         : undefined,
     paint,
     preferences: () => cache.preferences,
+    ...(now ? { now } : {}),
     status: () => cache.status,
     wallet,
   });
