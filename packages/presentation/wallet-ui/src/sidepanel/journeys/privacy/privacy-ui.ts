@@ -30,6 +30,7 @@ import {
 } from "./privacy-model";
 import { createPendingRegistrationPoll } from "./privacy-pending-poll";
 import type { PreparationProgress } from "./privacy-preparation-job";
+import { createPrivateSettlePoll } from "./privacy-settle-poll";
 
 /**
  * The privacy surface's collaborators, defined beside the disclosure loader
@@ -266,6 +267,32 @@ const syncPendingPoll = (deps: PrivacyUiDeps): void => {
   });
 };
 
+// The settle poll's sibling for a completed private move. A shield or private
+// send is accepted by the chain before the privacy indexer reflects the moved
+// note, so the reading the ordinary discovery latches can predate the move and
+// the home looks unchanged. This re-reads in place for a bounded window so the
+// shielded balance appears without the user hunting for a refresh. It is armed
+// by the controller only once a private send confirms.
+const settlePoll = createPrivateSettlePoll();
+
+const syncSettlePoll = (deps: PrivacyUiDeps): void => {
+  const scope = captureScope(deps);
+  settlePoll.sync(deps.now ? (deps.settledAt?.() ?? null) : null, {
+    apply: (value) => {
+      deps.setDisclosure({ error: null, loading: false, value });
+      deps.paint();
+    },
+    load: () => deps.wallet.loadPrivacyState(),
+    ...(deps.now ? { now: deps.now } : {}),
+    scopeKey: scopeKey(scope),
+    stillCurrent: (value) =>
+      scopeMatches(deps, scope) &&
+      value.accountId === scope.accountId &&
+      value.networkId === scope.networkId,
+    visible: () => deps.app?.ownerDocument.visibilityState === "visible",
+  });
+};
+
 const bindDisclosure = (deps: PrivacyUiDeps): void => {
   // Balances are unified: discovery starts automatically for the unlocked
   // active account. `error` intentionally blocks re-triggering so a failing
@@ -283,6 +310,7 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
     void loadPrivacyDisclosure(deps);
   }
   syncPendingPoll(deps);
+  syncSettlePoll(deps);
   // Deploy-then-register lands on the same journey as the plain entry, so both
   // reach the identical review.
   bindDeployAndRegister({

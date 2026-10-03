@@ -119,4 +119,83 @@ describe("private-balance staleness after a settled operation", () => {
     // in the Send flow while a journey may legitimately be mid-flight.
     expect(controller.journey()).toEqual({ stage: "idle" });
   });
+
+  test("an armed settle watch replaces the latched reading after a private send", async () => {
+    const clock = 1_000;
+    let disclosure: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: staleUnregistered,
+    };
+    const app = mount("");
+    let reads = 0;
+    bindPrivacy({
+      app,
+      balances: () => [],
+      disclosure: () => disclosure,
+      generation: () => 0,
+      journey: () => ({ stage: "idle" }),
+      navigate: () => undefined,
+      now: () => clock,
+      paint: () => undefined,
+      preferences: () => preferences,
+      // The Send flow told the controller a private send confirmed.
+      settledAt: () => clock,
+      setDisclosure: (state) => {
+        disclosure = state;
+      },
+      setJourney: () => undefined,
+      status: () => status,
+      wallet: {
+        // The pre-shield reading is cached, so only the settle watch re-reads;
+        // the indexer now reflects the moved balance.
+        loadPrivacyState: async () => {
+          reads += 1;
+          return { ...staleUnregistered, registration: "registered" as const };
+        },
+      } as unknown as SidepanelWallet,
+    });
+    await tick();
+    await tick();
+
+    expect(reads).toBeGreaterThan(0);
+    expect(disclosure.value?.registration).toBe("registered");
+  });
+
+  test("without an injected clock the settle watch stays off", async () => {
+    let disclosure: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: staleUnregistered,
+    };
+    const app = mount("");
+    let reads = 0;
+    bindPrivacy({
+      app,
+      balances: () => [],
+      disclosure: () => disclosure,
+      generation: () => 0,
+      journey: () => ({ stage: "idle" }),
+      navigate: () => undefined,
+      paint: () => undefined,
+      preferences: () => preferences,
+      settledAt: () => 1_000,
+      setDisclosure: (state) => {
+        disclosure = state;
+      },
+      setJourney: () => undefined,
+      status: () => status,
+      wallet: {
+        loadPrivacyState: async () => {
+          reads += 1;
+          return staleUnregistered;
+        },
+      } as unknown as SidepanelWallet,
+    });
+    await tick();
+    await tick();
+
+    expect(reads).toBe(0);
+    expect(disclosure.value).toEqual(staleUnregistered);
+  });
 });
