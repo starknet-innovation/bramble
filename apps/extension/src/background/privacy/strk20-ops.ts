@@ -7,6 +7,7 @@
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 
 import {
+  formatStrk20PoolFee,
   quoteStrk20Plan,
   summarizeStrk20Action,
   summarizeStrk20Plan,
@@ -188,7 +189,7 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
         "Activate private balances for this account",
         `Privacy pool ${config.poolAddress}`,
         `Registration preflight token ${token.address}`,
-        `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee`,
+        `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee`,
         "Publishes a viewing-key commitment, never the viewing key",
         "Opens this account's own private channel",
       ],

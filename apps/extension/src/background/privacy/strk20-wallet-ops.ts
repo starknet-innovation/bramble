@@ -14,6 +14,7 @@
 import { WalletError } from "@bramble/core/errors";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import {
+  formatStrk20PoolFee,
   prepareStrk20Registration,
   readStrk20Balances,
   readStrk20RegistrationStatus,
@@ -212,7 +213,7 @@ const registrationPreparationWork = async (
       summaries: [
         "Register this account with the privacy pool",
         "Registration is public and links this wallet address to its viewing key",
-        `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee from this account`,
+        `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee from this account`,
       ],
       token: context.token,
     };
