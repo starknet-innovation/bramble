@@ -8,6 +8,7 @@ import {
 import {
   discoveredNft,
   invokeApproval,
+  longActivity,
   NFT_CONTRACT,
   nftId,
   preferences,
@@ -140,6 +141,18 @@ const activityScenario: WalletScenario = {
       label: "Switch back",
       narrative: "Returning restores account A without any rows from account B.",
       state: { accountId: softwareAccount.id, entries: 5, foreignEntries: 0, scope: "SN_MAIN" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          activity: longActivity,
+          status: statusFor(softwareAccount),
+          view: "activity",
+        }),
+      id: "account-a-long",
+      label: "Long feed",
+      narrative: "The title bar keeps its place while only the feed scrolls beneath it.",
+      state: { accountId: softwareAccount.id, entries: 12, scope: "SN_MAIN" },
     },
   ],
   description:
