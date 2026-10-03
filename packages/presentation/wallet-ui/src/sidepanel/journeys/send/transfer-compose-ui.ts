@@ -327,7 +327,9 @@ const bindRecipientControls = (
     }
     // A repaint or close while the read was in flight leaves this form
     // detached; a resolution that lands there must not commit a recipient.
-    if (!form.isConnected) return;
+    // The same applies when the text was edited since: the commit that lands
+    // is for a name the field no longer shows.
+    if (!form.isConnected || (search?.value.trim() ?? "") !== typed) return;
     if (response?.resolution.status === "resolved") {
       choose(response.resolution.address, typed);
       return;

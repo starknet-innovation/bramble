@@ -88,6 +88,29 @@ describe("resolveStarkName", () => {
     ]);
   });
 
+  test("encodes each label of a multi-label name as its own felt", async () => {
+    // The calldata for `altaga.braavos.stark` (verified 2026-10-03): length
+    // prefix, one felt per label, then the hint array length. Pins the
+    // label-splitting path, not just the single-label one.
+    const calls: unknown[] = [];
+    await resolve(
+      providerWith({
+        async callContract(call) {
+          calls.push(call);
+          return [KNOWN_ADDRESS];
+        },
+      }),
+      "altaga.braavos.stark",
+    );
+    expect(calls).toEqual([
+      {
+        calldata: ["2", "2944239886", "55349935767", "0"],
+        contractAddress: "0x6ac597f8116f886fa1c97a23fa4e08299975ecaf6b598873ca6792b9bbfb678",
+        entrypoint: "domain_to_address",
+      },
+    ]);
+  });
+
   test("maps the contract's zero answer to not-found", async () => {
     for (const zero of [["0x0"], ["0x00"], ["0"]]) {
       const result = await resolve(providerWith({ callContract: async () => zero }));

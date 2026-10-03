@@ -235,4 +235,35 @@ describe("Send resolves a typed Starknet name", () => {
     expect(resolvedNames).toEqual([NAME]);
     expect(stages).toEqual(["details"]);
   });
+
+  test("a resolution that lands after the form is detached commits nothing", async () => {
+    const pending = deferred<StarkNameResolutionResponse | null>();
+    const { form, stages } = mount(() => pending.promise);
+
+    type(form, NAME);
+    clickContinue(form);
+    // The panel repaints (or closes) while the read is in flight.
+    form.remove();
+    pending.resolve(resolved);
+    await pending.promise;
+    await Promise.resolve();
+
+    expect(field(form, "recipient")).toBe("");
+    expect(stages).toEqual([]);
+  });
+
+  test("a resolution whose text was edited since is dropped, not committed", async () => {
+    const pending = deferred<StarkNameResolutionResponse | null>();
+    const { form, stages } = mount(() => pending.promise);
+
+    type(form, NAME);
+    clickContinue(form);
+    type(form, "other.braavos.stark");
+    pending.resolve(resolved);
+    await pending.promise;
+    await Promise.resolve();
+
+    expect(field(form, "recipient")).toBe("");
+    expect(stages).toEqual([]);
+  });
 });

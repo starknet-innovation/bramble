@@ -35,6 +35,7 @@ type SendMode =
   | "pending"
   | "recipient"
   | "recipient-name"
+  | "recipient-name-long"
   | "recipient-name-missing"
   | "review"
   | "reviewing"
@@ -153,18 +154,28 @@ const prepareSend =
     if (mode === "recipient") {
       return;
     }
-    if (mode === "recipient-name" || mode === "recipient-name-missing") {
+    if (
+      mode === "recipient-name" ||
+      mode === "recipient-name-missing" ||
+      mode === "recipient-name-long"
+    ) {
       // A typed Starknet name is resolved by the fixture before the checkpoint
       // settles: the resolved address becomes the recipient and the typed name
       // is its visible label, the same state the real wallet reaches once the
-      // background answers. The missing variant types an unregistered name, so
-      // the field's own not-found note is the state on screen.
+      // background answers. The missing and long variants type names that do
+      // not resolve, so the field's own note is the state on screen: the long
+      // one exercises the note's wrapping against the input bound.
       const search = context.app.querySelector<HTMLInputElement>("#send-recipient-search");
       if (!search) {
         throw new Error("Missing production Send recipient field");
       }
-      search.value =
-        mode === "recipient-name-missing" ? "nobody.braavos.stark" : "altaga.braavos.stark";
+      const typed =
+        mode === "recipient-name-long"
+          ? `${"a".repeat(40)}.${"b".repeat(40)}.stark`
+          : mode === "recipient-name-missing"
+            ? "nobody.braavos.stark"
+            : "altaga.braavos.stark";
+      search.value = typed;
       search.dispatchEvent(new Event("input", { bubbles: true }));
       context.app.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
       await nextTurn();
@@ -238,6 +249,11 @@ export const sendScenario: WalletScenario = {
       "recipient-name-missing",
       "Name not found",
       "An unregistered name commits no recipient and says so in the field's own note.",
+    ),
+    sendCheckpoint(
+      "recipient-name-long",
+      "Long name wraps",
+      "The longest accepted name keeps its note and field inside the panel width.",
     ),
     sendCheckpoint(
       "details",

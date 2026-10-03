@@ -134,6 +134,9 @@ export const SEND_COMPOSE_STYLES = `
     font-size: ${TYPE.label.size};
     line-height: ${TYPE.label.line};
     margin: 0;
+    /* A name can be a single long token; without this it sets the stage's
+       min-content width and widens the whole panel past the viewport. */
+    overflow-wrap: anywhere;
   }
   .send-list-heading {
     align-items: center;

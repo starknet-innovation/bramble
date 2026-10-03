@@ -26,6 +26,11 @@ export const SendRecipientNameMissing = checkpointStory(
   "send",
   "recipient-name-missing",
 );
+export const SendRecipientNameLong = checkpointStory(
+  "Send · long name wraps",
+  "send",
+  "recipient-name-long",
+);
 export const SendDetails = checkpointStory("Send · amount", "send", "details");
 export const SendAsset = checkpointStory("Send · asset picker", "send", "asset");
 export const SendReview = checkpointStory("Send · review", "send", "review");
