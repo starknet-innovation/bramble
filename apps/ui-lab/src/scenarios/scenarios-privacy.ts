@@ -243,6 +243,7 @@ export const privacyScenario: WalletScenario = {
           privateReady,
           {
             error: "The prover could not complete this proof. No transaction was submitted.",
+            severity: "danger",
             stage: "failure",
             tokenId: ETH_TOKEN.id,
           },
@@ -253,6 +254,25 @@ export const privacyScenario: WalletScenario = {
       narrative:
         "Failure is explicit, never auto-retries, and keeps retry or return choices close to the task.",
       state: { autoRetry: false, stage: "failure" },
+    },
+    {
+      content: () =>
+        privacyDashboard(
+          privateReady,
+          {
+            error:
+              "The wallet's background worker stopped while sending this private transaction, so its status is unknown. Check Activity before trying again.",
+            severity: "warning",
+            stage: "failure",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "activation-unknown",
+      label: "Status unknown",
+      narrative:
+        "A registration whose reply was lost may still be on chain: the amber tone and Activity lead, never the red failure with a blind retry (issue 382).",
+      state: { autoRetry: false, severity: "warning", stage: "failure" },
     },
     ...privacyDappCheckpoints,
   ],

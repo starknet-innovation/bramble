@@ -141,6 +141,7 @@ describe("privacy journey templates", () => {
 
     const failed = privacyFlow(status, preferences, {
       error: "<prover unavailable>",
+      severity: "danger",
       stage: "failure",
       tokenId: token.id,
     });
@@ -149,6 +150,21 @@ describe("privacy journey templates", () => {
     expect(failed).toContain('class="send-failure-ring"');
     expect(failed).toContain('class="send-failure-mark"');
     expect(failed).toContain('id="privacy-retry"');
+    expect(failed).toContain('data-severity="danger"');
+
+    // A submission whose reply was lost is a warning, not a failure: no red
+    // cross and no blind Try again, only Activity (issue 382).
+    const unknown = privacyFlow(status, preferences, {
+      error: "<worker lost>",
+      severity: "warning",
+      stage: "failure",
+      tokenId: token.id,
+    });
+    expect(unknown).toContain("Status unknown");
+    expect(unknown).toContain('data-severity="warning"');
+    expect(unknown).not.toContain('id="privacy-retry"');
+    expect(unknown).toContain('data-view="activity"');
+    expect(unknown).toContain('class="privacy-unknown-mark"');
 
     expect(privacyFlow(status, preferences, { stage: "idle" })).toContain(
       "Choose an asset to begin",
