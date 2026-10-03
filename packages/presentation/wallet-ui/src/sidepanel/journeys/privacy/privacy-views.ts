@@ -208,17 +208,35 @@ const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "succes
     </div>
   </section>`;
 
-const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failure" }>): string => `
-  <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive">
-    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg></span>
-    <h2>Private transaction not completed</h2>
+const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failure" }>): string => {
+  // A submission whose reply was lost is a warning, not a failure: it may still
+  // be on chain, so it leads with Activity rather than the Try again a failure
+  // offers (issue 382). The mark switches to the "!" the send receipt uses.
+  const warning = journey.severity === "warning";
+  return `
+  <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive" data-severity="${journey.severity}">
+    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /><path class="privacy-unknown-mark" d="M28 17v13m0 8v1" /></svg></span>
+    <h2>${warning ? "Status unknown" : "Private transaction not completed"}</h2>
     <p>${escapeHtml(journey.error)}</p>
-    <p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>
+    ${
+      warning
+        ? ""
+        : '<p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>'
+    }
     <div class="privacy-actions">
-      ${button({ attributes: { id: "privacy-retry" }, label: "Try again" })}
+      ${
+        warning
+          ? button({
+              attributes: { "data-view": "activity" },
+              icon: "activity",
+              label: "View activity",
+            })
+          : button({ attributes: { id: "privacy-retry" }, label: "Try again" })
+      }
       ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
     </div>
   </section>`;
+};
 
 type BlockedCopy = {
   readonly action: string;

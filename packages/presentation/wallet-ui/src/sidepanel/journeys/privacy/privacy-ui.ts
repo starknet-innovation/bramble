@@ -26,6 +26,7 @@ import {
   type PrivacyBlocker,
   type PrivacyJourneyState,
   privacyIneligibleKind,
+  privacyOutcomeSeverity,
 } from "./privacy-model";
 import { createPendingRegistrationPoll } from "./privacy-pending-poll";
 import type { PreparationProgress } from "./privacy-preparation-job";
@@ -395,6 +396,7 @@ const bindConfirmation = (
         }
         deps.setJourney({
           error: errorMessage(error, "Private transaction failed"),
+          severity: privacyOutcomeSeverity(error),
           stage: "failure",
           tokenId: journey.tokenId,
         });

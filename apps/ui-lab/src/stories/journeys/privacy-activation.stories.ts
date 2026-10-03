@@ -15,3 +15,5 @@ export const Submitted = checkpointStory("Activation submitted", "privacy", "act
 // Registration is the only journey left on this surface, so its failure state
 // belongs here rather than beside the shielding entry point.
 export const Failed = checkpointStory("Recover from failure", "privacy", "activation-failed");
+// A lost submission reply: amber, not the red failure, and no blind retry.
+export const StatusUnknown = checkpointStory("Status unknown", "privacy", "activation-unknown");
