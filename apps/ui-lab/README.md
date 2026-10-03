@@ -64,6 +64,15 @@ Storybook section.
 5. Use the Canvas for motion review and the Interactions panel to rewind or step through story play
    functions.
 
+## Accessibility readout
+
+`Wallet UI Lab / Accessibility scan` runs axe-core against the embedded wallet document, not the
+bench chrome, and reports the violations it finds. The review frame is script-free, so the scan
+renders the live document in an ephemeral twin frame, scans that twin's realm, and removes it.
+Open the story and use **Interactions** (or run `bun run test`) to read the result;
+`scanWalletFrame` and `scanWalletDocument` in `src/runtime/a11y-scan.ts` are the helper the lab
+and its tests drive.
+
 ## Journey coverage
 
 The lab has 208 deterministic checkpoints across 15 scenario families:
@@ -130,6 +139,9 @@ checkpoints for durable comparisons.
 - All accounts, sites, transactions, metadata, timing, errors, and device states are fixtures.
 - The wallet frame is a sandboxed `srcdoc` iframe with no script or navigation capability; forms
   are enabled only so parent-attached production bindings can intercept their submit events.
+- The accessibility scan renders the live wallet document a second time in an ephemeral,
+  script-enabled twin frame (same-origin so the bench can inject the engine), scans that twin, and
+  removes it immediately; the wallet frame above keeps its no-script boundary throughout.
 - Production bindings are attached by the lab only to deterministic in-memory runtime clients.
 - The lab must not import Chrome APIs, encrypted storage, Krusty KMS, Ledger transports, or live
   network clients.
