@@ -230,6 +230,16 @@ export const ONBOARDING_STYLES = `
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
   }
+  /* A wallet address is data, not a caption: read it in the mono voice at the
+     body size, at full text strength, so it is not smaller or quieter than the
+     account name above it. Matches the app's other address surfaces. */
+  .onboarding-account-copy [data-preview-address] {
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-mono);
+    font-size: ${TYPE.body.size};
+    line-height: ${TYPE.body.line};
+    overflow-wrap: anywhere;
+  }
   .onboarding-account {
     grid-template-columns: 44px minmax(0, 1fr) 40px;
     min-height: 76px;
