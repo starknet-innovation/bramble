@@ -71,6 +71,28 @@ describe("background strk20 messages", () => {
     });
   });
 
+  test("renders the registration pool fee in STRK, not as a raw felt", async () => {
+    const handler = buildHandler({ registered: false });
+    const held = handler({ origin, type: "wallet.strk20Register" }, contentSender);
+    await flushHeld();
+    const listed = await waitForPendingApprovals<{
+      readonly id: string;
+      readonly kind?: string;
+      readonly summaries?: readonly string[];
+    }>(handler, sender);
+    // The harness's pool fee is 0x1 base units, so its readable form is 1e-18
+    // STRK; the point is that the panel reads a STRK amount, never the felt.
+    expect(listed.at(-1)).toMatchObject({
+      kind: "strk20-register",
+      summaries: expect.arrayContaining([
+        "Approve and pay the reviewed 0.000000000000000001 STRK pool fee",
+      ]),
+    });
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    await held;
+  });
+
   test("does not submit registration when the user denies activation", async () => {
     const registerCalls = { value: 0 };
     const handler = buildHandler({ registerCalls, registered: false });

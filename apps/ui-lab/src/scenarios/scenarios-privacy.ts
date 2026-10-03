@@ -4,6 +4,7 @@
  */
 
 import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
+import { formatStrk20PoolFee } from "@bramble/privacy/service";
 import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
@@ -16,6 +17,7 @@ import {
   journeyBalances,
   journeyPreferences,
   journeyPrices,
+  POOL_FEE_FRI,
 } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { WalletScenario } from "../runtime/types";
@@ -32,6 +34,7 @@ const activation: PrivacyPreparation = {
   summaries: [
     "Register this account with the privacy pool",
     "Registration is public and links this wallet address to its viewing key",
+    `Approve and pay the reviewed ${formatStrk20PoolFee(POOL_FEE_FRI)} pool fee from this account`,
   ],
   symbol: ETH_TOKEN.symbol,
   tokenId: ETH_TOKEN.id,
@@ -47,9 +50,9 @@ const disclosure = (
     accountId: softwareAccount.id,
     balances,
     networkId: "SN_MAIN",
-    // The pool's 6 STRK action fee and a configured relay: the scenarios review
-    // the private route, which is only offered when a relay exists.
-    poolFeeFri: "0x53444835ec580000",
+    // A configured relay plus the pool's action fee: the scenarios review the
+    // private route, which is only offered when a relay exists.
+    poolFeeFri: POOL_FEE_FRI,
     registration,
     relayConfigured: true,
   },
