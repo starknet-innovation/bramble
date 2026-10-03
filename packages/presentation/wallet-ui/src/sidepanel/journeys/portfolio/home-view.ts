@@ -49,7 +49,8 @@ const heroDelta = (
   return `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
       <span class="hero-change-amt">${arrow} ${escapeHtml(formatFiat(delta.absolute, currency))}</span>
       <span class="hero-change-win">${delta.percent.toFixed(2)}% · 24h</span>
-    </p>`;
+    </p>
+    <p class="hero-note">Price change over 24h at your current balances; sends and receives aren't included.</p>`;
 };
 
 /**

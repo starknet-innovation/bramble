@@ -9,7 +9,7 @@ import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
-import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
 import { homeScreen } from "../../../../src/sidepanel/journeys/portfolio/home-view";
@@ -254,6 +254,67 @@ describe("sidepanel home", () => {
 
     expect(hero).not.toContain("hero-stale");
     expect(hero).not.toContain("last saved");
+  });
+
+  test("home hero caption states the 24h figures are price moves", () => {
+    const balance: TokenBalance = {
+      address: "0x00aa",
+      balance: "10000000000000000000",
+      decimals: 18,
+      formatted: "10",
+      id: "SN_MAIN:TKN:0x00aa",
+      name: "Token",
+      networkId: "SN_MAIN",
+      symbol: "TKN",
+    };
+    const html = dashboard(
+      "home",
+      status,
+      [],
+      preferences,
+      { balances: [balance] },
+      null,
+      [],
+      [],
+      { "0x00aa": 5 },
+      [],
+      null,
+      [],
+      null,
+      { "0x00aa": 4 },
+    );
+    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
+
+    // One caption carries the explanation once, so the token rows below need no
+    // per-row label.
+    expect(hero).toContain('class="hero-note"');
+    expect(hero).toContain(
+      "Price change over 24h at your current balances; sends and receives aren't included.",
+    );
+    expect(hero).toContain("· 24h");
+  });
+
+  test("home hero omits the caption when there is no priced baseline", () => {
+    const html = dashboard(
+      "home",
+      status,
+      [],
+      preferences,
+      { balances: [] },
+      null,
+      [],
+      [],
+      {},
+      [],
+      null,
+      [],
+      null,
+      {},
+    );
+    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
+
+    expect(hero).not.toContain("hero-note");
+    expect(hero).not.toContain("Price change over 24h");
   });
 
   test("saved balances survive a failed refresh with detail in the network status", () => {

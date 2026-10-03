@@ -313,6 +313,14 @@ export const BASE_STYLES = `
   }
   .read-only-notice #recover-account { margin-top: 2px; }
 
+  /* The 24h figures are price moves, not changes in balance; one quiet caption
+     under the hero says so once rather than repeating it on every token row. */
+  .hero-note {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    font-weight: 500;
+  }
+
   /* The frequent money actions are equal rounded-square tools. Their common
      shape makes the row instantly scannable; distinctive glyph silhouettes,
      not decorative colour, distinguish the jobs. */
