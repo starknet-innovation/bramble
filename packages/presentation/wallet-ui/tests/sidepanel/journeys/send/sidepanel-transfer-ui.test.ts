@@ -251,7 +251,7 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(calls.submitTransfer).toHaveLength(0);
-    expect(resultText(app)).toBe("Not enough ETH");
+    expect(resultText(app)).toBe("Not enough ETH. You need at least 1 ETH.");
 
     // Even if a refresh clears the gate, the stale review cannot submit. The
     // next click must produce a new review and only its confirm may send.

@@ -17,6 +17,19 @@ export default meta;
 
 export const SendRecipient = checkpointStory("Send · recipient", "send", "recipient");
 export const SendDetails = checkpointStory("Send · amount", "send", "details");
+export const SendInsufficientPrivateBalance: LabStory = {
+  args: { checkpointId: "private-shortfall", scenarioId: "send" },
+  name: "Send · insufficient private balance",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const needed =
+      "Not enough private STRK for this amount plus the pool fee. You need at least 7 STRK.";
+    await expect(body?.querySelector("#send-route-reason")).toHaveTextContent(needed);
+    await expect(body?.querySelector("#transfer-result")).toHaveTextContent(needed);
+  },
+};
 export const SendAsset = checkpointStory("Send · asset picker", "send", "asset");
 export const SendReview = checkpointStory("Send · review", "send", "review");
 export const SendFeeFailure = checkpointStory("Send · fee failure", "send", "fee-failure");

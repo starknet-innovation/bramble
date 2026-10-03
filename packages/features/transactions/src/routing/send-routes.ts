@@ -5,18 +5,20 @@
  * Shielding and unshielding are sends: a source bucket, a destination bucket,
  * and a recipient. Expressing all four combinations as one table means the
  * submission route, the fee source, and the on-chain disclosure are answered by
- * data rather than by three parallel flows that each re-derive them. Pure and
- * dependency-free on purpose, so the side panel and the background can gate
- * against the same rules.
+ * data rather than by three parallel flows that each re-derive them. It does no
+ * I/O and holds no state, so the side panel and the background can gate against
+ * the same rules.
  *
  * Out of scope: network gas. The account route's gas is estimated by the
  * existing review path and warned about by the fee-affordability guard; only
  * the pool's per-batch STRK charge is reasoned about here.
  */
 
+import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
   isNonZeroStarkFieldElement,
   STRK_TOKEN_ADDRESS,
+  STRK_TOKEN_DECIMALS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
 
@@ -66,6 +68,8 @@ export type SendRouteInput = {
   readonly sourceStrkBalanceRaw: bigint | null;
   readonly sourceTokenBalanceRaw: bigint | null;
   readonly tokenAddress: string;
+  /** The sent token's decimal scale, used to render a required minimum. */
+  readonly tokenDecimals: number;
   readonly tokenSymbol: string;
 };
 
@@ -223,10 +227,9 @@ const feeBlocker = (
   if (!shortOf(input.sourceStrkBalanceRaw, poolFeeFri)) {
     return null;
   }
+  const scope = input.source === "private" ? "private STRK" : "STRK";
   return refuse(
-    input.source === "private"
-      ? "Not enough private STRK to cover the pool fee"
-      : "Not enough STRK to cover the pool fee",
+    `Not enough ${scope} to cover the pool fee. You need at least ${formatTokenAmount(poolFeeFri, STRK_TOKEN_DECIMALS)} STRK.`,
   );
 };
 
@@ -243,7 +246,7 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
   }
   if (!route.poolFeeRequired) {
     return shortOf(input.sourceTokenBalanceRaw, input.amountRaw)
-      ? refuse(shortfall(input, route))
+      ? refuse(shortfall(input, route, input.amountRaw))
       : null;
   }
   if (input.poolFeeFri === null) {
@@ -257,16 +260,20 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
   // amount and the fee come out of one pot and must fit together.
   const needed = input.amountRaw + (tokenIsStrk ? input.poolFeeFri : 0n);
   if (shortOf(input.sourceTokenBalanceRaw, needed)) {
-    return refuse(shortfall(input, route));
+    return refuse(shortfall(input, route, needed));
   }
   return feeBlocker(input, input.poolFeeFri, tokenIsStrk);
 };
 
-const shortfall = (input: SendRouteInput, route: SendRoute): string => {
+// A refusal names the figure the user has to reach: the amount plus the pool fee
+// when that fee leaves the same balance, otherwise the amount alone. Stating the
+// minimum is what turns "not enough" into something the user can act on.
+const shortfall = (input: SendRouteInput, route: SendRoute, needed: bigint): string => {
   const asset = input.source === "private" ? `private ${input.tokenSymbol}` : input.tokenSymbol;
+  const minimum = `You need at least ${formatTokenAmount(needed, input.tokenDecimals)} ${input.tokenSymbol}.`;
   return route.poolFeeRequired && sameFelt(input.tokenAddress, STRK_TOKEN_ADDRESS)
-    ? `Not enough ${asset} for this amount plus the pool fee`
-    : `Not enough ${asset}`;
+    ? `Not enough ${asset} for this amount plus the pool fee. ${minimum}`
+    : `Not enough ${asset}. ${minimum}`;
 };
 
 /**

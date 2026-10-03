@@ -1,5 +1,5 @@
 import { ledgerMessage } from "@bramble/ledger-protocol/errors";
-import type { LedgerSignView } from "@bramble/wallet-ui/lab";
+import type { LedgerSignView, PrivacyDisclosureState } from "@bramble/wallet-ui/lab";
 import {
   bindTransfer,
   createSidepanelRuntime,
@@ -13,6 +13,7 @@ import {
   journeyChanges,
   journeyPreferences,
   journeyPrices,
+  STRK_TOKEN,
 } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "../runtime/types";
@@ -33,10 +34,35 @@ type SendMode =
   | "failed"
   | "fee-failure"
   | "pending"
+  | "private-shortfall"
   | "recipient"
   | "review"
   | "reviewing"
   | "submitted";
+
+// A registered account holding one private STRK, sending one STRK. The pool
+// charges its fee in STRK out of the same balance, so the amount plus the
+// 6 STRK fee cannot fit and the route refuses with the minimum it needs.
+const shortfallPrivacy = (): PrivacyDisclosureState => ({
+  error: null,
+  loading: false,
+  value: {
+    accountId: ledgerAccount.id,
+    balances: [
+      {
+        balance: "1000000000000000000",
+        formatted: "1",
+        symbol: STRK_TOKEN.symbol,
+        token: STRK_TOKEN.address,
+        tokenId: STRK_TOKEN.id,
+      },
+    ],
+    networkId: "SN_MAIN",
+    poolFeeFri: "0x53444835ec580000",
+    registration: "registered",
+    relayConfigured: true,
+  },
+});
 
 const waitForSendStage = async (
   form: HTMLFormElement,
@@ -138,6 +164,7 @@ const prepareSend =
       senderAddress: () => ledgerAccount.address,
       waitForConfirmation: async () => undefined,
       wallet,
+      ...(mode === "private-shortfall" ? { privacy: shortfallPrivacy } : {}),
     });
     if (mode === "recipient") {
       return;
@@ -147,6 +174,20 @@ const prepareSend =
     if (mode === "details") return;
     if (mode === "asset") {
       context.app.querySelector<HTMLButtonElement>("#send-token-trigger")?.click();
+      return;
+    }
+    if (mode === "private-shortfall") {
+      // Unshield one STRK from a one-STRK private balance: the pool fee is
+      // charged in STRK from the same balance, so the amount cannot fit and
+      // the amount step must name the figure it needs.
+      context.app.querySelector<HTMLButtonElement>('[data-send-bucket="source"]')?.click();
+      await nextTurn();
+      updateForm(context, "#send-amount-input", "1");
+      const shortfallForm = context.app.querySelector<HTMLFormElement>("#transfer-form");
+      if (!shortfallForm) {
+        throw new Error("Missing production Send form");
+      }
+      shortfallForm.requestSubmit();
       return;
     }
     updateForm(context, "#send-amount-input", "0.24");
@@ -205,6 +246,11 @@ export const sendScenario: WalletScenario = {
       "details",
       "Enter amount",
       "The chosen recipient and network remain visible while token or fiat value is entered.",
+    ),
+    sendCheckpoint(
+      "private-shortfall",
+      "Insufficient private balance",
+      "An unshield the private balance cannot cover names the figure the amount needs, not just that it falls short.",
     ),
     sendCheckpoint(
       "asset",
