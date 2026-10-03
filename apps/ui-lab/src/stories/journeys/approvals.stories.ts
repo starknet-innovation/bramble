@@ -1,6 +1,7 @@
 import { expect } from "storybook/test";
 import {
   assertCheckpointReady,
+  assertValueFits,
   checkpointStory,
   LAB_META,
   type LabMeta,
@@ -29,11 +30,14 @@ export const WatchAsset: LabStory = {
   name: "Approval · watch asset",
   play: async ({ canvasElement }) => {
     await assertCheckpointReady(canvasElement);
-    const body =
-      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    const mark = body?.querySelector<HTMLElement>(".request-token .token-mark");
+    const document =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument;
+    const mark = document?.querySelector<HTMLElement>(".request-token .token-mark");
     await expect(mark).toBeVisible();
-    expect(mark?.scrollWidth ?? 1).toBeLessThanOrEqual(mark?.clientWidth ?? 0);
+    if (!document) {
+      throw new Error("UI Lab wallet frame is unavailable");
+    }
+    assertValueFits(document, ".request-token .token-mark");
   },
 };
 export const SwitchChain = checkpointStory("Approval · switch chain", "approvals", "switch-chain");

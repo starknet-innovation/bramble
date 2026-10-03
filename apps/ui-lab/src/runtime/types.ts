@@ -1,6 +1,6 @@
 import type { WalletView } from "@bramble/wallet-ui/lab";
 
-export type LabSurface = "fullpage" | "popup" | "sidepanel";
+export type LabSurface = "fullpage" | "popup" | "sidepanel" | "sidepanel-min";
 export type LabTheme = "dark" | "light";
 
 export type LabEvent = {
