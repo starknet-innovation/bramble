@@ -13,6 +13,7 @@ import type {
   DisplayCurrency,
   ExplorerApiOverrides,
   ExplorerFallback,
+  FeeDisplayUnit,
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
@@ -40,6 +41,12 @@ export type WalletPreferences = {
    */
   readonly dappTokenIds?: readonly string[];
   readonly displayCurrency?: DisplayCurrency;
+  /**
+   * Unit the reviewed fee values are shown in. Absent means `"strk"`, the exact
+   * ceiling the approval binds. `"fiat"` only ever renders when a fresh STRK
+   * price is available, so a stored value can never present a stale figure.
+   */
+  readonly feeDisplayUnit?: FeeDisplayUnit;
   /** Per-network Starkscan-compatible read API override. */
   readonly explorerApiUrls?: ExplorerApiOverrides;
   /**
@@ -127,6 +134,7 @@ export type WalletPreferencesStore = {
   readonly setDisplay: (input: {
     readonly approvalSurface?: ApprovalSurfacePreference;
     readonly displayCurrency?: DisplayCurrency;
+    readonly feeDisplayUnit?: FeeDisplayUnit;
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;

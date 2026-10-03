@@ -365,3 +365,42 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
     });
   });
 };
+
+const boundFeeUnitToggles = new WeakSet<Element>();
+
+/**
+ * Wires the reviewed fee-unit toggles to the stored preference.
+ *
+ * A fee figure is rendered as a button carrying the state it flips in
+ * `aria-pressed` (true while the fiat reading shows), so the listener is
+ * delegated on the app root and a repainted review needs no re-binding. One
+ * tap stores the chosen unit and repaints, which is what makes the same choice
+ * follow the user to the next screen.
+ */
+export const bindFeeUnitToggle = ({ app, render, wallet }: BindingContext): void => {
+  if (!app || boundFeeUnitToggles.has(app)) {
+    return;
+  }
+  boundFeeUnitToggles.add(app);
+  app.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const button = target.closest<HTMLButtonElement>("[data-fee-toggle]");
+    if (!button || button.disabled) {
+      return;
+    }
+    const unit = button.getAttribute("aria-pressed") === "true" ? "strk" : "fiat";
+    button.disabled = true;
+    void wallet.setDisplay({ feeDisplayUnit: unit }).then(
+      async () => {
+        await render(await wallet.loadStatus());
+      },
+      (error: unknown) => {
+        button.disabled = false;
+        showToast(errorMessage(error, "Fee unit update failed"), "error", button);
+      },
+    );
+  });
+};

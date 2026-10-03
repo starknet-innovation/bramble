@@ -34,6 +34,27 @@ export const DECISION_STYLES = `
   /* The rule separates the cost ceiling from what precedes it; opening the
      send fee card, there is nothing above it inside the card to separate from. */
   .send-review-fee > .decision-boundary:first-child { box-shadow: none; padding-top: 0; }
+  /* A reviewed fee figure is a real button, so it is tappable and reachable by
+     keyboard, but it reads as the text it replaces. The dotted rule under it is
+     the only hint that the value switches unit. */
+  .fee-unit-toggle {
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-align: inherit;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--bramble-muted);
+    text-underline-offset: 2px;
+  }
+  .fee-unit-toggle:focus-visible {
+    border-radius: ${RADIUS.sm};
+    outline: 2px solid var(--bramble-accent);
+    outline-offset: 2px;
+  }
+  .fee-unit-toggle:disabled { cursor: default; opacity: 0.6; }
   /* What will happen is the sentence the decision rests on: primary ink, not
      the muted voice of supporting copy. */
   .decision-outcome > p:not(.decision-label) { color: var(--bramble-text); }

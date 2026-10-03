@@ -32,10 +32,11 @@ import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, hiddenOverlayMount, showToast } from "../shared/dom";
+import { feeDisplayFrom } from "../shared/fee-display";
 import { closeAfterGuardedClear } from "../shared/guarded-copy";
 import { isParkedCollectibleView } from "../shared/parts";
 import { utcDayKey } from "../shared/timestamp";
-import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
+import { bindAddressBook, bindApprovals, bindFeeUnitToggle } from "../shell/dashboard-bindings";
 import { bindDrawerFolders, createDrawerFolderState } from "../shell/drawer-folders-ui";
 import { applyEntryTheme, bindEntryNavigation } from "../shell/entry-ui";
 import {
@@ -190,6 +191,7 @@ export const startWalletUi = async (
     transfer.bindTransfer({
       app,
       back: goBack,
+      feeDisplay: () => feeDisplayFrom(cache.preferences, cache.prices, cache.priceStale),
       navigate: (view) => navigate(view),
       onPrivateSendSettled: () => privacy.invalidate(),
       privacy: () => privacy.disclosure(),
@@ -227,6 +229,8 @@ export const startWalletUi = async (
       wallet,
     });
     bindDisclosures(app);
+    // One binding covers the tap-to-switch-unit control on every reviewed fee.
+    bindFeeUnitToggle({ app, render, wallet });
     ledgerOnboard.bindTriggers(app);
     bindClusterScreens({
       app,

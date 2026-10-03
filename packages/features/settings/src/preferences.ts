@@ -24,6 +24,7 @@ import {
   isAddressBookEntry,
   isApprovalSurfacePreference,
   isDisplayCurrency,
+  isFeeDisplayUnit,
   isLabel,
   isThemeChoice,
   isTokenId,
@@ -58,6 +59,7 @@ export type {
   ExplorerApiOverrides,
   ExplorerFallback,
   ExplorerLanePreferences,
+  FeeDisplayUnit,
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
@@ -91,6 +93,23 @@ type WalletPreferencesStoreOptions = {
  */
 export { isWalletPreferences } from "./preferences-stored";
 
+/**
+ * The display fields one write changes: everything the caller named, and nothing
+ * it left out, so an absent choice never overwrites a stored one.
+ */
+const displayPatch = (
+  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
+): Partial<WalletPreferences> => ({
+  ...(input.approvalSurface === undefined ? {} : { approvalSurface: input.approvalSurface }),
+  ...(input.displayCurrency === undefined ? {} : { displayCurrency: input.displayCurrency }),
+  ...(input.feeDisplayUnit === undefined ? {} : { feeDisplayUnit: input.feeDisplayUnit }),
+  ...(input.productAnalytics === undefined ? {} : { productAnalytics: input.productAnalytics }),
+  ...(input.reliabilityDiagnostics === undefined
+    ? {}
+    : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
+  ...(input.theme === undefined ? {} : { theme: input.theme }),
+});
+
 const isValidDisplayInput = (
   input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
 ): boolean => {
@@ -98,6 +117,9 @@ const isValidDisplayInput = (
     return false;
   }
   if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
+    return false;
+  }
+  if (input.feeDisplayUnit !== undefined && !isFeeDisplayUnit(input.feeDisplayUnit)) {
     return false;
   }
   if (input.productAnalytics !== undefined && typeof input.productAnalytics !== "boolean") {
@@ -122,6 +144,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   addressBook: [],
   customNetworks: [],
   displayCurrency: "usd",
+  feeDisplayUnit: "strk",
   explorerFallback: {},
   explorerApiUrls: {},
   groups: [],
@@ -352,22 +375,7 @@ export const createPreferencesStore = ({
           throw new WalletError("Invalid display preference");
         }
         const preferences = await read();
-        const next = {
-          ...preferences,
-          ...(input.approvalSurface === undefined
-            ? {}
-            : { approvalSurface: input.approvalSurface }),
-          ...(input.displayCurrency === undefined
-            ? {}
-            : { displayCurrency: input.displayCurrency }),
-          ...(input.productAnalytics === undefined
-            ? {}
-            : { productAnalytics: input.productAnalytics }),
-          ...(input.reliabilityDiagnostics === undefined
-            ? {}
-            : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
-          ...(input.theme === undefined ? {} : { theme: input.theme }),
-        };
+        const next = { ...preferences, ...displayPatch(input) };
         await writePreferences(store, next);
         return next;
       },

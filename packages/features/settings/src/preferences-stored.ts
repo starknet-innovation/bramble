@@ -30,11 +30,13 @@ import {
   type AccountLabels,
   type AddressBookEntry,
   type DisplayCurrency,
+  type FeeDisplayUnit,
   isAccountLabels,
   isAddressBookEntry,
   isApprovalSurfacePreference,
   isDisplayCurrency,
   isExplorerFallback,
+  isFeeDisplayUnit,
   isHiddenTokens,
   isRpcOverrides,
   isThemeChoice,
@@ -58,6 +60,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "displayCurrency",
   "explorerApiUrls",
   "explorerFallback",
+  "feeDisplayUnit",
   "groups",
   "hiddenTokens",
   "nftIndexerUrl",
@@ -79,11 +82,14 @@ const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
   (Array.isArray(value["customNetworks"]) &&
     value["customNetworks"].every(isCustomNetwork) &&
     hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
+const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
+  (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
+  (value["feeDisplayUnit"] === undefined || isFeeDisplayUnit(value["feeDisplayUnit"]));
 const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
   (value["approvalSurface"] === undefined ||
     isApprovalSurfacePreference(value["approvalSurface"])) &&
-  (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
+  hasValidDisplayEntries(value) &&
   (value["explorerApiUrls"] === undefined || isRpcOverrides(value["explorerApiUrls"])) &&
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
@@ -349,6 +355,7 @@ export type ImportablePreferences = {
   readonly accountLabels?: AccountLabels;
   readonly activeNetworkId: StarknetNetworkId;
   readonly displayCurrency?: DisplayCurrency;
+  readonly feeDisplayUnit?: FeeDisplayUnit;
   readonly groups?: AccountGroups;
   readonly hiddenTokens?: readonly string[];
   readonly theme?: ThemeChoice;
@@ -374,6 +381,7 @@ export const pickImportablePreferences = (
   activeNetworkId: backup.activeNetworkId,
   ...(backup.accountLabels === undefined ? {} : { accountLabels: backup.accountLabels }),
   ...(backup.displayCurrency === undefined ? {} : { displayCurrency: backup.displayCurrency }),
+  ...(backup.feeDisplayUnit === undefined ? {} : { feeDisplayUnit: backup.feeDisplayUnit }),
   ...(backup.groups === undefined ? {} : { groups: backup.groups }),
   ...(backup.hiddenTokens === undefined ? {} : { hiddenTokens: backup.hiddenTokens }),
   ...(backup.theme === undefined ? {} : { theme: backup.theme }),

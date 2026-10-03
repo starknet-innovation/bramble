@@ -17,6 +17,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import { button } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
+import { type FeeDisplay, STRK_ONLY } from "../../shared/fee-display";
 import { icon } from "../../shared/icons";
 import { type WalletView, walletViewLabel } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
@@ -42,6 +43,7 @@ export const approvalTakeover = (
   actionable: readonly PendingApproval[],
   status: WalletStatus,
   pausedView: WalletView,
+  display: FeeDisplay = STRK_ONLY,
 ): string => {
   const first = actionable[0];
   if (!first) {
@@ -65,7 +67,7 @@ export const approvalTakeover = (
       <span class="takeover-continuity-mark">${icon("shield")}</span>
       <span><strong>${escapeHtml(pausedTask)} paused</strong></span>
     </section>
-    <ul class="request-list">${approvalCard(first, status)}</ul>
+    <ul class="request-list">${approvalCard(first, status, display)}</ul>
     <section class="approval-live" id="approval-live" role="status" aria-live="polite" hidden>
       <span class="approval-live-mark">${liquidDots("approval", true)}${liquidDotsFilter("approval")}</span>
       <div>

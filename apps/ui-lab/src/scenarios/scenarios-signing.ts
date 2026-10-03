@@ -3,6 +3,7 @@ import type { LedgerSignView } from "@bramble/wallet-ui/lab";
 import {
   bindTransfer,
   createSidepanelRuntime,
+  feeDisplayFrom,
   ledgerSignScreen,
   markTransferLedgerAuthorized,
   sendFlow,
@@ -111,7 +112,7 @@ const fixtureActivity = (
 };
 
 const prepareSend =
-  (mode: SendMode) =>
+  (mode: SendMode, feeUnit: "strk" | "fiat" = "strk") =>
   async (context: FrameContext): Promise<void> => {
     const unresolved = new Promise<never>(() => undefined);
     const wallet = createSidepanelRuntime({
@@ -133,6 +134,11 @@ const prepareSend =
     bindTransfer({
       app: context.app,
       confirmationDelaysMs: [0],
+      // The fixture carries a fresh STRK price, so the reviewed fee renders the
+      // unit the checkpoint asks for: the same wiring the shell performs, with
+      // the stored choice supplied instead of read from a store.
+      feeDisplay: () =>
+        feeDisplayFrom({ ...journeyPreferences, feeDisplayUnit: feeUnit }, journeyPrices, false),
       publicBalances: () => journeyBalances,
       render: async () => undefined,
       senderAddress: () => ledgerAccount.address,
@@ -172,7 +178,12 @@ const prepareSend =
     await waitForSendStage(form, mode);
   };
 
-const sendCheckpoint = (mode: SendMode, label: string, narrative: string): ScenarioCheckpoint => ({
+const sendCheckpoint = (
+  mode: SendMode,
+  label: string,
+  narrative: string,
+  feeUnit: "strk" | "fiat" = "strk",
+): ScenarioCheckpoint => ({
   content: () =>
     sendFlow(
       statusFor(ledgerAccount),
@@ -185,9 +196,10 @@ const sendCheckpoint = (mode: SendMode, label: string, narrative: string): Scena
   id: mode,
   label,
   narrative,
-  prepare: prepareSend(mode),
+  prepare: prepareSend(mode, feeUnit),
   state: {
     account: "Ledger vault",
+    feeUnit,
     fixture: true,
     stage: mode,
     transport: mode === "authorizing" || mode === "broadcasting" ? "parked" : "not-opened",
@@ -217,6 +229,19 @@ export const sendScenario: WalletScenario = {
       "The real Send binding waits on a deterministic delayed review response.",
     ),
     sendCheckpoint("review", "Review ready", "Decoded effects and fee are locked before signing."),
+    // The reviewed fee in the unit the user chose. The stored choice lives in
+    // the preferences store, which the lab has no write path for, so this
+    // checkpoint supplies it: the one state a screenshot of the default could
+    // never reach.
+    {
+      ...sendCheckpoint(
+        "review",
+        "Review ready (fee in USD)",
+        "The reviewed fee reads in the chosen unit, with the exact STRK ceiling kept beside it.",
+        "fiat",
+      ),
+      id: "review-fiat",
+    },
     sendCheckpoint(
       "fee-failure",
       "Fee estimate failed",

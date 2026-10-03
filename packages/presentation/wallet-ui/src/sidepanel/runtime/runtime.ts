@@ -68,6 +68,19 @@ import { unavailableStatus } from "./runtime-status";
 export type SidepanelWallet = ReturnType<typeof createSidepanelRuntime>;
 
 /**
+ * What a display-preference write may change. Every field is optional: a caller
+ * names only what it changes, so one control never rewrites another's choice.
+ */
+type DisplayPreferenceInput = {
+  readonly approvalSurface?: "popup" | "side-panel";
+  readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly feeDisplayUnit?: "strk" | "fiat";
+  readonly productAnalytics?: boolean;
+  readonly reliabilityDiagnostics?: boolean;
+  readonly theme?: "dark" | "light";
+};
+
+/**
  * Creates side panel actions over chrome.runtime messaging.
  */
 export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
@@ -376,13 +389,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       throw responseError(response, "label update failed");
     },
     ...createAccountGroupClient(sendMessage),
-    async setDisplay(input: {
-      readonly approvalSurface?: "popup" | "side-panel";
-      readonly displayCurrency?: "eur" | "gbp" | "usd";
-      readonly productAnalytics?: boolean;
-      readonly reliabilityDiagnostics?: boolean;
-      readonly theme?: "dark" | "light";
-    }): Promise<void> {
+    async setDisplay(input: DisplayPreferenceInput): Promise<void> {
       const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
       if (isPreferencesResponse(response)) {
         return;

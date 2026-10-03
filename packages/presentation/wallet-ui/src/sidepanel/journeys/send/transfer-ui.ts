@@ -5,6 +5,7 @@ import type { TokenBalance, WalletStatus } from "../../../popup/responses/respon
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation } from "../../shared/confirm-submitted";
 import { errorMessage, showToast } from "../../shared/dom";
+import type { FeeDisplay } from "../../shared/fee-display";
 import { watchDeployment } from "../../shell/shell-bindings";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
@@ -53,6 +54,8 @@ export type TransferUiDeps = {
   readonly app: Element | null;
   readonly back?: () => void;
   readonly confirmationDelaysMs?: readonly number[];
+  /** The fee reading (unit, currency, fresh STRK price) for review fee values. */
+  readonly feeDisplay?: () => FeeDisplay;
   readonly navigate?: (view: TransferExitView) => void;
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
@@ -124,7 +127,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   }
   const repaint = (): void =>
     transitionSendStage(form.ownerDocument, form.dataset["stage"], transferState.stage, () =>
-      applyTransferUi(form, transferState, deps.privacy?.().value?.poolFeeFri),
+      applyTransferUi(form, transferState, deps.privacy?.().value?.poolFeeFri, deps.feeDisplay?.()),
     );
   repaintActiveTransfer = repaint;
   repaint();

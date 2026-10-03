@@ -14,6 +14,7 @@ import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds"
 import { button } from "@bramble/ui-kit/controls";
 import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
+import { type FeeDisplay, feeValueHtml, STRK_ONLY } from "./fee-display";
 import { icon } from "./icons";
 import { formatFri } from "./parts";
 
@@ -126,6 +127,16 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
   fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
 
 /**
+ * A fee estimate's figure as markup: the value the user can tap when the
+ * estimate is denominated in FRI, and the unchanged plain text for any other
+ * unit, which must never be relabelled as STRK.
+ */
+const estimateValueHtml = (display: FeeDisplay, fee: FeeEstimate, label: string): string =>
+  fee.unit === "FRI"
+    ? feeValueHtml(display, fee.overallFee, label)
+    : escapeHtml(formatFeeEstimate(fee));
+
+/**
  * Renders the shared fee section of a pre-sign review: the estimated fee when
  * one exists, the not-yet-deployed notice, or the estimate-failed alert with a
  * retry button carrying the caller's attributes (Send wires an id, the dApp
@@ -138,6 +149,7 @@ export const reviewFeeSection = (
   retryAttributes: UiAttributes,
   options: {
     readonly extra?: string;
+    readonly display?: FeeDisplay;
     /**
      * The pool's own charge, in FRI. Given it, the section adds the total of
      * what will actually leave the account — the arithmetic belongs here
@@ -147,7 +159,7 @@ export const reviewFeeSection = (
     readonly rule?: boolean;
   } = {},
 ): string => {
-  const { extra = "", poolFeeFri, rule = true } = options;
+  const { display = STRK_ONLY, extra = "", poolFeeFri, rule = true } = options;
   // Two fees on one screen is two numbers to add up. Stated only when both are
   // known and share a denomination; an unlike pair fails closed rather than
   // printing a total that means nothing.
@@ -161,8 +173,10 @@ export const reviewFeeSection = (
       // Both figures reach here as base units, but the pool quotes hex and an
       // estimate may be decimal, so each is parsed rather than compared as text.
       const total = BigInt(network.overallFee) + BigInt(poolFeeFri);
-      return `<p class="review-fee review-fee-total">Total fees: ${escapeHtml(
-        formatFri(`0x${total.toString(16)}`),
+      return `<p class="review-fee review-fee-total">Total fees: ${feeValueHtml(
+        display,
+        `0x${total.toString(16)}`,
+        "Total fees",
       )}</p>`;
     } catch {
       return "";
@@ -186,8 +200,10 @@ export const reviewFeeSection = (
     // as the total would understate the cost the same way a missing half does.
     if (total) {
       return boundary(
-        `<div class="review-fee"><p>Estimated fee: ${escapeHtml(
-          formatFeeEstimate(total),
+        `<div class="review-fee"><p>Estimated fee: ${estimateValueHtml(
+          display,
+          total,
+          "Estimated fee",
         )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
           formatFeeEstimate(state.deploymentFee),
         )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
@@ -218,7 +234,7 @@ export const reviewFeeSection = (
   }
   if (state.fee) {
     return boundary(
-      `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`,
+      `<p class="review-fee">Estimated fee: ${estimateValueHtml(display, state.fee, "Estimated fee")}</p>${shortfallHtml(state)}`,
       state.fee,
     );
   }

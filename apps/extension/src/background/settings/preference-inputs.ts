@@ -13,7 +13,11 @@ import {
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
 import { isNostrPublicKey, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
-import { isApprovalSurfacePreference, isDisplayCurrency } from "@bramble/wallet-model/preferences";
+import {
+  isApprovalSurfacePreference,
+  isDisplayCurrency,
+  isFeeDisplayUnit,
+} from "@bramble/wallet-model/preferences";
 
 const isGroupNameText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
@@ -171,6 +175,7 @@ export const readSetAccountInGroupInput = (
 type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
   readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly feeDisplayUnit?: "strk" | "fiat";
   readonly productAnalytics?: boolean;
   readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
@@ -186,6 +191,9 @@ const hasValidDisplayValues = (
     return false;
   }
   if (message["displayCurrency"] !== undefined && !isDisplayCurrency(message["displayCurrency"])) {
+    return false;
+  }
+  if (message["feeDisplayUnit"] !== undefined && !isFeeDisplayUnit(message["feeDisplayUnit"])) {
     return false;
   }
   if (
@@ -214,6 +222,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     !hasOnlyKnownKeys(message, [
       "approvalSurface",
       "displayCurrency",
+      "feeDisplayUnit",
       "productAnalytics",
       "reliabilityDiagnostics",
       "theme",
@@ -230,12 +239,14 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   }
   const approvalSurface = message["approvalSurface"];
   const displayCurrency = message["displayCurrency"];
+  const feeDisplayUnit = message["feeDisplayUnit"];
   const productAnalytics = message["productAnalytics"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
   return {
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
+    ...(feeDisplayUnit === undefined ? {} : { feeDisplayUnit }),
     ...(productAnalytics === undefined ? {} : { productAnalytics }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),

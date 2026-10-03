@@ -6,6 +6,7 @@
  */
 
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
+import { type FeeDisplay, STRK_ONLY } from "../../shared/fee-display";
 import { applyOutcomeHash } from "../../shared/outcome-hash";
 import { reviewFeeBlocked } from "../../shared/review-render";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
@@ -207,6 +208,7 @@ export const applyTransferUi = (
   form: HTMLFormElement,
   state: TransferState<TransferReview>,
   poolFeeFri?: string,
+  display: FeeDisplay = STRK_ONLY,
 ): void => {
   const currentForm = form;
   const previousStage = currentForm.dataset["stage"];
@@ -273,11 +275,15 @@ export const applyTransferUi = (
   if (reviewFee && route) {
     // Fee lines and the disclosure together, directly under the estimate: what
     // the move costs and what it exposes are one decision.
-    reviewFee.innerHTML = routeReviewFeeHtml(route, {
-      ...(poolFeeFri === undefined ? {} : { poolFeeFri }),
-      preparation: state.privatePreparation,
-      review: state.review,
-    });
+    reviewFee.innerHTML = routeReviewFeeHtml(
+      route,
+      {
+        ...(poolFeeFri === undefined ? {} : { poolFeeFri }),
+        preparation: state.privatePreparation,
+        review: state.review,
+      },
+      display,
+    );
   }
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {

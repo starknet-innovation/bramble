@@ -19,6 +19,40 @@ export const SendRecipient = checkpointStory("Send · recipient", "send", "recip
 export const SendDetails = checkpointStory("Send · amount", "send", "details");
 export const SendAsset = checkpointStory("Send · asset picker", "send", "asset");
 export const SendReview = checkpointStory("Send · review", "send", "review");
+/**
+ * The reviewed fee value is the unit the user chose, and the exact STRK ceiling
+ * it was quoted from stays readable beside the fiat figure, because that is the
+ * number the approval binds.
+ */
+export const SendReviewFeesInStrk: LabStory = {
+  args: { checkpointId: "review", scenarioId: "send" },
+  name: "Send · review fee in STRK",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const toggle = body?.querySelector<HTMLButtonElement>("#send-review-fee [data-fee-toggle]");
+    if (!body || !toggle) throw new Error("Missing reviewed fee figure");
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(toggle).toHaveTextContent(/STRK/);
+    await expect(toggle).toHaveAccessibleName(/activate to show in USD/);
+  },
+};
+export const SendReviewFeesInUsd: LabStory = {
+  args: { checkpointId: "review-fiat", scenarioId: "send" },
+  name: "Send · review fee in USD",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const toggle = body?.querySelector<HTMLButtonElement>("#send-review-fee [data-fee-toggle]");
+    if (!body || !toggle) throw new Error("Missing reviewed fee figure");
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle).toHaveTextContent(/\$/);
+    await expect(toggle).toHaveTextContent(/STRK/);
+    await expect(toggle).toHaveAccessibleName(/activate to show in STRK/);
+  },
+};
 export const SendFeeFailure = checkpointStory("Send · fee failure", "send", "fee-failure");
 export const SendLedgerAuthorization = checkpointStory(
   "Send · Ledger authorization",

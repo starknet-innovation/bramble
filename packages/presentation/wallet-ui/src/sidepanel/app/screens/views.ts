@@ -65,6 +65,7 @@ import type { SendIntent } from "../../journeys/send/send-model";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
 import type { BalanceState } from "../../runtime/runtime";
+import { feeDisplayFrom } from "../../shared/fee-display";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
 import { accountDrawer } from "../../shell/account-drawer";
@@ -348,7 +349,12 @@ export const dashboard = (
   // explicitly snooze it back to Activity after seeing it.
   const actionable = actionableApprovals(pending, snoozedApprovalIds);
   if (actionable.length > 0) {
-    return approvalTakeover(actionable, status, activeView);
+    return approvalTakeover(
+      actionable,
+      status,
+      activeView,
+      feeDisplayFrom(preferences, prices, priceStale),
+    );
   }
   if (activeView === "requests") {
     return requestsFlow(pending, status);

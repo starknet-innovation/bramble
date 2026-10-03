@@ -9,6 +9,7 @@ import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-regi
 import { button } from "@bramble/ui-kit/controls";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
+import { type FeeDisplay, STRK_ONLY } from "../../shared/fee-display";
 import { icon } from "../../shared/icons";
 import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
@@ -226,7 +227,11 @@ const watchAssetCard = (approval: PendingApproval): string => {
 // retry button targets this approval by data attribute. A failed or absent fee
 // estimate disables Approve exactly as Send does: without a displayed amount
 // there is no fee ceiling for the user's consent to bind.
-const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
+const invokeCard = (
+  approval: PendingApproval,
+  status: WalletStatus,
+  display: FeeDisplay = STRK_ONLY,
+): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Transaction request")}
@@ -244,6 +249,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
           requiresDeployment: approval.requiresDeployment === true,
         },
         { "data-approval-retry-fee": approval.id },
+        { display },
       ) ||
       reviewCostNote(
         "The network fee is unavailable. Approval remains disabled until a fee can be reviewed.",
@@ -380,12 +386,16 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
 /**
  * Renders the correct approval card for a pending dapp request by kind.
  */
-export const approvalCard = (approval: PendingApproval, status: WalletStatus): string => {
+export const approvalCard = (
+  approval: PendingApproval,
+  status: WalletStatus,
+  display: FeeDisplay = STRK_ONLY,
+): string => {
   switch (approval.kind) {
     case "watch-asset":
       return watchAssetCard(approval);
     case "invoke":
-      return invokeCard(approval, status);
+      return invokeCard(approval, status, display);
     case "sign-typed-data":
       return signCard(approval, status);
     case "strk20-balances":

@@ -43,6 +43,7 @@ export {
   confirmationOutcome,
 } from "./sidepanel/shared/confirm-submitted";
 export { showToast } from "./sidepanel/shared/dom";
+export { feeDisplayFrom, feeValueHtml, STRK_ONLY } from "./sidepanel/shared/fee-display";
 /** Builds and writes a settled-transaction receipt, as every journey does. */
 export { outcomeReceiptFor, paintOutcomeReceipt } from "./sidepanel/shared/outcome-receipt";
 export * from "./sidepanel/shared/parts";

@@ -148,6 +148,14 @@ export type AccountLabels = Readonly<Partial<Record<string, string>>>;
 export type DisplayCurrency = "eur" | "gbp" | "usd";
 
 /**
+ * Unit the reviewed fee values are shown in. `"strk"` is the default and always
+ * exact: it is the ceiling the approval binds. `"fiat"` is a convenience
+ * reading of the very same figure through the cached STRK price, and is never
+ * used when that price is missing or stale.
+ */
+export type FeeDisplayUnit = "strk" | "fiat";
+
+/**
  * Browser surface used for wallet approvals and toolbar activation.
  */
 export type ApprovalSurfacePreference = "popup" | "side-panel";
@@ -296,6 +304,12 @@ export const isAccountLabels = (value: unknown): value is AccountLabels =>
  */
 export const isDisplayCurrency = (value: unknown): value is DisplayCurrency =>
   value === "eur" || value === "gbp" || value === "usd";
+
+/**
+ * Checks a fee display-unit choice.
+ */
+export const isFeeDisplayUnit = (value: unknown): value is FeeDisplayUnit =>
+  value === "strk" || value === "fiat";
 
 /**
  * Checks a browser approval-surface choice.
