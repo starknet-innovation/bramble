@@ -62,6 +62,7 @@ import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
+import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-preparations";
 import { createMessageHandler } from "./routing/messages";
 import type { BackgroundBrowser } from "./runtime/background-browser";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
@@ -322,6 +323,15 @@ const strk20Jobs = createStrk20JobRegistry({
     : {}),
   now: systemClock,
 });
+// A reviewed preparation is held only in worker memory too, so the same
+// extension API call keeps the worker alive while a confirmation sits on
+// screen; an unconfirmed review retires after its lifetime and drops the hold.
+const strk20Preparations = createStrk20WalletPreparationStore({
+  ...(runtime?.getPlatformInfo
+    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+    : {}),
+  now: systemClock,
+});
 // This extension's own identity. The origin MUST come from the runtime rather
 // than be built from the id: on Firefox `runtime.id` is the add-on id from
 // `browser_specific_settings` while extension pages are served from
@@ -357,6 +367,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   multisigStore: multisigLog,
   nostrCoordinationStore: nostrCoordinationLog,
   strk20Jobs,
+  strk20Preparations,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm
