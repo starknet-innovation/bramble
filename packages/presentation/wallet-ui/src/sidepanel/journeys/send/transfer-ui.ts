@@ -10,6 +10,7 @@ import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import { transitionSendStage } from "./send-transition";
 import { bindTransferBuckets } from "./transfer-buckets-ui";
+import { createComposeFee } from "./transfer-compose-fee";
 import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transfer-compose-ui";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
@@ -131,6 +132,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const goTo = (stage: TransferStage): void => {
     transferState = { ...transferState, fields: transferFields(form), stage };
     repaint();
+    composeFee.refresh();
   };
   // Leaving the review discards it. `reviewedKey` is what the submit handler
   // reads to tell "show me the review" from "I have read it, send it", so a
@@ -204,6 +206,13 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     }
     return resolveTransferRoute(context);
   };
+  // The Amount screen prices the send from the same route the form composes into.
+  const composeFee = createComposeFee({
+    context: routeContext,
+    form,
+    stage: () => transferState.stage,
+    wallet,
+  });
   // A bucket flip or an asset pick changes the route, so the cached review goes
   // and the screen is repainted: the header and actions name the operation the
   // buckets now describe (a shield flipped back to public reads as a send).
@@ -216,12 +225,14 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       reviewedKey: null,
     };
     repaint();
+    composeFee.refresh();
   };
   bindTransferCompose({
     form,
     goTo,
     onFields: (fields) => {
       transferState = { ...transferState, fields };
+      composeFee.refresh();
     },
     navigate: (view) => deps.navigate?.(view),
     spendable: () => transferSpendable(routeContext()),

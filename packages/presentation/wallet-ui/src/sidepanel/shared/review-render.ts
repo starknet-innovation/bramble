@@ -126,6 +126,14 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
   fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
 
 /**
+ * The one wording for an estimated network fee, shared by the pre-sign reviews
+ * and the Send Amount screen so the same figure can never be phrased two ways.
+ * Escapes nothing; callers place it in a text sink.
+ */
+export const estimatedFeeText = (fee: NonNullable<ReviewFeeState["fee"]>): string =>
+  `Estimated fee: ${formatFeeEstimate(fee)}`;
+
+/**
  * Renders the shared fee section of a pre-sign review: the estimated fee when
  * one exists, the not-yet-deployed notice, or the estimate-failed alert with a
  * retry button carrying the caller's attributes (Send wires an id, the dApp
@@ -186,8 +194,8 @@ export const reviewFeeSection = (
     // as the total would understate the cost the same way a missing half does.
     if (total) {
       return boundary(
-        `<div class="review-fee"><p>Estimated fee: ${escapeHtml(
-          formatFeeEstimate(total),
+        `<div class="review-fee"><p>${escapeHtml(
+          estimatedFeeText(total),
         )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
           formatFeeEstimate(state.deploymentFee),
         )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
@@ -218,7 +226,7 @@ export const reviewFeeSection = (
   }
   if (state.fee) {
     return boundary(
-      `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`,
+      `<p class="review-fee">${escapeHtml(estimatedFeeText(state.fee))}</p>${shortfallHtml(state)}`,
       state.fee,
     );
   }

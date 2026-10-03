@@ -176,6 +176,7 @@ const amountStage = (
         </span>
       </div>
       <p class="send-fiat-estimate" id="send-fiat-estimate">Estimated value —</p>
+      <div class="send-fee-lines" id="send-fee-lines" aria-live="polite"></div>
     </div>
     <button id="send-review-button" type="submit" ${account === null || asset === undefined ? "disabled" : ""}>${icon("send")}${liquidDots("send", true)}<span id="send-review-label">${escapeHtml(copy.reviewLabel)}</span></button>
   </section>`;
