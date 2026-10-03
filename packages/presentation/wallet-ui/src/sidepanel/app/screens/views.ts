@@ -394,7 +394,7 @@ export const dashboard = (
     return revealFlow(status);
   }
   if (activeView === "privacy") {
-    return privacyFlow(status, preferences, privacyJourney);
+    return privacyFlow(status, preferences, privacyJourney, privacy);
   }
   const sharedIdentity =
     activeView === "multisig-home" || activeView === "activity" || activeView === "settings"
