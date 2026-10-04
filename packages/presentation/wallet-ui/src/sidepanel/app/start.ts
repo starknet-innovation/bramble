@@ -17,7 +17,7 @@ import {
   onboardingLaunch,
 } from "../journeys/onboarding/onboarding-surface";
 import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
-import { bindUnlock } from "../journeys/onboarding/unlock-ui";
+import { bindUnlock, bindVaultReset } from "../journeys/onboarding/unlock-ui";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
 import type { SendIntent } from "../journeys/send/send-model";
@@ -142,6 +142,7 @@ export const startWalletUi = async (
       selectedMultisigId = null;
       viewHistory = [];
     });
+    bindVaultReset({ app, render, wallet });
     const shellDeps = {
       app,
       deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),

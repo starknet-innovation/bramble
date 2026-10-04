@@ -53,4 +53,17 @@ describe("locked gate view", () => {
     expect(html).toContain("Site request waiting");
     expect(html).toContain("https://terminal.example");
   });
+
+  test("offers a quiet reinitialize route for a forgotten passphrase", () => {
+    const html = locked(lockedStatus(true));
+    // Below the primary Unlock action, and not something to trip over.
+    expect(html).toContain('id="unlock-more"');
+    expect(html).toContain(">More options<");
+    expect(html).toContain("Reinitialize");
+    // The consequence is stated once, with the recovery phrase named as the way
+    // back rather than a reassurance-in-advance.
+    expect(html).toContain(
+      "Your funds are not deleted; the recovery phrase is the only way back to them.",
+    );
+  });
 });

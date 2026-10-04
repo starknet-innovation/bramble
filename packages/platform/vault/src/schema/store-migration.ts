@@ -19,6 +19,14 @@ export const VAULT_STORE_KEY = "bramble:vault";
 export const VAULT_MIGRATION_STORE_KEY = "bramble:vault-migration";
 
 /**
+ * Browser storage key for the archived encrypted vault kept after a
+ * reinitialize. It holds one raw envelope with no freshness record, so it is
+ * inert: nothing mounts it as a live store, and it is recoverable only offline
+ * with its passphrase.
+ */
+export const VAULT_ARCHIVE_STORE_KEY = "bramble:vault-archive";
+
+/**
  * Primary and staging encrypted stores participating in one vault migration.
  */
 export type VaultMigrationStores = {

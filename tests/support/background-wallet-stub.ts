@@ -112,7 +112,14 @@ export type WalletStubOptions = {
   readonly captureCreate?: (input: CreateVaultAccountInput) => void;
   readonly captureCreateKeyVault?: (input: CreateKeyVaultInput) => void;
   readonly captureGrant?: (input: OriginGrantInput) => void;
+  readonly captureReset?: () => void;
   readonly captureSign?: (input: SignHashInput) => void;
+  /**
+   * When set, the stub answers `resetVault` through it. Left unset, the stub has
+   * no reset route at all, which is how the dispatcher's fail-closed branch is
+   * exercised.
+   */
+  readonly resetVault?: () => Promise<{ readonly archived: boolean }>;
 };
 
 /**
@@ -120,6 +127,7 @@ export type WalletStubOptions = {
  */
 export const createWallet = (options: WalletStubOptions = {}) => {
   const accounts = options.accounts ?? [account];
+  const reset = options.resetVault;
   const vault = (): Vault => ({
     accounts,
     accountSecrets: [],
@@ -173,6 +181,14 @@ export const createWallet = (options: WalletStubOptions = {}) => {
       }
       return vault();
     },
+    ...(reset
+      ? {
+          async resetVault() {
+            options.captureReset?.();
+            return reset();
+          },
+        }
+      : {}),
     async setActiveAccount() {
       return account;
     },

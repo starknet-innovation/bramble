@@ -61,5 +61,15 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
         })}
       </div>
     </form>
+    <details class="gate-more" id="unlock-more">
+      <summary class="gate-more-summary">More options</summary>
+      <div class="gate-more-panel">
+        <p class="gate-more-copy">This clears the wallet and starts first-run setup again. Your funds are not deleted; the recovery phrase is the only way back to them.</p>
+        <p id="reset-result" role="status"></p>
+        <div class="gate-cta">
+          ${button({ label: "Reinitialize", type: "button", variant: "secondary" })}
+        </div>
+      </div>
+    </details>
   </main>`;
 };

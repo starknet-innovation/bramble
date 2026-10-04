@@ -2,7 +2,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { locked } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
-import { bindUnlock } from "../../../../src/sidepanel/journeys/onboarding/unlock-ui";
+import {
+  bindUnlock,
+  bindVaultReset,
+} from "../../../../src/sidepanel/journeys/onboarding/unlock-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
@@ -76,5 +79,55 @@ describe("locked vault handoff", () => {
     expect(
       document.querySelector<HTMLButtonElement>('#unlock-form button[type="submit"]')?.disabled,
     ).toBe(false);
+  });
+
+  test("reinitialize archives the vault and renders the vault-less status", async () => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    const calls: string[] = [];
+    const rendered: WalletStatus[] = [];
+    const fresh: WalletStatus = {
+      ...unlockedStatus,
+      accountCount: 0,
+      hasVault: false,
+      locked: false,
+    };
+    bindVaultReset({
+      app: document.querySelector("#app"),
+      render: async (next) => void rendered.push(next),
+      wallet: {
+        loadStatus: async () => fresh,
+        resetVault: async () => {
+          calls.push("reset");
+        },
+      } as unknown as SidepanelWallet,
+    });
+
+    document.querySelector<HTMLButtonElement>(".gate-more-panel button")?.click();
+    await tick();
+
+    // One click is the confirmation; the consequence lives in the copy.
+    expect(calls).toEqual(["reset"]);
+    // The vault-less status is what lands the reader on first-run onboarding.
+    expect(rendered).toEqual([fresh]);
+  });
+
+  test("keeps the reader on unlock when reinitialize fails", async () => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    bindVaultReset({
+      app: document.querySelector("#app"),
+      render: async () => undefined,
+      wallet: {
+        resetVault: async () => {
+          throw new Error("wallet reset incomplete");
+        },
+      } as unknown as SidepanelWallet,
+    });
+    const button = document.querySelector<HTMLButtonElement>(".gate-more-panel button");
+
+    button?.click();
+    await tick();
+
+    expect(document.querySelector("#reset-result")?.textContent).not.toBe("");
+    expect(button?.disabled).toBe(false);
   });
 });

@@ -27,6 +27,7 @@ import type {
   OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
+  ResetVaultResult,
   RevokeOriginInput,
   SetActiveAccountInput,
   SignHashInput,
@@ -102,6 +103,12 @@ export type WalletStatusReader = {
   ) => Promise<readonly AccountRef[]>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /**
+   * Archives the encrypted vault and clears the live copies so the next start
+   * is first-run. Optional only for partial test stubs; production fails closed
+   * when absent.
+   */
+  readonly resetVault?: () => Promise<ResetVaultResult>;
   /** Removes origin grants; optional only for partial test stubs. */
   readonly revokeOrigin?: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
@@ -188,6 +195,9 @@ export const createWalletReader = (
     },
     async readVault(vaultPassphrase) {
       return (await required()).readVault(vaultPassphrase);
+    },
+    async resetVault() {
+      return (await required()).resetVault();
     },
     async revokeOrigin(input) {
       return (await required()).revokeOrigin(input);

@@ -2,6 +2,7 @@
 import { WalletError } from "@bramble/core/errors";
 import { isWalletOrigin } from "@bramble/core/origin";
 import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
+import type { KeyValueStore } from "@bramble/store/kv";
 import { isAccountId, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
@@ -32,8 +33,9 @@ import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authori
 import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
+import { resetVaultStorage } from "./reset";
 import { vaultCreationMethods, writeVault } from "./service-creation";
-import type { WalletVaultService } from "./service-types";
+import type { ResetVaultResult, WalletVaultService } from "./service-types";
 
 export { activeAccountSecrets } from "./reveal";
 /** Re-exports the documented type surface from its size-budget split. */
@@ -52,6 +54,7 @@ export type {
   OpenNostrApplicationDataInput,
   OriginGrantInput,
   RecoverVaultAccountsInput,
+  ResetVaultResult,
   RevealedSecrets,
   RevokeOriginInput,
   SetActiveAccountInput,
@@ -65,6 +68,12 @@ export type {
 
 type WalletVaultServiceOptions = {
   readonly actor?: StoreActor;
+  /**
+   * Plain key-value backend the encrypted vault is archived into on a reset.
+   * Optional so callers that never reinitialize stay valid; a reset with none
+   * wired fails closed.
+   */
+  readonly archiveStore?: KeyValueStore;
   readonly encryptedStore: EncryptedStore;
   readonly kms: KmsPort;
   readonly migrationStore: EncryptedStore;
@@ -75,6 +84,7 @@ type WalletVaultServiceOptions = {
  */
 export const createWalletVaultService = ({
   actor = "background",
+  archiveStore,
   encryptedStore,
   kms,
   migrationStore,
@@ -239,6 +249,12 @@ export const createWalletVaultService = ({
       );
     },
     readVault,
+    resetVault: (): Promise<ResetVaultResult> => {
+      if (!archiveStore) {
+        throw new WalletError("Vault archive store unavailable");
+      }
+      return resetVaultStorage({ primary: encryptedStore, staging: migrationStore }, archiveStore);
+    },
     importSeedAccounts: (input) =>
       serialized(() => importSeedVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
     recoverAccounts: (input) =>
@@ -336,6 +352,7 @@ export const createWalletVaultService = ({
     forgetLedgerStrk20ViewingKey: (input) =>
       serialized(() => service.forgetLedgerStrk20ViewingKey(input)),
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
+    resetVault: () => serialized(() => service.resetVault()),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
     setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),

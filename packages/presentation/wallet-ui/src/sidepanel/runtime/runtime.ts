@@ -472,5 +472,17 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "Incorrect passphrase");
     },
+    /**
+     * Archives the locked vault and clears the live copy so the next start is
+     * first-run. Sends no passphrase: the privileged background message is the
+     * route for a user who cannot open the vault.
+     */
+    async resetVault(): Promise<void> {
+      const response = await sendMessage({ type: "wallet.resetVault" });
+      if (!isErrorResponse(response)) {
+        return;
+      }
+      throw responseError(response, "Reinitialize failed");
+    },
   };
 };

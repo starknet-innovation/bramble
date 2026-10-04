@@ -293,6 +293,43 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   }
 };
 
+/**
+ * Reinitializes a wallet whose passphrase is forgotten: archive the encrypted
+ * vault, then clear the live copies so the next start is first-run. Privileged
+ * by the deny-by-default `wallet.*` gate, so only an extension page (side
+ * panel, popup, onboarding) can reach it; a dapp cannot. No passphrase is
+ * required, and the archived blob stays encrypted on the archive key.
+ */
+const handleResetVault: RouterHandler = async (ctx, messageType, message) => {
+  if (messageType !== "wallet.resetVault") {
+    return null;
+  }
+  if (!readTypeOnlyInput(message, "wallet.resetVault")) {
+    return { error: "invalid reset request" };
+  }
+  const resetVault = ctx.wallet.resetVault;
+  if (!resetVault) {
+    return { error: "wallet unavailable" };
+  }
+  // Revoke a parked Ledger sign and drop the in-memory passphrase before the
+  // storage mutation, mirroring the explicit lock path.
+  ctx.ledgerSignQueue.rejectAll("wallet locked");
+  ctx.session.lock();
+  return ctx.activeStateCoordinator.run(async () => {
+    ctx.ledgerSignQueue.rejectAll("wallet locked");
+    ctx.session.lock();
+    // Clearing storage destroys the only live vault, so proceed only once the
+    // plaintext session mirror is confirmed erased, or fail closed.
+    try {
+      await ctx.session.mirrorCleared();
+    } catch {
+      return { error: "wallet reset incomplete" };
+    }
+    const { archived } = await resetVault();
+    return { archived, ok: true };
+  });
+};
+
 const handlePreferences: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.importPreferences") {
     const response = await handlePreferenceOps(ctx.preferencesStore, messageType, message);
@@ -368,6 +405,7 @@ const HANDLERS: readonly RouterHandler[] = [
   handleSetActiveNetwork,
   handleStatus,
   handleUnlock,
+  handleResetVault,
 ];
 
 const firstNonNull = async (

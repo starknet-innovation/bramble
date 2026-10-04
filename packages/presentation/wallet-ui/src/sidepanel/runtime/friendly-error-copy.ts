@@ -170,6 +170,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["mnemonic validation unavailable", "Couldn't check that recovery phrase. Try again."],
   ["reveal failed", "Couldn't reveal that. Re-enter your passphrase and try again."],
   ["incorrect passphrase", "That passphrase is wrong."],
+  ["reinitialize failed", "Couldn't reinitialize this wallet. Try again."],
+  ["wallet reset incomplete", "Couldn't reinitialize this wallet. Try again."],
+  ["vault archive store unavailable", "Couldn't reinitialize this wallet. Try again."],
   [
     "account discovery unavailable",
     "Couldn't search for accounts. Check your connection and try again.",

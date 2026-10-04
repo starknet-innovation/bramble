@@ -39,6 +39,14 @@ export type WalletStatus = {
 };
 
 /**
+ * Outcome of a privileged vault reinitialize: whether an encrypted vault was
+ * archived before the live copies were cleared.
+ */
+export type ResetVaultResult = {
+  readonly archived: boolean;
+};
+
+/**
  * Account creation input including the vault encryption passphrase.
  */
 export type CreateVaultAccountInput = AccountDerivationInput & {
@@ -292,6 +300,14 @@ export type WalletVaultService = {
     vaultPassphrase: string,
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /**
+   * Archives the encrypted vault and clears the live copies so the next start
+   * is first-run. No passphrase is required: the route exists for a user who
+   * cannot open the vault. The archived blob is inert (a raw envelope with no
+   * freshness record) and recoverable only offline with its passphrase and
+   * scope.
+   */
+  readonly resetVault: () => Promise<ResetVaultResult>;
   /** Restores a confirmed bounded set in one encrypted-vault commit. */
   /**
    * Imports selected accounts from another recovery phrase into the unlocked

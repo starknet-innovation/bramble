@@ -472,6 +472,9 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.supportedWalletApi" },
     sender: contentSender,
   },
+  // Placed last among the live entries: a reset is a terminal vault mutation, so
+  // it sits after the entries that read or write the same store.
+  { message: { type: "wallet.resetVault" }, sender: extensionSender },
   // Negative entries, last so the state they tear down or refuse cannot starve
   // an entry above. Each one is here because refusal is the response being
   // scanned: an error path leaks secrets just as easily as a success path.

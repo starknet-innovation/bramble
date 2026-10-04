@@ -193,6 +193,14 @@ describe("walletEventBroadcasts", () => {
       accountsChanged,
     ]);
   });
+
+  test("announces a reinitialize so connected pages drop the cleared account", () => {
+    // A reset clears the vault, so an origin that keeps showing the old address
+    // would hold one the wallet can no longer sign for, exactly as on a lock.
+    expect(
+      walletEventBroadcasts({ type: "wallet.resetVault" }, { archived: true, ok: true }),
+    ).toEqual([accountsChanged]);
+  });
 });
 
 // The toolbar badge mirrors the queue size, and approve/deny clear entries

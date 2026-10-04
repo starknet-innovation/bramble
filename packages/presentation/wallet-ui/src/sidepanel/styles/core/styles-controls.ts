@@ -267,4 +267,12 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   .gate-alt { border-top: 1px solid var(--bramble-hairline); display: grid; gap: ${SPACE.sm}; padding-top: ${SPACE.lg}; text-align: left; width: 100%; }
   .gate-alt .gate-form { flex: none; }
   .gate-alt .gate-cta { margin-top: ${SPACE.sm}; padding-top: 0; }
+  /* Reinitialize route: a quiet disclosure under the primary Unlock action, the
+   * only way forward for a reader who cannot open the vault. */
+  .gate-more { border-top: 1px solid var(--bramble-hairline); padding-top: ${SPACE.sm}; text-align: left; width: 100%; }
+  .gate-more-summary { color: var(--bramble-muted); cursor: pointer; font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.medium}; list-style: none; padding: ${SPACE.xs} 0; }
+  .gate-more-summary::-webkit-details-marker { display: none; }
+  .gate-more-panel { display: grid; gap: ${SPACE.sm}; padding-top: ${SPACE.sm}; }
+  .gate-more-copy { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .gate-more .gate-cta { margin-top: 0; padding-top: 0; }
 `;

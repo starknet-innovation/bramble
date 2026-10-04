@@ -37,3 +37,33 @@ export const bindUnlock = (
     );
   });
 };
+
+/**
+ * Binds the locked gate's reinitialize affordance: sends the privileged reset
+ * and then re-renders, so the resulting vault-less status lands on first-run
+ * onboarding. The wallet is untouched while the request is in flight; a failure
+ * stays inline and leaves the user on the unlock screen.
+ */
+export const bindVaultReset = (deps: OnboardingUiDeps): void => {
+  const details = deps.app?.querySelector<HTMLDetailsElement>("#unlock-more");
+  const panel = details?.querySelector<HTMLElement>(".gate-more-panel");
+  const confirmButton = panel?.querySelector<HTMLButtonElement>("button");
+  const result = panel?.querySelector<HTMLElement>("#reset-result");
+  if (!confirmButton) {
+    return;
+  }
+  confirmButton.addEventListener("click", () => {
+    buttonBusy(confirmButton, true);
+    void deps.wallet.resetVault().then(
+      async () => {
+        await deps.render(await deps.wallet.loadStatus());
+      },
+      (error: unknown) => {
+        if (result) {
+          result.textContent = errorLine(error, "Reinitialize failed");
+        }
+        buttonBusy(confirmButton, false);
+      },
+    );
+  });
+};

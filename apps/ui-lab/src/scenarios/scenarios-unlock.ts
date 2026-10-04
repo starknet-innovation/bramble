@@ -1,4 +1,4 @@
-import { bindUnlock, createSidepanelRuntime, locked } from "@bramble/wallet-ui/lab";
+import { bindUnlock, bindVaultReset, createSidepanelRuntime, locked } from "@bramble/wallet-ui/lab";
 import { invokeApproval } from "../fixtures/fixtures";
 import { lockedStatus } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
@@ -21,6 +21,26 @@ const prepareUnlockFailure = async (context: FrameContext): Promise<void> => {
   await nextTurn();
 };
 
+// Opens the reinitialize disclosure and wires its confirm to a stub that
+// answers a successful archive, so the checkpoint shows the route as built.
+const prepareResetOpen = async (context: FrameContext): Promise<void> => {
+  bindVaultReset({
+    app: context.app,
+    render: async () => undefined,
+    wallet: createSidepanelRuntime({
+      sendMessage: async (message) => {
+        context.emit({ detail: messageType(message) ?? "invalid request", kind: "action" });
+        return { archived: true, ok: true };
+      },
+    }),
+  });
+  const details = context.app.querySelector<HTMLDetailsElement>("#unlock-more");
+  if (details) {
+    details.open = true;
+  }
+  await nextTurn();
+};
+
 export const unlockScenario: WalletScenario = {
   checkpoints: [
     {
@@ -29,6 +49,15 @@ export const unlockScenario: WalletScenario = {
       label: "Returning wallet locked",
       narrative: "The returning journey focuses on one re-authentication action.",
       state: { gate: "locked", pending: 0 },
+    },
+    {
+      content: () => locked(lockedStatus),
+      id: "reset-open",
+      label: "Forgotten passphrase",
+      narrative:
+        "The forgotten-passphrase route sits under More options, with the consequence stated plainly and the recovery phrase named as the way back.",
+      prepare: prepareResetOpen,
+      state: { gate: "locked", reset: "open" },
     },
     {
       content: () => locked(lockedStatus, [invokeApproval]),

@@ -82,6 +82,11 @@ export const LedgerPassword = checkpointStory(
 );
 export const SetupComplete = checkpointStory("Setup · complete", "onboarding", "complete");
 export const ReturningLocked = checkpointStory("Returning wallet · locked", "unlock", "locked");
+export const ForgottenPassphrase = checkpointStory(
+  "Returning wallet · forgotten passphrase",
+  "unlock",
+  "reset-open",
+);
 export const RequestWaiting = checkpointStory(
   "Returning wallet · request waiting",
   "unlock",

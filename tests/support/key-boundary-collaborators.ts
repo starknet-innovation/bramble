@@ -148,6 +148,9 @@ export const walletStub = {
   async grantOrigin() {
     return [account];
   },
+  async resetVault() {
+    return { archived: true };
+  },
   async readVault(passphrase: string) {
     if (passphrase !== SECRET_PASSPHRASE) {
       throw new Error("bad passphrase");

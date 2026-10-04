@@ -69,6 +69,15 @@ type ValidateMnemonicResponse = {
 };
 
 /**
+ * Successful vault-reinitialize response: whether an encrypted vault was
+ * archived before the live copies were cleared.
+ */
+type ResetVaultResponse = {
+  readonly archived: boolean;
+  readonly ok: true;
+};
+
+/**
  * Re-authenticated secret reveal returned only to the extension reveal flow.
  */
 type RevealSecretsResponse = {
@@ -447,6 +456,7 @@ export type RuntimeResponse =
   | PermissionsResponse
   | PreferencesResponse
   | PricesResponse
+  | ResetVaultResponse
   | RequestAccountsResponse
   | RevealSecretsResponse
   | SignHashResponse

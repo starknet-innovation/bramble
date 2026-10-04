@@ -214,6 +214,16 @@ export const decryptJson = async (
  * the in-memory derived-key cache and must be called when the wallet locks.
  */
 export type EncryptedStore = {
+  /**
+   * Copies the encrypted envelope to `target` under `targetKey` for safekeeping,
+   * verifies the copy byte for byte, then clears this store (envelope and
+   * freshness record). The archive is a raw envelope with no freshness record,
+   * so it is inert: it cannot be mounted as a live store and is recoverable
+   * only offline, with its passphrase and the `bramble:encrypted-store:<key>`
+   * scope. Resolves false when there is nothing to archive. Throws on a corrupt
+   * envelope or a failed copy, leaving this store untouched.
+   */
+  readonly archiveTo: (target: KeyValueStore, targetKey: string) => Promise<boolean>;
   readonly clearKeys: () => void;
   readonly exists: () => Promise<boolean>;
   readonly read: (passphrase: string) => Promise<unknown>;
@@ -418,7 +428,31 @@ export const createEncryptedStore = (
     return derived;
   };
 
+  const removeStored = async (): Promise<void> => {
+    const envelope = await readRawEnvelope();
+    await store.remove(key);
+    if (envelope?.version === 3) {
+      await freshness.remove(envelope.lineage);
+    }
+  };
+
   return {
+    async archiveTo(target, targetKey) {
+      assertStorageKey(targetKey);
+      const envelope = await readRawEnvelope();
+      if (envelope === undefined) {
+        return false;
+      }
+      await target.set(targetKey, envelope);
+      if (JSON.stringify(await target.get(targetKey)) !== JSON.stringify(envelope)) {
+        throw new WalletError("Encrypted store archive verification failed");
+      }
+      await removeStored();
+      if ((await store.get(key)) !== undefined) {
+        throw new WalletError("Encrypted store archive cleanup failed");
+      }
+      return true;
+    },
     clearKeys() {
       keyCacheGeneration += 1;
       keyCache.clear();
@@ -433,13 +467,7 @@ export const createEncryptedStore = (
       }
       return decryptJson(envelope, passphrase, scope, resolveKey);
     },
-    async remove() {
-      const envelope = await readRawEnvelope();
-      await store.remove(key);
-      if (envelope?.version === 3) {
-        await freshness.remove(envelope.lineage);
-      }
-    },
+    remove: removeStored,
     async upgradeLegacyEnvelope(passphrase) {
       const envelope = await readEnvelope();
       if (
