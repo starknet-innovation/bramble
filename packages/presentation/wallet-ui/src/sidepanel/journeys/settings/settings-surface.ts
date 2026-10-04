@@ -6,9 +6,9 @@
  * are bound together rather than re-listed at the entry point.
  */
 
+import { bindFindAccounts } from "./find-accounts-ui";
 import { bindImportKey } from "./import-key-ui";
 import { bindImportPhrase } from "./import-phrase-ui";
-import { bindFindAccounts } from "./find-accounts-ui";
 import {
   bindAccountLabel,
   bindAccountVisibility,
