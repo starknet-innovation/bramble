@@ -94,6 +94,10 @@ export const createLedgerOnboardRuntime = (
 ): LedgerOnboardRuntime => {
   const { connector, create, describe, existingIds, mount, networkId, onCancel, refresh, wallet } =
     deps;
+  // The runtime's Ledger capability decides whether the chooser offers the
+  // Ledger routes at all. It is a UI affordance only: an absent report keeps
+  // the routes, matching the connector type's default.
+  const ledgerAvailable = connector.isAvailable?.() ?? true;
   let controller: LedgerOnboardController;
 
   const bindSelection = (): void => {
@@ -176,10 +180,10 @@ export const createLedgerOnboardRuntime = (
 
   const bodyFor = (view: LedgerOnboardView): string => {
     if (view.kind === "chooser") {
-      return addAccountChooser();
+      return addAccountChooser(ledgerAvailable);
     }
     if (view.kind === "import-chooser") {
-      return importAccountChooser();
+      return importAccountChooser(ledgerAvailable);
     }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();
