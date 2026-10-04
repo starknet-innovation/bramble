@@ -178,6 +178,12 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "account discovery is unavailable",
     "Couldn't search for accounts. Check your connection and try again.",
   ],
+  // A wallet set up from a device or a pasted key has no phrase to rescan, so
+  // the search has nothing to work from and the reader cannot fix it here.
+  [
+    "this wallet has no recovery phrase to scan",
+    "This wallet was set up without a recovery phrase, so there is nothing to search for.",
+  ],
   [
     "account recovery unavailable",
     "Couldn't recover accounts. Check your connection and try again.",
