@@ -116,6 +116,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     openImport: () => {
       imports += 1;
     },
+    openFindAccounts: () => undefined,
     openImportSeed: () => {
       seedImports += 1;
     },

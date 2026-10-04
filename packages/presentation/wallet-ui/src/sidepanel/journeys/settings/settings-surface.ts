@@ -8,6 +8,7 @@
 
 import { bindImportKey } from "./import-key-ui";
 import { bindImportPhrase } from "./import-phrase-ui";
+import { bindFindAccounts } from "./find-accounts-ui";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -34,6 +35,7 @@ export const bindSettingsSurface = (deps: SettingsSurfaceDeps): void => {
   bindAddAccount(deps);
   bindImportKey(deps);
   bindImportPhrase(deps);
+  bindFindAccounts(deps);
   bindAppearance(deps);
   bindBackup(deps);
   bindContacts(deps);

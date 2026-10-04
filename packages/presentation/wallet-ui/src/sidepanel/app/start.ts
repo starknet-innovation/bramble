@@ -121,6 +121,7 @@ export const startWalletUi = async (
     mount: ledgerOnboardMount,
     openImport: () => navigate("import-key"),
     openImportSeed: () => navigate("import-phrase"),
+    openFindAccounts: () => navigate("find-accounts"),
     openMultisig: () => navigate("multisig-add"),
     refresh: async () => render(await wallet.loadStatus()),
     wallet,

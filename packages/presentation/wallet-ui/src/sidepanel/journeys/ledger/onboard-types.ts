@@ -36,6 +36,7 @@ export type LedgerCandidate = {
  * is the only way an account created in Ready (Argent X) can be found.
  */
 export type LedgerOnboardAddKind =
+  | "find-accounts"
   | "import"
   | "import-key"
   | "import-phrase"
@@ -101,6 +102,7 @@ export type LedgerOnboardControllerDeps = {
   readonly onCancel: () => void;
   readonly openImport: () => void;
   readonly openImportSeed: () => void;
+  readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;
