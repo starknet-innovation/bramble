@@ -96,28 +96,6 @@ describe("bindMultisigs frozen-intent forms", () => {
       secondary.id,
     );
   });
-  test("keeps approval visible while address and fee review are prepared", async () => {
-    const fixture = await makeArgentMultisigFixture();
-    const signer = fixture.status.accounts[0];
-    if (!signer) throw new Error("signer fixture unavailable");
-    const pending = deferred<typeof fixture.deploymentReview>();
-    const app = mount(
-      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
-      await testClient({ reviewDeployment: () => pending.promise }),
-      fixture.status,
-    );
-    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
-    app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
-    form?.requestSubmit();
-    expect(form?.dataset["deploymentStage"]).toBe("approval");
-    expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
-    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
-      "Calculating address and fee",
-    );
-    pending.resolve(fixture.deploymentReview);
-    await flush();
-    expect(form?.dataset["deploymentStage"]).toBe("deploy");
-  });
   test("keeps an unfunded deployment in review instead of offering broadcast", async () => {
     const fixture = await makeArgentMultisigFixture();
     const signer = fixture.status.accounts[0];
@@ -232,7 +210,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain("Fund 0x");
     expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
     expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
-      "Check fee and address",
+      "Deploy multisig",
     );
   });
 
@@ -414,9 +392,7 @@ describe("bindMultisigs frozen-intent forms", () => {
 
     expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
     expect(form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
-    expect(form?.querySelector('button[type="submit"]')?.textContent).toContain(
-      "Check fee and address",
-    );
+    expect(form?.querySelector('button[type="submit"]')?.textContent).toContain("Deploy multisig");
   });
 
   test("keeps only the newest deployment review when requests resolve out of order", async () => {

@@ -149,8 +149,12 @@ export const DeployApproval: LabStory = {
     );
     await expect(body?.querySelector(".flow-header [data-nav-back]")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();
+    await expect(body?.querySelector(".multisig-deployment-target")).toBeVisible();
+    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
+      "Maximum network fee: 0.252237 STRK",
+    );
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
-      "Check fee and address",
+      "Deploy multisig",
     );
   },
 };
@@ -165,6 +169,10 @@ export const DeployReviewed: LabStory = {
     await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
       "Maximum network fee: 0.252237 STRK",
     );
+    // The merged stage keeps the threshold and signer controls visible beside
+    // the review; the quote no longer hides the fields it was computed from.
+    await expect(body?.querySelector('input[name="threshold"]')).toBeVisible();
+    await expect(body?.querySelector(".multisig-deployment-signer-field")).toBeVisible();
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
       "Deploy multisig",
     );

@@ -1,6 +1,5 @@
 /** Linear exact-review binding for stable Argent multisig creation. */
 import { escapeHtml } from "@bramble/core/html";
-import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import { button as buttonMarkup } from "@bramble/ui-kit/controls";
 import {
   explorerTransactionUrl,
@@ -20,12 +19,6 @@ import {
 } from "../../shared/dom";
 import { icon } from "../../shared/icons";
 import { accountLabel, copyButton } from "../../shared/parts";
-import {
-  formatFeeEstimate,
-  reviewCostNote,
-  reviewOutcome,
-  reviewPanel,
-} from "../../shared/review-render";
 import type { SendIntent } from "../send/send-model";
 import {
   ALREADY_DEPLOYED_MESSAGE,
@@ -35,7 +28,11 @@ import {
 } from "./multisig-deploy-errors";
 import { bindDeploymentFunding } from "./multisig-deploy-funding-ui";
 import { bindDeploymentSignerPicker } from "./multisig-deploy-signer-ui";
-import { deploymentFundingStage, type MULTISIG_CREATION_STEPS } from "./multisig-deploy-view";
+import {
+  deploymentFundingStage,
+  deploymentReviewMarkup,
+  type MULTISIG_CREATION_STEPS,
+} from "./multisig-deploy-view";
 import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
 import type { ArgentMultisigDeploymentSetup, MultisigClient } from "./multisig-runtime";
 
@@ -303,6 +300,78 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         ),
     });
   syncSignerSet(false);
+  const QUOTE_DEBOUNCE_MS = 350;
+  let quoteTimer: ReturnType<typeof setTimeout> | null = null;
+  // Runs one deployment quote and paints the reviewed deployment beside the
+  // threshold and signer controls. Stage advances happen only here, so a quote
+  // never hides the fields it was computed from.
+  const runQuote = (input: ArgentMultisigDeploymentSetup): void => {
+    if (!form) return;
+    const generation = (reviewGenerations.get(form) ?? 0) + 1;
+    reviewGenerations.set(form, generation);
+    const isCurrent = (): boolean => {
+      if (reviewGenerations.get(form) !== generation) return false;
+      try {
+        return sameSetup(deploymentSetup(form), input);
+      } catch {
+        return false;
+      }
+    };
+    deps.setResult("multisig-deploy-result", "Preparing exact deployment fee…");
+    void deps.multisig
+      .reviewDeployment(input)
+      .then((next) => {
+        if (!isCurrent()) return;
+        const fundingRequired = next.feeAffordability === "insufficient";
+        if (!fundingRequired) reviews.set(form, { input, review: next });
+        if (reviewRoot) {
+          renderFragment(
+            reviewRoot,
+            fundingRequired ? deploymentFundingStage(next) : deploymentReviewMarkup(next),
+          );
+          bindCopyButtons(reviewRoot);
+          if (fundingRequired) {
+            mountLocalFundingControls(form, reviewRoot);
+            bindDeploymentFunding(deps, form, next);
+          }
+        }
+        setDeploymentStage(form, fundingRequired ? "fund" : "deploy");
+        if (button) button.hidden = fundingRequired;
+        deps.setResult("multisig-deploy-result", "");
+        buttonBusy(button, false);
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent()) return;
+        const message = deploymentReviewFailure(errorMessage(error, "Deployment review failed"));
+        setDeploymentStage(form, "approval");
+        deps.setResult(
+          "multisig-deploy-result",
+          message === ALREADY_DEPLOYED_MESSAGE
+            ? message
+            : "Deployment review failed. Check the error and retry.",
+        );
+        showToast(message, "error", form);
+        buttonBusy(button, false);
+      });
+  };
+  // The approval controls re-quote as the reader settles a threshold, signer or
+  // salt, so the review appears beside them without a separate check press.
+  // Debounced, so a typed salt is one request rather than one per keystroke.
+  const scheduleQuote = (): void => {
+    if (!form) return;
+    if (quoteTimer !== null) clearTimeout(quoteTimer);
+    quoteTimer = setTimeout(() => {
+      quoteTimer = null;
+      if (!form.isConnected) return;
+      const stage = form.dataset["deploymentStage"];
+      if (stage !== "approval" && stage !== "deploy") return;
+      try {
+        runQuote(deploymentSetup(form));
+      } catch {
+        // An incomplete field stays on the approval stage; the next edit re-quotes.
+      }
+    }, QUOTE_DEBOUNCE_MS);
+  };
   const returnToPreviousStage = (event?: Event): boolean => {
     if (!form) return false;
     const stage = form.dataset["deploymentStage"] as DeploymentStage | undefined;
@@ -314,7 +383,6 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (reviewRoot) renderFragment(reviewRoot, "");
     if (button) {
       button.hidden = false;
-      button.lastChild?.replaceWith("Check fee and address");
       buttonBusy(button, false);
       button.disabled = form.dataset["classReady"] !== "true" || !signerAccountInput?.value;
     }
@@ -332,6 +400,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     ?.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")
     ?.addEventListener("click", () => {
       setDeploymentStage(form, "approval", () => thresholdInput?.focus({ preventScroll: true }));
+      scheduleQuote();
     });
   form?.addEventListener("input", (event) => {
     const target = event.target;
@@ -346,8 +415,8 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       form,
       target.closest(".multisig-deploy-signers-step") ? "participants" : "approval",
     );
-    button?.lastChild?.replaceWith("Check fee and address");
     if (reviewEnabled) buttonBusy(button, false);
+    scheduleQuote();
   });
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -365,12 +434,14 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (stored && !reviewed) {
       reviews.delete(form);
       if (reviewRoot) renderFragment(reviewRoot, "");
-      button?.lastChild?.replaceWith("Check fee and address");
+    }
+    if (quoteTimer !== null) {
+      clearTimeout(quoteTimer);
+      quoteTimer = null;
     }
     buttonBusy(button, true);
     if (reviewed) {
       deps.setResult("multisig-deploy-result", "Submitting exact reviewed deployment…");
-      button?.lastChild?.replaceWith("Submitting deployment…");
       reviews.delete(form);
       void deps.multisig.deployMultisig(reviewed).then(
         async (result) => {
@@ -410,7 +481,6 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
               ? "Fee review expired. Review the deployment again."
               : "Deployment failed. Review the error, then try again.",
           );
-          button?.lastChild?.replaceWith("Check fee and address");
           setDeploymentStage(form, "deploy");
           showToast(deploymentFailureToast(message, reviewed), "error", form);
           buttonBusy(button, false);
@@ -418,82 +488,6 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       );
       return;
     }
-    const generation = (reviewGenerations.get(form) ?? 0) + 1;
-    reviewGenerations.set(form, generation);
-    const isCurrent = (): boolean => {
-      if (reviewGenerations.get(form) !== generation) return false;
-      try {
-        return sameSetup(deploymentSetup(form), input);
-      } catch {
-        return false;
-      }
-    };
-    deps.setResult("multisig-deploy-result", "Preparing exact deployment fee…");
-    button?.lastChild?.replaceWith("Calculating address and fee…");
-    void deps.multisig
-      .reviewDeployment(input)
-      .then((next) => {
-        if (!isCurrent()) return;
-        const fundingRequired = next.feeAffordability === "insufficient";
-        if (!fundingRequired) reviews.set(form, { input, review: next });
-        if (reviewRoot) {
-          renderFragment(
-            reviewRoot,
-            fundingRequired
-              ? deploymentFundingStage(next)
-              : `${reviewOutcome(`Deploy a ${next.threshold}-of-${next.signerPublicKeys.length} Ready multisig.`)}
-            <div class="multisig-deployment-target" aria-label="Predicted multisig address">
-              <span>Predicted address</span>
-              <code title="${escapeHtml(next.address)}">${escapeHtml(accountLabel(next.address))}</code>
-              ${copyButton(next.address, "Copy predicted multisig address")}
-            </div>
-            ${reviewPanel([], fundingRequired ? `Funding is required first. Send at least ${formatFeeEstimate(next.fee)} to the predicted address, then check again.` : "Deployment creates a new on-chain multisig account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
-            ${reviewCostNote(`Maximum network fee: ${formatFeeEstimate(next.fee)}`)}
-            <details class="disclosure" data-disclosure="multisig-deployment-technical">
-              <summary>
-                <span class="menu-copy"><strong>Technical details</strong><small>Exact constructor authority and signer</small></span>
-                <span class="disclosure-mark">${icon("chevronRight")}</span>
-              </summary>
-              <div class="disclosure-body">
-                <dl class="request-detail">
-                  <div><dt>Address</dt><dd><code>${escapeHtml(next.address)}</code>${copyButton(next.address, "Copy multisig address")}</dd></div>
-                  <div><dt>Contract</dt><dd>Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
-                  <div><dt>Class hash</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, "Copy Ready Multisig class hash")}</dd></div>
-                  <div><dt>Network</dt><dd><code>${escapeHtml(next.networkId)}</code></dd></div>
-                  <div><dt>Signers</dt><dd>${next.signerPublicKeys.length}</dd></div>
-                  <div><dt>Public keys</dt><dd><code>${escapeHtml(next.signerPublicKeys.join(" "))}</code></dd></div>
-                  <div><dt>Threshold</dt><dd>${next.threshold}</dd></div>
-                  <div><dt>Salt</dt><dd><code>${escapeHtml(next.salt)}</code></dd></div>
-                  <div><dt>Deployment signer</dt><dd><code>${escapeHtml(next.signerAccountId)}</code></dd></div>
-                </dl>
-              </div>
-            </details>`,
-          );
-          bindCopyButtons(reviewRoot);
-          if (fundingRequired) {
-            mountLocalFundingControls(form, reviewRoot);
-            bindDeploymentFunding(deps, form, next);
-          }
-        }
-        setDeploymentStage(form, fundingRequired ? "fund" : "deploy");
-        if (button) button.hidden = fundingRequired;
-        if (!fundingRequired) button?.lastChild?.replaceWith("Deploy multisig");
-        deps.setResult("multisig-deploy-result", "");
-        buttonBusy(button, false);
-      })
-      .catch((error: unknown) => {
-        if (!isCurrent()) return;
-        const message = deploymentReviewFailure(errorMessage(error, "Deployment review failed"));
-        setDeploymentStage(form, "approval");
-        button?.lastChild?.replaceWith("Check fee and address");
-        deps.setResult(
-          "multisig-deploy-result",
-          message === ALREADY_DEPLOYED_MESSAGE
-            ? message
-            : "Deployment review failed. Check the error and retry.",
-        );
-        showToast(message, "error", form);
-        buttonBusy(button, false);
-      });
+    runQuote(input);
   });
 };
