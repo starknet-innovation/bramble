@@ -143,6 +143,14 @@ export const settingsScenario: WalletScenario = {
       state: { vault: "encrypted", view: "import-phrase" },
     },
     {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "find-accounts" }),
+      id: "find-accounts",
+      label: "Find my other accounts",
+      narrative:
+        "The wallet rescans the phrase it already holds: the panel asks for no words and no passphrase, and the grouped scan stays hidden until the reader starts it.",
+      state: { vault: "encrypted", view: "find-accounts" },
+    },
+    {
       content: () =>
         walletDashboard({
           classHashVerification: {
@@ -257,6 +265,7 @@ export const settingsScenario: WalletScenario = {
     "account",
     "import-key",
     "import-phrase",
+    "find-accounts",
     "backup",
     "backup-export",
     "backup-restore",
