@@ -10,6 +10,7 @@ import { bindImportKey } from "./import-key-ui";
 import { bindImportPhrase } from "./import-phrase-ui";
 import {
   bindAccountLabel,
+  bindAccountVisibility,
   bindAddAccount,
   bindAppearance,
   bindBackup,
@@ -31,6 +32,7 @@ export type SettingsSurfaceDeps = SettingsUiDeps;
  */
 export const bindSettingsSurface = (deps: SettingsSurfaceDeps): void => {
   bindAccountLabel(deps);
+  bindAccountVisibility(deps);
   bindAddAccount(deps);
   bindImportKey(deps);
   bindImportPhrase(deps);

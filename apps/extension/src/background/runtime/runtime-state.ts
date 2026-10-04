@@ -175,6 +175,53 @@ const requireCurrentAccountSelection = (authorized: () => boolean): void => {
  * mutation. The plain network preference records intent first; any subsequent
  * failure locks only the session generation that authorized the operation so
  * the provider cannot expose a different account under the new network.
+ *
+ * The caller must already hold the active-state coordinator (or be the only
+ * writer): this does not take it, so a composite operation can switch inside
+ * one serialized section instead of nesting coordinator runs.
+ */
+export const selectAccountLocked = async (
+  wallet: WalletStatusReader,
+  session: UnlockSession,
+  preferencesStore: WalletPreferencesStore,
+  accountId: string,
+): Promise<AccountRef | null> => {
+  const passphrase = session.getPassphrase();
+  if (!passphrase) {
+    return null;
+  }
+  const generation = session.generation();
+  const authorized = captureSessionAuthorization(session).isCurrent;
+  const target = findVaultAccount(await wallet.readVault(passphrase), accountId);
+  requireCurrentAccountSelection(authorized);
+  return runGuardedNetworkMutation(
+    session,
+    preferencesStore,
+    target.networkId,
+    passphrase,
+    generation,
+    "Unlock session changed during account selection",
+    (vaultPassphrase) => wallet.setActiveAccount({ accountId, vaultPassphrase }),
+  );
+};
+
+/**
+ * Reads the vault under the session's current credential, or null when the
+ * session holds none. Kept in this boundary module so the session and vault
+ * accessors are named in one audited place; callers pass the returned vault
+ * around and never the credential.
+ */
+export const readUnlockedVault = async (
+  wallet: WalletStatusReader,
+  session: UnlockSession,
+): Promise<Vault | null> => {
+  const passphrase = session.getPassphrase();
+  return passphrase ? wallet.readVault(passphrase) : null;
+};
+
+/**
+ * Selects an existing account and its network, serialized on the active-state
+ * coordinator. See {@link selectAccountLocked} for the mutation itself.
  */
 export const selectActiveAccount = async (
   wallet: WalletStatusReader,
@@ -183,25 +230,9 @@ export const selectActiveAccount = async (
   accountId: string,
   coordinator?: ActiveStateCoordinator,
 ): Promise<AccountRef | null> =>
-  runActiveStateMutation(coordinator, async () => {
-    const passphrase = session.getPassphrase();
-    if (!passphrase) {
-      return null;
-    }
-    const generation = session.generation();
-    const authorized = captureSessionAuthorization(session).isCurrent;
-    const target = findVaultAccount(await wallet.readVault(passphrase), accountId);
-    requireCurrentAccountSelection(authorized);
-    return runGuardedNetworkMutation(
-      session,
-      preferencesStore,
-      target.networkId,
-      passphrase,
-      generation,
-      "Unlock session changed during account selection",
-      (vaultPassphrase) => wallet.setActiveAccount({ accountId, vaultPassphrase }),
-    );
-  });
+  runActiveStateMutation(coordinator, () =>
+    selectAccountLocked(wallet, session, preferencesStore, accountId),
+  );
 
 const selectNetworkAccount = async (
   wallet: WalletStatusReader,

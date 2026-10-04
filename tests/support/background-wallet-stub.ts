@@ -13,6 +13,7 @@ import type {
   CreateKeyVaultInput,
   CreateVaultAccountInput,
   OriginGrantInput,
+  SetActiveAccountInput,
   SignHashInput,
   WalletStatus,
 } from "@bramble/vault/service";
@@ -109,6 +110,7 @@ const status: WalletStatus = {
 export type WalletStubOptions = {
   readonly accounts?: readonly AccountRef[];
   readonly activeAccountId?: () => string;
+  readonly captureSetActiveAccount?: (input: SetActiveAccountInput) => void;
   readonly captureCreate?: (input: CreateVaultAccountInput) => void;
   readonly captureCreateKeyVault?: (input: CreateKeyVaultInput) => void;
   readonly captureGrant?: (input: OriginGrantInput) => void;
@@ -173,7 +175,8 @@ export const createWallet = (options: WalletStubOptions = {}) => {
       }
       return vault();
     },
-    async setActiveAccount() {
+    async setActiveAccount(input: SetActiveAccountInput) {
+      options.captureSetActiveAccount?.(input);
       return account;
     },
     async signHash(input: SignHashInput) {

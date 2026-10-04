@@ -349,6 +349,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { accountId: account.id, label: "Main", type: "wallet.setAccountLabel" },
     sender: extensionSender,
   },
+  {
+    message: { accountId: account.id, hidden: false, type: "wallet.setAccountHidden" },
+    sender: extensionSender,
+  },
   { message: { displayCurrency: "usd", type: "wallet.setDisplay" }, sender: extensionSender },
   {
     message: { icon: "folder", name: "Savings", type: "wallet.createGroup" },

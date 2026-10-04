@@ -44,6 +44,7 @@ import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import { failureNoticeMessage } from "../transactions/tx-observation";
+import { handleSetAccountHidden } from "./account-visibility-ops";
 import { handleActivity } from "./activity-ops";
 import { submitReviewedAccountDeployment } from "./deployment-ops";
 import type { WalletStatusReader } from "./wallet-reader";
@@ -437,6 +438,7 @@ const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.getBalances": handleGetBalances,
   "wallet.lock": handleLock,
   "wallet.reviewTransfer": handleReviewTransfer,
+  "wallet.setAccountHidden": (deps, message) => handleSetAccountHidden(deps, message),
   "wallet.transactionAlerts": handleTransactionAlerts,
   "wallet.transfer": handleTransfer,
   "wallet.verifyClassHash": handleVerifyClassHash,

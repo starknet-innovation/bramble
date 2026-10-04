@@ -127,6 +127,18 @@ export const settingsScenario: WalletScenario = {
       state: { group: "operations" },
     },
     {
+      content: () =>
+        walletDashboard({
+          preferences: { ...journeyPreferences, hiddenAccountIds: [ledgerAccount.id] },
+          view: "account",
+        }),
+      id: "hidden-accounts",
+      label: "Hidden accounts",
+      narrative:
+        "Hiding takes an account out of the drawer and the send pickers without removing it: the manage screen keeps the hidden one in its own list with the control that shows it again.",
+      state: { hiddenAccounts: 1 },
+    },
+    {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "import-key" }),
       id: "import-key",
       label: "Import private key",

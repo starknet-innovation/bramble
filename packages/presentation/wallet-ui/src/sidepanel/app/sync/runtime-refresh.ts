@@ -34,6 +34,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.importArgentMultisigIntent",
   "wallet.importArgentMultisigSignature",
   "wallet.saveAddress",
+  "wallet.setAccountHidden",
   "wallet.setAccountInGroup",
   "wallet.setAccountLabel",
   "wallet.setActiveAccount",

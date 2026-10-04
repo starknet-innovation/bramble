@@ -72,6 +72,7 @@ const MUTATOR_MESSAGE_TYPES: Readonly<Record<string, readonly string[]>> = {
   importRawKeyAccount: ["wallet.importAccount"],
   setActiveAccount: [
     "wallet.approveOrigin",
+    "wallet.setAccountHidden",
     "wallet.setActiveAccount",
     "wallet.setActiveNetwork",
     "wallet.switchChain",

@@ -49,6 +49,13 @@ export type WalletPreferences = {
    */
   readonly explorerFallback?: ExplorerFallback;
   readonly groups?: AccountGroups;
+  /**
+   * Ids of accounts the user has hidden. A hidden account leaves the account
+   * drawer and the Send/Receive pickers but keeps its grants and its signing
+   * material: hiding is a view filter, not a permission change, so it lives
+   * here rather than in the vault and needs no schema migration.
+   */
+  readonly hiddenAccountIds?: readonly string[];
   readonly hiddenTokens?: readonly string[];
   readonly nftIndexerUrl?: string;
   readonly nfts?: readonly WatchedNft[];
@@ -118,6 +125,15 @@ export type WalletPreferencesStore = {
   readonly setNftSpam: (input: {
     readonly id: string;
     readonly spam: boolean;
+  }) => Promise<WalletPreferences>;
+  /**
+   * Hides or reveals one account. Hiding is refused for the last account a
+   * network would still show, and the background switches the active account
+   * away before hiding it, so no list ever opens on an account it omits.
+   */
+  readonly setAccountHidden: (input: {
+    readonly accountId: string;
+    readonly hidden: boolean;
   }) => Promise<WalletPreferences>;
   readonly setAccountLabel: (input: {
     readonly accountId: string;
