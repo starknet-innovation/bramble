@@ -174,6 +174,37 @@ ${recoveryScanFields()}
   );
 
 /**
+ * Renders the rescan of this wallet's own accounts, reached from the add-account
+ * chooser. Reuses the shared grouped scan; there is nothing to type on this
+ * screen, because the background reads the phrase the wallet already holds.
+ */
+export const findAccountsFlow = (status: WalletStatus): string =>
+  flowHeader(
+    "Find my other accounts",
+    status,
+    `Search this wallet's accounts on ${status.network}`,
+  ) +
+  flowScreen(
+    "find-accounts",
+    `<section class="section">
+      <p class="review-flag" role="note">Only accounts derived from this wallet's own phrase are searched.</p>
+      <form id="find-accounts-form" class="stack" novalidate>
+        <p class="hint">Searching uses the phrase this wallet already holds; there is nothing to type here.</p>
+        ${button({ attributes: { id: "find-accounts-search" }, label: "Search for accounts" })}
+        <div id="find-accounts-scan" hidden>
+${recoveryScanFields()}
+          ${button({
+            attributes: { id: "recover-accounts-button" },
+            disabled: true,
+            label: "Add selected accounts",
+          })}
+        </div>
+        <p id="find-accounts-result" role="status"></p>
+      </form>
+    </section>`,
+  );
+
+/**
  * Renders raw-key import as a dedicated security-sensitive task reached from
  * the Add account chooser.
  */
@@ -318,6 +349,8 @@ export const simpleFlowScreen = (
       return importKeyFlow(ctx.status);
     case "import-phrase":
       return importPhraseFlow(ctx.status);
+    case "find-accounts":
+      return findAccountsFlow(ctx.status);
     case "address-book":
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":

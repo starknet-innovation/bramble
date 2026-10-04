@@ -63,9 +63,12 @@ describe("onboarding views", () => {
     expect(html).not.toContain("aria-pressed");
   });
 
-  test("importing an existing account offers the phrase, a key, and a Ready Ledger", () => {
+  test("importing an existing account offers a rescan, the phrase, a key, and a Ready Ledger", () => {
     const html = importAccountChooser();
 
+    // The wallet's own accounts: one scan of the phrase it already holds, which
+    // is the only route here that imports without asking the reader to type one.
+    expect(html).toContain('data-add-kind="find-accounts"');
     expect(html).toContain('data-add-kind="import-phrase"');
     expect(html).toContain('data-add-kind="import-key"');
     expect(html).toContain('data-add-kind="restore-ready-ledger"');
@@ -73,7 +76,7 @@ describe("onboarding views", () => {
     // it is read from is the wallet's business, not the reader's.
     expect(html).toContain("Ready (Argent X)");
     expect(html).not.toContain("derivation path");
-    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(3);
+    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(4);
   });
 
   test("connect, reading, and error device states render their controls", () => {

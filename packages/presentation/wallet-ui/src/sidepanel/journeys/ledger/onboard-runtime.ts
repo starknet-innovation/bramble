@@ -59,6 +59,7 @@ export type LedgerOnboardRuntimeDeps = {
   readonly onCancel: () => void;
   readonly openImport: () => void;
   readonly openImportSeed: () => void;
+  readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
@@ -76,6 +77,7 @@ export type LedgerOnboardRuntime = {
 };
 
 const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
+  value === "find-accounts" ||
   value === "import" ||
   value === "import-key" ||
   value === "import-phrase" ||
@@ -225,6 +227,7 @@ export const createLedgerOnboardRuntime = (
     onCancel,
     openImport: () => deps.openImport(),
     openImportSeed: () => deps.openImportSeed(),
+    openFindAccounts: () => deps.openFindAccounts(),
     openMultisig: () => deps.openMultisig(),
     refresh,
     render,

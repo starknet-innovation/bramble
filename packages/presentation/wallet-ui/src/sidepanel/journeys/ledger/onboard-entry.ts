@@ -62,6 +62,7 @@ export const createLedgerOnboardEntry = (deps: {
   readonly mount: HTMLElement;
   readonly openImport: () => void;
   readonly openImportSeed: () => void;
+  readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: SidepanelWallet;
@@ -73,6 +74,7 @@ export const createLedgerOnboardEntry = (deps: {
     mount,
     openImport,
     openImportSeed,
+    openFindAccounts,
     openMultisig,
     refresh,
     wallet,
@@ -126,6 +128,7 @@ export const createLedgerOnboardEntry = (deps: {
     },
     openImport,
     openImportSeed,
+    openFindAccounts,
     openMultisig,
     refresh,
     wallet,

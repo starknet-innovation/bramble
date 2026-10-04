@@ -116,6 +116,7 @@ export const importAccountChooser = (ledgerAvailable = true): string => {
       })}
     </header>
     <div class="add-account-chooser" role="group" aria-label="Import an existing account">
+      ${chooserOption("find-accounts", "users", "Find my other accounts", "Search this wallet for accounts it does not list yet.")}
       ${chooserOption("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
       ${chooserOption("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
       ${ledgerAvailable ? chooserOption("restore-ready-ledger", "shield", "Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X).") : ""}

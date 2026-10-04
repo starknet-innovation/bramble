@@ -16,6 +16,7 @@ export type NavDirection = "forward" | "back" | "swap";
 // screen. Kept beside viewDepth so the depth map lives in one place.
 const DETAIL_VIEWS: readonly WalletView[] = [
   "advanced-network",
+  "find-accounts",
   "import-key",
   "import-phrase",
   "backup-export",
