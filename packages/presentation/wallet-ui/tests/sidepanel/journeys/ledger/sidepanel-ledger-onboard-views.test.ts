@@ -244,4 +244,21 @@ describe("onboarding views", () => {
   test("an empty candidate list renders the empty state", () => {
     expect(ledgerAccountPicker([])).toContain("No accounts read");
   });
+
+  test("omits the Ledger routes when the runtime cannot reach a device", () => {
+    const chooser = addAccountChooser(false);
+    expect(chooser).not.toContain('data-add-kind="ledger"');
+    expect(chooser).not.toContain("Ledger account");
+    expect(chooser).toContain('data-add-kind="regular"');
+    expect(chooser).toContain('data-add-kind="multisig"');
+    expect(chooser).toContain('data-add-kind="import"');
+    expect((chooser.match(/data-add-kind="/g) ?? []).length).toBe(3);
+
+    const importChooser = importAccountChooser(false);
+    expect(importChooser).not.toContain('data-add-kind="restore-ready-ledger"');
+    expect(importChooser).not.toContain("Ready Ledger account");
+    expect(importChooser).toContain('data-add-kind="import-phrase"');
+    expect(importChooser).toContain('data-add-kind="import-key"');
+    expect((importChooser.match(/data-add-kind="/g) ?? []).length).toBe(2);
+  });
 });

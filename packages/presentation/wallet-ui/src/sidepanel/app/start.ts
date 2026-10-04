@@ -337,7 +337,7 @@ export const startWalletUi = async (
         ? onboardingComplete()
         : !status.hasVault
           ? fullPageOnboarding
-            ? onboarding(status)
+            ? onboarding(status, ledgerConnector.isAvailable?.() ?? true)
             : onboardingLaunch()
           : status.locked
             ? locked(status, cache.pending)

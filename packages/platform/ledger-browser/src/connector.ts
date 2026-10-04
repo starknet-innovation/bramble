@@ -20,6 +20,7 @@ import { extensionBrowser, requestDeviceGrant } from "@bramble/ledger-browser/gr
 import {
   closeTransport,
   deviceClientFrom,
+  isLedgerTransportAvailable,
   listConnectedDevices,
   openConnectedTransport,
 } from "@bramble/ledger-browser/transport";
@@ -48,6 +49,7 @@ const sessionFrom = (transport: LedgerTransport): LedgerDeviceSession => ({
  * claimed.
  */
 export const ledgerConnector: LedgerConnector = {
+  isAvailable: isLedgerTransportAvailable,
   listConnected: listConnectedDevices,
   async openConnected(deviceId) {
     const transport = await openConnectedTransport(deviceId);
