@@ -27,6 +27,12 @@ export const ActivityAccountARestored = checkpointStory(
   "activity",
   "account-a-restored",
 );
+export const ActivityFilters = checkpointStory("Activity · feed filters", "activity", "filters");
+export const ActivityFiltersSearch = checkpointStory(
+  "Activity · search one counterparty",
+  "activity",
+  "filters-search",
+);
 
 export const Receive: LabStory = {
   args: { checkpointId: "receive", scenarioId: "assets" },

@@ -15,6 +15,7 @@ import {
 } from "../journeys/onboarding/onboarding-surface";
 import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
 import { bindUnlock } from "../journeys/onboarding/unlock-ui";
+import { resetActivityViewState } from "../journeys/portfolio/activity-view-state";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
 import type { SendIntent } from "../journeys/send/send-model";
@@ -383,6 +384,7 @@ export const startWalletUi = async (
     if (scopeChanged) {
       privacy.reset();
       sendIntent = null;
+      resetActivityViewState();
     }
     if (scopeChanged === "network" && selectedMultisigId !== null) {
       selectedMultisigId = null;
@@ -403,6 +405,7 @@ export const startWalletUi = async (
     cache.preferences = nextPreferences;
     if (!status.hasVault || status.locked) {
       privacy.reset();
+      resetActivityViewState();
       Object.assign(cache, emptyRenderCache(), {
         pending: cache.pending,
         preferences: cache.preferences,
