@@ -8,6 +8,7 @@
 import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import {
   readCreateAccountInput,
+  readImportOwnAccountsInput,
   readImportSeedAccountsInput,
 } from "../accounts/account-creation-inputs";
 import { readCreateKeyVaultInput, readImportAccountInput } from "../accounts/import-inputs";
@@ -120,6 +121,44 @@ const handleImportSeedAccounts: RouterHandler = async (ctx, messageType, message
   });
 };
 
+const handleImportOwnAccounts: RouterHandler = async (ctx, messageType, message) => {
+  if (messageType !== "wallet.importOwnAccounts") {
+    return null;
+  }
+  const input = readImportOwnAccountsInput(message);
+  if (!input) {
+    return { error: "invalid import own accounts request" };
+  }
+  const importSeedAccounts = ctx.wallet.importSeedAccounts;
+  if (!importSeedAccounts) {
+    return { error: "wallet unavailable" };
+  }
+  return ctx.activeStateCoordinator.run(async () => {
+    const accounts = await runUnlockedNetworkMutation(
+      ctx.session,
+      ctx.preferencesStore,
+      input.networkId,
+      async (vaultPassphrase) => {
+        // The wallet's own phrase is read inside the vault boundary; the
+        // founding-phrase path of the seed import then derives the selections
+        // with no imported-seed handle, so the own phrase is never retained.
+        const vault = await ctx.wallet.readVault(vaultPassphrase);
+        const foundingPhrase = vault.mnemonic;
+        if (foundingPhrase === null) {
+          throw new Error("This wallet has no recovery phrase");
+        }
+        return importSeedAccounts({
+          mnemonic: foundingPhrase,
+          networkId: input.networkId,
+          selections: input.selections,
+          vaultPassphrase,
+        });
+      },
+    );
+    return accounts ? { accounts, ok: true } : { error: "wallet locked" };
+  });
+};
+
 const handleImportAccount: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.importAccount") {
     return null;
@@ -144,13 +183,14 @@ const handleImportAccount: RouterHandler = async (ctx, messageType, message) => 
 };
 
 /**
- * Routes the four account-creation messages (create wallet, add derived
- * account, first-run key vault, raw-key import) to their handlers; null for
- * every other message type.
+ * Routes the account-creation messages (create wallet, add derived account,
+ * first-run key vault, foreign-phrase import, own-phrase import, raw-key
+ * import) to their handlers; null for every other message type.
  */
 export const handleAccountCreationOps: RouterHandler = async (ctx, messageType, message, sender) =>
   (await handleCreateAccount(ctx, messageType, message, sender)) ??
   (await handleAddAccount(ctx, messageType, message, sender)) ??
   (await handleCreateKeyVault(ctx, messageType, message, sender)) ??
   (await handleImportSeedAccounts(ctx, messageType, message, sender)) ??
+  (await handleImportOwnAccounts(ctx, messageType, message, sender)) ??
   handleImportAccount(ctx, messageType, message, sender);
