@@ -42,6 +42,11 @@ export const HiddenAccounts = checkpointStory(
   "hidden-accounts",
 );
 export const ImportKey = checkpointStory("Import private key", "settings-security", "import-key");
+export const FindAccounts = checkpointStory(
+  "Find my other accounts",
+  "settings-security",
+  "find-accounts",
+);
 export const ClassMismatch = checkpointStory(
   "Account class mismatch",
   "settings-security",
