@@ -323,6 +323,15 @@ export const isHiddenTokens = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every(isTokenId) && hasUniqueStrings(value);
 
 /**
+ * Validates the hidden-accounts list. Entries are canonical account ids
+ * (`networkId:0x...`), checked with the same validator the account model uses
+ * rather than the looser token-id check, so a stored id can never be one no
+ * account list would match.
+ */
+export const isHiddenAccountIds = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every(isAccountId) && hasUniqueStrings(value);
+
+/**
  * Validates the per-network RPC override map.
  */
 export const isRpcOverrides = (value: unknown): value is RpcOverrides =>

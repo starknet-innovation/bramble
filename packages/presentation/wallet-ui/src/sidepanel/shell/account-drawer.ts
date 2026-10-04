@@ -131,7 +131,10 @@ export const accountDrawer = (
   selectedMultisigId: string | null = null,
 ): string => {
   const groups = withDefaultGroups(preferences?.groups ?? []);
-  const accounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
+  const hidden = new Set(preferences?.hiddenAccountIds ?? []);
+  const accounts = status.accounts.filter(
+    (stored) => stored.networkId === status.networkId && !hidden.has(stored.id),
+  );
   const shared = multisigs.filter((view) => view.record.networkId === status.networkId);
   const selectedMultisig = shared.find((view) => view.record.id === selectedMultisigId) ?? null;
   const sections = folderSections(groups, accounts);

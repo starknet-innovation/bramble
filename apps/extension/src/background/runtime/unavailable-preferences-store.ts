@@ -43,6 +43,9 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async renameGroup() {
     throw new Error("preferences unavailable");
   },
+  async setAccountHidden() {
+    throw new Error("preferences unavailable");
+  },
   async setAccountInGroup() {
     throw new Error("preferences unavailable");
   },

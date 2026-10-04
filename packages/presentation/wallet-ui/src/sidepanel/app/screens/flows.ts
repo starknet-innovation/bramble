@@ -19,7 +19,7 @@ import {
   privacyPoolNotice,
   receiveAddressView,
 } from "../../journeys/send/receive-view";
-import { accountNamesSection } from "../../journeys/settings/account-names";
+import { accountNamesSection, hiddenAccountsSection } from "../../journeys/settings/account-names";
 import { groupsSection } from "../../journeys/settings/group-members";
 import {
   accountDisplayName,
@@ -249,6 +249,7 @@ export const accountFlow = (
     flowScreen(
       "account",
       accountNamesSection(status, preferences, groups) +
+        hiddenAccountsSection(status, preferences) +
         groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks),
     )
   );

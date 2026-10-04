@@ -475,4 +475,17 @@ describe("account groups", () => {
       "group membership update failed",
     );
   });
+
+  test("setAccountHidden forwards the toggle and resolves, or throws", async () => {
+    const { sent, wallet } = captureRuntime(preferencesResponse);
+    await expect(wallet.setAccountHidden(account.id, true)).resolves.toBeUndefined();
+    expect(sent[0]).toEqual({
+      accountId: account.id,
+      hidden: true,
+      type: "wallet.setAccountHidden",
+    });
+    await expect(runtimeReturning({}).setAccountHidden(account.id, false)).rejects.toThrow(
+      "account visibility update failed",
+    );
+  });
 });
