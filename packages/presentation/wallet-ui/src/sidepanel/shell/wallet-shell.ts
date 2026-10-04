@@ -204,6 +204,6 @@ export const shieldTile = (
       ? "Shield — deploy this account first"
       : ready
         ? "Shield public value into your private balance"
-        : "Activate private balances";
+        : "Activate private balances to start shielding";
   return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };

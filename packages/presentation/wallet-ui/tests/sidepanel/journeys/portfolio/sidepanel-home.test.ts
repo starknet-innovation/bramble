@@ -319,7 +319,7 @@ describe("shield tile", () => {
       const html = homeArgs(disclosure(registration));
 
       expect(html).toMatch(/class="action-tile" data-privacy-open="SN_MAIN:STRK:[^"]+"/);
-      expect(html).toContain('aria-label="Activate private balances"');
+      expect(html).toContain('aria-label="Activate private balances to start shielding"');
       expect(html).not.toContain("data-send-shield");
     }
   });

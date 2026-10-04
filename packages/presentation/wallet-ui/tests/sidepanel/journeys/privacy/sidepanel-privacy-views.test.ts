@@ -67,7 +67,12 @@ describe("privacy journey templates", () => {
     });
 
     expect(html).toContain("Activate private balances");
+    expect(html).toContain("turns on private balances for this account");
+    expect(html).toContain("It does not move any of your funds");
     expect(html).toContain("Registration is public");
+    expect(html).toContain("links this wallet address to its private activity");
+    // The cryptographic detail moves into Technical details, which is still
+    // rendered into the same document, so the disclosure never loses it.
     expect(html).toContain("viewing-key commitment");
   });
 

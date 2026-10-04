@@ -173,7 +173,7 @@ export const privacyScenario: WalletScenario = {
       id: "activation-review",
       label: "Review activation",
       narrative:
-        "The immutable review names the public route, pool, network, and viewing-key commitment before proof generation.",
+        "The review states the outcome in plain language and that registration moves no funds; the public route, pool, network, and viewing-key commitment stay under Technical details.",
       state: { route: "public-account", stage: "review", task: "register" },
     },
     {

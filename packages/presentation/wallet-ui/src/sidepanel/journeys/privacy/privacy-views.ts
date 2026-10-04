@@ -104,10 +104,10 @@ const preparationDetails = (
     </header>
     <section class="decision-layer decision-outcome" aria-label="What will happen">
       <p class="decision-label">What will happen</p>
-      <p>This one-time registration lets this account discover and use its private notes.</p>
+      <p>This one-time registration turns on private balances for this account. It does not move any of your funds.</p>
     </section>
     ${reviewPanel([
-      "Registration is public. It stores this account's viewing-key commitment on-chain and opens its private channel. It does not reveal the viewing key or your private balance.",
+      "Registration is public: it links this wallet address to its private activity, but your private balance stays hidden.",
     ])}
     <section class="decision-layer decision-boundary" aria-label="Cost">
       <p class="decision-label">Cost</p>
@@ -169,6 +169,7 @@ const preparationDetails = (
         valueStyle: "code",
       },
     ])}
+    <p class="hint">Registration stores this account's viewing-key commitment on-chain and opens its private channel. It never publishes the viewing key.</p>
     <ul class="privacy-facts">
       ${preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`).join("")}
     </ul>
