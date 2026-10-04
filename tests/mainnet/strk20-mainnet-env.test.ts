@@ -102,4 +102,15 @@ describe("STRK20 live-mainnet environment", () => {
       ).toThrow("dedicated test RPC endpoint");
     }
   });
+
+  test("refuses a shared RPC host written as a fully-qualified name", () => {
+    for (const rpcUrl of [
+      "https://wallet.nodes.starknet.org./rpc/mainnet/v0_10",
+      "https://mainnet.nodes.starknet.org./rpc/v0_10",
+    ]) {
+      expect(() =>
+        readStrk20MainnetEnvironment({ ...valid(), BRAMBLE_STRK20_E2E_RPC_URL: rpcUrl }),
+      ).toThrow("dedicated test RPC endpoint");
+    }
+  });
 });
