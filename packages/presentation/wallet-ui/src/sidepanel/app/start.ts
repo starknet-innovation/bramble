@@ -236,7 +236,8 @@ export const startWalletUi = async (
       },
       openWithToken: (view, tokenId) => {
         [sendIntent, selectedTokenId] = [null, tokenId];
-        if (view === "swap") presetSwapPair(tokenId, cache.preferences?.tokens ?? []);
+        if (view === "swap")
+          presetSwapPair(tokenId, cache.preferences?.tokens ?? [], cache.status.networkId);
         navigate(view);
       },
       openToken: (tokenId) => {

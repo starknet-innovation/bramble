@@ -409,7 +409,11 @@ describe("the drawer's network pill", () => {
       "SN_MAIN",
       "SN_SEPOLIA",
     ]);
-    expect(options[0]?.getAttribute("aria-selected")).toBe("true");
+    // A plain button list, not a listbox: the network in force is marked with
+    // aria-current rather than aria-selected.
+    expect(options[0]?.getAttribute("aria-current")).toBe("true");
+    expect(options[1]?.hasAttribute("aria-current")).toBe(false);
+    expect(menu?.hasAttribute("role")).toBe(false);
   });
 
   test("the pill opens and closes the list", () => {

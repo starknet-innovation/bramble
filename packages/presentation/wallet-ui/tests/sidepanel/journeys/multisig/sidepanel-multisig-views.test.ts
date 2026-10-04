@@ -183,7 +183,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(home).toContain(`data-ms-open-intent="${fixture.readyIntent.id}"`);
     expect(home).toContain(`data-ms-intent-account="${fixture.record.id}"`);
     expect(home).toContain("Ready to submit · 1 of 1");
-    expect(home).toContain("Waiting for a signature");
+    expect(home).toContain("Signed, ready to submit");
     expect(home).toContain(`href="https://starkscan.co/contract/${fixture.record.address}"`);
     expect(home).toContain('aria-label="Open this account on the block explorer"');
     expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
@@ -421,7 +421,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       [fixture.readyIntent],
     );
 
-    expect(html).toContain("no longer match this transaction");
+    expect(html).toContain("could not confirm this transaction");
     expect(html).not.toContain('data-ms-sign="');
     expect(html).not.toContain('data-ms-submit="');
     expect(html).not.toContain("Import signature fragment");

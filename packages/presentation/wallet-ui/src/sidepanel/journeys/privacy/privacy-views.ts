@@ -232,7 +232,10 @@ type BlockedCopy = {
 const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
   deploy: {
     action: button({
-      attributes: { "data-privacy-deploy-register": "" },
+      attributes: {
+        "aria-label": "Shield. Deploy this account first.",
+        "data-privacy-deploy-register": "",
+      },
       icon: "shield",
       label: "Shield",
     }),
@@ -241,12 +244,15 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
   },
   fund: {
     action: button({
-      attributes: { "data-view": "receive" },
+      attributes: {
+        "aria-label": "Fund with STRK. Deposit some STRK, then come back.",
+        "data-view": "receive",
+      },
       icon: "qrCode",
       label: "Fund with STRK",
     }),
     body: "Going private requires your account to be funded and activated.",
-    title: "Initialize your account",
+    title: "Not enough STRK yet",
   },
   ledger: {
     action: "",

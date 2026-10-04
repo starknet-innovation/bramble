@@ -83,18 +83,23 @@ let confirmEpoch = 0;
 // abandoned wait must not take over the next swap (mc-wallet issue 476).
 let submitting = false;
 
+const tradableFrom = (tokens: readonly TokenConfig[], networkId: string): readonly TokenConfig[] =>
+  tokens.filter((token) => token.networkId === networkId && !isLikelySpam(token));
+
 /** Opens the swap on a chosen sell token, clearing any in-flight quote. */
-export const presetSwapPair = (sellId: string, tokens: readonly TokenConfig[]): void => {
-  const pair = swapPresetPair(sellId, tokens);
+export const presetSwapPair = (
+  sellId: string,
+  tokens: readonly TokenConfig[],
+  networkId: string,
+): void => {
+  const pair = swapPresetPair(sellId, tradableFrom(tokens, networkId));
   if (!pair) return;
   [sellTokenId, buyTokenId, amountText] = [pair.sellId, pair.buyId, ""];
   [quote, preparation, pendingBuyAmount, stage] = [null, null, null, "edit"];
 };
 
 const tradableTokens = (deps: SwapUiDeps): readonly TokenConfig[] =>
-  (deps.preferences()?.tokens ?? []).filter(
-    (token) => token.networkId === deps.status().networkId && !isLikelySpam(token),
-  );
+  tradableFrom(deps.preferences()?.tokens ?? [], deps.status().networkId);
 
 const balanceFor = (deps: SwapUiDeps, tokenId: string | null): TokenBalance | null => {
   const state = deps.balances();

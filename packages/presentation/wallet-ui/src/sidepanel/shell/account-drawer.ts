@@ -87,19 +87,24 @@ const drawerAccountRow = (
  * settings; the option ids are distinct from the settings picker's so the two
  * bindings never claim each other's buttons — that picker returns to settings
  * after a switch, which is wrong from inside the drawer.
+ *
+ * The pill is a plain disclosure over a list of ordinary buttons: every option
+ * is a normal button in the tab order, so there is no arrow-key contract to
+ * honour. The network in force is marked with `aria-current`, not
+ * `aria-selected`, which belongs to the listbox roles this list does not use.
  */
 const networkControl = (status: WalletStatus): string => `
   <div class="drawer-network">
     <button class="drawer-network-pill" type="button" data-drawer-network-toggle
-      aria-expanded="false" aria-haspopup="listbox" aria-controls="drawer-network-menu">
+      aria-expanded="false" aria-controls="drawer-network-menu">
       ${pill(networkDisplayName(status.network), { dot: true })}${icon("chevronDown")}
     </button>
-    <div class="drawer-network-menu" id="drawer-network-menu" role="listbox" aria-label="Network" hidden>
+    <div class="drawer-network-menu" id="drawer-network-menu" aria-label="Network" hidden>
       ${status.networks
         .map(
-          (network) => `<button class="drawer-network-option" type="button" role="option"
+          (network) => `<button class="drawer-network-option" type="button"
             data-drawer-network-id="${escapeHtml(network.id)}"
-            aria-selected="${network.id === status.networkId}">
+            ${network.id === status.networkId ? 'aria-current="true"' : ""}>
             <span>${escapeHtml(network.name)}</span>
             ${network.id === status.networkId ? icon("check") : ""}
           </button>`,

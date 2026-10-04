@@ -211,7 +211,7 @@ describe("privacy journey templates", () => {
 
     const fund = blocked("fund", "Not enough STRK for the <pool> fee");
     expect(fund).toContain("Go private");
-    expect(fund).toContain("Initialize your account");
+    expect(fund).toContain("Not enough STRK yet");
     expect(fund).toContain('data-view="receive"');
     expect(fund).toContain("Fund with STRK");
     // The runtime's own reason is shown, escaped.

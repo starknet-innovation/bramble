@@ -126,7 +126,7 @@ export const HOME_STYLES = `
     width: 100%;
   }
   .drawer-network-option:hover { background: var(--bramble-elevated); }
-  .drawer-network-option[aria-selected="true"] { color: var(--bramble-accent); }
+  .drawer-network-option[aria-current="true"] { color: var(--bramble-accent); }
   .drawer-network-option .icon { height: 15px; width: 15px; }
   .drawer-list { align-content: start; display: grid; gap: 6px; }
   /* The folders are the drawer's one scroll region, so the head stays put and

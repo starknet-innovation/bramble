@@ -116,6 +116,7 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   return `
   ${textField({
     autocomplete: "new-password",
+    hint: "This passphrase protects Bramble on this device and cannot be recovered",
     label: "Vault passphrase",
     minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: passphraseName,
@@ -215,13 +216,13 @@ const generatedStep = (): string => `
       >${recoveryWordInputs("generated")}</div>
       <div class="button-row">
         ${button({
-          attributes: { id: "phrase-toggle" },
+          attributes: { "aria-label": "Show recovery phrase", id: "phrase-toggle" },
           icon: "book",
           label: "Show",
           variant: "secondary",
         })}
         ${button({
-          attributes: { id: "generated-copy-phrase" },
+          attributes: { "aria-label": "Copy recovery phrase", id: "generated-copy-phrase" },
           disabled: true,
           icon: "copy",
           label: "Copy",
@@ -411,7 +412,7 @@ const accountStep = (): string => `
 const ledgerStep = (status: WalletStatus): string => `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
     ${flowBack("Back to wallet methods")}
-    ${stepHead("lock", "Choose a password")}
+    ${stepHead("lock", "Create your vault passphrase")}
     <form id="ledger-setup-form" class="onboarding-fields">
       ${passwordFields("ledger")}
       ${networkConsequence()}

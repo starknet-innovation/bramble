@@ -222,7 +222,7 @@ const intentCard = (
       ...(hasFreshAuthority
         ? []
         : [
-            "The on-chain signers no longer match this transaction. Signing and submission are disabled.",
+            "Bramble could not confirm this transaction against the account's current signers, threshold and class. Signing and submission are disabled.",
           ]),
     ])}
     <section class="decision-layer decision-boundary" aria-label="Cost">
@@ -304,15 +304,15 @@ const intentList = (
   if (selectedIntentId) return emptyState("This transaction is no longer available.");
   const submitted = scoped.find((intent) => intent.state === "submitted");
   if (submitted) return intentCard(submitted, view, status, preferences, all);
-  const awaiting = scoped.filter(
-    (intent) => intent.state === "collecting" || intent.state === "ready",
-  );
+  const awaiting = scoped.filter((intent) => intent.state === "collecting");
+  const ready = scoped.filter((intent) => intent.state === "ready");
   const stale = scoped.filter((intent) => intent.state === "stale");
-  if (awaiting.length === 0 && stale.length === 0) {
+  if (awaiting.length === 0 && ready.length === 0 && stale.length === 0) {
     return emptyState("Nothing to sign.");
   }
   return `<div class="multisig-intent-stack">
     ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Waiting for a signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
+    ${ready.length === 0 ? "" : `<section><p class="eyebrow">Signed, ready to submit</p><div class="allowance-list">${ready.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
     ${stale.length === 0 ? "" : `<section><p class="eyebrow">Needs attention</p><div class="allowance-list">${stale.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
   </div><p id="multisig-intent-result" role="status"></p>`;
 };
@@ -328,7 +328,9 @@ const compactIntentList = (
     ? "Needs attention"
     : scoped.some((intent) => intent.state === "stale")
       ? "Transactions needing you"
-      : "Waiting for a signature";
+      : scoped.some((intent) => intent.state === "collecting")
+        ? "Waiting for a signature"
+        : "Signed, ready to submit";
   return {
     emptyMessage: "Nothing to sign. Import a transaction to review it here.",
     heading,

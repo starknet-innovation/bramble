@@ -49,7 +49,7 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
     "Turn on Blind signing in the Starknet app settings on your Ledger, then retry.",
   "chain-failed": "Your transaction was submitted but failed on-chain.",
   "dashboard-restore-failed":
-    "Your Ledger didn't return to its home screen. Unlock it, leave it on the Starknet app, then try again.",
+    "Your Ledger didn't return to its home screen for a compatibility check. Unlock it, leave it on the Starknet app, then try again.",
   "deploy-unfunded":
     "This account isn't deployed yet and has no STRK for the first transaction. Add STRK, then try again.",
   "device-busy":
@@ -61,7 +61,7 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "management-refused":
     "Your Ledger refused a compatibility check. Unlock it, open the Starknet app, close Ledger Live, then try again.",
   "management-unreadable":
-    "Your Ledger's app or firmware is newer than this wallet supports. Nothing was signed.",
+    "Your Ledger sent a reply Bramble couldn't read, so nothing was signed. Update the Starknet app in Ledger Live, then reconnect. If it keeps happening, report it.",
   "multiple-devices": "Select the Ledger for this account.",
   "network-mismatch":
     "This Ledger account was set up for another network. Switch networks or pick a matching account.",
@@ -76,7 +76,7 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   replug: "Reconnect your Ledger, then try again.",
   "sign-timeout": "Still waiting for you to confirm on your Ledger.",
   "starknet-reopen-failed":
-    "Your Ledger couldn't reopen the Starknet app. Open it on your device, then try again. Nothing was signed.",
+    "Your Ledger left the Starknet app for a compatibility check and couldn't reopen it. Open the Starknet app on your device, then try again. Nothing was signed.",
   "signature-verify-failed":
     "Couldn't verify the signature from your Ledger, so nothing was submitted. Try again.",
   "unexpected-device-error":

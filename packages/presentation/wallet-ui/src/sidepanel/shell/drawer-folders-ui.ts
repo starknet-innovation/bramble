@@ -199,7 +199,7 @@ const bindNetworkSwitch = (root: Element, deps: DrawerFolderDeps): void => {
   for (const option of root.querySelectorAll<HTMLButtonElement>("[data-drawer-network-id]")) {
     option.addEventListener("click", () => {
       const networkId = option.dataset["drawerNetworkId"];
-      if (!networkId || option.getAttribute("aria-selected") === "true") {
+      if (!networkId || option.getAttribute("aria-current") === "true") {
         return;
       }
       buttonBusy(option, true);

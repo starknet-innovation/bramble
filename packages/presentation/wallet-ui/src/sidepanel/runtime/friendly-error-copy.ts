@@ -224,11 +224,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "retry the fee estimate before approving this transaction",
     "Estimate the fee again before approving.",
   ],
-  // Already the sentence a reader needs. Listed so the coverage check can tell
-  // "reviewed and kept" from "never looked at".
+  // The raw stays the background's own sentence; the reader's copy names the
+  // move that resolves a failed estimate on a custom endpoint.
   [
     "couldn't estimate the network fee, so nothing was signed. try again.",
-    "Couldn't estimate the network fee, so nothing was signed. Try again.",
+    "Couldn't estimate the network fee, so nothing was signed. Check the RPC endpoint for this network, then try again.",
   ],
 
   // --- Allowances ----------------------------------------------------------

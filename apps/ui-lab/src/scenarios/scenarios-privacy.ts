@@ -254,6 +254,26 @@ export const privacyScenario: WalletScenario = {
         "Failure is explicit, never auto-retries, and keeps retry or return choices close to the task.",
       state: { autoRetry: false, stage: "failure" },
     },
+    // Last in the hand-written activation section, before the dApp checkpoints,
+    // so the activation walkthrough's Step sequence (which starts at
+    // "activation-required") is not disturbed by a blocked state.
+    {
+      content: () =>
+        privacyDashboard(
+          disclosure("unregistered"),
+          {
+            blocker: { kind: "fund", message: "Not enough STRK for the pool fee" },
+            stage: "blocked",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "fund-blocked",
+      label: "Not enough STRK",
+      narrative:
+        "An account short of the pool fee is told what is missing; the title never claims the account needs initialising when it is already deployed.",
+      state: { accountDeployed: true, blocker: "fund", shortfall: "pool fee" },
+    },
     ...privacyDappCheckpoints,
   ],
   description:

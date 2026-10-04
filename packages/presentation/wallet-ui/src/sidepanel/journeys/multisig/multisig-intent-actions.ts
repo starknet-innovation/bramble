@@ -26,7 +26,7 @@ const intentAction = (
   if (!hasFreshAuthority) {
     return {
       canSign: false,
-      note: "The signers changed since this transaction was frozen. Signing and submission stay blocked.",
+      note: "Bramble could not confirm this transaction against the account's current signers, threshold and class. Signing and submission stay blocked.",
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-view": "multisig-signers" },
