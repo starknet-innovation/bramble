@@ -10,6 +10,7 @@
  * elsewhere (`owner_of`); nothing here authorizes a transfer.
  */
 import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/json";
+import { normalizeHostname } from "@bramble/core/service-url";
 
 import {
   canonicalFelt,
@@ -107,7 +108,7 @@ export const normalizeNftHttpsUrl = (value: unknown): string => {
   }
   try {
     const url = new URL(value.trim());
-    const hostname = url.hostname.toLowerCase();
+    const hostname = normalizeHostname(url.hostname);
     if (
       url.protocol !== "https:" ||
       url.username ||
