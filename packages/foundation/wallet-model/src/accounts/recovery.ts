@@ -22,6 +22,18 @@ export const RECOVERY_SCAN_LIMITS = {
 } as const;
 
 /**
+ * Account indices this wallet never derives at. Another wallet that walks the
+ * same account-index axis reserves this value for a segregated branch it keeps
+ * out of a mainstream wallet, so a regular account here would surface accounts
+ * that belong to that branch (#336).
+ */
+export const RESERVED_ACCOUNT_INDICES: readonly number[] = [0x41474e54];
+
+/** True for an account index this wallet reserves and never derives at. */
+export const isReservedAccountIndex = (value: number): boolean =>
+  RESERVED_ACCOUNT_INDICES.includes(value);
+
+/**
  * One HD coordinate selected for restoration into the encrypted vault.
  *
  * `classHash` names the release the candidate was derived at. It is part of the
@@ -82,7 +94,8 @@ export const isRecoveryAccountIndex = (value: unknown): value is number =>
   typeof value === "number" &&
   Number.isSafeInteger(value) &&
   value >= 0 &&
-  value <= RECOVERY_SCAN_LIMITS.maxIndex;
+  value <= RECOVERY_SCAN_LIMITS.maxIndex &&
+  !isReservedAccountIndex(value);
 
 // Whether a selection's class is one its family can be deployed with, given
 // that OpenZeppelin carries none (resolved per network) and Braavos must name one.

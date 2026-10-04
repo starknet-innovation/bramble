@@ -9,7 +9,9 @@ import { canonicalFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import {
   isRecoveryAccountCandidate,
+  isRecoveryAccountIndex,
   isRecoveryAccountSelection,
+  isReservedAccountIndex,
   RECOVERY_SCAN_LIMITS,
   recoveryScanTarget,
   recoverySelectionKey,
@@ -85,6 +87,23 @@ describe("recovery selections", () => {
     expect(recoverySelectionKey(at(argent030.classHash))).toBe(
       recoverySelectionKey(at(argent030.classHash.replace("0x0", "0x"))),
     );
+  });
+
+  test("reserve the account index a sibling wallet keeps off the shared axis", () => {
+    // Another wallet derives a segregated branch at this index from the same
+    // seed axis, so it is refused as a coordinate and as a selection (#336).
+    expect(isReservedAccountIndex(0x41474e54)).toBe(true);
+    expect(isReservedAccountIndex(0x41474e53)).toBe(false);
+    expect(isRecoveryAccountIndex(0x41474e54)).toBe(false);
+    expect(isRecoveryAccountIndex(0x41474e53)).toBe(true);
+    expect(isRecoveryAccountIndex(0x41474e55)).toBe(true);
+    expect(isRecoveryAccountIndex(0)).toBe(true);
+    expect(
+      isRecoveryAccountSelection({ accountContractType: "argent", accountIndex: 0x41474e54 }),
+    ).toBe(false);
+    expect(
+      isRecoveryAccountSelection({ accountContractType: "argent", accountIndex: 0x41474e53 }),
+    ).toBe(true);
   });
 });
 

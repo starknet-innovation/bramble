@@ -22,6 +22,7 @@ import {
 import {
   isRecoveryAccountIndex,
   isRecoveryAccountSelection,
+  isReservedAccountIndex,
   RECOVERY_SCAN_LIMITS,
 } from "@bramble/wallet-model/recovery";
 
@@ -30,6 +31,16 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
     return undefined;
   }
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
+};
+
+// A raw account index is refused when it is one this wallet reserves and must
+// never derive at, on top of the range the field itself allows (#336).
+const readAccountIndex = (value: unknown): number | null | undefined => {
+  const index = readOptionalIndex(value);
+  if (index === undefined || index === null) {
+    return index;
+  }
+  return isReservedAccountIndex(index) ? null : index;
 };
 
 const readDeploymentSalt = (
@@ -49,7 +60,7 @@ const readDeploymentSalt = (
 const readDerivationFields = (
   message: Record<string, unknown>,
 ): Omit<AccountDerivationInput, "mnemonic"> | null => {
-  const accountIndex = readOptionalIndex(message["accountIndex"]);
+  const accountIndex = readAccountIndex(message["accountIndex"]);
   const addressIndex = readOptionalIndex(message["addressIndex"]);
   if (accountIndex === null || addressIndex === null) {
     return null;

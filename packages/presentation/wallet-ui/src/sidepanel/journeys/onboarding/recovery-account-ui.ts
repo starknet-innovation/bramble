@@ -331,7 +331,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   manualSearch?.addEventListener("click", () => {
     const index = Number(manual?.value);
     if (!manual?.value || !isRecoveryAccountIndex(index)) {
-      showToast("Enter a valid non-negative account index", "error", manualSearch);
+      showToast("Enter a valid account index", "error", manualSearch);
       return;
     }
     void scan(index);
