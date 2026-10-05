@@ -36,7 +36,30 @@ import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./hom
 
 // Whole days a delay spans, for the recovery copy. Takes the delay it is
 // given, so the pure render layer never reads the wall clock.
-const delayDays = (delaySeconds: number): number => Math.max(1, Math.round(delaySeconds / 86_400));
+/**
+ * Formats a unix-seconds instant as "DD/MM/YY at HHhMM UTC" with pure integer
+ * civil-from-epoch arithmetic (Hinnant's algorithm), so the render layer reads
+ * no wall clock — it only formats the value it is given.
+ */
+const formatUtcInstant = (epochSeconds: number): string => {
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  const days = Math.floor(epochSeconds / 86_400);
+  const secondOfDay = epochSeconds - days * 86_400;
+  const z = days + 719_468;
+  const era = Math.floor(z / 146_097);
+  const doe = z - era * 146_097;
+  const yoe = Math.floor(
+    (doe - Math.floor(doe / 1460) + Math.floor(doe / 36_524) - Math.floor(doe / 146_096)) / 365,
+  );
+  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
+  const mp = Math.floor((5 * doy + 2) / 153);
+  const day = doy - Math.floor((153 * mp + 2) / 5) + 1;
+  const month = mp < 10 ? mp + 3 : mp - 9;
+  const year = yoe + era * 400 + (month <= 2 ? 1 : 0);
+  const hour = Math.floor(secondOfDay / 3600);
+  const minute = Math.floor((secondOfDay % 3600) / 60);
+  return `${pad(day)}/${pad(month)}/${pad(year % 100)} at ${pad(hour)}h${pad(minute)} UTC`;
+};
 
 /**
  * The read-only notice under the total. Always says "Read only" and keeps the
@@ -53,9 +76,9 @@ const readOnlyNotice = (signability: SignabilityVerdict | null): string => {
       <p class="hero-stale">${icon("eye")}<span>Read only</span></p>
       ${
         pending
-          ? `<p class="read-only-detail">Removing 2FA — the account becomes usable about ${delayDays(
-              recovery?.delaySeconds ?? 0,
-            )} days after you started. Your Braavos device can still stop this.</p>`
+          ? `<p class="read-only-detail">Removing 2FA — usable on ${escapeHtml(
+              formatUtcInstant(recovery?.pendingUntil ?? 0),
+            )}. Your Braavos device can still stop this.</p>`
           : recoverable
             ? `<button class="button button-secondary" id="recover-account" type="button">Recover account</button>`
             : ""
