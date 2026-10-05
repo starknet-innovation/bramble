@@ -16,7 +16,6 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentAccountConstructorCalldata,
   argentMultisigConstructorCalldata,
-  requireAuthorizableFamily,
 } from "../accounts/account-contracts";
 import {
   authorizedSpendFor,
@@ -38,13 +37,10 @@ import {
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
-import {
-  acceptedBlockIdentifier,
-  requireAuthorizableArgentClass,
-  requireCompatibleArgentSigner,
-} from "./account-compatibility";
+import { isCompatibleAccountDeployed } from "./account-compatibility";
 
-export { argentSigningRestriction, requireLiveAuthorizableClass } from "./account-compatibility";
+export { requireLiveAuthorizableClass } from "./account-compatibility";
+export { isCompatibleAccountDeployed };
 
 /**
  * DEPLOY_ACCOUNT parameters for a counterfactual wallet account.
@@ -172,50 +168,6 @@ export const isAccountDeployed = async (
     }
     throw error;
   }
-};
-
-/**
- * Verifies pinned Argent class and supported signer state at one accepted block.
- * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
- * A family this wallet cannot authorize for is refused before any RPC, so it is
- * never reported as merely undeployed.
- */
-export const isCompatibleAccountDeployed = async (
-  provider: RpcProvider,
-  account: DeployableAccount,
-): Promise<boolean> => {
-  requireAuthorizableFamily(account.accountContractType);
-  let classHash: string;
-  const blockIdentifier =
-    account.accountContractType === "argent" ? await acceptedBlockIdentifier(provider) : "latest";
-  try {
-    classHash = await provider.getClassHashAt(account.address, blockIdentifier);
-  } catch (error) {
-    if (isContractNotFoundError(error)) {
-      return false;
-    }
-    throw error;
-  }
-  if (account.accountContractType === "openzeppelin") {
-    return true;
-  }
-  if (sameFelt(classHash, "0x0")) {
-    return false;
-  }
-  if (!isNonZeroStarkFieldElement(classHash)) {
-    throw new WalletError("RPC returned an invalid Argent account class hash");
-  }
-  if (account.accountContractType === "argent-multisig") {
-    // A multisig's configuration is bound to its exact class, so equality is
-    // the right test there and stays as it was.
-    if (!sameFelt(classHash, account.classHash)) {
-      throw new WalletError("Deployed Argent multisig class does not match the pinned release");
-    }
-    return true;
-  }
-  requireAuthorizableArgentClass(classHash);
-  await requireCompatibleArgentSigner(provider, account, blockIdentifier);
-  return true;
 };
 
 /**

@@ -42,14 +42,7 @@ test("never deploys a Braavos account, even at an address the OZ rule reproduces
   expect(() => accountDeployment(braavos)).toThrow("does not deploy Braavos accounts");
 });
 
-test("refuses a Braavos account before asking whether it is deployed", async () => {
-  let lookups = 0;
-  const provider = {
-    getClassHashAt: async () => {
-      lookups += 1;
-      return BRAAVOS_BASE_CLASS_HASH;
-    },
-  } as unknown as RpcProvider;
+test("checks a deployed Braavos account's live signers instead of refusing by family", async () => {
   const base = accountClassEntry(BRAAVOS_BASE_CLASS_HASH);
   if (!base) throw new Error("Braavos base class missing from the class table");
   const address = familyAccountAddress(base, PUBLIC_KEY);
@@ -64,9 +57,28 @@ test("refuses a Braavos account before asking whether it is deployed", async () 
     publicKeyX: PUBLIC_KEY,
     publicKeyY: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   };
+  const providerFor = (signers: readonly string[]) =>
+    ({
+      getBlock: async () => ({ block_hash: "0xb", timestamp: 1 }),
+      getBlockLatestAccepted: async () => ({ block_hash: "0xb", block_number: 1 }),
+      getClassHashAt: async () => BRAAVOS_BASE_CLASS_HASH,
+      callContract: async ({ entrypoint }: { readonly entrypoint: string }) => {
+        if (entrypoint === "get_signers") return [...signers];
+        if (entrypoint === "get_deferred_remove_signers") return ["0x0"];
+        throw new Error(`unexpected read: ${entrypoint}`);
+      },
+    }) as unknown as RpcProvider;
 
-  await expect(isCompatibleAccountDeployed(provider, braavos)).rejects.toThrow(
-    "cannot yet authorize transactions",
-  );
-  expect(lookups).toBe(0);
+  // Stark key as the only signer: compatible, signable.
+  await expect(
+    isCompatibleAccountDeployed(providerFor(["0x1", PUBLIC_KEY, "0x0", "0x0"]), braavos),
+  ).resolves.toBe(true);
+  // An active strong signer refuses before anything could be signed.
+  await expect(
+    isCompatibleAccountDeployed(providerFor(["0x1", PUBLIC_KEY, "0x1", "0xaa", "0x0"]), braavos),
+  ).rejects.toThrow("active 2FA signer");
+  // A stark list without the wallet's key refuses as a foreign account.
+  await expect(
+    isCompatibleAccountDeployed(providerFor(["0x1", "0xdead", "0x0", "0x0"]), braavos),
+  ).rejects.toThrow("owner does not match");
 });

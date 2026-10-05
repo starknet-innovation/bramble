@@ -84,7 +84,8 @@ const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
   guardian: "has a guardian",
   "owner-changed": "owner key changed",
   "owner-type": "unsupported signer",
-  release: "older Argent release",
+  release: "unsupported release",
+  "strong-signer": "2FA active",
 };
 
 const activityState = (candidate: RecoveryAccountCandidate): string => {
@@ -103,13 +104,16 @@ const activityState = (candidate: RecoveryAccountCandidate): string => {
     : "No on-chain activity found";
 };
 
-// A Braavos account is restored to be seen, not yet used: say so before the
-// user picks it, rather than after a send fails. It is never offered for
-// deployment either, since Bramble does not deploy Braavos accounts.
+// A deployed Braavos account is usable exactly when its advisory verdict says
+// so (stark key only, no strong signer); an undeployed one stays view-only,
+// since Bramble cannot deploy Braavos accounts yet.
 const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
   if (duplicate) return "Already in this wallet";
   if (candidate.account.accountContractType !== "braavos") return activityState(candidate);
-  return `${candidate.deployed ? "Deployed on Starknet" : "Funded, not deployed"} · view only for now`;
+  if (!candidate.deployed) return "Funded, not deployed · view only for now";
+  return candidate.restriction
+    ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
+    : "Deployed on Starknet";
 };
 
 // Two Argent releases at one index are two accounts. Name the release on any

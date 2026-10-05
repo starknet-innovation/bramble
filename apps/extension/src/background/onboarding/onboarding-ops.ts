@@ -60,21 +60,28 @@ const describeRecoveryAccount = async (
     rpcUrls,
   });
   if (deployed) {
-    // Advisory signability verdict (issue 542): only a deployed Argent account
-    // can carry a guardian, a rotated owner, or an unauthorizable live class.
-    // A missing probe or a throw lists the row unlabelled — the transaction
-    // path re-checks authoritatively, so this can mislabel but never move funds.
-    const restriction =
+    // Advisory signability verdict (issue 542): a deployed vendor account can
+    // carry a guardian or strong signer, a rotated owner, or an unauthorizable
+    // live class. A missing probe or a throw lists the row unlabelled — the
+    // transaction path re-checks authoritatively, so this can mislabel but
+    // never move funds.
+    const probe =
       account.accountContractType === "argent"
-        ? await deps.runtimeRpc
-            .getArgentSigningRestriction?.({
-              accountAddress: account.address,
-              publicKeyX: account.publicKeyX,
-              rpcUrls,
-            })
-            .catch(() => null)
-        : null;
-    return { account, deployed: true, funded: false, ...(restriction ? { restriction } : {}) };
+        ? deps.runtimeRpc.getArgentSigningRestriction
+        : account.accountContractType === "braavos"
+          ? deps.runtimeRpc.getBraavosSigningRestriction
+          : undefined;
+    const restriction = await probe?.({
+      accountAddress: account.address,
+      publicKeyX: account.publicKeyX,
+      rpcUrls,
+    }).catch(() => null);
+    return {
+      account,
+      deployed: true,
+      funded: false,
+      ...(restriction ? { restriction } : {}),
+    };
   }
   const balances = await deps.runtimeRpc.getTokenBalances({
     accountAddress: account.address,

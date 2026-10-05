@@ -8,7 +8,7 @@ import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import { memoryActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
-import { deploymentClasses } from "@bramble/wallet-model/account-families";
+import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
 import {
   type AccountRef,
   ARGENT_ACCOUNT_CLASS_HASH,
@@ -197,51 +197,57 @@ describe("signTypedData approval gate", () => {
     expect(signed).toBe(0);
   });
 
-  test("refuses typed data for a Braavos account before using the key", async () => {
-    let signed = 0;
-    let classReads = 0;
-    const session = createUnlockSession();
-    session.unlock(PASSPHRASE);
-    const response = await executeSignApproval(
-      {
-        activity: memoryActivityLog(),
-        preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
-        rpcProviderFor: () =>
-          ({
-            getBlockLatestAccepted: async () => {
-              classReads += 1;
-              return { block_hash: "0x9", block_number: 1 };
-            },
-            getClassHashAt: async () => {
-              classReads += 1;
-              return ARGENT_ACCOUNT_CLASS_HASH;
-            },
-          }) as unknown as RpcProvider,
-        session,
-        wallet: {
-          ...wallet,
-          async getGrantedAccounts() {
-            return [
-              {
-                ...account,
-                accountContractType: "braavos" as const,
-                deploymentSalt: account.publicKeyX,
+  test("refuses typed data for a 2FA Braavos account before using the key", async () => {
+    // Stark-only Braavos signs; a strong signer refuses at the live check,
+    // before the key is ever touched (issue 542 family).
+    const run = async (signers: readonly string[]) => {
+      let signed = 0;
+      const session = createUnlockSession();
+      session.unlock(PASSPHRASE);
+      const response = await executeSignApproval(
+        {
+          activity: memoryActivityLog(),
+          preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+          rpcProviderFor: () =>
+            ({
+              getBlock: async () => ({ block_hash: "0x9", timestamp: 1 }),
+              getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 1 }),
+              getClassHashAt: async () => BRAAVOS_BASE_CLASS_HASH,
+              callContract: async ({ entrypoint }: { readonly entrypoint: string }) => {
+                if (entrypoint === "get_signers") return [...signers];
+                if (entrypoint === "get_deferred_remove_signers") return ["0x0"];
+                throw new Error(`unexpected read: ${entrypoint}`);
               },
-            ];
-          },
-          async signHash() {
-            signed += 1;
-            return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+            }) as unknown as RpcProvider,
+          session,
+          wallet: {
+            ...wallet,
+            async getGrantedAccounts() {
+              return [
+                {
+                  ...account,
+                  accountContractType: "braavos" as const,
+                  deploymentSalt: account.publicKeyX,
+                },
+              ];
+            },
+            async signHash() {
+              signed += 1;
+              return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+            },
           },
         },
-      },
-      { origin: "https://dapp.example", typedData: MESSAGE },
-    );
-    expect(response).toEqual({
-      error: expect.stringContaining("cannot yet authorize transactions"),
+        { origin: "https://dapp.example", typedData: MESSAGE },
+      );
+      return { response, signed };
+    };
+    const guarded = await run(["0x1", account.publicKeyX, "0x1", "0xaa", "0x0"]);
+    expect(guarded.response).toEqual({
+      error: expect.stringContaining("active 2FA signer"),
     });
-    expect(signed).toBe(0);
-    expect(classReads).toBe(0);
+    expect(guarded.signed).toBe(0);
+    const starkOnly = await run(["0x1", account.publicKeyX, "0x0", "0x0"]);
+    expect(starkOnly.signed).toBe(1);
   });
 
   test("valid request never auto-signs — it queues and holds until approval", async () => {

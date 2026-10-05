@@ -5,6 +5,7 @@
 import { expect, test } from "bun:test";
 import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
+import { BRAAVOS_BASE_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import { OutsideExecutionVersion, outsideExecution, type RpcProvider } from "starknet";
 import {
@@ -19,9 +20,10 @@ import {
 
 const depositApproval = buildErc20ApproveCall(STRK_TOKEN_ADDRESS, poolAddress, 0x64n);
 
-test("refuses a private relay for a Braavos account before using the key", async () => {
+test("refuses a private relay for a 2FA Braavos account before using the key", async () => {
+  // Stark-only Braavos may relay; a strong signer refuses at the live check,
+  // before the key is ever touched (issue 542 family).
   let signed = 0;
-  let classReads = 0;
   const typedData = outsideExecution.getTypedData(
     "0x534e5f5345504f4c4941",
     { caller: "0x99", execute_after: "0x3e7", execute_before: "0x7d0" },
@@ -66,13 +68,21 @@ test("refuses a private relay for a Braavos account before using the key", async
       const provider = base();
       return {
         ...provider,
-        getBlockLatestAccepted: async () => {
-          classReads += 1;
-          return { block_hash: "0x9", block_number: 1 };
-        },
-        getClassHashAt: async () => {
-          classReads += 1;
-          return "0xdef";
+        getBlock: async () => ({ block_hash: "0x9", timestamp: 1 }),
+        getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 1 }),
+        getClassHashAt: async () => BRAAVOS_BASE_CLASS_HASH,
+        callContract: async (
+          request: { readonly entrypoint: string },
+          blockIdentifier?: string,
+        ) => {
+          if (request.entrypoint === "get_signers")
+            return ["0x1", relayContext.account.publicKeyX, "0x1", "0xaa", "0x0"];
+          if (request.entrypoint === "get_deferred_remove_signers") return ["0x0"];
+          // Everything else (pool fee reads) keeps the base provider's answers.
+          return (provider as unknown as RpcProvider).callContract(
+            request as never,
+            blockIdentifier as never,
+          );
         },
       } as unknown as RpcProvider;
     },
@@ -97,8 +107,7 @@ test("refuses a private relay for a Braavos account before using the key", async
   };
   const plan = await service.quoteActions({ ...braavosContext, actions });
   await expect(service.submitActions({ ...braavosContext, actions, plan })).rejects.toThrow(
-    "cannot yet authorize transactions",
+    "active 2FA signer",
   );
   expect(signed).toBe(0);
-  expect(classReads).toBe(0);
 });
