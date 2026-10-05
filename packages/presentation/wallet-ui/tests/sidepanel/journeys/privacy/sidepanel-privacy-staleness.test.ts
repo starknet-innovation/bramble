@@ -11,6 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { createPrivacyController } from "../../../../src/sidepanel/journeys/privacy/privacy-controller";
+import type { PrivacyUiDeps } from "../../../../src/sidepanel/journeys/privacy/privacy-disclosure";
 import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import { bindPrivacy } from "../../../../src/sidepanel/journeys/privacy/privacy-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
@@ -121,7 +122,9 @@ describe("private-balance staleness after a settled operation", () => {
   });
 
   test("an armed settle watch replaces the latched reading after a private send", async () => {
-    const clock = 1_000;
+    let clock = 1_000;
+    let settledAt: number | null = 1_000;
+    let cleared = 0;
     let disclosure: PrivacyDisclosureState = {
       error: null,
       loading: false,
@@ -129,9 +132,14 @@ describe("private-balance staleness after a settled operation", () => {
     };
     const app = mount("");
     let reads = 0;
-    bindPrivacy({
+    const deps: PrivacyUiDeps = {
       app,
       balances: () => [],
+      // The controller drops the settling time when the watch's window closes.
+      clearSettledAt: () => {
+        settledAt = null;
+        cleared += 1;
+      },
       disclosure: () => disclosure,
       generation: () => 0,
       journey: () => ({ stage: "idle" }),
@@ -140,7 +148,7 @@ describe("private-balance staleness after a settled operation", () => {
       paint: () => undefined,
       preferences: () => preferences,
       // The Send flow told the controller a private send confirmed.
-      settledAt: () => clock,
+      settledAt: () => settledAt,
       setDisclosure: (state) => {
         disclosure = state;
       },
@@ -154,12 +162,27 @@ describe("private-balance staleness after a settled operation", () => {
           return { ...staleUnregistered, registration: "registered" as const };
         },
       } as unknown as SidepanelWallet,
-    });
+    };
+    bindPrivacy(deps);
     await tick();
     await tick();
 
     expect(reads).toBeGreaterThan(0);
     expect(disclosure.value?.registration).toBe("registered");
+
+    // Once the bounded window closes the watch tears itself down, drops the
+    // settling time, and never re-arms on a later repaint. It also leaves no
+    // real timer running through this module-level poll.
+    clock = 200_000;
+    bindPrivacy(deps);
+    await tick();
+    const readsAtExpiry = reads;
+    expect(cleared).toBeGreaterThan(0);
+    expect(settledAt).toBeNull();
+
+    bindPrivacy(deps);
+    await tick();
+    expect(reads).toBe(readsAtExpiry);
   });
 
   test("without an injected clock the settle watch stays off", async () => {
