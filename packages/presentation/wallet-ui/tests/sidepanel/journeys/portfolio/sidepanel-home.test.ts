@@ -342,3 +342,49 @@ describe("shield tile", () => {
     expect(html).not.toContain("starkscan.co/contract");
   });
 });
+
+describe("home read-only flag", () => {
+  const idlePrivacy: Parameters<typeof homeScreen>[9] = {
+    error: null,
+    loading: false,
+    value: null,
+  };
+  const render = (signability: Parameters<typeof homeScreen>[10]) =>
+    homeScreen(
+      status,
+      account,
+      { balances: [] },
+      0,
+      true,
+      defaultWalletPreferences(),
+      {},
+      {},
+      "usd",
+      idlePrivacy,
+      signability,
+    );
+
+  test("says Read only under the total and greys the signing actions", () => {
+    const markup = render({ readOnly: true, reason: "braavos" });
+    expect(markup).toContain('data-read-only="true"');
+    expect(markup).toContain("Read only");
+    const tile = (id: string): string => {
+      const start = markup.indexOf(`data-view="${id}"`);
+      expect(start).toBeGreaterThan(-1);
+      const open = markup.lastIndexOf("<button", start);
+      return markup.slice(open, markup.indexOf(">", start) + 1);
+    };
+    expect(tile("send")).toContain("disabled");
+    expect(tile("swap")).toContain("disabled");
+    // Receiving needs no signature; it stays live.
+    expect(tile("receive")).not.toContain("disabled");
+  });
+
+  test("renders a normal account when signable or unknown", () => {
+    for (const signability of [{ readOnly: false as const }, null]) {
+      const markup = render(signability);
+      expect(markup).not.toContain('data-read-only="true"');
+      expect(markup).not.toContain("Read only");
+    }
+  });
+});

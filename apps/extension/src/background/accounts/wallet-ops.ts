@@ -224,6 +224,47 @@ const handleDeploymentStatus: WalletOpsHandler = async (deps, message) => {
   return { accountId: context.account.id, deployed, ok: true };
 };
 
+// The Home read-only flag's verdict: Braavos family-wide (until Braavos signing
+// lands), deployed Argent by live probe, everything else signs. Advisory — a
+// failed probe answers signable; the transaction path stays authoritative.
+const handleAccountSignability: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.accountSignability")) {
+    return { error: "invalid account signability request" };
+  }
+  const context = await passiveAccountContext(deps);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const { account } = context;
+  if (account.accountContractType === "braavos") {
+    return { accountId: account.id, ok: true, readOnly: true, reason: "braavos" };
+  }
+  if (account.accountContractType !== "argent" || !("publicKeyX" in account)) {
+    return { accountId: account.id, ok: true, readOnly: false };
+  }
+  const rpcUrls = networkRpcUrls(
+    STARKNET_NETWORKS[context.networkId],
+    await deps.preferencesStore.read(),
+  );
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
+    .catch(() => false);
+  if (!deployed) {
+    // An undeployed Argent account deploys and signs with the phrase key.
+    return { accountId: account.id, ok: true, readOnly: false };
+  }
+  const restriction = await deps.runtimeRpc
+    .getArgentSigningRestriction?.({
+      accountAddress: account.address,
+      publicKeyX: account.publicKeyX,
+      rpcUrls,
+    })
+    .catch(() => null);
+  return restriction === null || restriction === undefined
+    ? { accountId: account.id, ok: true, readOnly: false }
+    : { accountId: account.id, ok: true, readOnly: true, reason: restriction };
+};
+
 const handleVerifyClassHash: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.verifyClassHash")) {
     return { error: "invalid class hash verification request" };
@@ -434,6 +475,7 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
 const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.activity": handleActivity,
   "wallet.deployAccount": handleDeployAccount,
+  "wallet.accountSignability": handleAccountSignability,
   "wallet.deploymentStatus": handleDeploymentStatus,
   "wallet.getBalances": handleGetBalances,
   "wallet.lock": handleLock,

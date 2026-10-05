@@ -80,6 +80,7 @@ export {
 import { isWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import { type AllowanceView, isAllowanceView } from "@bramble/transactions/allowance-discovery";
 import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-model/accounts";
+import { isReadOnlyReason, type ReadOnlyReason } from "@bramble/wallet-model/recovery";
 import type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
 
@@ -151,6 +152,26 @@ export type DeploymentStatusResponse = {
   readonly accountId: string;
   readonly deployed: boolean;
   readonly ok: true;
+};
+
+/**
+ * Active-account signability verdict for the Home read-only flag. `reason` is
+ * present exactly when `readOnly` is true.
+ */
+/** The Home flag's input: signable, or read-only with its reason. */
+export type SignabilityVerdict =
+  | { readonly readOnly: false }
+  | { readonly readOnly: true; readonly reason: ReadOnlyReason };
+
+/**
+ * Active-account signability verdict for the Home read-only flag. `reason` is
+ * present exactly when `readOnly` is true.
+ */
+export type AccountSignabilityResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly readOnly: boolean;
+  readonly reason?: ReadOnlyReason;
 };
 
 /**
@@ -411,3 +432,13 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   value["ok"] === true &&
   isAccountId(value["accountId"]) &&
   typeof value["deployed"] === "boolean";
+
+/** Validates the signability verdict before the Home flag renders from it. */
+export const isAccountSignabilityResponse = (value: unknown): value is AccountSignabilityResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "ok", "readOnly", "reason"]) &&
+  value["ok"] === true &&
+  typeof value["accountId"] === "string" &&
+  typeof value["readOnly"] === "boolean" &&
+  (value["readOnly"] === true ? isReadOnlyReason(value["reason"]) : value["reason"] === undefined);
