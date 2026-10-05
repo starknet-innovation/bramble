@@ -44,6 +44,12 @@ export type PrivacyUiDeps = {
    */
   readonly settledAt?: () => number | null;
   /**
+   * Drops the settling time above once the settle watch's bounded window has
+   * closed, so later repaints bind with no watch rather than re-entering with a
+   * stale one. The controller that armed the watch supplies it.
+   */
+  readonly clearSettledAt?: () => void;
+  /**
    * The app's injected wall clock. The settle watch measures its bounded window
    * with it; without a clock the watch is not armed.
    */

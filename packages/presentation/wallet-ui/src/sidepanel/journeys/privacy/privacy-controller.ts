@@ -67,6 +67,11 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
       journey = state;
     },
     settledAt: () => settledAt,
+    // The settle watch calls this when its bounded window closes, so the
+    // controller stops holding a settling time that is no longer watched.
+    clearSettledAt: () => {
+      settledAt = null;
+    },
   });
   return {
     bind(): void {

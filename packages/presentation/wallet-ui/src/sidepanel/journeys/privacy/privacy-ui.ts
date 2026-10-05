@@ -284,6 +284,11 @@ const syncSettlePoll = (deps: PrivacyUiDeps): void => {
     },
     load: () => deps.wallet.loadPrivacyState(),
     ...(deps.now ? { now: deps.now } : {}),
+    onExpire: () => {
+      // The bounded window is over. Drop the settling time so later repaints
+      // bind with no watch instead of re-entering with a stale one.
+      deps.clearSettledAt?.();
+    },
     scopeKey: scopeKey(scope),
     stillCurrent: (value) =>
       scopeMatches(deps, scope) &&

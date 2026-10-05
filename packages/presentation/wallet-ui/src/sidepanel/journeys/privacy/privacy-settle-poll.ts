@@ -44,6 +44,13 @@ type PrivateSettlePollPort = {
    * Without it the poll cannot measure its window and refuses to arm.
    */
   readonly now?: () => number;
+  /**
+   * Called when the poll observes that its bounded window has closed: once as
+   * the armed watch tears itself down, and again on a later repaint that still
+   * carries the settling time, until the caller drops it. Not called when
+   * `sync` is handed null to begin with.
+   */
+  readonly onExpire?: () => void;
   readonly scopeKey: string;
   readonly setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly stillCurrent: (state: PrivacyAccountState) => boolean;
@@ -84,6 +91,16 @@ export const createPrivateSettlePoll = (windowMs: number = SETTLE_WINDOW_MS): Pr
         stop();
         return;
       }
+      // The window is one-shot. Once it has closed the watch is over, but the
+      // caller still holds the settling time (it is dropped only on a scope
+      // change or a lock), so a later repaint calls back in with the same
+      // value. Refuse it before arming: an expired window must not build a
+      // scheduler whose first tick immediately tears it down.
+      if (clock() - settledAt >= windowMs) {
+        stop();
+        port.onExpire?.();
+        return;
+      }
       if (scheduler && schedulerScope !== port.scopeKey) {
         stop();
       }
@@ -100,7 +117,11 @@ export const createPrivateSettlePoll = (windowMs: number = SETTLE_WINDOW_MS): Pr
       watchingSince = settledAt;
       seenVisible = true;
       schedulerScope = port.scopeKey;
-      scheduler = createRefreshScheduler({
+      // Own the new scheduler through a local. `start` and `visibilityChanged`
+      // can run the refresh synchronously, and a window that closes at this
+      // boundary stops the poll and nulls the shared handle before the next
+      // call, so the calls below must not go through it.
+      const armed = createRefreshScheduler({
         burstDelaysMs: SETTLE_BURST_DELAYS_MS,
         ...(port.clearTimer ? { clearTimer: port.clearTimer } : {}),
         pollIntervalMs: SETTLE_POLL_INTERVAL_MS,
@@ -109,6 +130,7 @@ export const createPrivateSettlePoll = (windowMs: number = SETTLE_WINDOW_MS): Pr
           // a reading the indexer never delivers cannot poll indefinitely.
           if (watchingSince === null || clock() - watchingSince >= windowMs) {
             stop();
+            port.onExpire?.();
             return;
           }
           const state = await port.load();
@@ -122,9 +144,10 @@ export const createPrivateSettlePoll = (windowMs: number = SETTLE_WINDOW_MS): Pr
           return seenVisible;
         },
       });
-      scheduler.start();
-      scheduler.visibilityChanged();
-      scheduler.afterAction();
+      scheduler = armed;
+      armed.start();
+      armed.visibilityChanged();
+      armed.afterAction();
     },
   };
 };
