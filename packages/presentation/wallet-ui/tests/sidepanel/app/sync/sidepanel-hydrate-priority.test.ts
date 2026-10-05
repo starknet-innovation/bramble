@@ -59,6 +59,9 @@ describe("home hydration priority", () => {
           return deployment.promise;
         },
       },
+      signability: {
+        load: async () => null,
+      },
       multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
@@ -112,6 +115,7 @@ describe("home hydration priority", () => {
       activeView: "home",
       cache: emptyRenderCache(),
       deployment: { load: async () => true },
+      signability: { load: async () => null },
       multisig: emptyMultisigClient,
       paint: () => undefined,
       selectedMultisigId: null,

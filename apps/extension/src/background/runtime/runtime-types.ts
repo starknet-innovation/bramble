@@ -19,7 +19,7 @@ import type { SwapCatalogToken } from "@bramble/transactions/avnu";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
+import type { ReadOnlyReason, RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
 import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
@@ -277,6 +277,17 @@ type DeploymentStatusResponse = {
 };
 
 /**
+ * Active-account signability verdict for the Home read-only flag; `reason`
+ * accompanies `readOnly: true` and never carries secret material.
+ */
+type AccountSignabilityResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly readOnly: boolean;
+  readonly reason?: ReadOnlyReason;
+};
+
+/**
  * On-chain class-hash verification returned to extension pages. `verification`
  * carries the discriminated {@link ClassHashVerification} outcome so the UI can
  * distinguish verified / mismatch / undeployed / unreachable without re-reading
@@ -407,6 +418,7 @@ type LedgerAccountStatusResponse = {
  * Union of supported background message responses.
  */
 export type RuntimeResponse =
+  | AccountSignabilityResponse
   | AccountsResponse
   | ActivityResponse
   | AddChainResponse

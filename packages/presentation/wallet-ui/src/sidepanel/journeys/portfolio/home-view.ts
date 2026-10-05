@@ -8,7 +8,11 @@ import { escapeHtml } from "@bramble/core/html";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
-import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
+import type {
+  SignabilityVerdict,
+  TokenBalance,
+  WalletStatus,
+} from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 
 /**
@@ -61,7 +65,11 @@ export const homeScreen = (
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState,
+  signability: SignabilityVerdict | null = null,
 ): string => {
+  // Read-only until proven otherwise never — the flag is advisory UX; the
+  // transaction path enforces. Null (unknown) renders as a normal account.
+  const readOnly = signability?.readOnly === true;
   const unified = unifiedHomeBalances(balances, privacy, preferences);
   const shieldedIncluded = visiblePrivateHomeBalances(privacy, preferences).some(
     (token) => BigInt(token.balance) > 0n,
@@ -94,16 +102,17 @@ export const homeScreen = (
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
+      ${readOnly ? `<p class="hero-stale" data-read-only="true">${icon("eye")}<span>Read only</span></p>` : ""}
       ${account ? "" : noAccountEmpty(status)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">
       <div class="action-row">
-        ${actionTile("send", "Send", "send", account !== null)}
-        ${actionTile("swap", "Swap", "shuffle", account !== null)}
+        ${actionTile("send", "Send", "send", account !== null && !readOnly)}
+        ${actionTile("swap", "Swap", "shuffle", account !== null && !readOnly)}
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
         ${shieldTile(
           strkTokenId,
-          privateReady,
+          privateReady && !readOnly,
           deploymentKnownFromPrivacy(deployment, privacy),
           fundedForFees,
         )}

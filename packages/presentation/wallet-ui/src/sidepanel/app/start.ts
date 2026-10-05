@@ -65,6 +65,7 @@ import { hydrateView } from "./sync/hydrate";
 import { startRefreshLifecycle } from "./sync/lifecycle";
 import type { RefreshReason } from "./sync/refresh-scheduler";
 import { createMutationRuntime } from "./sync/runtime-refresh";
+import { createSignabilityCache } from "./sync/signability-cache";
 
 /** Starts the wallet with injected Ledger and clock (`now` only dates the activity feed); fails closed without its runtime or root. */
 export const startWalletUi = async (
@@ -99,6 +100,7 @@ export const startWalletUi = async (
   let hasPaintedScope = false;
   const renderScene = createSceneRenderer(app, () => bindAll());
   const deployment = createDeploymentCache(wallet);
+  const signability = createSignabilityCache(wallet);
   const cache: RenderData = emptyRenderCache();
   let privacy: ReturnType<typeof createPrivacyController>;
   const ledgerSignMount = hiddenOverlayMount("ledger-sign-overlay");
@@ -377,6 +379,7 @@ export const startWalletUi = async (
                 sendIntent,
                 selectedMultisigIntentId,
                 now === null ? null : utcDayKey(now()),
+                cache.signability,
               );
     lastActiveView = activeView;
     if (!animate && content === lastContent) {
@@ -461,6 +464,7 @@ export const startWalletUi = async (
       wallet,
       multisig,
       deployment,
+      signability,
       ...(refreshReason ? { refreshReason } : {}),
       isCurrent,
       paint,

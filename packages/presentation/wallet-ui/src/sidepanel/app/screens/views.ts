@@ -21,6 +21,7 @@ import type {
   ConnectedSite,
   DiscoveredNft,
   PendingApproval,
+  SignabilityVerdict,
   TokenBalance,
   WalletStatus,
 } from "../../../popup/responses/responses";
@@ -305,6 +306,7 @@ export const dashboard = (
   sendIntent: SendIntent | null = null,
   selectedMultisigIntentId: string | null = null,
   todayKey: number | null = null,
+  signability: SignabilityVerdict | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -455,6 +457,7 @@ export const dashboard = (
               changes,
               currency,
               privacy,
+              signability,
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}
