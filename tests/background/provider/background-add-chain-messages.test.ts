@@ -67,7 +67,7 @@ const walletStub = () => ({
       importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 10 as const,
+      schemaVersion: 11 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

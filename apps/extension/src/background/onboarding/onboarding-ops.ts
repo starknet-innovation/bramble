@@ -11,7 +11,10 @@ import {
   deploymentClasses,
 } from "@bramble/wallet-model/account-families";
 import type { AccountContractType } from "@bramble/wallet-model/accounts";
-import { type DerivedAccountRef, isDerivedAccountRef } from "@bramble/wallet-model/accounts";
+import {
+  isRecoverableAccountRef,
+  type RecoverableAccountRef,
+} from "@bramble/wallet-model/accounts";
 import {
   STARKNET_NETWORKS,
   type StarknetNetworkId,
@@ -20,6 +23,7 @@ import {
 import {
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountCandidate,
+  type RecoveryDerivationKind,
   recoveryScanTarget,
 } from "@bramble/wallet-model/recovery";
 import {
@@ -47,7 +51,7 @@ type OnboardingOpsDeps = {
 
 const describeRecoveryAccount = async (
   deps: OnboardingOpsDeps,
-  account: DerivedAccountRef,
+  account: RecoverableAccountRef,
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
 ): Promise<RecoveryAccountCandidate> => {
@@ -84,17 +88,28 @@ const discoveryFingerprint = (
 // forever, whatever it upgraded to, so scanning only the release this wallet
 // creates finds nobody who arrived from Ready. The wallet's own OpenZeppelin
 // class stays resolved per network by Krusty rather than listed here.
+//
+// Argent walks two ladders (issue 505): Ready derives its keys on an
+// ETH-seeded tree ("argentx-bip44"), so every Argent release is scanned
+// there, and the release this wallet creates is scanned once more on the
+// wallet's own ladder for accounts this wallet made. Braavos keys live on the
+// plain BIP-44 address axis, which the vault derivation maps to by family.
 const recoveryScanShapes = (): readonly {
   readonly accountContractType: AccountContractType;
   readonly classHash?: string;
+  readonly derivation?: RecoveryDerivationKind;
 }[] => [
   { accountContractType: "openzeppelin" },
-  ...(["argent", "braavos"] as const).flatMap((family) =>
-    deploymentClasses(family).map((entry) => ({
-      accountContractType: family,
-      classHash: entry.classHash,
-    })),
-  ),
+  { accountContractType: "argent", classHash: ARGENT_ACCOUNT_CLASS_HASH },
+  ...deploymentClasses("argent").map((entry) => ({
+    accountContractType: "argent" as const,
+    classHash: entry.classHash,
+    derivation: "argentx-bip44" as const,
+  })),
+  ...deploymentClasses("braavos").map((entry) => ({
+    accountContractType: "braavos" as const,
+    classHash: entry.classHash,
+  })),
 ];
 
 // Whether this wallet would itself create an account at this candidate's class:
@@ -103,10 +118,11 @@ const recoveryScanShapes = (): readonly {
 // wallet's first account lives. A Braavos account, or Argent at any other
 // release, is only ever found; undeployed and unfunded, it is an address that
 // belongs to nobody, and offering it would import an account that does not exist.
-const isCreatableCandidate = (account: DerivedAccountRef): boolean =>
-  account.accountContractType === "openzeppelin" ||
-  (account.accountContractType === "argent" &&
-    sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH));
+const isCreatableCandidate = (account: RecoverableAccountRef): boolean =>
+  account.derivation.kind === "starknet-bip44" &&
+  (account.accountContractType === "openzeppelin" ||
+    (account.accountContractType === "argent" &&
+      sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)));
 
 const scanRecoveryIndex = async (
   deps: OnboardingOpsDeps,
@@ -121,10 +137,11 @@ const scanRecoveryIndex = async (
         accountContractType: shape.accountContractType,
         accountIndex,
         ...(shape.classHash === undefined ? {} : { classHash: shape.classHash }),
+        ...(shape.derivation === undefined ? {} : { derivation: shape.derivation }),
         mnemonic: input.mnemonic,
         networkId: input.networkId,
       });
-      if (!isDerivedAccountRef(account)) {
+      if (!isRecoverableAccountRef(account)) {
         throw new WalletError("Account discovery is unavailable");
       }
       return describeRecoveryAccount(deps, account, tokens, rpcUrls);

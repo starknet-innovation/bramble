@@ -21,6 +21,7 @@ import {
   isVaultV8,
   isVaultV9,
   isVaultV10,
+  isVaultV11,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -180,6 +181,21 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 10,
   },
+  {
+    fromVersion: 10,
+    // v11 admits accounts derived with Ready's ETH-seeded scheme (issue 505).
+    // No v10 writer ever produced the kind and the v10 validator refuses it, so
+    // this rewrites nothing but the version stamp — the bump buys an older
+    // build refusing a v11 vault instead of misreading records it cannot
+    // validate.
+    migrate(value) {
+      if (!isVaultV10(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 11 };
+    },
+    toVersion: 11,
+  },
 ];
 
 const requiredAccountId = (value: string): string => {
@@ -263,7 +279,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV10(value)) {
+  if (isVaultV11(value)) {
     return value;
   }
 
@@ -281,7 +297,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV10(migrated)) {
+  if (!isVaultV11(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

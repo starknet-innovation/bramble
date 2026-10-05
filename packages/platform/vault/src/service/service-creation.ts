@@ -13,10 +13,11 @@ import {
   deriveLedgerAccount,
   deriveLedgerAccountRefs,
   nextAccountIndex,
+  requireOwnLadderAccount,
 } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV10, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV11, type Vault } from "../schema/schema";
 import type { WalletVaultService } from "./service-types";
 
 /**
@@ -29,7 +30,7 @@ export const writeVault = async (
   vault: Vault,
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!isVaultV10(vault)) {
+  if (!isVaultV11(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase);
@@ -67,12 +68,13 @@ export const vaultCreationMethods = ({
     if (!vault.mnemonic) {
       throw new WalletError("No recovery phrase stored for this wallet");
     }
-    const { account, privateKey } = await deriveAccount(kms, {
+    const { account: derived, privateKey } = await deriveAccount(kms, {
       accountContractType: input.accountContractType,
       accountIndex: nextAccountIndex(vault.accounts, input.networkId),
       mnemonic: vault.mnemonic,
       networkId: input.networkId,
     });
+    const account = requireOwnLadderAccount(derived);
     if (vault.accounts.some((stored) => stored.id === account.id)) {
       throw new WalletError("Account already exists");
     }
@@ -98,7 +100,8 @@ export const vaultCreationMethods = ({
     if (displacesStoredSeed) {
       throw new WalletError("Wallet already exists");
     }
-    const { account, privateKey } = await deriveAccount(kms, input);
+    const { account: derived, privateKey } = await deriveAccount(kms, input);
+    const account = requireOwnLadderAccount(derived);
 
     if (vault.accounts.some((stored) => stored.id === account.id)) {
       throw new WalletError("Account already exists");

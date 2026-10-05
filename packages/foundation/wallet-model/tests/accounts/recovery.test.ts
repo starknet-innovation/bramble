@@ -11,6 +11,7 @@ import {
   RECOVERY_SCAN_LIMITS,
   recoveryScanTarget,
   recoverySelectionKey,
+  selectionDerivation,
 } from "@bramble/wallet-model/recovery";
 
 const argent030 = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
@@ -82,6 +83,57 @@ describe("recovery selections", () => {
     expect(recoverySelectionKey(at(argent030.classHash))).toBe(
       recoverySelectionKey(at(argent030.classHash.replace("0x0", "0x"))),
     );
+  });
+});
+
+describe("recovery selection derivation (issue 505)", () => {
+  const argentAt1 = { accountContractType: "argent" as const, accountIndex: 1 };
+
+  test("admits a scheme only where the family can walk that ladder", () => {
+    expect(isRecoveryAccountSelection({ ...argentAt1, derivation: "argentx-bip44" })).toBe(true);
+    expect(isRecoveryAccountSelection({ ...argentAt1, derivation: "starknet-bip44" })).toBe(true);
+    expect(
+      isRecoveryAccountSelection({
+        accountContractType: "openzeppelin",
+        accountIndex: 0,
+        derivation: "starknet-bip44",
+      }),
+    ).toBe(true);
+    // Only Argent exists on the Ready ladder.
+    expect(
+      isRecoveryAccountSelection({
+        accountContractType: "openzeppelin",
+        accountIndex: 0,
+        derivation: "argentx-bip44",
+      }),
+    ).toBe(false);
+    expect(
+      isRecoveryAccountSelection({
+        accountContractType: "braavos",
+        accountIndex: 0,
+        classHash: BRAAVOS_BASE_CLASS_HASH,
+        derivation: "argentx-bip44",
+      }),
+    ).toBe(false);
+    expect(isRecoveryAccountSelection({ ...argentAt1, derivation: "ledger" })).toBe(false);
+  });
+
+  test("defaults every family to its vendor scheme", () => {
+    expect(selectionDerivation(argentAt1)).toBe("argentx-bip44");
+    expect(selectionDerivation({ accountContractType: "openzeppelin", accountIndex: 0 })).toBe(
+      "starknet-bip44",
+    );
+    expect(selectionDerivation({ accountContractType: "braavos", accountIndex: 2 })).toBe(
+      "starknet-bip44",
+    );
+  });
+
+  test("keys one Argent index on the two ladders as two coordinates", () => {
+    const vendor = recoverySelectionKey({ ...argentAt1, derivation: "argentx-bip44" });
+    const own = recoverySelectionKey({ ...argentAt1, derivation: "starknet-bip44" });
+    expect(vendor).not.toBe(own);
+    // Absent means the vendor ladder, however it is spelled.
+    expect(recoverySelectionKey(argentAt1)).toBe(vendor);
   });
 });
 

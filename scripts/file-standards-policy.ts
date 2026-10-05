@@ -192,6 +192,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/vault/src/schema/schema.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
+  // Split from accounts.ts by the size budget: same boundary, same rules — the
+  // mnemonic and derived keys pass through to the encrypted vault, unlogged.
+  "packages/platform/vault/src/accounts/derivation-core.ts",
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
   "packages/platform/vault/src/accounts/network-account.ts",
   "packages/platform/vault/src/service/reveal.ts",

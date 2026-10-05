@@ -10,7 +10,7 @@ import { createMemoryStore } from "@bramble/store/kv";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { MAX_LEDGER_STRK20_VIEWING_KEYS } from "@bramble/vault/account-secrets";
 import { createEncryptedStore } from "@bramble/vault/encrypted-store";
-import { isVaultV10 } from "@bramble/vault/schema";
+import { isVaultV11 } from "@bramble/vault/schema";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
@@ -53,7 +53,7 @@ describe("createLedgerVault", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([account]);
     expect(vault.activeAccountId).toBe(account.id);
-    expect(isVaultV10(vault)).toBe(true);
+    expect(isVaultV11(vault)).toBe(true);
     // The passphrase encrypts the registry; it is never persisted in the clear.
     expect(JSON.stringify(await store.get(vaultKey))).not.toContain(vaultPassphrase);
   });
@@ -374,6 +374,6 @@ describe("ensureNetworkAccount for a keyless Ledger account", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([mainnet, sepolia]);
     expect(vault.activeAccountId).toBe(sepolia.id);
-    expect(isVaultV10(vault)).toBe(true);
+    expect(isVaultV11(vault)).toBe(true);
   });
 });

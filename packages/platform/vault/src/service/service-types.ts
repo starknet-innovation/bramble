@@ -14,6 +14,7 @@ import type {
   ImportedAccountRef,
   LedgerAccountRef,
   LedgerPubKeyEntry,
+  RecoverableAccountRef,
 } from "@bramble/wallet-model/accounts";
 import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
@@ -266,7 +267,7 @@ export type WalletVaultService = {
    * Derives public account metadata through Krusty without persisting a vault or
    * returning key material. Invalid derivation input fails closed.
    */
-  readonly previewAccount: (input: AccountDerivationInput) => Promise<DerivedAccountRef>;
+  readonly previewAccount: (input: AccountDerivationInput) => Promise<RecoverableAccountRef>;
   /**
    * Checks a recovery phrase through Krusty only. Returns false for an invalid
    * phrase and never echoes the input; fails closed when KMS is unavailable.
@@ -299,10 +300,10 @@ export type WalletVaultService = {
    */
   readonly importSeedAccounts: (
     input: RecoverVaultAccountsInput,
-  ) => Promise<readonly DerivedAccountRef[]>;
+  ) => Promise<readonly RecoverableAccountRef[]>;
   readonly recoverAccounts: (
     input: RecoverVaultAccountsInput,
-  ) => Promise<readonly DerivedAccountRef[]>;
+  ) => Promise<readonly RecoverableAccountRef[]>;
   readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;

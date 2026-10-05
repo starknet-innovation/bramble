@@ -4,6 +4,7 @@ import { accountClassEntry } from "@bramble/wallet-model/account-families";
 import {
   type AccountContractType,
   ARGENT_ACCOUNT_CLASS_HASH,
+  recoveryLadderIndex,
 } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type {
@@ -56,10 +57,15 @@ const selectionKey = recoverySelectionKey;
 // at the family default and restores a different account than the one shown.
 const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelection => ({
   accountContractType: candidate.account.accountContractType,
-  accountIndex: candidate.account.derivation.accountIndex,
+  accountIndex: recoveryLadderIndex(candidate.account),
   ...(candidate.account.accountContractType === "openzeppelin"
     ? {}
     : { classHash: candidate.account.classHash }),
+  // Argent walks two ladders (issue 505); every other family has one, so the
+  // scheme only needs spelling out where re-deriving could pick the wrong one.
+  ...(candidate.account.accountContractType === "argent"
+    ? { derivation: candidate.account.derivation.kind }
+    : {}),
 });
 
 // Only the class this wallet itself deploys can be brought on chain from here.
@@ -96,7 +102,7 @@ const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean)
 // but the one Bramble creates, so rows that share an index can be told apart.
 const candidateTitle = (candidate: RecoveryAccountCandidate): string => {
   const { account } = candidate;
-  const title = `Account ${account.derivation.accountIndex}`;
+  const title = `Account ${recoveryLadderIndex(account)}`;
   if (
     account.accountContractType !== "argent" ||
     sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)
@@ -217,8 +223,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       const rows = [...candidates]
         .filter((candidate) => candidate.account.accountContractType === contractType)
         .sort(
-          (left, right) =>
-            left.account.derivation.accountIndex - right.account.derivation.accountIndex,
+          (left, right) => recoveryLadderIndex(left.account) - recoveryLadderIndex(right.account),
         );
       listElement.replaceChildren(...rows.map(candidateRow));
       const detected = rows.filter((candidate) => candidate.deployed || candidate.funded).length;

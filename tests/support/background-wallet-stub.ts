@@ -127,7 +127,7 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     importedSeeds: [],
     mnemonic: null,
     originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 10,
+    schemaVersion: 11,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
   return {
