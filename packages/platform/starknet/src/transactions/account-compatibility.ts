@@ -16,12 +16,12 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { RecoverySigningRestriction } from "@bramble/wallet-model/recovery";
 import type { RpcProvider } from "starknet";
-import { requireAuthorizableFamily } from "../accounts/account-contracts";
+
 import { withRpcFallback } from "../rpc/provider";
 import { isBlockNotFoundError, isContractNotFoundError } from "../rpc/rpc-not-found";
 
 /** The account fields the signer check reads. */
-export type ArgentSignerSubject = {
+type ArgentSignerSubject = {
   readonly address: string;
   readonly publicKeyX: string;
 };
@@ -31,7 +31,7 @@ export type ArgentSignerSubject = {
  * decision sees the same state. A pending or shifting block could otherwise
  * report a class and an owner that never coexisted.
  */
-export const acceptedBlockIdentifier = async (provider: RpcProvider): Promise<string> => {
+const acceptedBlockIdentifier = async (provider: RpcProvider): Promise<string> => {
   const latest = await provider.getBlockLatestAccepted();
   const blockHash = canonicalFelt(latest.block_hash);
   if (blockHash === null || !isNonZeroStarkFieldElement(blockHash)) {
@@ -48,6 +48,7 @@ export type AuthorizableAccount = {
   readonly accountContractType: string;
   readonly address: string;
   readonly classHash: string;
+  readonly publicKeyX: string;
 };
 
 // A pinned block hash misses about one read in eight on a load-balanced
@@ -72,7 +73,17 @@ export const requireLiveAuthorizableClass = async (
   provider: RpcProvider,
   account: AuthorizableAccount,
 ): Promise<void> => {
-  requireAuthorizableFamily(account.accountContractType);
+  if (account.accountContractType === "braavos") {
+    // Braavos: the live class must be a known release and the stark key must
+    // be the account's only signer — a strong signer (2FA/3FA) demands a
+    // device approval this wallet cannot provide. Undeployed Braavos cannot
+    // authorize anything yet (deployment is unsupported), so absence refuses.
+    const blockIdentifier = await acceptedBlockIdentifier(provider);
+    const liveClassHash = await provider.getClassHashAt(account.address, blockIdentifier);
+    requireAuthorizableBraavosClass(liveClassHash);
+    await requireCompatibleBraavosSigner(provider, account, blockIdentifier);
+    return;
+  }
   if (account.accountContractType !== "argent") {
     return;
   }
@@ -111,7 +122,7 @@ export const requireLiveAuthorizableClass = async (
  * can authorize for. The two refusals are worded apart because "we do not know
  * this class" and "we know it but cannot act for it" lead a user elsewhere.
  */
-export const requireAuthorizableArgentClass = (classHash: string): void => {
+const requireAuthorizableArgentClass = (classHash: string): void => {
   const deployed = accountClassEntry(classHash);
   if (deployed === null || deployed.family !== "argent") {
     throw new WalletError("Deployed Argent account class is not a release this wallet recognizes");
@@ -171,12 +182,49 @@ export const argentSigningRestriction = async (
 };
 
 /**
+ * Advisory signability classification for a deployed Braavos recovery
+ * candidate: the live class must be a known Braavos release, the stark key a
+ * registered signer, and any active strong signer (2FA/3FA) marks the account
+ * view-only — unless a deferred-removal request has already expired by the
+ * latest block's timestamp. Advisory only; the authoritative fail-closed check
+ * is {@link requireCompatibleBraavosSigner}.
+ */
+export const braavosSigningRestriction = async (
+  provider: RpcProvider,
+  account: { readonly address: string; readonly publicKeyX: string },
+): Promise<RecoverySigningRestriction | null> => {
+  const liveClass = await provider.getClassHashAt(account.address, "latest");
+  const entry = accountClassEntry(liveClass);
+  if (entry === null || entry.family !== "braavos") {
+    return "release";
+  }
+  const read = (entrypoint: string) =>
+    provider.callContract({ calldata: [], contractAddress: account.address, entrypoint }, "latest");
+  const signers = parseBraavosSigners(await read("get_signers"));
+  if (!signers.stark.some((signer) => sameFelt(signer, account.publicKeyX))) {
+    return "owner-changed";
+  }
+  if (signers.strongCount === 0) {
+    return null;
+  }
+  const [expireAtFelt] = await read("get_deferred_remove_signers");
+  const expireAt = expireAtFelt === undefined ? 0n : BigInt(expireAtFelt);
+  if (expireAt !== 0n) {
+    const block = await provider.getBlock("latest");
+    if (BigInt(block.timestamp) > expireAt) {
+      return null;
+    }
+  }
+  return "strong-signer";
+};
+
+/**
  * Refuses a deployed Argent account whose on-chain owner is not this wallet's
  * signer, whose owner is an unsupported signer kind, or which carries a
  * guardian. A guardian is a second required approver the recovery phrase cannot
  * supply, so an account holding one must not be treated as signable here.
  */
-export const requireCompatibleArgentSigner = async (
+const requireCompatibleArgentSigner = async (
   provider: RpcProvider,
   account: ArgentSignerSubject,
   blockIdentifier: string,
@@ -208,6 +256,79 @@ export const requireCompatibleArgentSigner = async (
   }
 };
 
+// get_signers serializes three felt arrays: [stark_len, ...stark,
+// secp256r1_len, ...secp256r1, webauthn_len, ...webauthn].
+type BraavosSigners = {
+  readonly stark: readonly string[];
+  readonly strongCount: number;
+};
+
+const parseBraavosSigners = (result: readonly string[]): BraavosSigners => {
+  const take = (offset: number): { readonly next: number; readonly values: readonly string[] } => {
+    const length = Number(BigInt(result[offset] ?? "0x0"));
+    if (!Number.isSafeInteger(length) || length < 0 || offset + 1 + length > result.length) {
+      throw new WalletError("Braavos account returned a malformed signer list");
+    }
+    return { next: offset + 1 + length, values: result.slice(offset + 1, offset + 1 + length) };
+  };
+  const stark = take(0);
+  const secp256r1 = take(stark.next);
+  const webauthn = take(secp256r1.next);
+  return {
+    stark: stark.values,
+    strongCount: secp256r1.values.length + webauthn.values.length,
+  };
+};
+
+/**
+ * Refuses a deployed Braavos account whose live class this wallet cannot
+ * authorize for: the class must be a known Braavos release that verifies plain
+ * stark signatures. Worded apart from the signer refusals because "unknown
+ * release" and "extra signer" lead a user elsewhere.
+ */
+const requireAuthorizableBraavosClass = (classHash: string): void => {
+  const deployed = accountClassEntry(classHash);
+  if (deployed === null || deployed.family !== "braavos") {
+    throw new WalletError("Deployed Braavos account class is not a release this wallet recognizes");
+  }
+};
+
+/**
+ * Refuses a deployed Braavos account this wallet cannot sign for: the stark
+ * key must be a registered signer, and no strong signer (2FA/3FA) may be
+ * active — unless a deferred-removal request has expired by the pinned
+ * block's own timestamp, after which the account itself treats the strong
+ * signers as gone. Fail-closed: malformed reads refuse rather than sign a
+ * transaction the account would reject.
+ */
+const requireCompatibleBraavosSigner = async (
+  provider: RpcProvider,
+  account: ArgentSignerSubject,
+  blockIdentifier: string,
+): Promise<void> => {
+  const read = (entrypoint: string) =>
+    provider.callContract(
+      { calldata: [], contractAddress: account.address, entrypoint },
+      blockIdentifier,
+    );
+  const signers = parseBraavosSigners(await read("get_signers"));
+  if (!signers.stark.some((signer) => sameFelt(signer, account.publicKeyX))) {
+    throw new WalletError("Deployed Braavos account owner does not match the wallet signer");
+  }
+  if (signers.strongCount === 0) {
+    return;
+  }
+  const [expireAtFelt] = await read("get_deferred_remove_signers");
+  const expireAt = expireAtFelt === undefined ? 0n : BigInt(expireAtFelt);
+  if (expireAt === 0n) {
+    throw new WalletError("Deployed Braavos account has an active 2FA signer");
+  }
+  const block = await provider.getBlock(blockIdentifier);
+  if (BigInt(block.timestamp) <= expireAt) {
+    throw new WalletError("Deployed Braavos account has an active 2FA signer");
+  }
+};
+
 /** Input for the advisory recovery-scan signability probe (issue 542). */
 export type SigningRestrictionInput = {
   readonly accountAddress: string;
@@ -221,6 +342,28 @@ export type SigningRestrictionInput = {
  * endpoint fails; callers treat any throw as "no verdict" since the
  * transaction path re-checks authoritatively.
  */
+/**
+ * Advisory Braavos signability probe with the standard endpoint fallback; a
+ * throw means "no verdict" to callers, never a signing decision.
+ */
+export const getBraavosSigningRestriction = async (
+  { accountAddress, publicKeyX, rpcUrls }: SigningRestrictionInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<RecoverySigningRestriction | null> => {
+  if (!isNonZeroStarkFieldElement(accountAddress) || !isNonZeroStarkFieldElement(publicKeyX)) {
+    throw new WalletError("Invalid account address");
+  }
+  return withRpcFallback(
+    rpcUrls,
+    (provider) => braavosSigningRestriction(provider, { address: accountAddress, publicKeyX }),
+    makeProvider,
+  );
+};
+
+/**
+ * Advisory Argent signability probe with the standard endpoint fallback; a
+ * throw means "no verdict" to callers, never a signing decision.
+ */
 export const getArgentSigningRestriction = async (
   { accountAddress, publicKeyX, rpcUrls }: SigningRestrictionInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
@@ -233,4 +376,74 @@ export const getArgentSigningRestriction = async (
     (provider) => argentSigningRestriction(provider, { address: accountAddress, publicKeyX }),
     makeProvider,
   );
+};
+
+/**
+ * The fields the deployed-compatibility gate reads. `publicKeyX` is required
+ * exactly for the single-signer vendor families whose live signer it checks;
+ * an Argent multisig matches on its pinned class alone.
+ */
+export type DeployedCompatibilitySubject = {
+  readonly accountContractType: string;
+  readonly address: string;
+  readonly classHash: string;
+  readonly publicKeyX?: string;
+};
+
+const requireSignerSubject = (account: DeployedCompatibilitySubject): ArgentSignerSubject => {
+  const { publicKeyX } = account;
+  if (publicKeyX === undefined) {
+    throw new WalletError("Account public key unavailable for the live signer check");
+  }
+  return { address: account.address, publicKeyX };
+};
+
+/**
+ * Verifies pinned Argent class and supported signer state at one accepted block.
+ * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
+ * A family this wallet cannot authorize for is refused before any RPC, so it is
+ * never reported as merely undeployed.
+ */
+export const isCompatibleAccountDeployed = async (
+  provider: RpcProvider,
+  account: DeployedCompatibilitySubject,
+): Promise<boolean> => {
+  let classHash: string;
+  const blockIdentifier =
+    account.accountContractType === "openzeppelin"
+      ? "latest"
+      : await acceptedBlockIdentifier(provider);
+  try {
+    classHash = await provider.getClassHashAt(account.address, blockIdentifier);
+  } catch (error) {
+    if (isContractNotFoundError(error)) {
+      return false;
+    }
+    throw error;
+  }
+  if (account.accountContractType === "openzeppelin") {
+    return true;
+  }
+  if (sameFelt(classHash, "0x0")) {
+    return false;
+  }
+  if (!isNonZeroStarkFieldElement(classHash)) {
+    throw new WalletError("RPC returned an invalid Argent account class hash");
+  }
+  if (account.accountContractType === "argent-multisig") {
+    // A multisig's configuration is bound to its exact class, so equality is
+    // the right test there and stays as it was.
+    if (!sameFelt(classHash, account.classHash)) {
+      throw new WalletError("Deployed Argent multisig class does not match the pinned release");
+    }
+    return true;
+  }
+  if (account.accountContractType === "braavos") {
+    requireAuthorizableBraavosClass(classHash);
+    await requireCompatibleBraavosSigner(provider, requireSignerSubject(account), blockIdentifier);
+    return true;
+  }
+  requireAuthorizableArgentClass(classHash);
+  await requireCompatibleArgentSigner(provider, requireSignerSubject(account), blockIdentifier);
+  return true;
 };

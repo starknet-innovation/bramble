@@ -52,16 +52,23 @@ export type RecoveryDerivationKind = "argentx-bip44" | "starknet-bip44";
  * Why a detected account can be watched but not signed for from this wallet
  * (issue 542): a guardian is a second approver the phrase cannot supply, a
  * changed owner means the phrase no longer holds the key, an unsupported owner
- * type signs in a way this wallet cannot produce, and an unauthorizable live
- * release expects an encoding it does not emit.
+ * type signs in a way this wallet cannot produce, an unauthorizable live
+ * release expects an encoding it does not emit, and a strong signer (Braavos
+ * 2FA/3FA) demands a device approval beside the key.
  */
-export type RecoverySigningRestriction = "guardian" | "owner-changed" | "owner-type" | "release";
+export type RecoverySigningRestriction =
+  | "guardian"
+  | "owner-changed"
+  | "owner-type"
+  | "release"
+  | "strong-signer";
 
 const SIGNING_RESTRICTIONS: readonly RecoverySigningRestriction[] = [
   "guardian",
   "owner-changed",
   "owner-type",
   "release",
+  "strong-signer",
 ];
 
 /**

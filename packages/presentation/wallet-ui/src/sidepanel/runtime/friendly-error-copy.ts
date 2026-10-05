@@ -101,8 +101,28 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "This account runs an older Argent release. Upgrade it in Ready to use it here.",
   ],
   [
-    "braavos accounts can be viewed in this wallet, but it cannot yet authorize transactions for them",
-    "Braavos accounts are view only in this wallet for now.",
+    "deployed braavos account has an active 2fa signer",
+    "This account has 2FA, a device signature this wallet can't provide. Use it in Braavos.",
+  ],
+  [
+    "deployed braavos account owner does not match the wallet signer",
+    "This account's signing key has changed. This phrase can no longer sign for it.",
+  ],
+  [
+    "deployed braavos account class is not a release this wallet recognizes",
+    "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
+  ],
+  [
+    "braavos account returned a malformed signer list",
+    "Couldn't read this account's signers. Try again.",
+  ],
+  [
+    "braavos account class hash is not a release this wallet recognizes",
+    "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
+  ],
+  [
+    "this wallet does not deploy braavos accounts",
+    "This wallet can't deploy Braavos accounts yet. Deploy it in Braavos first.",
   ],
 
   // --- Requests the wallet would not carry out -----------------------------

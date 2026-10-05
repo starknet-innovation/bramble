@@ -32,7 +32,7 @@ const extensionSender: RuntimeSender = {
 const contentSender: RuntimeSender = { id: "extension-id", url: "https://example.com/app" };
 const vaultPassphrase = "correct horse battery staple";
 
-type ProbeBehaviour = "guardian" | "null" | "throws";
+type ProbeBehaviour = "guardian" | "null" | "strong-signer" | "throws";
 
 const makeHandler = (
   account: AccountRef,
@@ -63,6 +63,11 @@ const makeHandler = (
         probeCalls.push(input);
         if (options.probe === "throws") throw new Error("probe unavailable");
         return options.probe === "guardian" ? "guardian" : null;
+      },
+      async getBraavosSigningRestriction(input) {
+        probeCalls.push(input);
+        if (options.probe === "throws") throw new Error("probe unavailable");
+        return options.probe === "strong-signer" ? "strong-signer" : null;
       },
       async getDeploymentStatus() {
         return options.deployed ?? true;
@@ -119,15 +124,29 @@ describe("background account signability", () => {
     expect(probeCalls).toHaveLength(0);
   });
 
-  test("marks every Braavos account read only until Braavos signing exists", async () => {
-    const { ask, probeCalls } = makeHandler(braavosAccount);
-    expect(await ask()).toEqual({
+  test("probes a deployed Braavos account and marks only real restrictions", async () => {
+    const guarded = makeHandler(braavosAccount, { probe: "strong-signer" });
+    expect(await guarded.ask()).toEqual({
+      accountId: braavosAccount.id,
+      ok: true,
+      readOnly: true,
+      reason: "strong-signer",
+    });
+    const starkOnly = makeHandler(braavosAccount, { probe: "null" });
+    expect(await starkOnly.ask()).toEqual({
+      accountId: braavosAccount.id,
+      ok: true,
+      readOnly: false,
+    });
+    // Undeployed Braavos cannot be deployed from here yet, so nothing can be
+    // signed for it either.
+    const undeployed = makeHandler(braavosAccount, { deployed: false });
+    expect(await undeployed.ask()).toEqual({
       accountId: braavosAccount.id,
       ok: true,
       readOnly: true,
       reason: "braavos",
     });
-    expect(probeCalls).toHaveLength(0);
   });
 
   test("carries a deployed Argent account's probed restriction", async () => {

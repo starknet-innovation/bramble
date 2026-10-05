@@ -16,7 +16,6 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   type ArgentMultisigConfig,
   normalizeArgentMultisigConfig,
-  requireAuthorizableFamily,
   serializeAccountSignature,
   serializeArgentMultisigDeploySignature,
   serializeArgentMultisigSignature,
@@ -150,15 +149,20 @@ const signerInputs = (
   readonly publicKey: string;
 } => {
   if (account.accountContractType !== "argent-multisig") {
-    requireAuthorizableFamily(account.accountContractType);
     // The stored class is the one the address was deployed with, which may be
-    // any Argent release; what the account runs now, and so which encoding it
+    // any vendor release; what the account runs now, and so which encoding it
     // accepts, is checked against the chain before anything is submitted.
     if (
       account.accountContractType === "argent" &&
       accountClassEntry(account.classHash)?.family !== "argent"
     ) {
       throw new WalletError("Argent account class hash is not a release this wallet recognizes");
+    }
+    if (
+      account.accountContractType === "braavos" &&
+      accountClassEntry(account.classHash)?.family !== "braavos"
+    ) {
+      throw new WalletError("Braavos account class hash is not a release this wallet recognizes");
     }
     return { kind: account.accountContractType, multisig: null, publicKey: account.publicKeyX };
   }

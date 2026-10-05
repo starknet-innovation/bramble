@@ -1,6 +1,6 @@
 /** Advisory signability classification for recovery candidates (issue 542). */
 import { describe, expect, test } from "bun:test";
-import { argentSigningRestriction } from "@bramble/starknet/deployment";
+import { argentSigningRestriction, braavosSigningRestriction } from "@bramble/starknet/rpc";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   deploymentClasses,
@@ -74,5 +74,65 @@ describe("argentSigningRestriction", () => {
       "release",
     );
     await expect(argentSigningRestriction(providerOf("0x9999"), ACCOUNT)).resolves.toBe("release");
+  });
+});
+
+describe("braavosSigningRestriction", () => {
+  const BRAAVOS_IMPL = "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
+  const braavosProvider = (
+    reads: Readonly<Record<string, readonly string[]>>,
+    timestamp = 1_000,
+    liveClass = BRAAVOS_IMPL,
+  ): RpcProvider =>
+    ({
+      async getClassHashAt() {
+        return liveClass;
+      },
+      async getBlock() {
+        return { block_hash: "0xb", timestamp };
+      },
+      async callContract({ entrypoint }: { readonly entrypoint: string }) {
+        const result = reads[entrypoint];
+        if (!result) throw new Error(`unexpected read: ${entrypoint}`);
+        return [...result];
+      },
+    }) as unknown as RpcProvider;
+  const starkOnly = { get_signers: ["0x1", OWNER, "0x0", "0x0"] };
+  const guarded = {
+    get_deferred_remove_signers: ["0x0"],
+    get_signers: ["0x1", OWNER, "0x1", "0xaa", "0x0"],
+  };
+
+  test("answers null for a stark-only account on a known release", async () => {
+    await expect(
+      braavosSigningRestriction(braavosProvider(starkOnly), ACCOUNT),
+    ).resolves.toBeNull();
+  });
+
+  test("names the strong signer, and clears it once a removal request expired", async () => {
+    await expect(braavosSigningRestriction(braavosProvider(guarded), ACCOUNT)).resolves.toBe(
+      "strong-signer",
+    );
+    const expiring = { ...guarded, get_deferred_remove_signers: ["0x5"] };
+    // Request expires at 5; at block time 1000 the account itself treats the
+    // strong signers as removed, so the stark key signs.
+    await expect(
+      braavosSigningRestriction(braavosProvider(expiring, 1_000), ACCOUNT),
+    ).resolves.toBeNull();
+    await expect(braavosSigningRestriction(braavosProvider(expiring, 3), ACCOUNT)).resolves.toBe(
+      "strong-signer",
+    );
+  });
+
+  test("names a foreign stark key and an unknown live release", async () => {
+    await expect(
+      braavosSigningRestriction(
+        braavosProvider({ get_signers: ["0x1", "0xdead", "0x0", "0x0"] }),
+        ACCOUNT,
+      ),
+    ).resolves.toBe("owner-changed");
+    await expect(
+      braavosSigningRestriction(braavosProvider(starkOnly, 1_000, "0x9999"), ACCOUNT),
+    ).resolves.toBe("release");
   });
 });

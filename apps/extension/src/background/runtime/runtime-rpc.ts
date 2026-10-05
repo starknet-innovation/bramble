@@ -50,6 +50,7 @@ import {
   estimateDeclareFee,
   estimateInvokeFee,
   getArgentSigningRestriction,
+  getBraavosSigningRestriction,
   getDeploymentStatus,
   getNftOwner,
   getNftOwnership,
@@ -171,6 +172,10 @@ export type RuntimeRpc = {
   readonly getArgentSigningRestriction?: (
     input: SigningRestrictionInput,
   ) => ReturnType<typeof getArgentSigningRestriction>;
+  /** Braavos sibling of the Argent probe; same advisory contract. */
+  readonly getBraavosSigningRestriction?: (
+    input: SigningRestrictionInput,
+  ) => ReturnType<typeof getBraavosSigningRestriction>;
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -297,6 +302,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
   getArgentSigningRestriction,
+  getBraavosSigningRestriction,
   getDeploymentStatus,
   getNftMetadata,
   getNftOwner,

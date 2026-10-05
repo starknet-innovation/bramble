@@ -16,7 +16,10 @@ import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-
  * Re-exported advisory signability probe for recovery candidates (issue 542).
  */
 export {
+  argentSigningRestriction,
+  braavosSigningRestriction,
   getArgentSigningRestriction,
+  getBraavosSigningRestriction,
   type SigningRestrictionInput,
 } from "../transactions/account-compatibility";
 /**

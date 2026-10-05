@@ -74,7 +74,7 @@ type Candidate = {
   account: DerivedAccountRef;
   deployed: boolean;
   funded: boolean;
-  restriction?: "guardian" | "owner-changed" | "owner-type" | "release";
+  restriction?: "guardian" | "owner-changed" | "owner-type" | "release" | "strong-signer";
 };
 
 const mount = (
@@ -253,10 +253,11 @@ describe("recovery scan Ready gate", () => {
     expect(brambleGroup?.open).toBe(true);
   });
 
-  test("shows a found Braavos account, selected, and says it is view only", async () => {
-    // Discovery auto-selects every account with activity. A family with no
-    // group of its own was selected without ever being shown, so the user
-    // restored accounts they never saw.
+  test("shows a found Braavos account, selected, labelled by its verdict", async () => {
+    // Discovery auto-selects every account with activity. A stark-only Braavos
+    // account is now usable, so its row reads as a plain deployed account; a
+    // strong signer labels the row view only with the reason; an undeployed
+    // one stays view only, since Bramble cannot deploy Braavos yet.
     const braavos: DerivedAccountRef = {
       ...brambleAccount,
       accountContractType: "braavos",
@@ -273,9 +274,22 @@ describe("recovery scan Ready gate", () => {
     expect(rowsIn(app)("braavos").length).toBe(1);
     expect(checkbox?.checked).toBe(true);
     expect(checkbox?.disabled).toBe(false);
-    expect(row?.textContent).toContain("view only for now");
+    expect(row?.textContent).toContain("Deployed on Starknet");
+    expect(row?.textContent).not.toContain("view only");
     expect(app.querySelector<HTMLDetailsElement>('[data-recovery-group="braavos"]')?.open).toBe(
       true,
+    );
+
+    const guarded = mount([
+      { account: braavos, deployed: true, funded: false, restriction: "strong-signer" },
+    ]);
+    await reachPicker(guarded);
+    expect(rowsIn(guarded)("braavos")[0]?.textContent).toContain("2FA active · view only");
+
+    const undeployed = mount([{ account: braavos, deployed: false, funded: true }]);
+    await reachPicker(undeployed);
+    expect(rowsIn(undeployed)("braavos")[0]?.textContent).toContain(
+      "Funded, not deployed · view only for now",
     );
   });
 
