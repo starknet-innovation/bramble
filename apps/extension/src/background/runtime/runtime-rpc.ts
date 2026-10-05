@@ -49,6 +49,7 @@ import {
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  getArgentSigningRestriction,
   getDeploymentStatus,
   getNftOwner,
   getNftOwnership,
@@ -60,6 +61,7 @@ import {
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  type SigningRestrictionInput,
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,
@@ -161,6 +163,14 @@ export type RuntimeRpc = {
   readonly getTrackedAllowances?: (
     input: TrackedAllowanceScan,
   ) => ReturnType<typeof readTrackedAllowances>;
+  /**
+   * Advisory signability probe for deployed Argent recovery candidates (issue
+   * 542). Optional so narrow test doubles keep compiling; the scan treats an
+   * absent member or a throw as "no verdict".
+   */
+  readonly getArgentSigningRestriction?: (
+    input: SigningRestrictionInput,
+  ) => ReturnType<typeof getArgentSigningRestriction>;
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -286,6 +296,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   estimateInvokeFee,
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
+  getArgentSigningRestriction,
   getDeploymentStatus,
   getNftMetadata,
   getNftOwner,

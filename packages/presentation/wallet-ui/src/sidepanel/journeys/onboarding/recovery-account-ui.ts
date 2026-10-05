@@ -10,6 +10,7 @@ import { sameFelt } from "@bramble/wallet-model/networks";
 import type {
   RecoveryAccountCandidate,
   RecoveryAccountSelection,
+  RecoverySigningRestriction,
 } from "@bramble/wallet-model/recovery";
 import {
   isRecoveryAccountIndex,
@@ -77,8 +78,21 @@ const deployableHere = (candidate: RecoveryAccountCandidate): boolean =>
   (candidate.account.accountContractType === "argent" &&
     sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH));
 
+// The scan's advisory verdict, in the reader's terms: why this account is
+// watch-only here, said before they pick it rather than after a send fails.
+const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
+  guardian: "has a guardian",
+  "owner-changed": "owner key changed",
+  "owner-type": "unsupported signer",
+  release: "older Argent release",
+};
+
 const activityState = (candidate: RecoveryAccountCandidate): string => {
-  if (candidate.deployed) return "Deployed on Starknet";
+  if (candidate.deployed) {
+    return candidate.restriction
+      ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
+      : "Deployed on Starknet";
+  }
   if (candidate.funded) {
     return deployableHere(candidate)
       ? "Funded and ready to deploy"

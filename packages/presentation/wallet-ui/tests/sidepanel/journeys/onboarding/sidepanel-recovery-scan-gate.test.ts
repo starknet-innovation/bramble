@@ -70,7 +70,12 @@ const click = (root: ParentNode, selector: string): void => {
   button.click();
 };
 
-type Candidate = { account: DerivedAccountRef; deployed: boolean; funded: boolean };
+type Candidate = {
+  account: DerivedAccountRef;
+  deployed: boolean;
+  funded: boolean;
+  restriction?: "guardian" | "owner-changed" | "owner-type" | "release";
+};
 
 const mount = (
   candidates: readonly Candidate[] = [
@@ -190,6 +195,26 @@ describe("recovery scan Ready gate", () => {
     expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
       "Search complete. Checked 40 indices across every account type.",
     );
+  });
+
+  test("says a guarded Argent account is view only before it is picked", async () => {
+    // Issue 542: the advisory verdict reaches the row's state line, and the
+    // account stays selectable — imported view-only, like Braavos.
+    const guarded: DerivedAccountRef = {
+      ...readyIdleAccount,
+      address: "0xguarded",
+      id: "SN_MAIN:0xguarded",
+    };
+    const app = mount([
+      { account: guarded, deployed: true, funded: false, restriction: "guardian" },
+    ]);
+    await reachPicker(app);
+
+    const row = rowsIn(app)("argent")[0];
+    if (!row) throw new Error("missing argent row");
+    expect(row.textContent).toContain("Deployed on Starknet · has a guardian · view only");
+    const checkbox = row.querySelector<HTMLInputElement>("input[type=checkbox]");
+    expect(checkbox?.disabled).toBe(false);
   });
 
   test("lists an inactive Ready candidate but refuses to select it", async () => {

@@ -48,11 +48,33 @@ export type RecoveryAccountSelection = {
  */
 export type RecoveryDerivationKind = "argentx-bip44" | "starknet-bip44";
 
-/** One derived account and the chain evidence that made it discoverable. */
+/**
+ * Why a detected account can be watched but not signed for from this wallet
+ * (issue 542): a guardian is a second approver the phrase cannot supply, a
+ * changed owner means the phrase no longer holds the key, an unsupported owner
+ * type signs in a way this wallet cannot produce, and an unauthorizable live
+ * release expects an encoding it does not emit.
+ */
+export type RecoverySigningRestriction = "guardian" | "owner-changed" | "owner-type" | "release";
+
+const SIGNING_RESTRICTIONS: readonly RecoverySigningRestriction[] = [
+  "guardian",
+  "owner-changed",
+  "owner-type",
+  "release",
+];
+
+/**
+ * One derived account and the chain evidence that made it discoverable.
+ * `restriction` is the scan's advisory signability verdict for a deployed
+ * Argent candidate; absent means none found or the probe did not answer — the
+ * transaction path re-checks authoritatively either way.
+ */
 export type RecoveryAccountCandidate = {
   readonly account: RecoverableAccountRef;
   readonly deployed: boolean;
   readonly funded: boolean;
+  readonly restriction?: RecoverySigningRestriction;
 };
 
 /** True for a valid hardened BIP-44 account index. */
@@ -171,7 +193,9 @@ export const recoveryScanTarget = (candidates: readonly RecoveryAccountCandidate
 /** Validates one public discovery result before caching or rendering it. */
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["account", "deployed", "funded"]) &&
+  hasOnlyKnownKeys(value, ["account", "deployed", "funded", "restriction"]) &&
   isRecoverableAccountRef(value["account"]) &&
   typeof value["deployed"] === "boolean" &&
-  typeof value["funded"] === "boolean";
+  typeof value["funded"] === "boolean" &&
+  (value["restriction"] === undefined ||
+    SIGNING_RESTRICTIONS.includes(value["restriction"] as RecoverySigningRestriction));

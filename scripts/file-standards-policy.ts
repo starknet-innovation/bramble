@@ -30,6 +30,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // of its lookup keys name secret-material fields because that is the exact
   // text the background threw; nothing here reads, logs, or persists one.
   "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy.ts",
+  // Split from friendly-error-copy.ts by the size budget: same contract — its
+  // lookup keys quote diagnostics that name secret-material fields verbatim.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy-multisig.ts",
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Privileged first-run boundary: the phrase is validated through Krusty and
