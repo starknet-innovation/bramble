@@ -96,13 +96,32 @@ export const BRAAVOS_BASE_CLASS_HASH =
   "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6";
 
 /**
+ * The deployment class the current Braavos app pins counterfactual addresses
+ * to (labelled "braavos 1.0.0" in the table): a base-style account whose
+ * constructor replaces itself with the implementation named in the deploy
+ * transaction's extended authorization. The only Braavos class this wallet can
+ * deploy; older base-class counterfactuals are refused, since their expected
+ * deployment authorization has not been established.
+ */
+export const BRAAVOS_DEPLOYMENT_CLASS_HASH =
+  "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201";
+
+/**
+ * The implementation a wallet-made Braavos deployment installs (the table's
+ * "braavos current"): carried out-of-band in the deploy authorization and
+ * poseidon-signed beside it, exactly as the vendor app deploys.
+ */
+export const BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH =
+  "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
+
+/**
  * Every class this wallet recognises, with its role and constructor shape.
  * Ordered most-common-first so a candidate scan finds the usual case early.
  */
 export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
   {
     authorizationShape: "stark-pair",
-    classHash: "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
     constructorShape: "public-key",
     family: "braavos",
     label: "braavos 1.0.0",
@@ -118,7 +137,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
   },
   {
     authorizationShape: "stark-pair",
-    classHash: "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+    classHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
     constructorShape: "public-key",
     family: "braavos",
     label: "braavos current",

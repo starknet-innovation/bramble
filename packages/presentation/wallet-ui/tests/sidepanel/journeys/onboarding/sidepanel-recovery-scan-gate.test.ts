@@ -6,7 +6,11 @@
  * candidates are unaffected.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
+import {
+  BRAAVOS_BASE_CLASS_HASH,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import { ARGENT_ACCOUNT_CLASS_HASH, type DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
@@ -291,6 +295,17 @@ describe("recovery scan Ready gate", () => {
     expect(rowsIn(undeployed)("braavos")[0]?.textContent).toContain(
       "Funded, not deployed · view only for now",
     );
+
+    // The modern deployment class deploys from here like any other account.
+    const modern = mount([
+      {
+        account: { ...braavos, classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH },
+        deployed: false,
+        funded: true,
+      },
+    ]);
+    await reachPicker(modern);
+    expect(rowsIn(modern)("braavos")[0]?.textContent).toContain("Funded and ready to deploy");
   });
 
   test("names the Argent release on rows that share an index", async () => {

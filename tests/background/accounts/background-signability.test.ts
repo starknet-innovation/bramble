@@ -7,7 +7,9 @@
 import { describe, expect, test } from "bun:test";
 import type { SigningRestrictionInput } from "@bramble/starknet/rpc";
 import type { Vault } from "@bramble/vault/schema";
+import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -138,14 +140,23 @@ describe("background account signability", () => {
       ok: true,
       readOnly: false,
     });
-    // Undeployed Braavos cannot be deployed from here yet, so nothing can be
-    // signed for it either.
+    // An undeployed Braavos counterfactual on an older base class stays view
+    // only; the modern deployment class deploys from here like any account.
     const undeployed = makeHandler(braavosAccount, { deployed: false });
     expect(await undeployed.ask()).toEqual({
       accountId: braavosAccount.id,
       ok: true,
       readOnly: true,
       reason: "braavos",
+    });
+    const modern = makeHandler(
+      { ...braavosAccount, classHash: canonicalFelt(BRAAVOS_DEPLOYMENT_CLASS_HASH) as string },
+      { deployed: false },
+    );
+    expect(await modern.ask()).toEqual({
+      accountId: braavosAccount.id,
+      ok: true,
+      readOnly: false,
     });
   });
 

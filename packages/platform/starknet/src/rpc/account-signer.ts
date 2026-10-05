@@ -1,13 +1,17 @@
 /** Contract-aware starknet.js signer adapters for wallet account families. */
 
 import { WalletError } from "@bramble/core/errors";
-import { accountClassEntry } from "@bramble/wallet-model/account-families";
+import {
+  accountClassEntry,
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { isStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
 import {
   Account,
   type DeployAccountSignerDetails,
+  hash,
   type RpcProvider,
   type Signature,
   Signer,
@@ -68,6 +72,11 @@ const exactlyOneSignature = (value: StarkSignature | readonly StarkSignature[]):
 };
 
 class FixedContractStarknetSigner extends Signer {
+  // Chain id of the deploy transaction being signed, stashed by
+  // signDeployAccountTransaction so the Braavos deploy signature can bind its
+  // out-of-band parameters to the right chain.
+  private deployChainId: string | null = null;
+
   public constructor(
     protected readonly signerPublicKey: string,
     protected readonly contractKind: ContractKind,
@@ -82,12 +91,59 @@ class FixedContractStarknetSigner extends Signer {
     return this.signerPublicKey;
   }
 
+  public override signDeployAccountTransaction(
+    details: DeployAccountSignerDetails,
+  ): Promise<Signature> {
+    this.deployChainId = String(details.chainId);
+    return super.signDeployAccountTransaction(details);
+  }
+
+  // Braavos deploys a base-style class that parses its own transaction
+  // signature: [r, s] over the deploy hash, the AdditionalDeploymentParams
+  // (implementation to install, no extra signer, no limits, the chain id),
+  // and a second stark pair over poseidon(params), all by the same key. The
+  // layout is pinned by braavos-account-cairo and proven by the vendor
+  // dataset's mainnet deployments.
+  private async braavosDeploySignature(transactionHash: string): Promise<Signature> {
+    if (this.deployChainId === null) {
+      throw new WalletError("Braavos deployment chain id unavailable");
+    }
+    const params = [
+      BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+      "0x0", // additional signer type: none
+      "0x0",
+      "0x0",
+      "0x0",
+      "0x0", // secp256r1 public key as two u256 limbs each
+      "0x0", // multisig threshold
+      "0x0", // withdrawal limit
+      "0x0", // fee rate
+      "0x0", // stark fee rate
+      this.deployChainId,
+    ];
+    // The parameters are signed before the transaction hash on purpose: the
+    // submission safety check treats the key's last signed hash as the one
+    // broadcastable transaction, and only the deploy hash is broadcastable.
+    const auxHash = hash.computePoseidonHashOnElements(params);
+    const aux = exactlyOneSignature(await this.starkSignHash(auxHash));
+    const transaction = exactlyOneSignature(await this.starkSignHash(transactionHash));
+    for (const signature of [aux, transaction]) {
+      if (!sameFelt(signature.publicKey, this.signerPublicKey)) {
+        throw new WalletError("Signature public key does not match the account");
+      }
+    }
+    return [transaction.r, transaction.s, ...params, aux.r, aux.s];
+  }
+
   protected override async signRaw(messageHash: string): Promise<Signature> {
     const hash = messageHash.startsWith("0x")
       ? messageHash
       : `0x${BigInt(messageHash).toString(16)}`;
     if (!isStarkFieldElement(hash)) {
       throw new WalletError("Invalid transaction hash");
+    }
+    if (this.deployment && this.contractKind === "braavos") {
+      return this.braavosDeploySignature(hash);
     }
     const signed = await this.starkSignHash(hash);
     if (this.contractKind === "argent-multisig") {

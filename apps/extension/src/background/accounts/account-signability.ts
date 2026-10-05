@@ -4,7 +4,8 @@
  * passive session reads.
  */
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
@@ -26,6 +27,19 @@ type AccountSignabilityDeps = {
 // the wallet unlocked.
 const passiveAccountContext = (deps: AccountSignabilityDeps) =>
   observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+
+// An undeployed Argent account deploys and signs with the phrase key, and so
+// does a Braavos counterfactual on the modern deployment class; only an older
+// Braavos base class stays view-only, since its deployment authorization has not
+// been established.
+const undeployedVerdict = (
+  accountId: string,
+  vendor: "argent" | "braavos",
+  classHash: string,
+): RuntimeResponse =>
+  vendor === "argent" || sameFelt(classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH)
+    ? { accountId, ok: true, readOnly: false }
+    : { accountId, ok: true, readOnly: true, reason: "braavos" };
 
 /**
  * The Home read-only flag's verdict: deployed vendor accounts by live probe,
@@ -60,12 +74,7 @@ export const handleAccountSignability = async (
     .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
     .catch(() => false);
   if (!deployed) {
-    // An undeployed Argent account deploys and signs with the phrase key; an
-    // undeployed Braavos account cannot be deployed from here yet, so nothing
-    // can be signed for it either.
-    return vendor === "argent"
-      ? { accountId: account.id, ok: true, readOnly: false }
-      : { accountId: account.id, ok: true, readOnly: true, reason: "braavos" };
+    return undeployedVerdict(account.id, vendor, account.classHash);
   }
   const probe =
     vendor === "argent"
