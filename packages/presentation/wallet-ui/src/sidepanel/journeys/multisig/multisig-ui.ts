@@ -217,6 +217,13 @@ const bindTransferComposer = (form: HTMLFormElement): void => {
     });
     form.querySelector("#multisig-asset-empty")?.toggleAttribute("hidden", visible > 0);
   });
+  // Enter in the token search must never implicitly submit the form, which
+  // would prepare a transfer of the PREVIOUSLY selected hidden token rather
+  // than the one being searched for (audit 248, multisig twin of the Send
+  // token search). Choosing is done on an asset row.
+  form.querySelector("#multisig-asset-search")?.addEventListener("keydown", (event) => {
+    if ((event as KeyboardEvent).key === "Enter") event.preventDefault();
+  });
   form.querySelectorAll<HTMLButtonElement>("[data-ms-propose-asset]").forEach((asset) => {
     asset.addEventListener("click", () => applyTransferAsset(form, asset));
   });

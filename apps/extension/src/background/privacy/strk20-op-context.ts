@@ -21,6 +21,10 @@ import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";
+import {
+  type TrustedRecipientSources,
+  withTrustedRecipients,
+} from "../transactions/trusted-recipients";
 import { strk20AccountContext } from "./strk20-account-context";
 import type { Strk20JobRegistry } from "./strk20-preparation-jobs";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
@@ -40,7 +44,8 @@ export type Strk20WalletOpsDeps = WalletOpsDeps & {
  */
 export type ActivePrivacyContext = {
   readonly accountContext: Strk20AccountContext;
-  readonly preferences: WalletPreferences;
+  /** Carries the address-poisoning trust inputs (audit #163) for the pool routes. */
+  readonly preferences: WalletPreferences & TrustedRecipientSources;
   readonly token: TokenConfig;
 };
 
@@ -203,7 +208,11 @@ export const resolvePrivacyContext = async (
   if (active.error !== undefined) {
     return { error: active.error };
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    active.accounts,
+  );
   const config = preferences.strk20Networks?.[active.networkId] ?? null;
   if (!config) {
     return {

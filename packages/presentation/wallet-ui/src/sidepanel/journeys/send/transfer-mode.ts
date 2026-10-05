@@ -148,6 +148,12 @@ export const TRANSFER_FAILURE_TITLE = "Transaction not sent";
  */
 export const TRANSFER_SENT_FAILURE_TITLE = "Transaction failed";
 
+/**
+ * Heading of the receipt when the submission's reply was lost: it may or may
+ * not be on chain, so neither "not sent" nor "failed" is true.
+ */
+export const TRANSFER_UNKNOWN_TITLE = "Status unknown";
+
 /** Default reason for a submitted transaction that failed without its own message. */
 export const TRANSFER_SENT_FAILURE_REASON =
   "The transaction was sent but did not complete. Check its status in Activity.";

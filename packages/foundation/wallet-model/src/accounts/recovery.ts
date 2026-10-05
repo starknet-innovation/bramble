@@ -7,6 +7,7 @@ import {
   isAccountContractType,
   isRecoverableAccountRef,
   type RecoverableAccountRef,
+  recoveryLadderIndex,
 } from "./accounts";
 
 /** Shared recovery bounds consumed by input validation, scanning, and UI. */
@@ -14,6 +15,9 @@ export const RECOVERY_SCAN_LIMITS = {
   batchSize: 4,
   defaultCount: 20,
   maxIndex: 0x7fffffff,
+  // Fail-safe ceiling on how many indices one scan may cover, so an endpoint
+  // that answers "deployed" to every probe cannot extend the scan forever.
+  maxScannedIndexes: 200,
   maxSelections: 40,
 } as const;
 
@@ -135,6 +139,33 @@ const selectionClass = (selection: RecoveryAccountSelection): string => {
   return selection.accountContractType === "argent"
     ? (canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH) ?? "")
     : "default";
+};
+
+/**
+ * How many indices a scan must cover given what it has already found: at least
+ * `defaultCount`, and always `defaultCount` past the highest index with
+ * on-chain evidence (deployed or funded), so a ladder of real accounts keeps
+ * the search going and a quiet tail of `defaultCount` indices ends it.
+ * Candidates offered only as creatable defaults extend nothing. Bounded by
+ * `maxScannedIndexes`; an empty list yields the floor, so there is no failure
+ * path. Single-sourced here so the background's completion verdict and the
+ * UI's progress denominator cannot disagree.
+ */
+export const recoveryScanTarget = (candidates: readonly RecoveryAccountCandidate[]): number => {
+  const highestActive = candidates.reduce(
+    (highest, candidate) =>
+      candidate.deployed || candidate.funded
+        ? Math.max(highest, recoveryLadderIndex(candidate.account))
+        : highest,
+    -1,
+  );
+  return Math.min(
+    Math.max(
+      RECOVERY_SCAN_LIMITS.defaultCount,
+      highestActive + 1 + RECOVERY_SCAN_LIMITS.defaultCount,
+    ),
+    RECOVERY_SCAN_LIMITS.maxScannedIndexes,
+  );
 };
 
 /** Validates one public discovery result before caching or rendering it. */

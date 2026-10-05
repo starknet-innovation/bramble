@@ -257,6 +257,7 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
   }
   const result = await executeSignApproval(
     {
+      activity: deps.activity,
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,

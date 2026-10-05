@@ -36,11 +36,11 @@ import {
   providerStringArrayResult,
   providerSwitchChainId,
   readApiVersionParam,
-  readTypedDataParam,
   toProviderPayload as toProviderPayloadResult,
 } from "./results";
 import { invalidRequestPayload, unknownError, type WalletRpcError } from "./rpc-errors";
 import type { RuntimeMessage } from "./runtime-message";
+import { readTypedDataParam } from "./typed-data-params";
 
 /** Marker for page-to-content wallet provider requests.
  */

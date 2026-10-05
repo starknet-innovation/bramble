@@ -53,6 +53,101 @@ describe("strk20 bridge params", () => {
     });
   });
 
+  test("accepts the optional valid_until and api_version and drops them", () => {
+    for (const extra of [
+      { valid_until: 1_790_000_000 },
+      { valid_until: 0 },
+      { api_version: "0.10.4" },
+      { api_version: "0.10.4-rc.2", valid_until: 1_790_000_000 },
+    ]) {
+      expect(
+        toRuntimeMessage(request("wallet_strk20Balances", { tokens: [token], ...extra }), origin),
+      ).toEqual({ origin, tokens: [token], type: "wallet.strk20Balances" });
+    }
+  });
+
+  test("rejects a malformed valid_until or api_version", () => {
+    for (const extra of [
+      { valid_until: -1 },
+      { valid_until: 1.5 },
+      { valid_until: "1790000000" },
+      { valid_until: Number.MAX_SAFE_INTEGER + 1 },
+      { valid_until: null },
+      { api_version: "not.a.version.x" },
+      { api_version: 10 },
+      { authorization: "forever" },
+    ]) {
+      expect(
+        toRuntimeMessage(request("wallet_strk20Balances", { tokens: [token], ...extra }), origin),
+      ).toBeNull();
+    }
+  });
+
+  test("accepts the optional api_version on prepare, invoke, and commitment and drops it", () => {
+    const actions = [{ amount: "0x0a", token, type: "deposit" as const }];
+    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+      expect(
+        toRuntimeMessage(request("wallet_strk20PrepareInvoke", { actions, api_version }), origin),
+      ).toEqual({ actions, origin, simulate: false, type: "wallet.strk20PrepareInvoke" });
+      expect(
+        toRuntimeMessage(
+          request("wallet_strk20PrepareInvoke", { actions, api_version, simulate: true }),
+          origin,
+        ),
+      ).toEqual({ actions, origin, simulate: true, type: "wallet.strk20PrepareInvoke" });
+      expect(
+        toRuntimeMessage(
+          request("wallet_strk20InvokeTransaction", { actions, api_version }),
+          origin,
+        ),
+      ).toEqual({ actions, origin, type: "wallet.strk20InvokeTransaction" });
+      expect(
+        toRuntimeMessage(
+          request("wallet_strk20SubaccountCommitment", { api_version, dapp_name: "Terminal" }),
+          origin,
+        ),
+      ).toEqual({ dappName: "Terminal", origin, type: "wallet.strk20SubaccountCommitment" });
+      expect(
+        toRuntimeMessage(
+          request("wallet_strk20SubaccountCommitment", {
+            api_version,
+            dapp_name: "Terminal",
+            nonce: "0x1",
+          }),
+          origin,
+        ),
+      ).toEqual({
+        dappName: "Terminal",
+        nonce: "0x1",
+        origin,
+        type: "wallet.strk20SubaccountCommitment",
+      });
+    }
+  });
+
+  test("rejects a malformed api_version on prepare, invoke, and commitment", () => {
+    const actions = [{ amount: "0x0a", token, type: "deposit" as const }];
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+      for (const [method, params] of [
+        ["wallet_strk20PrepareInvoke", { actions, api_version }],
+        ["wallet_strk20PrepareInvoke", { actions, api_version, simulate: true }],
+        ["wallet_strk20InvokeTransaction", { actions, api_version }],
+        ["wallet_strk20SubaccountCommitment", { api_version, dapp_name: "Terminal" }],
+      ] as const) {
+        expect(toRuntimeMessage(request(method, params), origin)).toBeNull();
+      }
+    }
+    // api_version is a top-level param, never a field of an action.
+    expect(
+      toRuntimeMessage(
+        request("wallet_strk20InvokeTransaction", {
+          actions: [{ ...actions[0], api_version: "0.10.4" }],
+        }),
+        origin,
+      ),
+    ).toBeNull();
+  });
+
   test("maps prepare params with a default simulate flag", () => {
     expect(
       toRuntimeMessage(

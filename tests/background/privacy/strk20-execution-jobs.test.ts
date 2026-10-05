@@ -12,9 +12,13 @@
  * on every later execute, and idempotent on every later poll of the hash.
  */
 import { describe, expect, test } from "bun:test";
+import { STRK20_JOB_INTERRUPTED } from "@bramble/privacy/phases";
 import type { Strk20Service } from "@bramble/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
-import { STRK20_JOB_INTERRUPTED } from "../../../apps/extension/src/background/privacy/strk20-preparation-jobs";
+import {
+  INDETERMINATE_RPC_WRITE_MESSAGE,
+  IndeterminateRpcWriteError,
+} from "@bramble/starknet/provider";
 import { flushHeld } from "../../support/held";
 import {
   awaitStrk20Job,
@@ -244,5 +248,33 @@ describe("execution through the job", () => {
     await expect(
       after({ preparationId, type: "wallet.strk20Execute" }, STRK20_EXTENSION_SENDER),
     ).resolves.toEqual({ error: "Privacy preparation not found" });
+  });
+
+  // Audit #173: a relay whose reply was lost may still land the batch. The
+  // settled outcome must say "unknown", never a plain error the panel would
+  // render as "not sent".
+  test("settles a lost relay reply as status unknown, not as a failure", async () => {
+    const base = makeStrk20Service({ balance: "0xde0b6b3a7640000" });
+    const handler = buildStrk20Handler({
+      balance: "0xde0b6b3a7640000",
+      preferences: preferences(),
+      strk20: {
+        ...base,
+        async submitActions() {
+          throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
+        },
+      },
+    });
+    const prepared = (await handler(transfer, STRK20_EXTENSION_SENDER)) as {
+      readonly strk20Preparation: { readonly id: string };
+    };
+    const started = await handler(
+      { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
+      STRK20_EXTENSION_SENDER,
+    );
+    await expect(awaitStrk20Job((next, to) => handler(next, to), started)).resolves.toEqual({
+      error: INDETERMINATE_RPC_WRITE_MESSAGE,
+      submissionUnknown: true,
+    });
   });
 });

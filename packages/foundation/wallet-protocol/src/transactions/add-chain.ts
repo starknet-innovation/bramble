@@ -7,6 +7,7 @@
 import { hasOnlyKnownKeys, isNetworkLabel, isRecord, type Json } from "@bramble/core/json";
 import { isBoundedServiceUrlList } from "@bramble/core/service-url";
 import { isCanonicalChainId } from "@bramble/wallet-model/networks";
+import { isOptionalApiVersion } from "../provider/versions";
 
 /**
  * A custom Starknet chain a dapp asks the wallet to add, after bridge
@@ -48,12 +49,15 @@ const readUrlList = (value: unknown): readonly string[] | null | undefined => {
 /**
  * Parses a `{ id, chain_id, chain_name, rpc_urls?, ... }` STARKNET_CHAIN object,
  * accepting only the spec-required fields plus optional URI lists. Returns the
- * internal camelCase chain, or null for any malformed descriptor.
+ * internal camelCase chain, or null for any malformed descriptor. The spec's
+ * optional `api_version` rides beside the chain fields and is dropped when
+ * well-formed; it is never part of the stored chain.
  */
 export const readProviderChain = (params: Json | undefined): ProviderChain | null => {
   if (
     !isRecord(params) ||
     !hasOnlyKnownKeys(params, [
+      "api_version",
       "block_explorer_url",
       "chain_id",
       "chain_name",
@@ -62,6 +66,7 @@ export const readProviderChain = (params: Json | undefined): ProviderChain | nul
       "native_currency",
       "rpc_urls",
     ]) ||
+    !isOptionalApiVersion(params["api_version"]) ||
     !isNetworkLabel(params["id"]) ||
     !isCanonicalChainId(params["chain_id"]) ||
     !isNetworkLabel(params["chain_name"]) ||

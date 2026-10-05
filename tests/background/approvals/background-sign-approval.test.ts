@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
+import { memoryActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
 import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import {
@@ -139,6 +140,7 @@ describe("signTypedData approval gate", () => {
     await expect(
       executeSignApproval(
         {
+          activity: memoryActivityLog(),
           preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
           rpcProviderFor: () => liveClass(ARGENT_ACCOUNT_CLASS_HASH),
           session,
@@ -163,6 +165,7 @@ describe("signTypedData approval gate", () => {
     session.unlock(PASSPHRASE);
     const response = await executeSignApproval(
       {
+        activity: memoryActivityLog(),
         preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
         rpcProviderFor: () => liveClass(argent030.classHash),
         session,
@@ -201,6 +204,7 @@ describe("signTypedData approval gate", () => {
     session.unlock(PASSPHRASE);
     const response = await executeSignApproval(
       {
+        activity: memoryActivityLog(),
         preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
         rpcProviderFor: () =>
           ({
@@ -374,6 +378,7 @@ for (const boundary of ["preferences", "grants"] as const) {
       let signatures = 0;
       const pending = executeSignApproval(
         {
+          activity: memoryActivityLog(),
           session,
           preferencesStore: {
             ...preferencesStore,

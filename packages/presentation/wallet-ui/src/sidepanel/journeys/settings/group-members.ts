@@ -71,7 +71,7 @@ const accountChecklistRow = (
     <span class="option-avatar">${accountAvatar(account.address)}</span>
     <span class="account-check-copy">
       <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
-      <code>${accountLabel(account.address)}</code>
+      <code>${escapeHtml(accountLabel(account.address))}</code>
     </span>
     ${networkName ? `<span class="account-check-net">${escapeHtml(networkName)}</span>` : ""}
     <span class="account-check-mark">${member ? icon("check") : icon("plus")}</span>

@@ -14,6 +14,7 @@ import type {
 import {
   isRecoveryAccountIndex,
   RECOVERY_SCAN_LIMITS,
+  recoveryScanTarget,
   recoverySelectionKey,
 } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
@@ -252,7 +253,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     renderCandidates();
     scanStatus = complete
       ? `Search complete. Checked ${next.nextIndex} indices across every account type.`
-      : `Checked ${next.nextIndex} of ${RECOVERY_SCAN_LIMITS.defaultCount} indices…`;
+      : `Checked ${next.nextIndex} of ${recoveryScanTarget(next.candidates)} indices…`;
     renderStatus();
   };
 

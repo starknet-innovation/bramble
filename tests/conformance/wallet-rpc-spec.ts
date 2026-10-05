@@ -395,7 +395,7 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     method: "wallet_strk20Balances",
     resultMethod: "wallet_strk20Balances",
     runtimeType: "wallet.strk20Balances",
-    paramKeys: ["tokens"],
+    paramKeys: ["tokens", "valid_until"],
     optionalApiVersion: true,
     stateChanging: false,
     errorCodes: [
@@ -405,7 +405,13 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
       ERROR_CODES.API_VERSION_NOT_SUPPORTED,
       ERROR_CODES.UNKNOWN_ERROR,
     ],
-    request: { id: REQUEST_ID, method: "wallet_strk20Balances", params: { tokens: [TOKEN] } },
+    // Every spec param at once: valid_until and api_version are accepted, then
+    // dropped, so the runtime message carries only the token list.
+    request: {
+      id: REQUEST_ID,
+      method: "wallet_strk20Balances",
+      params: { api_version: API_VERSION, tokens: [TOKEN], valid_until: 1_790_000_000 },
+    },
     expectedRuntime: { origin: ORIGIN, tokens: [TOKEN], type: "wallet.strk20Balances" },
     backgroundResult: { balances: [{ balance: "0x64", token: TOKEN }], ok: true },
     validateResult: (r) =>

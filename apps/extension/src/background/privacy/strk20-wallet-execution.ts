@@ -27,14 +27,17 @@ import {
   type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@bramble/privacy/service";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { approvalPayloadMatchesContext } from "../approvals/approval-context";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import type { Strk20WalletExecuteResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
@@ -130,9 +133,15 @@ const assertCurrentRecipientPolicy = async (
   preparation: Exclude<Strk20WalletPreparation, { readonly kind: "register" }>,
   context: ActivePrivacyContext,
 ): Promise<void> => {
+  // Fresh preferences (a contact saved since review counts), with the same
+  // own-account and paid-recipient trust inputs the context was built with.
   const refusal = refusePoisonedStrk20Actions(
     context.accountContext.account,
-    await deps.preferencesStore.read(),
+    await withTrustedRecipients(
+      deps,
+      await deps.preferencesStore.read(),
+      context.preferences.ownAccounts,
+    ),
     preparation.actions,
   );
   if (refusal) {
@@ -288,6 +297,11 @@ const executionWork = async (
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
+    // A lost relay or RPC reply may still land: say so instead of "failed",
+    // so the panel does not report it as not sent (audit #173).
+    if (error instanceof IndeterminateRpcWriteError) {
+      return submissionUnknownResponse(errorText(error, "Private transaction failed"));
+    }
     return { error: errorText(error, "Private transaction failed") };
   }
 };

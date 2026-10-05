@@ -13,6 +13,7 @@ import {
   TRANSFER_FAILURE_TITLE,
   TRANSFER_SENT_FAILURE_REASON,
   TRANSFER_SENT_FAILURE_TITLE,
+  TRANSFER_UNKNOWN_TITLE,
   type TransferMode,
   transferModeCopy,
   transferModeFor,
@@ -158,20 +159,31 @@ const applySuccessReceipt = (
 
 // The failure receipt. A hash means it was submitted: the chain rejected or
 // reverted it, so the heading must not say "not sent", and the balance may have
-// paid a fee.
+// paid a fee. An unknown submission (its reply was lost) is neither: it gets a
+// warning, not a failure, and leads with Activity rather than Try again, since
+// a re-send could pay twice (audit 173).
 const applyFailureReceipt = (
   form: HTMLFormElement,
-  transactionHash: string | null,
-  error: string,
+  state: Pick<TransferState<TransferReview>, "error" | "submissionUnknown" | "transactionHash">,
 ): void => {
-  const submitted = Boolean(transactionHash);
+  const submitted = Boolean(state.transactionHash);
+  const unknown = state.submissionUnknown && !submitted;
   setText(
     form,
     "send-failure-title",
-    submitted ? TRANSFER_SENT_FAILURE_TITLE : TRANSFER_FAILURE_TITLE,
+    unknown
+      ? TRANSFER_UNKNOWN_TITLE
+      : submitted
+        ? TRANSFER_SENT_FAILURE_TITLE
+        : TRANSFER_FAILURE_TITLE,
   );
+  const section = form.querySelector<HTMLElement>("#send-failure");
+  if (unknown) section?.setAttribute("data-severity", "warning");
+  else section?.removeAttribute("data-severity");
+  form.querySelector("#send-retry")?.toggleAttribute("hidden", unknown);
+  form.querySelector("#send-failure-activity")?.toggleAttribute("hidden", !unknown);
   const reason =
-    error ||
+    state.error ||
     (submitted
       ? TRANSFER_SENT_FAILURE_REASON
       : "The transaction was not sent. Your balance is unchanged.");
@@ -223,7 +235,13 @@ export const applyTransferUi = (
   }
   form.querySelector("#send-working")?.toggleAttribute("hidden", !working);
   const mode = modeOf(form, state.fields);
-  setText(form.ownerDocument, "send-header-title", transferStageTitle(state.stage, mode));
+  // An unknown outcome did not fail, so the header names the operation only.
+  const unknownOutcome = state.stage === "failed" && state.submissionUnknown;
+  setText(
+    form.ownerDocument,
+    "send-header-title",
+    unknownOutcome ? transferModeCopy(mode).noun : transferStageTitle(state.stage, mode),
+  );
   if (state.fields) applyModeCopy(form, mode, reviewing);
   setSendProgress(form, state.stage);
   restoreTransferFields(form, state.fields);
@@ -289,7 +307,7 @@ export const applyTransferUi = (
     applyOutcomeHash(form, id, state.transactionHash ?? "", form.dataset["sendNetwork"] ?? "");
   }
   if (state.stage === "failed") {
-    applyFailureReceipt(form, state.transactionHash, state.error);
+    applyFailureReceipt(form, state);
   }
   setText(form, "transfer-result", state.stage === "failed" ? "" : state.error);
   if (previousStage && previousStage !== state.stage) {
