@@ -70,19 +70,31 @@ const formatUtcInstant = (epochSeconds: number): string => {
 const readOnlyNotice = (signability: SignabilityVerdict | null): string => {
   if (signability?.readOnly !== true) return "";
   const recovery = "recovery" in signability ? signability.recovery : undefined;
-  const recoverable = signability.reason === "strong-signer";
-  const pending = recovery?.pendingUntil != null;
+  // Ready's guardian escape is a two-step removal that needs a second signed
+  // call once the delay passes; Braavos' 2FA removal applies itself at expiry.
+  const kind = signability.reason === "guardian" ? "argent" : "braavos";
+  const recoverable = signability.reason === "strong-signer" || signability.reason === "guardian";
+  const noun = kind === "argent" ? "the guardian" : "2FA";
+  const stopper = kind === "argent" ? "Your guardian" : "Your Braavos device";
+  const pendingUntil = recovery?.pendingUntil ?? null;
+  const stage = recovery && "stage" in recovery ? recovery.stage : undefined;
+  const recoverButton = (label: string): string =>
+    `<button class="button button-secondary" id="recover-account" type="button" data-recover-kind="${kind}">${label}</button>`;
+  // Ready, delay elapsed: offer the second step. Otherwise a running removal
+  // shows its unlock time, and a fresh account offers the first step.
+  const body =
+    stage === "ready"
+      ? recoverButton("Complete recovery")
+      : pendingUntil !== null
+        ? `<p class="read-only-detail">Removing ${noun} — usable on ${escapeHtml(
+            formatUtcInstant(pendingUntil),
+          )}. ${stopper} can still stop this.</p>`
+        : recoverable
+          ? recoverButton("Recover account")
+          : "";
   return `<div class="read-only-notice" data-read-only="true">
       <p class="hero-stale">${icon("eye")}<span>Read only</span></p>
-      ${
-        pending
-          ? `<p class="read-only-detail">Removing 2FA — usable on ${escapeHtml(
-              formatUtcInstant(recovery?.pendingUntil ?? 0),
-            )}. Your Braavos device can still stop this.</p>`
-          : recoverable
-            ? `<button class="button button-secondary" id="recover-account" type="button">Recover account</button>`
-            : ""
-      }
+      ${body}
     </div>`;
 };
 

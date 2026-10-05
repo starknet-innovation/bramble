@@ -40,12 +40,6 @@ import {
   type TransferReviewResponse,
   type WalletStatus,
 } from "../../popup/responses/responses";
-import {
-  isRecoverBraavosAccountResponse,
-  isReviewBraavosRecoveryResponse,
-  type RecoverBraavosAccountResponse,
-  type ReviewBraavosRecoveryResponse,
-} from "../../popup/responses/responses-transfer";
 import { createNftRuntimeClient } from "../journeys/collectibles/nft-runtime";
 import { createLedgerRuntimeClient } from "../journeys/ledger/runtime-client";
 import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding-runtime";
@@ -68,6 +62,7 @@ export type {
 import { createAccountRuntimeClient } from "./runtime-accounts";
 import { responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
+import { createRecoveryRuntimeClient } from "./runtime-recovery";
 import { unavailableStatus } from "./runtime-status";
 
 /**
@@ -87,6 +82,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
+    ...createRecoveryRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {
@@ -113,16 +109,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async loadAccountSignability(): Promise<AccountSignabilityResponse | null> {
       const response = await sendMessage({ type: "wallet.accountSignability" });
       return isAccountSignabilityResponse(response) ? response : null;
-    },
-    async reviewBraavosRecovery(): Promise<ReviewBraavosRecoveryResponse> {
-      const response = await sendMessage({ type: "wallet.reviewBraavosRecovery" });
-      if (isReviewBraavosRecoveryResponse(response)) return response;
-      throw responseError(response, "account recovery unavailable");
-    },
-    async recoverBraavosAccount(reviewedFee: FeeEstimate): Promise<RecoverBraavosAccountResponse> {
-      const response = await sendMessage({ reviewedFee, type: "wallet.recoverBraavosAccount" });
-      if (isRecoverBraavosAccountResponse(response)) return response;
-      throw responseError(response, "account recovery failed");
     },
     async loadClassHashVerification(): Promise<ClassHashVerificationResponse | null> {
       // Return the whole response (with its `accountId`), not just the verdict,

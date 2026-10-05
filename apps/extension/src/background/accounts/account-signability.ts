@@ -4,6 +4,7 @@
  * passive session reads.
  */
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { DEFAULT_ARGENT_ESCAPE_SECURITY_PERIOD_SECONDS as ARGENT_ESCAPE_DELAY_SECONDS } from "@bramble/starknet/rpc";
 import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
@@ -93,21 +94,49 @@ export const handleAccountSignability = async (
   if (restriction === null || restriction === undefined) {
     return { accountId: account.id, ok: true, readOnly: false };
   }
-  // A strong signer is recoverable with the phrase: attach what the Home flag
-  // needs — the pending expiry if a request is live, or the delay a fresh one
-  // would take. Best-effort; the flag renders without it.
-  const recovery =
-    restriction === "strong-signer"
-      ? await deps.runtimeRpc
-          .getBraavosRecoveryState?.({ accountAddress: account.address, rpcUrls })
-          .catch(() => undefined)
-      : undefined;
+  // A phrase-recoverable restriction (Braavos 2FA, Ready guardian) attaches
+  // what the Home flag needs: any in-progress removal's unlock time and, for
+  // Ready's two-step escape, whether it is now ready to complete. Best-effort;
+  // the flag renders without it.
+  const recovery = await recoveryState(deps, account, restriction, rpcUrls);
   return {
     accountId: account.id,
     ok: true,
     readOnly: true,
     reason: restriction,
     ...(recovery ? { recovery } : {}),
+  };
+};
+
+const recoveryState = async (
+  deps: AccountSignabilityDeps,
+  account: { readonly address: string },
+  restriction: string,
+  rpcUrls: readonly string[],
+): Promise<
+  | {
+      readonly delaySeconds: number;
+      readonly pendingUntil: number | null;
+      readonly stage?: "pending" | "ready";
+    }
+  | undefined
+> => {
+  if (restriction === "strong-signer") {
+    return deps.runtimeRpc
+      .getBraavosRecoveryState?.({ accountAddress: account.address, rpcUrls })
+      .catch(() => undefined);
+  }
+  if (restriction !== "guardian") return undefined;
+  const state = await deps.runtimeRpc
+    .getArgentRecoveryState?.({ accountAddress: account.address, rpcUrls })
+    .catch(() => undefined);
+  // Only an escape already under way carries a stage; none/expired leaves the
+  // flag offering a fresh "Recover account".
+  if (!state || (state.status !== "pending" && state.status !== "ready")) return undefined;
+  return {
+    delaySeconds: ARGENT_ESCAPE_DELAY_SECONDS,
+    pendingUntil: state.readyAt,
+    stage: state.status,
   };
 };
 
@@ -181,6 +210,72 @@ export const handleRecoverBraavosAccount = async (
     accountId: account.id,
     ok: true,
     pendingUntil: submitted.pendingUntil,
+    transactionHash: submitted.transactionHash,
+  };
+};
+
+/**
+ * Quotes the Ready recovery's next escape step (fee + the delay it will take),
+ * mirroring the Braavos review. Privileged; the estimate signs only a
+ * query-version transaction, which can never be submitted.
+ */
+export const handleReviewArgentRecovery = async (
+  deps: AccountSignabilityDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  if (!readTypeOnlyInput(message, "wallet.reviewArgentRecovery")) {
+    return { error: "invalid recovery review request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) return { error: context.error };
+  const { account } = context;
+  if (!("publicKeyX" in account) || !deps.runtimeRpc.reviewArgentRecovery) {
+    return { error: "account recovery unavailable" };
+  }
+  const rpcUrls = networkRpcUrls(
+    STARKNET_NETWORKS[context.networkId],
+    await deps.preferencesStore.read(),
+  );
+  const fee = await deps.runtimeRpc.reviewArgentRecovery({
+    account,
+    rpcUrls,
+    signHash: accountHashSigner(deps, account, context.vaultPassphrase),
+  });
+  return { accountId: account.id, delaySeconds: ARGENT_ESCAPE_DELAY_SECONDS, fee, ok: true };
+};
+
+/**
+ * Submits the reviewed Ready recovery step (trigger, or complete once ready).
+ * The reviewed fee bounds the transaction; the platform layer re-reads the
+ * escape state and the live class before anything is signed.
+ */
+export const handleRecoverArgentAccount = async (
+  deps: AccountSignabilityDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readFeeReviewInput(message, "wallet.recoverArgentAccount");
+  if (!input) return { error: "invalid account recovery request" };
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) return { error: context.error };
+  const { account } = context;
+  if (!("publicKeyX" in account) || !deps.runtimeRpc.submitArgentRecovery) {
+    return { error: "account recovery unavailable" };
+  }
+  const authorized = captureSessionAuthorization(deps.session);
+  const submitted = await deps.runtimeRpc.submitArgentRecovery({
+    account,
+    isAuthorized: authorized.isCurrent,
+    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+    rpcUrls: networkRpcUrls(
+      STARKNET_NETWORKS[context.networkId],
+      await deps.preferencesStore.read(),
+    ),
+    signHash: accountHashSigner(deps, account, context.vaultPassphrase),
+  });
+  return {
+    accountId: account.id,
+    ok: true,
+    pendingUntil: submitted.readyAt,
     transactionHash: submitted.transactionHash,
   };
 };

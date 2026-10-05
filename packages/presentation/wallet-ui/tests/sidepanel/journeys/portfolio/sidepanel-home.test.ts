@@ -420,8 +420,37 @@ describe("home read-only flag", () => {
     expect(markup).not.toContain('id="recover-account"');
   });
 
-  test("does not offer recovery for a restriction the phrase cannot lift", () => {
+  test("offers recovery for a Ready account with a guardian", () => {
     const markup = render({ readOnly: true, reason: "guardian" });
+    expect(markup).toContain('id="recover-account"');
+    expect(markup).toContain('data-recover-kind="argent"');
+    expect(markup).toContain("Recover account");
+  });
+
+  test("offers to complete a Ready guardian escape once it is ready", () => {
+    const markup = render({
+      readOnly: true,
+      reason: "guardian",
+      recovery: { delaySeconds: 604_800, pendingUntil: 1_900_000_000, stage: "ready" },
+    });
+    expect(markup).toContain("Complete recovery");
+    expect(markup).toContain('data-recover-kind="argent"');
+  });
+
+  test("shows the Ready unlock time and the guardian-cancel note while pending", () => {
+    const markup = render({
+      readOnly: true,
+      reason: "guardian",
+      recovery: { delaySeconds: 604_800, pendingUntil: 1_900_000_000, stage: "pending" },
+    });
+    expect(markup).toContain("Removing the guardian");
+    expect(markup).toContain("usable on 17/03/30 at 17h46 UTC");
+    expect(markup).toContain("Your guardian can still stop this");
+    expect(markup).not.toContain('id="recover-account"');
+  });
+
+  test("does not offer recovery for a restriction the phrase cannot lift", () => {
+    const markup = render({ readOnly: true, reason: "release" });
     expect(markup).toContain("Read only");
     expect(markup).not.toContain('id="recover-account"');
   });

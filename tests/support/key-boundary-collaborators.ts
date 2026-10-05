@@ -353,6 +353,15 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     async getBraavosRecoveryState() {
       return { delaySeconds: 345_600, pendingUntil: null };
     },
+    async reviewArgentRecovery() {
+      return { overallFee: "1", unit: "FRI" };
+    },
+    async submitArgentRecovery() {
+      return { readyAt: 1_000, transactionHash: "0x7ed" };
+    },
+    async getArgentRecoveryState() {
+      return { readyAt: null, status: "none" as const };
+    },
     async getNftOwner() {
       return account.address;
     },
