@@ -410,7 +410,11 @@
       "secp256r1": {
         "x": "0xae55311fe954f6e206ed49ce1375ea4b146c7cf70cd0260b8bbf58d494fa6370",
         "y": "0x5d906e0689ca1ca6e36da79e36dd0a3ebdcc6b654ac4a086a36facf2662b75ef"
-      }
+      },
+      "recoveryRequested": true,
+      "recoveryTx": "0x1706142958afa1a978e291cfa159aa22e12e5c72e13834644830fc0aff73564",
+      "usableAfterUnix": 1791552532,
+      "note": "2FA removal requested through the wallet's own recovery path (phrase-only); pending ~4 days, then signable. No real device to cancel."
     },
     "log": [
       "fee float 0x45511bc50fbae9994936b59a3a2796d40b06ce46b7e2d981f1cf4ef754aed2",
