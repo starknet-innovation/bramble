@@ -126,6 +126,12 @@ device.
    formally reviewed. No viewing key is logged or returned through a browser message.
 4. The SDK performs note discovery, transaction assembly, and proving. `USER_LINKAGE` warnings map
    to the Wallet API privacy-leak error; every other non-empty or malformed warning fails closed.
+   A simulation (`simulate: true`) is proved by the configured prover exactly like a real proof,
+   and its proof is then replaced by an empty one so it cannot be submitted. The wallet never
+   calls the SDK's own `simulate`: it sends the viewing-key-bearing `compile_actions` invocation
+   to the JSON-RPC node, which may be a user-set override. A simulation skips the final
+   pre-proof policy gate, since it produces nothing submittable, and counts against the prover's
+   rate limits and proving budget like any other proof.
 5. Before a dapp invoke approval appears, the wallet runs only public/pure action checks, rejects a
    deposit/withdraw correlation, and requests and freezes the relayer fee action and any typed
    data. It never discovers private balances, generates a proof, or signs before approval.

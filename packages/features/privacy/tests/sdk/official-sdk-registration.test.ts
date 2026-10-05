@@ -22,7 +22,7 @@ describe("official STRK20 SDK registration discovery", () => {
   test("discovers account registration using the SDK setup requirement enum", async () => {
     let requirement = 0;
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -49,7 +49,7 @@ describe("official STRK20 SDK registration discovery", () => {
     const sdk = runtime(() => ({
       build: (options: unknown) => {
         seen.push(options);
-        return builder(executeResult());
+        return builder();
       },
       async discoverNotes() {
         return { notes: new Map() };
@@ -75,7 +75,7 @@ describe("official STRK20 SDK registration discovery", () => {
     class Transfers {
       public readonly discoveryProvider = { requirement: 3 };
       public build() {
-        return builder(executeResult());
+        return builder();
       }
       public async discoverNotes() {
         return { notes: new Map() };
@@ -99,7 +99,7 @@ describe("official STRK20 SDK registration discovery", () => {
   test("reads a recipient from the pool, never from the setup requirement", async () => {
     const subject = "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -120,7 +120,7 @@ describe("official STRK20 SDK registration discovery", () => {
 
   test("fails closed when the pool cannot answer for a recipient", async () => {
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -146,7 +146,7 @@ describe("official STRK20 SDK registration discovery", () => {
 
   test("rejects negative and out-of-field pool registration keys", async () => {
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },

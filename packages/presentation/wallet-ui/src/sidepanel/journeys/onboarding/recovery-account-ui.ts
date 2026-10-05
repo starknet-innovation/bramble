@@ -27,6 +27,13 @@ type RecoveryAccountUiDeps = {
   readonly form: HTMLFormElement;
   readonly mnemonic: () => string;
   readonly networkId: () => string;
+  /**
+   * Runs after a successful restore, before the repaint, once the picker has
+   * been emptied. The in-wallet import uses it to wipe the typed phrase: its
+   * screen does not change on success, so the repaint would keep the words in
+   * plain inputs. First-run omits it; success there tears the screen down.
+   */
+  readonly onRestored?: () => void;
   readonly render: (status: WalletStatus) => Promise<void>;
   /** Overrides first-run `recoverAccounts` — the in-wallet seed import commits here. */
   readonly restore?: (
@@ -285,6 +292,19 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     restartOnIdle = false;
   };
 
+  // Drops every candidate and pick, and makes any scan still in flight discard
+  // its results. Callers set the status line; the gate follows the empty pick.
+  const reset = (): void => {
+    generation += 1;
+    candidates = [];
+    complete = false;
+    scanStatus = "";
+    selected.clear();
+    seen.clear();
+    if (result) result.textContent = "";
+    renderCandidates();
+  };
+
   retry?.addEventListener("click", () => void scan());
   deps.form
     .querySelector('[data-onboarding-step="recovery-accounts"] [data-onboarding-back]')
@@ -315,6 +335,15 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
           "success",
           restore,
         );
+        if (deps.onRestored) {
+          // Release busy first: it re-enables the button, and the reset's
+          // gate must be what disables it again over an empty pick.
+          buttonBusy(restore, false);
+          restartOnIdle = false;
+          reset();
+          if (status) status.textContent = "";
+          deps.onRestored();
+        }
         await deps.render(await deps.wallet.loadStatus());
       })
       .catch((error: unknown) => {
@@ -327,14 +356,8 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
 
   return {
     start() {
-      generation += 1;
-      candidates = [];
-      complete = false;
-      selected.clear();
-      seen.clear();
       if (status) status.textContent = "Searching every account type…";
-      if (result) result.textContent = "";
-      renderCandidates();
+      reset();
       if (scanning) restartOnIdle = true;
       else void scan();
     },

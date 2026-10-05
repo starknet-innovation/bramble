@@ -303,6 +303,13 @@ export const bindTokenDropdown = (deps: TokenDropdownDeps): void => {
 
   panel.addEventListener("keydown", (event) => {
     const key = (event as KeyboardEvent).key;
+    // Enter in the search field must never fall through to implicit submission
+    // of an enclosing form, which would act on the PREVIOUS selection (audit
+    // 248). Choosing is done on an option.
+    if (key === "Enter" && (event.target as Element | null)?.hasAttribute("data-token-search")) {
+      event.preventDefault();
+      return;
+    }
     if (key === "Escape") {
       event.preventDefault();
       close(true);

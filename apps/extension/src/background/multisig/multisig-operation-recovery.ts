@@ -7,9 +7,30 @@ import { verificationContext } from "@bramble/transactions/verify";
 import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { networkRpcUrls } from "../runtime/runtime-state";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { paidCounterparty, recordSubmittedActivity } from "../transactions/activity-recording";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import { normalizedArgentMultisigCalls } from "./multisig-inputs";
+
+/**
+ * Journals a broadcast Argent intent. A single-call payment records its payee
+ * as the counterparty so the recipient joins the paid-recipient trust set like
+ * an ERC20 send's (audit #163); the call set was already reviewed against the
+ * poisoning rule before it could be signed.
+ */
+export const recordSubmittedIntentActivity = (
+  deps: Pick<MultisigOpsDeps, "activity">,
+  intent: ArgentMultisigSigningIntent,
+  networkId: ArgentMultisigRecord["networkId"],
+  transactionHash: string,
+): Promise<void> =>
+  recordSubmittedActivity(deps.activity, {
+    accountId: intent.accountId,
+    ...paidCounterparty(normalizedArgentMultisigCalls(intent.prepared.calls)),
+    hash: transactionHash,
+    kind: "invoke",
+    networkId,
+    summary: intent.summary,
+  });
 
 /**
  * Outcome of checking an exact deterministic submit hash.
@@ -68,13 +89,12 @@ export const recoverSubmittedArgentIntent = async (
     owner: allowanceOwner(record),
     store: deps.allowanceStore,
   });
-  await recordSubmittedActivity(deps.activity, {
-    accountId: intent.accountId,
-    hash: intent.prepared.transactionHash,
-    kind: "invoke",
-    networkId: record.networkId,
-    summary: intent.summary,
-  });
+  await recordSubmittedIntentActivity(
+    deps,
+    intent,
+    record.networkId,
+    intent.prepared.transactionHash,
+  );
   return { intent: recovered, kind: "submitted" };
 };
 

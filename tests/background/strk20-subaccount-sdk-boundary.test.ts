@@ -24,7 +24,6 @@ import { bindStrk20ActionsToOrigin } from "../../apps/extension/src/background/p
 import {
   STRK20_SDK_CONTEXT as context,
   executeResult,
-  STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
   STRK20_SDK_TOKEN as token,
 } from "../../packages/features/privacy/tests/support/official-sdk";
@@ -71,13 +70,6 @@ const sdkFor = (seen: bigint[]): PrivacySdkRuntime => ({
     const self = {
       createProofInvocation: async () => ({ warnings: [] }),
       invoke: () => self,
-      simulate: async () => ({
-        ...executeResult(),
-        callAndProof: {
-          call: { calldata: ["0x1"], contractAddress: poolAddress, entrypoint: "apply_actions" },
-          proof: { data: "", output: [], proofFacts: [] },
-        },
-      }),
       subaccounts(dappName: string) {
         const encoded = encodeDappName(dappName);
         seen.push(encoded);

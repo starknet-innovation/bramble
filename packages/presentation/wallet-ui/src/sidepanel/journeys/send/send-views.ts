@@ -213,7 +213,7 @@ const successStage = (copy: TransferModeCopy): string => `
 const failureStage = (): string => `
   <section class="send-outcome send-failure" id="send-failure" role="alert" aria-live="assertive" hidden>
     <span class="send-outcome-mark" aria-hidden="true">
-      <svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg>
+      <svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /><path class="send-unknown-mark" d="M28 17v13m0 8v1" /></svg>
     </span>
     <div class="send-outcome-copy">
       <h2 id="send-failure-title">${escapeHtml(TRANSFER_FAILURE_TITLE)}</h2>
@@ -224,6 +224,7 @@ const failureStage = (): string => `
       ${outcomeHashRow("send-failure-hash")}
     </div>
     <div class="send-actions">
+      ${button({ attributes: { hidden: true, id: "send-failure-activity" }, icon: "activity", label: "View in Activity tab" })}
       ${button({ attributes: { id: "send-retry" }, label: "Try again" })}
       ${button({ attributes: { id: "send-failure-edit" }, label: "Edit transaction", variant: "secondary" })}
     </div>

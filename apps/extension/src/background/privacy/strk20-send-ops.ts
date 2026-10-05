@@ -27,7 +27,7 @@ import {
 } from "@bramble/wallet-model/networks";
 import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
 import { createApprovalContext } from "../approvals/approval-context";
-import { activeAccountContext } from "../runtime/runtime-state";
+import { observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 
 import { strk20ServiceForRuntime } from "./strk20-account-context";
@@ -52,10 +52,13 @@ const recipientStatus = async (
   if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
     return { error: "Enter a valid Starknet address" };
   }
-  // User-initiated: this probe is debounced behind the recipient the user is
-  // typing, so it only ever runs because the user acted.
+  // The Send form re-checks the recipient it already holds every time a repaint
+  // rebinds it, so ambient price, balance or wallet-event changes re-issue this
+  // probe with no user input. It reads only the pool's public registration
+  // state, so it observes the unlock window and never extends it — otherwise a
+  // panel left on Send would keep the wallet unlocked forever.
   const context = await resolvePrivacyContext(deps, {
-    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    active: await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
     tokenId: input.tokenId,
   });
   if ("error" in context) {

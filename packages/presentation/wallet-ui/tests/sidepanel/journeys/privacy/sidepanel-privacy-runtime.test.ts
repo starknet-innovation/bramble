@@ -366,6 +366,36 @@ describe("privacy runtime client", () => {
       ).rejects.toThrow("Unshielding preparation failed");
     });
 
+    test("keeps a valid relay fee token's display metadata and refuses a malformed one", async () => {
+      const asset = { decimals: 6, symbol: "USDC" };
+      const fee = { amount: "0x2", recipient: "0x3", token: "0x4" };
+      const withAsset = { ...relayed("transfer"), relayFee: { ...fee, asset } };
+      await expect(
+        createPrivacyRuntimeClient(async () => ({
+          ok: true,
+          strk20Preparation: withAsset,
+        })).preparePrivacyTransfer("SN_MAIN:ETH:0x456", RECIPIENT, "1.25"),
+      ).resolves.toMatchObject({ relayFee: { asset } });
+
+      for (const malformed of [
+        { decimals: -1, symbol: "USDC" },
+        { decimals: 6, symbol: "" },
+        { decimals: 6, extra: true, symbol: "USDC" },
+        "USDC",
+      ]) {
+        const client = createPrivacyRuntimeClient(async () => ({
+          ok: true,
+          strk20Preparation: {
+            ...relayed("transfer"),
+            relayFee: { ...fee, asset: malformed },
+          },
+        }));
+        await expect(
+          client.preparePrivacyTransfer("SN_MAIN:ETH:0x456", RECIPIENT, "1.25"),
+        ).rejects.toThrow("Private send preparation failed");
+      }
+    });
+
     test("reads a recipient's registration and rejects any other answer", async () => {
       const seen: unknown[] = [];
       const registered = createPrivacyRuntimeClient(async (message) => {

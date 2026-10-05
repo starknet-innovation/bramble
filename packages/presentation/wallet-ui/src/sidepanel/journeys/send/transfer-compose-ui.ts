@@ -39,6 +39,17 @@ const setSendFormValue = (form: HTMLFormElement, name: string, value: string): v
   if (input) input.value = value;
 };
 
+/**
+ * Clears the chosen recipient when the user steps back to the recipient stage,
+ * so no review can be built from a recipient the current step no longer shows
+ * (audit 248). A scoped-intent recipient is cleared too: going Back is an
+ * explicit request to choose again.
+ */
+export const clearSendRecipient = (form: HTMLFormElement): void => {
+  setSendFormValue(form, "recipient", "");
+  setSendFormValue(form, "recipientLabel", "");
+};
+
 const copySelectedGlyph = (form: HTMLFormElement, source: Element | null): void => {
   const target = form.querySelector<HTMLElement>("#send-selected-token-glyph");
   if (!target || !source) return;
@@ -239,7 +250,11 @@ const bindRecipientControls = (
       choose(row.dataset["sendRecipient"] ?? "", row.dataset["sendRecipientLabel"] ?? ""),
     );
   });
-  continueButton?.addEventListener("click", () => {
+  // Commits the typed address as the recipient. Shared by "Continue with
+  // address" and Enter in the search field: without the latter, Enter fell
+  // through to implicit form submission and reviewed the PREVIOUSLY chosen
+  // hidden recipient, not the address on screen (audit 248).
+  const commitTyped = (): void => {
     const address = search?.value.trim() ?? "";
     if (recipientFieldError(address)) {
       search?.focus();
@@ -248,6 +263,13 @@ const bindRecipientControls = (
     // A pasted address that is already on the screen reads as the row it
     // matches, the same as tapping that row would.
     choose(address, knownRecipientLabel(form, address) || accountLabel(address));
+  };
+  continueButton?.addEventListener("click", commitTyped);
+  search?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitTyped();
+    }
   });
   updateSearch();
 };

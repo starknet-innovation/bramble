@@ -78,6 +78,7 @@ const mount = (
     { account: readyIdleAccount, deployed: false, funded: false },
   ],
   discover?: SidepanelWallet["discoverRecoveryAccounts"],
+  hooks: { readonly onRender?: () => void } = {},
 ) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
@@ -94,9 +95,16 @@ const mount = (
           ok: true as const,
         })),
     loadStatus: () => Promise.resolve(status),
+    recoverAccounts: () => Promise.resolve([brambleAccount]),
     validateMnemonic: () => Promise.resolve(true),
   } as unknown as SidepanelWallet;
-  bindOnboarding({ app, render: async () => undefined, wallet });
+  bindOnboarding({
+    app,
+    render: async () => {
+      hooks.onRender?.();
+    },
+    wallet,
+  });
   return app;
 };
 
@@ -349,5 +357,22 @@ describe("recovery scan Ready gate", () => {
     unchecked?.click();
     expect(unchecked?.checked).toBe(true);
     expect(boxes.filter((box) => box?.checked).length).toBe(RECOVERY_SCAN_LIMITS.maxSelections);
+  });
+
+  test("a first-run restore hands off to the repaint without emptying the picker", async () => {
+    // The in-wallet import wipes its form on success (audit #250); first-run
+    // passes no hook, because success there replaces the whole screen.
+    let renders = 0;
+    const app = mount(undefined, undefined, { onRender: () => (renders += 1) });
+    await reachPicker(app);
+    const picked = (): number =>
+      app.querySelectorAll<HTMLInputElement>("input.select-check:checked").length;
+    expect(picked()).toBe(1);
+    click(app, "#recover-accounts-button");
+    await tick();
+    await tick();
+    expect(renders).toBe(1);
+    expect(picked()).toBe(1);
+    expect(app.querySelector("#recovery-accounts-result")?.textContent).toContain("Restoring");
   });
 });

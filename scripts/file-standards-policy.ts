@@ -10,6 +10,16 @@
  */
 
 /**
+ * What counts as naming secret material, kept beside the exemption list it is
+ * paired with so a test can pin it. The session credential accessors and the
+ * vault decrypt count too, so renaming the local that holds their result
+ * cannot carry a vault read out of the approved boundary modules (audit #163:
+ * the trust-set vault read must stay inside those modules).
+ */
+export const SECRET_MATERIAL_PATTERN =
+  /\b(?:accountSecrets|getPassphrase|mnemonic|mnemonicPassphrase|passphrase|peekPassphrase|privateKey|readVault|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
+
+/**
  * Modules permitted to name secret material. Each one sits on a key, vault, or
  * signing boundary where the field names are unavoidable; everywhere else,
  * naming them is the signal that secret material has leaked out of its
@@ -33,6 +43,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // vault credential only to re-check a claimed approval's granted account
   // against the vault at decision time; never logs, persists, or returns it.
   "apps/extension/src/background/approvals/approval-claim-context.ts",
+  // Claim-time session view: wraps the session's credential accessors so a
+  // deferred executor cannot adopt a later unlock; it reads no value itself.
+  "apps/extension/src/background/approvals/approval-session.ts",
   "apps/extension/src/background/provider/add-chain-ops.ts",
   "apps/extension/src/background/approvals/approval-decisions.ts",
   "apps/extension/src/background/transactions/chain-ops.ts",

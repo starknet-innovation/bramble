@@ -10,6 +10,7 @@
  * sidepanel-runtime-client.test.ts.
  */
 import { describe, expect, test } from "bun:test";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { createSidepanelRuntime } from "../../../src/sidepanel/runtime/runtime";
 import { unavailableStatus } from "../../../src/sidepanel/runtime/runtime-status";
 import {
@@ -86,6 +87,13 @@ describe("NFT wrappers", () => {
     await expect(runtimeReturning({}).addNft("0x1", "1", "SN_MAIN", "L")).rejects.toThrow(
       "add NFT failed",
     );
+  });
+
+  test("removeToken sends the token id, resolves on preferences, throws otherwise", async () => {
+    const { sent, wallet } = captureRuntime(preferencesResponse);
+    await expect(wallet.removeToken("SN_MAIN:PRZ:0xbad")).resolves.toBeUndefined();
+    expect(sent[0]).toEqual({ tokenId: "SN_MAIN:PRZ:0xbad", type: "wallet.removeToken" });
+    await expect(runtimeReturning({}).removeToken("id-1")).rejects.toThrow("remove token failed");
   });
 
   test("removeNft resolves on preferences and throws otherwise", async () => {
@@ -283,6 +291,21 @@ describe("transfers and review", () => {
     await expect(runtimeReturning({}).submitTransfer(account.id, "t", "0x1", "1")).rejects.toThrow(
       "transfer failed",
     );
+  });
+
+  // Audit #173: the typed refusal must survive the boundary, or a lost reply
+  // turns back into "transfer failed" and the screen says "not sent".
+  test("submitTransfer rejects a lost-reply refusal as SubmissionUnknownError", async () => {
+    const error = await runtimeReturning({
+      error: "status unknown",
+      submissionUnknown: true,
+      transactionHash: "0x5eed",
+    })
+      .submitTransfer(account.id, "t", "0x1", "1")
+      .catch((rejection: unknown) => rejection);
+    expect(error).toBeInstanceOf(SubmissionUnknownError);
+    expect((error as SubmissionUnknownError).transactionHash).toBe("0x5eed");
+    expect((error as Error).message).toBe("status unknown");
   });
 });
 

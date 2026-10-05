@@ -256,17 +256,18 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [...input.summaries],
       });
     },
-    requestSignTypedData({ context, origin, summary, typedData }) {
+    requestSignTypedData({ context, origin, review, summary, typedData }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
       return enqueue({
         context: { ...context },
+        ...(review ? { flags: review.flags.map((flag) => ({ ...flag })) } : {}),
         id: crypto.randomUUID(),
         kind: "sign-typed-data",
         origin,
-        summaries: [summary],
+        summaries: [summary, ...(review?.summaries ?? [])],
         typedData: cloneApprovalValue(typedData),
       });
     },

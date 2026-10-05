@@ -11,17 +11,11 @@
  */
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/avnu-route";
-import {
-  asFelt,
-  canonicalFelt,
-  type StarknetNetworkId,
-  sameFelt,
-  uint256Felts,
-} from "@bramble/wallet-model/networks";
-import type { AddressBookEntry, TokenConfig } from "@bramble/wallet-model/preferences";
+import { asFelt, canonicalFelt, sameFelt, uint256Felts } from "@bramble/wallet-model/networks";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { Call } from "starknet";
+import type { VerificationContext } from "./verification-context";
 import {
   APPROVE_ENTRYPOINTS,
   BATCH_TRANSFER_FROM_ENTRYPOINTS,
@@ -60,59 +54,9 @@ export type DecodedCall = {
 };
 
 /**
- * Wallet context the verifier checks calls against: the acting account, the
- * contacts and tokens it trusts, and the NFT collections it watches. The
- * collection list is what lets an ERC721 `approve(to, token_id)` be told apart
- * from an ERC20 `approve(spender, amount)` — the two are indistinguishable by
- * calldata alone.
+ * Re-exported verifier context so callers keep importing it from this module.
  */
-export type VerificationContext = {
-  readonly account: Pick<AccountRef, "address" | "networkId">;
-  readonly addressBook: readonly AddressBookEntry[];
-  /** Wallet-pinned application contracts that should not raise an unknown-contract warning. */
-  readonly knownContracts?: readonly string[];
-  /**
-   * Collections this account watches. Optional because a context can be built
-   * where the wallet holds no NFT knowledge at all; absent means "no collection
-   * is known", under which an ERC721 `approve` is indistinguishable from an
-   * ERC20 one and is described in ERC20 terms. Every production context comes
-   * from {@link verificationContext}, which always fills it in.
-   */
-  readonly nftContracts?: readonly string[];
-  readonly tokens: readonly TokenConfig[];
-};
-
-/**
- * Builds the wallet context the verifier checks calls against, scoped to the
- * account's network.
- *
- * This is the single definition of "which contacts, tokens, and collections does
- * this account trust". It lives beside the verifier rather than in one product
- * line's handler so the ERC20 send, the NFT send, the allowance flows, the swap,
- * the dapp invoke, and the privacy pool routes all scope the trusted set the
- * same way; a fourth local copy of these filters is how a contact saved on
- * another network once made a foreign recipient read as trusted. Pure — it only
- * filters the preferences it is handed and never reads storage itself.
- */
-export const verificationContext = (
-  account: Pick<AccountRef, "address" | "networkId">,
-  preferences: {
-    readonly addressBook: readonly AddressBookEntry[];
-    // Structurally typed rather than importing `WatchedNft`: the watched-NFT
-    // record lives in the portfolio package, which the transactions package
-    // does not depend on. Only these two fields are read, and a `WatchedNft`
-    // still satisfies the shape at every call site.
-    readonly nfts?: readonly { readonly contract: string; readonly networkId: StarknetNetworkId }[];
-    readonly tokens: readonly TokenConfig[];
-  },
-): VerificationContext => ({
-  account,
-  addressBook: preferences.addressBook.filter((entry) => entry.networkId === account.networkId),
-  nftContracts: (preferences.nfts ?? [])
-    .filter((nft) => nft.networkId === account.networkId)
-    .map((nft) => nft.contract),
-  tokens: preferences.tokens.filter((token) => token.networkId === account.networkId),
-});
+export { type VerificationContext, verificationContext } from "./verification-context";
 
 /**
  * Abbreviates an address for display as `0x1234…abcd`.
@@ -448,6 +392,13 @@ const CALL_DECODERS: Readonly<Record<string, CallDecoder>> = {
   [AVNU_MULTI_ROUTE_SWAP]: decodeAvnuSwapCall,
   transfer: decodeTransferOrApproveCall,
 };
+
+/**
+ * Every entrypoint name the decoder table recognizes, derived from its keys so a
+ * spelling added to ./verify-selectors reaches selector-hash lookups (for
+ * example the SNIP-9 OutsideExecution reader) with no second edit.
+ */
+export const DECODED_ENTRYPOINTS: readonly string[] = Object.keys(CALL_DECODERS);
 
 /**
  * Decodes one call against the wallet context. Total: an unrecognized selector

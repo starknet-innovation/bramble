@@ -20,9 +20,12 @@ const WBTC = "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac
 const networkId = "SN_MAIN" as const;
 const POOL_FEE_6_STRK = 6_000_000_000_000_000_000n;
 
-const priceService = (prices: Readonly<Record<string, number>>): PriceService => ({
+const priceService = (
+  prices: Readonly<Record<string, number>>,
+  snapshot: Pick<TokenPrices, "asOf" | "stale"> = { asOf: 1_000, stale: false },
+): PriceService => ({
   async getPrices(): Promise<TokenPrices> {
-    return { asOf: 1_000, changes: {}, currency: "usd", prices, stale: false };
+    return { ...snapshot, changes: {}, currency: "usd", prices };
   },
   async getTokenChart() {
     return { currency: "usd", points: [] };
@@ -70,6 +73,21 @@ describe("createStrk20FeeReference", () => {
     ["a price is not finite", { [STRK_TOKEN_ADDRESS]: 0.2, [USDC]: Number.NaN }],
   ])("declines to price when %s", async (_case, prices) => {
     const reference = createStrk20FeeReference(priceService(prices));
+
+    await expect(
+      reference({ feeToken: USDC, networkId, poolFeeFri: POOL_FEE_6_STRK }),
+    ).resolves.toBeNull();
+  });
+
+  // #357: an unreachable feed serves its last-known-good snapshot as `stale`
+  // with no age limit, and an old high STRK rate would raise the ceiling.
+  test.each([
+    ["the feed served a stale last-known-good snapshot", { asOf: 1_000, stale: true }],
+    ["the snapshot carries no capture time", { asOf: null, stale: false }],
+  ])("declines to price when %s", async (_case, snapshot) => {
+    const reference = createStrk20FeeReference(
+      priceService({ [STRK_TOKEN_ADDRESS]: 0.2, [USDC]: 1 }, snapshot),
+    );
 
     await expect(
       reference({ feeToken: USDC, networkId, poolFeeFri: POOL_FEE_6_STRK }),

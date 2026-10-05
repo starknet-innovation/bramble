@@ -9,12 +9,14 @@ import { isSha256Digest } from "@bramble/core/ids";
 import type { PaymasterAuthorizationReview } from "@bramble/privacy/paymaster-typed-data";
 import type {
   PreparedStrk20AccountSubmission,
+  Strk20FeeAsset,
   Strk20SubmissionPlan,
 } from "@bramble/privacy/service";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { ApprovalContext } from "../approvals/approval-context";
+import { strk20FeeAssetFor } from "./strk20-fee-reference";
 
 const MAX_PREPARATIONS = 20;
 
@@ -112,6 +114,12 @@ export type Strk20WalletPreparationReview = {
   readonly route: "private-relay" | "public-account";
   readonly relayFee?: {
     readonly amount: string;
+    /**
+     * Registry display metadata for the fee token, absent for a token the
+     * registry does not describe. The relay fee may be converted out of STRK,
+     * so the panel must not format `amount` as STRK without it.
+     */
+    readonly asset?: Strk20FeeAsset;
     readonly recipient: string;
     readonly token: string;
   };
@@ -173,6 +181,19 @@ const reviewedNetworkFee = (
     ? { networkFee: preparation.networkFee }
     : {};
 
+const relayFeeReview = (
+  token: TokenConfig,
+  plan: Exclude<Strk20SubmissionPlan, { readonly mode: "account" }>,
+): NonNullable<Strk20WalletPreparationReview["relayFee"]> => {
+  const asset = strk20FeeAssetFor(token.networkId, plan);
+  return {
+    amount: plan.feeAction.amount,
+    ...(asset ? { asset } : {}),
+    recipient: plan.feeAction.recipient,
+    token: plan.feeAction.token,
+  };
+};
+
 const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparationReview => ({
   ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
   ...(preparation.kind !== "register" &&
@@ -196,13 +217,7 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
       ? "private-relay"
       : "public-account",
   ...(preparation.kind !== "register" && preparation.plan.mode !== "account"
-    ? {
-        relayFee: {
-          amount: preparation.plan.feeAction.amount,
-          recipient: preparation.plan.feeAction.recipient,
-          token: preparation.plan.feeAction.token,
-        },
-      }
+    ? { relayFee: relayFeeReview(preparation.token, preparation.plan) }
     : {}),
   summaries: [...preparation.summaries],
   symbol: preparation.token.symbol,

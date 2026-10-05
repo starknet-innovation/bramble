@@ -67,6 +67,12 @@ export const SEND_OUTCOME_STYLES = `
   }
   .send-success .send-outcome-mark { color: var(--bramble-positive); }
   .send-failure .send-outcome-mark { color: var(--bramble-danger); }
+  /* An unknown outcome is not a failure: warning colour and a "!" mark, never
+     the red cross that invites a retry (mc-wallet issue 382). */
+  .send-failure[data-severity="warning"] .send-outcome-mark { color: var(--bramble-warning); }
+  .send-unknown-mark,
+  .send-failure[data-severity="warning"] .send-failure-mark { display: none; }
+  .send-failure[data-severity="warning"] .send-unknown-mark { display: inline; }
   .send-failure-ring {
     animation: send-draw 420ms ${EASE.out} forwards;
     stroke-dasharray: 158;
@@ -119,8 +125,9 @@ export const SEND_OUTCOME_STYLES = `
     font-weight: ${WEIGHT.semibold};
   }
   /* One shrinkable column: the receipt's unbroken hash must ellipsize inside
-     the panel rather than widen the grid track past it. */
-  .send-success { grid-template-columns: minmax(0, 1fr); }
+     the panel rather than widen the grid track past it. The shared receipt
+     turns into a failure in place, so the failure tone keeps the column. */
+  .send-success, .send-failure { grid-template-columns: minmax(0, 1fr); }
   .send-outcome .send-actions { width: 100%; }
   .send-receipt {
     background: var(--bramble-panel);
@@ -145,8 +152,22 @@ export const SEND_OUTCOME_STYLES = `
     padding-top: ${SPACE.md};
     width: 100%;
   }
-  .send-receipt-tx .send-outcome-hash { flex: 0 1 auto; min-width: 0; }
+  .send-receipt-tx .send-receipt-address { flex: 0 1 auto; }
   .send-receipt-label { color: var(--bramble-muted); flex: none; font-size: ${TYPE.caption.size}; }
+  .send-explorer-link {
+    align-items: center;
+    color: var(--bramble-accent);
+    display: inline-flex;
+    font-weight: ${WEIGHT.medium};
+    gap: ${SPACE.xs};
+    justify-self: start;
+    text-decoration: none;
+  }
+  .send-explorer-link[hidden] { display: none; }
+  .send-explorer-link .icon { height: 16px; width: 16px; }
+  @media (hover: hover) and (pointer: fine) {
+    .send-explorer-link:hover { text-decoration: underline; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .send-failure-ring, .send-failure-mark { animation: none; stroke-dashoffset: 0; }

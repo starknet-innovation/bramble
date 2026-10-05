@@ -150,11 +150,13 @@ const activityScenario: WalletScenario = {
   views: ["activity"],
 };
 
-type NftMode = "blocked" | "review" | "submitted";
+// `failed` submits like `submitted`, but the fixture chain reverts the transfer.
+type NftMode = "blocked" | "failed" | "review" | "submitted";
 
 const prepareNft =
   (mode: NftMode) =>
   async (context: FrameContext): Promise<void> => {
+    const submits = mode === "submitted" || mode === "failed";
     const wallet = createSidepanelRuntime({
       sendMessage: async (message) => {
         const type = messageType(message);
@@ -178,8 +180,13 @@ const prepareNft =
             },
           };
         }
-        if (type === "wallet.transferNft" && mode === "submitted") {
+        if (type === "wallet.transferNft" && submits) {
           return { ok: true, transactionHash: NFT_HASH };
+        }
+        // The receipt reads the network off the live status: without it the
+        // hash has no explorer link, which is how a reader looks a failure up.
+        if (type === "wallet.status") {
+          return statusFor();
         }
         if (type === "wallet.activity") {
           return {
@@ -189,7 +196,7 @@ const prepareNft =
                 hash: NFT_HASH,
                 kind: "transfer" as const,
                 networkId: "SN_MAIN" as const,
-                status: "preconfirmed" as const,
+                status: mode === "failed" ? ("reverted" as const) : ("preconfirmed" as const),
                 submittedAt: 1,
                 summary: "Transfer Bramble Test Collection #342",
               },
@@ -205,6 +212,8 @@ const prepareNft =
       app: context.app,
       // The lab has no wall clock to spend: the fixture chain answers at once.
       confirmationDelaysMs: [0],
+      // The receipt's ways off report to the event log, as Swap's do.
+      navigate: (view) => context.emit({ detail: `navigate ${view}`, kind: "state" }),
       openDetail: () => undefined,
       render: async () => undefined,
       wallet,
@@ -216,7 +225,7 @@ const prepareNft =
     }
     form.requestSubmit();
     await nextTurn();
-    if (mode === "submitted") {
+    if (submits) {
       form.requestSubmit();
       await nextTurn();
       await nextTurn();
@@ -290,15 +299,27 @@ const nftScenario: WalletScenario = {
     },
     {
       content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      // The id predates the receipt waiting for the chain; the fixture chain
+      // confirms at once, so the checkpoint is the confirmed receipt.
       id: "submitted",
-      label: "Transfer submitted",
-      narrative: "Confirmation returns a transaction hash and never bypasses review.",
+      label: "Transfer complete",
+      narrative:
+        "Reached only through the review: once the chain confirms the transfer, the receipt says it is complete, where the collectible went, and the hash.",
       prepare: prepareNft("submitted"),
-      state: { review: "passed", transactionHash: NFT_HASH },
+      state: { chain: "preconfirmed", review: "passed", transactionHash: NFT_HASH },
+    },
+    {
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      id: "failed",
+      label: "Transfer failed",
+      narrative:
+        'A transfer the chain reverts ends on the failure, the chain\'s reason, and the hash — never on "Transfer complete".',
+      prepare: prepareNft("failed"),
+      state: { chain: "reverted", review: "passed", transactionHash: NFT_HASH },
     },
   ],
   description:
-    "NFT metadata arrival, gallery and detail quality, guarded transfer review, blocking, and submission.",
+    "NFT metadata arrival, gallery and detail quality, guarded transfer review, blocking, submission, and a reverted transfer.",
   id: "nft",
   surface: "sidepanel",
   title: "NFT loading and send",

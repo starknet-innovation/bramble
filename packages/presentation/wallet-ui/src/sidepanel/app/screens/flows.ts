@@ -56,7 +56,7 @@ import {
 } from "../../journeys/settings/settings-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
-import { outcomeReceiptActions, outcomeReceiptSection } from "../../shared/outcome-receipt";
+import { outcomeReceiptSection } from "../../shared/outcome-receipt";
 import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
@@ -134,7 +134,7 @@ const deployAccountFlow = (
               })}
               <p id="deploy-result" role="status"></p>
             </section>
-            ${outcomeReceiptSection("deploy-success", outcomeReceiptActions("deploy-view-activity"))}`
+            ${outcomeReceiptSection("deploy-success")}`
           : noAccountEmpty(status)
       }
     </section>`,
@@ -151,6 +151,7 @@ export const importPhraseFlow = (status: WalletStatus): string =>
   flowScreen(
     "import-phrase",
     `<section class="section">
+      <p class="review-flag" role="note">Anyone with this phrase controls its accounts.</p>
       <form id="import-phrase-form" class="stack" novalidate>
         <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
         <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
@@ -181,6 +182,7 @@ export const importKeyFlow = (status: WalletStatus): string =>
   flowScreen(
     "import-key",
     `<section class="section">
+      <p class="review-flag" role="note">Anyone with this key controls the account.</p>
       <form id="import-key-form" class="stack">
         ${selectField({
           hint: "Choose the contract that already owns this key. A different choice derives a different address.",

@@ -84,15 +84,17 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "wallet.loadWatchedNfts": "wallet.loadWatchedNfts",
 };
 
-// The two ambient readers that live outside hydration: the always-on refresh in
+// The ambient readers that live outside hydration: the always-on refresh in
 // the panel lifecycle (status, then the queued failure notices that
-// journeys/approvals/tx-alerts-ui.ts drains behind it), and the three-second
+// journeys/approvals/tx-alerts-ui.ts drains behind it), the three-second
 // disclosure poll journeys/privacy/privacy-pending-poll.ts runs while a
-// registration settles.
+// registration settles, and the private-recipient check the Send form re-sends
+// on every repaint that rebinds it (journeys/send/transfer-ui.ts `route()`).
 const POLLED_OUTSIDE_HYDRATION: readonly string[] = [
   "wallet.status",
   "wallet.transactionAlerts",
   "wallet.strk20State",
+  "wallet.strk20RecipientStatus",
 ];
 
 const AMBIENT_MESSAGES: readonly string[] = [
@@ -240,6 +242,22 @@ describe("panel polling cannot hold the wallet unlocked", () => {
       }
     }
 
+    fresh.setNow(EXPIRES_AT + 1);
+    expect(fresh.session.isUnlocked()).toBe(false);
+  });
+
+  test("a Send form re-checking its private recipient past the TTL still locks", async () => {
+    // Sherlock #176: each repaint of Send compose with a private destination
+    // rebinds the form, which re-sends the recipient check. Those re-checks must
+    // never renew the window, and the check keeps answering while unlocked.
+    const fresh = await makeProbe();
+    let renewals = 0;
+    for (let at = UNLOCKED_AT; at < EXPIRES_AT; at += TTL_MS / 4) {
+      fresh.setNow(at);
+      renewals += (await fresh.drive("wallet.strk20RecipientStatus")).renewals;
+    }
+
+    expect(renewals).toBe(0);
     fresh.setNow(EXPIRES_AT + 1);
     expect(fresh.session.isUnlocked()).toBe(false);
   });

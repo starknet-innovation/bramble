@@ -59,14 +59,16 @@ export const readAddStarknetChainInput = (
  * are trimmed here as well as in the bridge reader: this lane also accepts a
  * chain crossed straight from a runtime message, and the store should hold the
  * same canonical text either way.
+ *
+ * Only the chain id, labels, and the first RPC URL (the one the approval card
+ * shows) are kept. Nothing reads the other lists, and storing them let a dapp
+ * fill the preferences record (Sherlock audit 153).
  */
 const toCustomNetwork = (chain: ProviderChain): CustomNetwork => ({
   chainId: chain.chainId,
   id: chain.id.trim(),
   name: chain.chainName.trim(),
-  ...(chain.rpcUrls === undefined ? {} : { rpcUrls: chain.rpcUrls }),
-  ...(chain.blockExplorerUrls === undefined ? {} : { blockExplorerUrls: chain.blockExplorerUrls }),
-  ...(chain.iconUrls === undefined ? {} : { iconUrls: chain.iconUrls }),
+  ...(chain.rpcUrls?.[0] === undefined ? {} : { rpcUrls: [chain.rpcUrls[0]] }),
 });
 
 /**

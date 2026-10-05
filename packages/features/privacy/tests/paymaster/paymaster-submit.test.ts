@@ -33,6 +33,7 @@ describe("STRK20 paymaster submission boundary", () => {
         requests.push(JSON.parse(String(init?.body)));
         return response({ transaction_hash: "0x123" });
       },
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
@@ -65,6 +66,7 @@ describe("STRK20 paymaster submission boundary", () => {
         feeToken = body.params.parameters.fee_mode.pool_fee_token;
         return response({ transaction_hash: "0x123" });
       },
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         feeAction: { amount: "0x5", recipient: "0x4", token: USDC, type: "withdraw" },
@@ -90,6 +92,7 @@ describe("STRK20 paymaster submission boundary", () => {
           contacted = true;
           return response({ transaction_hash: "0x123" });
         },
+        isAuthorized: () => true,
         nowSeconds: 2,
         plan: { feeAction: { amount: "0x5", recipient: "0x4", token: USDC, type: "withdraw" } },
         proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
@@ -113,6 +116,7 @@ describe("STRK20 paymaster submission boundary", () => {
         submitted = JSON.parse(String(init?.body));
         return response({ transaction_hash: "0x123" });
       },
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         authorization: {
@@ -167,6 +171,7 @@ describe("STRK20 paymaster submission boundary", () => {
             submitted = true;
             return response({ transaction_hash: "0x123" });
           },
+          isAuthorized: () => true,
           nowSeconds: 2,
           plan,
           proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
@@ -193,6 +198,7 @@ describe("STRK20 paymaster submission boundary", () => {
           submitted = true;
           return response({ transaction_hash: "0x123" });
         },
+        isAuthorized: () => true,
         nowSeconds: 250,
         plan: {
           authorization: {
@@ -233,6 +239,7 @@ describe("STRK20 paymaster submission boundary", () => {
       call,
       config,
       http,
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
@@ -354,6 +361,7 @@ describe("STRK20 paymaster submission boundary", () => {
           }),
           { status: 200 },
         ),
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },

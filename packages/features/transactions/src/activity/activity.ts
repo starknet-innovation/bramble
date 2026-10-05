@@ -109,6 +109,21 @@ export type ActivityEntry = {
    * finds the transaction, so ordinary RPC noise never accumulates.
    */
   readonly notFoundCount?: number;
+  /**
+   * Provenance: `"wallet"` only on rows this wallet recorded for a transaction
+   * it submitted itself (see the background's `recordSubmittedActivity`). Rows
+   * discovered from chain history or an explorer never carry it, so a
+   * third-party event that names this account cannot pose as a payment the
+   * user made. Absent on legacy rows, which are treated as unknown origin.
+   */
+  readonly origin?: "wallet";
+  /**
+   * True once a status read returned a real finality for this hash. Only a
+   * transaction the wallet has seen can be judged gone after repeated
+   * not-found answers; an unseen one stays pending until its observation
+   * window lapses.
+   */
+  readonly seenOnChain?: boolean;
   readonly status: ActivityStatus;
   readonly submittedAt: number;
   readonly summary: string;
@@ -124,6 +139,7 @@ export type ActivityOutcome = {
   readonly failureNotice?: "pending";
   readonly finalizedOnL1?: boolean;
   readonly notFoundCount?: number;
+  readonly seenOnChain?: boolean;
   readonly status: ActivityStatus;
 };
 
@@ -153,7 +169,7 @@ export type ActivityLog = {
   readonly record: (
     entry: Omit<
       ActivityEntry,
-      "failureNotice" | "finalizedOnL1" | "notFoundCount" | "status" | "submittedAt"
+      "failureNotice" | "finalizedOnL1" | "notFoundCount" | "seenOnChain" | "status" | "submittedAt"
     >,
   ) => Promise<void>;
   /**
@@ -234,6 +250,8 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "kind",
     "networkId",
     "notFoundCount",
+    "origin",
+    "seenOnChain",
     "status",
     "submittedAt",
     "summary",
@@ -256,7 +274,9 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   isOptionalDetail(value["token"]) &&
   isFailureNotice(value["failureNotice"]) &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
-  isNotFoundCount(value["notFoundCount"]);
+  (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
+  isNotFoundCount(value["notFoundCount"]) &&
+  (value["origin"] === undefined || value["origin"] === "wallet");
 
 const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry[]> => {
   const stored = await store.get(ACTIVITY_STORE_KEY);
@@ -312,10 +332,13 @@ const applyOutcome = (entry: ActivityEntry, outcome: ActivityOutcome): ActivityE
       : (outcome.failureNotice ?? entry.failureNotice);
   const finalizedOnL1 =
     entry.finalizedOnL1 === true ? true : (outcome.finalizedOnL1 ?? entry.finalizedOnL1);
+  const seenOnChain =
+    entry.seenOnChain === true ? true : (outcome.seenOnChain ?? entry.seenOnChain);
   const next: ActivityEntry = {
     ...entry,
     ...(failureNotice === undefined ? {} : { failureNotice }),
     ...(finalizedOnL1 === undefined ? {} : { finalizedOnL1 }),
+    ...(seenOnChain === undefined ? {} : { seenOnChain }),
     ...(outcome.notFoundCount === undefined ? {} : { notFoundCount: outcome.notFoundCount }),
     status,
   };

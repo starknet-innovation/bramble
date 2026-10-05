@@ -68,10 +68,8 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
   "apps/extension/src/content/index.ts",
 ]);
 
-import { SECRET_MATERIAL_FILES } from "./file-standards-policy";
+import { SECRET_MATERIAL_FILES, SECRET_MATERIAL_PATTERN } from "./file-standards-policy";
 
-const SECRET_MATERIAL_PATTERN =
-  /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
 const SUPPRESSION_MARKERS = [
   "@ts-" + "expect-error",
   "@ts-" + "ignore",

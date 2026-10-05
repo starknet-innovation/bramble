@@ -105,7 +105,6 @@ const officialService = (stall: Stall) => {
       stall === "building the proof request" ? never() : Promise.resolve({ warnings: [] }),
     invoke: () => builder,
     register: () => builder,
-    simulate: async () => executeResult(),
     subaccounts: () => ({
       commitment: async () => 0x123n,
       invoke: () => builder,

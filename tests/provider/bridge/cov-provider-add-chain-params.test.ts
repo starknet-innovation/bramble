@@ -4,7 +4,11 @@
  * chain descriptor reject. Also covers the internal camelCase re-validator.
  */
 import { describe, expect, test } from "bun:test";
-import { isProviderChain, readProviderChain } from "@bramble/wallet-protocol/add-chain";
+import {
+  isProviderChain,
+  MAX_CHAIN_URLS,
+  readProviderChain,
+} from "@bramble/wallet-protocol/add-chain";
 
 const base = {
   chain_id: "0x534e5f4b4154414e41",
@@ -64,4 +68,30 @@ describe("isProviderChain rejects malformed camelCase URL lists", () => {
       }),
     ).toBe(false);
   });
+});
+
+// Sherlock audit 153: each list was unbounded, so one approved card could store
+// 80 URLs of 2 KB. The bridge and the background must agree on the bound.
+describe("add-chain URL lists are bounded on both sides of the wire", () => {
+  const urls = (count: number) =>
+    Array.from({ length: count }, (_, index) => `https://rpc${index}.example`);
+  const internal = (field: string, count: number) => ({
+    chainId: base.chain_id,
+    chainName: "Katana",
+    id: "katana",
+    [field]: urls(count),
+  });
+
+  for (const [wire, field] of [
+    ["rpc_urls", "rpcUrls"],
+    ["block_explorer_url", "blockExplorerUrls"],
+    ["icon_urls", "iconUrls"],
+  ] as const) {
+    test(`accepts ${MAX_CHAIN_URLS} ${wire} entries and rejects one more`, () => {
+      expect(readProviderChain({ ...base, [wire]: urls(MAX_CHAIN_URLS) })).not.toBeNull();
+      expect(readProviderChain({ ...base, [wire]: urls(MAX_CHAIN_URLS + 1) })).toBeNull();
+      expect(isProviderChain(internal(field, MAX_CHAIN_URLS))).toBe(true);
+      expect(isProviderChain(internal(field, MAX_CHAIN_URLS + 1))).toBe(false);
+    });
+  }
 });

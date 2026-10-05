@@ -14,6 +14,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { SendDisclosure, SendRoute } from "@bramble/transactions/send-routes";
 import { formatFri } from "../../shared/parts";
 import { reviewCostSection, reviewFeeSection } from "../../shared/review-render";
+import { isStrkRelayFee, relayFeeAmountText } from "../privacy/privacy-relay-fee";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferReview } from "./transfer-submit";
 
@@ -90,6 +91,14 @@ const networkFeeHtml = (
 ): string => {
   if (route.submission === "relay") {
     const relayFee = state.preparation?.relayFee;
+    if (relayFee !== undefined && !isStrkRelayFee(relayFee)) {
+      // A fee converted out of STRK covers the pool's STRK charge, which the
+      // relay pays, but cannot be split against it or added to it: the two are
+      // in different tokens. It is reported whole, in its own token.
+      return reviewCostSection(
+        feeLine("Fee taken from your private balance", relayFeeAmountText(relayFee)),
+      );
+    }
     const total = relayFee?.amount;
     const cut =
       total !== undefined && state.poolFeeFri !== undefined
@@ -108,7 +117,10 @@ const networkFeeHtml = (
     return reviewCostSection(
       `${feeLine("Estimated fee", network === null ? "Sponsored" : formatFri(network))}${poolFee}${
         network !== null && poolFeeFri !== undefined
-          ? feeLine("Total", formatFri(`0x${(BigInt(network) + BigInt(poolFeeFri)).toString(16)}`))
+          ? feeLine(
+              "Total fees",
+              formatFri(`0x${(BigInt(network) + BigInt(poolFeeFri)).toString(16)}`),
+            )
           : ""
       }`,
     );
@@ -132,7 +144,7 @@ const networkFeeHtml = (
 // protocol charge reading as network gas or as the relay's price.
 const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
   route.poolFeeRequired && route.feeBucket !== "none" && poolFeeFri !== undefined
-    ? feeLine("Pool fee", formatFri(poolFeeFri))
+    ? feeLine("Pool fee", `${formatFri(poolFeeFri)} from your ${route.feeBucket} balance`)
     : "";
 
 /**

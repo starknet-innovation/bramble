@@ -71,10 +71,11 @@ export const reviewFeeBlocked = (state: ReviewFeeState): boolean =>
     sumFeeEstimates(state.fee, state.deploymentFee) === null);
 
 // `rule: false` drops the hairline above the section, for a surface that already
-// separates its own blocks and does not want a divider drawn inside them.
-const reviewBoundary = (content: string, rule = true): string =>
-  `<section class="decision-layer${rule ? " decision-boundary" : ""}" aria-label="Cost">
-    <p class="decision-label">Cost</p>
+// separates its own blocks and does not want a divider drawn inside them. The
+// label must be true of the content: "Cost" over fee lines only.
+const reviewBoundary = (content: string, rule = true, label = "Cost"): string =>
+  `<section class="decision-layer${rule ? " decision-boundary" : ""}" aria-label="${label}">
+    <p class="decision-label">${label}</p>
     ${content}
   </section>`;
 
@@ -100,10 +101,19 @@ export const reviewOutcome = (copy: string): string =>
   </section>`;
 
 /**
- * Renders a non-fee constraint statement through the same decision hierarchy
- * as a transaction fee ceiling.
+ * Renders a constraint statement — what the decision does not sign, charge or
+ * authorize — through the same decision hierarchy as a fee ceiling. Labelled
+ * "Cost and limits", not "Cost": a line such as "the signed result can still
+ * authorize site-specific actions" is not fee information. Escapes `copy`.
  */
 export const reviewConstraints = (copy: string): string =>
+  reviewBoundary(`<p>${escapeHtml(copy)}</p>`, true, "Cost and limits");
+
+/**
+ * Renders one plain-text fee line (a maximum fee, or why there is none yet)
+ * in the Cost box. Escapes `copy`.
+ */
+export const reviewCostNote = (copy: string): string =>
   reviewBoundary(`<p>${escapeHtml(copy)}</p>`);
 
 /**
@@ -151,7 +161,7 @@ export const reviewFeeSection = (
       // Both figures reach here as base units, but the pool quotes hex and an
       // estimate may be decimal, so each is parsed rather than compared as text.
       const total = BigInt(network.overallFee) + BigInt(poolFeeFri);
-      return `<p class="review-fee review-fee-total">Total: ${escapeHtml(
+      return `<p class="review-fee review-fee-total">Total fees: ${escapeHtml(
         formatFri(`0x${total.toString(16)}`),
       )}</p>`;
     } catch {

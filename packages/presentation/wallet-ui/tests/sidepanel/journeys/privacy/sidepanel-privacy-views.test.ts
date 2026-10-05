@@ -71,6 +71,21 @@ describe("privacy journey templates", () => {
     expect(html).toContain("viewing-key commitment");
   });
 
+  test("activation review states the network fee in the estimate's own unit", () => {
+    const review = (unit: string) =>
+      privacyFlow(status, preferences, {
+        preparation: { ...registration, networkFee: { overallFee: "1000000000000000000", unit } },
+        stage: "activate-review",
+        tokenId: token.id,
+      });
+
+    expect(review("FRI")).toContain("1 STRK");
+    // A node answering in WEI must not have that figure relabelled as STRK.
+    const wei = review("WEI");
+    expect(wei).toContain("1000000000000000000 WEI");
+    expect(wei).not.toContain("STRK");
+  });
+
   test("a relayed registration discloses its authorization capability", () => {
     const html = privacyFlow(status, preferences, {
       preparation: relayedRegistration,
@@ -168,6 +183,8 @@ describe("privacy journey templates", () => {
     // Phase and elapsed time from the job's own poll, then the standing hint.
     expect(proving).toContain("Proving (attempt 2 of 3) · 1 min 35 s. Keep the wallet open.");
     expect(proving).toContain("Going back discards this preparation");
+    // Minutes of proving must not read as a signature underway (mc-wallet #476).
+    expect(proving).toContain("No transaction is signed or sent until you confirm the review.");
     // The task list beside it already names the step in progress.
     expect(proving).not.toContain("Building the registration proof");
   });

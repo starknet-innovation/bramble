@@ -1,10 +1,15 @@
 /**
  * Spec-exact dapp-wire shape checks: snake_case INVOKE_CALL / invoke_transaction
  * mapping, back-compat with the legacy { calls } param, PADDED_TXN_HASH padding,
- * and the typed_data param wrapper for wallet_signTypedData.
+ * the typed_data param wrapper for wallet_signTypedData, and the optional
+ * api_version each state-changing method accepts and drops.
  */
 import { describe, expect, test } from "bun:test";
-import { toProviderPayload, toRuntimeMessage } from "@bramble/wallet-protocol/bridge";
+import {
+  type ProviderRequest,
+  toProviderPayload,
+  toRuntimeMessage,
+} from "@bramble/wallet-protocol/bridge";
 import { padFelt } from "@bramble/wallet-protocol/results";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
@@ -142,6 +147,87 @@ describe("spec-exact dapp shapes", () => {
         "https://a.test",
       ),
     ).toEqual({ origin: "https://a.test", typedData, type: "wallet.signTypedData" });
+  });
+});
+
+describe("optional api_version on state-changing methods", () => {
+  const origin = "https://a.test";
+  const specCall = { calldata: ["0x1"], contract_address: "0x123", entry_point: "transfer" };
+  const proof = { data: "proof", output: ["0x1"], proof_facts: ["0x2"] };
+  const typedData = { domain: {}, message: {}, primaryType: "Mail", types: {} };
+  const wellFormed = ["0.10", "0.10.4", "0.10.4-rc.0"];
+  const malformed = ["not.a.version.x", "", "v0.10.4", 10, null];
+  const map = (method: ProviderRequest["method"], params: unknown) =>
+    toRuntimeMessage({ id: requestId, method, params } as ProviderRequest, origin);
+
+  test("drops a well-formed api_version from both invoke shapes, with or without a proof", () => {
+    for (const api_version of wellFormed) {
+      const invoke = { calls: [call], origin, type: "wallet.addInvokeTransaction" as const };
+      expect(
+        map("wallet_addInvokeTransaction", { api_version, invoke_transaction: [specCall] }),
+      ).toEqual(invoke);
+      expect(map("wallet_addInvokeTransaction", { api_version, calls: [call] })).toEqual(invoke);
+      expect(
+        map("wallet_addInvokeTransaction", { api_version, invoke_transaction: [specCall], proof }),
+      ).toEqual({ ...invoke, proof });
+    }
+  });
+
+  test("rejects a malformed, call-nested, or both-shape invoke api_version", () => {
+    for (const api_version of malformed) {
+      expect(
+        map("wallet_addInvokeTransaction", { api_version, invoke_transaction: [specCall] }),
+      ).toBeNull();
+      expect(map("wallet_addInvokeTransaction", { api_version, calls: [call] })).toBeNull();
+    }
+    expect(
+      map("wallet_addInvokeTransaction", {
+        invoke_transaction: [{ ...specCall, api_version: "0.10.4" }],
+      }),
+    ).toBeNull();
+    expect(
+      map("wallet_addInvokeTransaction", {
+        api_version: "0.10.4",
+        calls: [call],
+        invoke_transaction: [specCall],
+      }),
+    ).toBeNull();
+  });
+
+  test("drops a well-formed switch-chain api_version and rejects a malformed one", () => {
+    const chainId = "0x534e5f4d41494e";
+    for (const api_version of wellFormed) {
+      expect(
+        map("wallet_switchStarknetChain", { api_version, chainId, silent_mode: true }),
+      ).toEqual({ chainId, origin, type: "wallet.switchChain" });
+      expect(map("wallet_switchStarknetChain", { api_version, chainId })).toEqual({
+        chainId,
+        origin,
+        type: "wallet.switchChain",
+      });
+    }
+    for (const api_version of malformed) {
+      expect(map("wallet_switchStarknetChain", { api_version, chainId })).toBeNull();
+    }
+  });
+
+  test("drops a well-formed typed-data api_version from every param form", () => {
+    const signed = { origin, typedData, type: "wallet.signTypedData" as const };
+    for (const api_version of wellFormed) {
+      expect(map("wallet_signTypedData", { api_version, typed_data: typedData })).toEqual(signed);
+      expect(map("wallet_signTypedData", { api_version, typedData })).toEqual(signed);
+      // The types-js `TypedData & ApiVersionRequest` shape: the version is not
+      // a typed-data field, so it must not reach the background's shape check.
+      expect(map("wallet_signTypedData", { ...typedData, api_version })).toEqual(signed);
+    }
+  });
+
+  test("rejects a malformed typed-data api_version in every param form", () => {
+    for (const api_version of malformed) {
+      expect(map("wallet_signTypedData", { api_version, typed_data: typedData })).toBeNull();
+      expect(map("wallet_signTypedData", { api_version, typedData })).toBeNull();
+      expect(map("wallet_signTypedData", { ...typedData, api_version })).toBeNull();
+    }
   });
 });
 

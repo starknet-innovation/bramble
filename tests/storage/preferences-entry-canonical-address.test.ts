@@ -92,7 +92,7 @@ describe("the store cannot mint a numerically-equal second record", () => {
   test("upsertToken with the minimal spelling replaces the seeded record", async () => {
     const store = createPreferencesStore({ store: createMemoryStore() });
 
-    const next = await store.upsertToken(ethRecord(ETH_MINIMAL));
+    const next = await store.upsertToken(ethRecord(ETH_MINIMAL), "user");
 
     const mainnet = next.tokens.filter((token) => token.networkId === "SN_MAIN");
     // Two seeded Mainnet tokens (ETH, STRK) — not three.

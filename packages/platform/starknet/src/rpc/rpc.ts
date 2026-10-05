@@ -2,21 +2,15 @@
  * Starknet RPC wallet operations backed by starknet-js and Krusty signatures.
  */
 import { WalletError } from "@bramble/core/errors";
-import { isDecimalAmountText, isSafeDecimals } from "@bramble/core/json";
+import { isSafeDecimals } from "@bramble/core/json";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import { type Call, CallData, cairo, type RpcProvider, shortString } from "starknet";
+import { parseTokenAmount } from "./balances";
 import type { FeeEstimate } from "./fee-bounds";
-import {
-  isTransactionNotFoundError,
-  isTransportRpcError,
-  type StarkHashSigner,
-  withRpcFallback,
-} from "./provider";
-import { decodeUint256Response } from "./rpc-assets";
+import { type StarkHashSigner, withRpcFallback } from "./provider";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
-import type { TokenBalance } from "./token-balance";
 
 /**
  * Re-exported declare-transaction submission so callers keep one RPC import path.
@@ -42,6 +36,15 @@ export {
   getDeploymentStatus,
   submitAccountDeployment,
 } from "../transactions/deployment";
+/**
+ * Re-exported amount helpers and balance reads so callers keep one RPC import path.
+ */
+export {
+  type BalanceInput,
+  formatTokenAmount,
+  getTokenBalances,
+  parseTokenAmount,
+} from "./balances";
 /**
  * Re-exported provider helpers so existing callers keep one import path.
  */
@@ -87,20 +90,22 @@ export {
 } from "./rpc-submit";
 export { isTokenBalance, type TokenBalance } from "./token-balance";
 /**
+ * Re-exported transaction-status reads so callers keep one RPC import path.
+ */
+export {
+  classifyTransactionStatus,
+  getTransactionStatuses,
+  TRANSACTION_STATUS_CONCURRENCY,
+  type TransactionStatus,
+  type TransactionStatusInput,
+  type TransactionStatusReport,
+} from "./transaction-status";
+/**
  * ERC20 transfer submission result.
  */
 export type TransferSubmission = {
   readonly call: Call;
   readonly transactionHash: string;
-};
-
-/**
- * Inputs for reading tracked ERC20 balances.
- */
-export type BalanceInput = {
-  readonly accountAddress: string;
-  readonly rpcUrls: readonly string[];
-  readonly tokens: readonly TokenConfig[];
 };
 
 /**
@@ -111,6 +116,12 @@ export type TransferInput = {
   readonly amount: string;
   /** Live authorization checked immediately before each on-chain mutation. */
   readonly isAuthorized?: () => boolean;
+  /**
+   * Journal hook; see {@link InvokeInput.onSigned}. The caller learns the
+   * signed transfer's hash before it is sent, so a send whose answer is lost
+   * can still be tracked instead of being reported as not sent.
+   */
+  readonly onSigned?: InvokeInput["onSigned"];
   readonly recipient: string;
   /** Separately reviewed ceiling for an automatic account deployment. */
   readonly reviewedDeploymentFee?: FeeEstimate;
@@ -129,90 +140,6 @@ export type TransferInput = {
 export type { FeeEstimate };
 
 /**
- * Inputs for reading transaction statuses.
- */
-export type TransactionStatusInput = {
-  readonly hashes: readonly string[];
-  readonly rpcUrls: readonly string[];
-};
-
-/**
- * Chain-derived transaction status used by the activity feed.
- *
- * `preconfirmed` is Starknet's `PRE_CONFIRMED` finality: the block proposer has
- * executed the transaction in the block it is building, so its outcome
- * (including a revert) is already known, but consensus has not committed that
- * block. Provisional — a real outcome the user can act on, never final.
- * `ACCEPTED_ON_L1` and `ACCEPTED_ON_L2` both map to `accepted`; L1 finality is
- * tracked out of band (see {@link TransactionStatusReport}).
- */
-export type TransactionStatus = "accepted" | "pending" | "preconfirmed" | "rejected" | "reverted";
-
-/**
- * One hash's chain observation.
- *
- * - `found` is false only when the node answered that it has no record of the
- *   hash (`TXN_HASH_NOT_FOUND`); a transport failure fails over or throws
- *   instead, so this means "the node says it is gone", not "we could not ask".
- *   A pre-confirmed transaction whose block proposal never commits disappears
- *   exactly this way, but a single not-found is ordinary noise — callers must
- *   require several consecutive observations before treating it as failure.
- * - `finalizedOnL1` is true only for `ACCEPTED_ON_L1`: the reconciliation
- *   loop's terminal condition, deliberately not a {@link TransactionStatus}.
- */
-export type TransactionStatusReport = {
-  readonly finalizedOnL1: boolean;
-  readonly found: boolean;
-  readonly status: TransactionStatus;
-};
-
-const pow10 = (decimals: number): bigint => 10n ** BigInt(decimals);
-
-/**
- * Parses a decimal token amount into raw integer ERC20 units. The terminal
- * consumer of every amount the reader boundaries admit, so it applies their
- * grammars (`isDecimalAmountText`, `isSafeDecimals`) rather than its own copies.
- * Throws {@link WalletError} on a value either rule rejects, on more fraction
- * digits than the token has, and on a non-positive result.
- */
-export const parseTokenAmount = (amount: string, decimals: number): bigint => {
-  const trimmed = amount.trim();
-  if (!isSafeDecimals(decimals) || !isDecimalAmountText(trimmed)) {
-    throw new WalletError("Invalid transfer amount");
-  }
-
-  const [whole = "0", fraction = ""] = trimmed.split(".");
-  if (fraction.length > decimals) {
-    throw new WalletError("Too many decimal places");
-  }
-  const raw = BigInt(whole) * pow10(decimals) + BigInt(fraction.padEnd(decimals, "0") || "0");
-  if (raw <= 0n) {
-    throw new WalletError("Transfer amount must be greater than zero");
-  }
-  return raw;
-};
-
-/**
- * Formats raw integer ERC20 units into a decimal display string.
- */
-export const formatTokenAmount = (raw: bigint, decimals: number): string => {
-  const base = pow10(decimals);
-  const whole = raw / base;
-  const fraction = (raw % base).toString().padStart(decimals, "0").replace(/0+$/, "");
-  return fraction.length === 0 ? whole.toString() : `${whole.toString()}.${fraction}`;
-};
-
-const parseUint256Response = (response: readonly string[]): bigint => {
-  const value = decodeUint256Response(response);
-  if (value === null) {
-    throw new WalletError("Invalid token balance response");
-  }
-  return value;
-};
-
-const BALANCE_READ_CONCURRENCY = 4;
-
-/**
  * Builds an ERC20 transfer call without signing or broadcasting it.
  */
 export const buildErc20TransferCall = (
@@ -228,48 +155,6 @@ export const buildErc20TransferCall = (
     contractAddress: tokenAddress,
     entrypoint: "transfer",
   };
-};
-
-/**
- * Reads ERC20 balances through Starknet RPC.
- */
-export const getTokenBalances = async (
-  { accountAddress, rpcUrls, tokens }: BalanceInput,
-  makeProvider?: (nodeUrl: string) => RpcProvider,
-): Promise<readonly TokenBalance[]> => {
-  if (!isNonZeroStarkFieldElement(accountAddress)) {
-    throw new WalletError("Invalid account address");
-  }
-  return withRpcFallback(
-    rpcUrls,
-    async (provider) => {
-      const balances: TokenBalance[] = [];
-      for (let index = 0; index < tokens.length; index += BALANCE_READ_CONCURRENCY) {
-        balances.push(
-          ...(await Promise.all(
-            tokens.slice(index, index + BALANCE_READ_CONCURRENCY).map(async (token) => {
-              const response = await provider.callContract(
-                {
-                  calldata: CallData.compile([accountAddress]),
-                  contractAddress: token.address,
-                  entrypoint: "balanceOf",
-                },
-                "latest",
-              );
-              const balance = parseUint256Response(response);
-              return {
-                ...token,
-                balance: balance.toString(),
-                formatted: formatTokenAmount(balance, token.decimals),
-              };
-            }),
-          )),
-        );
-      }
-      return balances;
-    },
-    makeProvider,
-  );
 };
 
 /**
@@ -384,6 +269,7 @@ export const submitErc20Transfer = async (
     account,
     amount,
     isAuthorized,
+    onSigned,
     recipient,
     reviewedDeploymentFee,
     reviewedFee,
@@ -401,6 +287,7 @@ export const submitErc20Transfer = async (
       account,
       calls: [call],
       ...(isAuthorized === undefined ? {} : { isAuthorized }),
+      ...(onSigned === undefined ? {} : { onSigned }),
       ...(reviewedDeploymentFee === undefined ? {} : { reviewedDeploymentFee }),
       ...(reviewedFee === undefined ? {} : { reviewedFee }),
       rpcUrls,
@@ -414,86 +301,3 @@ export const submitErc20Transfer = async (
     transactionHash: result.transactionHash,
   };
 };
-
-const FINALITY_TO_STATUS: Readonly<Record<string, TransactionStatus>> = {
-  ACCEPTED_ON_L1: "accepted",
-  ACCEPTED_ON_L2: "accepted",
-  PRE_CONFIRMED: "preconfirmed",
-  REJECTED: "rejected",
-};
-
-// Unclassified, RECEIVED, and CANDIDATE answers deliberately stay pending.
-const PENDING_REPORT: TransactionStatusReport = {
-  finalizedOnL1: false,
-  found: true,
-  status: "pending",
-};
-const NOT_FOUND_REPORT: TransactionStatusReport = {
-  finalizedOnL1: false,
-  found: false,
-  status: "pending",
-};
-
-/**
- * Maximum status reads in flight against one RPC endpoint.
- */
-export const TRANSACTION_STATUS_CONCURRENCY = 8;
-
-const transactionStatusEntry = async (
-  provider: RpcProvider,
-  transactionHash: string,
-): Promise<readonly [string, TransactionStatusReport]> => {
-  try {
-    return [
-      transactionHash,
-      classifyTransactionStatus(await provider.getTransactionStatus(transactionHash)),
-    ];
-  } catch (error) {
-    if (isTransportRpcError(error)) {
-      throw error;
-    }
-    return [transactionHash, isTransactionNotFoundError(error) ? NOT_FOUND_REPORT : PENDING_REPORT];
-  }
-};
-
-/** Classifies one untrusted status response. Unknown finality stays pending. */
-export const classifyTransactionStatus = (receipt: {
-  readonly execution_status?: unknown;
-  readonly finality_status?: unknown;
-}): TransactionStatusReport => {
-  const finality = String(receipt.finality_status ?? "");
-  // REVERTED wins over finality, including PRE_CONFIRMED.
-  if (String(receipt.execution_status ?? "") === "REVERTED") {
-    return { finalizedOnL1: finality === "ACCEPTED_ON_L1", found: true, status: "reverted" };
-  }
-  const status = FINALITY_TO_STATUS[finality];
-  return status === undefined
-    ? PENDING_REPORT
-    : { finalizedOnL1: finality === "ACCEPTED_ON_L1", found: true, status };
-};
-
-/**
- * Reads transaction status with bounded fanout and transport failover. Explicit
- * not-found answers remain distinct so callers can tally disappearances.
- */
-export const getTransactionStatuses = async (
-  { hashes, rpcUrls }: TransactionStatusInput,
-  makeProvider?: (nodeUrl: string) => RpcProvider,
-): Promise<Readonly<Record<string, TransactionStatusReport>>> =>
-  withRpcFallback(
-    rpcUrls,
-    async (provider) => {
-      const uniqueHashes = [...new Set(hashes)];
-      const entries: (readonly [string, TransactionStatusReport])[] = [];
-      for (let offset = 0; offset < uniqueHashes.length; offset += TRANSACTION_STATUS_CONCURRENCY) {
-        const batch = uniqueHashes.slice(offset, offset + TRANSACTION_STATUS_CONCURRENCY);
-        entries.push(
-          ...(await Promise.all(
-            batch.map((transactionHash) => transactionStatusEntry(provider, transactionHash)),
-          )),
-        );
-      }
-      return Object.fromEntries(entries);
-    },
-    makeProvider,
-  );

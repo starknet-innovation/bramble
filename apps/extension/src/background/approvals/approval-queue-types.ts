@@ -95,6 +95,14 @@ export type ApprovalQueue = {
   readonly requestSignTypedData: (input: {
     readonly context: ApprovalContext;
     readonly origin: string;
+    /**
+     * OutsideExecution call review: its flags ride on the approval and its
+     * decoded call summaries follow `summary` in `summaries`.
+     */
+    readonly review?: {
+      readonly flags: readonly ApprovalRiskFlag[];
+      readonly summaries: readonly string[];
+    };
     readonly summary: string;
     readonly typedData: unknown;
   }) => PendingApproval;

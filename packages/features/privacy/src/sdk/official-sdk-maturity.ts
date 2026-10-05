@@ -163,6 +163,24 @@ const replaceStuck = async (
   }
 };
 
+// Maps a failed receipt wait on the scope's prior write. A proven rejection
+// releases the marker; a marker replaced during the wait keeps its own
+// status-unknown refusal; anything else is the generic service error.
+const priorWaitFailure = async (
+  store: Strk20MaturityStore,
+  scope: Strk20MaturityScope,
+  transactionHash: string,
+  error: unknown,
+): Promise<never> => {
+  if (error instanceof RejectedPrivacyTransaction) {
+    await store.replaceIfCurrentHash(scope, transactionHash, null);
+  }
+  if (error instanceof WalletError && error.message === STATUS_UNKNOWN) {
+    throw error;
+  }
+  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+};
+
 const settledRecord = (
   outcome: Exclude<SignedOutcome, "unknown">,
   transactionHash: string,
@@ -309,12 +327,18 @@ export const createStrk20MaturityRuntime = ({
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
     // The receipt wait is a gap. Record the block only while this hash is
-    // still the scope's marker; a newer send's marker must survive it.
-    await store.replaceIfCurrentHash(scope, transactionHash, {
+    // still the scope's marker; a newer send's marker must survive it. If a
+    // newer send replaced the marker meanwhile, this block says nothing about
+    // that send's acceptance, so fail closed instead of returning it as a
+    // proving floor (mc-wallet #474 item 1).
+    const recorded = await store.replaceIfCurrentHash(scope, transactionHash, {
       acceptedBlock: block,
       state: "submitted",
       transactionHash,
     });
+    if (!recorded) {
+      throw new WalletError(STATUS_UNKNOWN);
+    }
     return block;
   };
 
@@ -336,10 +360,7 @@ export const createStrk20MaturityRuntime = ({
     try {
       return await acceptedBlock(provider, scope, record.transactionHash);
     } catch (error) {
-      if (error instanceof RejectedPrivacyTransaction) {
-        await store.replaceIfCurrentHash(scope, record.transactionHash, null);
-      }
-      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      return priorWaitFailure(store, scope, record.transactionHash, error);
     }
   };
 

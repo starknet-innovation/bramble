@@ -5,6 +5,7 @@ import {
   argentMultisigOperationId,
   memoryMultisigStore,
 } from "@bramble/multisig/repository";
+import { walletPaidRecipients } from "@bramble/transactions/paid-recipients";
 import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,
@@ -96,5 +97,46 @@ describe("Argent multisig submit recovery", () => {
       ),
     ).resolves.toMatchObject({ ok: true, transactionHash: intent.prepared.transactionHash });
     expect(harness.submitCount()).toBe(1);
+  });
+
+  test("a submitted single-payment intent records its payee as paid (#163)", async () => {
+    const harness = await makeMultisigHarness();
+    const intent = await readyIntent(harness);
+    await harness.handler(
+      { intentId: intent.id, type: "wallet.submitArgentMultisigIntent" },
+      harnessExtensionSender,
+    );
+    const rows = await harness.activity.list();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ counterparty: "0x1", origin: "wallet" });
+    expect(walletPaidRecipients(rows)).toEqual([{ address: "0x1", networkId: "SN_MAIN" }]);
+  });
+
+  test("a recovered broadcast records the same payee (#163)", async () => {
+    const harness = await makeMultisigHarness({
+      getTransactionStatuses: async (hash) => ({
+        [hash]: { finalizedOnL1: false, found: true, status: "pending" },
+      }),
+    });
+    const intent = await readyIntent(harness);
+    const operationId = argentMultisigOperationId(
+      "submit",
+      intent.accountId,
+      intent.prepared.transactionHash,
+    );
+    if (!operationId) throw new Error("submission operation id unavailable");
+    await harness.multisigStore.claimOperation({
+      accountId: intent.accountId,
+      id: operationId,
+      kind: "submit",
+      target: intent.prepared.transactionHash,
+    });
+    await harness.handler(
+      { intentId: intent.id, type: "wallet.submitArgentMultisigIntent" },
+      harnessExtensionSender,
+    );
+    expect(harness.submitCount()).toBe(0);
+    const [row] = await harness.activity.list();
+    expect(row).toMatchObject({ counterparty: "0x1", origin: "wallet" });
   });
 });

@@ -9,6 +9,7 @@
  */
 
 import {
+  DEFAULT_TOKENS,
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
   sameFelt,
@@ -193,3 +194,28 @@ export const tokenSpamReasons = (token: SpamCandidate): readonly SpamReason[] =>
  * default.
  */
 export const isLikelySpam = (token: SpamCandidate): boolean => tokenSpamReasons(token).length > 0;
+
+// Every curated token on every network, so the per-entry network comparison in
+// isCuratedToken is the single network guard: the same contract and ticker on
+// another network (ETH/STRK share addresses everywhere; a mainnet-only token
+// does not exist on Sepolia) must not match.
+const CURATED_TOKENS: readonly RegistryToken[] = [
+  ...Object.values(REGISTRY).flat(),
+  ...DEFAULT_TOKENS,
+];
+
+/**
+ * Checks whether a token is exactly a curated one: a registry or default-tracked
+ * token on the same network with the same contract, ticker, and decimals. Used
+ * to keep a dapp-suggested token trusted only when the wallet already vouches
+ * for every field the review reads from it; any mismatch (including a real
+ * contract under a site-supplied ticker or decimals) is not curated.
+ */
+export const isCuratedToken = (token: SpamCandidate): boolean =>
+  CURATED_TOKENS.some(
+    (known) =>
+      known.networkId === token.networkId &&
+      sameFelt(known.address, token.address) &&
+      known.symbol === token.symbol &&
+      known.decimals === token.decimals,
+  );

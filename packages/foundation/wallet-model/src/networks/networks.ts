@@ -281,6 +281,19 @@ export const sameFelt = (left: unknown, right: unknown): boolean => {
 };
 
 /**
+ * Whether a token is one of the bundled {@link DEFAULT_TOKENS} for its network,
+ * matched by network and numeric address. Built-in tokens cannot be removed
+ * from the tracked list; the fee guards and onboarding rely on them.
+ */
+export const isDefaultToken = (token: {
+  readonly address: string;
+  readonly networkId: string;
+}): boolean =>
+  DEFAULT_TOKENS.some(
+    (known) => known.networkId === token.networkId && sameFelt(known.address, token.address),
+  );
+
+/**
  * Parses a felt-shaped string into its bigint value, or null when the input is
  * not a non-empty numeric string. The one shared felt parser — decode calldata
  * felts through this rather than re-deriving the BigInt guard locally.
