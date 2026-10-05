@@ -12,9 +12,6 @@ import type { FeeEstimate } from "./fee-bounds";
 import { type StarkHashSigner, withRpcFallback } from "./provider";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
 
-/**
- * Re-exported advisory signability probe for recovery candidates (issue 542).
- */
 export {
   argentSigningRestriction,
   braavosSigningRestriction,
@@ -22,6 +19,20 @@ export {
   getBraavosSigningRestriction,
   type SigningRestrictionInput,
 } from "../transactions/account-compatibility";
+/**
+ * Re-exported advisory signability probe for recovery candidates (issue 542).
+ */
+/**
+ * Re-exported seed-driven Braavos recovery (deferred 2FA removal).
+ */
+export {
+  type BraavosRecoveryInput,
+  type BraavosRecoveryState,
+  DEFAULT_BRAAVOS_RECOVERY_DELAY_SECONDS,
+  getBraavosRecoveryState,
+  reviewBraavosRecovery,
+  submitBraavosRecovery,
+} from "../transactions/braavos-recovery";
 /**
  * Re-exported declare-transaction submission so callers keep one RPC import path.
  */

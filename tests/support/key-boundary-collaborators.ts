@@ -344,6 +344,15 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
       Object.assign(state, { accountDeployed: true });
       return { transactionHash: "0x7de" };
     },
+    async reviewBraavosRecovery() {
+      return { overallFee: "1", unit: "FRI" };
+    },
+    async submitBraavosRecovery() {
+      return { pendingUntil: 1_000, transactionHash: "0x7ec" };
+    },
+    async getBraavosRecoveryState() {
+      return { delaySeconds: 345_600, pendingUntil: null };
+    },
     async getNftOwner() {
       return account.address;
     },

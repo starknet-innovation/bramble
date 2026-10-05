@@ -285,6 +285,21 @@ type AccountSignabilityResponse = {
   readonly ok: true;
   readonly readOnly: boolean;
   readonly reason?: ReadOnlyReason;
+  /** Phrase-recoverable read-only accounts (Braavos 2FA) carry the recovery state. */
+  readonly recovery?: { readonly delaySeconds: number; readonly pendingUntil: number | null };
+};
+
+type ReviewBraavosRecoveryResponse = {
+  readonly accountId: string;
+  readonly delaySeconds: number | null;
+  readonly fee: FeeEstimate;
+  readonly ok: true;
+};
+type RecoverBraavosAccountResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly pendingUntil: number | null;
+  readonly transactionHash: string;
 };
 
 /**
@@ -419,6 +434,8 @@ type LedgerAccountStatusResponse = {
  */
 export type RuntimeResponse =
   | AccountSignabilityResponse
+  | ReviewBraavosRecoveryResponse
+  | RecoverBraavosAccountResponse
   | AccountsResponse
   | ActivityResponse
   | AddChainResponse

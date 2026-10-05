@@ -396,4 +396,31 @@ describe("home read-only flag", () => {
       expect(markup).not.toContain("Read only");
     }
   });
+
+  test("offers recovery for a Braavos 2FA account with no request pending", () => {
+    const markup = render({ readOnly: true, reason: "strong-signer" });
+    expect(markup).toContain("Read only");
+    expect(markup).toContain('id="recover-account"');
+    expect(markup).toContain("Recover account");
+  });
+
+  test("shows the unlock time and the device-cancel note while a removal is pending", () => {
+    const markup = render({
+      readOnly: true,
+      reason: "strong-signer",
+      recovery: { delaySeconds: 345_600, pendingUntil: 1_900_000_000 },
+    });
+    // Stays read only with the buttons greyed even mid-removal.
+    expect(markup).toContain("Read only");
+    expect(markup).toContain("Removing 2FA");
+    expect(markup).toContain("device can still stop this");
+    // No recover button once a request is under way.
+    expect(markup).not.toContain('id="recover-account"');
+  });
+
+  test("does not offer recovery for a restriction the phrase cannot lift", () => {
+    const markup = render({ readOnly: true, reason: "guardian" });
+    expect(markup).toContain("Read only");
+    expect(markup).not.toContain('id="recover-account"');
+  });
 });

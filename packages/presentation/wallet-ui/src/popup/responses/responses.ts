@@ -158,20 +158,32 @@ export type DeploymentStatusResponse = {
  * Active-account signability verdict for the Home read-only flag. `reason` is
  * present exactly when `readOnly` is true.
  */
+/** A seed-recoverable account's on-chain recovery state for the Home flag. */
+export type RecoveryState = {
+  readonly delaySeconds: number;
+  readonly pendingUntil: number | null;
+};
+
 /** The Home flag's input: signable, or read-only with its reason. */
 export type SignabilityVerdict =
   | { readonly readOnly: false }
-  | { readonly readOnly: true; readonly reason: ReadOnlyReason };
+  | {
+      readonly readOnly: true;
+      readonly reason: ReadOnlyReason;
+      readonly recovery?: RecoveryState;
+    };
 
 /**
  * Active-account signability verdict for the Home read-only flag. `reason` is
- * present exactly when `readOnly` is true.
+ * present exactly when `readOnly` is true; `recovery` accompanies a Braavos
+ * strong-signer account the phrase can recover.
  */
 export type AccountSignabilityResponse = {
   readonly accountId: string;
   readonly ok: true;
   readonly readOnly: boolean;
   readonly reason?: ReadOnlyReason;
+  readonly recovery?: RecoveryState;
 };
 
 /**
@@ -434,11 +446,21 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   typeof value["deployed"] === "boolean";
 
 /** Validates the signability verdict before the Home flag renders from it. */
+const isRecoveryState = (value: unknown): value is RecoveryState =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["delaySeconds", "pendingUntil"]) &&
+  typeof value["delaySeconds"] === "number" &&
+  (value["pendingUntil"] === null || typeof value["pendingUntil"] === "number");
+
+/** Validates the signability verdict (with any recovery state) before the flag renders. */
 export const isAccountSignabilityResponse = (value: unknown): value is AccountSignabilityResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "ok", "readOnly", "reason"]) &&
+  hasOnlyKnownKeys(value, ["accountId", "ok", "readOnly", "reason", "recovery"]) &&
   value["ok"] === true &&
   typeof value["accountId"] === "string" &&
   typeof value["readOnly"] === "boolean" &&
-  (value["readOnly"] === true ? isReadOnlyReason(value["reason"]) : value["reason"] === undefined);
+  (value["readOnly"] === true
+    ? isReadOnlyReason(value["reason"])
+    : value["reason"] === undefined) &&
+  (value["recovery"] === undefined || isRecoveryState(value["recovery"]));

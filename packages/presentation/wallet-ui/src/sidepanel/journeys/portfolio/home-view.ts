@@ -34,6 +34,35 @@ import { actionTile, pendingCallout, shieldTile } from "../../shell/wallet-shell
 import { deploymentKnownFromPrivacy, type PrivacyDisclosureState } from "../privacy/privacy-model";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 
+// Whole days a delay spans, for the recovery copy. Takes the delay it is
+// given, so the pure render layer never reads the wall clock.
+const delayDays = (delaySeconds: number): number => Math.max(1, Math.round(delaySeconds / 86_400));
+
+/**
+ * The read-only notice under the total. Always says "Read only" and keeps the
+ * money actions greyed; a phrase-recoverable account (Braavos 2FA) adds a
+ * "Recover account" button, and once a removal is under way it states the
+ * delay and that the 2FA device can still stop it.
+ */
+const readOnlyNotice = (signability: SignabilityVerdict | null): string => {
+  if (signability?.readOnly !== true) return "";
+  const recovery = "recovery" in signability ? signability.recovery : undefined;
+  const recoverable = signability.reason === "strong-signer";
+  const pending = recovery?.pendingUntil != null;
+  return `<div class="read-only-notice" data-read-only="true">
+      <p class="hero-stale">${icon("eye")}<span>Read only</span></p>
+      ${
+        pending
+          ? `<p class="read-only-detail">Removing 2FA — the account becomes usable about ${delayDays(
+              recovery?.delaySeconds ?? 0,
+            )} days after you started. Your Braavos device can still stop this.</p>`
+          : recoverable
+            ? `<button class="button button-secondary" id="recover-account" type="button">Recover account</button>`
+            : ""
+      }
+    </div>`;
+};
+
 const heroDelta = (
   balances: readonly TokenBalance[],
   prices: Readonly<Record<string, number>>,
@@ -102,7 +131,7 @@ export const homeScreen = (
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
-      ${readOnly ? `<p class="hero-stale" data-read-only="true">${icon("eye")}<span>Read only</span></p>` : ""}
+      ${readOnly ? readOnlyNotice(signability) : ""}
       ${account ? "" : noAccountEmpty(status)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">

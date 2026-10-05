@@ -102,6 +102,8 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
   { message: { type: "wallet.accountSignability" }, sender: extensionSender },
+  { message: { type: "wallet.recoverBraavosAccount" }, sender: extensionSender },
+  { message: { type: "wallet.reviewBraavosRecovery" }, sender: extensionSender },
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
   { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
   {

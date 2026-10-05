@@ -43,6 +43,7 @@ import {
 import { withRpcFallback } from "@bramble/starknet/provider";
 import {
   type BalanceInput,
+  type BraavosRecoveryInput,
   type DeclareInput,
   type DeployAccountInput,
   type DeploymentStatusInput,
@@ -50,6 +51,7 @@ import {
   estimateDeclareFee,
   estimateInvokeFee,
   getArgentSigningRestriction,
+  getBraavosRecoveryState,
   getBraavosSigningRestriction,
   getDeploymentStatus,
   getNftOwner,
@@ -62,8 +64,10 @@ import {
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  reviewBraavosRecovery,
   type SigningRestrictionInput,
   submitAccountDeployment,
+  submitBraavosRecovery,
   submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
@@ -176,6 +180,18 @@ export type RuntimeRpc = {
   readonly getBraavosSigningRestriction?: (
     input: SigningRestrictionInput,
   ) => ReturnType<typeof getBraavosSigningRestriction>;
+  /** Pending-state read for the Braavos recovery flow; advisory, read-only. */
+  readonly getBraavosRecoveryState?: (
+    input: Parameters<typeof getBraavosRecoveryState>[0],
+  ) => ReturnType<typeof getBraavosRecoveryState>;
+  /** Estimates the Braavos recovery request for its review card. */
+  readonly reviewBraavosRecovery?: (
+    input: BraavosRecoveryInput,
+  ) => ReturnType<typeof reviewBraavosRecovery>;
+  /** Submits the reviewed Braavos recovery request. */
+  readonly submitBraavosRecovery?: (
+    input: BraavosRecoveryInput,
+  ) => ReturnType<typeof submitBraavosRecovery>;
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -302,8 +318,11 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
   getArgentSigningRestriction,
+  getBraavosRecoveryState,
   getBraavosSigningRestriction,
   getDeploymentStatus,
+  reviewBraavosRecovery,
+  submitBraavosRecovery,
   getNftMetadata,
   getNftOwner,
   getNftOwnership,
