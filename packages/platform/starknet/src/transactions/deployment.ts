@@ -4,6 +4,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   isNonZeroStarkFieldElement,
@@ -118,11 +119,17 @@ const deploymentInputs = (
       constructorCalldata: CallData.compile([account.publicKeyX]),
     };
   }
-  // This wallet imports Braavos accounts; it never creates one. Falling through
-  // to the OpenZeppelin rule would be worse than an error: Braavos also deploys
-  // with the public key as salt and sole constructor argument, so the address
-  // check would pass and a Braavos account would be deployed at a class whose
-  // authorization this wallet does not produce.
+  // Only the deployment class the current Braavos app pins addresses to: the
+  // signer carries the implementation out-of-band in the extended deploy
+  // signature, and that layout has only been established for this class. An
+  // older base-class counterfactual is refused rather than deployed with a
+  // signature its constructor may not accept.
+  if (sameFelt(account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH)) {
+    return {
+      addressSalts: [account.publicKeyX],
+      constructorCalldata: CallData.compile([account.publicKeyX]),
+    };
+  }
   throw new WalletError("This wallet does not deploy Braavos accounts");
 };
 
@@ -268,16 +275,19 @@ export const ensureAccountDeployed = async (
   }
   let submitted: DeploySubmission | null = null;
   try {
-    const validateArgent = account.accountContractType !== "openzeppelin";
-    const estimatingAccount = validateArgent
-      ? argentQueryAccount(provider, account, signerOptions(account))
-      : starknetAccount;
+    // Braavos constructors validate the deploy signature even on query
+    // versions, so their estimate signs for real; Argent accepts a mock query
+    // signature; OpenZeppelin skips validation (see submitAccountDeployment).
+    const estimatingAccount =
+      account.accountContractType === "openzeppelin" || account.accountContractType === "braavos"
+        ? starknetAccount
+        : argentQueryAccount(provider, account, signerOptions(account));
     submitted = await deployAccountContract(
       starknetAccount,
       account,
       reviewedFee,
       estimatingAccount,
-      !validateArgent,
+      account.accountContractType === "openzeppelin",
       isAuthorized,
       expectedTransactionHash,
     );
@@ -382,10 +392,10 @@ export const estimateAccountDeploymentFee = async (
         await isCompatibleAccountDeployed(provider, account);
       }
       const deployment = accountDeployment(account);
-      const validateArgent = account.accountContractType !== "openzeppelin";
-      const estimatingAccount = validateArgent
-        ? argentQueryAccount(provider, account, signerOptions(account))
-        : makeAccount(provider, account, signHash, signerOptions(account));
+      const estimatingAccount =
+        account.accountContractType === "openzeppelin" || account.accountContractType === "braavos"
+          ? makeAccount(provider, account, signHash, signerOptions(account))
+          : argentQueryAccount(provider, account, signerOptions(account));
       const estimate = await estimatingAccount.estimateAccountDeployFee(
         {
           addressSalt: deployment.addressSalt,
@@ -393,7 +403,7 @@ export const estimateAccountDeploymentFee = async (
           constructorCalldata: [...deployment.constructorCalldata],
           contractAddress: deployment.contractAddress,
         },
-        { skipValidate: !validateArgent, tip: "0x0" },
+        { skipValidate: account.accountContractType === "openzeppelin", tip: "0x0" },
       );
       return reviewedSpendFor(estimate, "standard");
     },
@@ -431,15 +441,21 @@ export const submitAccountDeployment = async (
         authorizedSigner,
         signerOptions(account),
       );
-      const validateArgent = account.accountContractType !== "openzeppelin";
+      // Argent skips signature checks on query-version transactions, so a mock
+      // query signer estimates with validation on; Braavos validates the deploy
+      // signature in its constructor unconditionally, so its estimate must be
+      // signed for real — a query-version hash can never be submitted, so the
+      // pre-flight signature spends nothing. OpenZeppelin skips validation.
+      const estimating =
+        account.accountContractType === "openzeppelin" || account.accountContractType === "braavos"
+          ? starknetAccount
+          : argentQueryAccount(provider, account, signerOptions(account));
       const submitted = await deployAccountContract(
         starknetAccount,
         account,
         reviewedFee,
-        validateArgent
-          ? argentQueryAccount(provider, account, signerOptions(account))
-          : starknetAccount,
-        !validateArgent,
+        estimating,
+        account.accountContractType === "openzeppelin",
         isAuthorized,
         () => signedHash,
       );

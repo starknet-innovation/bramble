@@ -1,6 +1,9 @@
 /** Bounded account discovery and confirmation for phrase recovery, per family. */
 
-import { accountClassEntry } from "@bramble/wallet-model/account-families";
+import {
+  accountClassEntry,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
 import {
   type AccountContractType,
   ARGENT_ACCOUNT_CLASS_HASH,
@@ -87,7 +90,9 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
 const deployableHere = (candidate: RecoveryAccountCandidate): boolean =>
   candidate.account.accountContractType === "openzeppelin" ||
   (candidate.account.accountContractType === "argent" &&
-    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH));
+    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH)) ||
+  (candidate.account.accountContractType === "braavos" &&
+    sameFelt(candidate.account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH));
 
 // The scan's advisory verdict, in the reader's terms: why this account is
 // watch-only here, said before they pick it rather than after a send fails.
@@ -121,7 +126,13 @@ const activityState = (candidate: RecoveryAccountCandidate): string => {
 const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
   if (duplicate) return "Already in this wallet";
   if (candidate.account.accountContractType !== "braavos") return activityState(candidate);
-  if (!candidate.deployed) return "Funded, not deployed · view only for now";
+  if (!candidate.deployed) {
+    // The modern deployment class deploys from here like any other account;
+    // an older base-class counterfactual still cannot.
+    return deployableHere(candidate)
+      ? "Funded and ready to deploy"
+      : "Funded, not deployed · view only for now";
+  }
   return candidate.restriction
     ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
     : "Deployed on Starknet";
