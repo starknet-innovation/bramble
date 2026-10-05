@@ -12,6 +12,7 @@ import {
   isAccountIdForNetwork,
   isAccountRef,
   isKeylessAccount,
+  isLegacyV8AccountRef,
   isLegacyV10AccountRef,
   isRecoverableAccountRef,
   recoveryLadderIndex,
@@ -191,8 +192,9 @@ test("a Ready-scheme account record is x-only and schema-gated (issue 505)", () 
   expect(isAccountRef({ ...argentx, derivation: { ...argentx.derivation, accountIndex: 0 } })).toBe(
     false,
   );
-  // No v10 writer produced the kind: the v10 validator must refuse it.
+  // No legacy writer produced the kind: every per-version validator refuses it.
   expect(isLegacyV10AccountRef(argentx)).toBe(false);
+  expect(isLegacyV8AccountRef(argentx)).toBe(false);
   expect(isLegacyV10AccountRef(derived)).toBe(true);
   // One ladder position per candidate, whichever axis the scheme walks.
   expect(recoveryLadderIndex(argentx)).toBe(4);

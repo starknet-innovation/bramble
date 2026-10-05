@@ -360,7 +360,7 @@ export const isLegacyV10AccountRef = (value: unknown): value is AccountRef =>
  * admitted from schema v9). Legacy vault validators only.
  */
 export const isLegacyV8AccountRef = (value: unknown): value is AccountRef =>
-  isAccountRefShape(value, true, LEDGERW_ONLY, "pre-braavos");
+  isAccountRefShape(value, true, LEDGERW_ONLY, "pre-braavos", false);
 
 /**
  * Validates canonical schema-v6 account metadata for its one-step migration.
