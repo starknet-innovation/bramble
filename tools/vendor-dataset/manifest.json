@@ -211,7 +211,8 @@
     "backedBy": "simulated",
     "state": {
       "deployed": true,
-      "guardian": "0x2606cf4247920814d1592c12cc5001c7b0f720f16182a3c7d3bce5cff987a72"
+      "guardian": "0x2606cf4247920814d1592c12cc5001c7b0f720f16182a3c7d3bce5cff987a72",
+      "note": "First Ready-recovery attempt here reverted on an under-tight gas bound (skipValidate estimate); that reverted tx still consumed the account's 12h escape rate-limit slot. Fixed by estimating with validation on; clean proof moved to ready-matrix/20."
     },
     "log": [
       "fee float 0x6ac463368375b2f1def34fda053d04dc7cde1abb1718563f60ecf00062a8563",
@@ -714,6 +715,31 @@
     },
     "log": [
       "deployed 0x3fcf7128daa3c676f91f173bace93ca43706c60ed5ac2f7f982d404a01f7fdb"
+    ]
+  },
+  "ready-matrix/20": {
+    "id": "ready-matrix/20",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "ready-double",
+    "index": 20,
+    "address": "0x1a6bfd9ebb591dc6bfda3ef7b05394ca579f8f80a4192ba264ea7d4859e4512",
+    "pubkey": "",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "Ready guardian-escape recovery proof \u2014 triggered via the wallet, pending ~7 days then completable",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "guardian": "set (our key)",
+      "escapeTriggered": true,
+      "triggerTx": "0x19205b\u2026see run",
+      "usableAfterUnix": 1791815082,
+      "note": "Guardian escape triggered through the wallet's own review/submit path; status pending (7-day security period)."
+    },
+    "log": [
+      "deployed",
+      "guardian set",
+      "escape triggered"
     ]
   }
 }
