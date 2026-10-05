@@ -14,8 +14,10 @@ import {
   isNonZeroStarkFieldElement,
   sameFelt,
 } from "@bramble/wallet-model/networks";
+import type { RecoverySigningRestriction } from "@bramble/wallet-model/recovery";
 import type { RpcProvider } from "starknet";
 import { requireAuthorizableFamily } from "../accounts/account-contracts";
+import { withRpcFallback } from "../rpc/provider";
 import { isBlockNotFoundError, isContractNotFoundError } from "../rpc/rpc-not-found";
 
 /** The account fields the signer check reads. */
@@ -115,10 +117,57 @@ export const requireAuthorizableArgentClass = (classHash: string): void => {
     throw new WalletError("Deployed Argent account class is not a release this wallet recognizes");
   }
   if (deployed.authorizationShape !== "argent-signer-array") {
+    // Fixed text, not templated with the release label: the reader-facing
+    // translation table matches diagnostics exactly (see friendly-error-copy).
     throw new WalletError(
-      `Deployed Argent account class (${deployed.label}) expects an authorization format this wallet does not produce`,
+      "Deployed Argent account class expects an authorization format this wallet does not produce",
     );
   }
+};
+
+/**
+ * Advisory signability classification for the recovery scan (issue 542): reads
+ * the live class and signer state at the latest block and names the first
+ * reason this wallet could not authorize for the account, or null when it
+ * could. Advisory only — a wrong or missing answer mislabels a picker row but
+ * never moves funds, because the transaction path keeps the authoritative
+ * fail-closed checks below.
+ */
+export const argentSigningRestriction = async (
+  provider: RpcProvider,
+  account: { readonly address: string; readonly publicKeyX: string },
+): Promise<RecoverySigningRestriction | null> => {
+  const liveClass = await provider.getClassHashAt(account.address, "latest");
+  const entry = accountClassEntry(liveClass);
+  if (
+    entry === null ||
+    entry.family !== "argent" ||
+    entry.authorizationShape !== "argent-signer-array"
+  ) {
+    return "release";
+  }
+  const read = (entrypoint: string) =>
+    provider.callContract({ calldata: [], contractAddress: account.address, entrypoint }, "latest");
+  const [owner, ownerType, guardian] = await Promise.all([
+    read("get_owner"),
+    read("get_owner_type"),
+    read("get_guardian"),
+  ]);
+  const [ownerKey] = owner;
+  if (
+    owner.length !== 1 ||
+    typeof ownerKey !== "string" ||
+    !sameFelt(ownerKey, account.publicKeyX)
+  ) {
+    return "owner-changed";
+  }
+  if (ownerType.length !== 1 || !sameFelt(ownerType[0], "0x0")) {
+    return "owner-type";
+  }
+  if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
+    return "guardian";
+  }
+  return null;
 };
 
 /**
@@ -157,4 +206,31 @@ export const requireCompatibleArgentSigner = async (
   if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
     throw new WalletError("Deployed Argent account guardian is not supported by this wallet");
   }
+};
+
+/** Input for the advisory recovery-scan signability probe (issue 542). */
+export type SigningRestrictionInput = {
+  readonly accountAddress: string;
+  readonly publicKeyX: string;
+  readonly rpcUrls: readonly string[];
+};
+
+/**
+ * Advisory signability probe for a deployed Argent recovery candidate, with
+ * the standard endpoint fallback. Throws on an invalid address or when every
+ * endpoint fails; callers treat any throw as "no verdict" since the
+ * transaction path re-checks authoritatively.
+ */
+export const getArgentSigningRestriction = async (
+  { accountAddress, publicKeyX, rpcUrls }: SigningRestrictionInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<RecoverySigningRestriction | null> => {
+  if (!isNonZeroStarkFieldElement(accountAddress) || !isNonZeroStarkFieldElement(publicKeyX)) {
+    throw new WalletError("Invalid account address");
+  }
+  return withRpcFallback(
+    rpcUrls,
+    (provider) => argentSigningRestriction(provider, { address: accountAddress, publicKeyX }),
+    makeProvider,
+  );
 };

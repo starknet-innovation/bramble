@@ -13,6 +13,13 @@ import { type StarkHashSigner, withRpcFallback } from "./provider";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
 
 /**
+ * Re-exported advisory signability probe for recovery candidates (issue 542).
+ */
+export {
+  getArgentSigningRestriction,
+  type SigningRestrictionInput,
+} from "../transactions/account-compatibility";
+/**
  * Re-exported declare-transaction submission so callers keep one RPC import path.
  */
 export {

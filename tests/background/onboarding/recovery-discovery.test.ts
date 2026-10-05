@@ -235,6 +235,61 @@ describe("recovery discovery", () => {
     expect(braavosShapes.length).toBe(deploymentClasses("braavos").length);
   });
 
+  test("labels deployed Argent candidates with the advisory signability verdict", async () => {
+    // Issue 542: the probe answers for deployed Argent rows, a probe failure
+    // lists the row unlabelled, and no other family is ever probed.
+    const probed: string[] = [];
+    const deps = {
+      activeStateCoordinator: createActiveStateCoordinator(),
+      preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+      recoveryDiscovery: createRecoveryDiscoveryCache(),
+      runtimeRpc: {
+        ...defaultRuntimeRpc,
+        async getArgentSigningRestriction({ accountAddress }: { readonly accountAddress: string }) {
+          probed.push(accountAddress);
+          if (accountAddress === "0x2") return "guardian" as const;
+          throw new Error("probe unavailable");
+        },
+        async getDeploymentStatus() {
+          return true;
+        },
+        async getTokenBalances({
+          tokens,
+        }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
+          return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
+        },
+      },
+      session: createUnlockSession(),
+      wallet: {
+        ...walletStub,
+        async previewAccount(input: AccountDerivationInput) {
+          return accountFor(input);
+        },
+      },
+    };
+    const response = (await handleOnboardingOps(deps, "wallet.discoverRecoveryAccounts", {
+      manualIndex: 0,
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      networkId: "SN_MAIN",
+      type: "wallet.discoverRecoveryAccounts",
+    })) as { readonly candidates: readonly RecoveryAccountCandidate[] };
+
+    const argent = response.candidates.filter(
+      (candidate) => candidate.account.accountContractType === "argent",
+    );
+    expect(argent.some((candidate) => candidate.restriction === "guardian")).toBe(true);
+    // The failing probe leaves its candidates listed, just unlabelled.
+    expect(response.candidates.every((candidate) => candidate.deployed)).toBe(true);
+    const nonArgent = response.candidates.filter(
+      (candidate) => candidate.account.accountContractType !== "argent",
+    );
+    expect(nonArgent.every((candidate) => candidate.restriction === undefined)).toBe(true);
+    // Only Argent addresses were ever probed.
+    expect(probed.length).toBeGreaterThan(0);
+    const argentAddresses = new Set(argent.map((candidate) => candidate.account.address));
+    expect(probed.every((address) => argentAddresses.has(address))).toBe(true);
+  });
+
   test("previews every Argent release an account could have been deployed with", async () => {
     // A Ready account deployed at Argent 0.3.x keeps that address forever,
     // whatever it upgrades to. Scanning only the release this wallet creates

@@ -5,8 +5,10 @@ import {
   BRAAVOS_BASE_CLASS_HASH,
   deploymentClasses,
 } from "@bramble/wallet-model/account-families";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import {
+  isRecoveryAccountCandidate,
   isRecoveryAccountSelection,
   RECOVERY_SCAN_LIMITS,
   recoveryScanTarget,
@@ -134,6 +136,29 @@ describe("recovery selection derivation (issue 505)", () => {
     expect(vendor).not.toBe(own);
     // Absent means the vendor ladder, however it is spelled.
     expect(recoverySelectionKey(argentAt1)).toBe(vendor);
+  });
+});
+
+describe("recovery candidate restriction (issue 542)", () => {
+  const account = {
+    accountContractType: "argent" as const,
+    address: "0x1",
+    classHash: canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH) as string,
+    deploymentSalt: "0x3",
+    derivation: { addressIndex: 0, kind: "argentx-bip44" as const },
+    id: "SN_MAIN:0x1",
+    networkId: "SN_MAIN" as const,
+    publicKeyX: "0x4",
+  };
+  const candidate = { account, deployed: true, funded: false };
+
+  test("admits each named restriction and nothing else", () => {
+    expect(isRecoveryAccountCandidate(candidate)).toBe(true);
+    for (const restriction of ["guardian", "owner-changed", "owner-type", "release"]) {
+      expect(isRecoveryAccountCandidate({ ...candidate, restriction })).toBe(true);
+    }
+    expect(isRecoveryAccountCandidate({ ...candidate, restriction: "frozen" })).toBe(false);
+    expect(isRecoveryAccountCandidate({ ...candidate, restriction: 1 })).toBe(false);
   });
 });
 
