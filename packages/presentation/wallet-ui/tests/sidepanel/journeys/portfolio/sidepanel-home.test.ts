@@ -413,6 +413,8 @@ describe("home read-only flag", () => {
     // Stays read only with the buttons greyed even mid-removal.
     expect(markup).toContain("Read only");
     expect(markup).toContain("Removing 2FA");
+    // 1_900_000_000 = 17/03/30 17h46 UTC — rendered absolute, no live clock.
+    expect(markup).toContain("usable on 17/03/30 at 17h46 UTC");
     expect(markup).toContain("device can still stop this");
     // No recover button once a request is under way.
     expect(markup).not.toContain('id="recover-account"');
