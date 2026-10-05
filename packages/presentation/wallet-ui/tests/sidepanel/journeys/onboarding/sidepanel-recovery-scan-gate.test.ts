@@ -149,6 +149,49 @@ describe("recovery scan Ready gate", () => {
     await tick();
   });
 
+  test("extends the progress denominator past activity near the horizon", async () => {
+    // Issue 503: evidence at index 19 reopens the scan, and the status line
+    // quotes the extended target rather than announcing a finished window.
+    const lateAccount: DerivedAccountRef = {
+      ...brambleAccount,
+      address: "0xlate",
+      derivation: { accountIndex: 19, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_MAIN:0xlate",
+    };
+    const batches: Array<Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>> = [
+      {
+        candidates: [{ account: lateAccount, deployed: true, funded: false }],
+        complete: false,
+        nextIndex: 20,
+        ok: true,
+      },
+    ];
+    let finish: (value: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>) => void =
+      () => undefined;
+    const app = mount([], () => {
+      const batch = batches.shift();
+      if (batch) return Promise.resolve(batch);
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    await reachPicker(app);
+
+    expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
+      "Checked 20 of 40 indices…",
+    );
+    finish({
+      candidates: [{ account: lateAccount, deployed: true, funded: false }],
+      complete: true,
+      nextIndex: 40,
+      ok: true,
+    });
+    await tick();
+    expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
+      "Search complete. Checked 40 indices across every account type.",
+    );
+  });
+
   test("lists an inactive Ready candidate but refuses to select it", async () => {
     const app = mount();
     await reachPicker(app);

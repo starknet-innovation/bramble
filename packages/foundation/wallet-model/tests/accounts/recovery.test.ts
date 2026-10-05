@@ -5,7 +5,13 @@ import {
   BRAAVOS_BASE_CLASS_HASH,
   deploymentClasses,
 } from "@bramble/wallet-model/account-families";
-import { isRecoveryAccountSelection, recoverySelectionKey } from "@bramble/wallet-model/recovery";
+import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
+import {
+  isRecoveryAccountSelection,
+  RECOVERY_SCAN_LIMITS,
+  recoveryScanTarget,
+  recoverySelectionKey,
+} from "@bramble/wallet-model/recovery";
 
 const argent030 = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
 if (!argent030) throw new Error("argent 0.3.0 missing from the class table");
@@ -75,6 +81,53 @@ describe("recovery selections", () => {
     expect(recoverySelectionKey(at())).toBe(recoverySelectionKey(at(ARGENT_ACCOUNT_CLASS_HASH)));
     expect(recoverySelectionKey(at(argent030.classHash))).toBe(
       recoverySelectionKey(at(argent030.classHash.replace("0x0", "0x"))),
+    );
+  });
+});
+
+describe("recovery scan target", () => {
+  const candidateAt = (
+    accountIndex: number,
+    evidence: Partial<Pick<RecoveryAccountCandidate, "deployed" | "funded">> = {},
+  ): RecoveryAccountCandidate => ({
+    account: {
+      accountContractType: "openzeppelin",
+      address: `0x${(accountIndex + 1).toString(16)}`,
+      classHash: "0x1",
+      derivation: { accountIndex, addressIndex: 0, kind: "starknet-bip44" },
+      id: `SN_MAIN:0x${(accountIndex + 1).toString(16)}`,
+      networkId: "SN_MAIN",
+      publicKeyX: "0x2",
+      publicKeyY: "0x3",
+    },
+    deployed: false,
+    funded: false,
+    ...evidence,
+  });
+
+  test("covers the floor when nothing was found", () => {
+    expect(recoveryScanTarget([])).toBe(RECOVERY_SCAN_LIMITS.defaultCount);
+  });
+
+  test("reaches a quiet tail past the last on-chain evidence", () => {
+    // Activity at index 19 would be the last account a fixed window ever
+    // offers; the target keeps the scan going for a full tail beyond it.
+    expect(recoveryScanTarget([candidateAt(19, { deployed: true })])).toBe(
+      20 + RECOVERY_SCAN_LIMITS.defaultCount,
+    );
+    expect(recoveryScanTarget([candidateAt(25, { funded: true })])).toBe(
+      26 + RECOVERY_SCAN_LIMITS.defaultCount,
+    );
+  });
+
+  test("ignores candidates offered without on-chain evidence", () => {
+    // A creatable default at index 0 is an offer, not a finding.
+    expect(recoveryScanTarget([candidateAt(17)])).toBe(RECOVERY_SCAN_LIMITS.defaultCount);
+  });
+
+  test("never exceeds the fail-safe ceiling", () => {
+    expect(recoveryScanTarget([candidateAt(5000, { deployed: true })])).toBe(
+      RECOVERY_SCAN_LIMITS.maxScannedIndexes,
     );
   });
 });

@@ -20,6 +20,7 @@ import {
 import {
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountCandidate,
+  recoveryScanTarget,
 } from "@bramble/wallet-model/recovery";
 import {
   readDiscoverRecoveryAccountsInput,
@@ -156,9 +157,15 @@ const discoverRecoveryAccounts = async (
     (token) => token.networkId === input.networkId,
   );
   const start = manual ?? snapshot.nextIndex;
+  // The scan horizon is a gap limit, not a fixed window: it always reaches
+  // `defaultCount` indices past the last evidence of activity (issue 503), so
+  // each batch is bounded by the target the candidates found so far justify.
   const end =
     manual ??
-    Math.min(start + RECOVERY_SCAN_LIMITS.batchSize - 1, RECOVERY_SCAN_LIMITS.defaultCount - 1);
+    Math.min(
+      start + RECOVERY_SCAN_LIMITS.batchSize - 1,
+      recoveryScanTarget(snapshot.candidates) - 1,
+    );
   const discovered: RecoveryAccountCandidate[] = [];
   for (let accountIndex = start; accountIndex <= end; accountIndex += 1) {
     const candidates = await scanRecoveryIndex(deps, input, accountIndex, tokens, rpcUrls);
@@ -178,7 +185,9 @@ const discoverRecoveryAccounts = async (
   await deps.recoveryDiscovery.write(next).catch(() => undefined);
   return {
     candidates: next.candidates,
-    complete: nextIndex >= RECOVERY_SCAN_LIMITS.defaultCount,
+    // Judged against what this batch found, so activity near the horizon's
+    // edge reopens the scan — including activity a manual search turned up.
+    complete: nextIndex >= recoveryScanTarget(next.candidates),
     nextIndex,
     ok: true,
   };
