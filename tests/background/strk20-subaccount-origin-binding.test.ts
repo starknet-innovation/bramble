@@ -6,7 +6,7 @@
  * while one site keeps a stable identity across sessions and distinct scopes
  * across its own labels.
  *
- * `subaccounts(dappName)` is one identity for both the disclosed commitment and
+ * `shadowAccounts(dappName)` is one identity for both the disclosed commitment and
  * the `subaccount_invoke` that acts through it, so this suite also pins that
  * the action path derives the identical separator. If it did not, a site could
  * be shown a commitment it could never name in an action.

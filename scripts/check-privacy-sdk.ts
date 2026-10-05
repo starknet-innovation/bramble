@@ -35,11 +35,11 @@ const bundle = `${checkout}/sdk/dist/browser/starknet-sdk.min.js`;
 const sourceMap = `${bundle}.map`;
 const lockPath = `${checkout}/sdk/package-lock.json`;
 const vendorScript = "scripts/vendor-privacy-sdk.ts";
-const expectedDigest = "c3ae103928707d7712ba4fe47abecfb946019da622c795b14779e7c3bc8965cc";
+const expectedDigest = "b3d4c41a3e8784adc4f7b5dbd069a1e7a22a27e2eb1747abe46619c1f625c9c5";
 // SHA-256 of the source map emitted alongside the reviewed bundle. Its
 // `sources` are repository-relative, so it is byte-reproducible wherever the
 // pinned revision is built; update it only together with PRIVACY_SDK_REVISION.
-const expectedSourceMapDigest = "36a2a9a176a4287cc6db6a82f71d2e71b781a0de77ea2b77aceb008e66bba38e";
+const expectedSourceMapDigest = "d89b6eebee646952d5acb61232bfeb315d76f944c6749b685d039dae9f4b5e57";
 
 for (const path of [bundle, sourceMap]) {
   if (!(await Bun.file(path).exists())) {
@@ -160,7 +160,15 @@ if (
   typeof runtime["Open"] !== "symbol" ||
   !runtime["SetupRequirement"] ||
   typeof runtime["IndexerDiscoveryProvider"] !== "function" ||
-  typeof runtime["ProvingService"] !== "function"
+  typeof runtime["ProvingService"] !== "function" ||
+  // rc.8 renamed the sub-account surface to shadow accounts and made the
+  // identity helpers standalone exports. The adapter consumes the builder
+  // methods, but pinning the module-level helpers too means a rename that a
+  // factory-only check would miss fails here instead.
+  typeof runtime["shadowAccountAddress"] !== "function" ||
+  typeof runtime["shadowAccountPartialCommitment"] !== "function" ||
+  typeof runtime["shadowAccountCommitment"] !== "function" ||
+  typeof runtime["PRIMER_CLASS_HASH"] !== "bigint"
 ) {
   throw new Error("Privacy SDK browser runtime exports do not match the reviewed adapter");
 }
@@ -173,7 +181,7 @@ const transfers = createPrivateTransfers({
     nodeUrl: "https://rpc.invalid",
     url: "https://prover.invalid",
   },
-  subAccountAnonymizerAddress: "0x3",
+  shadowAccountAnonymizerAddress: "0x3",
   viewingKeyProvider: { getViewingKey: async () => "0x1" },
 });
 if (
@@ -193,4 +201,14 @@ if (
 const builder = transfers.build();
 if (typeof builder !== "object" || builder === null || typeof builder.register !== "function") {
   throw new Error("Privacy SDK builder no longer exposes reviewed account registration");
+}
+const shadowAccounts = builder.shadowAccounts("smoke");
+if (
+  typeof shadowAccounts !== "object" ||
+  shadowAccounts === null ||
+  typeof shadowAccounts.partialCommitment !== "function" ||
+  typeof shadowAccounts.commitment !== "function" ||
+  typeof shadowAccounts.invoke !== "function"
+) {
+  throw new Error("Privacy SDK builder no longer exposes the reviewed shadow-account interface");
 }
