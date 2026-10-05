@@ -671,5 +671,45 @@
       "liveClass": null
     },
     "log": []
+  },
+  "braavos-matrix/5": {
+    "id": "braavos-matrix/5",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 5,
+    "address": "0x7213c526cf231182e66785de225fc5d16f9882c69838539404d0b814ec59e87",
+    "pubkey": "",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "wallet-deployed Braavos account, stark-only, fully signable",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "deployedBy": "bramble-platform-code",
+      "note": "deployed BY THE WALLET's platform path (first run; exposed and fixed the signed-hash ordering)"
+    },
+    "log": [
+      "deployed (first-run proof)"
+    ]
+  },
+  "braavos-matrix/6": {
+    "id": "braavos-matrix/6",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 6,
+    "address": "0x645dd757fd08588daee39cf2120eb884c88a4c828ce005cd70d51982f7161d8",
+    "pubkey": "",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "wallet-deployed Braavos account, stark-only, fully signable",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "deployedBy": "bramble-platform-code",
+      "note": "deployed BY THE WALLET's platform path, clean end-to-end (estimate with validation + submit + hash check)"
+    },
+    "log": [
+      "deployed 0x3fcf7128daa3c676f91f173bace93ca43706c60ed5ac2f7f982d404a01f7fdb"
+    ]
   }
 }
