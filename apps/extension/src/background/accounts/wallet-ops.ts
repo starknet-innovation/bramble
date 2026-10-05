@@ -46,7 +46,9 @@ import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import { failureNoticeMessage } from "../transactions/tx-observation";
 import {
   handleAccountSignability,
+  handleRecoverArgentAccount,
   handleRecoverBraavosAccount,
+  handleReviewArgentRecovery,
   handleReviewBraavosRecovery,
 } from "./account-signability";
 import { handleActivity } from "./activity-ops";
@@ -439,7 +441,9 @@ const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.activity": handleActivity,
   "wallet.deployAccount": handleDeployAccount,
   "wallet.accountSignability": handleAccountSignability,
+  "wallet.recoverArgentAccount": handleRecoverArgentAccount,
   "wallet.recoverBraavosAccount": handleRecoverBraavosAccount,
+  "wallet.reviewArgentRecovery": handleReviewArgentRecovery,
   "wallet.reviewBraavosRecovery": handleReviewBraavosRecovery,
   "wallet.deploymentStatus": handleDeploymentStatus,
   "wallet.getBalances": handleGetBalances,

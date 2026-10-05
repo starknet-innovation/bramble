@@ -371,7 +371,8 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
  * Binds the account drawer and portfolio menu on the home screen. Safe to call
  * on every render; screens without these regions are skipped.
  */
-// The phrase-driven 2FA-removal entry on the read-only Home flag. Consequential
+// The phrase-driven removal entry (Braavos 2FA, or Ready's guardian via its
+// two-step escape) on the read-only Home flag. Consequential
 // and delayed, so it confirms in place: the first press reviews the fee and
 // the delay and arms the button, the second submits the removal request.
 // Cancelling a pending request is not offered here because a Braavos account
@@ -385,21 +386,29 @@ const bindRecoverAccount = (deps: HomeUiDeps): void => {
     seconds === null ? "" : ` · usable in ${Math.ceil(seconds / 86_400)} days`;
   button.addEventListener("click", async () => {
     try {
+      const kind = button.dataset["recoverKind"] === "argent" ? "argent" : "braavos";
+      const subject = kind === "argent" ? "guardian" : "2FA";
       if (!armed) {
         buttonBusy(button, true);
-        const review = await deps.wallet.reviewBraavosRecovery();
+        const review =
+          kind === "argent"
+            ? await deps.wallet.reviewArgentRecovery()
+            : await deps.wallet.reviewBraavosRecovery();
         buttonBusy(button, false);
         armed = true;
-        button.textContent = `Remove 2FA — tap to confirm${days(review.delaySeconds)}`;
+        button.textContent = `Remove ${subject} — tap to confirm${days(review.delaySeconds)}`;
         button.dataset["reviewedFee"] = JSON.stringify(review.fee);
         return;
       }
       const reviewedFee = button.dataset["reviewedFee"];
       if (!reviewedFee) return;
       buttonBusy(button, true);
-      await deps.wallet.recoverBraavosAccount(JSON.parse(reviewedFee));
+      const fee = JSON.parse(reviewedFee);
+      await (kind === "argent"
+        ? deps.wallet.recoverArgentAccount(fee)
+        : deps.wallet.recoverBraavosAccount(fee));
       showToast(
-        "2FA removal started. The account becomes usable after the delay.",
+        `Removal started. The account becomes usable once the ${subject} is removed.`,
         "success",
         button,
       );

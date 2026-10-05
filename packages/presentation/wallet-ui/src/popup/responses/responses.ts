@@ -162,6 +162,8 @@ export type DeploymentStatusResponse = {
 export type RecoveryState = {
   readonly delaySeconds: number;
   readonly pendingUntil: number | null;
+  /** Ready's two-step escape: "pending" while the delay runs, "ready" to complete. */
+  readonly stage?: "pending" | "ready";
 };
 
 /** The Home flag's input: signable, or read-only with its reason. */
@@ -448,9 +450,10 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
 /** Validates the signability verdict before the Home flag renders from it. */
 const isRecoveryState = (value: unknown): value is RecoveryState =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["delaySeconds", "pendingUntil"]) &&
+  hasOnlyKnownKeys(value, ["delaySeconds", "pendingUntil", "stage"]) &&
   typeof value["delaySeconds"] === "number" &&
-  (value["pendingUntil"] === null || typeof value["pendingUntil"] === "number");
+  (value["pendingUntil"] === null || typeof value["pendingUntil"] === "number") &&
+  (value["stage"] === undefined || value["stage"] === "pending" || value["stage"] === "ready");
 
 /** Validates the signability verdict (with any recovery state) before the flag renders. */
 export const isAccountSignabilityResponse = (value: unknown): value is AccountSignabilityResponse =>

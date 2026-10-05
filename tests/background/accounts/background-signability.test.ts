@@ -93,6 +93,77 @@ const braavosAccount: AccountRef = {
   deploymentSalt: base.publicKeyX,
 };
 
+describe("background argent recovery", () => {
+  const guarded: AccountRef = {
+    ...base,
+    accountContractType: "argent",
+    deploymentSalt: base.publicKeyX,
+  };
+  const makeHandlerFor = () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const vault = { accounts: [guarded], activeAccountId: guarded.id } as unknown as Vault;
+    return createMessageHandler(
+      {
+        ...sharedWalletStub,
+        async readVault() {
+          return vault;
+        },
+        async status() {
+          return {
+            accountCount: 1,
+            activeAccountId: guarded.id,
+            hasVault: true,
+            locked: false,
+            ready: true,
+          };
+        },
+      },
+      testExtension,
+      {
+        runtimeRpc: makeRuntimeRpc({
+          async getArgentRecoveryState() {
+            return { readyAt: null, status: "none" as const };
+          },
+          async reviewArgentRecovery() {
+            return { overallFee: "100", unit: "FRI" as const };
+          },
+          async submitArgentRecovery() {
+            return { readyAt: 1_000, transactionHash: "0xesc" };
+          },
+        }),
+        session,
+      },
+    );
+  };
+
+  test("quotes the escape step fee and delay", async () => {
+    expect(
+      await makeHandlerFor()({ type: "wallet.reviewArgentRecovery" }, extensionSender),
+    ).toEqual({
+      accountId: guarded.id,
+      delaySeconds: 604_800,
+      fee: { overallFee: "100", unit: "FRI" },
+      ok: true,
+    });
+  });
+
+  test("submits the reviewed escape step", async () => {
+    expect(
+      await makeHandlerFor()(
+        { reviewedFee: { overallFee: "100", unit: "FRI" }, type: "wallet.recoverArgentAccount" },
+        extensionSender,
+      ),
+    ).toEqual({ accountId: guarded.id, ok: true, pendingUntil: 1_000, transactionHash: "0xesc" });
+  });
+
+  test("stays privileged", async () => {
+    expect(await makeHandlerFor()({ type: "wallet.reviewArgentRecovery" }, contentSender)).toEqual({
+      error: "privileged sender required",
+    });
+  });
+});
+
 describe("background braavos recovery", () => {
   const recoverable: AccountRef = {
     ...base,

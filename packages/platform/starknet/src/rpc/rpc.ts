@@ -23,6 +23,17 @@ export {
  * Re-exported advisory signability probe for recovery candidates (issue 542).
  */
 /**
+ * Re-exported phrase-driven Ready (Argent) guardian removal.
+ */
+export {
+  type ArgentRecoveryInput,
+  type ArgentRecoveryState,
+  DEFAULT_ARGENT_ESCAPE_SECURITY_PERIOD_SECONDS,
+  getArgentRecoveryState,
+  reviewArgentRecovery,
+  submitArgentRecovery,
+} from "../transactions/argent-recovery";
+/**
  * Re-exported seed-driven Braavos recovery (deferred 2FA removal).
  */
 export {

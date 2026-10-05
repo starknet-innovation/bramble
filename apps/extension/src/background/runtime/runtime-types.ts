@@ -209,9 +209,8 @@ type TokenChartResponse = {
 };
 
 /**
- * Verified AVNU token catalog returned to extension pages for the swap
- * picker. Directory data only — a selected untracked token is re-validated
- * on-chain by the add-token flow before the wallet trusts it.
+ * Verified AVNU token catalog for the swap picker. Directory data only — a
+ * selected untracked token is re-validated on-chain before the wallet trusts it.
  */
 type SwapTokensResponse = {
   readonly ok: true;
@@ -285,8 +284,11 @@ type AccountSignabilityResponse = {
   readonly ok: true;
   readonly readOnly: boolean;
   readonly reason?: ReadOnlyReason;
-  /** Phrase-recoverable read-only accounts (Braavos 2FA) carry the recovery state. */
-  readonly recovery?: { readonly delaySeconds: number; readonly pendingUntil: number | null };
+  readonly recovery?: {
+    readonly delaySeconds: number;
+    readonly pendingUntil: number | null;
+    readonly stage?: "pending" | "ready";
+  };
 };
 
 type ReviewBraavosRecoveryResponse = {
@@ -303,10 +305,8 @@ type RecoverBraavosAccountResponse = {
 };
 
 /**
- * On-chain class-hash verification returned to extension pages. `verification`
- * carries the discriminated {@link ClassHashVerification} outcome so the UI can
- * distinguish verified / mismatch / undeployed / unreachable without re-reading
- * the chain.
+ * On-chain class-hash verification: the discriminated
+ * {@link ClassHashVerification} outcome, so the UI need not re-read the chain.
  */
 type ClassHashVerificationResponse = {
   readonly accountId: string;

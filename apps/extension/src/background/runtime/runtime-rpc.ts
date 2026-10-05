@@ -42,6 +42,7 @@ import {
 } from "@bramble/starknet/multisig-invoke";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import {
+  type ArgentRecoveryInput,
   type BalanceInput,
   type BraavosRecoveryInput,
   type DeclareInput,
@@ -50,6 +51,7 @@ import {
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  getArgentRecoveryState,
   getArgentSigningRestriction,
   getBraavosRecoveryState,
   getBraavosSigningRestriction,
@@ -64,9 +66,11 @@ import {
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  reviewArgentRecovery,
   reviewBraavosRecovery,
   type SigningRestrictionInput,
   submitAccountDeployment,
+  submitArgentRecovery,
   submitBraavosRecovery,
   submitDeclareTransaction,
   submitErc20Transfer,
@@ -180,6 +184,18 @@ export type RuntimeRpc = {
   readonly getBraavosSigningRestriction?: (
     input: SigningRestrictionInput,
   ) => ReturnType<typeof getBraavosSigningRestriction>;
+  /** Pending-state read for the Ready recovery flow; advisory, read-only. */
+  readonly getArgentRecoveryState?: (
+    input: Parameters<typeof getArgentRecoveryState>[0],
+  ) => ReturnType<typeof getArgentRecoveryState>;
+  /** Estimates the Ready recovery's next escape step. */
+  readonly reviewArgentRecovery?: (
+    input: ArgentRecoveryInput,
+  ) => ReturnType<typeof reviewArgentRecovery>;
+  /** Submits the reviewed Ready recovery step. */
+  readonly submitArgentRecovery?: (
+    input: ArgentRecoveryInput,
+  ) => ReturnType<typeof submitArgentRecovery>;
   /** Pending-state read for the Braavos recovery flow; advisory, read-only. */
   readonly getBraavosRecoveryState?: (
     input: Parameters<typeof getBraavosRecoveryState>[0],
@@ -318,10 +334,13 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
   getArgentSigningRestriction,
+  getArgentRecoveryState,
   getBraavosRecoveryState,
   getBraavosSigningRestriction,
   getDeploymentStatus,
+  reviewArgentRecovery,
   reviewBraavosRecovery,
+  submitArgentRecovery,
   submitBraavosRecovery,
   getNftMetadata,
   getNftOwner,

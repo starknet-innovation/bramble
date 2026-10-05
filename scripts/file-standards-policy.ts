@@ -204,6 +204,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Assembles the Braavos 2FA-removal request through the signing boundary;
   // the phrase key signs here and nothing is logged or persisted.
   "packages/platform/starknet/src/transactions/braavos-recovery.ts",
+  // Assembles the Ready guardian-escape request through the signing boundary;
+  // the phrase key signs here and nothing is logged or persisted.
+  "packages/platform/starknet/src/transactions/argent-recovery.ts",
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
   "packages/platform/vault/src/accounts/network-account.ts",
   "packages/platform/vault/src/service/reveal.ts",
