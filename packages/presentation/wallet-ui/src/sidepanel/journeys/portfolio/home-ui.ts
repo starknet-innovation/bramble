@@ -371,7 +371,51 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
  * Binds the account drawer and portfolio menu on the home screen. Safe to call
  * on every render; screens without these regions are skipped.
  */
+// The phrase-driven 2FA-removal entry on the read-only Home flag. Consequential
+// and delayed, so it confirms in place: the first press reviews the fee and
+// the delay and arms the button, the second submits the removal request.
+// Cancelling a pending request is not offered here because a Braavos account
+// with an active strong signer accepts the stark-only carve-out for the
+// removal request alone — the cancel needs the 2FA device, which the copy says.
+const bindRecoverAccount = (deps: HomeUiDeps): void => {
+  const button = deps.app?.querySelector<HTMLButtonElement>("#recover-account");
+  if (!button) return;
+  let armed = false;
+  const days = (seconds: number | null): string =>
+    seconds === null ? "" : ` · usable in ${Math.ceil(seconds / 86_400)} days`;
+  button.addEventListener("click", async () => {
+    try {
+      if (!armed) {
+        buttonBusy(button, true);
+        const review = await deps.wallet.reviewBraavosRecovery();
+        buttonBusy(button, false);
+        armed = true;
+        button.textContent = `Remove 2FA — tap to confirm${days(review.delaySeconds)}`;
+        button.dataset["reviewedFee"] = JSON.stringify(review.fee);
+        return;
+      }
+      const reviewedFee = button.dataset["reviewedFee"];
+      if (!reviewedFee) return;
+      buttonBusy(button, true);
+      await deps.wallet.recoverBraavosAccount(JSON.parse(reviewedFee));
+      showToast(
+        "2FA removal started. The account becomes usable after the delay.",
+        "success",
+        button,
+      );
+      await deps.wallet.loadStatus().then(deps.render);
+    } catch (error) {
+      buttonBusy(button, false);
+      armed = false;
+      button.textContent = "Recover account";
+      showToast(errorMessage(error, "Couldn't start recovery. Try again."), "error", button);
+    }
+  });
+};
+
+/** Wires the Home drawer, portfolio menu, and the read-only recover-account entry. */
 export const bindHomeUi = (deps: HomeUiDeps): void => {
   bindDrawer(deps);
   bindPortfolioMenu(deps);
+  bindRecoverAccount(deps);
 };

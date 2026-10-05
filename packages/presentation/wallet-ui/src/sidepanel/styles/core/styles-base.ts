@@ -305,6 +305,13 @@ export const BASE_STYLES = `
     gap: 5px;
   }
   .hero-stale .icon { height: 13px; width: 13px; }
+  /* Read-only flag: label, optional recovery detail, and recover button stacked
+     in one quiet column beneath the total. */
+  .read-only-notice { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xs}; }
+  .read-only-notice .read-only-detail {
+    color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; max-width: 32ch; text-align: center;
+  }
+  .read-only-notice #recover-account { margin-top: 2px; }
 
   /* The frequent money actions are equal rounded-square tools. Their common
      shape makes the row instantly scannable; distinctive glyph silhouettes,

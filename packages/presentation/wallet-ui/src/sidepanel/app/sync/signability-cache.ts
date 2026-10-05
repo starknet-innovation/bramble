@@ -64,7 +64,11 @@ export const createSignabilityCache = (
       }
       const verdict: SignabilityVerdict =
         response.readOnly && response.reason !== undefined
-          ? { readOnly: true, reason: response.reason }
+          ? {
+              readOnly: true,
+              reason: response.reason,
+              ...(response.recovery ? { recovery: response.recovery } : {}),
+            }
           : { readOnly: false };
       snapshots.set(key, { checkedAt, verdict });
       return verdict;

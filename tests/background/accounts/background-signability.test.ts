@@ -93,6 +93,84 @@ const braavosAccount: AccountRef = {
   deploymentSalt: base.publicKeyX,
 };
 
+describe("background braavos recovery", () => {
+  const recoverable: AccountRef = {
+    ...base,
+    accountContractType: "braavos",
+    deploymentSalt: base.publicKeyX,
+  };
+  const makeRecoveryHandler = () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const vault = { accounts: [recoverable], activeAccountId: recoverable.id } as unknown as Vault;
+    const handler = createMessageHandler(
+      {
+        ...sharedWalletStub,
+        async readVault() {
+          return vault;
+        },
+        async status() {
+          return {
+            accountCount: 1,
+            activeAccountId: recoverable.id,
+            hasVault: true,
+            locked: false,
+            ready: true,
+          };
+        },
+      },
+      testExtension,
+      {
+        runtimeRpc: makeRuntimeRpc({
+          async getBraavosRecoveryState() {
+            return { delaySeconds: 345_600, pendingUntil: null };
+          },
+          async reviewBraavosRecovery() {
+            return { overallFee: "100", unit: "FRI" as const };
+          },
+          async submitBraavosRecovery() {
+            return { pendingUntil: 1_000, transactionHash: "0xreq" };
+          },
+        }),
+        session,
+      },
+    );
+    return handler;
+  };
+
+  test("quotes the removal fee and delay", async () => {
+    const handler = makeRecoveryHandler();
+    expect(await handler({ type: "wallet.reviewBraavosRecovery" }, extensionSender)).toEqual({
+      accountId: recoverable.id,
+      delaySeconds: 345_600,
+      fee: { overallFee: "100", unit: "FRI" },
+      ok: true,
+    });
+  });
+
+  test("submits the reviewed removal request", async () => {
+    const handler = makeRecoveryHandler();
+    expect(
+      await handler(
+        { reviewedFee: { overallFee: "100", unit: "FRI" }, type: "wallet.recoverBraavosAccount" },
+        extensionSender,
+      ),
+    ).toEqual({
+      accountId: recoverable.id,
+      ok: true,
+      pendingUntil: 1_000,
+      transactionHash: "0xreq",
+    });
+  });
+
+  test("stays privileged", async () => {
+    const handler = makeRecoveryHandler();
+    expect(await handler({ type: "wallet.reviewBraavosRecovery" }, contentSender)).toEqual({
+      error: "privileged sender required",
+    });
+  });
+});
+
 describe("background account signability", () => {
   test("stays privileged and locked-safe", async () => {
     const { handler } = makeHandler(ozAccount);

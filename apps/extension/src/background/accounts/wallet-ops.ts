@@ -44,7 +44,11 @@ import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import { failureNoticeMessage } from "../transactions/tx-observation";
-import { handleAccountSignability } from "./account-signability";
+import {
+  handleAccountSignability,
+  handleRecoverBraavosAccount,
+  handleReviewBraavosRecovery,
+} from "./account-signability";
 import { handleSetAccountHidden } from "./account-visibility-ops";
 import { handleActivity } from "./activity-ops";
 import { submitReviewedAccountDeployment } from "./deployment-ops";
@@ -436,6 +440,8 @@ const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.activity": handleActivity,
   "wallet.deployAccount": handleDeployAccount,
   "wallet.accountSignability": handleAccountSignability,
+  "wallet.recoverBraavosAccount": handleRecoverBraavosAccount,
+  "wallet.reviewBraavosRecovery": handleReviewBraavosRecovery,
   "wallet.deploymentStatus": handleDeploymentStatus,
   "wallet.getBalances": handleGetBalances,
   "wallet.lock": handleLock,
