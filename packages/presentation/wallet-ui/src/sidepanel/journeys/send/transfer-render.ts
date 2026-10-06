@@ -198,6 +198,11 @@ const applyFailureReceipt = (
   bindCopyButtons(copyError?.parentElement ?? null);
 };
 
+// The reviewed network label is carried on the form by the first paint, so the
+// summary stays a function of the same account/network state the form holds.
+const reviewedNetworkLabel = (form: HTMLFormElement): string =>
+  form.dataset["sendNetworkLabel"] ?? "";
+
 /**
  * Paints the Send form for one state. `poolFeeFri` is threaded in rather than
  * read here: the privacy reading belongs to the binding, so this stays a
@@ -282,10 +287,15 @@ export const applyTransferUi = (
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {
     reviewSummary.innerHTML = state.fields
-      ? reviewSummaryHtml(state.fields, mode, {
-          address: form.dataset["sender"] ?? "",
-          label: form.dataset["senderLabel"] ?? "",
-        })
+      ? reviewSummaryHtml(
+          state.fields,
+          mode,
+          {
+            address: form.dataset["sender"] ?? "",
+            label: form.dataset["senderLabel"] ?? "",
+          },
+          reviewedNetworkLabel(form),
+        )
       : "";
     // Freshly rendered markup: the shell's copy binding ran before this paint.
     bindCopyButtons(reviewSummary);

@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
+import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
 
 const account = {
   accountContractType: "openzeppelin" as const,
@@ -52,10 +53,15 @@ describe("approvalCard renders each approval kind", () => {
     // The identity is on the face, not inside the technical disclosure.
     expect(html.indexOf("<dt>Account</dt>")).toBeGreaterThan(-1);
     expect(html).not.toContain("request-technical");
+    // The familiar display name leads, stacked over the address it shares.
+    expect(html).toContain(`<strong>${accountDisplayName(account, null)}</strong>`);
     expect(html).toContain(`title="${active?.address}"`);
     expect(html).toContain(`<dt>Network</dt><dd>${status.network}</dd>`);
     expect(html).toContain(`data-approval-account="${status.activeAccountId}"`);
     expect(html).toContain(`data-approval-action="approve"`);
+    // The consent action names what it does; the escape hatch reads as escaping.
+    expect(html).toContain(">Connect account</");
+    expect(html).toContain(">Cancel</");
     // Not locked, not blocked: the approve button is enabled.
     expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
     // Deny is reached first by keyboard and eye.

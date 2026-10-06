@@ -350,10 +350,10 @@ export const dashboard = (
   // explicitly snooze it back to Activity after seeing it.
   const actionable = actionableApprovals(pending, snoozedApprovalIds);
   if (actionable.length > 0) {
-    return approvalTakeover(actionable, status, activeView);
+    return approvalTakeover(actionable, status, activeView, preferences);
   }
   if (activeView === "requests") {
-    return requestsFlow(pending, status);
+    return requestsFlow(pending, status, preferences);
   }
   const simpleFlow = simpleFlowScreen(activeView, {
     account,

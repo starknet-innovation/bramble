@@ -123,6 +123,9 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     justify-content: flex-end;
   }
   .request-detail dd:has(> .icon-button) > code { min-width: 0; }
+  /* The connect card leads with the account's familiar display name, stacked
+     over the address it shares, right-aligned with the receipt grammar. */
+  .request-detail dd.request-account { display: grid; justify-items: end; }
   .review-calls {
     display: grid;
     gap: ${SPACE.sm};
