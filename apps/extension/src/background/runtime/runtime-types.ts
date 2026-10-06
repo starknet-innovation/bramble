@@ -41,6 +41,11 @@ import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
 import type {
+  AccountRecoveryState,
+  RecoverAccountResponse,
+  RecoveryReviewResponse,
+} from "./recovery-types";
+import type {
   FeeReviewResponse,
   TransferResponse,
   TransferReviewResponse,
@@ -284,24 +289,7 @@ type AccountSignabilityResponse = {
   readonly ok: true;
   readonly readOnly: boolean;
   readonly reason?: ReadOnlyReason;
-  readonly recovery?: {
-    readonly delaySeconds: number;
-    readonly pendingUntil: number | null;
-    readonly stage?: "pending" | "ready";
-  };
-};
-
-type ReviewBraavosRecoveryResponse = {
-  readonly accountId: string;
-  readonly delaySeconds: number | null;
-  readonly fee: FeeEstimate;
-  readonly ok: true;
-};
-type RecoverBraavosAccountResponse = {
-  readonly accountId: string;
-  readonly ok: true;
-  readonly pendingUntil: number | null;
-  readonly transactionHash: string;
+  readonly recovery?: AccountRecoveryState;
 };
 
 /**
@@ -434,8 +422,8 @@ type LedgerAccountStatusResponse = {
  */
 export type RuntimeResponse =
   | AccountSignabilityResponse
-  | ReviewBraavosRecoveryResponse
-  | RecoverBraavosAccountResponse
+  | RecoveryReviewResponse
+  | RecoverAccountResponse
   | AccountsResponse
   | ActivityResponse
   | AddChainResponse

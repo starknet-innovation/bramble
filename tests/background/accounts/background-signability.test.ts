@@ -5,7 +5,7 @@
  * authoritative checks.
  */
 import { describe, expect, test } from "bun:test";
-import type { SigningRestrictionInput } from "@bramble/starknet/rpc";
+import type { ArgentRecoveryState, SigningRestrictionInput } from "@bramble/starknet/rpc";
 import type { Vault } from "@bramble/vault/schema";
 import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -38,7 +38,11 @@ type ProbeBehaviour = "guardian" | "null" | "strong-signer" | "throws";
 
 const makeHandler = (
   account: AccountRef,
-  options: { readonly deployed?: boolean; readonly probe?: ProbeBehaviour } = {},
+  options: {
+    readonly argentState?: ArgentRecoveryState;
+    readonly deployed?: boolean;
+    readonly probe?: ProbeBehaviour;
+  } = {},
 ) => {
   const probeCalls: SigningRestrictionInput[] = [];
   const session = createUnlockSession();
@@ -74,6 +78,13 @@ const makeHandler = (
       async getDeploymentStatus() {
         return options.deployed ?? true;
       },
+      ...(options.argentState
+        ? {
+            async getArgentRecoveryState() {
+              return options.argentState as ArgentRecoveryState;
+            },
+          }
+        : {}),
     }),
     session,
   });
@@ -92,171 +103,6 @@ const braavosAccount: AccountRef = {
   accountContractType: "braavos",
   deploymentSalt: base.publicKeyX,
 };
-
-describe("background argent recovery", () => {
-  const guarded: AccountRef = {
-    ...base,
-    accountContractType: "argent",
-    deploymentSalt: base.publicKeyX,
-  };
-  const makeHandlerFor = () => {
-    const session = createUnlockSession();
-    session.unlock(vaultPassphrase);
-    const vault = { accounts: [guarded], activeAccountId: guarded.id } as unknown as Vault;
-    return createMessageHandler(
-      {
-        ...sharedWalletStub,
-        async readVault() {
-          return vault;
-        },
-        async status() {
-          return {
-            accountCount: 1,
-            activeAccountId: guarded.id,
-            hasVault: true,
-            locked: false,
-            ready: true,
-          };
-        },
-      },
-      testExtension,
-      {
-        runtimeRpc: makeRuntimeRpc({
-          async getArgentRecoveryState() {
-            return {
-              expiresAt: null,
-              ownerEscapePending: false,
-              readyAt: null,
-              securityPeriodSeconds: 604_800,
-              status: "none" as const,
-            };
-          },
-          async reviewArgentRecovery() {
-            return {
-              expiresAt: 2_000,
-              fee: { overallFee: "100", unit: "FRI" as const },
-              readyAt: 1_000,
-              replacesOwnerEscape: false,
-              step: "start" as const,
-            };
-          },
-          async submitArgentRecovery() {
-            return { expiresAt: 2_000, readyAt: 1_000, transactionHash: "0xesc" };
-          },
-        }),
-        session,
-      },
-    );
-  };
-
-  test("quotes the escape step fee and delay", async () => {
-    expect(
-      await makeHandlerFor()({ type: "wallet.reviewArgentRecovery" }, extensionSender),
-    ).toEqual({
-      accountId: guarded.id,
-      delaySeconds: null,
-      fee: { overallFee: "100", unit: "FRI" },
-      ok: true,
-    });
-  });
-
-  test("submits the reviewed escape step", async () => {
-    expect(
-      await makeHandlerFor()(
-        { reviewedFee: { overallFee: "100", unit: "FRI" }, type: "wallet.recoverArgentAccount" },
-        extensionSender,
-      ),
-    ).toEqual({ accountId: guarded.id, ok: true, pendingUntil: 1_000, transactionHash: "0xesc" });
-  });
-
-  test("stays privileged", async () => {
-    expect(await makeHandlerFor()({ type: "wallet.reviewArgentRecovery" }, contentSender)).toEqual({
-      error: "privileged sender required",
-    });
-  });
-});
-
-describe("background braavos recovery", () => {
-  const recoverable: AccountRef = {
-    ...base,
-    accountContractType: "braavos",
-    deploymentSalt: base.publicKeyX,
-  };
-  const makeRecoveryHandler = () => {
-    const session = createUnlockSession();
-    session.unlock(vaultPassphrase);
-    const vault = { accounts: [recoverable], activeAccountId: recoverable.id } as unknown as Vault;
-    const handler = createMessageHandler(
-      {
-        ...sharedWalletStub,
-        async readVault() {
-          return vault;
-        },
-        async status() {
-          return {
-            accountCount: 1,
-            activeAccountId: recoverable.id,
-            hasVault: true,
-            locked: false,
-            ready: true,
-          };
-        },
-      },
-      testExtension,
-      {
-        runtimeRpc: makeRuntimeRpc({
-          async getBraavosRecoveryState() {
-            return { delaySeconds: 345_600, pendingUntil: null };
-          },
-          async reviewBraavosRecovery() {
-            return {
-              delaySeconds: 345_600,
-              effectiveAfter: 1_000,
-              fee: { overallFee: "100", unit: "FRI" as const },
-            };
-          },
-          async submitBraavosRecovery() {
-            return { pendingUntil: 1_000, transactionHash: "0xreq" };
-          },
-        }),
-        session,
-      },
-    );
-    return handler;
-  };
-
-  test("quotes the removal fee and delay", async () => {
-    const handler = makeRecoveryHandler();
-    expect(await handler({ type: "wallet.reviewBraavosRecovery" }, extensionSender)).toEqual({
-      accountId: recoverable.id,
-      delaySeconds: 345_600,
-      fee: { overallFee: "100", unit: "FRI" },
-      ok: true,
-    });
-  });
-
-  test("submits the reviewed removal request", async () => {
-    const handler = makeRecoveryHandler();
-    expect(
-      await handler(
-        { reviewedFee: { overallFee: "100", unit: "FRI" }, type: "wallet.recoverBraavosAccount" },
-        extensionSender,
-      ),
-    ).toEqual({
-      accountId: recoverable.id,
-      ok: true,
-      pendingUntil: 1_000,
-      transactionHash: "0xreq",
-    });
-  });
-
-  test("stays privileged", async () => {
-    const handler = makeRecoveryHandler();
-    expect(await handler({ type: "wallet.reviewBraavosRecovery" }, contentSender)).toEqual({
-      error: "privileged sender required",
-    });
-  });
-});
 
 describe("background account signability", () => {
   test("stays privileged and locked-safe", async () => {
@@ -357,5 +203,36 @@ describe("background account signability", () => {
     expect(undeployed.probeCalls).toHaveLength(0);
     const flaky = makeHandler(argentAccount, { probe: "throws" });
     expect(await flaky.ask()).toEqual({ accountId: argentAccount.id, ok: true, readOnly: false });
+  });
+
+  test("carries a Ready escape's stage and window from chain, never forcing a stage", async () => {
+    const window = { expiresAt: 1_600, ownerEscapePending: false, readyAt: 1_000 };
+    const verdictFor = async (argentState: ArgentRecoveryState) =>
+      (
+        (await makeHandler(argentAccount, { argentState, probe: "guardian" }).ask()) as {
+          readonly recovery?: unknown;
+        }
+      ).recovery;
+    for (const status of ["pending", "ready", "expired"] as const) {
+      expect(await verdictFor({ ...window, securityPeriodSeconds: 600, status })).toEqual({
+        delaySeconds: 600,
+        expiresAt: 1_600,
+        pendingUntil: 1_000,
+        stage: status,
+      });
+    }
+    const none = {
+      expiresAt: null,
+      readyAt: null,
+      securityPeriodSeconds: 600,
+      status: "none" as const,
+    };
+    expect(await verdictFor({ ...none, ownerEscapePending: false })).toBeUndefined();
+    // A guardian-approved key change in progress is reported, not read as none.
+    expect(await verdictFor({ ...none, ownerEscapePending: true })).toEqual({
+      delaySeconds: 600,
+      pendingUntil: null,
+      stage: "owner-escape",
+    });
   });
 });

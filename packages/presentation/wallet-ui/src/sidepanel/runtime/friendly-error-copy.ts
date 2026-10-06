@@ -209,6 +209,17 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "account recovery unavailable",
     "Couldn't recover accounts. Check your connection and try again.",
   ],
+  // Removing 2FA or a guardian is a phrase flow; a Ledger account is refused
+  // before any device prompt (account-recovery.ts).
+  [
+    "account recovery is not available for ledger accounts",
+    "Removing 2FA or a guardian isn't available for Ledger accounts.",
+  ],
+  // The confirmation was reviewed for another account than the active one.
+  [
+    "the active account changed. review the recovery again.",
+    "You switched accounts. Review the recovery again.",
+  ],
   ["account preview unavailable", "Couldn't preview that account. Try again."],
   [
     "class hash verification unavailable",

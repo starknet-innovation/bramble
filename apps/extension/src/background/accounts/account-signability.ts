@@ -6,16 +6,12 @@
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
-import { accountHashSigner } from "../ledger/account-hash-signer";
-import { readFeeReviewInput, readTypeOnlyInput } from "../routing/message-inputs";
+import { readTypeOnlyInput } from "../routing/message-inputs";
+import type { AccountRecoveryState } from "../runtime/recovery-types";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import {
-  activeAccountContext,
-  networkRpcUrls,
-  observedAccountContext,
-} from "../runtime/runtime-state";
+import { networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
+import type { UnlockSession } from "../runtime/session";
 import type { WalletStatusReader } from "./wallet-reader";
 
 // The slice of the wallet-ops dependency set this handler reads. Structural on
@@ -116,14 +112,7 @@ const recoveryState = async (
   account: { readonly address: string },
   restriction: string,
   rpcUrls: readonly string[],
-): Promise<
-  | {
-      readonly delaySeconds: number;
-      readonly pendingUntil: number | null;
-      readonly stage?: "pending" | "ready";
-    }
-  | undefined
-> => {
+): Promise<AccountRecoveryState | undefined> => {
   if (restriction === "strong-signer") {
     return deps.runtimeRpc
       .getBraavosRecoveryState?.({ accountAddress: account.address, rpcUrls })
@@ -133,144 +122,31 @@ const recoveryState = async (
   const state = await deps.runtimeRpc
     .getArgentRecoveryState?.({ accountAddress: account.address, rpcUrls })
     .catch(() => undefined);
-  // Only an escape already under way carries a stage; none/expired leaves the
-  // flag offering a fresh "Recover account".
-  if (!state || (state.status !== "pending" && state.status !== "ready")) return undefined;
+  if (!state) return undefined;
+  const delaySeconds = state.securityPeriodSeconds;
+  // A guardian-approved key change in progress is surfaced, never read as
+  // "nothing pending": starting a guardian escape would cancel it.
+  if (state.ownerEscapePending) {
+    return { delaySeconds, pendingUntil: null, stage: "owner-escape" };
+  }
+  // No escape: the flag offers a fresh "Recover account". A running, ready or
+  // expired one carries its window so the flag can state it.
+  if (state.status === "none" || state.readyAt === null || state.expiresAt === null) {
+    return undefined;
+  }
   return {
-    delaySeconds: state.securityPeriodSeconds,
+    delaySeconds,
+    expiresAt: state.expiresAt,
     pendingUntil: state.readyAt,
     stage: state.status,
   };
 };
 
-/**
- * Quotes the Braavos recovery request for its review card: the fee, and the
- * delay after which the removal takes effect. Privileged; the phrase key signs
- * only a query-version estimate, which can never be submitted.
- */
-export const handleReviewBraavosRecovery = async (
-  deps: AccountSignabilityDeps,
-  message: unknown,
-): Promise<RuntimeResponse> => {
-  if (!readTypeOnlyInput(message, "wallet.reviewBraavosRecovery")) {
-    return { error: "invalid recovery review request" };
-  }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) return { error: context.error };
-  const { account } = context;
-  if (!("publicKeyX" in account) || !deps.runtimeRpc.reviewBraavosRecovery) {
-    return { error: "account recovery unavailable" };
-  }
-  const rpcUrls = networkRpcUrls(
-    STARKNET_NETWORKS[context.networkId],
-    await deps.preferencesStore.read(),
-  );
-  const review = await deps.runtimeRpc.reviewBraavosRecovery({
-    account,
-    rpcUrls,
-    signHash: accountHashSigner(deps, account, context.vaultPassphrase),
-  });
-  return { accountId: account.id, delaySeconds: review.delaySeconds, fee: review.fee, ok: true };
-};
-
-/**
- * Submits the reviewed Braavos recovery request. The reviewed fee is mandatory
- * and bounds the transaction; the platform layer re-checks the account state
- * and the on-chain fee cap before anything is signed.
- */
-export const handleRecoverBraavosAccount = async (
-  deps: AccountSignabilityDeps,
-  message: unknown,
-): Promise<RuntimeResponse> => {
-  const input = readFeeReviewInput(message, "wallet.recoverBraavosAccount");
-  if (!input) return { error: "invalid account recovery request" };
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) return { error: context.error };
-  const { account } = context;
-  if (!("publicKeyX" in account) || !deps.runtimeRpc.submitBraavosRecovery) {
-    return { error: "account recovery unavailable" };
-  }
-  const authorized = captureSessionAuthorization(deps.session);
-  const submitted = await deps.runtimeRpc.submitBraavosRecovery({
-    account,
-    isAuthorized: authorized.isCurrent,
-    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
-    rpcUrls: networkRpcUrls(
-      STARKNET_NETWORKS[context.networkId],
-      await deps.preferencesStore.read(),
-    ),
-    signHash: accountHashSigner(deps, account, context.vaultPassphrase),
-  });
-  return {
-    accountId: account.id,
-    ok: true,
-    pendingUntil: submitted.pendingUntil,
-    transactionHash: submitted.transactionHash,
-  };
-};
-
-/**
- * Quotes the Ready recovery's next escape step (fee + the delay it will take),
- * mirroring the Braavos review. Privileged; the estimate signs only a
- * query-version transaction, which can never be submitted.
- */
-export const handleReviewArgentRecovery = async (
-  deps: AccountSignabilityDeps,
-  message: unknown,
-): Promise<RuntimeResponse> => {
-  if (!readTypeOnlyInput(message, "wallet.reviewArgentRecovery")) {
-    return { error: "invalid recovery review request" };
-  }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) return { error: context.error };
-  const { account } = context;
-  if (!("publicKeyX" in account) || !deps.runtimeRpc.reviewArgentRecovery) {
-    return { error: "account recovery unavailable" };
-  }
-  const rpcUrls = networkRpcUrls(
-    STARKNET_NETWORKS[context.networkId],
-    await deps.preferencesStore.read(),
-  );
-  const review = await deps.runtimeRpc.reviewArgentRecovery({
-    account,
-    rpcUrls,
-    signHash: accountHashSigner(deps, account, context.vaultPassphrase),
-  });
-  return { accountId: account.id, delaySeconds: null, fee: review.fee, ok: true };
-};
-
-/**
- * Submits the reviewed Ready recovery step (trigger, or complete once ready).
- * The reviewed fee bounds the transaction; the platform layer re-reads the
- * escape state and the live class before anything is signed.
- */
-export const handleRecoverArgentAccount = async (
-  deps: AccountSignabilityDeps,
-  message: unknown,
-): Promise<RuntimeResponse> => {
-  const input = readFeeReviewInput(message, "wallet.recoverArgentAccount");
-  if (!input) return { error: "invalid account recovery request" };
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) return { error: context.error };
-  const { account } = context;
-  if (!("publicKeyX" in account) || !deps.runtimeRpc.submitArgentRecovery) {
-    return { error: "account recovery unavailable" };
-  }
-  const authorized = captureSessionAuthorization(deps.session);
-  const submitted = await deps.runtimeRpc.submitArgentRecovery({
-    account,
-    isAuthorized: authorized.isCurrent,
-    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
-    rpcUrls: networkRpcUrls(
-      STARKNET_NETWORKS[context.networkId],
-      await deps.preferencesStore.read(),
-    ),
-    signHash: accountHashSigner(deps, account, context.vaultPassphrase),
-  });
-  return {
-    accountId: account.id,
-    ok: true,
-    pendingUntil: submitted.readyAt,
-    transactionHash: submitted.transactionHash,
-  };
-};
+// The recovery review/submit handlers live in account-recovery.ts (size
+// budget); re-exported so the wallet-ops handler table keeps one import path.
+export {
+  handleRecoverArgentAccount,
+  handleRecoverBraavosAccount,
+  handleReviewArgentRecovery,
+  handleReviewBraavosRecovery,
+} from "./account-recovery";

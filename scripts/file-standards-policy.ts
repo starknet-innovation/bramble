@@ -38,9 +38,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Privileged first-run boundary: the phrase is validated through Krusty and
   // only the boolean verdict returns; the phrase is never logged or persisted.
   "apps/extension/src/background/onboarding/onboarding-ops.ts",
-  // Builds the signHash for the Braavos recovery submission; the phrase key
-  // signs here and nothing is logged or persisted.
-  "apps/extension/src/background/accounts/account-signability.ts",
+  // Builds the signHash for the recovery submissions; the phrase key signs
+  // in the platform layer and nothing is logged or persisted.
+  "apps/extension/src/background/accounts/account-recovery.ts",
   "apps/extension/src/background/routing/account-creation-handlers.ts",
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
