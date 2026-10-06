@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type {
@@ -73,7 +74,7 @@ const readOnlyNotice = (signability: SignabilityVerdict | null): string => {
   if (signability.reason === "undeployed") {
     return `<div class="read-only-notice" data-read-only="undeployed">
       <p class="hero-stale">${icon("rocket")}<span>Not deployed</span></p>
-      <p class="read-only-detail">Deploy this account first (Settings → Deploy account).</p>
+      <p class="read-only-detail">${escapeHtml(UNDEPLOYED_BRAAVOS_REFUSAL)}</p>
     </div>`;
   }
   const recovery = "recovery" in signability ? signability.recovery : undefined;

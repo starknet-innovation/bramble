@@ -9,7 +9,11 @@
 import { describe, expect, test } from "bun:test";
 import { familyAccountAddress } from "@bramble/starknet/account-contracts";
 import { estimateDeclareFee, submitDeclareTransaction } from "@bramble/starknet/declare";
-import { ensureAccountDeployed, UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/starknet/deployment";
+import {
+  ensureAccountDeployed,
+  UNDEPLOYED_BRAAVOS_REFUSAL,
+  UndeployedBraavosError,
+} from "@bramble/starknet/deployment";
 import { estimateInvokeFee, submitInvokeTransaction } from "@bramble/starknet/rpc";
 import {
   accountClassEntry,
@@ -95,12 +99,13 @@ const DECLARATION = {
 describe("an undeployed modern-class Braavos account", () => {
   test("refuses an invoke estimate before signing or estimating", async () => {
     const h = harness();
-    await expect(
-      estimateInvokeFee(
-        { account: modern, calls: CALLS, rpcUrls: RPC_URLS, signHash: h.signHash },
-        h.makeProvider,
-      ),
-    ).rejects.toThrow(UNDEPLOYED_BRAAVOS_REFUSAL);
+    const refusal = estimateInvokeFee(
+      { account: modern, calls: CALLS, rpcUrls: RPC_URLS, signHash: h.signHash },
+      h.makeProvider,
+    );
+    // Typed, so review surfaces can name it without matching message text.
+    await expect(refusal).rejects.toBeInstanceOf(UndeployedBraavosError);
+    await expect(refusal).rejects.toThrow(UNDEPLOYED_BRAAVOS_REFUSAL);
     expect(h.signed).toEqual([]);
     expect(h.unexpected).toEqual([]);
   });

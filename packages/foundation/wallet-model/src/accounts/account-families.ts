@@ -27,6 +27,8 @@
  * from Krusty rather than restated**, so there is one source of truth again.
  */
 
+import { sameFelt } from "../networks/networks";
+
 /**
  * The Argent Account 0.4 class this wallet deploys when it creates an Argent
  * account. Defined here, beside the rest of the class table, so the account
@@ -133,6 +135,26 @@ export const BRAAVOS_SIGNING_CLASS_HASHES: readonly string[] = [
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
   BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH,
 ];
+
+/**
+ * Refusal for a transaction from an undeployed Braavos counterfactual: its
+ * deployment is its own reviewed step, never folded into another transaction.
+ * One string for the transaction refusal, the Home notice, and the approval card.
+ */
+export const UNDEPLOYED_BRAAVOS_REFUSAL = "Deploy this account first (Settings → Deploy account).";
+
+/**
+ * Whether an account is a Braavos counterfactual on the one deployment class
+ * this wallet deploys. While undeployed it can deploy only through the explicit
+ * deployment (its deploy signature signs an extra hash first), so every
+ * deploy-then-act path refuses it with {@link UNDEPLOYED_BRAAVOS_REFUSAL}.
+ */
+export const isDeployableBraavos = (account: {
+  readonly accountContractType: string;
+  readonly classHash: string;
+}): boolean =>
+  account.accountContractType === "braavos" &&
+  sameFelt(account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH);
 
 /**
  * Every class this wallet recognises, with its role and constructor shape.

@@ -5,8 +5,8 @@
  */
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { DEFAULT_ARGENT_ESCAPE_SECURITY_PERIOD_SECONDS as ARGENT_ESCAPE_DELAY_SECONDS } from "@bramble/starknet/rpc";
-import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
-import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import { readFeeReviewInput, readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
@@ -45,7 +45,9 @@ const undeployedVerdict = (
   classHash: string,
 ): RuntimeResponse => {
   if (vendor === "argent") return { accountId, ok: true, readOnly: false };
-  const reason = sameFelt(classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH) ? "undeployed" : "braavos";
+  const reason = isDeployableBraavos({ accountContractType: vendor, classHash })
+    ? "undeployed"
+    : "braavos";
   return { accountId, ok: true, readOnly: true, reason };
 };
 
