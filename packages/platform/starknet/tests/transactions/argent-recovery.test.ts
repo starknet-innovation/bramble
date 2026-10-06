@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
 import { getArgentRecoveryState, IndeterminateRpcWriteError } from "@bramble/starknet/rpc";
 import {
+  ACCEPTED_BLOCK,
   account,
   BLOCK_TIME,
   boundsFor,
@@ -87,6 +88,23 @@ describe("argent recovery state", () => {
       pendingChange: null,
     });
     await expect(read({ ...PENDING, status: "0x9" })).rejects.toThrow("unrecognised escape status");
+  });
+});
+
+describe("argent recovery gate", () => {
+  test("reads the gate and the escape at one accepted block, for review and submit", async () => {
+    for (const run of ["review", "submit"] as const) {
+      const reads: string[] = [];
+      if (run === "review") await review({ reads }).result;
+      else await submit({ reads }, "start").result;
+      // Everything up to the estimate: class, owner, owner type, guardian,
+      // backup, escape and period — all at the pinned accepted block.
+      const gate = reads.slice(0, 7);
+      expect(gate).toHaveLength(7);
+      expect(gate.every((read) => read.endsWith(`@${ACCEPTED_BLOCK}`))).toBe(true);
+      expect(gate).toContain(`get_escape_and_status@${ACCEPTED_BLOCK}`);
+      expect(gate).toContain(`get_guardian_backup@${ACCEPTED_BLOCK}`);
+    }
   });
 });
 

@@ -57,7 +57,7 @@ const guardedReads: Record<string, readonly string[]> = {
 
 const providerWith = (
   reads: Record<string, readonly string[]>,
-  options: { readonly waitFails?: boolean } = {},
+  options: { readonly log?: string[]; readonly waitFails?: boolean } = {},
 ): RpcProvider => {
   // After the receipt, the request the submission wrote reads back.
   let confirmed = false;
@@ -65,13 +65,18 @@ const providerWith = (
     async getChainId() {
       return STARKNET_NETWORKS.SN_MAIN.chainId;
     },
-    async getClassHashAt() {
+    async getClassHashAt(_address: string, block: string) {
+      options.log?.push(`class@${block}`);
       return BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH;
+    },
+    async getBlockLatestAccepted() {
+      return { block_hash: "0xb10c", block_number: 7 };
     },
     async getBlock() {
       return { block_hash: "0xb", timestamp: BLOCK_TIME };
     },
-    async callContract({ entrypoint }: { readonly entrypoint: string }) {
+    async callContract({ entrypoint }: { readonly entrypoint: string }, block: string) {
+      options.log?.push(`${entrypoint}@${block}`);
       if (confirmed && entrypoint === "get_deferred_remove_signers") {
         return [`0x${(BLOCK_TIME + DEFAULT_BRAAVOS_RECOVERY_DELAY_SECONDS).toString(16)}`];
       }
@@ -303,6 +308,24 @@ describe("braavos recovery submit", () => {
       expect(refused.accounts.recorded.executes).toHaveLength(0);
     }
     await expect(submit({ subject: ledgerAccount }).result).rejects.toThrow("Ledger");
+  });
+});
+
+describe("braavos recovery gate", () => {
+  test("reads the class, signers and pending request at one accepted block", async () => {
+    const log: string[] = [];
+    await reviewBraavosRecovery(
+      { account, rpcUrls: RPC, signHash },
+      () => providerWith(guardedReads, { log }),
+      fakeAccounts(10n ** 15n).make,
+    );
+    // The verdict reads the request once, the pending-request gate once more.
+    expect(log.slice(0, 4)).toEqual([
+      "class@0xb10c",
+      "get_signers@0xb10c",
+      "get_deferred_remove_signers@0xb10c",
+      "get_deferred_remove_signers@0xb10c",
+    ]);
   });
 });
 

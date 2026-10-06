@@ -58,7 +58,12 @@ export type Chain = {
   readonly readyAt?: string;
   readonly status?: string;
   readonly waitFails?: boolean;
+  /** Collects every class and contract read as `entrypoint@block`. */
+  readonly reads?: string[];
 };
+
+/** The accepted block the doubles pin; gate reads must name exactly this. */
+export const ACCEPTED_BLOCK = "0xb10c";
 
 // A guardian-restricted 0.4.0 account: owner is the wallet key, a guardian is
 // set, the escape and security period controllable per test. After a
@@ -69,13 +74,18 @@ export const providerWith = (chain: Chain = {}): RpcProvider => {
     async getChainId() {
       return STARKNET_NETWORKS.SN_MAIN.chainId;
     },
-    async getClassHashAt() {
+    async getClassHashAt(_address: string, block: string) {
+      chain.reads?.push(`class@${block}`);
       return canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH);
+    },
+    async getBlockLatestAccepted() {
+      return { block_hash: ACCEPTED_BLOCK, block_number: 7 };
     },
     async getBlock() {
       return { block_hash: "0xb", timestamp: BLOCK_TIME };
     },
-    async callContract({ entrypoint }: { readonly entrypoint: string }) {
+    async callContract({ entrypoint }: { readonly entrypoint: string }, block: string) {
+      chain.reads?.push(`${entrypoint}@${block}`);
       switch (entrypoint) {
         case "get_owner":
           return [chain.owner ?? PUBLIC_KEY];

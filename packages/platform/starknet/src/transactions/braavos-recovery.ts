@@ -26,7 +26,7 @@ import {
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
-import { braavosSigningRestriction } from "./account-compatibility";
+import { atAcceptedBlock, braavosSigningRestriction } from "./account-compatibility";
 import {
   capturingRecoverySigner,
   RECOVERY_TIP,
@@ -92,10 +92,11 @@ const readFelt = async (
   provider: RpcProvider,
   contractAddress: string,
   entrypoint: string,
+  blockIdentifier = "latest",
 ): Promise<bigint> => {
   const [value] = await provider.callContract(
     { calldata: [], contractAddress, entrypoint },
-    "latest",
+    blockIdentifier,
   );
   return value === undefined ? 0n : BigInt(value);
 };
@@ -132,6 +133,8 @@ export const getBraavosRecoveryState = async (
 // The flow exists exactly for a deployed, phrase-held Braavos account whose
 // only restriction is the strong signer and which has no request pending (the
 // account refuses a second one); anything else is refused before signing.
+// Every gate read sits at one pinned accepted block, so the class, signers and
+// pending request it decides on coexisted.
 const requireRecoverableBraavos = async (
   provider: RpcProvider,
   account: AccountRef,
@@ -140,17 +143,34 @@ const requireRecoverableBraavos = async (
     throw new WalletError("Account recovery is only available for Braavos accounts");
   }
   refuseKeylessRecovery(account);
-  const restriction = await braavosSigningRestriction(provider, {
-    address: account.address,
-    publicKeyX: account.publicKeyX,
-  });
+  await atAcceptedBlock(provider, (blockIdentifier) =>
+    requireRecoverableBraavosAt(provider, account, blockIdentifier),
+  );
+};
+
+const requireRecoverableBraavosAt = async (
+  provider: RpcProvider,
+  account: AccountRef,
+  blockIdentifier: string,
+): Promise<void> => {
+  const restriction = await braavosSigningRestriction(
+    provider,
+    { address: account.address, publicKeyX: account.publicKeyX },
+    blockIdentifier,
+  );
   if (restriction === null) {
     throw new WalletError("This account has no 2FA signer to remove");
   }
   if (restriction !== "strong-signer") {
     throw new WalletError("Deployed Braavos account owner does not match the wallet signer");
   }
-  if ((await readFelt(provider, account.address, "get_deferred_remove_signers")) !== 0n) {
+  const pending = await readFelt(
+    provider,
+    account.address,
+    "get_deferred_remove_signers",
+    blockIdentifier,
+  );
+  if (pending !== 0n) {
     throw new WalletError("A 2FA removal is already pending for this account");
   }
 };

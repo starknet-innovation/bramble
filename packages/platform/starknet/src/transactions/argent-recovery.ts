@@ -28,7 +28,7 @@ import {
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
-import { argentSigningRestriction } from "./account-compatibility";
+import { argentSigningRestriction, atAcceptedBlock } from "./account-compatibility";
 import {
   capturingRecoverySigner,
   RECOVERY_TIP,
@@ -160,10 +160,11 @@ const STATUS_BY_CODE: Readonly<Record<string, ArgentRecoveryStatus>> = {
 const readGuardianBackup = async (
   provider: RpcProvider,
   accountAddress: string,
+  blockIdentifier: string,
 ): Promise<"absent" | "present"> => {
   const [value] = await provider.callContract(
     { calldata: [], contractAddress: accountAddress, entrypoint: "get_guardian_backup" },
-    "latest",
+    blockIdentifier,
   );
   if (value === undefined) {
     throw new WalletError(BACKUP_UNCHECKED);
@@ -208,13 +209,19 @@ const feltOrZero = (value: string | undefined): bigint =>
 const readEscapeState = async (
   provider: RpcProvider,
   accountAddress: string,
+  blockIdentifier = "latest",
 ): Promise<ArgentRecoveryState> => {
   const read = (entrypoint: string) =>
-    provider.callContract({ calldata: [], contractAddress: accountAddress, entrypoint }, "latest");
+    provider.callContract(
+      { calldata: [], contractAddress: accountAddress, entrypoint },
+      blockIdentifier,
+    );
   const [escapeFelts, period, guardianBackup] = await Promise.all([
     read("get_escape_and_status"),
     read("get_escape_security_period"),
-    readGuardianBackup(provider, accountAddress).catch((): GuardianBackup => "unknown"),
+    readGuardianBackup(provider, accountAddress, blockIdentifier).catch(
+      (): GuardianBackup => "unknown",
+    ),
   ]);
   const periodFelt = feltOrZero(period[0]);
   const securityPeriodSeconds =
@@ -268,19 +275,33 @@ export const getArgentRecoveryState = async (
   withRpcFallback(rpcUrls, (provider) => readEscapeState(provider, accountAddress), makeProvider);
 
 // The flow applies only to a deployed, phrase-held Argent account whose sole
-// restriction is a guardian; anything else is refused before signing.
-const requireRecoverableArgent = async (
+// restriction is a guardian; anything else is refused before signing. The
+// gate and the escape state it returns are read at one pinned accepted block,
+// so the class, owner, guardian, backup and escape all coexisted.
+const recoverableEscapeState = async (
   provider: RpcProvider,
   account: AccountRef,
-): Promise<void> => {
+): Promise<ArgentRecoveryState> => {
   if (account.accountContractType !== "argent") {
     throw new WalletError("Account recovery is only available for Ready accounts");
   }
   refuseKeylessRecovery(account);
-  const restriction = await argentSigningRestriction(provider, {
-    address: account.address,
-    publicKeyX: account.publicKeyX,
+  return atAcceptedBlock(provider, async (blockIdentifier) => {
+    await requireRecoverableArgentAt(provider, account, blockIdentifier);
+    return readEscapeState(provider, account.address, blockIdentifier);
   });
+};
+
+const requireRecoverableArgentAt = async (
+  provider: RpcProvider,
+  account: AccountRef,
+  blockIdentifier: string,
+): Promise<void> => {
+  const restriction = await argentSigningRestriction(
+    provider,
+    { address: account.address, publicKeyX: account.publicKeyX },
+    blockIdentifier,
+  );
   if (restriction === null) {
     throw new WalletError("This account has no guardian to remove");
   }
@@ -289,10 +310,12 @@ const requireRecoverableArgent = async (
   }
   // Transport failures keep their own classification (and endpoint fallback);
   // any other failed read refuses rather than letting the escape revert.
-  const backup = await readGuardianBackup(provider, account.address).catch((error: unknown) => {
-    if (isTransportRpcError(error)) throw error;
-    throw new WalletError(BACKUP_UNCHECKED);
-  });
+  const backup = await readGuardianBackup(provider, account.address, blockIdentifier).catch(
+    (error: unknown) => {
+      if (isTransportRpcError(error)) throw error;
+      throw new WalletError(BACKUP_UNCHECKED);
+    },
+  );
   if (backup === "present") {
     throw new WalletError(BACKUP_PRESENT);
   }
@@ -361,8 +384,7 @@ export const reviewArgentRecovery = async (
   withRpcFallback(
     rpcUrls,
     async (provider) => {
-      await requireRecoverableArgent(provider, account);
-      const state = await readEscapeState(provider, account.address);
+      const state = await recoverableEscapeState(provider, account);
       const step = nextStep(state.status);
       const estimate = await estimateStep(provider, account, step, makeQueryAccount);
       const fee = recoveryFeeCeiling(estimate, MAX_ESCAPE_FEE_FRI);
@@ -414,8 +436,7 @@ export const submitArgentRecovery = async (
       if (!reviewedFee || expectedStep === undefined) {
         throw new WalletError("The recovery was not reviewed. Review it and try again.");
       }
-      await requireRecoverableArgent(provider, account);
-      const state = await readEscapeState(provider, account.address);
+      const state = await recoverableEscapeState(provider, account);
       const step = confirmedStep(state, expectedStep, input.replaceEscapeReadyAt);
       const estimate = await estimateStep(provider, account, step, makeQueryAccount);
       requireWithinReviewedRecoveryFee(estimate, reviewedFee, MAX_ESCAPE_FEE_FRI);

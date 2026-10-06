@@ -61,12 +61,14 @@ export type AuthorizableAccount = {
 // endpoint. Three re-pins cover that skew; a persistent miss fails closed.
 const LIVE_CLASS_READ_ATTEMPTS = 3;
 
-// Runs every read behind one decision at a freshly pinned accepted block. The
-// pin and a read can land on different nodes behind one load-balanced
-// endpoint; a sibling that has not seen the pin answers JSON-RPC 24. That is
-// skew, not chain state, so the whole decision re-pins and runs again. Any
-// other failure, and a miss on every attempt, propagates.
-const atAcceptedBlock = async <T>(
+/**
+ * Runs every read behind one decision at a freshly pinned accepted block. The
+ * pin and a read can land on different nodes behind one load-balanced
+ * endpoint; a sibling that has not seen the pin answers JSON-RPC 24. That is
+ * skew, not chain state, so the whole decision re-pins and runs again. Any
+ * other failure, and a miss on every attempt, propagates.
+ */
+export const atAcceptedBlock = async <T>(
   provider: RpcProvider,
   decide: (blockIdentifier: string) => Promise<T>,
 ): Promise<T> => {
@@ -161,7 +163,8 @@ const requireAuthorizableArgentClass = (classHash: string): void => {
 
 /**
  * Advisory signability classification for the recovery scan (issue 542): reads
- * the live class and signer state at the latest block and names the first
+ * the live class and signer state at `blockIdentifier` (the latest block unless
+ * a caller pins one with {@link atAcceptedBlock}) and names the first
  * reason this wallet could not authorize for the account, or null when it
  * could. Advisory only — a wrong or missing answer mislabels a picker row but
  * never moves funds, because the transaction path keeps the authoritative
@@ -170,8 +173,9 @@ const requireAuthorizableArgentClass = (classHash: string): void => {
 export const argentSigningRestriction = async (
   provider: RpcProvider,
   account: { readonly address: string; readonly publicKeyX: string },
+  blockIdentifier = "latest",
 ): Promise<RecoverySigningRestriction | null> => {
-  const liveClass = await provider.getClassHashAt(account.address, "latest");
+  const liveClass = await provider.getClassHashAt(account.address, blockIdentifier);
   const entry = accountClassEntry(liveClass);
   if (
     entry === null ||
@@ -181,7 +185,10 @@ export const argentSigningRestriction = async (
     return "release";
   }
   const read = (entrypoint: string) =>
-    provider.callContract({ calldata: [], contractAddress: account.address, entrypoint }, "latest");
+    provider.callContract(
+      { calldata: [], contractAddress: account.address, entrypoint },
+      blockIdentifier,
+    );
   const [owner, ownerType, guardian] = await Promise.all([
     read("get_owner"),
     read("get_owner_type"),
@@ -209,20 +216,22 @@ export const argentSigningRestriction = async (
  * candidate: the live class must be a Braavos implementation release this
  * wallet signs for, the stark key the account's first stark signer, and any
  * active strong signer (2FA/3FA) marks the account view-only — unless a
- * deferred-removal request has already expired by the latest block's
- * timestamp. Advisory only; the same rules run fail-closed at a pinned block
+ * deferred-removal request has already expired by the read block's timestamp.
+ * Reads at `blockIdentifier` (latest by default; the recovery gates pin one
+ * with {@link atAcceptedBlock}). Advisory only; the same rules run fail-closed at a pinned block
  * through {@link requireLiveAuthorizableClass} and
  * {@link isCompatibleAccountDeployed}.
  */
 export const braavosSigningRestriction = async (
   provider: RpcProvider,
   account: { readonly address: string; readonly publicKeyX: string },
+  blockIdentifier = "latest",
 ): Promise<RecoverySigningRestriction | null> => {
-  const liveClass = await provider.getClassHashAt(account.address, "latest");
+  const liveClass = await provider.getClassHashAt(account.address, blockIdentifier);
   if (!isBraavosSigningClass(liveClass)) {
     return "release";
   }
-  return braavosSignerVerdict(provider, account, "latest");
+  return braavosSignerVerdict(provider, account, blockIdentifier);
 };
 
 /**
