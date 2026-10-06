@@ -32,8 +32,9 @@ describe("multisig deployment quote", () => {
     expect(app.querySelector("#multisig-deploy-result")?.textContent).toContain(
       "Preparing exact deployment fee",
     );
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
     expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
-      "Deploy multisig",
+      "Check fee and address",
     );
     pending.resolve(fixture.deploymentReview);
     await flush();
@@ -100,5 +101,56 @@ describe("multisig deployment quote", () => {
     await new Promise((resolve) => setTimeout(resolve, 450));
     expect(calls).toBe(afterContinue + 1);
     expect(form?.dataset["deploymentStage"]).toBe("deploy");
+  });
+  test("holds the Deploy action busy, then names it, as the quote settles", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const pending = deferred<typeof fixture.deploymentReview>();
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      await testClient({ reviewDeployment: () => pending.promise }),
+      fixture.status,
+    );
+    const submit = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+    app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    expect(submit?.disabled).toBe(true);
+    expect(submit?.textContent).toContain("Check fee and address");
+    pending.resolve(fixture.deploymentReview);
+    await flush();
+    expect(submit?.disabled).toBe(false);
+    expect(submit?.textContent).toContain("Deploy multisig");
+  });
+  test("toasts a failed quote only on an explicit submit, not the auto-quote", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    let calls = 0;
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      await testClient({
+        async reviewDeployment() {
+          calls += 1;
+          throw new Error("deployment review unavailable");
+        },
+      }),
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    const submit = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+    app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    await flush();
+    expect(calls).toBeGreaterThan(0);
+    expect(document.querySelector(".toast.error")).toBeNull();
+    expect(app.querySelector("#multisig-deploy-result")?.textContent).toContain(
+      "Deployment review failed",
+    );
+    expect(submit?.disabled).toBe(false);
+    expect(submit?.textContent).toContain("Check fee and address");
+    form?.requestSubmit();
+    await flush();
+    expect(document.querySelector(".toast.error .toast-text")).not.toBeNull();
   });
 });

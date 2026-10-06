@@ -210,7 +210,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain("Fund 0x");
     expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
     expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
-      "Deploy multisig",
+      "Check fee and address",
     );
   });
 
@@ -392,7 +392,9 @@ describe("bindMultisigs frozen-intent forms", () => {
 
     expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
     expect(form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
-    expect(form?.querySelector('button[type="submit"]')?.textContent).toContain("Deploy multisig");
+    expect(form?.querySelector('button[type="submit"]')?.textContent).toContain(
+      "Check fee and address",
+    );
   });
 
   test("keeps only the newest deployment review when requests resolve out of order", async () => {

@@ -385,7 +385,7 @@ export const multisigDeployFlow = (
             </div>
             <div id="multisig-deploy-review" aria-live="polite"></div>
             <div class="multisig-deploy-actions">
-              ${button({ disabled: classState !== true || !deploymentSigner, label: "Deploy multisig", type: "submit" })}
+              ${button({ disabled: classState !== true || !deploymentSigner, label: "Check fee and address", type: "submit" })}
             </div>
             <p id="multisig-deploy-result" role="status"></p>
           </div>

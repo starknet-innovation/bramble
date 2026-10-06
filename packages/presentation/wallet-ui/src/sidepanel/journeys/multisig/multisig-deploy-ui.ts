@@ -132,13 +132,16 @@ const mountLocalFundingControls = (form: HTMLFormElement, reviewRoot: HTMLElemen
   }
 };
 
-/**
- * Binds review then exact echoed deployment; editing invalidates consent.
- */
+/** Binds review then exact echoed deployment; editing invalidates consent. */
 export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-deploy-form");
   const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const reviewEnabled = button?.disabled === false;
+  // Names what the one action does: deploy the held review, else check fee.
+  const setDeployLabel = (): void =>
+    button?.lastChild?.replaceWith(
+      form && reviews.get(form) ? "Deploy multisig" : "Check fee and address",
+    );
   const reviewRoot = deps.app?.querySelector<HTMLElement>("#multisig-deploy-review");
   const signerAccountInput = form?.querySelector<HTMLInputElement>('input[name="signerAccountId"]');
   const signerKeyInput = form?.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]');
@@ -302,10 +305,8 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   syncSignerSet(false);
   const QUOTE_DEBOUNCE_MS = 350;
   let quoteTimer: ReturnType<typeof setTimeout> | null = null;
-  // Runs one deployment quote and paints the reviewed deployment beside the
-  // threshold and signer controls. Stage advances happen only here, so a quote
-  // never hides the fields it was computed from.
-  const runQuote = (input: ArgentMultisigDeploymentSetup): void => {
+  // Runs one quote, painting it beside the fields it read; stage ends only here.
+  const runQuote = (input: ArgentMultisigDeploymentSetup, explicit = false): void => {
     if (!form) return;
     const generation = (reviewGenerations.get(form) ?? 0) + 1;
     reviewGenerations.set(form, generation);
@@ -317,6 +318,8 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         return false;
       }
     };
+    // Busy throughout: a second press cannot deploy an unread review.
+    buttonBusy(button, true);
     deps.setResult("multisig-deploy-result", "Preparing exact deployment fee…");
     void deps.multisig
       .reviewDeployment(input)
@@ -324,6 +327,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         if (!isCurrent()) return;
         const fundingRequired = next.feeAffordability === "insufficient";
         if (!fundingRequired) reviews.set(form, { input, review: next });
+        setDeployLabel();
         if (reviewRoot) {
           renderFragment(
             reviewRoot,
@@ -350,13 +354,12 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
             ? message
             : "Deployment review failed. Check the error and retry.",
         );
-        showToast(message, "error", form);
+        if (explicit) showToast(message, "error", form);
         buttonBusy(button, false);
+        setDeployLabel();
       });
   };
-  // The approval controls re-quote as the reader settles a threshold, signer or
-  // salt, so the review appears beside them without a separate check press.
-  // Debounced, so a typed salt is one request rather than one per keystroke.
+  // Re-quotes as the approval controls settle, debounced into one request.
   const scheduleQuote = (): void => {
     if (!form) return;
     if (quoteTimer !== null) clearTimeout(quoteTimer);
@@ -387,6 +390,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       button.disabled = form.dataset["classReady"] !== "true" || !signerAccountInput?.value;
     }
     deps.setResult("multisig-deploy-result", "");
+    setDeployLabel();
     const previous = stage === "approval" ? "participants" : "approval";
     setDeploymentStage(form, previous, () =>
       (previous === "participants" ? nameInput : thresholdInput)?.focus({ preventScroll: true }),
@@ -416,6 +420,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       target.closest(".multisig-deploy-signers-step") ? "participants" : "approval",
     );
     if (reviewEnabled) buttonBusy(button, false);
+    setDeployLabel();
     scheduleQuote();
   });
   form?.addEventListener("submit", (event) => {
@@ -484,10 +489,11 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
           setDeploymentStage(form, "deploy");
           showToast(deploymentFailureToast(message, reviewed), "error", form);
           buttonBusy(button, false);
+          setDeployLabel();
         },
       );
       return;
     }
-    runQuote(input);
+    runQuote(input, true);
   });
 };
