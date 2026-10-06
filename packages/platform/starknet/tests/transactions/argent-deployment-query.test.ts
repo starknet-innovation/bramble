@@ -269,3 +269,55 @@ test("refuses a recognized class whose authorization format it cannot produce", 
     "expects an authorization format this wallet does not produce",
   );
 });
+
+test("re-pins the submit-path check when a signer read misses the pinned block", async () => {
+  // The class and owner reads must share one block; a sibling node that has
+  // not seen it (JSON-RPC 24) re-pins the whole decision rather than refusing.
+  const pins: string[] = [];
+  let ownerMisses = 1;
+  const provider = {
+    getBlockLatestAccepted: async () => {
+      pins.push(`0x${(pins.length + 9).toString(16)}`);
+      return { block_hash: pins.at(-1), block_number: 100 };
+    },
+    getClassHashAt: async () => ARGENT_ACCOUNT_CONTRACT.classHash,
+    callContract: async ({ entrypoint }: { readonly entrypoint: string }, block: string) => {
+      if (entrypoint === "get_owner" && ownerMisses > 0) {
+        ownerMisses -= 1;
+        throw new Error("Block not found");
+      }
+      expect(block).toBe(pins.at(-1) as string);
+      return entrypoint === "get_owner" ? [PUBLIC_KEY] : ["0x0"];
+    },
+  } as unknown as RpcProvider;
+  await expect(isCompatibleAccountDeployed(provider, account)).resolves.toBe(true);
+  expect(pins.length).toBe(2);
+  ownerMisses = 3;
+  pins.length = 0;
+  await expect(isCompatibleAccountDeployed(provider, account)).rejects.toThrow("Block not found");
+  expect(pins.length).toBe(3);
+});
+
+test("reads an Argent multisig's class at latest, never at a pin that can miss", async () => {
+  const multisig = {
+    accountContractType: "argent-multisig",
+    address: "0x5",
+    classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+  } as const;
+  const blocks: string[] = [];
+  const provider = {
+    getBlockLatestAccepted: async () => {
+      throw new Error("a multisig class check must not pin a block");
+    },
+    getClassHashAt: async (_address: string, block: string) => {
+      blocks.push(block);
+      return ARGENT_MULTISIG_CONTRACT.classHash;
+    },
+  } as unknown as RpcProvider;
+  await expect(isCompatibleAccountDeployed(provider, multisig)).resolves.toBe(true);
+  expect(blocks).toEqual(["latest"]);
+  const other = { ...provider, getClassHashAt: async () => ARGENT_ACCOUNT_CONTRACT.classHash };
+  await expect(
+    isCompatibleAccountDeployed(other as unknown as RpcProvider, multisig),
+  ).rejects.toThrow("does not match the pinned release");
+});

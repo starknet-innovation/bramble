@@ -93,6 +93,12 @@ export type PendingApproval = {
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
   /**
+   * Invoke only: the account is an undeployed Braavos counterfactual, which
+   * deploys only through its own reviewed step, so this request cannot be
+   * approved until it is deployed. Present only when true, with no fee.
+   */
+  readonly deployFirst?: true;
+  /**
    * Connect only: the site already holds a grant, so approving adds the
    * reviewed account to it rather than sharing a first one. Absent when the
    * queue could not tell (a locked wallet at request time).

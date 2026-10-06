@@ -101,8 +101,29 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "This account runs an older Argent release. Upgrade it in Ready to use it here.",
   ],
   [
-    "braavos accounts can be viewed in this wallet, but it cannot yet authorize transactions for them",
-    "Braavos accounts are view only in this wallet for now.",
+    "deployed braavos account has an active 2fa signer",
+    "This account has 2FA, a device signature this wallet can't provide. Use it in Braavos.",
+  ],
+  [
+    "deployed braavos account owner does not match the wallet signer",
+    "This account's signing key has changed. This phrase can no longer sign for it.",
+  ],
+  [
+    "deployed braavos account class is not a release this wallet recognizes",
+    "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
+  ],
+  [
+    "braavos account returned a malformed signer list",
+    "Couldn't read this account's signers. Try again.",
+  ],
+  ["rpc returned an invalid account class hash", "Couldn't read this account. Try again."],
+  [
+    "braavos account class hash is not a release this wallet recognizes",
+    "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
+  ],
+  [
+    "this wallet does not deploy braavos accounts",
+    "This wallet can't deploy Braavos accounts yet. Deploy it in Braavos first.",
   ],
 
   // --- Requests the wallet would not carry out -----------------------------
@@ -187,6 +208,68 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   [
     "account recovery unavailable",
     "Couldn't recover accounts. Check your connection and try again.",
+  ],
+  // The 2FA / guardian removal flow's own fallbacks (runtime-recovery.ts and
+  // account-recovery.ts), worded apart from the account-discovery flow above.
+  [
+    "second factor removal unavailable",
+    "Couldn't load 2FA or guardian removal. Check your connection and try again.",
+  ],
+  [
+    "second factor removal unconfirmed",
+    "Couldn't confirm the 2FA or guardian removal. Check activity before trying again.",
+  ],
+  [
+    "deployed argent account class is not one this wallet can recover",
+    "This account runs a Ready release this wallet can't recover. Use it in Ready.",
+  ],
+  [
+    "this account's signer setup cannot be recovered with the recovery phrase",
+    "This account's signers can't be recovered with the recovery phrase.",
+  ],
+  // The account's own limit (TIME_BETWEEN_TWO_ESCAPES), checked before the
+  // escape is estimated, and a failed read of its clock (fail closed).
+  [
+    "this account allows one escape attempt every 12 hours",
+    "This account allows one escape attempt every 12 hours. Try again later.",
+  ],
+  [
+    "could not check this account's escape limit",
+    "Couldn't check this account's escape limit. Try again.",
+  ],
+  // argent-recovery.ts fails closed on an escape it cannot decode.
+  [
+    "the account reported an unrecognised escape",
+    "This account reported a guardian state this wallet can't read. Use it in Ready.",
+  ],
+  [
+    "the account reported an unrecognised escape status",
+    "This account reported a guardian state this wallet can't read. Use it in Ready.",
+  ],
+  [
+    "the account reported an unrecognised escape type",
+    "This account reported a guardian state this wallet can't read. Use it in Ready.",
+  ],
+  // Removing 2FA or a guardian is a phrase flow; a Ledger account is refused
+  // before any device prompt (account-recovery.ts).
+  [
+    "account recovery is not available for ledger accounts",
+    "Removing 2FA or a guardian isn't available for Ledger accounts.",
+  ],
+  // A Ready account with a backup guardian cannot escape its guardian to none
+  // (argent-recovery.ts refuses before the account would revert).
+  [
+    "this account has a backup guardian, so the guardian cannot be removed with the recovery phrase",
+    "This account has a backup guardian, so the recovery phrase can't remove its guardian.",
+  ],
+  [
+    "could not check this account's backup guardian",
+    "Couldn't check this account's backup guardian. Try again.",
+  ],
+  // The confirmation was reviewed for another account than the active one.
+  [
+    "the active account changed. review the recovery again.",
+    "You switched accounts. Review the recovery again.",
   ],
   ["account preview unavailable", "Couldn't preview that account. Try again."],
   [

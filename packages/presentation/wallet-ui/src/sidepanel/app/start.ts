@@ -9,12 +9,9 @@ import { createLedgerSignRuntime } from "../journeys/ledger/sign-runtime";
 import { createMultisigClient } from "../journeys/multisig/multisig-runtime";
 import { shouldPreserveMultisigIntentSurface } from "../journeys/multisig/multisig-surface";
 import { bindMultisigs } from "../journeys/multisig/multisig-ui";
-import { locked, onboarding } from "../journeys/onboarding/gate-views";
 import {
   bindOnboardingCompletion,
   bindOnboardingLaunch,
-  onboardingComplete,
-  onboardingLaunch,
 } from "../journeys/onboarding/onboarding-surface";
 import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
 import { bindUnlock } from "../journeys/onboarding/unlock-ui";
@@ -46,12 +43,7 @@ import {
 } from "../shell/shell-bindings";
 import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
-import {
-  emptyRenderCache,
-  type RenderData,
-  updateRenderScope,
-  verificationForAccount,
-} from "./rendering/render-cache";
+import { emptyRenderCache, type RenderData, updateRenderScope } from "./rendering/render-cache";
 import {
   createSceneRenderer,
   createScopeAnnouncer,
@@ -59,12 +51,14 @@ import {
 } from "./rendering/scene-renderer";
 import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
-import { dashboard, type WalletView } from "./screens/views";
+import { sceneContent } from "./screens/scene-content";
+import type { WalletView } from "./screens/views";
 import { createDeploymentCache } from "./sync/deployment-cache";
 import { hydrateView } from "./sync/hydrate";
 import { startRefreshLifecycle } from "./sync/lifecycle";
 import type { RefreshReason } from "./sync/refresh-scheduler";
 import { createMutationRuntime } from "./sync/runtime-refresh";
+import { createSignabilityCache } from "./sync/signability-cache";
 
 /** Starts the wallet with injected Ledger and clock (`now` dates the activity feed and times the privacy settle watch); fails closed without its runtime or root. */
 export const startWalletUi = async (
@@ -99,6 +93,7 @@ export const startWalletUi = async (
   let hasPaintedScope = false;
   const renderScene = createSceneRenderer(app, () => bindAll());
   const deployment = createDeploymentCache(wallet);
+  const signability = createSignabilityCache(wallet);
   const cache: RenderData = emptyRenderCache();
   let privacy: ReturnType<typeof createPrivacyController>;
   const ledgerSignMount = hiddenOverlayMount("ledger-sign-overlay");
@@ -315,10 +310,6 @@ export const startWalletUi = async (
     if (collapsed.length !== drawerFolders.collapsedFolders().length) {
       drawerFolders.setCollapsedFolders(collapsed);
     }
-    const classHashVerification = verificationForAccount(
-      cache.classHashVerification,
-      status.activeAccountId,
-    );
     snoozedApprovalIds = snoozedApprovalIds.filter((id) =>
       cache.pending.some((approval) => approval.id === id),
     );
@@ -334,52 +325,23 @@ export const startWalletUi = async (
       )
     )
       return;
-    const content =
-      fullPageOnboarding && status.hasVault
-        ? onboardingComplete()
-        : !status.hasVault
-          ? fullPageOnboarding
-            ? onboarding(status, ledgerConnector.isAvailable?.() ?? true)
-            : onboardingLaunch()
-          : status.locked
-            ? locked(status, cache.pending)
-            : dashboard(
-                activeView,
-                status,
-                cache.pending,
-                cache.preferences,
-                cache.balances,
-                cache.deployment,
-                cache.transactions,
-                cache.connectedSites,
-                cache.prices,
-                cache.chart,
-                selectedTokenId,
-                cache.allowances,
-                selectedNftId,
-                cache.changes,
-                cache.multisigs.multisigs,
-                cache.multisigs.intents,
-                selectedMultisigId,
-                cache.multisigClassDeclared,
-                drawerFolders.collapsedFolders(),
-                expandedGroupId,
-                cache.priceStale,
-                cache.priceAsOf,
-                [],
-                drawerFolders.addFolderOpen(),
-                classHashVerification,
-                cache.historyUnavailable,
-                snoozedApprovalIds,
-                cache.multisigsError,
-                cache.multisigBalances,
-                cache.multisigBalanceId,
-                privacy.disclosure(),
-                privacy.journey(),
-                sendIntent,
-                selectedMultisigIntentId,
-                now === null ? null : utcDayKey(now()),
-              );
+    const content = sceneContent(cache, {
+      activeView,
+      addFolderOpen: drawerFolders.addFolderOpen(),
+      collapsedFolders: drawerFolders.collapsedFolders(),
+      expandedGroupId,
+      fullPageOnboarding,
+      ledgerAvailable: ledgerConnector.isAvailable?.() ?? true,
+      privacy: privacy.disclosure(),
+      privacyJourney: privacy.journey(),
+      selectedMultisigId,
+      selectedMultisigIntentId,
+      selectedNftId,
+      selectedTokenId,
+      sendIntent,
+      snoozedApprovalIds,
+      todayKey: now === null ? null : utcDayKey(now()),
+    });
     lastActiveView = activeView;
     if (!animate && content === lastContent) {
       return;
@@ -464,6 +426,7 @@ export const startWalletUi = async (
       wallet,
       multisig,
       deployment,
+      signability,
       ...(refreshReason ? { refreshReason } : {}),
       isCurrent,
       paint,

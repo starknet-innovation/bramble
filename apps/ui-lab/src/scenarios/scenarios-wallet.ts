@@ -220,6 +220,21 @@ export const portfolioScenario: WalletScenario = {
           deployment: false,
           preferences: journeyPreferences,
           prices: journeyPrices,
+          signability: { readOnly: true, reason: "undeployed" },
+        }),
+      id: "undeployed-braavos",
+      label: "Undeployed Braavos account",
+      narrative:
+        "A Braavos counterfactual deploys only through its own step, so Send and Swap wait for it and Home says where to deploy.",
+      state: { accountDeployment: "required", send: "disabled", signability: "undeployed" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
           view: "deploy-account",
         }),
       id: "deploy-account",

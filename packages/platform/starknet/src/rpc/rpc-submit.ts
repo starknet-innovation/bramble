@@ -7,7 +7,11 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import { type Account, type Call, num, type RpcProvider } from "starknet";
-import { ensureAccountDeployed, isCompatibleAccountDeployed } from "../transactions/deployment";
+import {
+  ensureAccountDeployed,
+  isCompatibleAccountDeployed,
+  refuseUndeployedBraavos,
+} from "../transactions/deployment";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -266,6 +270,7 @@ export const submitInvokeTransaction = async (
       });
       const estimating = invokeEstimatingAccount(provider, account, starknetAccount);
       const deployed = await isCompatibleAccountDeployed(provider, account);
+      refuseUndeployedBraavos(account, deployed);
       const resourceBounds = await settledResourceBounds(
         estimating.account,
         account,

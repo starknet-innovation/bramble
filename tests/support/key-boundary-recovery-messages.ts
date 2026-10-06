@@ -1,5 +1,6 @@
 /** Recovery requests that must remain inside the encrypted key boundary. */
 import {
+  account,
   extensionSender,
   SECRET_MNEMONIC,
   SECRET_PASSPHRASE,
@@ -57,6 +58,28 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
       networkId: "SN_MAIN",
       selections: [{ accountContractType: "openzeppelin", accountIndex: 0 }],
       type: "wallet.importOwnAccounts",
+    },
+    sender: extensionSender,
+  },
+  // Phrase-driven 2FA / guardian removal: reviews and confirmed submissions
+  // (live payloads, so the scan reaches the handlers rather than refusals).
+  { message: { type: "wallet.reviewArgentRecovery" }, sender: extensionSender },
+  { message: { type: "wallet.reviewBraavosRecovery" }, sender: extensionSender },
+  {
+    message: {
+      accountId: account.id,
+      replaceEscape: { kind: "owner-escape", readyAt: 1_500 },
+      reviewedFee: { overallFee: "1", unit: "FRI" },
+      step: "start",
+      type: "wallet.recoverArgentAccount",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      accountId: account.id,
+      reviewedFee: { overallFee: "1", unit: "FRI" },
+      type: "wallet.recoverBraavosAccount",
     },
     sender: extensionSender,
   },

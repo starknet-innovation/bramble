@@ -9,6 +9,7 @@ import {
   type DeploySubmission,
   ensureAccountDeployed,
   isCompatibleAccountDeployed,
+  refuseUndeployedBraavos,
 } from "@bramble/starknet/deployment";
 import {
   acceptedRpcWriteHash,
@@ -192,6 +193,7 @@ export const estimateDeclareFee = async (
     async (provider) => {
       const validateArgent = input.account.accountContractType === "argent";
       const deployed = await isCompatibleAccountDeployed(provider, input.account);
+      refuseUndeployedBraavos(input.account, deployed);
       const estimatingAccount = validateArgent
         ? argentQueryAccount(provider, input.account)
         : makeAccount(provider, input.account, input.signHash);
@@ -285,6 +287,7 @@ export const submitDeclareTransaction = async (
       });
       const validateArgent = account.accountContractType === "argent";
       const deployed = await isCompatibleAccountDeployed(provider, account);
+      refuseUndeployedBraavos(account, deployed);
       const bounds = await checkedDeclareBounds(
         validateArgent ? argentQueryAccount(provider, account) : (starknetAccount as Account),
         account,

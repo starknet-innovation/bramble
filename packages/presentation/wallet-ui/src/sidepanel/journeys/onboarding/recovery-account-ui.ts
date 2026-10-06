@@ -1,6 +1,9 @@
 /** Bounded account discovery and confirmation for phrase recovery, per family. */
 
-import { accountClassEntry } from "@bramble/wallet-model/account-families";
+import {
+  accountClassEntry,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
 import {
   type AccountContractType,
   ARGENT_ACCOUNT_CLASS_HASH,
@@ -87,7 +90,9 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
 const deployableHere = (candidate: RecoveryAccountCandidate): boolean =>
   candidate.account.accountContractType === "openzeppelin" ||
   (candidate.account.accountContractType === "argent" &&
-    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH));
+    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH)) ||
+  (candidate.account.accountContractType === "braavos" &&
+    sameFelt(candidate.account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH));
 
 // The scan's advisory verdict, in the reader's terms: why this account is
 // watch-only here, said before they pick it rather than after a send fails.
@@ -95,7 +100,8 @@ const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
   guardian: "has a guardian",
   "owner-changed": "owner key changed",
   "owner-type": "unsupported signer",
-  release: "older Argent release",
+  release: "unsupported release",
+  "strong-signer": "2FA active",
 };
 
 const activityState = (candidate: RecoveryAccountCandidate): string => {
@@ -114,13 +120,22 @@ const activityState = (candidate: RecoveryAccountCandidate): string => {
     : "No on-chain activity found";
 };
 
-// A Braavos account is restored to be seen, not yet used: say so before the
-// user picks it, rather than after a send fails. It is never offered for
-// deployment either, since Bramble does not deploy Braavos accounts.
+// A deployed Braavos account is usable exactly when its advisory verdict says
+// so (stark key only, no strong signer); an undeployed one stays view-only,
+// since Bramble cannot deploy Braavos accounts yet.
 const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
   if (duplicate) return "Already in this wallet";
   if (candidate.account.accountContractType !== "braavos") return activityState(candidate);
-  return `${candidate.deployed ? "Deployed on Starknet" : "Funded, not deployed"} · view only for now`;
+  if (!candidate.deployed) {
+    // The modern deployment class deploys from here like any other account;
+    // an older base-class counterfactual still cannot.
+    return deployableHere(candidate)
+      ? "Funded and ready to deploy"
+      : "Funded, not deployed · view only for now";
+  }
+  return candidate.restriction
+    ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
+    : "Deployed on Starknet";
 };
 
 // Two Argent releases at one index are two accounts. Name the release on any

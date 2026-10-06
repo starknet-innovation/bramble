@@ -161,8 +161,9 @@ export const multisigDeployFlow = (
     return flowHeader(flowTitle, status) + flowScreen("multisig-deploy", noAccountEmpty(status));
   }
   const accounts = status.accounts.filter((candidate) => candidate.networkId === status.networkId);
-  // Braavos is restored view-only. A transfer from it is refused before
-  // submission, so it cannot be a funding source for this deployment.
+  // Braavos stays out of the funding list: whether this wallet can sign for
+  // one (no active 2FA, wallet key as first stark signer) is only known from a
+  // live read at submission, so it is not offered as a funding source here.
   const fundingAccounts = accounts.filter(
     (candidate) => candidate.accountContractType !== "braavos",
   );

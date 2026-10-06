@@ -12,13 +12,40 @@ import type { FeeEstimate } from "./fee-bounds";
 import { type StarkHashSigner, withRpcFallback } from "./provider";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
 
+export {
+  argentSigningRestriction,
+  braavosSigningRestriction,
+  getArgentSigningRestriction,
+  getBraavosSigningRestriction,
+  type SigningRestrictionInput,
+} from "../transactions/account-compatibility";
 /**
  * Re-exported advisory signability probe for recovery candidates (issue 542).
  */
+/**
+ * Re-exported phrase-driven Ready (Argent) guardian removal.
+ */
 export {
-  getArgentSigningRestriction,
-  type SigningRestrictionInput,
-} from "../transactions/account-compatibility";
+  type ArgentRecoveryInput,
+  type ArgentRecoveryReview,
+  type ArgentRecoveryState,
+  type ArgentRecoveryStep,
+  getArgentRecoveryState,
+  reviewArgentRecovery,
+  submitArgentRecovery,
+} from "../transactions/argent-recovery";
+/**
+ * Re-exported seed-driven Braavos recovery (deferred 2FA removal).
+ */
+export {
+  type BraavosRecoveryInput,
+  type BraavosRecoveryReview,
+  type BraavosRecoveryState,
+  DEFAULT_BRAAVOS_RECOVERY_DELAY_SECONDS,
+  getBraavosRecoveryState,
+  reviewBraavosRecovery,
+  submitBraavosRecovery,
+} from "../transactions/braavos-recovery";
 /**
  * Re-exported declare-transaction submission so callers keep one RPC import path.
  */
