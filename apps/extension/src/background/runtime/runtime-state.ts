@@ -46,14 +46,19 @@ export const networkRpcUrls = (
 };
 
 /**
- * Returns the active account for a network, falling back to the first account on that network.
+ * Returns the active account for a network, falling back to the first account
+ * on that network the user has not hidden, and only then to the first at all.
  */
 const accountForNetwork = (
   vault: Vault,
   networkId: StarknetNetworkId,
-  accountId?: string | null,
+  accountId: string | null | undefined,
+  hiddenAccountIds: readonly string[] = [],
 ): AccountRef | null =>
   vault.accounts.find((account) => account.id === accountId && account.networkId === networkId) ??
+  vault.accounts.find(
+    (account) => account.networkId === networkId && !hiddenAccountIds.includes(account.id),
+  ) ??
   vault.accounts.find((account) => account.networkId === networkId) ??
   null;
 
@@ -100,7 +105,12 @@ const reconcileActiveAccountWithGuard = async (
     preferencesStore.read(),
     wallet.readVault(vaultPassphrase),
   ]);
-  const account = accountForNetwork(vault, preferences.activeNetworkId, vault.activeAccountId);
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
+  );
   if (!account || account.id === vault.activeAccountId) {
     return account;
   }
@@ -239,11 +249,12 @@ const selectNetworkAccount = async (
   networkId: StarknetNetworkId,
   passphrase: string,
   authorized: () => boolean,
+  hiddenAccountIds: readonly string[],
   preferredAccountId?: string,
 ): Promise<AccountRef | null> => {
   const vault = await wallet.readVault(passphrase);
   requireCurrentNetworkSwitch(authorized);
-  const fallback = accountForNetwork(vault, networkId, vault.activeAccountId);
+  const fallback = accountForNetwork(vault, networkId, vault.activeAccountId, hiddenAccountIds);
   if (fallback?.id === vault.activeAccountId) {
     return fallback;
   }
@@ -298,6 +309,7 @@ export const switchActiveNetwork = async (
     }
     const generation = session.generation();
     const authorized = captureSessionAuthorization(session).isCurrent;
+    const { hiddenAccountIds = [] } = await preferencesStore.read();
     return runGuardedNetworkMutation(
       session,
       preferencesStore,
@@ -311,6 +323,7 @@ export const switchActiveNetwork = async (
           networkId,
           vaultPassphrase,
           authorized,
+          hiddenAccountIds,
           options.preferredAccountId,
         ),
     );
@@ -341,7 +354,12 @@ const accountContextFor = async (
   }
   const preferences = await preferencesStore.read();
   const vault = await wallet.readVault(vaultPassphrase);
-  const account = accountForNetwork(vault, preferences.activeNetworkId, vault.activeAccountId);
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
+  );
   if (!account) {
     return { error: "no account for selected network" };
   }
@@ -454,7 +472,12 @@ export const statusResponse = async (
     if (!authorized.isCurrent()) {
       return lockedStatus;
     }
-    const activeAccount = accountForNetwork(vault, network.id, vault.activeAccountId);
+    const activeAccount = accountForNetwork(
+      vault,
+      network.id,
+      vault.activeAccountId,
+      preferences.hiddenAccountIds,
+    );
     return {
       ...status,
       accountCount: vault.accounts.length,

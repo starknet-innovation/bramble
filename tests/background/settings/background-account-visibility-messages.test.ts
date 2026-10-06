@@ -76,6 +76,56 @@ describe("account visibility messages", () => {
     expect(status).toMatchObject({ activeAccountId: secondAccount.id });
   });
 
+  // A: first on Sepolia (hidden), B: active on Sepolia, C: the only Mainnet account.
+  const hiddenFirstFixture = () => {
+    const mainnet = { ...account, address: "0x1234", id: "SN_MAIN:0x1234", networkId: "SN_MAIN" };
+    const state = { active: secondAccount.id };
+    const handler = createMessageHandler(
+      createWallet({
+        accounts: [account, secondAccount, mainnet as typeof account],
+        activeAccountId: () => state.active,
+        captureSetActiveAccount: (input) => {
+          state.active = input.accountId;
+        },
+      }),
+      testExtension,
+      { preferencesStore: createPreferencesStore({ store: createMemoryStore() }) },
+    );
+    const send = (message: unknown) => handler(message, extensionSender);
+    return { mainnet, send, state };
+  };
+
+  test("a network round-trip never lands on a hidden account", async () => {
+    const { mainnet, send, state } = hiddenFirstFixture();
+    await send({ type: "wallet.unlock", vaultPassphrase });
+    await send({ networkId: "SN_SEPOLIA", type: "wallet.setActiveNetwork" });
+    expect(await send(hide(account.id, true))).toMatchObject({ ok: true });
+
+    await send({ networkId: "SN_MAIN", type: "wallet.setActiveNetwork" });
+    expect(state.active).toBe(mainnet.id);
+    const back = await send({ networkId: "SN_SEPOLIA", type: "wallet.setActiveNetwork" });
+
+    expect(state.active).toBe(secondAccount.id);
+    expect(back).toMatchObject({ activeAccountId: secondAccount.id });
+  });
+
+  test("unlock reconciliation never lands on a hidden account", async () => {
+    const { send, state } = hiddenFirstFixture();
+    await send({ type: "wallet.unlock", vaultPassphrase });
+    await send({ networkId: "SN_SEPOLIA", type: "wallet.setActiveNetwork" });
+    expect(await send(hide(account.id, true))).toMatchObject({ ok: true });
+    await send({ networkId: "SN_MAIN", type: "wallet.setActiveNetwork" });
+    await send({ type: "wallet.lock" });
+    // A locked switch records only the network preference; unlock repairs the account.
+    await send({ networkId: "SN_SEPOLIA", type: "wallet.setActiveNetwork" });
+    await send({ type: "wallet.unlock", vaultPassphrase });
+
+    expect(state.active).toBe(secondAccount.id);
+    await expect(send({ type: "wallet.status" })).resolves.toMatchObject({
+      activeAccountId: secondAccount.id,
+    });
+  });
+
   test("a content script cannot hide an account", async () => {
     const handler = createMessageHandler(createWallet(), testExtension, {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
