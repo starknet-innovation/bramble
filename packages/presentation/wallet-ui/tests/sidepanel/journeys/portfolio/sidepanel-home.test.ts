@@ -389,6 +389,21 @@ describe("home read-only flag", () => {
     expect(markup).not.toContain('data-privacy-open="SN_MAIN:STRK');
   });
 
+  test("asks an undeployed Braavos account to deploy first, not to read only", () => {
+    const markup = render({ readOnly: true, reason: "undeployed" });
+    expect(markup).toContain('data-read-only="undeployed"');
+    expect(markup).toContain("Not deployed");
+    expect(markup).toContain("Deploy this account first (Settings → Deploy account).");
+    expect(markup).not.toContain("Read only");
+    for (const id of ["send", "swap"]) {
+      const start = markup.indexOf(`data-view="${id}"`);
+      const open = markup.lastIndexOf("<button", start);
+      expect(markup.slice(open, markup.indexOf(">", start) + 1)).toContain("disabled");
+    }
+    // Shield keeps its own deploy-first route rather than a dead control.
+    expect(markup).not.toContain("Shield unavailable — this account is read only");
+  });
+
   test("renders a normal account when signable or unknown", () => {
     for (const signability of [{ readOnly: false as const }, null]) {
       const markup = render(signability);

@@ -34,22 +34,24 @@ type AccountSignabilityDeps = {
 const passiveAccountContext = (deps: AccountSignabilityDeps) =>
   observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
 
-// An undeployed Argent account deploys and signs with the phrase key, and so
-// does a Braavos counterfactual on the modern deployment class; only an older
-// Braavos base class stays view-only, since its deployment authorization has not
-// been established.
+// An undeployed Argent account deploys inside its first transaction. A Braavos
+// counterfactual on the modern deployment class deploys only through the
+// explicit Deploy account step (the transaction path refuses deploy-then-act
+// for it), so until then it cannot send; an older Braavos base class stays
+// view-only, since its deployment authorization has not been established.
 const undeployedVerdict = (
   accountId: string,
   vendor: "argent" | "braavos",
   classHash: string,
-): RuntimeResponse =>
-  vendor === "argent" || sameFelt(classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH)
-    ? { accountId, ok: true, readOnly: false }
-    : { accountId, ok: true, readOnly: true, reason: "braavos" };
+): RuntimeResponse => {
+  if (vendor === "argent") return { accountId, ok: true, readOnly: false };
+  const reason = sameFelt(classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH) ? "undeployed" : "braavos";
+  return { accountId, ok: true, readOnly: true, reason };
+};
 
 /**
  * The Home read-only flag's verdict: deployed vendor accounts by live probe,
- * undeployed Braavos read-only (deployment unsupported), everything else
+ * undeployed Braavos unable to send until deployed, everything else
  * signs. Advisory — a failed probe answers signable rather than alarming on an
  * RPC flake; the transaction path keeps its authoritative fail-closed checks.
  */

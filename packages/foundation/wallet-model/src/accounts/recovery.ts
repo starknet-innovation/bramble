@@ -198,15 +198,19 @@ export const recoveryScanTarget = (candidates: readonly RecoveryAccountCandidate
 };
 
 /**
- * Why the active account is watch-only on the wallet's own surfaces (issue
- * 54x): one of the per-account Argent restrictions, or the Braavos family,
- * which this wallet cannot yet authorize for at all.
+ * Why the active account cannot sign on the wallet's own surfaces (issue 54x):
+ * one of the per-account signing restrictions; "braavos", a Braavos account
+ * this wallet cannot authorize for at all; or "undeployed", a Braavos
+ * counterfactual that must be deployed through its own reviewed step before
+ * it can send anything.
  */
-export type ReadOnlyReason = RecoverySigningRestriction | "braavos";
+export type ReadOnlyReason = RecoverySigningRestriction | "braavos" | "undeployed";
 
 /** Validates a read-only reason at runtime boundaries. */
 export const isReadOnlyReason = (value: unknown): value is ReadOnlyReason =>
-  value === "braavos" || SIGNING_RESTRICTIONS.includes(value as RecoverySigningRestriction);
+  value === "braavos" ||
+  value === "undeployed" ||
+  SIGNING_RESTRICTIONS.includes(value as RecoverySigningRestriction);
 
 /** Validates one public discovery result before caching or rendering it. */
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>

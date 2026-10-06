@@ -69,6 +69,13 @@ const formatUtcInstant = (epochSeconds: number): string => {
  */
 const readOnlyNotice = (signability: SignabilityVerdict | null): string => {
   if (signability?.readOnly !== true) return "";
+  // Not read only: it signs once deployed, which is its own reviewed step.
+  if (signability.reason === "undeployed") {
+    return `<div class="read-only-notice" data-read-only="undeployed">
+      <p class="hero-stale">${icon("rocket")}<span>Not deployed</span></p>
+      <p class="read-only-detail">Deploy this account first (Settings → Deploy account).</p>
+    </div>`;
+  }
   const recovery = "recovery" in signability ? signability.recovery : undefined;
   // Ready's guardian escape is a two-step removal that needs a second signed
   // call once the delay passes; Braavos' 2FA removal applies itself at expiry.
@@ -134,6 +141,8 @@ export const homeScreen = (
   // Read-only until proven otherwise never — the flag is advisory UX; the
   // transaction path enforces. Null (unknown) renders as a normal account.
   const readOnly = signability?.readOnly === true;
+  // An undeployed Braavos account can still reach Shield's deploy-first step.
+  const shieldReadOnly = readOnly && signability.reason !== "undeployed";
   const unified = unifiedHomeBalances(balances, privacy, preferences);
   const shieldedIncluded = visiblePrivateHomeBalances(privacy, preferences).some(
     (token) => BigInt(token.balance) > 0n,
@@ -179,7 +188,7 @@ export const homeScreen = (
           privateReady,
           deploymentKnownFromPrivacy(deployment, privacy),
           fundedForFees,
-          readOnly,
+          shieldReadOnly,
         )}
       </div>
     </section>

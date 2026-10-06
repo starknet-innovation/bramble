@@ -290,7 +290,8 @@ describe("background account signability", () => {
       readOnly: false,
     });
     // An undeployed Braavos counterfactual on an older base class stays view
-    // only; the modern deployment class deploys from here like any account.
+    // only; the modern deployment class cannot send until its explicit
+    // deployment (the transaction path refuses deploy-then-act for it).
     const undeployed = makeHandler(braavosAccount, { deployed: false });
     expect(await undeployed.ask()).toEqual({
       accountId: braavosAccount.id,
@@ -305,7 +306,8 @@ describe("background account signability", () => {
     expect(await modern.ask()).toEqual({
       accountId: braavosAccount.id,
       ok: true,
-      readOnly: false,
+      readOnly: true,
+      reason: "undeployed",
     });
   });
 
