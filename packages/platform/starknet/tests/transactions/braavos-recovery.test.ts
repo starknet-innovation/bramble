@@ -57,7 +57,11 @@ const guardedReads: Record<string, readonly string[]> = {
 
 const providerWith = (
   reads: Record<string, readonly string[]>,
-  options: { readonly log?: string[]; readonly waitFails?: boolean } = {},
+  options: {
+    readonly classHash?: string;
+    readonly log?: string[];
+    readonly waitFails?: boolean;
+  } = {},
 ): RpcProvider => {
   // After the receipt, the request the submission wrote reads back.
   let confirmed = false;
@@ -67,7 +71,7 @@ const providerWith = (
     },
     async getClassHashAt(_address: string, block: string) {
       options.log?.push(`class@${block}`);
-      return BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH;
+      return options.classHash ?? BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH;
     },
     async getBlockLatestAccepted() {
       return { block_hash: "0xb10c", block_number: 7 };
@@ -312,6 +316,16 @@ describe("braavos recovery submit", () => {
 });
 
 describe("braavos recovery gate", () => {
+  test("an unrecognised release is refused for that reason, not as a key change", async () => {
+    await expect(
+      reviewBraavosRecovery(
+        { account, rpcUrls: RPC, signHash },
+        () => providerWith(guardedReads, { classHash: "0x123" }),
+        fakeAccounts(10n ** 15n).make,
+      ),
+    ).rejects.toThrow("Deployed Braavos account class is not a release this wallet recognizes");
+  });
+
   test("reads the class, signers and pending request at one accepted block", async () => {
     const log: string[] = [];
     await reviewBraavosRecovery(

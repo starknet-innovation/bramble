@@ -46,6 +46,8 @@ export const ledgerAccount = {
 export type Chain = {
   /** get_guardian_backup's answer, or a contract revert / empty answer. */
   readonly backup?: string | "empty" | "revert";
+  /** The live class (an unrecognised one reads as restriction "release"). */
+  readonly classHash?: string;
   readonly escapeType?: string;
   /** A guardian escape to a NEW guardian: new_signer = Some(this key). */
   readonly newGuardian?: string;
@@ -76,7 +78,7 @@ export const providerWith = (chain: Chain = {}): RpcProvider => {
     },
     async getClassHashAt(_address: string, block: string) {
       chain.reads?.push(`class@${block}`);
-      return canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH);
+      return chain.classHash ?? canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH);
     },
     async getBlockLatestAccepted() {
       return { block_hash: ACCEPTED_BLOCK, block_number: 7 };

@@ -15,6 +15,7 @@
 import { WalletError } from "@bramble/core/errors";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { RecoverySigningRestriction } from "@bramble/wallet-model/recovery";
 import type { RpcProvider } from "starknet";
 import type { FeeEstimate } from "../rpc/fee-bounds";
 import {
@@ -35,6 +36,7 @@ import {
   recoveryFeeCeiling,
   refuseKeylessRecovery,
   requireWithinReviewedRecoveryFee,
+  UNRECOVERABLE_SIGNERS,
 } from "./recovery-shared";
 
 /**
@@ -68,6 +70,15 @@ const BACKUP_UNCHECKED = "Could not check this account's backup guardian";
 type PendingEscapeChange = {
   readonly kind: "guardian-change" | "owner-escape";
   readonly readyAt: number;
+};
+
+// Each restriction's own refusal. `release` covers both an unknown class and
+// a known one whose authorization this wallet cannot produce, so it says only
+// what is true of both.
+const ARGENT_REFUSALS: Partial<Record<RecoverySigningRestriction, string>> = {
+  "owner-changed": "Deployed Argent account owner does not match the wallet signer",
+  "owner-type": "Deployed Argent account owner type is not supported by this wallet",
+  release: "Deployed Argent account class is not one this wallet can recover",
 };
 
 /** The step a confirmation offers: start the escape, or complete a ready one. */
@@ -306,7 +317,7 @@ const requireRecoverableArgentAt = async (
     throw new WalletError("This account has no guardian to remove");
   }
   if (restriction !== "guardian") {
-    throw new WalletError("Deployed Argent account owner does not match the wallet signer");
+    throw new WalletError(ARGENT_REFUSALS[restriction] ?? UNRECOVERABLE_SIGNERS);
   }
   // Transport failures keep their own classification (and endpoint fallback);
   // any other failed read refuses rather than letting the escape revert.

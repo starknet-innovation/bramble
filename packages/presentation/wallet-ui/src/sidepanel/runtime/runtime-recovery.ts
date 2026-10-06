@@ -26,7 +26,7 @@ export const createRecoveryRuntimeClient = (
   async reviewBraavosRecovery(): Promise<RecoveryReview> {
     const response = await sendMessage({ type: "wallet.reviewBraavosRecovery" });
     if (isRecoveryReview(response)) return response;
-    throw responseError(response, "account recovery unavailable");
+    throw responseError(response, "second factor removal unavailable");
   },
   /** Submits the confirmed Braavos 2FA-removal request. */
   async recoverBraavosAccount(review: RecoveryReview): Promise<RecoverAccountResponse> {
@@ -36,13 +36,13 @@ export const createRecoveryRuntimeClient = (
       type: "wallet.recoverBraavosAccount",
     });
     if (isRecoverAccountResponse(response)) return response;
-    throw responseError(response, "account recovery failed");
+    throw responseError(response, "second factor removal unconfirmed");
   },
   /** Quotes the Ready recovery's next escape step for its confirmation. */
   async reviewArgentRecovery(): Promise<RecoveryReview> {
     const response = await sendMessage({ type: "wallet.reviewArgentRecovery" });
     if (isRecoveryReview(response)) return response;
-    throw responseError(response, "account recovery unavailable");
+    throw responseError(response, "second factor removal unavailable");
   },
   /**
    * Submits the confirmed Ready escape step. `replaceEscapeReadyAt` names the
@@ -59,6 +59,6 @@ export const createRecoveryRuntimeClient = (
       type: "wallet.recoverArgentAccount",
     });
     if (isRecoverAccountResponse(response)) return response;
-    throw responseError(response, "account recovery failed");
+    throw responseError(response, "second factor removal unconfirmed");
   },
 });

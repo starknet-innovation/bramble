@@ -79,6 +79,13 @@ export const requireWithinReviewedRecoveryFee = (
 };
 
 /**
+ * Refusal for a restriction the recovery flow does not lift and that no more
+ * specific message describes (e.g. a restriction another vendor reports).
+ */
+export const UNRECOVERABLE_SIGNERS =
+  "This account's signer setup cannot be recovered with the recovery phrase";
+
+/**
  * Recovery is a phrase flow. A Ledger account's key never leaves the device,
  * which could only blind-sign this hash, so the flows refuse it before any
  * estimate or prompt rather than asking for a device approval of a second

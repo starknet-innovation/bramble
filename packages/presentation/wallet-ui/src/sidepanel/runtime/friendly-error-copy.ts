@@ -209,6 +209,37 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "account recovery unavailable",
     "Couldn't recover accounts. Check your connection and try again.",
   ],
+  // The 2FA / guardian removal flow's own fallbacks (runtime-recovery.ts and
+  // account-recovery.ts), worded apart from the account-discovery flow above.
+  [
+    "second factor removal unavailable",
+    "Couldn't load 2FA or guardian removal. Check your connection and try again.",
+  ],
+  [
+    "second factor removal unconfirmed",
+    "Couldn't confirm the 2FA or guardian removal. Check activity before trying again.",
+  ],
+  [
+    "deployed argent account class is not one this wallet can recover",
+    "This account runs a Ready release this wallet can't recover. Use it in Ready.",
+  ],
+  [
+    "this account's signer setup cannot be recovered with the recovery phrase",
+    "This account's signers can't be recovered with the recovery phrase.",
+  ],
+  // argent-recovery.ts fails closed on an escape it cannot decode.
+  [
+    "the account reported an unrecognised escape",
+    "This account reported a guardian state this wallet can't read. Use it in Ready.",
+  ],
+  [
+    "the account reported an unrecognised escape status",
+    "This account reported a guardian state this wallet can't read. Use it in Ready.",
+  ],
+  [
+    "the account reported an unrecognised escape type",
+    "This account reported a guardian state this wallet can't read. Use it in Ready.",
+  ],
   // Removing 2FA or a guardian is a phrase flow; a Ledger account is refused
   // before any device prompt (account-recovery.ts).
   [

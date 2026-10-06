@@ -61,7 +61,17 @@ const extensionSender: RuntimeSender = {
 const contentSender: RuntimeSender = { id: "extension-id", url: "https://example.com/app" };
 const FEE = { overallFee: "100", unit: "FRI" as const };
 
-const harness = (account: AccountRef, overrides: Partial<RuntimeRpc> = {}) => {
+const unwired = (rpc: RuntimeRpc, without: readonly (keyof RuntimeRpc)[]): RuntimeRpc =>
+  Object.fromEntries(
+    Object.entries(rpc).filter(([key]) => !without.includes(key as keyof RuntimeRpc)),
+  ) as RuntimeRpc;
+
+const harness = (
+  account: AccountRef,
+  overrides: Partial<RuntimeRpc> = {},
+  // RPC methods to leave unwired, as a deployment without them would.
+  without: readonly (keyof RuntimeRpc)[] = [],
+) => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
   const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
@@ -96,32 +106,35 @@ const harness = (account: AccountRef, overrides: Partial<RuntimeRpc> = {}) => {
     testExtension,
     {
       activity,
-      runtimeRpc: makeRuntimeRpc({
-        async reviewBraavosRecovery() {
-          return { delaySeconds: 345_600, effectiveAfter: 1_345_600, fee: FEE };
-        },
-        async submitBraavosRecovery(input) {
-          calls.braavos.push(input);
-          input.onSigned?.("0xb1");
-          return { pendingUntil: 1_345_600, transactionHash: "0xb1" };
-        },
-        async reviewArgentRecovery() {
-          return {
-            expiresAt: 2_209_600,
-            fee: FEE,
-            readyAt: 1_604_800,
-            replaces: { kind: "owner-escape" as const, readyAt: 1_500 },
-            step: "start" as const,
-          };
-        },
-        async submitArgentRecovery(input) {
-          calls.argent.push(input);
-          const hash = `0xa${calls.argent.length}`;
-          input.onSigned?.(hash);
-          return { expiresAt: 2_209_600, readyAt: 1_604_800, transactionHash: hash };
-        },
-        ...overrides,
-      }),
+      runtimeRpc: unwired(
+        makeRuntimeRpc({
+          async reviewBraavosRecovery() {
+            return { delaySeconds: 345_600, effectiveAfter: 1_345_600, fee: FEE };
+          },
+          async submitBraavosRecovery(input) {
+            calls.braavos.push(input);
+            input.onSigned?.("0xb1");
+            return { pendingUntil: 1_345_600, transactionHash: "0xb1" };
+          },
+          async reviewArgentRecovery() {
+            return {
+              expiresAt: 2_209_600,
+              fee: FEE,
+              readyAt: 1_604_800,
+              replaces: { kind: "owner-escape" as const, readyAt: 1_500 },
+              step: "start" as const,
+            };
+          },
+          async submitArgentRecovery(input) {
+            calls.argent.push(input);
+            const hash = `0xa${calls.argent.length}`;
+            input.onSigned?.(hash);
+            return { expiresAt: 2_209_600, readyAt: 1_604_800, transactionHash: hash };
+          },
+          ...overrides,
+        }),
+        without,
+      ),
       session,
     },
   );
@@ -176,6 +189,16 @@ describe("recovery reviews", () => {
         error: "privileged sender required",
       });
     }
+  });
+
+  test("say the 2FA/guardian flow is unavailable when its RPC is not wired", async () => {
+    const unavailable = { error: "second factor removal unavailable" };
+    const braavosOff = harness(braavos, {}, ["reviewBraavosRecovery", "submitBraavosRecovery"]);
+    expect(await braavosOff.send({ type: "wallet.reviewBraavosRecovery" })).toEqual(unavailable);
+    expect(await braavosOff.send(braavosSubmit)).toEqual(unavailable);
+    const argentOff = harness(argent, {}, ["reviewArgentRecovery", "submitArgentRecovery"]);
+    expect(await argentOff.send({ type: "wallet.reviewArgentRecovery" })).toEqual(unavailable);
+    expect(await argentOff.send(argentSubmit())).toEqual(unavailable);
   });
 
   test("refuse a Ledger account before any estimate or signer", async () => {

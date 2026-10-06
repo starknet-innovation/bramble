@@ -56,6 +56,19 @@ describe("recovery runtime client", () => {
     }
   });
 
+  test("a malformed reply falls back to this flow's own diagnostics", async () => {
+    for (const method of ["reviewArgentRecovery", "reviewBraavosRecovery"] as const) {
+      await expect(clientReplying({ ok: true }).client[method]()).rejects.toThrow(
+        "second factor removal unavailable",
+      );
+    }
+    for (const method of ["recoverArgentAccount", "recoverBraavosAccount"] as const) {
+      await expect(clientReplying({ ok: true }).client[method](REVIEW)).rejects.toThrow(
+        "second factor removal unconfirmed",
+      );
+    }
+  });
+
   test("a Braavos submit sends the reviewed account and fee only", async () => {
     const { client, sent } = clientReplying(SUBMITTED);
     expect(await client.recoverBraavosAccount(REVIEW)).toEqual(SUBMITTED);

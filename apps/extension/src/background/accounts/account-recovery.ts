@@ -55,7 +55,7 @@ const recoveryContext = async (deps: AccountRecoveryDeps, expectedAccountId?: st
   if (expectedAccountId !== undefined && account.id !== expectedAccountId) {
     return { error: "The active account changed. Review the recovery again." } as const;
   }
-  if (!("publicKeyX" in account)) return { error: "account recovery unavailable" } as const;
+  if (!("publicKeyX" in account)) return { error: "second factor removal unavailable" } as const;
   if (isKeylessAccount(account)) {
     return { error: "Account recovery is not available for Ledger accounts" } as const;
   }
@@ -85,7 +85,7 @@ export const handleReviewBraavosRecovery = async (
   }
   const context = await recoveryContext(deps);
   if ("error" in context) return { error: context.error };
-  if (!deps.runtimeRpc.reviewBraavosRecovery) return { error: "account recovery unavailable" };
+  if (!deps.runtimeRpc.reviewBraavosRecovery) return { error: "second factor removal unavailable" };
   const review = await deps.runtimeRpc.reviewBraavosRecovery(context);
   return {
     accountId: context.account.id,
@@ -113,7 +113,7 @@ export const handleReviewArgentRecovery = async (
   }
   const context = await recoveryContext(deps);
   if ("error" in context) return { error: context.error };
-  if (!deps.runtimeRpc.reviewArgentRecovery) return { error: "account recovery unavailable" };
+  if (!deps.runtimeRpc.reviewArgentRecovery) return { error: "second factor removal unavailable" };
   const review = await deps.runtimeRpc.reviewArgentRecovery(context);
   return {
     accountId: context.account.id,
@@ -186,7 +186,7 @@ export const handleRecoverBraavosAccount = async (
   const input = readRecoveryInput(message, "wallet.recoverBraavosAccount");
   if (!input) return { error: "invalid account recovery request" };
   const submit = deps.runtimeRpc.submitBraavosRecovery;
-  if (!submit) return { error: "account recovery unavailable" };
+  if (!submit) return { error: "second factor removal unavailable" };
   return submitRecovery(deps, "braavos", input, (context, extras) =>
     submit({ ...context, ...extras, reviewedFee: input.reviewedFee }),
   );
@@ -205,7 +205,7 @@ export const handleRecoverArgentAccount = async (
   const input = readRecoveryInput(message, "wallet.recoverArgentAccount");
   if (!input?.step) return { error: "invalid account recovery request" };
   const submit = deps.runtimeRpc.submitArgentRecovery;
-  if (!submit) return { error: "account recovery unavailable" };
+  if (!submit) return { error: "second factor removal unavailable" };
   const step = input.step;
   return submitRecovery(deps, "argent", input, async (context, extras) => {
     const submitted = await submit({

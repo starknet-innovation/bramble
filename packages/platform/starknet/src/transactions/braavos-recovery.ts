@@ -15,6 +15,7 @@
 import { WalletError } from "@bramble/core/errors";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { RecoverySigningRestriction } from "@bramble/wallet-model/recovery";
 import type { RpcProvider } from "starknet";
 import type { FeeEstimate } from "../rpc/fee-bounds";
 import {
@@ -33,6 +34,7 @@ import {
   recoveryFeeCeiling,
   refuseKeylessRecovery,
   requireWithinReviewedRecoveryFee,
+  UNRECOVERABLE_SIGNERS,
 } from "./recovery-shared";
 
 /**
@@ -81,6 +83,13 @@ export type BraavosRecoveryState = {
 };
 
 const RECOVERY_ENTRYPOINT = "deferred_remove_signers";
+
+// Each restriction's own refusal (the strings the transaction path already
+// throws, so the panel's reviewed translations apply).
+const BRAAVOS_REFUSALS: Partial<Record<RecoverySigningRestriction, string>> = {
+  "owner-changed": "Deployed Braavos account owner does not match the wallet signer",
+  release: "Deployed Braavos account class is not a release this wallet recognizes",
+};
 
 const recoveryCall = (address: string) => ({
   calldata: [] as string[],
@@ -162,7 +171,7 @@ const requireRecoverableBraavosAt = async (
     throw new WalletError("This account has no 2FA signer to remove");
   }
   if (restriction !== "strong-signer") {
-    throw new WalletError("Deployed Braavos account owner does not match the wallet signer");
+    throw new WalletError(BRAAVOS_REFUSALS[restriction] ?? UNRECOVERABLE_SIGNERS);
   }
   const pending = await readFelt(
     provider,

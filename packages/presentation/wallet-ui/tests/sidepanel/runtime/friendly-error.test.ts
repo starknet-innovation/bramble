@@ -56,9 +56,33 @@ describe("friendlyError", () => {
         "The active account changed. Review the recovery again.",
         "You switched accounts. Review the recovery again.",
       ],
+      [
+        "second factor removal unavailable",
+        "Couldn't load 2FA or guardian removal. Check your connection and try again.",
+      ],
+      [
+        "second factor removal unconfirmed",
+        "Couldn't confirm the 2FA or guardian removal. Check activity before trying again.",
+      ],
+      [
+        "Deployed Argent account class is not one this wallet can recover",
+        "This account runs a Ready release this wallet can't recover. Use it in Ready.",
+      ],
+      [
+        "This account's signer setup cannot be recovered with the recovery phrase",
+        "This account's signers can't be recovered with the recovery phrase.",
+      ],
+      [
+        "The account reported an unrecognised escape",
+        "This account reported a guardian state this wallet can't read. Use it in Ready.",
+      ],
     ] as const) {
       expect(friendlyError(raw).message).toBe(message);
     }
+    // The account-discovery flow keeps its own wording.
+    expect(friendlyError("account recovery unavailable").message).toBe(
+      "Couldn't recover accounts. Check your connection and try again.",
+    );
   });
 
   test("maps 'wallet unavailable' to a friendly message", () => {

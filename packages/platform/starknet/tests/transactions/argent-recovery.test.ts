@@ -160,8 +160,16 @@ describe("argent recovery review", () => {
 
   test("refuses accounts the carve-out does not cover", async () => {
     await expect(review({ guardian: "0x0" }).result).rejects.toThrow("no guardian to remove");
-    await expect(review({ owner: "0x999" }).result).rejects.toThrow("does not match");
-    await expect(review({ ownerType: "0x1" }).result).rejects.toThrow("does not match");
+    // Each restriction names its own cause.
+    await expect(review({ owner: "0x999" }).result).rejects.toThrow(
+      "Deployed Argent account owner does not match the wallet signer",
+    );
+    await expect(review({ ownerType: "0x1" }).result).rejects.toThrow(
+      "Deployed Argent account owner type is not supported by this wallet",
+    );
+    await expect(review({ classHash: "0x123" }).result).rejects.toThrow(
+      "Deployed Argent account class is not one this wallet can recover",
+    );
     await expect(review({}, 10n ** 15n, ledgerAccount).result).rejects.toThrow("Ledger");
   });
 });
@@ -218,7 +226,7 @@ describe("argent recovery submit", () => {
   test("re-checks the account before signing", async () => {
     for (const chain of [{ owner: "0x999" }, { ownerType: "0x1" }, { guardian: "0x0" }]) {
       const refused = submit(chain, "start");
-      await expect(refused.result).rejects.toThrow(/does not match|no guardian/);
+      await expect(refused.result).rejects.toThrow(/does not match|not supported|no guardian/);
       expect(refused.doubles.executes).toHaveLength(0);
     }
     await expect(submit({}, "start", { subject: ledgerAccount }).result).rejects.toThrow("Ledger");
