@@ -139,7 +139,7 @@ export const GROUP_STYLES = `
     top: 0;
   }
   .account-name-row > .option-avatar { margin-top: 4px; }
-  .account-name-row > button[type="submit"] { align-self: start; margin-top: 4px; }
+  .account-name-actions { align-self: start; display: flex; gap: 4px; margin-top: 4px; }
   .account-name-copy { display: grid; gap: 4px; min-width: 0; }
   .account-name-copy label { display: grid; }
   .account-name-copy input {

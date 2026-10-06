@@ -118,7 +118,11 @@ export const recipientStage = (
   preferences: WalletPreferences | null,
   multisigs: readonly ArgentMultisigRecord[],
 ): string => {
-  const accounts = sendRecipientAccounts(status.accounts, status.networkId);
+  const accounts = sendRecipientAccounts(
+    status.accounts,
+    status.networkId,
+    preferences?.hiddenAccountIds ?? [],
+  );
   const sharedAccounts = multisigs.filter((record) => record.networkId === status.networkId);
   const contacts =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];

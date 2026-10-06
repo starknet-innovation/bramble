@@ -46,14 +46,19 @@ export const networkRpcUrls = (
 };
 
 /**
- * Returns the active account for a network, falling back to the first account on that network.
+ * Returns the active account for a network, falling back to the first account
+ * on that network the user has not hidden, and only then to the first at all.
  */
 const accountForNetwork = (
   vault: Vault,
   networkId: StarknetNetworkId,
-  accountId?: string | null,
+  accountId: string | null | undefined,
+  hiddenAccountIds: readonly string[] = [],
 ): AccountRef | null =>
   vault.accounts.find((account) => account.id === accountId && account.networkId === networkId) ??
+  vault.accounts.find(
+    (account) => account.networkId === networkId && !hiddenAccountIds.includes(account.id),
+  ) ??
   vault.accounts.find((account) => account.networkId === networkId) ??
   null;
 
@@ -100,7 +105,12 @@ const reconcileActiveAccountWithGuard = async (
     preferencesStore.read(),
     wallet.readVault(vaultPassphrase),
   ]);
-  const account = accountForNetwork(vault, preferences.activeNetworkId, vault.activeAccountId);
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
+  );
   if (!account || account.id === vault.activeAccountId) {
     return account;
   }
@@ -175,6 +185,53 @@ const requireCurrentAccountSelection = (authorized: () => boolean): void => {
  * mutation. The plain network preference records intent first; any subsequent
  * failure locks only the session generation that authorized the operation so
  * the provider cannot expose a different account under the new network.
+ *
+ * The caller must already hold the active-state coordinator (or be the only
+ * writer): this does not take it, so a composite operation can switch inside
+ * one serialized section instead of nesting coordinator runs.
+ */
+export const selectAccountLocked = async (
+  wallet: WalletStatusReader,
+  session: UnlockSession,
+  preferencesStore: WalletPreferencesStore,
+  accountId: string,
+): Promise<AccountRef | null> => {
+  const passphrase = session.getPassphrase();
+  if (!passphrase) {
+    return null;
+  }
+  const generation = session.generation();
+  const authorized = captureSessionAuthorization(session).isCurrent;
+  const target = findVaultAccount(await wallet.readVault(passphrase), accountId);
+  requireCurrentAccountSelection(authorized);
+  return runGuardedNetworkMutation(
+    session,
+    preferencesStore,
+    target.networkId,
+    passphrase,
+    generation,
+    "Unlock session changed during account selection",
+    (vaultPassphrase) => wallet.setActiveAccount({ accountId, vaultPassphrase }),
+  );
+};
+
+/**
+ * Reads the vault under the session's current credential, or null when the
+ * session holds none. Kept in this boundary module so the session and vault
+ * accessors are named in one audited place; callers pass the returned vault
+ * around and never the credential.
+ */
+export const readUnlockedVault = async (
+  wallet: WalletStatusReader,
+  session: UnlockSession,
+): Promise<Vault | null> => {
+  const passphrase = session.getPassphrase();
+  return passphrase ? wallet.readVault(passphrase) : null;
+};
+
+/**
+ * Selects an existing account and its network, serialized on the active-state
+ * coordinator. See {@link selectAccountLocked} for the mutation itself.
  */
 export const selectActiveAccount = async (
   wallet: WalletStatusReader,
@@ -183,36 +240,21 @@ export const selectActiveAccount = async (
   accountId: string,
   coordinator?: ActiveStateCoordinator,
 ): Promise<AccountRef | null> =>
-  runActiveStateMutation(coordinator, async () => {
-    const passphrase = session.getPassphrase();
-    if (!passphrase) {
-      return null;
-    }
-    const generation = session.generation();
-    const authorized = captureSessionAuthorization(session).isCurrent;
-    const target = findVaultAccount(await wallet.readVault(passphrase), accountId);
-    requireCurrentAccountSelection(authorized);
-    return runGuardedNetworkMutation(
-      session,
-      preferencesStore,
-      target.networkId,
-      passphrase,
-      generation,
-      "Unlock session changed during account selection",
-      (vaultPassphrase) => wallet.setActiveAccount({ accountId, vaultPassphrase }),
-    );
-  });
+  runActiveStateMutation(coordinator, () =>
+    selectAccountLocked(wallet, session, preferencesStore, accountId),
+  );
 
 const selectNetworkAccount = async (
   wallet: WalletStatusReader,
   networkId: StarknetNetworkId,
   passphrase: string,
   authorized: () => boolean,
+  hiddenAccountIds: readonly string[],
   preferredAccountId?: string,
 ): Promise<AccountRef | null> => {
   const vault = await wallet.readVault(passphrase);
   requireCurrentNetworkSwitch(authorized);
-  const fallback = accountForNetwork(vault, networkId, vault.activeAccountId);
+  const fallback = accountForNetwork(vault, networkId, vault.activeAccountId, hiddenAccountIds);
   if (fallback?.id === vault.activeAccountId) {
     return fallback;
   }
@@ -267,6 +309,7 @@ export const switchActiveNetwork = async (
     }
     const generation = session.generation();
     const authorized = captureSessionAuthorization(session).isCurrent;
+    const { hiddenAccountIds = [] } = await preferencesStore.read();
     return runGuardedNetworkMutation(
       session,
       preferencesStore,
@@ -280,6 +323,7 @@ export const switchActiveNetwork = async (
           networkId,
           vaultPassphrase,
           authorized,
+          hiddenAccountIds,
           options.preferredAccountId,
         ),
     );
@@ -310,7 +354,12 @@ const accountContextFor = async (
   }
   const preferences = await preferencesStore.read();
   const vault = await wallet.readVault(vaultPassphrase);
-  const account = accountForNetwork(vault, preferences.activeNetworkId, vault.activeAccountId);
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
+  );
   if (!account) {
     return { error: "no account for selected network" };
   }
@@ -423,7 +472,12 @@ export const statusResponse = async (
     if (!authorized.isCurrent()) {
       return lockedStatus;
     }
-    const activeAccount = accountForNetwork(vault, network.id, vault.activeAccountId);
+    const activeAccount = accountForNetwork(
+      vault,
+      network.id,
+      vault.activeAccountId,
+      preferences.hiddenAccountIds,
+    );
     return {
       ...status,
       accountCount: vault.accounts.length,

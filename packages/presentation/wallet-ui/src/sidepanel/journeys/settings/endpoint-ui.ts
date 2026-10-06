@@ -39,7 +39,7 @@ const requestHostAccess = (
   const origins = [...new Set(configured.map((value) => `${new URL(value).origin}/*`))];
   if (origins.length === 0) return Promise.resolve(true);
   if (!permissions) {
-    return Promise.reject(new Error("Chrome host permission controls are unavailable"));
+    return Promise.reject(new Error("Host permission controls are unavailable in this browser"));
   }
   return permissions.request({ origins });
 };
@@ -68,7 +68,7 @@ const bindEndpointForm = (
       : Promise.resolve(true);
     void access
       .then((granted) => {
-        if (!granted) throw new Error("Chrome did not grant access to that service host");
+        if (!granted) throw new Error("Your browser did not grant access to that service host");
         return submit(value);
       })
       .then(
@@ -126,7 +126,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
     buttonBusy(submitButton, true);
     void requestHostAccess(deps.permissions, [discoveryUrl, ohttpRelayUrl, paymasterUrl, proverUrl])
       .then((granted) => {
-        if (!granted) throw new Error("Chrome did not grant access to those service hosts");
+        if (!granted) throw new Error("Your browser did not grant access to those service hosts");
         return deps.wallet.setStrk20NetworkConfig(deps.networkId(), config);
       })
       .then(
@@ -164,7 +164,7 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
     buttonBusy(submitButton, true);
     void requestHostAccess(deps.permissions, [apiUrl])
       .then((granted) => {
-        if (!granted) throw new Error("Chrome did not grant access to that explorer host");
+        if (!granted) throw new Error("Your browser did not grant access to that explorer host");
         return deps.wallet.setExplorerFallback(deps.networkId(), enabled, apiUrl);
       })
       .then(

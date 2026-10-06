@@ -23,11 +23,21 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
 
+/** One bounded discovery page as the runtime returns it. */
+type DiscoveryResult = Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>;
+
 type RecoveryAccountUiDeps = {
+  /**
+   * Injected discovery page. The settings rescan of the wallet's own phrase has
+   * no phrase in the panel and supplies this; the phrase-bearing flows omit it
+   * and the picker calls `wallet.discoverRecoveryAccounts` with `mnemonic`.
+   */
+  readonly discover?: (manualIndex?: number) => Promise<DiscoveryResult>;
   /** Accounts already in the vault; scan candidates matching them are shown but locked. */
   readonly existingIds?: () => ReadonlySet<string>;
   readonly form: HTMLFormElement;
-  readonly mnemonic: () => string;
+  /** The typed phrase; absent when `discover` supplies the page instead. */
+  readonly mnemonic?: () => string;
   readonly networkId: () => string;
   /**
    * Runs after a successful restore, before the repaint, once the picker has
@@ -43,7 +53,8 @@ type RecoveryAccountUiDeps = {
     networkId: string,
     selections: readonly RecoveryAccountSelection[],
   ) => Promise<unknown>;
-  readonly vaultPassphrase: () => string;
+  /** The typed unlock credential; absent when `restore` commits instead. */
+  readonly vaultPassphrase?: () => string;
   readonly wallet: SidepanelWallet;
 };
 
@@ -253,7 +264,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     refreshGate();
   };
 
-  const apply = (next: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>): void => {
+  const apply = (next: DiscoveryResult): void => {
     for (const candidate of next.candidates) {
       const key = selectionKey(selectionFor(candidate));
       const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
@@ -280,13 +291,16 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     buttonBusy(activeButton, true);
     if (inactiveButton) inactiveButton.disabled = true;
     try {
-      let next: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>;
+      let next: DiscoveryResult;
       do {
-        next = await deps.wallet.discoverRecoveryAccounts(
-          deps.mnemonic(),
-          deps.networkId(),
-          manualIndex,
-        );
+        next =
+          deps.discover !== undefined
+            ? await deps.discover(manualIndex)
+            : await deps.wallet.discoverRecoveryAccounts(
+                deps.mnemonic?.() ?? "",
+                deps.networkId(),
+                manualIndex,
+              );
         if (generation !== activeGeneration) return;
         apply(next);
       } while (manualIndex === undefined && !next.complete);
@@ -346,8 +360,8 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     const commit =
       deps.restore ??
       ((mnemonic: string, networkId: string, picks: readonly RecoveryAccountSelection[]) =>
-        deps.wallet.recoverAccounts(mnemonic, networkId, deps.vaultPassphrase(), picks));
-    void commit(deps.mnemonic(), deps.networkId(), selections)
+        deps.wallet.recoverAccounts(mnemonic, networkId, deps.vaultPassphrase?.() ?? "", picks));
+    void commit(deps.mnemonic?.() ?? "", deps.networkId(), selections)
       .then(async () => {
         showToast(
           `${selections.length} account${selections.length === 1 ? "" : "s"} restored`,

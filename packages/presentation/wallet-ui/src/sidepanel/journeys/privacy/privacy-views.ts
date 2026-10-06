@@ -16,7 +16,11 @@ import { networkDisplayName } from "../../shared/network-label";
 import { flowHeader, flowScreen, formatFri } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { formatFeeEstimate, reviewPanel } from "../../shared/review-render";
-import type { PrivacyBlockerKind, PrivacyJourneyState } from "./privacy-model";
+import type {
+  PrivacyBlockerKind,
+  PrivacyDisclosureState,
+  PrivacyJourneyState,
+} from "./privacy-model";
 import { type PreparationProgress, preparationProgressText } from "./privacy-preparation-job";
 
 /**
@@ -296,14 +300,27 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
   },
 };
 
-const blocked = (journey: Extract<PrivacyJourneyState, { readonly stage: "blocked" }>): string => {
+const blocked = (
+  journey: Extract<PrivacyJourneyState, { readonly stage: "blocked" }>,
+  disclosure: PrivacyDisclosureState | null,
+): string => {
   const copy = BLOCKED_COPY[journey.blocker.kind];
+  // The refusal names the missing STRK but not the amount. The fund screen is
+  // the one place the reader can act on a number, so it states the pool fee the
+  // registration needs when the disclosure has read one; a network-fee estimate
+  // does not exist yet, so that cost is named without a figure.
+  const poolFeeFri = journey.blocker.kind === "fund" ? disclosure?.value?.poolFeeFri : undefined;
+  const requirement =
+    poolFeeFri === undefined
+      ? ""
+      : `<p class="hint">Registration needs ${escapeHtml(formatFri(poolFeeFri))} for the pool fee, plus a network fee.</p>`;
   return `
   <section class="privacy-outcome privacy-blocked" role="status" aria-live="polite" data-privacy-blocker="${journey.blocker.kind}">
     <span class="privacy-outcome-mark" aria-hidden="true">${icon("shield")}</span>
     <h2>${escapeHtml(copy.title)}</h2>
     <p>${escapeHtml(copy.body)}</p>
     <p class="hint">${escapeHtml(journey.blocker.message)}</p>
+    ${requirement}
     <div class="privacy-actions">
       ${copy.action}
       ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
@@ -318,6 +335,7 @@ export const privacyFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
   journey: PrivacyJourneyState,
+  disclosure: PrivacyDisclosureState | null = null,
 ): string => {
   const tokenId = journey.stage === "idle" ? null : journey.tokenId;
   const token =
@@ -328,7 +346,7 @@ export const privacyFlow = (
     journey.stage === "activate-review"
       ? preparationDetails(journey, status)
       : journey.stage === "blocked"
-        ? blocked(journey)
+        ? blocked(journey, disclosure)
         : journey.stage === "preparing"
           ? preparing(journey)
           : journey.stage === "working"

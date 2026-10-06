@@ -169,7 +169,7 @@ export const advancedNetworkFlow = (
     flowScreen(
       "advanced-network",
       `<section class="section">
-      <p class="review-flag" role="note">Only use endpoints you trust. Chrome asks before granting access to a new service host.</p>
+      <p class="review-flag" role="note">Only use endpoints you trust. Your browser asks before granting access to a new service host.</p>
       ${contextHelp(
         "advanced-endpoint-privacy",
         "What an endpoint can learn",

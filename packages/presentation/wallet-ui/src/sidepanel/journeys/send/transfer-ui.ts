@@ -56,6 +56,13 @@ export type TransferUiDeps = {
   readonly navigate?: (view: TransferExitView) => void;
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
+  /**
+   * Arms the bounded privacy re-read once a private send's confirmation lands.
+   * The chain accepts a shield before the privacy indexer reflects the moved
+   * note, so the cached reading can predate the move; this watches the settled
+   * state so the home shows the shielded balance.
+   */
+  readonly onPrivateSendConfirmed?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
   /** The account's public token balances, for bucket display and fee gating. */
   readonly publicBalances?: () => readonly TokenBalance[];
@@ -286,6 +293,11 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             submissionUnknown: false,
           };
     repaintActiveTransfer?.();
+    // Only a confirmed private route moved a balance the indexer must catch up on.
+    const settledRoute = transferState.fields ? transferRoute(transferState.fields).id : null;
+    if (outcome.kind === "succeeded" && settledRoute !== null && settledRoute !== "public-public") {
+      deps.onPrivateSendConfirmed?.();
+    }
     showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
   };
   form.querySelector("#send-check-again")?.addEventListener("click", () => {

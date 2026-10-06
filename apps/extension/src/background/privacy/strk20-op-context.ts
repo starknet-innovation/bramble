@@ -6,6 +6,7 @@
  */
 
 import { WalletError, walletErrorMessage } from "@bramble/core/errors";
+import type { PriceService } from "@bramble/portfolio/prices";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import { canonicalStrk20PoolFee, type Strk20AccountContext } from "@bramble/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
@@ -35,6 +36,12 @@ import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations"
  * lets a proof outlive the runtime request that asked for it.
  */
 export type Strk20WalletOpsDeps = WalletOpsDeps & {
+  /**
+   * Fiat price feed used to bound a converted pool fee. Optional so partial test
+   * stubs stay valid; a missing feed prices nothing, which leaves the Send gate
+   * on the fee token exactly as the relay quote would fall back.
+   */
+  readonly prices?: PriceService;
   readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
 };

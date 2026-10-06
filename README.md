@@ -153,7 +153,7 @@ access only the validated provider protocol. The package graph and its enforced 
 - **[Wallet store architecture](docs/WALLET_STORE.md)** — persistence layout, account scoping, Chrome update migrations, and Ledger viewing-key custody.
 - **[Security audit](docs/security-audit/index.md)** — baseline, threat model, review sequence, and sanitized findings ledger.
 - **[Source package audit](docs/security-audit/src-package-audit.md)** — package-by-package controls, resolved findings, and validation evidence.
-- **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**
+- **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Building from source](BUILDING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**
 
 ## License
 

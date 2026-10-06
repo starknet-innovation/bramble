@@ -128,6 +128,7 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
     openImport: () => {
       imports += 1;
     },
+    openFindAccounts: () => undefined,
     openImportSeed: () => {
       seedImports += 1;
     },

@@ -373,6 +373,77 @@ describe("bucket controls", () => {
   });
 });
 
+describe("a configured non-STRK relay fee token (#356)", () => {
+  const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+  const usdcFee = (feeCeiling?: string): PrivacyDisclosureState => {
+    const base = registered();
+    if (!base.value) throw new Error("fixture");
+    return {
+      ...base,
+      value: {
+        ...base.value,
+        balances: [
+          ...base.value.balances,
+          {
+            balance: "50000000",
+            ...(feeCeiling === undefined ? {} : { feeCeiling }),
+            formatted: "50",
+            symbol: "USDC",
+            token: USDC,
+            tokenId: "SN_MAIN:USDC:0x053c9",
+          },
+        ],
+        feeToken: USDC,
+      },
+    };
+  };
+  const usdcToken = (form: HTMLFormElement): void => {
+    const set = (name: string, value: string): void => {
+      const input = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
+      if (input) input.value = value;
+    };
+    set("tokenAddress", USDC);
+    set("tokenDecimals", "6");
+    set("tokenSymbol", "USDC");
+    set("tokenId", "SN_MAIN:USDC:0x053c9");
+  };
+  const privateSend = (): HTMLFormElement => {
+    const form = mountForm();
+    for (const name of ["source", "destination"]) {
+      const input = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
+      if (input) input.value = "private";
+    }
+    return form;
+  };
+
+  test("a private STRK send pays the exact STRK fee whatever the fee token", () => {
+    // The relay quote prefers the sent token and STRK needs no price, so even
+    // with no USDC ceiling the STRK send resolves against the STRK balance.
+    const resolution = resolveTransferRoute(context(privateSend(), usdcFee()));
+    expect(resolution.blocked).toBeUndefined();
+    expect(resolution.route?.id).toBe("private-private");
+  });
+
+  test("sending the configured USDC fee token reserves its own ceiling", () => {
+    // 6 USDC bound (0x5b8d80) against 50 private USDC: the route resolves rather
+    // than sitting on "Checking the pool fee…".
+    const form = privateSend();
+    usdcToken(form);
+    const resolution = resolveTransferRoute(context(form, usdcFee("0x5b8d80")));
+    expect(resolution.blocked).toBeUndefined();
+    expect(resolution.route?.id).toBe("private-private");
+  });
+
+  test("an unpriceable configured fee token refuses with the reason", () => {
+    const form = privateSend();
+    usdcToken(form);
+    expect(resolveTransferRoute(context(form, usdcFee())).blocked).toEqual({
+      pending: false,
+      reason: "The pool fee can't be priced in USDC right now",
+    });
+  });
+});
+
 describe("private send fee lines", () => {
   // 6 STRK: the mainnet pool's per-action charge, which the relay pays on the
   // sender's behalf and recovers from the shielded balance.

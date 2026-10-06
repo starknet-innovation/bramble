@@ -46,4 +46,18 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     },
     sender: extensionSender,
   },
+  {
+    // The settings-surface rescan of the wallet's own phrase: no secret in the
+    // request, but this handler reaches a vault read, so its response is scanned.
+    message: { networkId: "SN_MAIN", type: "wallet.discoverOwnAccounts" },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      networkId: "SN_MAIN",
+      selections: [{ accountContractType: "openzeppelin", accountIndex: 0 }],
+      type: "wallet.importOwnAccounts",
+    },
+    sender: extensionSender,
+  },
 ];

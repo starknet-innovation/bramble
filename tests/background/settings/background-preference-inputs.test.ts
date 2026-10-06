@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  readSetAccountHiddenInput,
   readSetDisplayInput,
   readSetNostrRelayUrlInput,
   readSetStrk20NetworkConfigInput,
@@ -47,6 +48,58 @@ describe("readSetDisplayInput", () => {
       readSetDisplayInput({ reliabilityDiagnostics: "yes", type: "wallet.setDisplay" }),
     ).toBeNull();
     expect(readSetDisplayInput({ productAnalytics: "yes", type: "wallet.setDisplay" })).toBeNull();
+  });
+});
+
+describe("readSetAccountHiddenInput", () => {
+  test("reads a well-formed hide or reveal toggle", () => {
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        hidden: true,
+        type: "wallet.setAccountHidden",
+      }),
+    ).toEqual({ accountId: "SN_MAIN:0x2a", hidden: true });
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        hidden: false,
+        type: "wallet.setAccountHidden",
+      }),
+    ).toEqual({ accountId: "SN_MAIN:0x2a", hidden: false });
+  });
+
+  test("rejects a non-record, wrong-type, unknown-key, or malformed payload", () => {
+    expect(readSetAccountHiddenInput(null)).toBeNull();
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        hidden: true,
+        type: "wallet.setAccountLabel",
+      }),
+    ).toBeNull();
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        extra: 1,
+        hidden: true,
+        type: "wallet.setAccountHidden",
+      }),
+    ).toBeNull();
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "not-an-account",
+        hidden: true,
+        type: "wallet.setAccountHidden",
+      }),
+    ).toBeNull();
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        hidden: "yes",
+        type: "wallet.setAccountHidden",
+      }),
+    ).toBeNull();
   });
 });
 

@@ -287,6 +287,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "token visibility update failed");
     },
+    async setAccountHidden(accountId: string, hidden: boolean): Promise<void> {
+      const response = await sendMessage({ accountId, hidden, type: "wallet.setAccountHidden" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "account visibility update failed");
+    },
     async removeToken(tokenId: string): Promise<void> {
       const response = await sendMessage({ tokenId, type: "wallet.removeToken" });
       if (isPreferencesResponse(response)) {

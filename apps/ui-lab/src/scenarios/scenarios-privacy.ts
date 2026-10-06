@@ -4,6 +4,7 @@
  */
 
 import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
+import { STRK20_MAX_POOL_FEE } from "@bramble/privacy/fee-policy";
 import { formatStrk20PoolFee } from "@bramble/privacy/service";
 import type {
   PrivacyDisclosureState,
@@ -25,6 +26,9 @@ import { privacyDappCheckpoints } from "./scenarios-privacy-dapp";
 
 const digest = `sha256:${"d".repeat(64)}`;
 
+/** The largest pool fee the wallet accepts, the bound the fee line must hold. */
+const MAX_POOL_FEE_FRI = `0x${STRK20_MAX_POOL_FEE.toString(16)}`;
+
 const activation: PrivacyPreparation = {
   id: digest,
   kind: "register",
@@ -43,6 +47,7 @@ const activation: PrivacyPreparation = {
 const disclosure = (
   registration: "registered" | "unregistered",
   balances: readonly PrivateBalanceView[] = [],
+  poolFeeFri: string = POOL_FEE_FRI,
 ): PrivacyDisclosureState => ({
   error: null,
   loading: false,
@@ -50,9 +55,10 @@ const disclosure = (
     accountId: softwareAccount.id,
     balances,
     networkId: "SN_MAIN",
-    // A configured relay plus the pool's action fee: the scenarios review the
-    // private route, which is only offered when a relay exists.
-    poolFeeFri: POOL_FEE_FRI,
+    // The pool's current 6 STRK action fee and a configured relay: the scenarios
+    // review the private route, which is only offered when a relay exists. The
+    // fund-blocked checkpoints override it to cover the fee's display bounds.
+    poolFeeFri,
     registration,
     relayConfigured: true,
   },
@@ -276,6 +282,42 @@ export const privacyScenario: WalletScenario = {
       narrative:
         "A registration whose reply was lost may still be on chain: the amber tone and Activity lead, never the red failure with a blind retry (issue 382).",
       state: { autoRetry: false, severity: "warning", stage: "failure" },
+    },
+    // The funding shortfall sits after the activation sequence so the guided
+    // walkthrough's Step order (required, review, proving, submitted) is intact.
+    {
+      content: () =>
+        privacyDashboard(
+          disclosure("unregistered"),
+          {
+            blocker: { kind: "fund", message: "Not enough STRK for the pool fee" },
+            stage: "blocked",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "fund-blocked",
+      label: "Registration needs funds",
+      narrative:
+        "An account short of STRK is told the exact pool fee its registration needs, in the unit it pays.",
+      state: { blocked: "fund", poolFee: "6 STRK", registration: "required" },
+    },
+    {
+      content: () =>
+        privacyDashboard(
+          disclosure("unregistered", [], MAX_POOL_FEE_FRI),
+          {
+            blocker: { kind: "fund", message: "Not enough STRK for the pool fee" },
+            stage: "blocked",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "fund-blocked-long",
+      label: "Registration fee at its ceiling",
+      narrative:
+        "The fee line holds at the largest pool fee the wallet accepts, so no figure can push the screen sideways.",
+      state: { blocked: "fund", poolFee: "protocol maximum" },
     },
     ...privacyDappCheckpoints,
   ],

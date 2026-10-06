@@ -12,6 +12,8 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import { unavailablePriceService } from "@bramble/portfolio/prices";
+import { strk20ConvertedFeeCeiling } from "@bramble/privacy/fee-policy";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import {
   formatStrk20PoolFee,
@@ -21,13 +23,18 @@ import {
 } from "@bramble/privacy/service";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import { systemClock } from "@bramble/transactions/activity";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import {
+  STRK_TOKEN_ADDRESS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import { createApprovalContext } from "../approvals/approval-context";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
+import { createStrk20FeeReference } from "./strk20-fee-reference";
 import {
   type ActivePrivacyContext,
   assertPrivacyAccountDeployed,
@@ -83,6 +90,56 @@ const hasPendingRegistration = async (
   );
 };
 
+/**
+ * The bounded converted pool fee for each held token the wallet can price,
+ * keyed by token address. This is what lets the Send affordability gate reserve
+ * the fee in the token the relay will actually charge it in, rather than
+ * assuming STRK. Every held token except STRK is priced: the pool fee is
+ * denominated in STRK, so only STRK needs no conversion. That includes a
+ * non-STRK configured fee token, whose ceiling the gate needs whenever the fee
+ * falls back to it. A token the reference cannot price is simply absent, which
+ * leaves the Send gate without a bound for it.
+ */
+const readConvertedFeeCeilings = async (
+  deps: Strk20WalletOpsDeps,
+  input: {
+    readonly balances: readonly { readonly token: string }[];
+    readonly networkId: StarknetNetworkId;
+    readonly poolFeeFri: string;
+  },
+): Promise<ReadonlyMap<string, string>> => {
+  const ceilings = new Map<string, string>();
+  let poolFee: bigint;
+  try {
+    poolFee = BigInt(input.poolFeeFri);
+  } catch {
+    return ceilings;
+  }
+  const reference = createStrk20FeeReference(deps.prices ?? unavailablePriceService);
+  for (const entry of input.balances) {
+    if (sameFelt(entry.token, STRK_TOKEN_ADDRESS)) {
+      continue;
+    }
+    let bound: bigint | null = null;
+    try {
+      bound = await reference({
+        feeToken: entry.token,
+        networkId: input.networkId,
+        poolFeeFri: poolFee,
+      });
+    } catch {
+      bound = null;
+    }
+    if (bound !== null && bound > 0n) {
+      // Field elements cross this boundary as 0x-hex, which is what the panel's
+      // strict state validator accepts and what the reviewed ceilings already
+      // use. A decimal string here makes the whole disclosure unreadable.
+      ceilings.set(entry.token, `0x${strk20ConvertedFeeCeiling(bound).toString(16)}`);
+    }
+  }
+  return ceilings;
+};
+
 const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
   // The privacy screen re-reads this disclosure on every hydration and, while a
   // registration is settling, on a three-second poll. It is pure observation of
@@ -125,6 +182,20 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
       throw new WalletError("Private pool fee is unavailable. Retry the balance check.");
     }
     const poolFeeFri = await service.poolFee(context.accountContext);
+    // The fee token a relayed batch falls back to, and the bounded converted
+    // fee for every other held token the wallet can price. The Send
+    // affordability gate reserves against these so it matches the fee the relay
+    // will quote, rather than assuming STRK. No relay means no relayed fee, so
+    // the disclosure stays exactly as before.
+    const paymaster = context.accountContext.config?.paymaster;
+    const feeToken = paymaster?.feeToken ?? STRK_TOKEN_ADDRESS;
+    const feeCeilings = paymaster
+      ? await readConvertedFeeCeilings(deps, {
+          balances,
+          networkId: context.accountContext.account.networkId,
+          poolFeeFri,
+        })
+      : new Map<string, string>();
     return {
       ok: true,
       strk20State: {
@@ -135,14 +206,17 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
               candidate.networkId === context.accountContext.account.networkId &&
               sameFelt(candidate.address, entry.token),
           );
+          const feeCeiling = feeCeilings.get(entry.token);
           return {
             balance: entry.balance,
+            ...(feeCeiling !== undefined ? { feeCeiling } : {}),
             formatted: token ? formatTokenAmount(BigInt(entry.balance), token.decimals) : "0",
             symbol: token?.symbol ?? "Token",
             token: entry.token,
             tokenId: token?.id ?? "",
           };
         }),
+        ...(paymaster ? { feeToken } : {}),
         networkId: context.accountContext.account.networkId,
         poolFeeFri,
         relayConfigured: context.accountContext.config?.paymaster !== undefined,
