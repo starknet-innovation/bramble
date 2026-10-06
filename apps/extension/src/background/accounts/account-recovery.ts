@@ -46,8 +46,10 @@ const RECOVERY_ACTIVITY_SUMMARIES = {
 type RecoveryFlow = "argent" | "braavos";
 
 // Resolves the unlocked active account the flow may act on, refusing an
-// account switch since the review, a non-vendor shape, and Ledger accounts
-// (the device could only blind-sign the removal of a second factor).
+// account switch since the review and Ledger accounts (the device could only
+// blind-sign the removal of a second factor). Every AccountRef shape carries
+// publicKeyX (AccountRefCore), so there is no key-less shape to refuse here;
+// a non-vendor contract type is refused by the platform gate.
 const recoveryContext = async (deps: AccountRecoveryDeps, expectedAccountId?: string) => {
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) return { error: context.error } as const;
@@ -55,7 +57,6 @@ const recoveryContext = async (deps: AccountRecoveryDeps, expectedAccountId?: st
   if (expectedAccountId !== undefined && account.id !== expectedAccountId) {
     return { error: "The active account changed. Review the recovery again." } as const;
   }
-  if (!("publicKeyX" in account)) return { error: "second factor removal unavailable" } as const;
   if (isKeylessAccount(account)) {
     return { error: "Account recovery is not available for Ledger accounts" } as const;
   }
