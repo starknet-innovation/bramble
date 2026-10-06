@@ -410,6 +410,11 @@ export const SEND_COMPOSE_STYLES = `
      control on one line); the address clips first so the control never
      leaves the fact. */
   .send-review-address code { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  /* A name-resolved recipient shows the whole address, because the address is
+     what the reader is asked to check; it wraps rather than clipping. The
+     provenance line sits under it, muted like the other annotation copy. */
+  .send-review-address-full code { overflow-wrap: anywhere; text-wrap: wrap; }
+  .send-review-source { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
   #send-review-button { margin-top: auto; width: 100%; }
   /* The busy review button swaps its send glyph for the shared Liquid Dots
      mark, so a running preparation reads as work rather than as a dimmed

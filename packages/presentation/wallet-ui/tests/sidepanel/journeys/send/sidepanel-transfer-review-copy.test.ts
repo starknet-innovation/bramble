@@ -5,6 +5,7 @@
  * exactly once, with the shared clipboard feedback.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { account } from "@bramble/testkit/sidepanel";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
 import { accountLabel } from "../../../../src/sidepanel/shared/parts";
@@ -100,5 +101,59 @@ describe("send review recipient copy", () => {
     // The working stage is a live-region container in the same section; the
     // feedback must never have replaced its markup.
     expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending your transaction…");
+  });
+});
+
+// A name-resolved recipient is the one case where the review shows the whole
+// address rather than a shortened form: the name is not the thing being sent
+// to, so the address it resolved to is what the reader has to check.
+const reviewResolvedName = async (recipient: string, label: string): Promise<HTMLElement> => {
+  const { app, deps } = mount();
+  bindTransfer(deps);
+  setField(app, "recipient", recipient);
+  setField(app, "recipientLabel", label);
+  setField(app, "recipientResolvedFrom", "stark-name");
+  setField(app, "amount", "1");
+  submit(app);
+  await flush();
+  return app;
+};
+
+describe("send review of a name-resolved recipient", () => {
+  test("shows the full address, its provenance, and a new-recipient warning", async () => {
+    const app = await reviewResolvedName(RECIPIENT, "stranger.braavos.stark");
+    const fact = app
+      .querySelector("#send-review-summary [data-copy]")
+      ?.closest(".send-review-address");
+
+    // The full canonical address, not the shortened label the other facts use.
+    expect(fact?.classList.contains("send-review-address-full")).toBe(true);
+    expect(fact?.querySelector("code")?.textContent).toBe(CANONICAL);
+    expect(app.querySelector("#send-review-summary .send-review-source")?.textContent).toBe(
+      "Resolved from Starknet ID",
+    );
+    // The recipient is on no row on this network, so the wallet says so.
+    const risks = app.querySelector("#send-review-risks");
+    expect(risks?.hasAttribute("hidden")).toBe(false);
+    expect(risks?.textContent).toContain("New recipient. Check the full address before you send.");
+  });
+
+  test("shows the provenance without the warning for a recipient already listed", async () => {
+    const app = await reviewResolvedName(account.address, "my own account");
+    const fact = app
+      .querySelector("#send-review-summary [data-copy]")
+      ?.closest(".send-review-address");
+
+    expect(fact?.querySelector("code")?.textContent).toBe(
+      canonicalFelt(account.address) ?? account.address,
+    );
+    expect(app.querySelector("#send-review-summary .send-review-source")?.textContent).toBe(
+      "Resolved from Starknet ID",
+    );
+    // The address is the user's own account, which the recipient screen lists,
+    // so there is nothing new to warn about.
+    expect(app.querySelector("#send-review-risks")?.textContent ?? "").not.toContain(
+      "New recipient.",
+    );
   });
 });

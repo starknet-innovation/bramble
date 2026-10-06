@@ -293,9 +293,11 @@ type ClassHashVerificationResponse = {
  * A typed Starknet ID name resolved on the active network. `resolution` carries
  * the discriminated {@link StarkNameResolution} outcome so the UI can
  * distinguish resolved / not-found / unsupported-network / unreachable without
- * re-reading the chain.
+ * re-reading the chain. `networkId` names the network the read was made on, so
+ * a panel that changed network mid-read never commits an address from another.
  */
 type StarkNameResolutionResponse = {
+  readonly networkId: StarknetNetworkId;
   readonly ok: true;
   readonly resolution: StarkNameResolution;
 };

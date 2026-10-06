@@ -111,10 +111,15 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({ type: "wallet.verifyClassHash" });
       return isClassHashVerificationResponse(response) ? response : null;
     },
-    async resolveStarkName(name: string): Promise<StarkNameResolutionResponse | null> {
+    async resolveStarkName(
+      name: string,
+      networkId: string,
+    ): Promise<StarkNameResolutionResponse | null> {
       // Returns null for any reply that is not a well-formed resolution, so the
       // caller shows a plain failure rather than reading a malformed envelope.
-      const response = await sendMessage({ name, type: "wallet.resolveStarkName" });
+      // The panel sends the network it is showing; the answer names the network
+      // it was read on, so a read that crossed a network switch is dropped.
+      const response = await sendMessage({ name, networkId, type: "wallet.resolveStarkName" });
       return isStarkNameResolutionResponse(response) ? response : null;
     },
     /**

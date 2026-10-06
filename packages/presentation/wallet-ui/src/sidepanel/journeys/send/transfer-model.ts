@@ -30,10 +30,12 @@ export const recipientFieldError = (recipient: string): string | null =>
 
 /**
  * True when the text is a syntactically valid Starknet name (for example
- * `name.stark` or `name.braavos.stark`). A name is not an address: it is only
- * offered to the background for resolution, and the address it resolves to is
- * what a review is built from. A bare hex address is judged by
- * {@link recipientFieldError} instead.
+ * `name.stark` or `name.braavos.stark`). The `.stark` suffix is required: a
+ * bare word is not a name, so an ordinary recipient search can never turn a
+ * word into a lookup. A name is not an address: it is only offered to the
+ * background for resolution, and the address it resolves to is what a review is
+ * built from. A bare hex address is judged by {@link recipientFieldError}
+ * instead.
  */
 export const isStarkName = (value: string): boolean => normalizeStarkName(value) !== null;
 
@@ -78,6 +80,12 @@ export type TransferFields = {
   readonly fiatEstimate: string;
   readonly recipient: string;
   readonly recipientLabel: string;
+  /**
+   * Set to `"stark-name"` when the recipient came from a resolved Starknet
+   * name, so the review can show the address it was resolved to and flag a
+   * recipient that is not already saved. Empty for every other recipient.
+   */
+  readonly recipientResolvedFrom: "" | "stark-name";
   readonly signer: "ledger" | "software";
   /** Balance the value is spent from. */
   readonly source: ValueBucket;
@@ -152,6 +160,7 @@ export const transferFields = (form: HTMLFormElement): TransferFields => {
     fiatEstimate: String(data.get("fiatEstimate") ?? ""),
     recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
     recipientLabel: String(data.get("recipientLabel") ?? "").trim(),
+    recipientResolvedFrom: data.get("recipientResolvedFrom") === "stark-name" ? "stark-name" : "",
     signer: form.dataset["signer"] === "ledger" ? "ledger" : "software",
     source: bucket(data.get("source")),
     speed: data.get("speed") === "fast" ? "fast" : "standard",

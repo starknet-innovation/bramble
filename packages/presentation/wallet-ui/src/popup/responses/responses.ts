@@ -10,6 +10,7 @@ import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
+  type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
 
 /**
@@ -415,12 +416,13 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   typeof value["deployed"] === "boolean";
 
 /**
- * A typed Starknet name resolved by the background. `resolution` is a
- * discriminated outcome: only `resolved` carries an address, and that address
- * must be a nonzero felt, so a malformed envelope can never be read as a
- * recipient.
+ * A typed Starknet name resolved by the background. `networkId` names the
+ * network the read was made on. `resolution` is a discriminated outcome: only
+ * `resolved` carries an address, and that address must be a nonzero felt, so a
+ * malformed envelope can never be read as a recipient.
  */
 export type StarkNameResolutionResponse = {
+  readonly networkId: StarknetNetworkId;
   readonly ok: true;
   readonly resolution: StarkNameResolution;
 };
@@ -446,13 +448,16 @@ const isStarkNameResolution = (value: unknown): value is StarkNameResolution => 
 };
 
 /**
- * Checks a name-resolution response before the recipient step trusts it.
+ * Checks a name-resolution response before the recipient step trusts it. The
+ * network is required: a reply that does not name the network it was read on
+ * cannot be bound to the network the panel is showing, so it fails closed.
  */
 export const isStarkNameResolutionResponse = (
   value: unknown,
 ): value is StarkNameResolutionResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["ok", "resolution"]) &&
+  hasOnlyKnownKeys(value, ["networkId", "ok", "resolution"]) &&
   value["ok"] === true &&
+  isStarknetNetworkId(value["networkId"]) &&
   isStarkNameResolution(value["resolution"]);

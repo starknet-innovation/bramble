@@ -46,14 +46,15 @@ export type ResolveStarkNameInput = {
 
 /**
  * Normalizes a typed name to the canonical `name.stark` form the naming
- * contract expects (trimmed, lower-cased, suffix added), or `null` when it is
- * not a syntactically valid Starknet name. Labels are 1-48 characters of a-z,
- * 0-9 and '-', exactly as {@link starknetId.isStarkDomain} checks.
+ * contract expects, or `null` when it is not a syntactically valid Starknet
+ * name. The suffix is required, never added: a bare label is not a name here,
+ * so an ordinary word can never be turned into a lookup. Labels are 1-48
+ * characters of a-z, 0-9 and '-', exactly as {@link starknetId.isStarkDomain}
+ * checks.
  */
 export const normalizeStarkName = (name: string): string | null => {
   const trimmed = name.trim().toLowerCase();
-  const domain = trimmed.endsWith(STARK_SUFFIX) ? trimmed : `${trimmed}${STARK_SUFFIX}`;
-  return starknetId.isStarkDomain(domain) ? domain : null;
+  return starknetId.isStarkDomain(trimmed) ? trimmed : null;
 };
 
 /**

@@ -21,6 +21,11 @@ export const SendRecipientByName = checkpointStory(
   "send",
   "recipient-name",
 );
+export const SendRecipientNameReview = checkpointStory(
+  "Send · review a name recipient",
+  "send",
+  "recipient-name-review",
+);
 export const SendRecipientNameMissing = checkpointStory(
   "Send · name not found",
   "send",

@@ -77,16 +77,21 @@ export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
 const MAX_STARK_NAME_CHARACTERS = 128;
 
 /**
- * Parses the name-resolution reader's typed Starknet name.
+ * Parses the name-resolution reader's typed Starknet name and the network it
+ * is being read on. The network travels with the request so the background can
+ * refuse a read the panel made for a different chain than its own active one.
  */
-export const readStarkNameInput = (message: unknown): { readonly name: string } | null =>
+export const readStarkNameInput = (
+  message: unknown,
+): { readonly name: string; readonly networkId: StarknetNetworkId } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["name", "type"]) &&
+  hasOnlyKnownKeys(message, ["name", "networkId", "type"]) &&
   message["type"] === "wallet.resolveStarkName" &&
   typeof message["name"] === "string" &&
   message["name"].trim().length > 0 &&
-  message["name"].length <= MAX_STARK_NAME_CHARACTERS
-    ? { name: message["name"] }
+  message["name"].length <= MAX_STARK_NAME_CHARACTERS &&
+  isStarknetNetworkId(message["networkId"])
+    ? { name: message["name"], networkId: message["networkId"] }
     : null;
 
 /**

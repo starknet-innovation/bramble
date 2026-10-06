@@ -77,7 +77,11 @@ const walletStub = {
   },
 };
 
-const RESOLVE = { name: "altaga.braavos.stark", type: "wallet.resolveStarkName" } as const;
+const RESOLVE = {
+  name: "altaga.braavos.stark",
+  networkId: "SN_MAIN",
+  type: "wallet.resolveStarkName",
+} as const;
 const MAINNET_RPC_URLS = [
   "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
   "https://mainnet.nodes.starknet.org/rpc/v0_10",
@@ -119,6 +123,7 @@ describe("background Starknet name resolution message", () => {
     const response = await handler(RESOLVE, extensionSender);
 
     expect(response).toEqual({
+      networkId: "SN_MAIN",
       ok: true,
       resolution: { address: account.address, status: "resolved" },
     });
@@ -138,6 +143,7 @@ describe("background Starknet name resolution message", () => {
     });
 
     expect(await handler(RESOLVE, extensionSender)).toEqual({
+      networkId: "SN_MAIN",
       ok: true,
       resolution: { status: "not-found" },
     });
@@ -156,9 +162,48 @@ describe("background Starknet name resolution message", () => {
     });
 
     expect(await handler(RESOLVE, extensionSender)).toEqual({
+      networkId: "SN_MAIN",
       ok: true,
       resolution: { status: "unreachable" },
     });
+  });
+
+  test("refuses a request naming a network other than the active one", async () => {
+    const calls: ResolveStarkNameInput[] = [];
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(walletStub, testExtension, {
+      runtimeRpc: makeRuntimeRpc({
+        async resolveStarkName(input) {
+          calls.push(input);
+          return { address: account.address, status: "resolved" };
+        },
+      }),
+      session,
+    });
+
+    // The panel declares the network it is showing. A read for another network
+    // must fail closed rather than resolve here and be committed as if it
+    // belonged to the network on screen.
+    expect(await handler({ ...RESOLVE, networkId: "SN_SEPOLIA" }, extensionSender)).toEqual({
+      error: "name resolution network changed",
+    });
+    expect(calls).toEqual([]);
+  });
+
+  test("rejects a request without a network", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(walletStub, testExtension, {
+      runtimeRpc: makeRuntimeRpc(),
+      session,
+    });
+    expect(
+      await handler(
+        { name: "altaga.braavos.stark", type: "wallet.resolveStarkName" },
+        extensionSender,
+      ),
+    ).toEqual({ error: "invalid stark name request" });
   });
 
   test("rejects an unexpected extra field on the request", async () => {
@@ -170,7 +215,12 @@ describe("background Starknet name resolution message", () => {
     });
     expect(
       await handler(
-        { extra: true, name: "altaga.braavos.stark", type: "wallet.resolveStarkName" },
+        {
+          extra: true,
+          name: "altaga.braavos.stark",
+          networkId: "SN_MAIN",
+          type: "wallet.resolveStarkName",
+        },
         extensionSender,
       ),
     ).toEqual({ error: "invalid stark name request" });
@@ -190,7 +240,10 @@ describe("background Starknet name resolution message", () => {
       session,
     });
     expect(
-      await handler({ name: "   ", type: "wallet.resolveStarkName" }, extensionSender),
+      await handler(
+        { name: "   ", networkId: "SN_MAIN", type: "wallet.resolveStarkName" },
+        extensionSender,
+      ),
     ).toEqual({ error: "invalid stark name request" });
     expect(calls).toEqual([]);
   });

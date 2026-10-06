@@ -258,6 +258,12 @@ const handleResolveStarkName: WalletOpsHandler = async (deps, message) => {
   if (context.error !== undefined) {
     return { error: context.error };
   }
+  // The panel names the network it is showing. The read must happen on that
+  // same network, or an address resolved elsewhere could be committed as if it
+  // belonged here, so a mismatch fails closed instead of resolving anyway.
+  if (input.networkId !== context.networkId) {
+    return { error: "name resolution network changed" };
+  }
   const resolution = await deps.runtimeRpc.resolveStarkName({
     name: input.name,
     rpcUrls: networkRpcUrls(
@@ -265,7 +271,9 @@ const handleResolveStarkName: WalletOpsHandler = async (deps, message) => {
       await deps.preferencesStore.read(),
     ),
   });
-  return { ok: true, resolution };
+  // The answer carries the network its address belongs to, so the panel can
+  // drop a resolution whose network changed while the read was in flight.
+  return { networkId: context.networkId, ok: true, resolution };
 };
 
 const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {

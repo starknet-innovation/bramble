@@ -3,12 +3,14 @@
  * module changes only extension-owned form state and delegates journey stages
  * to the parent transfer state machine.
  */
+import { normalizeStarkName } from "@bramble/starknet/stark-name";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { StarkNameResolutionResponse } from "../../../popup/responses/responses";
 import { formatFiat } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
 import { bindTokenDropdown } from "../../shared/token-dropdown";
 import { setAddressBookDraft } from "../../shell/address-draft";
+import { isUnlistedRecipient, knownRecipientLabel, matchingRecipients } from "./recipient-rows";
 import {
   balanceShortcut,
   fiatInputToken,
@@ -50,6 +52,7 @@ const setSendFormValue = (form: HTMLFormElement, name: string, value: string): v
 export const clearSendRecipient = (form: HTMLFormElement): void => {
   setSendFormValue(form, "recipient", "");
   setSendFormValue(form, "recipientLabel", "");
+  setSendFormValue(form, "recipientResolvedFrom", "");
 };
 
 const copySelectedGlyph = (form: HTMLFormElement, source: Element | null): void => {
@@ -161,21 +164,6 @@ const applySelectedAsset = (form: HTMLFormElement, row: HTMLElement): void => {
   setSendFormValue(form, "fiatEstimate", "");
 };
 
-// The name of the row the typed address belongs to: one of the user's own
-// accounts, a saved contact, or a shared account, all on this network. Compared
-// as felts, so a padded or differently cased spelling of a known address is
-// still known. Names only ever come from the user's own rows, never from the
-// typed text, and the review keeps the real address beside them.
-const knownRecipientLabel = (form: HTMLFormElement, address: string): string | undefined =>
-  [...form.querySelectorAll<HTMLElement>("[data-send-recipient]")].find((row) =>
-    sameFelt(row.dataset["sendRecipient"] ?? "", address),
-  )?.dataset["sendRecipientLabel"];
-
-// True when the typed address matches no row on the screen. The same lookup as
-// the name, so "Save address" and the name shown can never disagree.
-const isUnlistedRecipient = (form: HTMLFormElement, address: string): boolean =>
-  knownRecipientLabel(form, address) === undefined;
-
 // True when the row sits in a folder the user has minimized. The archive starts
 // that way; every other folder starts open.
 const inCollapsedFolder = (row: HTMLElement): boolean =>
@@ -186,7 +174,7 @@ const bindRecipientControls = (
   goTo: (stage: TransferStage) => void,
   onFields: (fields: TransferFields) => void,
   navigate?: (view: TransferExitView) => void,
-  resolveName?: (name: string) => Promise<StarkNameResolutionResponse | null>,
+  resolveName?: (name: string, networkId: string) => Promise<StarkNameResolutionResponse | null>,
 ): void => {
   const search = form.querySelector<HTMLInputElement>("#send-recipient-search");
   const continueButton = form.querySelector<HTMLButtonElement>("#send-recipient-continue");
@@ -259,10 +247,11 @@ const bindRecipientControls = (
       navigate?.("address-book");
     }
   });
-  const choose = (address: string, label: string): void => {
+  const choose = (address: string, label: string, resolvedFrom: "" | "stark-name" = ""): void => {
     setNote("");
     setSendFormValue(form, "recipient", address);
     setSendFormValue(form, "recipientLabel", label);
+    setSendFormValue(form, "recipientResolvedFrom", resolvedFrom);
     onFields(transferFields(form));
     goTo("details");
   };
@@ -293,10 +282,10 @@ const bindRecipientControls = (
   };
   // Commits the typed value as the recipient. A bare address is taken as is; a
   // Starknet name is resolved to an address first, and only the resolved
-  // address is reviewed (its label stays the typed name). Shared by "Continue
-  // with address" and Enter in the search field: without the latter, Enter fell
-  // through to implicit form submission and reviewed the PREVIOUSLY chosen
-  // hidden recipient, not the address on screen (audit 248).
+  // address is reviewed (its label is the canonical name the wallet resolved).
+  // Shared by "Continue with address" and Enter in the search field: without
+  // the latter, Enter fell through to implicit form submission and reviewed the
+  // PREVIOUSLY chosen hidden recipient, not the address on screen (audit 248).
   let resolving = false;
   const commitTyped = async (): Promise<void> => {
     if (resolving) return;
@@ -307,16 +296,31 @@ const bindRecipientControls = (
       choose(typed, knownRecipientLabel(form, typed) || accountLabel(typed));
       return;
     }
-    if (!isStarkName(typed) || !resolveName) {
+    // The box is also the address-book search, so a text that names a listed
+    // contact or account is taken as that row: a name is never resolved over a
+    // row the screen is showing. More than one match commits nothing rather
+    // than guessing which was meant.
+    const listed = matchingRecipients(form, typed);
+    if (listed.length > 0) {
+      const row = listed.length === 1 ? listed[0] : undefined;
+      if (row) {
+        choose(row.dataset["sendRecipient"] ?? "", row.dataset["sendRecipientLabel"] ?? "");
+      } else {
+        search?.focus();
+      }
+      return;
+    }
+    const canonical = normalizeStarkName(typed);
+    if (canonical === null || !resolveName) {
       search?.focus();
       return;
     }
     resolving = true;
     if (continueButton) continueButton.disabled = true;
-    setNote(`Resolving ${typed}…`);
+    setNote(`Resolving ${canonical}…`);
     let response: StarkNameResolutionResponse | null = null;
     try {
-      response = await resolveName(typed);
+      response = await resolveName(canonical, form.dataset["sendNetwork"] ?? "");
     } catch {
       // A thrown resolver is the same failure as a malformed reply: no address
       // is committed, and the field says so rather than staying stuck on
@@ -326,18 +330,28 @@ const bindRecipientControls = (
       resolving = false;
     }
     // A repaint or close while the read was in flight leaves this form
-    // detached; a resolution that lands there must not commit a recipient.
-    // The same applies when the text was edited since: the commit that lands
-    // is for a name the field no longer shows.
-    if (!form.isConnected || (search?.value.trim() ?? "") !== typed) return;
+    // detached; a resolution that lands there must not commit a recipient. The
+    // same applies when the text was edited since, or when the answer was read
+    // on a network this screen no longer shows: the commit is for a name the
+    // field no longer spells, or for another chain.
+    if (
+      !form.isConnected ||
+      (search?.value.trim() ?? "") !== typed ||
+      (response !== null && response.networkId !== (form.dataset["sendNetwork"] ?? ""))
+    ) {
+      return;
+    }
     if (response?.resolution.status === "resolved") {
-      choose(response.resolution.address, typed);
+      // The label is the canonical name the wallet resolved, never the typed
+      // spelling, and the review is told the recipient came from a Starknet ID
+      // name so it can show the address and flag an unsaved recipient.
+      choose(response.resolution.address, canonical, "stark-name");
       return;
     }
     // Re-enable the control for the current text (which is still a valid name)
     // before showing why the last attempt did not commit.
     updateSearch();
-    setNote(resolutionFailure(response, typed));
+    setNote(resolutionFailure(response, canonical));
     search?.focus();
   };
   continueButton?.addEventListener("click", () => {
@@ -456,8 +470,14 @@ export const bindTransferCompose = ({
   readonly onFields: (fields: TransferFields) => void;
   /** Leaves Send for another screen: the address book, or token management. */
   readonly navigate?: (view: TransferExitView) => void;
-  /** Resolves a typed Starknet name to an address; absent disables name entry. */
-  readonly resolveName?: (name: string) => Promise<StarkNameResolutionResponse | null>;
+  /**
+   * Resolves a typed Starknet name to an address on the network the screen is
+   * showing; absent disables name entry.
+   */
+  readonly resolveName?: (
+    name: string,
+    networkId: string,
+  ) => Promise<StarkNameResolutionResponse | null>;
   /** Raw spendable units for the composed route; `null` withholds Max/Half. */
   readonly spendable?: () => bigint | null;
 }): void => {

@@ -203,11 +203,13 @@ export const makeWallet = (
       calls.reviewTransfer.push(args);
       return feeReview;
     },
-    async resolveStarkName() {
+    async resolveStarkName(_name: string, _networkId: string) {
       // Benign default: no name resolves, so a suite that drives the shared
-      // Send binding never has a name accidentally commit an address. Suites
-      // that assert resolution override this per test.
-      return { ok: true, resolution: { status: "not-found" } };
+      // Send binding never has a name accidentally commit an address. The reply
+      // names the network the panel declared, so it is only dropped when a test
+      // deliberately answers for another network. Suites that assert resolution
+      // override this per test.
+      return { networkId: "SN_MAIN", ok: true, resolution: { status: "not-found" } };
     },
     async submitTransfer(...args: unknown[]) {
       calls.submitTransfer.push(args);

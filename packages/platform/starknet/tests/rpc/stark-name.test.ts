@@ -47,15 +47,19 @@ const resolve = (
 ): Promise<StarkNameResolution> => resolveStarkName({ makeProvider, name, rpcUrls: RPC_URLS });
 
 describe("normalizeStarkName", () => {
-  test("adds the .stark suffix and lower-cases the typed name", () => {
-    expect(normalizeStarkName("Fricoben")).toBe("fricoben.stark");
+  test("lower-cases and trims a name that already carries the .stark suffix", () => {
+    expect(normalizeStarkName("Fricoben.stark")).toBe("fricoben.stark");
     expect(normalizeStarkName("  Fricoben.STARK ")).toBe("fricoben.stark");
   });
 
-  test("keeps a multi-label name and rejects anything that is not a Starknet name", () => {
+  test("requires the suffix and rejects anything that is not a Starknet name", () => {
     expect(normalizeStarkName("altaga.braavos.stark")).toBe("altaga.braavos.stark");
-    expect(normalizeStarkName("")).toBeNull();
+    // A bare label is not a name: the suffix is never added, so an ordinary
+    // word (a contact search, a typo) can never become a name lookup.
+    expect(normalizeStarkName("Fricoben")).toBeNull();
+    expect(normalizeStarkName("mom")).toBeNull();
     expect(normalizeStarkName(".stark")).toBeNull();
+    expect(normalizeStarkName("")).toBeNull();
     expect(normalizeStarkName("has space.stark")).toBeNull();
     // A full-length hex address is far past the 48-character label limit, so it
     // is not read as a name.

@@ -1,10 +1,14 @@
 /**
  * Send resolves a typed Starknet name to the recipient's address. A name is not
  * an address, so it is only offered to the background for resolution; the
- * address it resolves to becomes the reviewed recipient while the typed name
- * stays as the visible label. An unregistered name, a network without Starknet
- * ID, an unreachable set of endpoints, and a malformed reply each keep the
- * recipient from being committed and say so in the field's own note.
+ * address it resolves to becomes the reviewed recipient, labelled with the
+ * canonical name the wallet resolved rather than the spelling that was typed.
+ * Only text that already ends in `.stark` is offered: a bare word is never a
+ * lookup, and a text that names a listed contact or account commits that row
+ * instead of going to the network. An unregistered name, a network without
+ * Starknet ID, an unreachable set of endpoints, a reply carrying another
+ * network, and a malformed reply each keep the recipient from being committed
+ * and say so in the field's own note.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
@@ -44,19 +48,39 @@ const preferences: WalletPreferences = {
 };
 
 const ADDRESS = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+const CONTACT_ADDRESS = "0x0111111111111111111111111111111111111111111111111111111111111111";
 const NAME = "altaga.braavos.stark";
 
 const resolved: StarkNameResolutionResponse = {
+  networkId: "SN_MAIN",
   ok: true,
   resolution: { address: ADDRESS, status: "resolved" },
 };
 
+// A saved contact whose label is also spellable as a name. The recipient step
+// must commit the contact, not send the label to the naming contract.
+const contact: WalletPreferences["addressBook"][number] = {
+  address: CONTACT_ADDRESS,
+  id: "contact-mom",
+  label: "mom.stark",
+  networkId: "SN_MAIN",
+};
+
 const mount = (
-  resolveName: (name: string) => Promise<StarkNameResolutionResponse | null>,
-): { form: HTMLFormElement; stages: TransferStage[]; resolvedNames: string[] } => {
+  resolveName: (name: string, networkId: string) => Promise<StarkNameResolutionResponse | null>,
+  addressBook: WalletPreferences["addressBook"] = [],
+): {
+  form: HTMLFormElement;
+  resolvedNames: string[];
+  resolvedNetworks: string[];
+  stages: TransferStage[];
+} => {
   const app = document.createElement("div");
   app.id = "app";
-  paint(app, sendFlow(status, account, preferences, [], {}, {}, "usd", [], null));
+  paint(
+    app,
+    sendFlow(status, account, { ...preferences, addressBook }, [], {}, {}, "usd", [], null),
+  );
   document.body.append(app);
   const form = app.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
@@ -64,17 +88,19 @@ const mount = (
   }
   const stages: TransferStage[] = [];
   const resolvedNames: string[] = [];
+  const resolvedNetworks: string[] = [];
   bindTransferCompose({
     form,
     goTo: (stage) => stages.push(stage),
     navigate: () => undefined,
     onFields: () => undefined,
-    resolveName: (name) => {
+    resolveName: (name, networkId) => {
       resolvedNames.push(name);
-      return resolveName(name);
+      resolvedNetworks.push(networkId);
+      return resolveName(name, networkId);
     },
   });
-  return { form, stages, resolvedNames };
+  return { form, resolvedNames, resolvedNetworks, stages };
 };
 
 const type = (form: HTMLFormElement, value: string): void => {
@@ -84,6 +110,14 @@ const type = (form: HTMLFormElement, value: string): void => {
   }
   field.value = value;
   field.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
+const pressEnter = (form: HTMLFormElement): void => {
+  form
+    .querySelector<HTMLInputElement>("#send-recipient-search")
+    ?.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }),
+    );
 };
 
 const clickContinue = (form: HTMLFormElement): void => {
@@ -115,11 +149,12 @@ describe("Send resolves a typed Starknet name", () => {
     expect(continueDisabled(form)).toBe(true);
   });
 
-  test("commits the resolved address with the typed name as its label", async () => {
+  test("commits the resolved address labelled with the canonical name, naming the network", async () => {
     const pending = deferred<StarkNameResolutionResponse | null>();
-    const { form, stages, resolvedNames } = mount(() => pending.promise);
+    const { form, resolvedNames, resolvedNetworks, stages } = mount(() => pending.promise);
 
-    type(form, NAME);
+    // A mixed-case spelling: the request, and the label, are the canonical name.
+    type(form, "Altaga.Braavos.STARK");
     clickContinue(form);
 
     // The read is in flight: the control is held and the field says so.
@@ -132,21 +167,73 @@ describe("Send resolves a typed Starknet name", () => {
     await Promise.resolve();
 
     expect(resolvedNames).toEqual([NAME]);
+    // The panel declares the network it is showing, so the answer can be tied to it.
+    expect(resolvedNetworks).toEqual(["SN_MAIN"]);
     expect(field(form, "recipient")).toBe(ADDRESS);
     expect(field(form, "recipientLabel")).toBe(NAME);
+    expect(field(form, "recipientResolvedFrom")).toBe("stark-name");
     expect(note(form).hidden).toBe(true);
     expect(stages).toEqual(["details"]);
+  });
+
+  test("a bare word is never resolved as a name", async () => {
+    const { form, resolvedNames, stages } = mount(async () => resolved);
+
+    type(form, "mom");
+    expect(continueDisabled(form)).toBe(true);
+    clickContinue(form);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(resolvedNames).toEqual([]);
+    expect(field(form, "recipient")).toBe("");
+    expect(stages).toEqual([]);
+    expect(note(form).hidden).toBe(true);
+  });
+
+  test("a text naming a saved contact commits that contact, never a name lookup", async () => {
+    const { form, resolvedNames, stages } = mount(async () => resolved, [contact]);
+
+    type(form, "mom.stark");
+    clickContinue(form);
+    await Promise.resolve();
+
+    expect(resolvedNames).toEqual([]);
+    expect(field(form, "recipient")).toBe(CONTACT_ADDRESS);
+    expect(field(form, "recipientLabel")).toBe("mom.stark");
+    expect(field(form, "recipientResolvedFrom")).toBe("");
+    expect(stages).toEqual(["details"]);
+  });
+
+  test("Enter on a text matching a saved contact commits it rather than resolving", async () => {
+    const { form, resolvedNames, stages } = mount(async () => resolved, [contact]);
+
+    type(form, contact.label);
+    pressEnter(form);
+    await Promise.resolve();
+
+    expect(resolvedNames).toEqual([]);
+    expect(field(form, "recipient")).toBe(CONTACT_ADDRESS);
+    expect(stages).toEqual(["details"]);
+  });
+
+  test("a reply read on another network is dropped, not committed", async () => {
+    const { form, stages } = mount(async () => ({ ...resolved, networkId: "SN_SEPOLIA" }));
+
+    type(form, NAME);
+    clickContinue(form);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(field(form, "recipient")).toBe("");
+    expect(stages).toEqual([]);
   });
 
   test("Enter resolves the same way the button does", async () => {
     const { form, stages } = mount(async () => resolved);
 
     type(form, NAME);
-    form
-      .querySelector<HTMLInputElement>("#send-recipient-search")
-      ?.dispatchEvent(
-        new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }),
-      );
+    pressEnter(form);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -155,7 +242,11 @@ describe("Send resolves a typed Starknet name", () => {
   });
 
   test("an unregistered name does not commit a recipient and says why", async () => {
-    const { form, stages } = mount(async () => ({ ok: true, resolution: { status: "not-found" } }));
+    const { form, stages } = mount(async () => ({
+      networkId: "SN_MAIN",
+      ok: true,
+      resolution: { status: "not-found" },
+    }));
 
     type(form, NAME);
     clickContinue(form);
@@ -170,7 +261,11 @@ describe("Send resolves a typed Starknet name", () => {
   });
 
   test("a transport outage says the network could not be reached", async () => {
-    const { form } = mount(async () => ({ ok: true, resolution: { status: "unreachable" } }));
+    const { form } = mount(async () => ({
+      networkId: "SN_MAIN",
+      ok: true,
+      resolution: { status: "unreachable" },
+    }));
 
     type(form, NAME);
     clickContinue(form);
@@ -183,6 +278,7 @@ describe("Send resolves a typed Starknet name", () => {
 
   test("a network without Starknet ID says names are unavailable there", async () => {
     const { form } = mount(async () => ({
+      networkId: "SN_MAIN",
       ok: true,
       resolution: { status: "unsupported-network" },
     }));
