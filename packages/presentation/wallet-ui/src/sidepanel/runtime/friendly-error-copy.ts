@@ -227,6 +227,16 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "this account's signer setup cannot be recovered with the recovery phrase",
     "This account's signers can't be recovered with the recovery phrase.",
   ],
+  // The account's own limit (TIME_BETWEEN_TWO_ESCAPES), checked before the
+  // escape is estimated, and a failed read of its clock (fail closed).
+  [
+    "this account allows one escape attempt every 12 hours",
+    "This account allows one escape attempt every 12 hours. Try again later.",
+  ],
+  [
+    "could not check this account's escape limit",
+    "Couldn't check this account's escape limit. Try again.",
+  ],
   // argent-recovery.ts fails closed on an escape it cannot decode.
   [
     "the account reported an unrecognised escape",

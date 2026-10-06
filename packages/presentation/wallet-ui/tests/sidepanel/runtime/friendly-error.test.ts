@@ -57,6 +57,14 @@ describe("friendlyError", () => {
         "You switched accounts. Review the recovery again.",
       ],
       [
+        "This account allows one escape attempt every 12 hours",
+        "This account allows one escape attempt every 12 hours. Try again later.",
+      ],
+      [
+        "Could not check this account's escape limit",
+        "Couldn't check this account's escape limit. Try again.",
+      ],
+      [
         "second factor removal unavailable",
         "Couldn't load 2FA or guardian removal. Check your connection and try again.",
       ],

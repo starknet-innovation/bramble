@@ -48,6 +48,9 @@ export type Chain = {
   readonly backup?: string | "empty" | "revert";
   /** The live class (an unrecognised one reads as restriction "release"). */
   readonly classHash?: string;
+  /** last_owner_escape_attempt / last_owner_trigger_escape_attempt, or a revert. */
+  readonly lastEscape?: string | "revert";
+  readonly lastTrigger?: string | "revert";
   readonly escapeType?: string;
   /** A guardian escape to a NEW guardian: new_signer = Some(this key). */
   readonly newGuardian?: string;
@@ -101,6 +104,13 @@ export const providerWith = (chain: Chain = {}): RpcProvider => {
             throw Object.assign(new Error("argent/only_guid"), { baseError: { code: 40 } });
           }
           return chain.backup === "empty" ? [] : [chain.backup ?? "0x0"];
+        case "get_last_owner_trigger_escape_attempt":
+        case "get_last_owner_escape_attempt": {
+          const last =
+            entrypoint === "get_last_owner_escape_attempt" ? chain.lastEscape : chain.lastTrigger;
+          if (last === "revert") throw new Error("entrypoint not found");
+          return [last ?? "0x0"];
+        }
         case "get_escape_security_period":
           return [chain.period ?? hex(WEEK)];
         case "get_escape_and_status":

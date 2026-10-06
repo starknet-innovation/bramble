@@ -4,9 +4,10 @@
  */
 import { beforeEach, describe, expect, test } from "bun:test";
 import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
-import { getArgentRecoveryState } from "@bramble/starknet/rpc";
+import { getArgentRecoveryState, reviewArgentRecovery } from "@bramble/starknet/rpc";
 import {
   account,
+  BLOCK_TIME,
   type Chain,
   GUARDIAN_CHANGE,
   hex,
@@ -111,5 +112,60 @@ describe("argent recovery backup guardian", () => {
       await expect(refused.result).rejects.toThrow(/backup guardian/);
       expect(refused.doubles.executes).toHaveLength(0);
     }
+  });
+});
+
+describe("argent recovery escape limit (one attempt per 12 hours)", () => {
+  const TWELVE_HOURS = 43_200;
+  const LIMIT = "This account allows one escape attempt every 12 hours";
+
+  test("review refuses a start within 12 hours of the last trigger, before estimating", async () => {
+    for (const ago of [100, TWELVE_HOURS]) {
+      const recent = review({ lastTrigger: hex(BLOCK_TIME - ago) });
+      await expect(recent.result).rejects.toThrow(LIMIT);
+      expect(recent.doubles.estimates).toHaveLength(0);
+    }
+    // Strictly after last + 12h passes, as the account's assert does.
+    expect(await review({ lastTrigger: hex(BLOCK_TIME - TWELVE_HOURS - 1) }).result).toMatchObject({
+      step: "start",
+    });
+  });
+
+  test("completion is held to the completion clock, not the trigger's", async () => {
+    await expect(review({ ...READY, lastEscape: hex(BLOCK_TIME - 100) }).result).rejects.toThrow(
+      LIMIT,
+    );
+    expect(await review({ ...READY, lastTrigger: hex(BLOCK_TIME - 100) }).result).toMatchObject({
+      step: "complete",
+    });
+  });
+
+  test("submit refuses before signing, and an unreadable clock fails closed", async () => {
+    const refused = submit({ lastTrigger: hex(BLOCK_TIME - 100) }, "start");
+    await expect(refused.result).rejects.toThrow(LIMIT);
+    expect(refused.doubles.executes).toHaveLength(0);
+    await expect(review({ lastTrigger: "revert" }).result).rejects.toThrow(
+      "Could not check this account's escape limit",
+    );
+  });
+
+  test("an estimate that reverts on the limit gets the same refusal; others pass through", async () => {
+    const estimateFailing = (message: string) => () =>
+      ({
+        async estimateInvokeFee() {
+          throw new Error(message);
+        },
+      }) as never;
+    const run = (message: string) =>
+      reviewArgentRecovery(
+        { account, rpcUrls: RPC, signHash: async () => ({ publicKey: "0x1", r: "0x1", s: "0x1" }) },
+        () => providerWith({}),
+        estimateFailing(message),
+      );
+    await expect(
+      run("execution reverted: 0x617267656e742f6c6173742d6573636170652d746f6f2d726563656e74"),
+    ).rejects.toThrow(LIMIT);
+    await expect(run("Failure reason: 'argent/last-escape-too-recent'")).rejects.toThrow(LIMIT);
+    await expect(run("argent/invalid-owner-sig")).rejects.toThrow("argent/invalid-owner-sig");
   });
 });
