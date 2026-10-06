@@ -135,38 +135,58 @@ const assertNoHorizontalOverflow = (document: Document): void => {
 };
 
 /**
- * A value the user must read at the minimum width, such as an amount or a fee:
- * its box stays inside the panel edge and its own text is not clipped away.
- * Addresses the design deliberately truncates behind a copy control are checked
- * with {@link assertInsidePanel} instead.
+ * Every element a selector matches, checked individually. A selector aimed at a
+ * list (for example `.token-amount`) must be checked on each row: a single
+ * `querySelector` would let a clipped later row pass behind a healthy first one.
+ * An empty match is an error, because a selector that matches nothing asserts
+ * nothing.
  */
-export const assertValueFits = (document: Document, selector: string): void => {
-  const element = document.querySelector<HTMLElement>(selector);
-  if (!element) {
+const eachMatch = (document: Document, selector: string): readonly HTMLElement[] => {
+  const elements = document.querySelectorAll<HTMLElement>(selector);
+  if (elements.length === 0) {
     throw new Error(`Expected ${selector} at the minimum side-panel width`);
   }
+  return Array.from(elements);
+};
+
+const label = (selector: string, index: number, count: number): string =>
+  count === 1 ? selector : `${selector} [${index}]`;
+
+/**
+ * A value the user must read at the minimum width, such as an amount or a fee:
+ * its box stays inside the panel edge and its own text is not clipped away.
+ * Every element the selector matches is checked, so a list fails on any clipped
+ * row, not only the first. Addresses the design deliberately truncates behind a
+ * copy control are checked with {@link assertInsidePanel} instead.
+ */
+export const assertValueFits = (document: Document, selector: string): void => {
   const width = document.documentElement.clientWidth;
-  const rect = element.getBoundingClientRect();
-  expect(rect.left, `${selector} starts left of the panel`).toBeGreaterThanOrEqual(-1);
-  expect(rect.right, `${selector} runs past the panel edge`).toBeLessThanOrEqual(width + 1);
-  expect(element.scrollWidth, `${selector} clips its own value`).toBeLessThanOrEqual(
-    element.clientWidth + 1,
-  );
+  const elements = eachMatch(document, selector);
+  elements.forEach((element, index) => {
+    const name = label(selector, index, elements.length);
+    const rect = element.getBoundingClientRect();
+    expect(rect.left, `${name} starts left of the panel`).toBeGreaterThanOrEqual(-1);
+    expect(rect.right, `${name} runs past the panel edge`).toBeLessThanOrEqual(width + 1);
+    expect(element.scrollWidth, `${name} clips its own value`).toBeLessThanOrEqual(
+      element.clientWidth + 1,
+    );
+  });
 };
 
 /**
  * A value that may truncate by design but must still sit inside the panel: only
- * the element's box is checked, not its internal overflow.
+ * the element's box is checked, not its internal overflow. Every element the
+ * selector matches is checked, as in {@link assertValueFits}.
  */
 export const assertInsidePanel = (document: Document, selector: string): void => {
-  const element = document.querySelector<HTMLElement>(selector);
-  if (!element) {
-    throw new Error(`Expected ${selector} at the minimum side-panel width`);
-  }
   const width = document.documentElement.clientWidth;
-  const rect = element.getBoundingClientRect();
-  expect(rect.left, `${selector} starts left of the panel`).toBeGreaterThanOrEqual(-1);
-  expect(rect.right, `${selector} runs past the panel edge`).toBeLessThanOrEqual(width + 1);
+  const elements = eachMatch(document, selector);
+  elements.forEach((element, index) => {
+    const name = label(selector, index, elements.length);
+    const rect = element.getBoundingClientRect();
+    expect(rect.left, `${name} starts left of the panel`).toBeGreaterThanOrEqual(-1);
+    expect(rect.right, `${name} runs past the panel edge`).toBeLessThanOrEqual(width + 1);
+  });
 };
 
 export type NarrowStoryCheck = (document: Document, body: HTMLElement) => void;
