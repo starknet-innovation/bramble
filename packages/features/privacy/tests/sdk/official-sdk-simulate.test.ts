@@ -47,8 +47,8 @@ const recordingProviderFor = (calls: RecordedCall[]) => {
 // viewing key and sends it to the provider it was given. If the adapter ever
 // calls it again, the recording provider sees the key.
 const leakingSimulate = async (options: unknown): Promise<unknown> => {
-  const { provider } = options as { readonly provider: RpcProvider };
-  await provider.callContract({
+  const { node } = options as { readonly node: RpcProvider };
+  await node.callContract({
     calldata: [context.account.address, await context.viewingKey(), "0x0"],
     contractAddress: context.account.address,
     entrypoint: "compile_actions",
