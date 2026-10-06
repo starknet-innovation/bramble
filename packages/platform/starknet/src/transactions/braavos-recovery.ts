@@ -6,6 +6,9 @@
  * execution time delay the account itself treats the strong signers as
  * removed, so the ordinary signing checks start passing with no further
  * transaction; during the window only the strong-signer device can cancel.
+ * When it applies (lazily, on the account's next `__validate__`) the account
+ * removes every strong signer, its multisig threshold and any withdrawal
+ * limits, leaving the stark key — the recovery phrase — in sole control.
  * This module deliberately bypasses the strong-signer refusal that guards
  * every other submission, mirroring the carve-out the account contract makes.
  */
@@ -13,16 +16,24 @@ import { WalletError } from "@bramble/core/errors";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
-import { type FeeEstimate, reviewedSpendFor } from "../rpc/fee-bounds";
+import type { FeeEstimate } from "../rpc/fee-bounds";
 import {
   type AccountHashSigner,
-  acceptedRpcWriteHash,
+  INDETERMINATE_RPC_WRITE_MESSAGE,
+  IndeterminateRpcWriteError,
   krustyAccount,
+  matchingAcceptedRpcWriteHash,
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
-
 import { braavosSigningRestriction } from "./account-compatibility";
+import {
+  capturingRecoverySigner,
+  RECOVERY_TIP,
+  recoveryFeeCeiling,
+  refuseKeylessRecovery,
+  requireWithinReviewedRecoveryFee,
+} from "./recovery-shared";
 
 /**
  * The account-side delay between the removal request and it taking effect when
@@ -37,13 +48,30 @@ export const DEFAULT_BRAAVOS_RECOVERY_DELAY_SECONDS = 345_600;
 // wallet never signs a request the account would reject.
 const MAX_RECOVERY_FEE_FRI = 100_000_000_000_000_000_000n;
 
-/** Inputs shared by the recovery review and submission. */
+/**
+ * Inputs shared by the recovery review and submission. `onSigned` receives the
+ * submission hash after it is signed and before it is broadcast, so the caller
+ * can journal a write whose reply is lost.
+ */
 export type BraavosRecoveryInput = {
   readonly account: AccountRef;
   readonly isAuthorized?: () => boolean;
+  readonly onSigned?: (transactionHash: string) => void;
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: AccountHashSigner;
+};
+
+/**
+ * What the confirmation states: the maximum fee the submission may sign
+ * under, the account's delay, and the moment after which the removal takes
+ * effect if it is sent now (the latest block's time plus the delay; the real
+ * expiry is set from the inclusion block, so it can only be later).
+ */
+export type BraavosRecoveryReview = {
+  readonly delaySeconds: number;
+  readonly effectiveAfter: number;
+  readonly fee: FeeEstimate;
 };
 
 /** Pending-state read: when the request takes effect, and the account's delay. */
@@ -72,6 +100,11 @@ const readFelt = async (
   return value === undefined ? 0n : BigInt(value);
 };
 
+const readDelaySeconds = async (provider: RpcProvider, address: string): Promise<number> => {
+  const delay = await readFelt(provider, address, "get_execution_time_delay");
+  return delay === 0n ? DEFAULT_BRAAVOS_RECOVERY_DELAY_SECONDS : Number(delay);
+};
+
 /**
  * Reads the account's recovery state at the latest block: a pending request's
  * expiry (null when none is pending) and the delay a new request would take.
@@ -88,17 +121,17 @@ export const getBraavosRecoveryState = async (
     rpcUrls,
     async (provider) => {
       const expireAt = await readFelt(provider, accountAddress, "get_deferred_remove_signers");
-      const delay = await readFelt(provider, accountAddress, "get_execution_time_delay");
       return {
-        delaySeconds: delay === 0n ? DEFAULT_BRAAVOS_RECOVERY_DELAY_SECONDS : Number(delay),
+        delaySeconds: await readDelaySeconds(provider, accountAddress),
         pendingUntil: expireAt === 0n ? null : Number(expireAt),
       };
     },
     makeProvider,
   );
 
-// The flow exists exactly for a deployed Braavos account whose only
-// restriction is the strong signer; anything else is refused before signing.
+// The flow exists exactly for a deployed, phrase-held Braavos account whose
+// only restriction is the strong signer and which has no request pending (the
+// account refuses a second one); anything else is refused before signing.
 const requireRecoverableBraavos = async (
   provider: RpcProvider,
   account: AccountRef,
@@ -106,6 +139,7 @@ const requireRecoverableBraavos = async (
   if (account.accountContractType !== "braavos") {
     throw new WalletError("Account recovery is only available for Braavos accounts");
   }
+  refuseKeylessRecovery(account);
   const restriction = await braavosSigningRestriction(provider, {
     address: account.address,
     publicKeyX: account.publicKeyX,
@@ -116,10 +150,24 @@ const requireRecoverableBraavos = async (
   if (restriction !== "strong-signer") {
     throw new WalletError("Deployed Braavos account owner does not match the wallet signer");
   }
+  if ((await readFelt(provider, account.address, "get_deferred_remove_signers")) !== 0n) {
+    throw new WalletError("A 2FA removal is already pending for this account");
+  }
 };
 
+// Estimates with validation on, like a Braavos deployment: the account's
+// __validate__ does real work for this call, and a skipped-validation quote
+// would understate the fee the submission is then held to. The phrase key
+// signs only the query-version hash, which can never be broadcast as a real
+// transaction.
+const estimateRecovery = (starknetAccount: ReturnType<typeof krustyAccount>, address: string) =>
+  starknetAccount.estimateInvokeFee(recoveryCall(address), {
+    skipValidate: false,
+    tip: RECOVERY_TIP,
+  });
+
 /**
- * Estimates the removal request and returns the fee a review card can quote.
+ * Estimates the removal request and returns what its confirmation states.
  * Refuses an account the flow does not apply to, and a fee over the account's
  * own on-chain cap.
  */
@@ -127,33 +175,32 @@ export const reviewBraavosRecovery = async (
   { account, rpcUrls, signHash }: BraavosRecoveryInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
   makeAccount: typeof krustyAccount = krustyAccount,
-): Promise<FeeEstimate> =>
+): Promise<BraavosRecoveryReview> =>
   withRpcFallback(
     rpcUrls,
     async (provider) => {
       await requireRecoverableBraavos(provider, account);
-      const starknetAccount = makeAccount(provider, account, signHash);
-      const estimate = await starknetAccount.estimateInvokeFee(recoveryCall(account.address), {
-        skipValidate: true,
-        tip: "0x0",
-      });
-      const reviewed = reviewedSpendFor(estimate, "standard");
-      if (BigInt(reviewed.overallFee) > MAX_RECOVERY_FEE_FRI) {
-        throw new WalletError("Recovery fee exceeds the account's on-chain cap");
-      }
-      return reviewed;
+      const estimate = await estimateRecovery(
+        makeAccount(provider, account, signHash),
+        account.address,
+      );
+      const fee = recoveryFeeCeiling(estimate, MAX_RECOVERY_FEE_FRI);
+      const delaySeconds = await readDelaySeconds(provider, account.address);
+      const block = await provider.getBlock("latest");
+      return { delaySeconds, effectiveAfter: Number(block.timestamp) + delaySeconds, fee };
     },
     makeProvider,
   );
 
 /**
  * Submits the removal request and returns its hash and the moment it takes
- * effect. `reviewedFee` is mandatory and bounds the transaction exactly as a
- * reviewed invoke fee does; the submission re-checks the account state and the
- * on-chain fee cap before anything is signed.
+ * effect. `reviewedFee` is mandatory and is the ceiling the confirmation
+ * stated; the submission re-checks the account state, the fee and the on-chain
+ * cap before anything is signed. Once the node has accepted the hash, any
+ * later failure is reported as indeterminate: the request may be on chain.
  */
 export const submitBraavosRecovery = async (
-  { account, isAuthorized, reviewedFee, rpcUrls, signHash }: BraavosRecoveryInput,
+  { account, isAuthorized, onSigned, reviewedFee, rpcUrls, signHash }: BraavosRecoveryInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
   makeAccount: typeof krustyAccount = krustyAccount,
 ): Promise<{ readonly pendingUntil: number | null; readonly transactionHash: string }> =>
@@ -165,44 +212,27 @@ export const submitBraavosRecovery = async (
         throw new WalletError("The recovery fee was not reviewed. Review it and try again.");
       }
       await requireRecoverableBraavos(provider, account);
-      let signedHash: string | undefined;
-      const authorizedSigner: AccountHashSigner = async (messageHash) => {
-        const signed = await signHash(messageHash);
-        if (isAuthorized?.() === false) {
-          throw new WalletError("wallet locked");
-        }
-        signedHash = messageHash;
-        return signed;
-      };
-      const starknetAccount = makeAccount(provider, account, authorizedSigner);
-      const estimate = await starknetAccount.estimateInvokeFee(recoveryCall(account.address), {
-        skipValidate: true,
-        tip: "0x0",
-      });
-      const spend = reviewedSpendFor(estimate, "standard");
-      if (
-        BigInt(spend.overallFee) > BigInt(reviewedFee.overallFee) ||
-        spend.unit !== reviewedFee.unit ||
-        BigInt(spend.overallFee) > MAX_RECOVERY_FEE_FRI
-      ) {
-        throw new WalletError("The recovery fee changed. Review it and try again.");
+      const estimate = await estimateRecovery(
+        makeAccount(provider, account, signHash),
+        account.address,
+      );
+      requireWithinReviewedRecoveryFee(estimate, reviewedFee, MAX_RECOVERY_FEE_FRI);
+      const capture = capturingRecoverySigner(signHash, isAuthorized, onSigned);
+      const submitted = await makeAccount(provider, account, capture.signer).execute(
+        recoveryCall(account.address),
+        { resourceBounds: estimate.resourceBounds, tip: RECOVERY_TIP },
+      );
+      const transactionHash = matchingAcceptedRpcWriteHash(
+        submitted.transaction_hash,
+        capture.signedHash(),
+      );
+      try {
+        await provider.waitForTransaction(transactionHash);
+        const expireAt = await readFelt(provider, account.address, "get_deferred_remove_signers");
+        return { pendingUntil: expireAt === 0n ? null : Number(expireAt), transactionHash };
+      } catch {
+        throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
       }
-      const submitted = await starknetAccount.execute(recoveryCall(account.address), {
-        resourceBounds: estimate.resourceBounds,
-        tip: "0x0",
-      });
-      const transactionHash = acceptedRpcWriteHash(submitted.transaction_hash);
-      if (signedHash === undefined || BigInt(signedHash) !== BigInt(transactionHash)) {
-        throw new WalletError(
-          "RPC accepted a different transaction hash. Check on-chain state before retrying.",
-        );
-      }
-      await provider.waitForTransaction(transactionHash);
-      const expireAt = await readFelt(provider, account.address, "get_deferred_remove_signers");
-      return {
-        pendingUntil: expireAt === 0n ? null : Number(expireAt),
-        transactionHash,
-      };
     },
     makeProvider,
   );

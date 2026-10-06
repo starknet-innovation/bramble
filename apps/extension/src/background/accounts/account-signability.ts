@@ -166,20 +166,12 @@ export const handleReviewBraavosRecovery = async (
     STARKNET_NETWORKS[context.networkId],
     await deps.preferencesStore.read(),
   );
-  const fee = await deps.runtimeRpc.reviewBraavosRecovery({
+  const review = await deps.runtimeRpc.reviewBraavosRecovery({
     account,
     rpcUrls,
     signHash: accountHashSigner(deps, account, context.vaultPassphrase),
   });
-  const state = await deps.runtimeRpc
-    .getBraavosRecoveryState?.({ accountAddress: account.address, rpcUrls })
-    .catch(() => undefined);
-  return {
-    accountId: account.id,
-    delaySeconds: state?.delaySeconds ?? null,
-    fee,
-    ok: true,
-  };
+  return { accountId: account.id, delaySeconds: review.delaySeconds, fee: review.fee, ok: true };
 };
 
 /**

@@ -38,6 +38,7 @@ export {
  */
 export {
   type BraavosRecoveryInput,
+  type BraavosRecoveryReview,
   type BraavosRecoveryState,
   DEFAULT_BRAAVOS_RECOVERY_DELAY_SECONDS,
   getBraavosRecoveryState,

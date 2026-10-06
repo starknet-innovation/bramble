@@ -197,7 +197,11 @@ describe("background braavos recovery", () => {
             return { delaySeconds: 345_600, pendingUntil: null };
           },
           async reviewBraavosRecovery() {
-            return { overallFee: "100", unit: "FRI" as const };
+            return {
+              delaySeconds: 345_600,
+              effectiveAfter: 1_000,
+              fee: { overallFee: "100", unit: "FRI" as const },
+            };
           },
           async submitBraavosRecovery() {
             return { pendingUntil: 1_000, transactionHash: "0xreq" };
