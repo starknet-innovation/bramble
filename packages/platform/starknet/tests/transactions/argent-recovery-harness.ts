@@ -44,13 +44,13 @@ export const ledgerAccount = {
 } as unknown as AccountRef;
 
 export type Chain = {
-  /** get_guardian_backup's answer, or a contract revert / empty answer. */
-  readonly backup?: string | "empty" | "revert";
+  /** get_guardian_backup's answer, or a failure mode (see {@link FailureMode}). */
+  readonly backup?: string | "empty" | FailureMode;
   /** The live class (an unrecognised one reads as restriction "release"). */
   readonly classHash?: string;
-  /** last_owner_escape_attempt / last_owner_trigger_escape_attempt, or a revert. */
-  readonly lastEscape?: string | "revert";
-  readonly lastTrigger?: string | "revert";
+  /** last_owner_escape_attempt / last_owner_trigger_escape_attempt, or a failure mode. */
+  readonly lastEscape?: string | FailureMode;
+  readonly lastTrigger?: string | FailureMode;
   readonly escapeType?: string;
   /** A guardian escape to a NEW guardian: new_signer = Some(this key). */
   readonly newGuardian?: string;
@@ -73,8 +73,29 @@ export const ACCEPTED_BLOCK = "0xb10c";
 // A guardian-restricted 0.4.0 account: owner is the wallet key, a guardian is
 // set, the escape and security period controllable per test. After a
 // receipt, the escape reads back as `after` would leave it (cleared here).
+/**
+ * How a read can fail: `revert` is an answer from the account (a contract
+ * error), `transport` an endpoint failure (fails over), `miss-once` a single
+ * JSON-RPC 24 block-not-found on the pinned block (re-pins), then "0x0".
+ */
+type FailureMode = "miss-once" | "revert" | "transport";
+
 export const providerWith = (chain: Chain = {}): RpcProvider => {
   let confirmed = false;
+  const missed = new Set<string>();
+  const answer = (entrypoint: string, value: string | undefined): string[] => {
+    if (value === "revert") {
+      // A node that answered: a contract-level failure, not transport.
+      throw Object.assign(new Error("argent/only_guid"), { baseError: { code: 40 } });
+    }
+    if (value === "transport") throw new Error("fetch failed");
+    if (value === "miss-once") {
+      if (missed.has(entrypoint)) return ["0x0"];
+      missed.add(entrypoint);
+      throw Object.assign(new Error("Block not found"), { baseError: { code: 24 } });
+    }
+    return value === "empty" ? [] : [value ?? "0x0"];
+  };
   return {
     async getChainId() {
       return STARKNET_NETWORKS.SN_MAIN.chainId;
@@ -99,17 +120,12 @@ export const providerWith = (chain: Chain = {}): RpcProvider => {
         case "get_guardian":
           return [chain.guardian ?? "0xabc"];
         case "get_guardian_backup":
-          if (chain.backup === "revert") {
-            // A node that answered: a contract-level failure, not transport.
-            throw Object.assign(new Error("argent/only_guid"), { baseError: { code: 40 } });
-          }
-          return chain.backup === "empty" ? [] : [chain.backup ?? "0x0"];
+          return answer(entrypoint, chain.backup);
         case "get_last_owner_trigger_escape_attempt":
         case "get_last_owner_escape_attempt": {
           const last =
             entrypoint === "get_last_owner_escape_attempt" ? chain.lastEscape : chain.lastTrigger;
-          if (last === "revert") throw new Error("entrypoint not found");
-          return [last ?? "0x0"];
+          return answer(entrypoint, last);
         }
         case "get_escape_security_period":
           return [chain.period ?? hex(WEEK)];
@@ -155,7 +171,7 @@ export const boundsFor = (spend: bigint) => ({
 });
 
 // Query account (estimates) and signing account (executes) stand-ins.
-const fakes = (spend = 10n ** 15n, options: { readonly accepts?: string } = {}) => {
+export const fakes = (spend = 10n ** 15n, options: { readonly accepts?: string } = {}) => {
   const estimates: Recorded = [];
   const executes: Recorded = [];
   const makeQueryAccount = () =>

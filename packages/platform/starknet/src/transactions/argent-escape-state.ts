@@ -7,7 +7,24 @@
  */
 import { WalletError } from "@bramble/core/errors";
 import type { RpcProvider } from "starknet";
-import { withRpcFallback } from "../rpc/provider";
+import { isTransportRpcError, withRpcFallback } from "../rpc/provider";
+import { isBlockNotFoundError } from "../rpc/rpc-not-found";
+
+/**
+ * Whether a failed read must propagate rather than be classified: a transport
+ * failure (so withRpcFallback moves to the next endpoint) or a JSON-RPC 24
+ * miss on a pinned block (so atAcceptedBlock re-pins). Anything else is an
+ * answer from the account, which callers map to their own fail-closed result.
+ */
+export const isRetryableReadError = (error: unknown): boolean =>
+  isTransportRpcError(error) || isBlockNotFoundError(error);
+
+const unlessRetryable =
+  <T>(fallback: T) =>
+  (error: unknown): T => {
+    if (isRetryableReadError(error)) throw error;
+    return fallback;
+  };
 
 /**
  * The account's default security period (`DEFAULT_ESCAPE_SECURITY_PERIOD`,
@@ -141,7 +158,7 @@ export const readEscapeState = async (
     read("get_escape_and_status"),
     read("get_escape_security_period"),
     readGuardianBackup(provider, accountAddress, blockIdentifier).catch(
-      (): GuardianBackup => "unknown",
+      unlessRetryable<GuardianBackup>("unknown"),
     ),
   ]);
   const periodFelt = feltOrZero(period[0]);
@@ -227,7 +244,9 @@ export const isEscapeTooRecentRevert = (error: unknown): boolean => {
  * attempt of that kind plus 12 hours — `last_owner_trigger_escape_attempt`
  * for `trigger_escape_guardian`, `last_owner_escape_attempt` for
  * `escape_guardian`. Read at the caller's pinned block; time only moves on, so
- * a step allowed there is allowed at inclusion. An unreadable clock refuses.
+ * a step allowed there is allowed at inclusion. A transport failure or a
+ * JSON-RPC 24 miss propagates (endpoint fallback / re-pin); any other failed
+ * read of the clock, or an empty answer, refuses.
  */
 export const requireEscapeAttemptAllowed = async (
   provider: RpcProvider,
@@ -241,7 +260,7 @@ export const requireEscapeAttemptAllowed = async (
     provider
       .callContract({ calldata: [], contractAddress: accountAddress, entrypoint }, blockIdentifier)
       .then(([value]) => value)
-      .catch(() => undefined),
+      .catch(unlessRetryable(undefined)),
     provider.getBlock(blockIdentifier),
   ]);
   if (lastAttempt === undefined) {

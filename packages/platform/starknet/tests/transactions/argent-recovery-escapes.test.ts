@@ -9,6 +9,7 @@ import {
   account,
   BLOCK_TIME,
   type Chain,
+  fakes,
   GUARDIAN_CHANGE,
   hex,
   providerWith,
@@ -167,5 +168,56 @@ describe("argent recovery escape limit (one attempt per 12 hours)", () => {
     ).rejects.toThrow(LIMIT);
     await expect(run("Failure reason: 'argent/last-escape-too-recent'")).rejects.toThrow(LIMIT);
     await expect(run("argent/invalid-owner-sig")).rejects.toThrow("argent/invalid-owner-sig");
+  });
+});
+
+describe("argent recovery gate reads that must not be swallowed", () => {
+  const TWO = ["https://rpc-a.example", "https://rpc-b.example"];
+
+  test("a transport failure on a gate read moves to the next endpoint", async () => {
+    for (const broken of [{ lastTrigger: "transport" }, { backup: "transport" }] as const) {
+      // The failed endpoint cools down; start each case from fresh state.
+      resetRpcEndpointCooldownsForTests();
+      const used: string[] = [];
+      const doubles = fakes();
+      const result = await reviewArgentRecovery(
+        { account, rpcUrls: TWO, signHash: async () => ({ publicKey: "0x1", r: "0x1", s: "0x1" }) },
+        (url) => {
+          used.push(url);
+          return providerWith(url === TWO[0] ? broken : {});
+        },
+        doubles.makeQueryAccount,
+      );
+      expect(result.step).toBe("start");
+      expect(used).toEqual(TWO);
+    }
+  });
+
+  test("the Home state read fails over too, rather than reporting the backup unknown", async () => {
+    resetRpcEndpointCooldownsForTests();
+    const state = await getArgentRecoveryState(
+      { accountAddress: account.address, rpcUrls: TWO },
+      (url) => providerWith(url === TWO[0] ? { backup: "transport" } : {}),
+    );
+    expect(state.guardianBackup).toBe("absent");
+  });
+
+  test("a JSON-RPC 24 miss re-pins instead of refusing", async () => {
+    for (const chain of [{ lastTrigger: "miss-once" }, { backup: "miss-once" }] as const) {
+      const reads: string[] = [];
+      expect(await review({ ...chain, reads }).result).toMatchObject({ step: "start" });
+      const entry =
+        "lastTrigger" in chain ? "get_last_owner_trigger_escape_attempt" : "get_guardian_backup";
+      expect(reads.filter((read) => read.startsWith(entry)).length).toBeGreaterThan(1);
+    }
+  });
+
+  test("an answer from the account still refuses", async () => {
+    await expect(review({ lastTrigger: "revert" }).result).rejects.toThrow(
+      "Could not check this account's escape limit",
+    );
+    await expect(review({ backup: "revert" }).result).rejects.toThrow(
+      "Could not check this account's backup guardian",
+    );
   });
 });

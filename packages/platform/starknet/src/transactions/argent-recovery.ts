@@ -23,7 +23,6 @@ import {
   argentQueryAccount,
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
-  isTransportRpcError,
   krustyAccount,
   matchingAcceptedRpcWriteHash,
   withRpcFallback,
@@ -37,6 +36,7 @@ import {
   BACKUP_UNCHECKED,
   ESCAPE_TOO_RECENT,
   isEscapeTooRecentRevert,
+  isRetryableReadError,
   type PendingEscapeChange,
   readEscapeState,
   readGuardianBackup,
@@ -158,11 +158,11 @@ const requireRecoverableArgentAt = async (
   if (restriction !== "guardian") {
     throw new WalletError(ARGENT_REFUSALS[restriction] ?? UNRECOVERABLE_SIGNERS);
   }
-  // Transport failures keep their own classification (and endpoint fallback);
-  // any other failed read refuses rather than letting the escape revert.
+  // Transport failures and pinned-block misses propagate (endpoint fallback,
+  // re-pin); any other failed read refuses rather than letting the escape revert.
   const backup = await readGuardianBackup(provider, account.address, blockIdentifier).catch(
     (error: unknown) => {
-      if (isTransportRpcError(error)) throw error;
+      if (isRetryableReadError(error)) throw error;
       throw new WalletError(BACKUP_UNCHECKED);
     },
   );
