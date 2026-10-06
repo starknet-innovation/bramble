@@ -217,7 +217,9 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(calls.submitTransfer).toHaveLength(0);
-    expect(calls.reviewTransfer).toHaveLength(2);
+    // Three review reads, none of them a send: the preview re-quotes the
+    // re-shown amount step, and each Review click reads once more.
+    expect(calls.reviewTransfer).toHaveLength(3);
     expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
 
     // Only the confirm from the re-shown review sends.

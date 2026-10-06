@@ -14,6 +14,7 @@ import { sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { estimatedFeeText } from "../../shared/review-render";
+import { finitePositive } from "./send-model";
 import type { TransferFields, TransferStage } from "./transfer-model";
 import { poolFeeText } from "./transfer-review-routes";
 import { resolveTransferRoute, type TransferRouteContext, transferRoute } from "./transfer-route";
@@ -45,7 +46,7 @@ export type ComposeFeeEstimate = {
  */
 export const composeFeeTarget = (context: TransferRouteContext): ComposeFeeTarget | null => {
   const { fields } = context;
-  if (fields.recipient === "" || fields.amount === "" || Number(fields.amount) <= 0) {
+  if (fields.recipient === "" || finitePositive(fields.amount) === null) {
     return null;
   }
   if (resolveTransferRoute(context).blocked) {
@@ -141,6 +142,7 @@ export const createComposeFee = (deps: {
     );
   // Each fee is one text node: the figure is data, never markup.
   const paint = (lines: readonly string[]): void => {
+    if (!deps.form.isConnected) return;
     const region = deps.form.querySelector<HTMLElement>("#send-fee-lines");
     if (!region) return;
     const doc = region.ownerDocument;
@@ -172,7 +174,7 @@ export const createComposeFee = (deps: {
       clear();
       return;
     }
-    const target = composeFeeTarget(deps.context());
+    const target = deps.form.isConnected ? composeFeeTarget(deps.context()) : null;
     if (target === null) {
       clear();
       return;
@@ -189,6 +191,9 @@ export const createComposeFee = (deps: {
     }
     cancel = schedule(deps.delayMs ?? COMPOSE_FEE_DEBOUNCE_MS, () => {
       cancel = null;
+      // A repaint can detach the form before the debounce fires; an estimate for
+      // it would be a request with nothing left to paint.
+      if (!deps.form.isConnected) return;
       void estimate(target.fields).then(
         (review) => {
           if (mine === token) paint(composeFeeLines(target, { failed: false, review }));

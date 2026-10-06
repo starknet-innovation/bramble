@@ -152,7 +152,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       reviewedKey: null,
       stage: "details",
     };
-    repaint();
+    goTo("details");
     form.querySelector<HTMLInputElement>("#send-amount-input")?.focus();
   };
   // Closing Send abandons what was composed. Without this, the module-level
@@ -357,7 +357,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         fields,
         stage: "details",
       };
-      repaint();
+      goTo("details");
       return;
     }
     const key = transferKey(fields);
@@ -398,7 +398,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             const message = errorMessage(error, preparationFailure(composed));
             showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
-            repaintActiveTransfer?.();
+            goTo("details");
           },
         );
         return;
@@ -422,7 +422,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             const message = friendlyReviewError(error);
             showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
-            repaintActiveTransfer?.();
+            goTo("details");
           },
         );
       return;

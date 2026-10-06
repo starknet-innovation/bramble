@@ -10,10 +10,10 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account } from "@bramble/testkit/sidepanel";
-import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
+import { finitePositive } from "../../../../src/sidepanel/journeys/send/send-model";
 import {
   COMPOSE_FEE_DEBOUNCE_MS,
   composeFeeLines,
@@ -29,6 +29,14 @@ import { transferRoute } from "../../../../src/sidepanel/journeys/send/transfer-
 import type { TransferReview } from "../../../../src/sidepanel/journeys/send/transfer-submit";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+import {
+  context,
+  DEPLOYMENT_FEE,
+  FIELDS,
+  registered,
+  review,
+  strkBalance,
+} from "../../../support/compose-fee-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
   flush,
@@ -37,6 +45,7 @@ import {
   transferPreferences as preferences,
   transferPublicBalance as publicBalance,
   walletStatus as status,
+  submitTransferForm as submit,
   TRANSFER_RECIPIENT,
 } from "../../../support/transfer-ui-harness";
 
@@ -44,88 +53,10 @@ beforeAll(registerDom);
 afterAll(unregisterDom);
 beforeEach(() => document.body.replaceChildren());
 
-// The pool charges in STRK, so a route that pays one needs a STRK reading.
-const strkBalance = {
-  address: STRK_TOKEN_ADDRESS,
-  balance: "50000000000000000000",
-  decimals: 18,
-  formatted: "50",
-  id: `SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`,
-  name: "Starknet Token",
-  networkId: "SN_MAIN" as const,
-  symbol: "STRK",
-};
-
-const FEE = { overallFee: "2000000000000000", unit: "FRI" };
-const DEPLOYMENT_FEE = { overallFee: "1000000000000000", unit: "FRI" };
-const TWO_STRK_FRI = "2000000000000000000";
-
-const FIELDS: TransferFields = {
-  accountId: account.id,
-  amount: "1",
-  destination: "public",
-  fiatEstimate: "",
-  recipient: TRANSFER_RECIPIENT,
-  recipientLabel: "",
-  signer: "software",
-  source: "public",
-  speed: "standard",
-  tokenAddress: publicBalance.address,
-  tokenBalance: "100000000000000000000",
-  tokenDecimals: "18",
-  tokenFormatted: "100",
-  tokenId: publicBalance.id,
-  tokenPrice: "",
-  tokenSymbol: "ETH",
-};
-
-const review = (overrides: Partial<TransferReview> = {}): TransferReview => ({
-  fee: FEE,
-  feeAffordability: "ok",
-  feeEstimateFailed: false,
-  flags: [],
-  requiresDeployment: false,
-  summaries: ["Transfer 1 ETH"],
-  ...overrides,
-});
-
-const context = (
-  overrides: Partial<TransferRouteContext> = {},
-  fields: Partial<TransferFields> = {},
-): TransferRouteContext => ({
-  fields: { ...FIELDS, ...fields },
-  privacy: { error: null, loading: false, value: null },
-  publicBalances: [publicBalance, strkBalance],
-  recipientRegistration: "registered",
-  senderAddress: account.address,
-  ...overrides,
-});
-
 const target = (value: TransferRouteContext) => {
   const resolved = composeFeeTarget(value);
   if (resolved === null) throw new Error("expected the compose to be priceable");
   return resolved;
-};
-
-const registered: PrivacyDisclosureState = {
-  error: null,
-  loading: false,
-  value: {
-    accountId: account.id,
-    balances: [
-      {
-        balance: "100000000000000000000",
-        formatted: "100",
-        symbol: "ETH",
-        token: publicBalance.address,
-        tokenId: publicBalance.id,
-      },
-    ],
-    networkId: "SN_MAIN",
-    poolFeeFri: TWO_STRK_FRI,
-    relayConfigured: true,
-    registration: "registered",
-  },
 };
 
 describe("the fee lines", () => {
@@ -200,6 +131,18 @@ describe("the fee lines", () => {
     expect(composeFeeTarget(context({}, { recipient: "" }))).toBeNull();
   });
 
+  test("a comma decimal is never quoted", () => {
+    // Number("1,5") is NaN and NaN <= 0 is false, so a bare magnitude check
+    // accepts it. The shared finite gate refuses it; that amount also resolves
+    // to zero, so the route gate refuses it as well. Both are pinned so neither
+    // can start quoting the figure.
+    expect(finitePositive("1,5")).toBeNull();
+    expect(finitePositive("abc")).toBeNull();
+    expect(finitePositive("1e999")).toBeNull();
+    expect(composeFeeTarget(context({}, { amount: "1,5" }))).toBeNull();
+    expect(composeFeeTarget(context({}, { amount: "1e999" }))).toBeNull();
+  });
+
   test("a route that refuses is not priced", () => {
     // The recipient's registration is the gate the Review button enforces, so a
     // refusing route is not given a figure here either.
@@ -225,6 +168,7 @@ describe("the live preview", () => {
     readonly calls: unknown[][];
     readonly delays: number[];
     readonly fee: ReturnType<typeof createComposeFee>;
+    readonly form: HTMLFormElement;
     readonly region: HTMLElement;
     readonly runScheduled: () => void;
     readonly setFields: (fields: Partial<TransferFields>) => void;
@@ -277,6 +221,7 @@ describe("the live preview", () => {
       calls,
       delays,
       fee,
+      form,
       region,
       runScheduled: () => {
         for (const entry of scheduled.splice(0, scheduled.length)) {
@@ -386,6 +331,26 @@ describe("the live preview", () => {
     expect(subject.delays).toEqual([]);
     expect(subject.calls).toHaveLength(0);
   });
+
+  test("a form detached before the debounce fires neither asks nor paints", () => {
+    // A shell repaint replaces the form, leaving the captured one detached: an
+    // estimate for it would be a request with nowhere truthful to land.
+    const subject = makeSubject({ fields: { amount: "1" } });
+    subject.form.remove();
+    subject.runScheduled();
+    expect(subject.calls).toHaveLength(0);
+    expect(subject.region.textContent).toBe("");
+  });
+
+  test("an estimate that lands after the form detaches does not paint", async () => {
+    const subject = makeSubject({ fields: { amount: "1" } });
+    subject.runScheduled();
+    expect(subject.calls).toHaveLength(1);
+    subject.form.remove();
+    subject.settle(0, review());
+    await flush();
+    expect(subject.region.textContent).toBe("");
+  });
 });
 
 describe("on the real form", () => {
@@ -493,5 +458,33 @@ describe("on the real form", () => {
 
     typeAmount(app, "");
     expect(feeLines(app)).toBe("");
+  });
+
+  test("returning to the amount step from the review re-quotes it", async () => {
+    let reviews = 0;
+    const { app } = open(publicIntent, publicPrivacy, {
+      async reviewTransfer() {
+        reviews += 1;
+        return review();
+      },
+    });
+    typeAmount(app, "1");
+    await flush();
+    expect(feeLines(app)).toBe("Estimated fee: 0.002 STRK");
+
+    const form = app.querySelector<HTMLFormElement>("#transfer-form");
+    submit(app);
+    await flush();
+    expect(form?.dataset["stage"]).toBe("review");
+
+    const before = reviews;
+    document.querySelector<HTMLButtonElement>("#send-header-back")?.click();
+    await flush();
+
+    expect(form?.dataset["stage"]).toBe("details");
+    // The amount step asks for the fee again rather than leaving the figure it
+    // quoted before the review on screen.
+    expect(reviews).toBe(before + 1);
+    expect(feeLines(app)).toBe("Estimated fee: 0.002 STRK");
   });
 });

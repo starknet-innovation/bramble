@@ -97,7 +97,13 @@ export const sendRecipientAccounts = (
   networkId: string,
 ): readonly AccountRef[] => accounts.filter((account) => account.networkId === networkId);
 
-const finitePositive = (value: string): number | null => {
+/**
+ * Parses a strictly positive, finite decimal amount from a field string, or
+ * null when the text is empty, non-numeric or not greater than zero. The Send
+ * surfaces share this one gate, so a half-typed amount (for example a comma
+ * decimal) is refused in the same way at the amount step and in the fee preview.
+ */
+export const finitePositive = (value: string): number | null => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
