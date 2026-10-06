@@ -112,9 +112,10 @@ export const homeScreen = (
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
         ${shieldTile(
           strkTokenId,
-          privateReady && !readOnly,
+          privateReady,
           deploymentKnownFromPrivacy(deployment, privacy),
           fundedForFees,
+          readOnly,
         )}
       </div>
     </section>

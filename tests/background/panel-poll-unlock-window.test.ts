@@ -69,6 +69,7 @@ const EXPIRES_AT = UNLOCKED_AT + TTL_MS;
  */
 const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "deployment.load": "wallet.deploymentStatus",
+  "signability.load": "wallet.accountSignability",
   "multisig.loadBalances": "wallet.multisigBalances",
   "multisig.loadClassStatus": "wallet.argentMultisigClassStatus",
   "multisig.loadMultisigs": "wallet.multisigs",
@@ -265,7 +266,7 @@ describe("panel polling cannot hold the wallet unlocked", () => {
   test("hydration has no loader this suite does not classify", async () => {
     const source = await readFile(HYDRATE_SOURCE, "utf8");
     const called = new Set(
-      [...source.matchAll(/\b(wallet|multisig|deployment)\.([a-zA-Z]+)\(/g)].map(
+      [...source.matchAll(/\b(wallet|multisig|deployment|signability)\.([a-zA-Z]+)\(/g)].map(
         (match) => `${match[1]}.${match[2]}`,
       ),
     );
