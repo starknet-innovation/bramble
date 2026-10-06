@@ -362,7 +362,7 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
         expiresAt: 2_000,
         fee: { overallFee: "1", unit: "FRI" as const },
         readyAt: 1_000,
-        replacesOwnerEscape: false,
+        replaces: null,
         step: "start" as const,
       };
     },
@@ -373,7 +373,7 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
       return {
         expiresAt: null,
         guardianBackup: "absent" as const,
-        ownerEscapePending: false,
+        pendingChange: null,
         readyAt: null,
         securityPeriodSeconds: 604_800,
         status: "none" as const,

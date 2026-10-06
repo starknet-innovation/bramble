@@ -158,9 +158,10 @@ const recoveryConfirmCopy = (
       fee,
     ],
     title: "Remove the guardian from this account?",
-    warning: review.replacesOwnerEscape
-      ? `${OWNER_ESCAPE} Continuing cancels that change. If you asked for it, don't continue.`
-      : null,
+    warning:
+      review.replaces !== null
+        ? `${OWNER_ESCAPE} Continuing cancels that change. If you asked for it, don't continue.`
+        : null,
   };
 };
 

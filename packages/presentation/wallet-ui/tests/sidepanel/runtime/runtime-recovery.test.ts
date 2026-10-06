@@ -20,7 +20,7 @@ const REVIEW: RecoveryReview = {
   fee: { overallFee: "100", unit: "FRI" },
   ok: true,
   readyAt: 1_000,
-  replacesOwnerEscape: true,
+  replaces: { kind: "owner-escape" as const, readyAt: 1_500 },
   step: "start",
 };
 const SUBMITTED = {
@@ -74,14 +74,14 @@ describe("recovery runtime client", () => {
     expect(warned.sent).toEqual([
       {
         accountId: REVIEW.accountId,
-        replaceOwnerEscape: true,
+        replaceEscapeReadyAt: 1_500,
         reviewedFee: REVIEW.fee,
         step: "start",
         type: "wallet.recoverArgentAccount",
       },
     ]);
     const plain = clientReplying(SUBMITTED);
-    await plain.client.recoverArgentAccount({ ...REVIEW, replacesOwnerEscape: false });
+    await plain.client.recoverArgentAccount({ ...REVIEW, replaces: null });
     await plain.client.recoverArgentAccount({ ...REVIEW, step: "complete" });
     expect(plain.sent).toEqual([
       {
@@ -118,7 +118,11 @@ describe("recovery reply validators", () => {
     expect(isRecoveryReview(REVIEW)).toBe(true);
     expect(isRecoveryReview({ ...REVIEW, step: "cancel" })).toBe(false);
     expect(isRecoveryReview({ ...REVIEW, readyAt: -1 })).toBe(false);
-    expect(isRecoveryReview({ ...REVIEW, replacesOwnerEscape: "yes" })).toBe(false);
+    expect(isRecoveryReview({ ...REVIEW, replaces: true })).toBe(false);
+    expect(isRecoveryReview({ ...REVIEW, replaces: { kind: "owner-escape", readyAt: -1 } })).toBe(
+      false,
+    );
+    expect(isRecoveryReview({ ...REVIEW, replaces: { kind: "other", readyAt: 1 } })).toBe(false);
     expect(isRecoveryReview({ ...REVIEW, delaySeconds: 1 })).toBe(false);
     expect(isRecoveryReview({ ...REVIEW, fee: { overallFee: "1", unit: "BTC" } })).toBe(false);
     expect(isRecoveryReview({ ...REVIEW, expiresAt: null })).toBe(true);

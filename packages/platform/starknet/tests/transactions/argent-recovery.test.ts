@@ -175,7 +175,7 @@ const submit = (
   options: {
     readonly accepts?: string;
     readonly isAuthorized?: () => boolean;
-    readonly replaceOwnerEscape?: boolean;
+    readonly replaceEscapeReadyAt?: number;
     readonly reviewed?: string;
     readonly spend?: bigint;
     readonly subject?: AccountRef;
@@ -191,7 +191,9 @@ const submit = (
         ...(step ? { expectedStep: step } : {}),
         ...(options.isAuthorized ? { isAuthorized: options.isAuthorized } : {}),
         onSigned: (hash) => signed.push(hash),
-        ...(options.replaceOwnerEscape ? { replaceOwnerEscape: true } : {}),
+        ...(options.replaceEscapeReadyAt !== undefined
+          ? { replaceEscapeReadyAt: options.replaceEscapeReadyAt }
+          : {}),
         reviewedFee: { overallFee: options.reviewed ?? "1500000000000000", unit: "FRI" },
         rpcUrls: RPC,
         signHash,
@@ -217,7 +219,7 @@ describe("argent recovery state", () => {
     const none = {
       expiresAt: null,
       guardianBackup: "absent" as const,
-      ownerEscapePending: false,
+      pendingChange: null,
       readyAt: null,
       securityPeriodSeconds: WEEK,
       status: "none" as const,
@@ -226,7 +228,7 @@ describe("argent recovery state", () => {
     const window = {
       expiresAt: READY_AT + WEEK,
       guardianBackup: "absent" as const,
-      ownerEscapePending: false,
+      pendingChange: null,
       readyAt: READY_AT,
     };
     expect(await read(PENDING)).toEqual({
@@ -252,12 +254,15 @@ describe("argent recovery state", () => {
       getArgentRecoveryState({ accountAddress: account.address, rpcUrls: RPC }, () =>
         providerWith(chain),
       );
-    expect(await read(OWNER_ESCAPE)).toMatchObject({ ownerEscapePending: true, status: "none" });
+    expect(await read(OWNER_ESCAPE)).toMatchObject({
+      pendingChange: { kind: "owner-escape", readyAt: READY_AT },
+      status: "none",
+    });
     expect(await read({ ...OWNER_ESCAPE, status: "0x2" })).toMatchObject({
-      ownerEscapePending: true,
+      pendingChange: { kind: "owner-escape", readyAt: READY_AT },
     });
     expect(await read({ ...OWNER_ESCAPE, status: "0x3" })).toMatchObject({
-      ownerEscapePending: false,
+      pendingChange: null,
     });
     await expect(read({ ...PENDING, status: "0x9" })).rejects.toThrow("unrecognised escape status");
   });
@@ -309,7 +314,7 @@ describe("argent recovery review", () => {
         expiresAt: BLOCK_TIME + 2 * WEEK,
         fee: { overallFee: "1500000000000000", unit: "FRI" },
         readyAt: BLOCK_TIME + WEEK,
-        replacesOwnerEscape: false,
+        replaces: null,
         step: "start",
       });
       expect(doubles.estimates).toEqual([{ call: TRIGGER, details: VALIDATED }]);
@@ -329,7 +334,7 @@ describe("argent recovery review", () => {
       expiresAt: READY_AT + WEEK,
       fee: { overallFee: "1500000000000000", unit: "FRI" },
       readyAt: READY_AT,
-      replacesOwnerEscape: false,
+      replaces: null,
       step: "complete",
     });
     expect(doubles.estimates).toEqual([{ call: COMPLETE, details: VALIDATED }]);
@@ -341,7 +346,7 @@ describe("argent recovery review", () => {
 
   test("flags that starting cancels a pending owner escape", async () => {
     expect(await review(OWNER_ESCAPE).result).toMatchObject({
-      replacesOwnerEscape: true,
+      replaces: { kind: "owner-escape", readyAt: READY_AT },
       step: "start",
     });
   });
@@ -388,7 +393,12 @@ describe("argent recovery submit", () => {
     const silent = submit(OWNER_ESCAPE, "start");
     await expect(silent.result).rejects.toThrow("key change is pending");
     expect(silent.doubles.executes).toHaveLength(0);
-    const acknowledged = submit(OWNER_ESCAPE, "start", { replaceOwnerEscape: true });
+    // An acknowledgement for another escape (cancelled and re-triggered since
+    // the review, so a different ready_at) does not cover this one.
+    const stale = submit(OWNER_ESCAPE, "start", { replaceEscapeReadyAt: READY_AT - 1 });
+    await expect(stale.result).rejects.toThrow("key change is pending");
+    expect(stale.doubles.executes).toHaveLength(0);
+    const acknowledged = submit(OWNER_ESCAPE, "start", { replaceEscapeReadyAt: READY_AT });
     await acknowledged.result;
     expect(acknowledged.doubles.executes.map((entry) => entry.call)).toEqual([TRIGGER]);
   });

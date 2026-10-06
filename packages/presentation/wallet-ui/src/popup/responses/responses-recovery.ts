@@ -49,6 +49,18 @@ export const isRecoveryState = (value: unknown): value is RecoveryState =>
   (value["pendingUntil"] === null || isTime(value["pendingUntil"])) &&
   (value["stage"] === undefined || RECOVERY_STAGES.includes(value["stage"]));
 
+/** A pending escape a Ready start would cancel, identified by its `readyAt`. */
+export type RecoveryReplacedEscape = {
+  readonly kind: "owner-escape";
+  readonly readyAt: number;
+};
+
+const isReplacedEscape = (value: unknown): value is RecoveryReplacedEscape =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["kind", "readyAt"]) &&
+  value["kind"] === "owner-escape" &&
+  isTime(value["readyAt"]);
+
 /**
  * What a recovery confirmation states: the step, the maximum fee the submit is
  * held to, when the removal takes effect (Braavos) or can be completed (Ready),
@@ -61,7 +73,7 @@ export type RecoveryReview = {
   readonly fee: FeeEstimate;
   readonly ok: true;
   readonly readyAt: number;
-  readonly replacesOwnerEscape: boolean;
+  readonly replaces: RecoveryReplacedEscape | null;
   readonly step: "complete" | "start";
 };
 
@@ -69,21 +81,13 @@ export type RecoveryReview = {
 export const isRecoveryReview = (value: unknown): value is RecoveryReview =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, [
-    "accountId",
-    "expiresAt",
-    "fee",
-    "ok",
-    "readyAt",
-    "replacesOwnerEscape",
-    "step",
-  ]) &&
+  hasOnlyKnownKeys(value, ["accountId", "expiresAt", "fee", "ok", "readyAt", "replaces", "step"]) &&
   value["ok"] === true &&
   typeof value["accountId"] === "string" &&
   (value["expiresAt"] === null || isTime(value["expiresAt"])) &&
   isFeeEstimate(value["fee"]) &&
   isTime(value["readyAt"]) &&
-  typeof value["replacesOwnerEscape"] === "boolean" &&
+  (value["replaces"] === null || isReplacedEscape(value["replaces"])) &&
   (value["step"] === "start" || value["step"] === "complete");
 
 /** A submitted recovery step: its hash and when the removal takes effect. */

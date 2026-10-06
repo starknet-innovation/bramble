@@ -209,7 +209,7 @@ describe("background account signability", () => {
     const window = {
       expiresAt: 1_600,
       guardianBackup: "absent" as const,
-      ownerEscapePending: false,
+      pendingChange: null,
       readyAt: 1_000,
     };
     const verdictFor = async (argentState: ArgentRecoveryState) =>
@@ -233,9 +233,11 @@ describe("background account signability", () => {
       securityPeriodSeconds: 600,
       status: "none" as const,
     };
-    expect(await verdictFor({ ...none, ownerEscapePending: false })).toBeUndefined();
+    expect(await verdictFor({ ...none, pendingChange: null })).toBeUndefined();
     // A guardian-approved key change in progress is reported, not read as none.
-    expect(await verdictFor({ ...none, ownerEscapePending: true })).toEqual({
+    expect(
+      await verdictFor({ ...none, pendingChange: { kind: "owner-escape", readyAt: 1_500 } }),
+    ).toEqual({
       delaySeconds: 600,
       pendingUntil: null,
       stage: "owner-escape",
@@ -250,7 +252,7 @@ describe("background account signability", () => {
             expiresAt: null,
             guardianBackup,
             // Precedence: the backup refusal wins even over an owner escape.
-            ownerEscapePending: true,
+            pendingChange: { kind: "owner-escape", readyAt: 1_500 },
             readyAt: null,
             securityPeriodSeconds: 600,
             status: "none",

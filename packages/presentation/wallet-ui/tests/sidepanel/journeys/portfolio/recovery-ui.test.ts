@@ -25,7 +25,7 @@ const BRAAVOS_REVIEW: RecoveryReview = {
   fee: { overallFee: "1500000000000000000", unit: "FRI" },
   ok: true,
   readyAt: 1_900_000_000,
-  replacesOwnerEscape: false,
+  replaces: null,
   step: "start",
 };
 const ARGENT_START: RecoveryReview = {
@@ -34,7 +34,7 @@ const ARGENT_START: RecoveryReview = {
   fee: { overallFee: "2000000000000000000", unit: "FRI" },
   ok: true,
   readyAt: 1_900_000_000,
-  replacesOwnerEscape: false,
+  replaces: null,
   step: "start",
 };
 
@@ -147,7 +147,10 @@ describe("recovery confirmation", () => {
   });
 
   test("states the Ready window, the cancel rule and an owner-escape warning", async () => {
-    const { app } = mount("guardian", { ...ARGENT_START, replacesOwnerEscape: true });
+    const { app } = mount("guardian", {
+      ...ARGENT_START,
+      replaces: { kind: "owner-escape", readyAt: 1_899_000_000 },
+    });
     await open(app);
     const panel = text(app);
     expect(panel).toContain("Remove the guardian from this account?");

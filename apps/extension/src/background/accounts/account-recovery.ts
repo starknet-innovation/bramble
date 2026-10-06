@@ -93,7 +93,7 @@ export const handleReviewBraavosRecovery = async (
     fee: review.fee,
     ok: true,
     readyAt: review.effectiveAfter,
-    replacesOwnerEscape: false,
+    replaces: null,
     step: "start",
   };
 };
@@ -121,7 +121,7 @@ export const handleReviewArgentRecovery = async (
     fee: review.fee,
     ok: true,
     readyAt: review.readyAt,
-    replacesOwnerEscape: review.replacesOwnerEscape,
+    replaces: review.replaces,
     step: review.step,
   };
 };
@@ -212,7 +212,9 @@ export const handleRecoverArgentAccount = async (
       ...context,
       ...extras,
       expectedStep: step,
-      ...(input.replaceOwnerEscape ? { replaceOwnerEscape: true } : {}),
+      ...(input.replaceEscapeReadyAt !== undefined
+        ? { replaceEscapeReadyAt: input.replaceEscapeReadyAt }
+        : {}),
       reviewedFee: input.reviewedFee,
     });
     return { pendingUntil: submitted.readyAt, transactionHash: submitted.transactionHash };

@@ -68,7 +68,7 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   {
     message: {
       accountId: account.id,
-      replaceOwnerEscape: true,
+      replaceEscapeReadyAt: 1_500,
       reviewedFee: { overallFee: "1", unit: "FRI" },
       step: "start",
       type: "wallet.recoverArgentAccount",

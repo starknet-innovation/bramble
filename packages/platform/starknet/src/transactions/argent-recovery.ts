@@ -61,6 +61,15 @@ const BACKUP_PRESENT =
 /** Refusal when the backup-guardian read failed: fail closed rather than revert on chain. */
 const BACKUP_UNCHECKED = "Could not check this account's backup guardian";
 
+/**
+ * A live escape that starting a removal cancels, identified by its `ready_at`
+ * so an acknowledgement covers that escape and not a later replacement.
+ */
+type PendingEscapeChange = {
+  readonly kind: "owner-escape";
+  readonly readyAt: number;
+};
+
 /** The step a confirmation offers: start the escape, or complete a ready one. */
 export type ArgentRecoveryStep = "complete" | "start";
 
@@ -68,8 +77,9 @@ export type ArgentRecoveryStep = "complete" | "start";
  * The guardian-escape state the Home flag and the submit step read.
  * `readyAt`/`expiresAt` bound the window in which a guardian escape can be
  * completed (`expiresAt = readyAt + securityPeriodSeconds`), null when none is
- * recorded. `ownerEscapePending` reports an un-expired OWNER escape — a key
- * replacement the guardian approved — which starting a guardian escape cancels.
+ * recorded. `pendingChange` reports a live escape that starting a removal
+ * would cancel — an OWNER escape (a key replacement the guardian approved) —
+ * with its `readyAt`, which identifies that exact escape for the confirmation.
  * `guardianBackup` is `present` when the account also has a backup guardian
  * (the phrase cannot remove the guardian then) and `unknown` when that read
  * failed; callers treat `unknown` as unavailable, never as absent.
@@ -77,7 +87,7 @@ export type ArgentRecoveryStep = "complete" | "start";
 export type ArgentRecoveryState = {
   readonly expiresAt: number | null;
   readonly guardianBackup: GuardianBackup;
-  readonly ownerEscapePending: boolean;
+  readonly pendingChange: PendingEscapeChange | null;
   readonly readyAt: number | null;
   readonly securityPeriodSeconds: number;
   readonly status: ArgentRecoveryStatus;
@@ -86,21 +96,22 @@ export type ArgentRecoveryState = {
 /**
  * What the confirmation states: the step, the maximum fee, the window in which
  * the removal can be completed (estimated from the latest block for a start,
- * the account's own for a completion), and whether starting cancels a pending
- * owner escape.
+ * the account's own for a completion), and the pending escape starting would
+ * cancel, if any.
  */
 export type ArgentRecoveryReview = {
   readonly expiresAt: number;
   readonly fee: FeeEstimate;
   readonly readyAt: number;
-  readonly replacesOwnerEscape: boolean;
+  readonly replaces: PendingEscapeChange | null;
   readonly step: ArgentRecoveryStep;
 };
 
 /**
  * Inputs shared by the Ready recovery review and submission. The submission
- * must name the `expectedStep` the user confirmed, and `replaceOwnerEscape`
- * when that confirmation acknowledged cancelling a pending owner escape.
+ * must name the `expectedStep` the user confirmed, and `replaceEscapeReadyAt`
+ * — the `readyAt` of the pending escape its confirmation warned about — when
+ * starting would cancel one; any other escape found at submit is refused.
  * `onSigned` receives the hash after signing and before broadcast.
  */
 export type ArgentRecoveryInput = {
@@ -108,7 +119,7 @@ export type ArgentRecoveryInput = {
   readonly expectedStep?: ArgentRecoveryStep;
   readonly isAuthorized?: () => boolean;
   readonly onSigned?: (transactionHash: string) => void;
-  readonly replaceOwnerEscape?: boolean;
+  readonly replaceEscapeReadyAt?: number;
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: AccountHashSigner;
@@ -194,12 +205,16 @@ const readEscapeState = async (
     status: "none" as const,
   };
   if (readyAt === 0n || status === "none") {
-    return { ...none, ownerEscapePending: false };
+    return { ...none, pendingChange: null };
   }
   if (escapeType === OWNER_ESCAPE_TYPE) {
     // An expired owner escape is inert; a live one is a key replacement in
     // progress that starting a guardian escape would cancel.
-    return { ...none, ownerEscapePending: status === "pending" || status === "ready" };
+    const live = status === "pending" || status === "ready";
+    return {
+      ...none,
+      pendingChange: live ? { kind: "owner-escape", readyAt: Number(readyAt) } : null,
+    };
   }
   if (escapeType !== GUARDIAN_ESCAPE_TYPE) {
     throw new WalletError("The account reported an unrecognised escape type");
@@ -207,7 +222,7 @@ const readEscapeState = async (
   return {
     expiresAt: Number(readyAt) + securityPeriodSeconds,
     guardianBackup,
-    ownerEscapePending: false,
+    pendingChange: null,
     readyAt: Number(readyAt),
     securityPeriodSeconds,
     status,
@@ -309,7 +324,7 @@ export const reviewArgentRecovery = async (
           expiresAt: state.expiresAt,
           fee,
           readyAt: state.readyAt,
-          replacesOwnerEscape: false,
+          replaces: null,
           step,
         };
       }
@@ -319,7 +334,7 @@ export const reviewArgentRecovery = async (
         expiresAt: readyAt + state.securityPeriodSeconds,
         fee,
         readyAt,
-        replacesOwnerEscape: state.ownerEscapePending,
+        replaces: state.pendingChange,
         step: "start",
       };
     },
@@ -329,8 +344,8 @@ export const reviewArgentRecovery = async (
 /**
  * Submits the confirmed escape step and returns its hash and the escape window
  * after it (null once completed). Refuses before signing when the live step
- * differs from `expectedStep`, when a pending owner escape was not explicitly
- * acknowledged, or when the fresh estimate exceeds the confirmed fee or the
+ * differs from `expectedStep`, when the pending escape found is not the one
+ * the confirmation acknowledged, or when the fresh estimate exceeds the confirmed fee or the
  * on-chain cap. Once the node has accepted the hash, any later failure is
  * indeterminate: the step may be on chain.
  */
@@ -358,7 +373,10 @@ export const submitArgentRecovery = async (
       if (step !== expectedStep) {
         throw new WalletError("The recovery step changed. Review it and try again.");
       }
-      if (step === "start" && state.ownerEscapePending && input.replaceOwnerEscape !== true) {
+      // The acknowledgement covers the exact escape the confirmation showed: a
+      // cancelled and re-triggered one has a different ready_at and is refused.
+      const pending = step === "start" ? state.pendingChange : null;
+      if (pending !== null && input.replaceEscapeReadyAt !== pending.readyAt) {
         throw new WalletError(
           "A guardian-approved key change is pending. Review it and try again.",
         );

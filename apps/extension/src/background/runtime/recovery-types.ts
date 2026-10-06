@@ -33,7 +33,7 @@ export type AccountRecoveryState = {
  * maximum fee the submission is held to, when the removal takes effect
  * (Braavos) or can be completed (Ready start; the escape's own time for a
  * completion), the end of Ready's completion window (null for Braavos), and
- * whether starting cancels a pending owner escape.
+ * the pending escape starting would cancel (identified by its `readyAt`), if any.
  */
 export type RecoveryReviewResponse = {
   readonly accountId: string;
@@ -41,7 +41,7 @@ export type RecoveryReviewResponse = {
   readonly fee: FeeEstimate;
   readonly ok: true;
   readonly readyAt: number;
-  readonly replacesOwnerEscape: boolean;
+  readonly replaces: { readonly kind: "owner-escape"; readonly readyAt: number } | null;
   readonly step: "complete" | "start";
 };
 

@@ -11,7 +11,7 @@ import { isAccountId } from "@bramble/wallet-model/accounts";
 /** A validated recovery submit request. */
 export type RecoveryInput = {
   readonly accountId: string;
-  readonly replaceOwnerEscape: boolean;
+  readonly replaceEscapeReadyAt?: number;
   readonly reviewedFee: FeeEstimate;
   readonly step?: "complete" | "start";
 };
@@ -27,7 +27,7 @@ export const readRecoveryInput = (
 ): RecoveryInput | null => {
   const argent = type === "wallet.recoverArgentAccount";
   const keys = argent
-    ? ["accountId", "replaceOwnerEscape", "reviewedFee", "step", "type"]
+    ? ["accountId", "replaceEscapeReadyAt", "reviewedFee", "step", "type"]
     : ["accountId", "reviewedFee", "type"];
   if (
     !isRecord(message) ||
@@ -39,12 +39,17 @@ export const readRecoveryInput = (
     return null;
   }
   const step = message["step"];
-  const replace = message["replaceOwnerEscape"];
+  const replace = message["replaceEscapeReadyAt"];
   if (step !== undefined && step !== "start" && step !== "complete") return null;
-  if (replace !== undefined && replace !== true) return null;
+  if (
+    replace !== undefined &&
+    (typeof replace !== "number" || !Number.isSafeInteger(replace) || replace <= 0)
+  ) {
+    return null;
+  }
   return {
     accountId: message["accountId"],
-    replaceOwnerEscape: replace === true,
+    ...(typeof replace === "number" ? { replaceEscapeReadyAt: replace } : {}),
     reviewedFee: message["reviewedFee"],
     ...(step !== undefined ? { step } : {}),
   };
