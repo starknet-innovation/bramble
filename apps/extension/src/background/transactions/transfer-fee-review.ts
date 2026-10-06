@@ -23,13 +23,18 @@ export type WalletFundedFeeReview = {
 
 /**
  * Estimates the exact invoke and, when required, the counterfactual account
- * deployment. Neither estimate signs or broadcasts; an unreadable deployment
- * status or either missing component fails the combined review closed.
+ * deployment. Nothing is broadcast; an unreadable deployment status or either
+ * missing component fails the combined review closed.
  *
  * An undeployed Braavos account is the one exception that throws: it can only
  * deploy through its own reviewed step, so the review rejects with
  * {@link UndeployedBraavosError} (whose message says to deploy first) rather
- * than degrading to a retryable "fee unavailable" no retry can fix.
+ * than degrading to a retryable "fee unavailable" no retry can fix. That
+ * refusal comes before either estimate on purpose: a Braavos deployment
+ * estimate signs a query-version deploy with the account key (its constructor
+ * validates even then), whereas the estimates that do run here sign nothing
+ * private — Argent validates on a mock query signature, other families skip
+ * validation.
  */
 export const reviewWalletFundedFees = async (
   runtimeRpc: RuntimeRpc,
