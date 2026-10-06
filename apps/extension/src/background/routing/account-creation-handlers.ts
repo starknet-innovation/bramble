@@ -5,6 +5,7 @@
  * return null without echoing secrets, and every handler fails closed when
  * the wallet surface is unavailable.
  */
+import { WalletError } from "@bramble/core/errors";
 import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import {
   readCreateAccountInput,
@@ -145,7 +146,7 @@ const handleImportOwnAccounts: RouterHandler = async (ctx, messageType, message)
         const vault = await ctx.wallet.readVault(vaultPassphrase);
         const foundingPhrase = vault.mnemonic;
         if (foundingPhrase === null) {
-          throw new Error("This wallet has no recovery phrase");
+          throw new WalletError("This wallet has no recovery phrase to scan");
         }
         return importSeedAccounts({
           mnemonic: foundingPhrase,

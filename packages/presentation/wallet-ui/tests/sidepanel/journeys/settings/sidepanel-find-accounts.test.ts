@@ -6,7 +6,12 @@
  * recoverAccounts, and never the foreign-phrase import).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { findAccountsFlow } from "../../../../src/sidepanel/app/screens/flows";
@@ -41,6 +46,23 @@ const accountAt = (accountIndex: number): DerivedAccountRef =>
     publicKeyY: "0x4",
   }) as DerivedAccountRef;
 
+// A Ready (Argent X) account on the vendor's ETH-seeded ladder: x-only key,
+// stepped on the address axis, at an older Argent release (issue 505).
+const READY_CLASS =
+  deploymentClasses("argent").find((entry) => !sameFelt(entry.classHash, ARGENT_ACCOUNT_CLASS_HASH))
+    ?.classHash ?? "";
+const readyAt = (addressIndex: number): DerivedAccountRef =>
+  ({
+    accountContractType: "argent",
+    address: `0x${addressIndex + 50}def`,
+    classHash: READY_CLASS,
+    deploymentSalt: "0x0",
+    derivation: { addressIndex, kind: "argentx-bip44" },
+    id: `SN_MAIN:0x${addressIndex + 50}def`,
+    networkId: "SN_MAIN",
+    publicKeyX: "0x5",
+  }) as unknown as DerivedAccountRef;
+
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 const click = (root: ParentNode, selector: string): void => {
@@ -51,7 +73,12 @@ const click = (root: ParentNode, selector: string): void => {
   button.click();
 };
 
-const mount = () => {
+const mount = (
+  candidates: readonly { readonly account: DerivedAccountRef }[] = [
+    { account: accountAt(0) },
+    { account: accountAt(1) },
+  ],
+) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(findAccountsFlow(status)));
@@ -65,10 +92,7 @@ const mount = () => {
     discoverOwnAccounts(networkId: string, manualIndex?: number) {
       scans.push([networkId, manualIndex]);
       return Promise.resolve({
-        candidates: [
-          { account: accountAt(0), deployed: true, funded: false },
-          { account: accountAt(1), deployed: true, funded: false },
-        ],
+        candidates: candidates.map(({ account }) => ({ account, deployed: true, funded: false })),
         complete: true,
         nextIndex: 20,
         ok: true as const,
@@ -153,5 +177,40 @@ describe("find-accounts flow", () => {
     expect(flow.recoveries).toEqual([]);
     expect(flow.foreignImports).toEqual([]);
     expect(flow.renders()).toBe(1);
+  });
+
+  test("commits a Ready account with its class and the vendor's ladder", async () => {
+    expect(READY_CLASS).not.toBe("");
+    const flow = mount([{ account: accountAt(0) }, { account: readyAt(2) }]);
+    click(flow.app, "#find-accounts-search");
+    await tick();
+    await tick();
+    const ready = Array.from(
+      flow.app.querySelectorAll<HTMLInputElement>(
+        '[data-recovery-group="argent"] input.select-check',
+      ),
+    );
+    expect(ready.length).toBe(1);
+    expect(ready[0]?.checked).toBe(true);
+    click(flow.app, "#recover-accounts-button");
+    await tick();
+
+    // The selection names the release and the scheme, so the vault re-derives
+    // on Ready's ladder rather than this wallet's own.
+    expect(flow.imports).toEqual([
+      [
+        "SN_MAIN",
+        [
+          {
+            accountContractType: "argent",
+            accountIndex: 2,
+            classHash: READY_CLASS,
+            derivation: "argentx-bip44",
+          },
+        ],
+      ],
+    ]);
+    expect(flow.recoveries).toEqual([]);
+    expect(flow.foreignImports).toEqual([]);
   });
 });

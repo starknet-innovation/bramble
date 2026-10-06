@@ -38,7 +38,7 @@ import { runVaultCreationWithNetwork } from "../runtime/active-network-mutation"
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
 import type { RecoveryDiscoveryCache } from "./recovery-cache";
 
 type OnboardingOpsDeps = {
@@ -177,6 +177,10 @@ const runRecoveryDiscovery = async (
     readonly mnemonic: string;
     readonly networkId: StarknetNetworkId;
   },
+  // Re-checked between indices when the phrase came from the unlocked vault: a
+  // lock mid-scan stops the walk, so the phrase is not held across further
+  // chain round-trips and nothing is cached under a session that has ended.
+  stillAuthorized: () => boolean = () => true,
 ): Promise<RuntimeResponse> => {
   const fingerprintAccount = await discoveryFingerprint(deps, input);
   if (!fingerprintAccount) return { error: "account discovery is unavailable" };
@@ -209,6 +213,7 @@ const runRecoveryDiscovery = async (
     );
   const discovered: RecoveryAccountCandidate[] = [];
   for (let accountIndex = start; accountIndex <= end; accountIndex += 1) {
+    if (!stillAuthorized()) return { error: "wallet locked" };
     const candidates = await scanRecoveryIndex(deps, input, accountIndex, tokens, rpcUrls);
     discovered.push(
       ...candidates.filter(
@@ -223,6 +228,7 @@ const runRecoveryDiscovery = async (
   for (const candidate of discovered) byId.set(candidate.account.id, candidate);
   const nextIndex = manual === undefined ? end + 1 : snapshot.nextIndex;
   const next = { ...snapshot, candidates: [...byId.values()], nextIndex };
+  if (!stillAuthorized()) return { error: "wallet locked" };
   await deps.recoveryDiscovery.write(next).catch(() => undefined);
   return {
     candidates: next.candidates,
@@ -255,16 +261,22 @@ const discoverOwnAccounts = async (
   // getPassphrase renews the inactivity window: this scan is user-initiated.
   const vaultPassphrase = deps.session.getPassphrase();
   if (!vaultPassphrase) return { error: "wallet locked" };
-  const vault = await deps.wallet.readVault(vaultPassphrase);
-  const mnemonic = vault.mnemonic;
+  const authorized = captureSessionAuthorization(deps.session);
+  // Keep only the phrase: the decrypted vault (signing keys included) is not
+  // held across the scan's chain round-trips.
+  const { mnemonic } = await deps.wallet.readVault(vaultPassphrase);
   if (mnemonic === null) {
     return { error: "This wallet has no recovery phrase to scan" };
   }
-  return runRecoveryDiscovery(deps, {
-    ...(input.manualIndex === undefined ? {} : { manualIndex: input.manualIndex }),
-    mnemonic,
-    networkId: input.networkId,
-  });
+  return runRecoveryDiscovery(
+    deps,
+    {
+      ...(input.manualIndex === undefined ? {} : { manualIndex: input.manualIndex }),
+      mnemonic,
+      networkId: input.networkId,
+    },
+    authorized.isCurrent,
+  );
 };
 
 const recoverAccounts = async (
