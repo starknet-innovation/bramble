@@ -205,10 +205,20 @@ describe("argent recovery submit", () => {
     expect(silent.doubles.executes).toHaveLength(0);
     // An acknowledgement for another escape (cancelled and re-triggered since
     // the review, so a different ready_at) does not cover this one.
-    const stale = submit(OWNER_ESCAPE, "start", { replaceEscapeReadyAt: READY_AT - 1 });
+    const stale = submit(OWNER_ESCAPE, "start", {
+      replaceEscape: { kind: "owner-escape", readyAt: READY_AT - 1 },
+    });
     await expect(stale.result).rejects.toThrow("key change is pending");
     expect(stale.doubles.executes).toHaveLength(0);
-    const acknowledged = submit(OWNER_ESCAPE, "start", { replaceEscapeReadyAt: READY_AT });
+    // Nor does one for another kind of change at the same ready_at.
+    const wrongKind = submit(OWNER_ESCAPE, "start", {
+      replaceEscape: { kind: "guardian-change", readyAt: READY_AT },
+    });
+    await expect(wrongKind.result).rejects.toThrow("key change is pending");
+    expect(wrongKind.doubles.executes).toHaveLength(0);
+    const acknowledged = submit(OWNER_ESCAPE, "start", {
+      replaceEscape: { kind: "owner-escape", readyAt: READY_AT },
+    });
     await acknowledged.result;
     expect(acknowledged.doubles.executes.map((entry) => entry.call)).toEqual([TRIGGER]);
   });

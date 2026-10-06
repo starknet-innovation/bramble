@@ -72,7 +72,9 @@ describe("argent recovery guardian change (escape to a new guardian)", () => {
     const silent = submit(GUARDIAN_CHANGE, "start");
     await expect(silent.result).rejects.toThrow("A guardian change is pending");
     expect(silent.doubles.executes).toHaveLength(0);
-    const acknowledged = submit(GUARDIAN_CHANGE, "start", { replaceEscapeReadyAt: READY_AT });
+    const acknowledged = submit(GUARDIAN_CHANGE, "start", {
+      replaceEscape: { kind: "guardian-change", readyAt: READY_AT },
+    });
     await acknowledged.result;
     expect(acknowledged.doubles.executes.map((entry) => entry.call)).toEqual([TRIGGER]);
   });

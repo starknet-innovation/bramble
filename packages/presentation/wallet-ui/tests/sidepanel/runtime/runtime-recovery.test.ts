@@ -87,11 +87,19 @@ describe("recovery runtime client", () => {
     expect(warned.sent).toEqual([
       {
         accountId: REVIEW.accountId,
-        replaceEscapeReadyAt: 1_500,
+        replaceEscape: { kind: "owner-escape", readyAt: 1_500 },
         reviewedFee: REVIEW.fee,
         step: "start",
         type: "wallet.recoverArgentAccount",
       },
+    ]);
+    const change = clientReplying(SUBMITTED);
+    await change.client.recoverArgentAccount({
+      ...REVIEW,
+      replaces: { kind: "guardian-change", readyAt: 1_600 },
+    });
+    expect(change.sent).toMatchObject([
+      { replaceEscape: { kind: "guardian-change", readyAt: 1_600 } },
     ]);
     const plain = clientReplying(SUBMITTED);
     await plain.client.recoverArgentAccount({ ...REVIEW, replaces: null });

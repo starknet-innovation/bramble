@@ -11,10 +11,22 @@ import { isAccountId } from "@bramble/wallet-model/accounts";
 /** A validated recovery submit request. */
 export type RecoveryInput = {
   readonly accountId: string;
-  readonly replaceEscapeReadyAt?: number;
+  readonly replaceEscape?: {
+    readonly kind: "guardian-change" | "owner-escape";
+    readonly readyAt: number;
+  };
   readonly reviewedFee: FeeEstimate;
   readonly step?: "complete" | "start";
 };
+
+// The acknowledged escape: exactly its kind and a positive whole ready_at.
+const isReplacedEscape = (value: unknown): value is RecoveryInput["replaceEscape"] =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["kind", "readyAt"]) &&
+  (value["kind"] === "owner-escape" || value["kind"] === "guardian-change") &&
+  typeof value["readyAt"] === "number" &&
+  Number.isSafeInteger(value["readyAt"]) &&
+  value["readyAt"] > 0;
 
 /**
  * Parses a recovery submit message of `type`, or returns null. The Braavos
@@ -27,7 +39,7 @@ export const readRecoveryInput = (
 ): RecoveryInput | null => {
   const argent = type === "wallet.recoverArgentAccount";
   const keys = argent
-    ? ["accountId", "replaceEscapeReadyAt", "reviewedFee", "step", "type"]
+    ? ["accountId", "replaceEscape", "reviewedFee", "step", "type"]
     : ["accountId", "reviewedFee", "type"];
   if (
     !isRecord(message) ||
@@ -39,17 +51,12 @@ export const readRecoveryInput = (
     return null;
   }
   const step = message["step"];
-  const replace = message["replaceEscapeReadyAt"];
+  const replace = message["replaceEscape"];
   if (step !== undefined && step !== "start" && step !== "complete") return null;
-  if (
-    replace !== undefined &&
-    (typeof replace !== "number" || !Number.isSafeInteger(replace) || replace <= 0)
-  ) {
-    return null;
-  }
+  if (replace !== undefined && !isReplacedEscape(replace)) return null;
   return {
     accountId: message["accountId"],
-    ...(typeof replace === "number" ? { replaceEscapeReadyAt: replace } : {}),
+    ...(replace !== undefined ? { replaceEscape: replace } : {}),
     reviewedFee: message["reviewedFee"],
     ...(step !== undefined ? { step } : {}),
   };

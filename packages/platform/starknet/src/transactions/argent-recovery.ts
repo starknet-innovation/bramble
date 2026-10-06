@@ -87,9 +87,9 @@ export type ArgentRecoveryReview = {
 
 /**
  * Inputs shared by the Ready recovery review and submission. The submission
- * must name the `expectedStep` the user confirmed, and `replaceEscapeReadyAt`
- * — the `readyAt` of the pending escape its confirmation warned about — when
- * starting would cancel one; any other escape found at submit is refused.
+ * must name the `expectedStep` the user confirmed, and `replaceEscape` — the
+ * kind and `readyAt` of the pending escape its confirmation warned about —
+ * when starting would cancel one; any other escape found at submit is refused.
  * `onSigned` receives the hash after signing and before broadcast.
  */
 export type ArgentRecoveryInput = {
@@ -97,7 +97,7 @@ export type ArgentRecoveryInput = {
   readonly expectedStep?: ArgentRecoveryStep;
   readonly isAuthorized?: () => boolean;
   readonly onSigned?: (transactionHash: string) => void;
-  readonly replaceEscapeReadyAt?: number;
+  readonly replaceEscape?: PendingEscapeChange;
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: AccountHashSigner;
@@ -206,19 +206,23 @@ const estimateStep = (
     });
 
 // The live step, refused unless it is the one the user confirmed and, when it
-// cancels a pending escape, the acknowledgement names that exact escape (a
-// cancelled and re-triggered one has a different ready_at).
+// cancels a pending escape, the acknowledgement names that exact escape: its
+// kind (an owner escape is not a guardian change) and its ready_at (a
+// cancelled and re-triggered one has a different one).
 const confirmedStep = (
   state: ArgentRecoveryState,
   expectedStep: ArgentRecoveryStep,
-  replaceEscapeReadyAt: number | undefined,
+  replaceEscape: PendingEscapeChange | undefined,
 ): ArgentRecoveryStep => {
   const step = nextStep(state.status);
   if (step !== expectedStep) {
     throw new WalletError("The recovery step changed. Review it and try again.");
   }
   const pending = step === "start" ? state.pendingChange : null;
-  if (pending !== null && replaceEscapeReadyAt !== pending.readyAt) {
+  if (
+    pending !== null &&
+    (replaceEscape?.kind !== pending.kind || replaceEscape.readyAt !== pending.readyAt)
+  ) {
     throw new WalletError(
       pending.kind === "owner-escape"
         ? "A guardian-approved key change is pending. Review it and try again."
@@ -295,7 +299,7 @@ export const submitArgentRecovery = async (
         throw new WalletError("The recovery was not reviewed. Review it and try again.");
       }
       const { step } = await recoverableStep(provider, account, (live) =>
-        confirmedStep(live, expectedStep, input.replaceEscapeReadyAt),
+        confirmedStep(live, expectedStep, input.replaceEscape),
       );
       const estimate = await estimateStep(provider, account, step, makeQueryAccount);
       requireWithinReviewedRecoveryFee(estimate, reviewedFee, MAX_ESCAPE_FEE_FRI);

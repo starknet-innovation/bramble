@@ -228,7 +228,10 @@ export const submit = (
   options: {
     readonly accepts?: string;
     readonly isAuthorized?: () => boolean;
-    readonly replaceEscapeReadyAt?: number;
+    readonly replaceEscape?: {
+      readonly kind: "guardian-change" | "owner-escape";
+      readonly readyAt: number;
+    };
     readonly reviewed?: string;
     readonly spend?: bigint;
     readonly subject?: AccountRef;
@@ -244,9 +247,7 @@ export const submit = (
         ...(step ? { expectedStep: step } : {}),
         ...(options.isAuthorized ? { isAuthorized: options.isAuthorized } : {}),
         onSigned: (hash) => signed.push(hash),
-        ...(options.replaceEscapeReadyAt !== undefined
-          ? { replaceEscapeReadyAt: options.replaceEscapeReadyAt }
-          : {}),
+        ...(options.replaceEscape !== undefined ? { replaceEscape: options.replaceEscape } : {}),
         reviewedFee: { overallFee: options.reviewed ?? "1500000000000000", unit: "FRI" },
         rpcUrls: RPC,
         signHash,

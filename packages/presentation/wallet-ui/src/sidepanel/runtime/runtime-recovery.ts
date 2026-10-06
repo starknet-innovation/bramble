@@ -45,14 +45,15 @@ export const createRecoveryRuntimeClient = (
     throw responseError(response, "second factor removal unavailable");
   },
   /**
-   * Submits the confirmed Ready escape step. `replaceEscapeReadyAt` names the
-   * exact pending escape the confirmation warned about, and is sent only then.
+   * Submits the confirmed Ready escape step. `replaceEscape` names the exact
+   * pending escape (kind and readyAt) the confirmation warned about, and is
+   * sent only then.
    */
   async recoverArgentAccount(review: RecoveryReview): Promise<RecoverAccountResponse> {
     const response = await sendMessage({
       accountId: review.accountId,
       ...(review.step === "start" && review.replaces !== null
-        ? { replaceEscapeReadyAt: review.replaces.readyAt }
+        ? { replaceEscape: { kind: review.replaces.kind, readyAt: review.replaces.readyAt } }
         : {}),
       reviewedFee: review.fee,
       step: review.step,

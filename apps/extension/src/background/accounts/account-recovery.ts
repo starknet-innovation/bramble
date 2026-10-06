@@ -212,9 +212,7 @@ export const handleRecoverArgentAccount = async (
       ...context,
       ...extras,
       expectedStep: step,
-      ...(input.replaceEscapeReadyAt !== undefined
-        ? { replaceEscapeReadyAt: input.replaceEscapeReadyAt }
-        : {}),
+      ...(input.replaceEscape !== undefined ? { replaceEscape: input.replaceEscape } : {}),
       reviewedFee: input.reviewedFee,
     });
     return { pendingUntil: submitted.readyAt, transactionHash: submitted.transactionHash };

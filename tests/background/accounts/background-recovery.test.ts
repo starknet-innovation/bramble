@@ -235,11 +235,14 @@ describe("recovery submissions", () => {
 
   test("pass the confirmed step and owner-escape acknowledgement for Ready", async () => {
     const { activity, calls, send } = harness(argent);
-    await send(argentSubmit({ replaceEscapeReadyAt: 1_500 }));
-    expect(calls.argent[0]).toMatchObject({ expectedStep: "start", replaceEscapeReadyAt: 1_500 });
+    await send(argentSubmit({ replaceEscape: { kind: "guardian-change", readyAt: 1_500 } }));
+    expect(calls.argent[0]).toMatchObject({
+      expectedStep: "start",
+      replaceEscape: { kind: "guardian-change", readyAt: 1_500 },
+    });
     await send(argentSubmit({ step: "complete" }));
     expect(calls.argent[1]?.expectedStep).toBe("complete");
-    expect(calls.argent[1]?.replaceEscapeReadyAt).toBeUndefined();
+    expect(calls.argent[1]?.replaceEscape).toBeUndefined();
     expect((await activity.list()).map((entry) => entry.summary).sort()).toEqual([
       "Complete guardian removal",
       "Start guardian removal",
@@ -250,9 +253,17 @@ describe("recovery submissions", () => {
     const { calls, send } = harness(argent);
     const invalid = { error: "invalid account recovery request" };
     expect(await send(argentSubmit({ step: undefined }))).toEqual(invalid);
-    expect(await send(argentSubmit({ replaceEscapeReadyAt: true }))).toEqual(invalid);
-    expect(await send(argentSubmit({ replaceEscapeReadyAt: 0 }))).toEqual(invalid);
-    expect(await send(argentSubmit({ replaceEscapeReadyAt: 1.5 }))).toEqual(invalid);
+    for (const replaceEscape of [
+      true,
+      1_500,
+      { readyAt: 1_500 },
+      { kind: "other", readyAt: 1_500 },
+      { kind: "owner-escape", readyAt: 0 },
+      { kind: "owner-escape", readyAt: 1.5 },
+      { kind: "owner-escape", readyAt: 1_500, extra: true },
+    ]) {
+      expect(await send(argentSubmit({ replaceEscape }))).toEqual(invalid);
+    }
     expect(await send(argentSubmit({ step: "cancel" }))).toEqual(invalid);
     expect(await send(argentSubmit({ reviewedFee: undefined }))).toEqual(invalid);
     expect(await send({ ...argentSubmit(), accountId: undefined })).toEqual(invalid);
