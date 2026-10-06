@@ -41,8 +41,10 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('data-view="receive"');
     expect(html).toContain('aria-controls="wallet-screen-home"');
     expect(html).toContain('aria-selected="true"');
-    expect(dock).toContain('aria-label="Home" title="Home"');
-    expect(dock).not.toContain('class="nav-label"');
+    // Each root is named by a visible caption, not a hover-only tooltip.
+    expect(dock).toContain('aria-label="Home" aria-controls="wallet-screen-home"');
+    expect(dock).toContain('<span class="nav-label">Home</span>');
+    expect(dock).not.toContain('title="Home"');
     expect(dock).not.toContain('class="nav-tooltip"');
   });
 

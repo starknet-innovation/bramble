@@ -426,15 +426,15 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toContain("terminal-cta");
   });
 
-  test("the icon-only dock carries state on the root disc, never on the glyph", () => {
-    // Roots are 44px discs: muted ink at rest, text ink on hover, and the
-    // selected root on the accent's soft tint. The glyph wrapper itself never
-    // gains a surface, and there is no visible caption or custom tooltip.
+  test("the labelled dock carries state on the root capsule, never on the glyph", () => {
+    // Roots are 44px-tall capsules: muted ink at rest, text ink on hover, and
+    // the selected root on the accent's soft tint. Each root shows a visible
+    // caption under the glyph; the glyph wrapper itself never gains a surface.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item \{[^}]*color: var\(--bramble-muted\)[^}]*height: 44px[^}]*width: 44px/s,
+      /button\.nav-item \{[^}]*color: var\(--bramble-muted\)[^}]*height: 44px[^}]*min-width: 44px/s,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*box-shadow/);
-    expect(SIDEPANEL_STYLES).not.toContain(".nav-label");
+    expect(SIDEPANEL_STYLES).toMatch(/\.nav-label \{[^}]*font-size: 12px/s);
     expect(SIDEPANEL_STYLES).not.toContain(".nav-tooltip");
     expect(SIDEPANEL_STYLES).not.toMatch(/\.tab-icon[^{}]*\{[^}]*background/s);
   });

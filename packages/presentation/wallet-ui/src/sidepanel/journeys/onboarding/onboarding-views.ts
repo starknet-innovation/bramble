@@ -382,19 +382,14 @@ const accountStep = (): string => `
     ${flowBack("Back to passphrase")}
     ${stepHead("wallet", "Review your account")}
     <div class="onboarding-fields">
-      <button
-        class="onboarding-account"
-        id="account-preview"
-        type="button"
-        aria-pressed="false"
-      >
+      <div class="onboarding-account" id="account-preview">
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
           <strong data-preview-label>Primary Bramble account</strong>
           <span data-preview-address>Deriving account…</span>
         </span>
-        <span class="onboarding-account-check">${icon("check")}</span>
-      </button>
+        <span class="onboarding-account-check" aria-hidden="true">${icon("check")}</span>
+      </div>
       ${networkConsequence()}
       <p id="form-result" role="status"></p>
     </div>
@@ -402,7 +397,7 @@ const accountStep = (): string => `
       ${button({
         attributes: { id: "create-wallet-button" },
         disabled: true,
-        label: "Add selected account",
+        label: "Finish setup",
         type: "submit",
       })}
     </div>

@@ -46,12 +46,11 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
    create the wallet until the words match.
 4. Set a **vault passphrase** of at least **12 characters**. This encrypts the
    wallet on *this* device; it is not your recovery phrase.
-5. Review and explicitly select the derived account. Bramble supports both
-   account models; **OpenZeppelin Account** is the recommended default and
-   **Argent Account** remains available. Setup defaults to Starknet Mainnet, so
-   tick the **real-funds acknowledgement**.
-6. Press **Add selected account**, then open the side-panel wallet from the
-   completion screen.
+5. Review the derived account. Bramble supports both account models;
+   **OpenZeppelin Account** is the recommended default and **Argent Account**
+   remains available. Setup defaults to Starknet Mainnet.
+6. Press **Finish setup**, then open the side-panel wallet from the completion
+   screen.
 
 ### Restore an existing wallet
 
@@ -59,9 +58,9 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
 2. Enter the 12 or 24 words individually, or paste the complete phrase into the
    first field.
 3. Set and confirm a vault passphrase of at least 12 characters.
-4. Review and select the derived account, accept the Mainnet real-funds
-   acknowledgement, and press **Add selected account**. Invalid recovery data
-   fails closed and remains on the current step for correction.
+4. Select the accounts to restore and press **Restore selected accounts**.
+   Invalid recovery data fails closed and remains on the current step for
+   correction.
 
 ### Unlocking later
 
@@ -230,7 +229,7 @@ keys.
 ### FAQ
 
 - **I closed the panel mid-setup — did I lose anything?** No. If you had not
-  pressed **Add selected account** successfully, no wallet was written. Reopen
+  pressed **Finish setup** successfully, no wallet was written. Reopen
   and start again; no draft phrase or passphrase is kept.
 - **Why is my new account "not deployed"?** Deployment is a separate on-chain
   step from the dashboard, done when you choose — creating the wallet does not
