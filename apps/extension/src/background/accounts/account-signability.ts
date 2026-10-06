@@ -124,6 +124,15 @@ const recoveryState = async (
     .catch(() => undefined);
   if (!state) return undefined;
   const delaySeconds = state.securityPeriodSeconds;
+  // A backup guardian blocks the phrase escape outright; an unanswered read
+  // is treated the same way (no Recover button), never as "no backup".
+  if (state.guardianBackup !== "absent") {
+    return {
+      delaySeconds,
+      pendingUntil: null,
+      stage: state.guardianBackup === "present" ? "backup-guardian" : "backup-unknown",
+    };
+  }
   // A guardian-approved key change in progress is surfaced, never read as
   // "nothing pending": starting a guardian escape would cancel it.
   if (state.ownerEscapePending) {

@@ -48,6 +48,8 @@ const ledgerAccount = {
 } as unknown as AccountRef;
 
 type Chain = {
+  /** get_guardian_backup's answer, or a contract revert / empty answer. */
+  readonly backup?: string | "empty" | "revert";
   readonly escapeType?: string;
   readonly guardian?: string;
   readonly owner?: string;
@@ -81,6 +83,12 @@ const providerWith = (chain: Chain = {}): RpcProvider => {
           return [chain.ownerType ?? "0x0"];
         case "get_guardian":
           return [chain.guardian ?? "0xabc"];
+        case "get_guardian_backup":
+          if (chain.backup === "revert") {
+            // A node that answered: a contract-level failure, not transport.
+            throw Object.assign(new Error("argent/only_guid"), { baseError: { code: 40 } });
+          }
+          return chain.backup === "empty" ? [] : [chain.backup ?? "0x0"];
         case "get_escape_security_period":
           return [chain.period ?? hex(WEEK)];
         case "get_escape_and_status":
@@ -208,13 +216,19 @@ describe("argent recovery state", () => {
       );
     const none = {
       expiresAt: null,
+      guardianBackup: "absent" as const,
       ownerEscapePending: false,
       readyAt: null,
       securityPeriodSeconds: WEEK,
       status: "none" as const,
     };
     expect(await read({})).toEqual(none);
-    const window = { expiresAt: READY_AT + WEEK, ownerEscapePending: false, readyAt: READY_AT };
+    const window = {
+      expiresAt: READY_AT + WEEK,
+      guardianBackup: "absent" as const,
+      ownerEscapePending: false,
+      readyAt: READY_AT,
+    };
     expect(await read(PENDING)).toEqual({
       ...window,
       securityPeriodSeconds: WEEK,
@@ -246,6 +260,44 @@ describe("argent recovery state", () => {
       ownerEscapePending: false,
     });
     await expect(read({ ...PENDING, status: "0x9" })).rejects.toThrow("unrecognised escape status");
+  });
+});
+
+describe("argent recovery backup guardian", () => {
+  const read = (chain: Chain) =>
+    getArgentRecoveryState({ accountAddress: account.address, rpcUrls: RPC }, () =>
+      providerWith(chain),
+    );
+
+  test("the state reports a backup guardian, and an unanswered read as unknown", async () => {
+    expect((await read({ backup: "0xb4c" })).guardianBackup).toBe("present");
+    expect((await read({ backup: "revert" })).guardianBackup).toBe("unknown");
+    expect((await read({ backup: "empty" })).guardianBackup).toBe("unknown");
+  });
+
+  test("review refuses before estimating, and fails closed when the read fails", async () => {
+    const present = review({ backup: "0xb4c" });
+    await expect(present.result).rejects.toThrow("has a backup guardian");
+    expect(present.doubles.estimates).toHaveLength(0);
+    for (const backup of ["revert", "empty"] as const) {
+      const unchecked = review({ backup });
+      await expect(unchecked.result).rejects.toThrow(
+        "Could not check this account's backup guardian",
+      );
+      expect(unchecked.doubles.estimates).toHaveLength(0);
+    }
+  });
+
+  test("submit refuses before signing, for either step", async () => {
+    for (const [chain, step] of [
+      [{ backup: "0xb4c" }, "start"],
+      [{ ...READY, backup: "0xb4c" }, "complete"],
+      [{ backup: "revert" }, "start"],
+    ] as const) {
+      const refused = submit(chain, step);
+      await expect(refused.result).rejects.toThrow(/backup guardian/);
+      expect(refused.doubles.executes).toHaveLength(0);
+    }
   });
 });
 

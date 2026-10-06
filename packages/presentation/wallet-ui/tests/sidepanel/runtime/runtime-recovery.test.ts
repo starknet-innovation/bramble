@@ -126,7 +126,14 @@ describe("recovery reply validators", () => {
 
   test("accept the recovery state stages and nothing else", () => {
     expect(isRecoveryState({ delaySeconds: 1, pendingUntil: null })).toBe(true);
-    for (const stage of ["expired", "owner-escape", "pending", "ready"]) {
+    for (const stage of [
+      "backup-guardian",
+      "backup-unknown",
+      "expired",
+      "owner-escape",
+      "pending",
+      "ready",
+    ]) {
       expect(isRecoveryState({ delaySeconds: 1, expiresAt: 3, pendingUntil: 2, stage })).toBe(true);
     }
     expect(isRecoveryState({ delaySeconds: 1, pendingUntil: 2, stage: "cancelled" })).toBe(false);

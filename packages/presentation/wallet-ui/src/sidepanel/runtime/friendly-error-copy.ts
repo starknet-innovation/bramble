@@ -215,6 +215,16 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "account recovery is not available for ledger accounts",
     "Removing 2FA or a guardian isn't available for Ledger accounts.",
   ],
+  // A Ready account with a backup guardian cannot escape its guardian to none
+  // (argent-recovery.ts refuses before the account would revert).
+  [
+    "this account has a backup guardian, so the guardian cannot be removed with the recovery phrase",
+    "This account has a backup guardian, so the recovery phrase can't remove its guardian.",
+  ],
+  [
+    "could not check this account's backup guardian",
+    "Couldn't check this account's backup guardian. Try again.",
+  ],
   // The confirmation was reviewed for another account than the active one.
   [
     "the active account changed. review the recovery again.",

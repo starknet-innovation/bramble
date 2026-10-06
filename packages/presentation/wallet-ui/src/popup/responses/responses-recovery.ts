@@ -14,17 +14,31 @@ const isTime = (value: unknown): value is number =>
  * A recoverable read-only account's on-chain recovery state for the Home flag.
  * `pendingUntil` is when a running removal takes effect (Braavos) or can be
  * completed (Ready); `expiresAt` closes Ready's completion window; `stage` is
- * Ready-only: the escape's status, or `owner-escape` when a guardian-approved
- * key change is pending.
+ * Ready-only: the escape's status, `owner-escape` when a guardian-approved key
+ * change is pending, or `backup-guardian` / `backup-unknown` when a backup
+ * guardian (or a failed read of it) makes the phrase escape unavailable.
  */
 export type RecoveryState = {
   readonly delaySeconds: number;
   readonly expiresAt?: number;
   readonly pendingUntil: number | null;
-  readonly stage?: "expired" | "owner-escape" | "pending" | "ready";
+  readonly stage?:
+    | "backup-guardian"
+    | "backup-unknown"
+    | "expired"
+    | "owner-escape"
+    | "pending"
+    | "ready";
 };
 
-const RECOVERY_STAGES: readonly unknown[] = ["expired", "owner-escape", "pending", "ready"];
+const RECOVERY_STAGES: readonly unknown[] = [
+  "backup-guardian",
+  "backup-unknown",
+  "expired",
+  "owner-escape",
+  "pending",
+  "ready",
+];
 
 /** Validates the recovery state a signability verdict carries. */
 export const isRecoveryState = (value: unknown): value is RecoveryState =>

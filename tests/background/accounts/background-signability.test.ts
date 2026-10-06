@@ -206,7 +206,12 @@ describe("background account signability", () => {
   });
 
   test("carries a Ready escape's stage and window from chain, never forcing a stage", async () => {
-    const window = { expiresAt: 1_600, ownerEscapePending: false, readyAt: 1_000 };
+    const window = {
+      expiresAt: 1_600,
+      guardianBackup: "absent" as const,
+      ownerEscapePending: false,
+      readyAt: 1_000,
+    };
     const verdictFor = async (argentState: ArgentRecoveryState) =>
       (
         (await makeHandler(argentAccount, { argentState, probe: "guardian" }).ask()) as {
@@ -223,6 +228,7 @@ describe("background account signability", () => {
     }
     const none = {
       expiresAt: null,
+      guardianBackup: "absent" as const,
       readyAt: null,
       securityPeriodSeconds: 600,
       status: "none" as const,
@@ -234,5 +240,26 @@ describe("background account signability", () => {
       pendingUntil: null,
       stage: "owner-escape",
     });
+  });
+
+  test("a backup guardian, or an unanswered read of it, withholds Ready recovery", async () => {
+    const stageFor = async (guardianBackup: ArgentRecoveryState["guardianBackup"]) =>
+      (
+        (await makeHandler(argentAccount, {
+          argentState: {
+            expiresAt: null,
+            guardianBackup,
+            // Precedence: the backup refusal wins even over an owner escape.
+            ownerEscapePending: true,
+            readyAt: null,
+            securityPeriodSeconds: 600,
+            status: "none",
+          },
+          probe: "guardian",
+        }).ask()) as { readonly recovery?: { readonly stage?: string } }
+      ).recovery?.stage;
+    expect(await stageFor("present")).toBe("backup-guardian");
+    expect(await stageFor("unknown")).toBe("backup-unknown");
+    expect(await stageFor("absent")).toBe("owner-escape");
   });
 });

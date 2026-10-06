@@ -47,6 +47,13 @@ const READY_CANCEL = "Cancelling needs this account's key and your guardian toge
 // escape is a key replacement the guardian approved.
 const OWNER_ESCAPE = "Your guardian has started replacing this account's key.";
 
+// trigger_escape_guardian(None) is rejected while a backup guardian is set, so
+// the phrase cannot remove the guardian; a failed read is shown, not guessed.
+const BACKUP_PRESENT =
+  "This account has a backup guardian, so the recovery phrase can't remove its guardian.";
+const BACKUP_UNKNOWN =
+  "Couldn't check this account's backup guardian, so recovery isn't offered. Try again later.";
+
 const detail = (text: string): string => `<p class="read-only-detail">${escapeHtml(text)}</p>`;
 
 /**
@@ -79,6 +86,10 @@ export const readOnlyNotice = (
   let body = "";
   if (recoverable && keyless) {
     body = detail(`Removing ${noun} isn't available for Ledger accounts.`);
+  } else if (kind === "argent" && stage === "backup-guardian") {
+    body = detail(BACKUP_PRESENT);
+  } else if (kind === "argent" && stage === "backup-unknown") {
+    body = detail(BACKUP_UNKNOWN);
   } else if (kind === "argent" && stage === "ready" && expiresAt !== undefined) {
     body = `${detail(`Guardian removal is ready. Complete it before ${at(expiresAt)}.`)}${button("Complete recovery")}`;
   } else if (kind === "argent" && stage === "expired" && expiresAt !== undefined) {

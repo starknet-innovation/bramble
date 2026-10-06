@@ -10,14 +10,22 @@ import type { FeeEstimate } from "@bramble/starknet/rpc";
  * The recovery state a read-only verdict carries for the Home flag.
  * `pendingUntil` is when a running removal takes effect (Braavos) or can be
  * completed (Ready); `expiresAt` ends Ready's completion window (absent for Braavos).
- * `stage` is Ready-only: the escape's live status, or `owner-escape` when a
- * guardian-approved key change is pending instead.
+ * `stage` is Ready-only: the escape's live status, `owner-escape` when a
+ * guardian-approved key change is pending instead, or `backup-guardian` /
+ * `backup-unknown` when a backup guardian (or a failed read of it) makes the
+ * phrase escape unavailable.
  */
 export type AccountRecoveryState = {
   readonly delaySeconds: number;
   readonly expiresAt?: number;
   readonly pendingUntil: number | null;
-  readonly stage?: "expired" | "owner-escape" | "pending" | "ready";
+  readonly stage?:
+    | "backup-guardian"
+    | "backup-unknown"
+    | "expired"
+    | "owner-escape"
+    | "pending"
+    | "ready";
 };
 
 /**

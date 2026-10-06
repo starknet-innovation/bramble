@@ -37,6 +37,30 @@ describe("friendlyError", () => {
     expect(result.message).not.toContain("Devnet");
   });
 
+  // The exact strings argent-recovery.ts and account-recovery.ts throw.
+  test("maps the recovery refusals to reviewed copy", () => {
+    for (const [raw, message] of [
+      [
+        "This account has a backup guardian, so the guardian cannot be removed with the recovery phrase",
+        "This account has a backup guardian, so the recovery phrase can't remove its guardian.",
+      ],
+      [
+        "Could not check this account's backup guardian",
+        "Couldn't check this account's backup guardian. Try again.",
+      ],
+      [
+        "Account recovery is not available for Ledger accounts",
+        "Removing 2FA or a guardian isn't available for Ledger accounts.",
+      ],
+      [
+        "The active account changed. Review the recovery again.",
+        "You switched accounts. Review the recovery again.",
+      ],
+    ] as const) {
+      expect(friendlyError(raw).message).toBe(message);
+    }
+  });
+
   test("maps 'wallet unavailable' to a friendly message", () => {
     const result = friendlyError("wallet unavailable");
     expect(result).toEqual({

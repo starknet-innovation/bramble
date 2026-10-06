@@ -372,6 +372,7 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     async getArgentRecoveryState() {
       return {
         expiresAt: null,
+        guardianBackup: "absent" as const,
         ownerEscapePending: false,
         readyAt: null,
         securityPeriodSeconds: 604_800,

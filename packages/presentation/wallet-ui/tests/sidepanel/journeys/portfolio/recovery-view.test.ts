@@ -104,4 +104,25 @@ describe("read-only recovery notice", () => {
   test("renders nothing for a signable or unknown account", () => {
     expect(notice({ readOnly: false })).toBe("");
   });
+
+  test("a backup guardian, or an unanswered read of it, gets no Recover button", () => {
+    const present = notice({
+      readOnly: true,
+      reason: "guardian",
+      recovery: { delaySeconds: 604_800, pendingUntil: null, stage: "backup-guardian" },
+    });
+    expect(present).toContain(
+      "This account has a backup guardian, so the recovery phrase can&#39;t remove its guardian.",
+    );
+    expect(present).not.toContain('id="recover-account"');
+    const unknown = notice({
+      readOnly: true,
+      reason: "guardian",
+      recovery: { delaySeconds: 604_800, pendingUntil: null, stage: "backup-unknown" },
+    });
+    expect(unknown).toContain(
+      "Couldn&#39;t check this account&#39;s backup guardian, so recovery isn&#39;t offered. Try again later.",
+    );
+    expect(unknown).not.toContain('id="recover-account"');
+  });
 });

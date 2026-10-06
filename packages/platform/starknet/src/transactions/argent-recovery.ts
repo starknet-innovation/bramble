@@ -7,7 +7,8 @@
  * normally again; past that window the escape expires and must be started
  * again. Cancelling in between needs the owner AND guardian together. Starting
  * an escape silently replaces any pending owner escape (the guardian's flow),
- * so that case is surfaced and needs an explicit acknowledgement. This module
+ * so that case is surfaced and needs an explicit acknowledgement. An account
+ * with a backup guardian cannot escape to None and is refused up front. This module
  * deliberately bypasses the guardian refusal that guards every other
  * submission, mirroring the account's own carve-out.
  */
@@ -21,6 +22,7 @@ import {
   argentQueryAccount,
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
+  isTransportRpcError,
   krustyAccount,
   matchingAcceptedRpcWriteHash,
   withRpcFallback,
@@ -50,6 +52,15 @@ const MAX_ESCAPE_FEE_FRI = 5n * 10n ** 18n;
 /** Where a guardian escape stands, as the account's own view reports it. */
 type ArgentRecoveryStatus = "none" | "pending" | "ready" | "expired";
 
+/** Whether the account also has a backup guardian, as far as the chain answered. */
+type GuardianBackup = "absent" | "present" | "unknown";
+
+/** Refusal for an account with a backup guardian (see {@link readGuardianBackup}). */
+const BACKUP_PRESENT =
+  "This account has a backup guardian, so the guardian cannot be removed with the recovery phrase";
+/** Refusal when the backup-guardian read failed: fail closed rather than revert on chain. */
+const BACKUP_UNCHECKED = "Could not check this account's backup guardian";
+
 /** The step a confirmation offers: start the escape, or complete a ready one. */
 export type ArgentRecoveryStep = "complete" | "start";
 
@@ -59,9 +70,13 @@ export type ArgentRecoveryStep = "complete" | "start";
  * completed (`expiresAt = readyAt + securityPeriodSeconds`), null when none is
  * recorded. `ownerEscapePending` reports an un-expired OWNER escape — a key
  * replacement the guardian approved — which starting a guardian escape cancels.
+ * `guardianBackup` is `present` when the account also has a backup guardian
+ * (the phrase cannot remove the guardian then) and `unknown` when that read
+ * failed; callers treat `unknown` as unavailable, never as absent.
  */
 export type ArgentRecoveryState = {
   readonly expiresAt: number | null;
+  readonly guardianBackup: GuardianBackup;
   readonly ownerEscapePending: boolean;
   readonly readyAt: number | null;
   readonly securityPeriodSeconds: number;
@@ -125,6 +140,24 @@ const STATUS_BY_CODE: Readonly<Record<string, ArgentRecoveryStatus>> = {
   "3": "expired",
 };
 
+// trigger_escape_guardian(None) is valid only when no backup guardian is set
+// (`argent/backup-should-be-null` in __validate__), and the account rejects a
+// guardian removal that would leave a backup behind. An empty answer is not
+// "no backup": it throws, so callers fail closed.
+const readGuardianBackup = async (
+  provider: RpcProvider,
+  accountAddress: string,
+): Promise<"absent" | "present"> => {
+  const [value] = await provider.callContract(
+    { calldata: [], contractAddress: accountAddress, entrypoint: "get_guardian_backup" },
+    "latest",
+  );
+  if (value === undefined) {
+    throw new WalletError(BACKUP_UNCHECKED);
+  }
+  return BigInt(value) === 0n ? "absent" : "present";
+};
+
 const feltOrZero = (value: string | undefined): bigint =>
   value === undefined ? 0n : BigInt(value);
 
@@ -139,9 +172,10 @@ const readEscapeState = async (
 ): Promise<ArgentRecoveryState> => {
   const read = (entrypoint: string) =>
     provider.callContract({ calldata: [], contractAddress: accountAddress, entrypoint }, "latest");
-  const [escapeFelts, period] = await Promise.all([
+  const [escapeFelts, period, guardianBackup] = await Promise.all([
     read("get_escape_and_status"),
     read("get_escape_security_period"),
+    readGuardianBackup(provider, accountAddress).catch((): GuardianBackup => "unknown"),
   ]);
   const periodFelt = feltOrZero(period[0]);
   const securityPeriodSeconds =
@@ -152,7 +186,13 @@ const readEscapeState = async (
   if (status === undefined) {
     throw new WalletError("The account reported an unrecognised escape status");
   }
-  const none = { expiresAt: null, readyAt: null, securityPeriodSeconds, status: "none" as const };
+  const none = {
+    expiresAt: null,
+    guardianBackup,
+    readyAt: null,
+    securityPeriodSeconds,
+    status: "none" as const,
+  };
   if (readyAt === 0n || status === "none") {
     return { ...none, ownerEscapePending: false };
   }
@@ -166,6 +206,7 @@ const readEscapeState = async (
   }
   return {
     expiresAt: Number(readyAt) + securityPeriodSeconds,
+    guardianBackup,
     ownerEscapePending: false,
     readyAt: Number(readyAt),
     securityPeriodSeconds,
@@ -206,6 +247,15 @@ const requireRecoverableArgent = async (
   }
   if (restriction !== "guardian") {
     throw new WalletError("Deployed Argent account owner does not match the wallet signer");
+  }
+  // Transport failures keep their own classification (and endpoint fallback);
+  // any other failed read refuses rather than letting the escape revert.
+  const backup = await readGuardianBackup(provider, account.address).catch((error: unknown) => {
+    if (isTransportRpcError(error)) throw error;
+    throw new WalletError(BACKUP_UNCHECKED);
+  });
+  if (backup === "present") {
+    throw new WalletError(BACKUP_PRESENT);
   }
 };
 
