@@ -260,8 +260,9 @@ describe("onboarding views", () => {
     const importChooser = importAccountChooser(false);
     expect(importChooser).not.toContain('data-add-kind="restore-ready-ledger"');
     expect(importChooser).not.toContain("Ready Ledger account");
+    expect(importChooser).toContain('data-add-kind="find-accounts"');
     expect(importChooser).toContain('data-add-kind="import-phrase"');
     expect(importChooser).toContain('data-add-kind="import-key"');
-    expect((importChooser.match(/data-add-kind="/g) ?? []).length).toBe(2);
+    expect((importChooser.match(/data-add-kind="/g) ?? []).length).toBe(3);
   });
 });
