@@ -79,6 +79,8 @@ const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
       }
     : {};
 
+const BRAAVOS_DEPLOYMENT_UNSUPPORTED = "This wallet does not deploy Braavos accounts";
+
 // The constructor arguments and candidate salts one family deploys with. Split
 // from accountDeployment so each family's rule reads on its own, and so a family
 // this wallet never deploys fails here rather than reaching the address check.
@@ -130,7 +132,28 @@ const deploymentInputs = (
       constructorCalldata: CallData.compile([account.publicKeyX]),
     };
   }
-  throw new WalletError("This wallet does not deploy Braavos accounts");
+  throw new WalletError(BRAAVOS_DEPLOYMENT_UNSUPPORTED);
+};
+
+/**
+ * Refusal for a transaction from an undeployed Braavos account. Its deployment
+ * is a separate reviewed step, never folded into another transaction.
+ */
+export const UNDEPLOYED_BRAAVOS_REFUSAL = "Deploy this account first (Settings → Deploy account).";
+
+/**
+ * Throws before any signing when an undeployed Braavos account would need a
+ * deploy-then-act submission, which only the explicit deployment can produce
+ * (its deploy signature signs an extra hash first). An older base class, which
+ * this wallet cannot deploy at all, says so instead.
+ */
+export const refuseUndeployedBraavos = (account: DeployableAccount, deployed: boolean): void => {
+  if (deployed || account.accountContractType !== "braavos") return;
+  throw new WalletError(
+    sameFelt(account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH)
+      ? UNDEPLOYED_BRAAVOS_REFUSAL
+      : BRAAVOS_DEPLOYMENT_UNSUPPORTED,
+  );
 };
 
 /**
@@ -273,13 +296,15 @@ export const ensureAccountDeployed = async (
   if (await isCompatibleAccountDeployed(provider, account)) {
     return null;
   }
+  // `expectedTransactionHash` names the first hash signed, which for Braavos
+  // would be the deploy signature's parameters hash, never the broadcast one.
+  refuseUndeployedBraavos(account, false);
   let submitted: DeploySubmission | null = null;
   try {
-    // Braavos constructors validate the deploy signature even on query
-    // versions, so their estimate signs for real; Argent accepts a mock query
-    // signature; OpenZeppelin skips validation (see submitAccountDeployment).
+    // Argent accepts a mock query signature; OpenZeppelin skips validation
+    // (see submitAccountDeployment). Braavos was refused above.
     const estimatingAccount =
-      account.accountContractType === "openzeppelin" || account.accountContractType === "braavos"
+      account.accountContractType === "openzeppelin"
         ? starknetAccount
         : argentQueryAccount(provider, account, signerOptions(account));
     submitted = await deployAccountContract(
