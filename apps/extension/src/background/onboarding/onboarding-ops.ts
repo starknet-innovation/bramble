@@ -2,7 +2,7 @@
 
 import { WalletError } from "@bramble/core/errors";
 import {
-  defaultWalletPreferences,
+  recoveryProbeTokens,
   type TokenConfig,
   type WalletPreferencesStore,
 } from "@bramble/settings/preferences";
@@ -186,9 +186,11 @@ const discoverRecoveryAccounts = async (
   const manual = input.manualIndex;
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
-  const tokens = defaultWalletPreferences().tokens.filter(
-    (token) => token.networkId === input.networkId,
-  );
+  // Probe the recovery activity set, not just the display defaults: an
+  // undeployed account funded only in native USDC has no ETH or STRK, so the
+  // display-token probe would read it as empty and skip it (issue: USDC-only
+  // accounts invisible to discovery).
+  const tokens = recoveryProbeTokens().filter((token) => token.networkId === input.networkId);
   const start = manual ?? snapshot.nextIndex;
   // The scan horizon is a gap limit, not a fixed window: it always reaches
   // `defaultCount` indices past the last evidence of activity (issue 503), so
