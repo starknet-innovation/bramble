@@ -83,7 +83,13 @@ const readOnlyNotice = (signability: SignabilityVerdict | null): string => {
   const kind = signability.reason === "guardian" ? "argent" : "braavos";
   const recoverable = signability.reason === "strong-signer" || signability.reason === "guardian";
   const noun = kind === "argent" ? "the guardian" : "2FA";
-  const stopper = kind === "argent" ? "Your guardian" : "Your Braavos device";
+  // Who can stop a running removal. Braavos: the strong-signer device alone.
+  // Ready: `cancel_escape` needs the owner AND guardian signatures together, so
+  // neither the guardian nor the phrase can stop it alone.
+  const stopper =
+    kind === "argent"
+      ? "Cancelling needs this account's key and your guardian together, in Ready."
+      : "Your Braavos device can still stop this.";
   const pendingUntil = recovery?.pendingUntil ?? null;
   const stage = recovery && "stage" in recovery ? recovery.stage : undefined;
   const recoverButton = (label: string): string =>
@@ -96,7 +102,7 @@ const readOnlyNotice = (signability: SignabilityVerdict | null): string => {
       : pendingUntil !== null
         ? `<p class="read-only-detail">Removing ${noun} — usable on ${escapeHtml(
             formatUtcInstant(pendingUntil),
-          )}. ${stopper} can still stop this.</p>`
+          )}. ${stopper}</p>`
         : recoverable
           ? recoverButton("Recover account")
           : "";

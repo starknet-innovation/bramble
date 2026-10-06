@@ -460,7 +460,10 @@ describe("home read-only flag", () => {
     });
     expect(markup).toContain("Removing the guardian");
     expect(markup).toContain("usable on 17/03/30 at 17h46 UTC");
-    expect(markup).toContain("Your guardian can still stop this");
+    expect(markup).toContain(
+      "Cancelling needs this account's key and your guardian together, in Ready.",
+    );
+    expect(markup).not.toContain("guardian can still stop");
     expect(markup).not.toContain('id="recover-account"');
   });
 

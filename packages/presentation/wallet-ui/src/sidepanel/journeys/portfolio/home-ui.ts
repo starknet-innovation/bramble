@@ -382,8 +382,6 @@ const bindRecoverAccount = (deps: HomeUiDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#recover-account");
   if (!button) return;
   let armed = false;
-  const days = (seconds: number | null): string =>
-    seconds === null ? "" : ` · usable in ${Math.ceil(seconds / 86_400)} days`;
   button.addEventListener("click", async () => {
     try {
       const kind = button.dataset["recoverKind"] === "argent" ? "argent" : "braavos";
@@ -396,7 +394,9 @@ const bindRecoverAccount = (deps: HomeUiDeps): void => {
             : await deps.wallet.reviewBraavosRecovery();
         buttonBusy(button, false);
         armed = true;
-        button.textContent = `Remove ${subject} — tap to confirm${days(review.delaySeconds)}`;
+        // No delay on the label: completing a Ready escape is immediate, and a
+        // starting step's timing is stated on the Home flag once it is pending.
+        button.textContent = `Remove ${subject} — tap to confirm`;
         button.dataset["reviewedFee"] = JSON.stringify(review.fee);
         return;
       }
