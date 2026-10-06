@@ -8,9 +8,11 @@
 
 import { resolveSpring } from "@bramble/ui-kit/spring";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { prefersReducedMotion, projectMomentum } from "../../shared/motion";
+import { bindRecoverAccount } from "./recovery-ui";
 
 /**
  * State accessors and services the home bindings close over. State lives in
@@ -21,7 +23,7 @@ export type HomeUiDeps = {
   readonly drawerOpen: () => boolean;
   readonly setDrawerOpen: (open: boolean) => void;
   readonly networkId: () => string;
-  readonly render: (status: WalletStatus) => Promise<void>;
+  readonly render: (status: WalletStatus, refreshReason?: RefreshReason) => Promise<void>;
   readonly selectPortfolio?: (multisigId: string | null) => void;
   readonly startAddAccount?: () => void;
   readonly wallet: SidepanelWallet;
@@ -365,61 +367,6 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
     });
     portfolioMenuApps.add(app);
   }
-};
-
-/**
- * Binds the account drawer and portfolio menu on the home screen. Safe to call
- * on every render; screens without these regions are skipped.
- */
-// The phrase-driven removal entry (Braavos 2FA, or Ready's guardian via its
-// two-step escape) on the read-only Home flag. Consequential
-// and delayed, so it confirms in place: the first press reviews the fee and
-// the delay and arms the button, the second submits the removal request.
-// Cancelling a pending request is not offered here because a Braavos account
-// with an active strong signer accepts the stark-only carve-out for the
-// removal request alone — the cancel needs the 2FA device, which the copy says.
-const bindRecoverAccount = (deps: HomeUiDeps): void => {
-  const button = deps.app?.querySelector<HTMLButtonElement>("#recover-account");
-  if (!button) return;
-  let armed = false;
-  button.addEventListener("click", async () => {
-    try {
-      const kind = button.dataset["recoverKind"] === "argent" ? "argent" : "braavos";
-      const subject = kind === "argent" ? "guardian" : "2FA";
-      if (!armed) {
-        buttonBusy(button, true);
-        const review =
-          kind === "argent"
-            ? await deps.wallet.reviewArgentRecovery()
-            : await deps.wallet.reviewBraavosRecovery();
-        buttonBusy(button, false);
-        armed = true;
-        // No delay on the label: completing a Ready escape is immediate, and a
-        // starting step's timing is stated on the Home flag once it is pending.
-        button.textContent = `Remove ${subject} — tap to confirm`;
-        button.dataset["reviewedFee"] = JSON.stringify(review.fee);
-        return;
-      }
-      const reviewedFee = button.dataset["reviewedFee"];
-      if (!reviewedFee) return;
-      buttonBusy(button, true);
-      const fee = JSON.parse(reviewedFee);
-      await (kind === "argent"
-        ? deps.wallet.recoverArgentAccount(fee)
-        : deps.wallet.recoverBraavosAccount(fee));
-      showToast(
-        `Removal started. The account becomes usable once the ${subject} is removed.`,
-        "success",
-        button,
-      );
-      await deps.wallet.loadStatus().then(deps.render);
-    } catch (error) {
-      buttonBusy(button, false);
-      armed = false;
-      button.textContent = "Recover account";
-      showToast(errorMessage(error, "Couldn't start recovery. Try again."), "error", button);
-    }
-  });
 };
 
 /** Wires the Home drawer, portfolio menu, and the read-only recover-account entry. */

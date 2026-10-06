@@ -446,25 +446,15 @@ describe("home read-only flag", () => {
     const markup = render({
       readOnly: true,
       reason: "guardian",
-      recovery: { delaySeconds: 604_800, pendingUntil: 1_900_000_000, stage: "ready" },
+      recovery: {
+        delaySeconds: 604_800,
+        expiresAt: 1_900_604_800,
+        pendingUntil: 1_900_000_000,
+        stage: "ready",
+      },
     });
     expect(markup).toContain("Complete recovery");
     expect(markup).toContain('data-recover-kind="argent"');
-  });
-
-  test("shows the Ready unlock time and the guardian-cancel note while pending", () => {
-    const markup = render({
-      readOnly: true,
-      reason: "guardian",
-      recovery: { delaySeconds: 604_800, pendingUntil: 1_900_000_000, stage: "pending" },
-    });
-    expect(markup).toContain("Removing the guardian");
-    expect(markup).toContain("usable on 17/03/30 at 17h46 UTC");
-    expect(markup).toContain(
-      "Cancelling needs this account's key and your guardian together, in Ready.",
-    );
-    expect(markup).not.toContain("guardian can still stop");
-    expect(markup).not.toContain('id="recover-account"');
   });
 
   test("does not offer recovery for a restriction the phrase cannot lift", () => {

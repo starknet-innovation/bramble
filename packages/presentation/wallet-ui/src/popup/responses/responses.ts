@@ -83,6 +83,7 @@ import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-mode
 import { isReadOnlyReason, type ReadOnlyReason } from "@bramble/wallet-model/recovery";
 import type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
+import { isRecoveryState, type RecoveryState } from "./responses-recovery";
 
 /**
  * Shared wallet status and network response shapes after runtime validation.
@@ -154,13 +155,8 @@ export type DeploymentStatusResponse = {
   readonly ok: true;
 };
 
-/** A seed-recoverable account's on-chain recovery state for the Home flag. */
-export type RecoveryState = {
-  readonly delaySeconds: number;
-  readonly pendingUntil: number | null;
-  /** Ready's two-step escape: "pending" while the delay runs, "ready" to complete. */
-  readonly stage?: "pending" | "ready";
-};
+/** A recoverable account's on-chain recovery state, validated in ./responses-recovery. */
+export type { RecoveryState } from "./responses-recovery";
 
 /** The Home flag's input: signable, or read-only with its reason. */
 export type SignabilityVerdict =
@@ -173,8 +169,8 @@ export type SignabilityVerdict =
 
 /**
  * Active-account signability verdict for the Home read-only flag. `reason` is
- * present exactly when `readOnly` is true; `recovery` accompanies a Braavos
- * strong-signer account the phrase can recover.
+ * present exactly when `readOnly` is true; `recovery` accompanies an account
+ * the phrase can recover (Braavos 2FA, Ready guardian).
  */
 export type AccountSignabilityResponse = {
   readonly accountId: string;
@@ -442,14 +438,6 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   value["ok"] === true &&
   isAccountId(value["accountId"]) &&
   typeof value["deployed"] === "boolean";
-
-// Validates the recovery state a signability verdict may carry.
-const isRecoveryState = (value: unknown): value is RecoveryState =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["delaySeconds", "pendingUntil", "stage"]) &&
-  typeof value["delaySeconds"] === "number" &&
-  (value["pendingUntil"] === null || typeof value["pendingUntil"] === "number") &&
-  (value["stage"] === undefined || value["stage"] === "pending" || value["stage"] === "ready");
 
 /** Validates the signability verdict (with any recovery state) before the flag renders. */
 export const isAccountSignabilityResponse = (value: unknown): value is AccountSignabilityResponse =>
