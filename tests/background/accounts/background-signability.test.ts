@@ -123,13 +123,25 @@ describe("background argent recovery", () => {
       {
         runtimeRpc: makeRuntimeRpc({
           async getArgentRecoveryState() {
-            return { readyAt: null, status: "none" as const };
+            return {
+              expiresAt: null,
+              ownerEscapePending: false,
+              readyAt: null,
+              securityPeriodSeconds: 604_800,
+              status: "none" as const,
+            };
           },
           async reviewArgentRecovery() {
-            return { overallFee: "100", unit: "FRI" as const };
+            return {
+              expiresAt: 2_000,
+              fee: { overallFee: "100", unit: "FRI" as const },
+              readyAt: 1_000,
+              replacesOwnerEscape: false,
+              step: "start" as const,
+            };
           },
           async submitArgentRecovery() {
-            return { readyAt: 1_000, transactionHash: "0xesc" };
+            return { expiresAt: 2_000, readyAt: 1_000, transactionHash: "0xesc" };
           },
         }),
         session,
@@ -142,7 +154,7 @@ describe("background argent recovery", () => {
       await makeHandlerFor()({ type: "wallet.reviewArgentRecovery" }, extensionSender),
     ).toEqual({
       accountId: guarded.id,
-      delaySeconds: 604_800,
+      delaySeconds: null,
       fee: { overallFee: "100", unit: "FRI" },
       ok: true,
     });

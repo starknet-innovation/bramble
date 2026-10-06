@@ -358,13 +358,25 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
       return { delaySeconds: 345_600, pendingUntil: null };
     },
     async reviewArgentRecovery() {
-      return { overallFee: "1", unit: "FRI" };
+      return {
+        expiresAt: 2_000,
+        fee: { overallFee: "1", unit: "FRI" as const },
+        readyAt: 1_000,
+        replacesOwnerEscape: false,
+        step: "start" as const,
+      };
     },
     async submitArgentRecovery() {
-      return { readyAt: 1_000, transactionHash: "0x7ed" };
+      return { expiresAt: 2_000, readyAt: 1_000, transactionHash: "0x7ed" };
     },
     async getArgentRecoveryState() {
-      return { readyAt: null, status: "none" as const };
+      return {
+        expiresAt: null,
+        ownerEscapePending: false,
+        readyAt: null,
+        securityPeriodSeconds: 604_800,
+        status: "none" as const,
+      };
     },
     async getNftOwner() {
       return account.address;

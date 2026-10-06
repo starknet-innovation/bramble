@@ -1,29 +1,46 @@
 /**
  * Phrase-driven Ready (Argent) guardian removal: the owner key alone escapes
  * the guardian, in the two steps the account's escape carve-out accepts from a
- * single owner signature — `trigger_escape_guardian(None)` starts a security
- * period, then after it `escape_guardian()` removes the guardian and the
- * account signs normally again. Cancelling in between needs the full
- * owner+guardian pair, so the phrase cannot stop it alone — the copy says the
- * guardian still can. This module deliberately bypasses the guardian refusal
- * that guards every other submission, mirroring the account's own carve-out.
+ * single owner signature — `trigger_escape_guardian(None)` starts the
+ * security period, then from `ready_at` until `ready_at + period`
+ * `escape_guardian()` removes the guardian at once and the account signs
+ * normally again; past that window the escape expires and must be started
+ * again. Cancelling in between needs the owner AND guardian together. Starting
+ * an escape silently replaces any pending owner escape (the guardian's flow),
+ * so that case is surfaced and needs an explicit acknowledgement. This module
+ * deliberately bypasses the guardian refusal that guards every other
+ * submission, mirroring the account's own carve-out.
  */
 import { WalletError } from "@bramble/core/errors";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
-import { type FeeEstimate, reviewedSpendFor } from "../rpc/fee-bounds";
+import type { FeeEstimate } from "../rpc/fee-bounds";
 import {
   type AccountHashSigner,
-  acceptedRpcWriteHash,
+  argentQueryAccount,
+  INDETERMINATE_RPC_WRITE_MESSAGE,
+  IndeterminateRpcWriteError,
   krustyAccount,
+  matchingAcceptedRpcWriteHash,
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
 import { argentSigningRestriction } from "./account-compatibility";
+import {
+  capturingRecoverySigner,
+  RECOVERY_TIP,
+  recoveryFeeCeiling,
+  refuseKeylessRecovery,
+  requireWithinReviewedRecoveryFee,
+} from "./recovery-shared";
 
-/** The account-side delay before a triggered guardian escape may complete. */
-export const DEFAULT_ARGENT_ESCAPE_SECURITY_PERIOD_SECONDS = 604_800;
+/**
+ * The account's default security period (`DEFAULT_ESCAPE_SECURITY_PERIOD`,
+ * seven days), used only if `get_escape_security_period` answers zero, which
+ * the account itself never does.
+ */
+const DEFAULT_ESCAPE_SECURITY_PERIOD_SECONDS = 604_800;
 
 // The account rejects an escape transaction whose fee exceeds this on-chain cap
 // (MAX_ESCAPE_MAX_FEE_STRK, 5 STRK in fri), an anti-griefing bound. Enforced
@@ -33,16 +50,50 @@ const MAX_ESCAPE_FEE_FRI = 5n * 10n ** 18n;
 /** Where a guardian escape stands, as the account's own view reports it. */
 type ArgentRecoveryStatus = "none" | "pending" | "ready" | "expired";
 
-/** The guardian-escape state the Home flag and the submit step read. */
+/** The step a confirmation offers: start the escape, or complete a ready one. */
+export type ArgentRecoveryStep = "complete" | "start";
+
+/**
+ * The guardian-escape state the Home flag and the submit step read.
+ * `readyAt`/`expiresAt` bound the window in which a guardian escape can be
+ * completed (`expiresAt = readyAt + securityPeriodSeconds`), null when none is
+ * recorded. `ownerEscapePending` reports an un-expired OWNER escape — a key
+ * replacement the guardian approved — which starting a guardian escape cancels.
+ */
 export type ArgentRecoveryState = {
+  readonly expiresAt: number | null;
+  readonly ownerEscapePending: boolean;
   readonly readyAt: number | null;
+  readonly securityPeriodSeconds: number;
   readonly status: ArgentRecoveryStatus;
 };
 
-/** Inputs shared by the Ready recovery review and submission. */
+/**
+ * What the confirmation states: the step, the maximum fee, the window in which
+ * the removal can be completed (estimated from the latest block for a start,
+ * the account's own for a completion), and whether starting cancels a pending
+ * owner escape.
+ */
+export type ArgentRecoveryReview = {
+  readonly expiresAt: number;
+  readonly fee: FeeEstimate;
+  readonly readyAt: number;
+  readonly replacesOwnerEscape: boolean;
+  readonly step: ArgentRecoveryStep;
+};
+
+/**
+ * Inputs shared by the Ready recovery review and submission. The submission
+ * must name the `expectedStep` the user confirmed, and `replaceOwnerEscape`
+ * when that confirmation acknowledged cancelling a pending owner escape.
+ * `onSigned` receives the hash after signing and before broadcast.
+ */
 export type ArgentRecoveryInput = {
   readonly account: AccountRef;
+  readonly expectedStep?: ArgentRecoveryStep;
   readonly isAuthorized?: () => boolean;
+  readonly onSigned?: (transactionHash: string) => void;
+  readonly replaceOwnerEscape?: boolean;
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: AccountHashSigner;
@@ -63,9 +114,9 @@ const completeCall = (address: string) => ({
   entrypoint: "escape_guardian",
 });
 
-// LegacyEscapeType in the account: 0 none, 1 guardian, 2 owner. Only a guardian
-// escape is ours to advance; an owner escape belongs to the guardian's flow.
+// LegacyEscapeType in the account: 0 none, 1 guardian, 2 owner.
 const GUARDIAN_ESCAPE_TYPE = 1n;
+const OWNER_ESCAPE_TYPE = 2n;
 // EscapeStatus from the account's view: 0 none, 1 not-ready, 2 ready, 3 expired.
 const STATUS_BY_CODE: Readonly<Record<string, ArgentRecoveryStatus>> = {
   "0": "none",
@@ -74,11 +125,58 @@ const STATUS_BY_CODE: Readonly<Record<string, ArgentRecoveryStatus>> = {
   "3": "expired",
 };
 
+const feltOrZero = (value: string | undefined): bigint =>
+  value === undefined ? 0n : BigInt(value);
+
+// Reads the escape on the given provider. get_escape_and_status returns
+// (LegacyEscape, EscapeStatus): ready_at is the first felt, the escape type
+// the second, and the status the last — whatever the variable-length
+// new_signer in between serializes to. The account computes the status against
+// its own block clock. An unrecognised type or status fails closed.
+const readEscapeState = async (
+  provider: RpcProvider,
+  accountAddress: string,
+): Promise<ArgentRecoveryState> => {
+  const read = (entrypoint: string) =>
+    provider.callContract({ calldata: [], contractAddress: accountAddress, entrypoint }, "latest");
+  const [escapeFelts, period] = await Promise.all([
+    read("get_escape_and_status"),
+    read("get_escape_security_period"),
+  ]);
+  const periodFelt = feltOrZero(period[0]);
+  const securityPeriodSeconds =
+    periodFelt === 0n ? DEFAULT_ESCAPE_SECURITY_PERIOD_SECONDS : Number(periodFelt);
+  const readyAt = feltOrZero(escapeFelts[0]);
+  const escapeType = feltOrZero(escapeFelts[1]);
+  const status = STATUS_BY_CODE[String(feltOrZero(escapeFelts[escapeFelts.length - 1]))];
+  if (status === undefined) {
+    throw new WalletError("The account reported an unrecognised escape status");
+  }
+  const none = { expiresAt: null, readyAt: null, securityPeriodSeconds, status: "none" as const };
+  if (readyAt === 0n || status === "none") {
+    return { ...none, ownerEscapePending: false };
+  }
+  if (escapeType === OWNER_ESCAPE_TYPE) {
+    // An expired owner escape is inert; a live one is a key replacement in
+    // progress that starting a guardian escape would cancel.
+    return { ...none, ownerEscapePending: status === "pending" || status === "ready" };
+  }
+  if (escapeType !== GUARDIAN_ESCAPE_TYPE) {
+    throw new WalletError("The account reported an unrecognised escape type");
+  }
+  return {
+    expiresAt: Number(readyAt) + securityPeriodSeconds,
+    ownerEscapePending: false,
+    readyAt: Number(readyAt),
+    securityPeriodSeconds,
+    status,
+  };
+};
+
 /**
- * Reads where a guardian escape stands, via the account's own `get_escape` and
- * `get_escape_status` views, so the status reflects the chain's clock, not a
- * local one. A pending owner escape (the guardian's flow, not the phrase's)
- * reads as "none" here.
+ * Reads where a guardian escape stands, its completion window, the account's
+ * security period, and whether an owner escape is pending, via the account's
+ * own views so the status reflects the chain's clock, not a local one.
  */
 export const getArgentRecoveryState = async (
   {
@@ -87,31 +185,10 @@ export const getArgentRecoveryState = async (
   }: { readonly accountAddress: string; readonly rpcUrls: readonly string[] },
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<ArgentRecoveryState> =>
-  withRpcFallback(
-    rpcUrls,
-    async (provider) => {
-      // get_escape_and_status returns (LegacyEscape, EscapeStatus): ready_at is
-      // the first felt, the escape type the second, and the status the last —
-      // whatever the variable-length new_signer in between serializes to. The
-      // account computes the status against its own block clock.
-      const result = await provider.callContract(
-        { calldata: [], contractAddress: accountAddress, entrypoint: "get_escape_and_status" },
-        "latest",
-      );
-      const readyAt = result[0] === undefined ? 0n : BigInt(result[0]);
-      const escapeType = result[1] === undefined ? 0n : BigInt(result[1]);
-      const statusFelt = result[result.length - 1];
-      if (readyAt === 0n || escapeType !== GUARDIAN_ESCAPE_TYPE) {
-        return { readyAt: null, status: "none" as const };
-      }
-      const status = STATUS_BY_CODE[String(statusFelt === undefined ? 0n : BigInt(statusFelt))];
-      return { readyAt: Number(readyAt), status: status ?? "none" };
-    },
-    makeProvider,
-  );
+  withRpcFallback(rpcUrls, (provider) => readEscapeState(provider, accountAddress), makeProvider);
 
-// The flow applies only to a deployed Argent account whose sole restriction is
-// a guardian; anything else is refused before signing.
+// The flow applies only to a deployed, phrase-held Argent account whose sole
+// restriction is a guardian; anything else is refused before signing.
 const requireRecoverableArgent = async (
   provider: RpcProvider,
   account: AccountRef,
@@ -119,6 +196,7 @@ const requireRecoverableArgent = async (
   if (account.accountContractType !== "argent") {
     throw new WalletError("Account recovery is only available for Ready accounts");
   }
+  refuseKeylessRecovery(account);
   const restriction = await argentSigningRestriction(provider, {
     address: account.address,
     publicKeyX: account.publicKeyX,
@@ -134,102 +212,126 @@ const requireRecoverableArgent = async (
 // Which escape step advances the removal from the live status: start it when
 // none is pending or the last one expired, complete it once it is ready, and
 // refuse while the security period is still running.
-const nextCall = (address: string, status: ArgentRecoveryStatus) => {
-  if (status === "none" || status === "expired") return triggerCall(address);
-  if (status === "ready") return completeCall(address);
+const nextStep = (status: ArgentRecoveryStatus): ArgentRecoveryStep => {
+  if (status === "none" || status === "expired") return "start";
+  if (status === "ready") return "complete";
   throw new WalletError("Guardian removal is still in its waiting period");
 };
 
-/** Estimates the next escape step and returns the fee a review card can quote. */
+const callFor = (address: string, step: ArgentRecoveryStep) =>
+  step === "start" ? triggerCall(address) : completeCall(address);
+
+// Validated estimate through the query signer: the escape call does real work
+// in __validate__ (the rate-limit bookkeeping) that a skipped-validation quote
+// under-prices, and the account accepts a shape-correct dummy owner entry for
+// a query-version transaction. No key — phrase or Ledger — is asked to sign.
+const estimateStep = (
+  provider: RpcProvider,
+  account: AccountRef,
+  step: ArgentRecoveryStep,
+  makeQueryAccount: typeof argentQueryAccount,
+) =>
+  makeQueryAccount(provider, account).estimateInvokeFee(callFor(account.address, step), {
+    skipValidate: false,
+    tip: RECOVERY_TIP,
+  });
+
+/**
+ * Estimates the next escape step and returns what its confirmation states.
+ * Refuses an account the flow does not apply to, an escape still in its
+ * waiting period, and a fee over the account's on-chain escape cap.
+ */
 export const reviewArgentRecovery = async (
-  { account, rpcUrls, signHash }: ArgentRecoveryInput,
+  { account, rpcUrls }: ArgentRecoveryInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
-  makeAccount: typeof krustyAccount = krustyAccount,
-): Promise<FeeEstimate> =>
+  makeQueryAccount: typeof argentQueryAccount = argentQueryAccount,
+): Promise<ArgentRecoveryReview> =>
   withRpcFallback(
     rpcUrls,
     async (provider) => {
       await requireRecoverableArgent(provider, account);
-      const { status } = await getArgentRecoveryState(
-        { accountAddress: account.address, rpcUrls },
-        makeProvider,
-      );
-      const call = nextCall(account.address, status);
-      const estimate = await makeAccount(provider, account, signHash).estimateInvokeFee(call, {
-        skipValidate: false,
-        tip: "0x0",
-      });
-      const reviewed = reviewedSpendFor(estimate, "standard");
-      if (BigInt(reviewed.overallFee) > MAX_ESCAPE_FEE_FRI) {
-        throw new WalletError("Recovery fee exceeds the account's on-chain escape cap");
+      const state = await readEscapeState(provider, account.address);
+      const step = nextStep(state.status);
+      const estimate = await estimateStep(provider, account, step, makeQueryAccount);
+      const fee = recoveryFeeCeiling(estimate, MAX_ESCAPE_FEE_FRI);
+      if (step === "complete" && state.readyAt !== null && state.expiresAt !== null) {
+        return {
+          expiresAt: state.expiresAt,
+          fee,
+          readyAt: state.readyAt,
+          replacesOwnerEscape: false,
+          step,
+        };
       }
-      return reviewed;
+      const block = await provider.getBlock("latest");
+      const readyAt = Number(block.timestamp) + state.securityPeriodSeconds;
+      return {
+        expiresAt: readyAt + state.securityPeriodSeconds,
+        fee,
+        readyAt,
+        replacesOwnerEscape: state.ownerEscapePending,
+        step: "start",
+      };
     },
     makeProvider,
   );
 
 /**
- * Submits the next escape step and returns its hash and the state after it:
- * triggering returns the moment the removal may complete; completing clears
- * the escape. `reviewedFee` bounds the transaction, re-checked before signing.
+ * Submits the confirmed escape step and returns its hash and the escape window
+ * after it (null once completed). Refuses before signing when the live step
+ * differs from `expectedStep`, when a pending owner escape was not explicitly
+ * acknowledged, or when the fresh estimate exceeds the confirmed fee or the
+ * on-chain cap. Once the node has accepted the hash, any later failure is
+ * indeterminate: the step may be on chain.
  */
 export const submitArgentRecovery = async (
-  { account, isAuthorized, reviewedFee, rpcUrls, signHash }: ArgentRecoveryInput,
+  input: ArgentRecoveryInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
   makeAccount: typeof krustyAccount = krustyAccount,
-): Promise<{ readonly readyAt: number | null; readonly transactionHash: string }> =>
-  withRpcWrite(
+  makeQueryAccount: typeof argentQueryAccount = argentQueryAccount,
+): Promise<{
+  readonly expiresAt: number | null;
+  readonly readyAt: number | null;
+  readonly transactionHash: string;
+}> => {
+  const { account, expectedStep, reviewedFee, rpcUrls } = input;
+  return withRpcWrite(
     rpcUrls,
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
-      if (!reviewedFee) {
-        throw new WalletError("The recovery fee was not reviewed. Review it and try again.");
+      if (!reviewedFee || expectedStep === undefined) {
+        throw new WalletError("The recovery was not reviewed. Review it and try again.");
       }
       await requireRecoverableArgent(provider, account);
-      const { status } = await getArgentRecoveryState(
-        { accountAddress: account.address, rpcUrls },
-        makeProvider,
-      );
-      const call = nextCall(account.address, status);
-      let signedHash: string | undefined;
-      const authorizedSigner: AccountHashSigner = async (messageHash) => {
-        const signed = await signHash(messageHash);
-        if (isAuthorized?.() === false) {
-          throw new WalletError("wallet locked");
-        }
-        signedHash = messageHash;
-        return signed;
-      };
-      const starknetAccount = makeAccount(provider, account, authorizedSigner);
-      const estimate = await starknetAccount.estimateInvokeFee(call, {
-        skipValidate: false,
-        tip: "0x0",
-      });
-      // The escape fee is bounded by the account itself at MAX_ESCAPE_FEE_FRI,
-      // so that protocol cap is the ceiling the submission honours; the
-      // reviewed fee is the quote the user saw and is required, but a validated
-      // escape estimate moves between review and submit, so it is not pinned to
-      // the cent. A submit over the on-chain cap is refused before signing.
-      const spend = reviewedSpendFor(estimate, "standard");
-      if (spend.unit !== reviewedFee.unit || BigInt(spend.overallFee) > MAX_ESCAPE_FEE_FRI) {
-        throw new WalletError("The recovery fee exceeds the account's on-chain escape cap");
+      const state = await readEscapeState(provider, account.address);
+      const step = nextStep(state.status);
+      if (step !== expectedStep) {
+        throw new WalletError("The recovery step changed. Review it and try again.");
       }
-      const submitted = await starknetAccount.execute(call, {
-        resourceBounds: estimate.resourceBounds,
-        tip: "0x0",
-      });
-      const transactionHash = acceptedRpcWriteHash(submitted.transaction_hash);
-      if (signedHash === undefined || BigInt(signedHash) !== BigInt(transactionHash)) {
+      if (step === "start" && state.ownerEscapePending && input.replaceOwnerEscape !== true) {
         throw new WalletError(
-          "RPC accepted a different transaction hash. Check on-chain state before retrying.",
+          "A guardian-approved key change is pending. Review it and try again.",
         );
       }
-      await provider.waitForTransaction(transactionHash);
-      const after = await getArgentRecoveryState(
-        { accountAddress: account.address, rpcUrls },
-        makeProvider,
+      const estimate = await estimateStep(provider, account, step, makeQueryAccount);
+      requireWithinReviewedRecoveryFee(estimate, reviewedFee, MAX_ESCAPE_FEE_FRI);
+      const capture = capturingRecoverySigner(input.signHash, input.isAuthorized, input.onSigned);
+      const submitted = await makeAccount(provider, account, capture.signer).execute(
+        callFor(account.address, step),
+        { resourceBounds: estimate.resourceBounds, tip: RECOVERY_TIP },
       );
-      return { readyAt: after.readyAt, transactionHash };
+      const transactionHash = matchingAcceptedRpcWriteHash(
+        submitted.transaction_hash,
+        capture.signedHash(),
+      );
+      try {
+        await provider.waitForTransaction(transactionHash);
+        const after = await readEscapeState(provider, account.address);
+        return { expiresAt: after.expiresAt, readyAt: after.readyAt, transactionHash };
+      } catch {
+        throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
+      }
     },
     makeProvider,
   );
+};

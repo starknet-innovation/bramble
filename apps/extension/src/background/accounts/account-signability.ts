@@ -4,7 +4,6 @@
  * passive session reads.
  */
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import { DEFAULT_ARGENT_ESCAPE_SECURITY_PERIOD_SECONDS as ARGENT_ESCAPE_DELAY_SECONDS } from "@bramble/starknet/rpc";
 import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
@@ -138,7 +137,7 @@ const recoveryState = async (
   // flag offering a fresh "Recover account".
   if (!state || (state.status !== "pending" && state.status !== "ready")) return undefined;
   return {
-    delaySeconds: ARGENT_ESCAPE_DELAY_SECONDS,
+    delaySeconds: state.securityPeriodSeconds,
     pendingUntil: state.readyAt,
     stage: state.status,
   };
@@ -232,12 +231,12 @@ export const handleReviewArgentRecovery = async (
     STARKNET_NETWORKS[context.networkId],
     await deps.preferencesStore.read(),
   );
-  const fee = await deps.runtimeRpc.reviewArgentRecovery({
+  const review = await deps.runtimeRpc.reviewArgentRecovery({
     account,
     rpcUrls,
     signHash: accountHashSigner(deps, account, context.vaultPassphrase),
   });
-  return { accountId: account.id, delaySeconds: ARGENT_ESCAPE_DELAY_SECONDS, fee, ok: true };
+  return { accountId: account.id, delaySeconds: null, fee: review.fee, ok: true };
 };
 
 /**

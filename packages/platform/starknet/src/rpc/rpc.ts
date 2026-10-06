@@ -27,8 +27,9 @@ export {
  */
 export {
   type ArgentRecoveryInput,
+  type ArgentRecoveryReview,
   type ArgentRecoveryState,
-  DEFAULT_ARGENT_ESCAPE_SECURITY_PERIOD_SECONDS,
+  type ArgentRecoveryStep,
   getArgentRecoveryState,
   reviewArgentRecovery,
   submitArgentRecovery,
