@@ -2,6 +2,7 @@
  * Dapp-facing STRK20 checkpoints. Every value is deterministic fixture data;
  * these stories never derive notes, request proofs, or contact a remote service.
  */
+import { formatStrk20PoolFee } from "@bramble/privacy/service";
 import type { PendingApproval } from "@bramble/wallet-ui/lab";
 import { RECIPIENT_ADDRESS, softwareAccount, statusFor, USDC_ADDRESS } from "../fixtures/fixtures";
 import {
@@ -9,6 +10,7 @@ import {
   journeyBalances,
   journeyPreferences,
   journeyPrices,
+  POOL_FEE_FRI,
   STRK_TOKEN,
 } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
@@ -55,6 +57,20 @@ const allBalances: PendingApproval = {
   kind: "strk20-balances",
   origin: DAPP_ORIGIN,
   summaries: ["Share all private token balances", "No funds or notes will move"],
+};
+
+// The dapp-initiated registration review. Its fee line is built through the
+// production formatter so this checkpoint shows the same STRK amount a real
+// disclosure does, never the raw felt (issue 484).
+const registerDisclosure: PendingApproval = {
+  context: context("a"),
+  id: approvalId("210"),
+  kind: "strk20-register",
+  origin: TERMINAL_ORIGIN,
+  summaries: [
+    "Activate private balances for this account",
+    `Approve and pay the reviewed ${formatStrk20PoolFee(POOL_FEE_FRI)} pool fee`,
+  ],
 };
 
 const prepareTransfer: PendingApproval = {
@@ -280,6 +296,12 @@ export const privacyDappCheckpoints: WalletScenario["checkpoints"] = [
     "Share every balance",
     "The broader disclosure is visually distinct and warns that every discovered private token total will be revealed.",
     allBalances,
+  ),
+  privacyRequest(
+    "register-activation",
+    "Activate private balances",
+    "A dapp registration review names the account's one-time public commitment and the pool fee in STRK.",
+    registerDisclosure,
   ),
   privacyRequest(
     "proof-transfer",

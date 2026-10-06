@@ -7,6 +7,7 @@ import {
   PrivacyBlockerError,
   type PrivacyBlockerKind,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import type { PreparationProgress } from "./privacy-preparation-job";
 import type { PrivacyAccountState, PrivacyPreparation } from "./privacy-runtime";
 
@@ -85,6 +86,23 @@ export const privacyBlockerFor = (error: unknown): PrivacyBlocker => ({
 export type PrivacyPreparingStep = "discovering" | "proving";
 
 /**
+ * How a not-completed private write is shown. `warning` is for a submission
+ * whose reply was lost: it may already be on chain, so it is not a failure and
+ * must not lead with the retry a failure offers (issue 382).
+ */
+export type PrivacyOutcomeSeverity = "danger" | "warning";
+
+/**
+ * Classifies a rejected private write for display. A {@link SubmissionUnknownError}
+ * means the write left the wallet and its outcome could not be established, so
+ * it is a warning; anything else is a determinate failure. Kept a total function
+ * of the error so the severity is decided once, at the origin, rather than
+ * inferred from the message at paint time.
+ */
+export const privacyOutcomeSeverity = (error: unknown): PrivacyOutcomeSeverity =>
+  error instanceof SubmissionUnknownError ? "warning" : "danger";
+
+/**
  * Deterministic checkpoint in the pool-registration journey.
  *
  * Registration is all this surface does. Every movement of value — shielding,
@@ -133,6 +151,7 @@ export type PrivacyJourneyState =
     }
   | {
       readonly error: string;
+      readonly severity: PrivacyOutcomeSeverity;
       readonly stage: "failure";
       readonly tokenId: string;
     };

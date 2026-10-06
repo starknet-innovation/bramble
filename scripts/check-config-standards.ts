@@ -77,12 +77,17 @@ if (
 }
 
 // Reviewed security pins for transitive dependencies used by build/terminal tooling.
+// source-map-js reaches the build through postcss (via vite, jsdom and web-ext's
+// addons-linter) and madge; 1.2.2 is the first release without
+// GHSA-68fv-2mgg-jv7q, so the pin keeps `bun audit` green until the parents'
+// ranges move up on their own.
 const overrides = packageJson["overrides"];
 if (
   !isRecord(overrides) ||
-  !hasOnlyKeys(overrides, ["qs", "sharp"]) ||
+  !hasOnlyKeys(overrides, ["qs", "sharp", "source-map-js"]) ||
   overrides["qs"] !== "6.16.0" ||
-  overrides["sharp"] !== "0.35.4"
+  overrides["sharp"] !== "0.35.4" ||
+  overrides["source-map-js"] !== "1.2.2"
 ) {
   failures.push("package.json must retain the reviewed security overrides");
 }
