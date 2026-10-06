@@ -231,6 +231,16 @@ const poolFeeAmountIn = (input: SendRouteInput): bigint | null =>
     ? input.poolFeeFri
     : input.convertedFeeCeilingRaw;
 
+// The pool fee's size is unknown. The charge is governance-set and read live,
+// so until it lands the gate waits rather than compose an amount the pool would
+// reject. A non-STRK fee also needs a converted bound: once the pool fee itself
+// has loaded, a missing bound means the fee token cannot be priced, which no
+// amount of waiting fixes, so the gate refuses with the reason instead.
+const unknownFeeBlocker = (input: SendRouteInput): SendRouteBlocker =>
+  input.poolFeeFri !== null && !sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)
+    ? refuse(`The pool fee can't be priced in ${input.feeTokenSymbol} right now`)
+    : wait("Checking the pool fee…");
+
 const feeInSentToken = (input: SendRouteInput): boolean =>
   sameFelt(input.feeTokenAddress, input.tokenAddress);
 
@@ -272,10 +282,7 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
   }
   const feeAmount = poolFeeAmountIn(input);
   if (feeAmount === null) {
-    // The charge is governance-set and read live, so an unknown fee cannot be
-    // reasoned about: block until it lands rather than compose an amount that
-    // the pool would reject.
-    return wait("Checking the pool fee…");
+    return unknownFeeBlocker(input);
   }
   // The fee always leaves the source bucket. When it is charged in the token
   // being sent, the amount and the fee come out of one pot and must fit

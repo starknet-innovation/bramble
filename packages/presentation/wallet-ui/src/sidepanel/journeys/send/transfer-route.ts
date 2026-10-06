@@ -128,11 +128,13 @@ const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
   const { fields } = context;
   const route = routeFor(fields.source, fields.destination);
   const state = context.privacy.value;
+  const fallbackFeeToken = state?.feeToken ?? STRK_TOKEN_ADDRESS;
   const feeModel =
     route.submission === "relay"
       ? strk20SendFeeModel({
           convertedCeiling: rawBalance(privateEntryFor(context, fields.tokenAddress)?.feeCeiling),
-          fallbackFeeToken: state?.feeToken ?? STRK_TOKEN_ADDRESS,
+          fallbackCeiling: rawBalance(privateEntryFor(context, fallbackFeeToken)?.feeCeiling),
+          fallbackFeeToken,
           token: fields.tokenAddress,
         })
       : { convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS };
@@ -141,7 +143,9 @@ const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
     convertedFeeCeilingRaw: feeModel.convertedCeiling,
     destination: fields.destination,
     feeTokenAddress: feeModel.feeToken,
-    feeTokenSymbol: symbolOfToken(context, feeModel.feeToken) ?? "STRK",
+    feeTokenSymbol:
+      symbolOfToken(context, feeModel.feeToken) ??
+      (sameFelt(feeModel.feeToken, STRK_TOKEN_ADDRESS) ? "STRK" : "fee token"),
     poolFeeFri: state?.poolFeeFri ? rawBalance(state.poolFeeFri) : null,
     recipient: fields.recipient || null,
     recipientRegistration: context.recipientRegistration,

@@ -92,12 +92,33 @@ describe("#356 converted-fee affordability", () => {
     ).toEqual({ pending: true, reason: "Checking your private USDC balance…" });
   });
 
-  test("waits, rather than refusing, while a converted ceiling is unknown", () => {
-    // The balance is known, so only the fee's size is missing: the gate must
-    // wait on the pool charge rather than compose an amount it cannot back.
+  test("refuses, rather than waiting forever, when a non-STRK fee cannot be priced", () => {
+    // The pool fee has loaded but the fee token has no converted bound, so no
+    // amount of waiting resolves it: say so instead of pending indefinitely.
     expect(resolveSendRoute(privateUsdcSend({ convertedFeeCeilingRaw: null })).blocked).toEqual({
-      pending: true,
-      reason: "Checking the pool fee…",
+      pending: false,
+      reason: "The pool fee can't be priced in USDC right now",
     });
+  });
+
+  test("still waits while the pool fee itself is unread", () => {
+    expect(
+      resolveSendRoute(privateUsdcSend({ convertedFeeCeilingRaw: null, poolFeeFri: null })).blocked,
+    ).toEqual({ pending: true, reason: "Checking the pool fee…" });
+  });
+
+  test("a configured non-STRK fee token is reserved from its own balance", () => {
+    // Sending a token the reference can't price, with USDC configured as the
+    // relay's fee token: the fee falls back to USDC, bounded by USDC's ceiling.
+    const otherSend = privateUsdcSend({
+      amountRaw: 5n,
+      sourceTokenBalanceRaw: 50n,
+      tokenAddress: "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8",
+      tokenSymbol: "USDT",
+    });
+    expect(resolveSendRoute(otherSend).blocked).toBeUndefined();
+    expect(resolveSendRoute({ ...otherSend, sourceFeeBalanceRaw: 0n }).blocked?.reason).toBe(
+      "Not enough private USDC to cover the pool fee",
+    );
   });
 });

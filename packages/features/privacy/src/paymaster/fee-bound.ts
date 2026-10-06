@@ -155,15 +155,26 @@ export const preferredStrk20FeeToken = (
  * from an independent reference, and otherwise falls back to the configured fee
  * token. `convertedCeiling` is that bound for `token`, already derived from the
  * reference; a `null` ceiling means no bound exists, so the fee stays on the
- * fallback exactly as the quote would leave it. Keeping this selection here, a
- * pure function beside the quote's own preference, is what stops the two
- * disagreeing about which balance a fee leaves.
+ * fallback exactly as the quote would leave it. `fallbackCeiling` is the same
+ * bound for the fallback token: `null` when the fallback is STRK (the pool fee
+ * needs no conversion) or when it cannot be priced, which the gate must then
+ * refuse rather than wait on. Keeping this selection here, a pure function
+ * beside the quote's own preference, is what stops the two disagreeing about
+ * which balance a fee leaves.
  */
 export const strk20SendFeeModel = (input: {
   readonly convertedCeiling: bigint | null;
+  readonly fallbackCeiling: bigint | null;
   readonly fallbackFeeToken: string;
   readonly token: string;
-}): { readonly convertedCeiling: bigint | null; readonly feeToken: string } =>
-  sameFelt(input.token, input.fallbackFeeToken) || input.convertedCeiling === null
-    ? { convertedCeiling: null, feeToken: input.fallbackFeeToken }
+}): { readonly convertedCeiling: bigint | null; readonly feeToken: string } => {
+  // Sending STRK: the quote prefers the sent token and STRK needs no reference
+  // (`resolveStrk20FeeBound`'s exact branch), so the fee is STRK whatever the
+  // configured fallback. The gate then reads `poolFeeFri` directly.
+  if (sameFelt(input.token, STRK_TOKEN_ADDRESS)) {
+    return { convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS };
+  }
+  return sameFelt(input.token, input.fallbackFeeToken) || input.convertedCeiling === null
+    ? { convertedCeiling: input.fallbackCeiling, feeToken: input.fallbackFeeToken }
     : { convertedCeiling: input.convertedCeiling, feeToken: input.token };
+};

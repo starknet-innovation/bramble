@@ -94,16 +94,16 @@ const hasPendingRegistration = async (
  * The bounded converted pool fee for each held token the wallet can price,
  * keyed by token address. This is what lets the Send affordability gate reserve
  * the fee in the token the relay will actually charge it in, rather than
- * assuming STRK. Only tokens other than the fee token are priced: the fee token
- * needs no conversion. A token the reference cannot price is simply absent,
- * which leaves the Send gate on the fee token, exactly as the relay quote
- * falls back when it cannot bound a conversion.
+ * assuming STRK. Every held token except STRK is priced: the pool fee is
+ * denominated in STRK, so only STRK needs no conversion. That includes a
+ * non-STRK configured fee token, whose ceiling the gate needs whenever the fee
+ * falls back to it. A token the reference cannot price is simply absent, which
+ * leaves the Send gate without a bound for it.
  */
 const readConvertedFeeCeilings = async (
   deps: Strk20WalletOpsDeps,
   input: {
     readonly balances: readonly { readonly token: string }[];
-    readonly feeToken: string;
     readonly networkId: StarknetNetworkId;
     readonly poolFeeFri: string;
   },
@@ -117,7 +117,7 @@ const readConvertedFeeCeilings = async (
   }
   const reference = createStrk20FeeReference(deps.prices ?? unavailablePriceService);
   for (const entry of input.balances) {
-    if (sameFelt(entry.token, input.feeToken)) {
+    if (sameFelt(entry.token, STRK_TOKEN_ADDRESS)) {
       continue;
     }
     let bound: bigint | null = null;
@@ -192,7 +192,6 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
     const feeCeilings = paymaster
       ? await readConvertedFeeCeilings(deps, {
           balances,
-          feeToken,
           networkId: context.accountContext.account.networkId,
           poolFeeFri,
         })
