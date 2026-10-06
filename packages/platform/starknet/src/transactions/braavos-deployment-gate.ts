@@ -29,7 +29,7 @@ export class UndeployedBraavosError extends WalletError {
 /**
  * Throws before any signing when an undeployed Braavos account would need a
  * deploy-then-act submission, which only the explicit deployment can produce
- * (its deploy signature signs an extra hash first): {@link UndeployedBraavosError}
+ * (its deployment authorization covers an extra hash first): {@link UndeployedBraavosError}
  * for the modern class, {@link BRAAVOS_DEPLOYMENT_UNSUPPORTED} for an older one.
  */
 export const refuseUndeployedBraavos = (

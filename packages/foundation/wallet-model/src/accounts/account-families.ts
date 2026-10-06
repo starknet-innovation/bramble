@@ -146,7 +146,7 @@ export const UNDEPLOYED_BRAAVOS_REFUSAL = "Deploy this account first (Settings â
 /**
  * Whether an account is a Braavos counterfactual on the one deployment class
  * this wallet deploys. While undeployed it can deploy only through the explicit
- * deployment (its deploy signature signs an extra hash first), so every
+ * deployment (its deployment authorization covers an extra hash first), so every
  * deploy-then-act path refuses it with {@link UNDEPLOYED_BRAAVOS_REFUSAL}.
  */
 export const isDeployableBraavos = (account: {

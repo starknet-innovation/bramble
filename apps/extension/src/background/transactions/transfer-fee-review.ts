@@ -33,7 +33,7 @@ export type WalletFundedFeeReview = {
  * refusal comes before either estimate on purpose: a Braavos deployment
  * estimate signs a query-version deploy with the account key (its constructor
  * validates even then), whereas the estimates that do run here sign nothing
- * private — Argent validates on a mock query signature, other families skip
+ * private — Argent validates on a mock query authorization, other families skip
  * validation.
  */
 export const reviewWalletFundedFees = async (
