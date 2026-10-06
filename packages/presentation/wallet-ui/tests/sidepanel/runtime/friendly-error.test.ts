@@ -20,6 +20,14 @@ describe("friendlyError", () => {
     }
   });
 
+  // A broken class-hash answer can surface on any family's live check, so its
+  // copy names neither Argent nor Braavos.
+  test("reads an invalid class-hash answer as an unreadable account", () => {
+    expect(friendlyError("RPC returned an invalid account class hash").message).toBe(
+      "Couldn't read this account. Try again.",
+    );
+  });
+
   // The raw string names neither cause nor remedy, so the mapping supplies the
   // fix — and stays network-agnostic, since the guard fires on every network.
   test("turns the write-path chain guard into an actionable endpoint hint", () => {

@@ -271,14 +271,9 @@ export type SigningRestrictionInput = {
 };
 
 /**
- * Advisory signability probe for a deployed Argent recovery candidate, with
- * the standard endpoint fallback. Throws on an invalid address or when every
- * endpoint fails; callers treat any throw as "no verdict" since the
- * transaction path re-checks authoritatively.
- */
-/**
- * Advisory Braavos signability probe with the standard endpoint fallback; a
- * throw means "no verdict" to callers, never a signing decision.
+ * Advisory Braavos signability probe with the standard endpoint fallback.
+ * Throws on an invalid address or when every endpoint fails; a throw means
+ * "no verdict" to callers, never a signing decision.
  */
 export const getBraavosSigningRestriction = async (
   { accountAddress, publicKeyX, rpcUrls }: SigningRestrictionInput,
@@ -357,7 +352,7 @@ const deployedClassAt = async (
     return null;
   }
   if (!isNonZeroStarkFieldElement(classHash)) {
-    throw new WalletError("RPC returned an invalid Argent account class hash");
+    throw new WalletError("RPC returned an invalid account class hash");
   }
   return classHash;
 };

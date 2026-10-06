@@ -205,3 +205,9 @@ describe("Braavos pinned-block skew", () => {
     }
   });
 });
+
+test("a malformed class-hash answer refuses in family-neutral words", async () => {
+  const garbled = { liveClass: `0x${"f".repeat(70)}`, signers: STARK_ONLY };
+  const reason = "RPC returned an invalid account class hash";
+  expect((await authoritative(garbled))[0]).toBe(reason);
+});

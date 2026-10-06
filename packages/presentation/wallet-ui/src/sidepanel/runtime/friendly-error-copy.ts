@@ -116,6 +116,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "braavos account returned a malformed signer list",
     "Couldn't read this account's signers. Try again.",
   ],
+  ["rpc returned an invalid account class hash", "Couldn't read this account. Try again."],
   [
     "braavos account class hash is not a release this wallet recognizes",
     "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
