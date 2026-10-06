@@ -8,11 +8,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import { type AccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
-import type {
-  SignabilityVerdict,
-  TokenBalance,
-  WalletStatus,
-} from "../../../popup/responses/responses";
+import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 
 /**
@@ -27,31 +23,14 @@ export const strkAvailableForFees = (balances: BalanceState): boolean | null =>
       )
     : null;
 
-import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
+import { formatFiat, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { dockScreen, noAccountEmpty } from "../../shared/parts";
 import { actionTile, pendingCallout, shieldTile } from "../../shell/wallet-shell";
 import { deploymentKnownFromPrivacy, type PrivacyDisclosureState } from "../privacy/privacy-model";
+import { heroChange } from "./hero-change";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 import { readOnlyNotice } from "./recovery-view";
-
-const heroDelta = (
-  balances: readonly TokenBalance[],
-  prices: Readonly<Record<string, number>>,
-  changes: Readonly<Record<string, number>>,
-  currency: DisplayCurrency,
-): string => {
-  const delta = portfolioDelta(balances, prices, changes);
-  if (delta === null) {
-    return "";
-  }
-  const arrow = delta.direction === "up" ? "↑" : "↓";
-  return `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
-      <span class="hero-change-amt">${arrow} ${escapeHtml(formatFiat(delta.absolute, currency))}</span>
-      <span class="hero-change-win">${delta.percent.toFixed(2)}% · 24h</span>
-    </p>
-    <p class="hero-note">Price change over 24h at your current balances; sends and receives aren't included.</p>`;
-};
 
 /**
  * Renders the account-scoped Home portfolio without the shared wallet shell.
@@ -104,7 +83,7 @@ export const homeScreen = (
     `${pendingCallout(pendingCount)}
     <section class="hero" data-live-group>
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
-      ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
+      ${showTotal ? heroChange(unified, prices, changes, currency) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
       ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
       ${account ? "" : noAccountEmpty(status)}

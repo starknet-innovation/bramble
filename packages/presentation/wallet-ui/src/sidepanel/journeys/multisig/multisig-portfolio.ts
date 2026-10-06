@@ -11,8 +11,9 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { explorerAccountUrl } from "@bramble/wallet-model/networks";
 import type { BalanceState } from "../../runtime/runtime";
-import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
+import { formatFiat, portfolioTotal } from "../../shared/fiat";
 import { actionTile, explorerTile } from "../../shell/wallet-shell";
+import { heroChange } from "../portfolio/hero-change";
 import { visibleHomeBalances } from "../portfolio/home-tabs";
 import { balanceRow } from "../portfolio/token-row";
 import { type CompactIntentList, compactIntentListView } from "./multisig-intent-list";
@@ -46,17 +47,9 @@ const portfolioHero = (
   const visible = visibleHomeBalances(data.balances, preferences);
   const hasPrices = visible.some((balance) => data.prices[balance.address] !== undefined);
   const total = hasPrices ? portfolioTotal(visible, data.prices) : null;
-  const delta = hasPrices ? portfolioDelta(visible, data.prices, data.changes) : null;
   return `<section class="hero multisig-portfolio-hero" aria-label="Multisig balance" data-live-group>
     <p class="hero-total" data-live-key="multisig-total:${escapeHtml(record.id)}" data-live-value="${total ?? "unknown"}">${total === null ? "—" : escapeHtml(formatFiat(total, data.currency))}</p>
-    ${
-      delta
-        ? `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
-            <span class="hero-change-amt">${delta.direction === "up" ? "↑" : "↓"} ${escapeHtml(formatFiat(delta.absolute, data.currency))}</span>
-            <span class="hero-change-win">${delta.percent.toFixed(2)}% · 24h</span>
-          </p>`
-        : ""
-    }
+    ${heroChange(visible, data.prices, data.changes, data.currency)}
   </section>`;
 };
 
