@@ -11,6 +11,7 @@ import type {
   PendingApproval,
   PrivacyDisclosureState,
   PrivacyJourneyState,
+  SignabilityVerdict,
   WalletStatus,
 } from "@bramble/wallet-ui/lab";
 import { dashboard, type WalletView } from "@bramble/wallet-ui/lab";
@@ -52,6 +53,8 @@ export type DashboardOptions = {
   readonly selectedMultisigIntentId?: string | null;
   readonly selectedNftId?: string | null;
   readonly selectedTokenId?: string | null;
+  /** The Home signability verdict; absent renders a normal, signable account. */
+  readonly signability?: SignabilityVerdict | null;
   readonly snoozed?: readonly string[];
   readonly status?: WalletStatus;
   readonly view?: WalletView;
@@ -115,5 +118,7 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     options.privacyJourney ?? { stage: "idle" },
     null,
     selectedMultisigIntentId,
+    null,
+    options.signability ?? null,
   );
 };
