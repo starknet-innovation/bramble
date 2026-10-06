@@ -47,6 +47,7 @@ import {
   randomAnalyticsUuid,
   withGatewayAnalyticsFlows,
 } from "./analytics/gateway-analytics";
+import { createApprovalKeepAlive } from "./approvals/approval-keepalive";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
   bindToolbarActivation,
@@ -55,6 +56,7 @@ import {
   showPendingApprovals,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
+import { createSignatureWaiters } from "./approvals/signature-waiters";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
@@ -85,6 +87,21 @@ const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
   void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
 };
 const approvals = createApprovalQueue();
+// The held-response registry lives here rather than inside the router context
+// so the worker keepalive below can watch it alongside the approval queue: a
+// held dapp response is the thing a suspension destroys, and the two counts
+// together are what "a decision is still pending" means (#350).
+const signatureWaiters = createSignatureWaiters();
+// Firefox tears down a non-persistent event page on its idle timer even while
+// a prompt is unanswered, and the queue and the waiters above are in-memory
+// only, so one parent API call per interval is what holds the page open until
+// the user decides. The interval runs only while something is pending.
+const approvalKeepAlive = createApprovalKeepAlive({
+  isPending: () => approvals.list().length > 0 || signatureWaiters.pending() > 0,
+  ...(runtime?.getPlatformInfo
+    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+    : {}),
+});
 const sessionStore = (() => {
   try {
     return createBrowserSessionStore();
@@ -341,6 +358,7 @@ const extension = { id: runtime?.id ?? "", origin: extensionOrigin() };
 const handleMessage = createMessageHandler(walletReader, extension, {
   activeStateCoordinator,
   approvals,
+  waiters: signatureWaiters,
   balanceSnapshots,
   nftSnapshots,
   session,
@@ -413,15 +431,19 @@ const broadcastWalletEvents = (message: unknown, response: unknown): void => {
   }
   if (announcesApprovalsChange(events)) {
     refreshPendingApprovals();
+    approvalKeepAlive.sync();
   }
 };
 
 // A held signTypedData request queues an approval and defers its response, so
 // it pushes an approvals-changed signal at queue time via this notifier, which
-// also covers the lazy expiry sweep.
+// also covers the lazy expiry sweep. The same signal is where the pending
+// decision starts and stops the worker keepalive, so a prompt left open keeps
+// the event page alive and a decision or sweep releases it.
 setApprovalNotifier(() => {
   broadcastEvent({ event: "approvalsChanged", type: "wallet.event" });
   refreshPendingApprovals();
+  approvalKeepAlive.sync();
 });
 
 runtime?.onInstalled.addListener((details) => {
