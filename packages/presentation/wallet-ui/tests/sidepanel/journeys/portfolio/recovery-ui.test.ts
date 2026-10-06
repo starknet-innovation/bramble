@@ -212,18 +212,24 @@ describe("recovery confirmation", () => {
 
   test("never attaches to a flag a re-render replaced while reviewing", async () => {
     let release: (value: RecoveryReview) => void = () => undefined;
-    const { app } = mount(
+    const { app, timers } = mount(
       "guardian",
       () =>
         new Promise<RecoveryReview>((resolve) => {
           release = resolve;
         }),
     );
+    const replaced = app.querySelector<HTMLElement>("[data-recovery-body]");
     app.querySelector<HTMLButtonElement>("#recover-account")?.click();
     app.replaceChildren();
     release(ARGENT_START);
     await tick();
     expect(document.querySelector("[data-recovery-confirm]")).toBeNull();
+    // Nothing was armed on the discarded flag: no panel built into it and no
+    // expiry timer left running for markup no one can see.
+    expect(replaced?.querySelector("[data-recovery-confirm]")).toBeNull();
+    expect(replaced?.querySelector("#recover-account")).not.toBeNull();
+    expect(timers.scheduled).toEqual([]);
   });
 
   test("confirm submits exactly the review, then disarms and force-refreshes", async () => {
