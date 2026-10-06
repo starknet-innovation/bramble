@@ -61,6 +61,30 @@ export type AuthorizableAccount = {
 // endpoint. Three re-pins cover that skew; a persistent miss fails closed.
 const LIVE_CLASS_READ_ATTEMPTS = 3;
 
+// Runs every read behind one decision at a freshly pinned accepted block. The
+// pin and a read can land on different nodes behind one load-balanced
+// endpoint; a sibling that has not seen the pin answers JSON-RPC 24. That is
+// skew, not chain state, so the whole decision re-pins and runs again. Any
+// other failure, and a miss on every attempt, propagates.
+const atAcceptedBlock = async <T>(
+  provider: RpcProvider,
+  decide: (blockIdentifier: string) => Promise<T>,
+): Promise<T> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < LIVE_CLASS_READ_ATTEMPTS; attempt += 1) {
+    const blockIdentifier = await acceptedBlockIdentifier(provider);
+    try {
+      return await decide(blockIdentifier);
+    } catch (error) {
+      if (!isBlockNotFoundError(error)) {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+  throw lastError;
+};
+
 /**
  * Refuses an account whose live class this wallet cannot encode an authorization for.
  *
@@ -71,47 +95,40 @@ const LIVE_CLASS_READ_ATTEMPTS = 3;
  * routes must do the same. When nothing is deployed, the stored class is the
  * one a deployment would use, so it is checked instead.
  *
- * The block pin and the class read can land on different nodes behind one
- * load-balanced endpoint. A sibling that has not seen the pin answers with
- * JSON-RPC 24. That is skew, not a missing account, so the read is re-pinned.
+ * Every read sits at one accepted block, re-pinned when a load-balanced
+ * sibling has not seen it yet (JSON-RPC 24); a persistent miss fails closed.
  */
 export const requireLiveAuthorizableClass = async (
   provider: RpcProvider,
   account: AuthorizableAccount,
 ): Promise<void> => {
   if (account.accountContractType === "braavos") {
-    // Braavos: the live class must be a known release and the stark key must
-    // be the account's only signer — a strong signer (2FA/3FA) demands a
-    // device approval this wallet cannot provide. Undeployed Braavos cannot
-    // authorize anything yet (deployment is unsupported), so absence refuses.
-    const blockIdentifier = await acceptedBlockIdentifier(provider);
-    const liveClassHash = await provider.getClassHashAt(account.address, blockIdentifier);
-    requireBraavosSigningClass(liveClassHash);
-    await requireCompatibleBraavosSigner(provider, account, blockIdentifier);
+    // Braavos: the live class must be an implementation release this wallet
+    // signs for, the wallet key the first stark signer, and no strong signer
+    // (2FA/3FA) active. An undeployed Braavos account has no contract to
+    // verify an authorization, so absence refuses (the read's own error).
+    await atAcceptedBlock(provider, async (blockIdentifier) => {
+      const liveClassHash = await provider.getClassHashAt(account.address, blockIdentifier);
+      requireBraavosSigningClass(liveClassHash);
+      await requireCompatibleBraavosSigner(provider, account, blockIdentifier);
+    });
     return;
   }
   if (account.accountContractType !== "argent") {
     return;
   }
-  let lastError: unknown;
-  for (let attempt = 0; attempt < LIVE_CLASS_READ_ATTEMPTS; attempt += 1) {
-    const blockIdentifier = await acceptedBlockIdentifier(provider);
+  await atAcceptedBlock(provider, async (blockIdentifier) => {
+    let liveClassHash: string;
     try {
-      const liveClassHash = await provider.getClassHashAt(account.address, blockIdentifier);
-      requireAuthorizableArgentClass(liveClassHash);
-      return;
+      liveClassHash = await provider.getClassHashAt(account.address, blockIdentifier);
     } catch (error) {
-      if (isContractNotFoundError(error)) {
-        requireAuthorizableArgentClass(account.classHash);
-        return;
-      }
-      if (!isBlockNotFoundError(error)) {
+      if (!isContractNotFoundError(error)) {
         throw error;
       }
-      lastError = error;
+      liveClassHash = account.classHash;
     }
-  }
-  throw lastError;
+    requireAuthorizableArgentClass(liveClassHash);
+  });
 };
 
 /**
@@ -315,39 +332,57 @@ const requireSignerSubject = (account: DeployedCompatibilitySubject): ArgentSign
   return { address: account.address, publicKeyX };
 };
 
+// The class deployed at an address, or null when nothing is: no contract, or
+// (unless `anyClass`, for existence-only checks) the zero class. A class hash
+// that is not a felt is a broken RPC answer and throws.
+const deployedClassAt = async (
+  provider: RpcProvider,
+  address: string,
+  blockIdentifier: string,
+  anyClass = false,
+): Promise<string | null> => {
+  let classHash: string;
+  try {
+    classHash = await provider.getClassHashAt(address, blockIdentifier);
+  } catch (error) {
+    if (isContractNotFoundError(error)) {
+      return null;
+    }
+    throw error;
+  }
+  if (anyClass) {
+    return classHash;
+  }
+  if (sameFelt(classHash, "0x0")) {
+    return null;
+  }
+  if (!isNonZeroStarkFieldElement(classHash)) {
+    throw new WalletError("RPC returned an invalid Argent account class hash");
+  }
+  return classHash;
+};
+
 /**
- * Verifies pinned Argent class and supported signer state at one accepted block.
- * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
- * A family this wallet cannot authorize for is refused before any RPC, so it is
- * never reported as merely undeployed.
+ * Whether the account is deployed in a state this wallet can submit for.
+ *
+ * OpenZeppelin is existence-only and an Argent multisig must run exactly its
+ * pinned class; both are single reads at `latest`. Argent and Braavos read
+ * class and signer state at one accepted block (re-pinned on JSON-RPC 24 skew)
+ * and refuse malformed or incompatible state before signing or broadcast.
+ * Undeployed (no contract, or class 0x0) answers false for every family.
  */
 export const isCompatibleAccountDeployed = async (
   provider: RpcProvider,
   account: DeployedCompatibilitySubject,
 ): Promise<boolean> => {
-  let classHash: string;
-  const blockIdentifier =
-    account.accountContractType === "openzeppelin"
-      ? "latest"
-      : await acceptedBlockIdentifier(provider);
-  try {
-    classHash = await provider.getClassHashAt(account.address, blockIdentifier);
-  } catch (error) {
-    if (isContractNotFoundError(error)) {
-      return false;
-    }
-    throw error;
-  }
   if (account.accountContractType === "openzeppelin") {
-    return true;
-  }
-  if (sameFelt(classHash, "0x0")) {
-    return false;
-  }
-  if (!isNonZeroStarkFieldElement(classHash)) {
-    throw new WalletError("RPC returned an invalid Argent account class hash");
+    return (await deployedClassAt(provider, account.address, "latest", true)) !== null;
   }
   if (account.accountContractType === "argent-multisig") {
+    const classHash = await deployedClassAt(provider, account.address, "latest");
+    if (classHash === null) {
+      return false;
+    }
     // A multisig's configuration is bound to its exact class, so equality is
     // the right test there and stays as it was.
     if (!sameFelt(classHash, account.classHash)) {
@@ -355,12 +390,19 @@ export const isCompatibleAccountDeployed = async (
     }
     return true;
   }
-  if (account.accountContractType === "braavos") {
-    requireBraavosSigningClass(classHash);
-    await requireCompatibleBraavosSigner(provider, requireSignerSubject(account), blockIdentifier);
+  return atAcceptedBlock(provider, async (blockIdentifier) => {
+    const classHash = await deployedClassAt(provider, account.address, blockIdentifier);
+    if (classHash === null) {
+      return false;
+    }
+    const subject = requireSignerSubject(account);
+    if (account.accountContractType === "braavos") {
+      requireBraavosSigningClass(classHash);
+      await requireCompatibleBraavosSigner(provider, subject, blockIdentifier);
+      return true;
+    }
+    requireAuthorizableArgentClass(classHash);
+    await requireCompatibleArgentSigner(provider, subject, blockIdentifier);
     return true;
-  }
-  requireAuthorizableArgentClass(classHash);
-  await requireCompatibleArgentSigner(provider, requireSignerSubject(account), blockIdentifier);
-  return true;
+  });
 };

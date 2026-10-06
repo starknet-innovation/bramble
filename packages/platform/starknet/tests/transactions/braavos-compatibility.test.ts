@@ -168,3 +168,40 @@ describe("Braavos strong signers", () => {
     ]);
   });
 });
+
+describe("Braavos pinned-block skew", () => {
+  // A chain whose first `misses` signer reads answer "Block not found", as a
+  // load-balanced sibling that has not seen the pin does.
+  const skewed = (misses: number) => {
+    const base = chain({ signers: STARK_ONLY });
+    let left = misses;
+    let pins = 0;
+    const provider = {
+      ...base.provider,
+      getBlockLatestAccepted: async () => {
+        pins += 1;
+        return { block_hash: PINNED, block_number: 1 };
+      },
+      callContract: async (request: { readonly entrypoint: string }, block: string) => {
+        if (left > 0) {
+          left -= 1;
+          throw new Error("24: Block not found");
+        }
+        return base.provider.callContract(request as never, block as never);
+      },
+    } as unknown as RpcProvider;
+    return { pins: () => pins, provider };
+  };
+
+  test("both gates re-pin after a miss and refuse after three", async () => {
+    for (const gate of [isCompatibleAccountDeployed, requireLiveAuthorizableClass]) {
+      const once = skewed(1);
+      // Resolves (true / undefined) rather than refusing on the skew.
+      expect(await gate(once.provider, account).then(() => "ok")).toBe("ok");
+      expect(once.pins()).toBe(2);
+      const always = skewed(3);
+      await expect(gate(always.provider, account)).rejects.toThrow("Block not found");
+      expect(always.pins()).toBe(3);
+    }
+  });
+});
