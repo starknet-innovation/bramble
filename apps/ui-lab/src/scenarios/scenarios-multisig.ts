@@ -45,6 +45,7 @@ const base: DashboardOptions = {
 const bindFixtureMultisig = (
   context: FrameContext,
   feeAffordability: "insufficient" | "ok" = "ok",
+  quote: "failed" | "ok" | "pending" = "ok",
 ): void => {
   const runtime = {
     sendMessage: async (message: unknown): Promise<unknown> => {
@@ -58,6 +59,8 @@ const bindFixtureMultisig = (
         message["signerPublicKeys"].every((key) => typeof key === "string") &&
         Number.isSafeInteger(message["threshold"])
       ) {
+        if (quote === "pending") return new Promise<never>(() => undefined);
+        if (quote === "failed") throw new Error("Deployment review unavailable");
         return {
           deploymentReview: {
             address: argentMultisig.record.address,
@@ -138,6 +141,23 @@ const prepareDeploymentApproval = async (context: FrameContext): Promise<void> =
   await new Promise<void>((resolve) => setTimeout(resolve, 450));
   await nextTurn();
 };
+
+/**
+ * Renders the approval stage while its quote is still in flight, or after the
+ * quote failed, so the action label and its busy state are directly inspectable.
+ */
+const prepareDeploymentQuote =
+  (quote: "failed" | "pending") =>
+  async (context: FrameContext): Promise<void> => {
+    bindFixtureMultisig(context, "ok", quote);
+    const continueButton = context.app.querySelector<HTMLButtonElement>(
+      "[data-multisig-deploy-continue]",
+    );
+    if (!continueButton) throw new Error("Missing production multisig approval action");
+    continueButton.click();
+    await new Promise<void>((resolve) => setTimeout(resolve, 450));
+    await nextTurn();
+  };
 
 const revealDeploymentParticipant = async (context: FrameContext): Promise<void> => {
   bindFixtureMultisig(context);
@@ -423,6 +443,26 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
       { class: "declared", funding: "ready", threshold: 2 },
     ),
     prepare: prepareDeploymentReview("ok"),
+  },
+  {
+    ...checkpoint(
+      "deploy-quote-pending",
+      "Deployment review in flight",
+      "While the quote is in flight the single action names what it will do next and is held busy, so a second press cannot deploy a review the reader has not seen.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", quote: "pending", step: "approval", threshold: 2 },
+    ),
+    prepare: prepareDeploymentQuote("pending"),
+  },
+  {
+    ...checkpoint(
+      "deploy-quote-failed",
+      "Deployment review failed",
+      "A failed debounced quote keeps the approval controls intact, restores the check label, and names the failure without a toast.",
+      { selectedMultisigId: null, view: "multisig-deploy" },
+      { class: "declared", quote: "failed", step: "approval", threshold: 2 },
+    ),
+    prepare: prepareDeploymentQuote("failed"),
   },
   {
     ...checkpoint(

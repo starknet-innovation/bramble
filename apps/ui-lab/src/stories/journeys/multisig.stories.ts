@@ -180,6 +180,38 @@ export const DeployReviewed: LabStory = {
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();
   },
 };
+export const DeployQuotePending: LabStory = {
+  args: { checkpointId: "deploy-quote-pending", scenarioId: "multisig" },
+  name: "Create · review in flight",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("#multisig-deploy-result")).toHaveTextContent(
+      "Preparing exact deployment fee",
+    );
+    const submit = body?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await expect(submit).toHaveTextContent("Check fee and address");
+    await expect(submit).toHaveAttribute("data-busy");
+    await expect(submit?.disabled).toBe(true);
+  },
+};
+export const DeployQuoteFailed: LabStory = {
+  args: { checkpointId: "deploy-quote-failed", scenarioId: "multisig" },
+  name: "Create · review failed",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("#multisig-deploy-result")).toHaveTextContent(
+      "Deployment review failed",
+    );
+    const submit = body?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await expect(submit).toHaveTextContent("Check fee and address");
+    await expect(submit?.disabled).toBe(false);
+    await expect(body?.querySelector(".toast.error")).toBeNull();
+  },
+};
 export const DeployFunding: LabStory = {
   args: { checkpointId: "deploy-funding", scenarioId: "multisig" },
   name: "Create · funding required",
