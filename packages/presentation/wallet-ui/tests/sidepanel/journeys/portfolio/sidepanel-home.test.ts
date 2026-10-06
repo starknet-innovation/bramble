@@ -378,6 +378,15 @@ describe("home read-only flag", () => {
     expect(tile("swap")).toContain("disabled");
     // Receiving needs no signature; it stays live.
     expect(tile("receive")).not.toContain("disabled");
+    // Shield must be a true disabled control, not a link into a signing flow
+    // (the privacy activation a read-only account cannot complete).
+    const shield = markup.slice(
+      markup.indexOf("Shield unavailable") - 120,
+      markup.indexOf("Shield unavailable"),
+    );
+    expect(markup).toContain("Shield unavailable — this account is read only");
+    expect(shield).toContain("disabled");
+    expect(markup).not.toContain('data-privacy-open="SN_MAIN:STRK');
   });
 
   test("renders a normal account when signable or unknown", () => {
