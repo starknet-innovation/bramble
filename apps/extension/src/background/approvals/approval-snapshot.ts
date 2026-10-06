@@ -30,6 +30,8 @@ export type {
  * Display-only invoke fee state, aligned with Send review classification.
  */
 export type InvokeFeeReview = {
+  /** The account must be deployed through its own step first; no fee. */
+  readonly deployFirst?: true;
   readonly fee: FeeEstimate | null;
   readonly feeAffordability: FeeAffordability;
   readonly feeEstimateFailed: boolean;
@@ -47,6 +49,7 @@ export type ApprovalRequest = PendingApproval & ApprovalPayload;
 // Copies an invoke entry's fee review onto its snapshot without materializing
 // absent fields, so non-invoke snapshots stay byte-identical to before.
 const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.deployFirst === true ? { deployFirst: true } : {}),
   ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
   ...(approval.feeAffordability === undefined
     ? {}

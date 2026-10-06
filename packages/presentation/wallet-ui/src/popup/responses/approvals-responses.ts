@@ -138,7 +138,18 @@ const isDeclarationReview = (value: unknown): value is DeclarationReview =>
   value["feeEstimateFailed"] === (value["fee"] === null) &&
   isCount(value["sierraProgramLength"]);
 
+// A deploy-first review (undeployed Braavos) is exactly one shape: no fee, no
+// failure, nothing pending, and a deployment required.
+const isDeployFirstReview = (value: Readonly<Record<string, unknown>>): boolean =>
+  value["deployFirst"] === undefined ||
+  (value["deployFirst"] === true &&
+    (value["fee"] ?? null) === null &&
+    value["feeEstimateFailed"] !== true &&
+    value["feeEstimatePending"] !== true &&
+    value["requiresDeployment"] === true);
+
 const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
+  isDeployFirstReview(value) &&
   (value["fee"] === undefined || value["fee"] === null || isFee(value["fee"])) &&
   (value["feeAffordability"] === undefined ||
     value["feeAffordability"] === "insufficient" ||
@@ -167,6 +178,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "callReviews",
       "context",
       "declaration",
+      "deployFirst",
       "existingGrant",
       "fee",
       "feeAffordability",
@@ -239,7 +251,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const feeValid =
     value["kind"] === "invoke"
       ? isInvokeFeeReview(value)
-      : value["fee"] === undefined &&
+      : value["deployFirst"] === undefined &&
+        value["fee"] === undefined &&
         value["feeAffordability"] === undefined &&
         value["feeEstimateFailed"] === undefined &&
         value["feeEstimatePending"] === undefined &&
