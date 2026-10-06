@@ -99,9 +99,9 @@ const dappScenario: WalletScenario = {
 
 // The feed's filter, search and sort controls are production bindings. The lab
 // cannot repaint a dock screen by itself, so the fixture hands the binding the
-// same content function the frame was rendered from; the sort control then
-// reshapes the feed exactly as it does in the app. The fixture runtime answers
-// the status read a repaint asks for.
+// same local repaint the shell passes in production; the sort control then
+// reshapes the feed exactly as it does in the app. The fixture runtime still
+// answers the status read the refresh control asks for.
 const activityFrameContent = (): string =>
   walletDashboard({
     activity: softwareActivity,
@@ -111,13 +111,14 @@ const activityFrameContent = (): string =>
 
 const bindActivityControls = (context: FrameContext): void => {
   const app = context.app;
-  const render = async (): Promise<void> => {
+  const repaint = (): void => {
     app.innerHTML = activityFrameContent();
     bindActivityControls(context);
   };
   bindActivity({
     app,
-    render,
+    render: async () => repaint(),
+    repaint,
     wallet: {
       loadStatus: async () => statusFor(softwareAccount),
     } as unknown as SidepanelWallet,

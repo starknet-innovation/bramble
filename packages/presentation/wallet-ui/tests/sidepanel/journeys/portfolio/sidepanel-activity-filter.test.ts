@@ -32,7 +32,7 @@ import {
 } from "../../../../src/sidepanel/journeys/portfolio/activity-view-state";
 import { activityScreen } from "../../../../src/sidepanel/journeys/portfolio/activity-views";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
-import { flush, makeWallet, paint, walletStatus } from "../../../support/transfer-ui-harness";
+import { makeWallet, paint, walletStatus } from "../../../support/transfer-ui-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -129,35 +129,38 @@ const entries: readonly ActivityEntry[] = [
 type Mounted = {
   readonly app: HTMLElement;
   readonly calls: ReturnType<typeof makeWallet>["calls"];
-  readonly renderCalls: WalletStatus[];
+  readonly repaints: number[];
 };
 
 const mountActivity = (
   filter: ActivityFilter = EMPTY_ACTIVITY_FILTER,
   viewContacts: readonly ActivityContact[] = contacts,
+  feed: readonly ActivityEntry[] = entries,
 ): Mounted => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.id = "app";
   document.body.append(app);
   const { calls, wallet } = makeWallet();
-  const renderCalls: WalletStatus[] = [];
-  // Mirrors the shell: rebuild the whole screen string and rebind, which is
-  // what makes a sort change visible in the feed's own shape.
-  const paintWith = (status: WalletStatus): void => {
-    paint(app, activityScreen([], status, entries, false, null, pricing, null, viewContacts));
+  const repaints: number[] = [];
+  // Mirrors the shell: the sort asks for a local repaint that rebuilds the
+  // screen string from the data already on hand, never a wallet status read,
+  // which is what makes a sort change visible in the feed's own shape.
+  const paintWith = (status: WalletStatus, entries_: readonly ActivityEntry[]): void => {
+    paint(app, activityScreen([], status, entries_, false, null, pricing, null, viewContacts));
     bindActivity({
       app,
-      render: async (next: WalletStatus): Promise<void> => {
-        renderCalls.push(next);
-        paintWith(next);
+      repaint: (): void => {
+        repaints.push(1);
+        paintWith(status, entries_);
       },
+      render: async (next: WalletStatus): Promise<void> => paintWith(next, entries_),
       wallet: wallet as unknown as Parameters<typeof bindActivity>[0]["wallet"],
     });
   };
   setActivityViewState(filter);
-  paintWith(walletStatus);
-  return { app, calls, renderCalls };
+  paintWith(walletStatus, feed);
+  return { app, calls, repaints };
 };
 
 const rows = (app: HTMLElement): HTMLElement[] => [
@@ -294,15 +297,16 @@ describe("activity feed sort control", () => {
     );
   });
 
-  test("repaints into one amount-ordered list, then back into day groups", async () => {
-    const { app, calls, renderCalls } = mountActivity();
+  test("repaints locally into one amount-ordered list, then back into day groups", () => {
+    const { app, calls, repaints } = mountActivity();
     expect(days(app)).toHaveLength(2);
 
     control<HTMLElement>(app, "[data-activity-sort='amount']").click();
-    await flush();
 
-    expect(calls.loadStatus).toBe(1);
-    expect(renderCalls).toHaveLength(1);
+    // The sort repaints from the data already on screen: no wallet read, so no
+    // failed status round trip can desync the pressed control from the state.
+    expect(calls.loadStatus).toBe(0);
+    expect(repaints).toHaveLength(1);
     expect(activityViewState().sort).toBe("amount");
     expect(days(app)).toHaveLength(0);
     const flat = [...app.querySelectorAll<HTMLElement>("#activity-feed .tx-list-flat li.tx-row")];
@@ -313,17 +317,65 @@ describe("activity feed sort control", () => {
 
     // Asking for the sort already in force repaints nothing.
     control<HTMLElement>(app, "[data-activity-sort='amount']").click();
-    await flush();
-    expect(calls.loadStatus).toBe(1);
+    expect(repaints).toHaveLength(1);
 
     control<HTMLElement>(app, "[data-activity-sort='date']").click();
-    await flush();
-    expect(calls.loadStatus).toBe(2);
+    expect(repaints).toHaveLength(2);
+    expect(calls.loadStatus).toBe(0);
     expect(activityViewState().sort).toBe("date");
     expect(days(app)).toHaveLength(2);
   });
 
-  test("keeps a search in force across the sort repaint", async () => {
+  test("groups rows by token so a raw amount is never compared across tokens", () => {
+    const usdc: ActivityEntry = {
+      accountId: account.id,
+      amount: "2",
+      hash: "0x4",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      status: "accepted",
+      submittedAt: 1752415500000,
+      summary: "Send 2 USDC",
+      token: "USDC",
+    };
+    const eth: ActivityEntry = {
+      accountId: account.id,
+      amount: "1",
+      hash: "0x5",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      status: "accepted",
+      submittedAt: 1752415500000,
+      summary: "Send 1 ETH",
+      token: "ETH",
+    };
+    // Raw amounts order 2 (USDC) above 1 (ETH), but grouping keeps each token's
+    // own order and never crosses tokens.
+    const { app } = mountActivity({ ...EMPTY_ACTIVITY_FILTER, sort: "amount" }, contacts, [
+      eth,
+      usdc,
+      ...entries,
+    ]);
+    const flat = [...app.querySelectorAll<HTMLElement>("#activity-feed .tx-list-flat li.tx-row")];
+    expect(flat.map((row) => row.dataset["activityToken"])).toEqual([
+      "ETH",
+      "STRK",
+      "STRK",
+      "STRK",
+      "STRK",
+      "USDC",
+    ]);
+    expect(flat.map((row) => row.dataset["activityAmount"])).toEqual([
+      "1",
+      "9",
+      "5",
+      "2",
+      "1.5",
+      "2",
+    ]);
+  });
+
+  test("keeps a search in force across the sort repaint", () => {
     const { app } = mountActivity();
     const search = control<HTMLInputElement>(app, "#activity-search");
     search.value = "ada";
@@ -331,7 +383,6 @@ describe("activity feed sort control", () => {
     expect(visible(app)).toHaveLength(2);
 
     control<HTMLElement>(app, "[data-activity-sort='amount']").click();
-    await flush();
 
     expect(control<HTMLInputElement>(app, "#activity-search").value).toBe("ada");
     const flat = [...app.querySelectorAll<HTMLElement>("#activity-feed .tx-list-flat li.tx-row")];
@@ -353,6 +404,41 @@ describe("activity feed sort control", () => {
     expect(html).toContain('value="accepted" selected');
     expect(html).toContain('value="STRK" selected');
     expect(visible(app)).toHaveLength(1);
+  });
+});
+
+describe("activity filter reconciliation", () => {
+  // The stored filter can outlive the option it names: a pending transaction
+  // settles between paints, so "pending" is no longer offered while the state
+  // still filters on it. Before the toolbar renders, the stale axis must reset
+  // so the control, the state and the rows agree instead of the feed emptying
+  // behind a control that reads "All statuses".
+  const settled = entries.map((entry) =>
+    entry.status === "pending" ? { ...entry, status: "accepted" as const } : entry,
+  );
+  const selectHtml = (html: string, name: string): string => {
+    const start = html.indexOf(`name="${name}"`);
+    return html.slice(start, html.indexOf("</select>", start));
+  };
+
+  test("resets a stale axis and shows the whole feed", () => {
+    const { app } = mountActivity(
+      { ...EMPTY_ACTIVITY_FILTER, status: "pending" },
+      contacts,
+      settled,
+    );
+
+    expect(activityViewState().status).toBe("all");
+    expect(visible(app)).toHaveLength(4);
+    expect(app.querySelector("#activity-result")?.textContent).toBe("");
+    const html = activityScreen([], walletStatus, settled, false, null, pricing, null, contacts);
+    expect(selectHtml(html, "activity-status")).toContain('value="all" selected');
+  });
+
+  test("keeps an axis whose value the feed still offers", () => {
+    const { app } = mountActivity({ ...EMPTY_ACTIVITY_FILTER, status: "accepted" });
+    expect(activityViewState().status).toBe("accepted");
+    expect(visible(app)).toHaveLength(2);
   });
 });
 

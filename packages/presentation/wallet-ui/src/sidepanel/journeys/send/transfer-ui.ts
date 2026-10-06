@@ -37,7 +37,7 @@ import {
   submitRejection,
 } from "./transfer-submit";
 
-export { activityExportToast, bindActivity } from "../portfolio/activity-ui";
+export { type ActivityUiDeps, activityExportToast, bindActivity } from "../portfolio/activity-ui";
 export { friendlyReviewError, recipientFieldError } from "./transfer-model";
 export { reviewPanelHtml } from "./transfer-review-markup";
 

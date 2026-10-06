@@ -27,6 +27,7 @@ import {
   activitySearchIndex,
   compareActivityByAmount,
   EMPTY_ACTIVITY_FILTER,
+  reconcileActivityFilter,
 } from "../../../../src/sidepanel/journeys/portfolio/activity-filter";
 
 // Address book entries are stored in the padded canonical spelling the
@@ -251,14 +252,29 @@ describe("activityRowMatches", () => {
 });
 
 describe("compareActivityByAmount", () => {
-  test("orders by recorded amount descending, then newest first", () => {
-    const ordered = [sent, swapped, received].sort(compareActivityByAmount);
+  // A recorded amount means nothing across tokens (1 ETH is not below 2 USDC),
+  // so the sort groups rows by token before it compares amounts.
+  const withToken = (entry: ActivityEntry, symbol: string): ActivityEntry => ({
+    ...entry,
+    token: symbol,
+  });
+
+  test("orders one token's rows by recorded amount descending, then newest first", () => {
+    const ordered = [sent, withToken(swapped, "STRK"), received].sort(compareActivityByAmount);
     expect(ordered.map((entry) => entry.hash)).toEqual(["0x3", "0x2", "0x1"]);
     const tied: ActivityEntry = { ...received, amount: "1.5" };
     expect(compareActivityByAmount(tied, sent)).toBeLessThan(0);
   });
 
-  test("sorts an entry with no numeric amount last instead of dropping it", () => {
+  test("groups by token so a raw amount is never compared across tokens", () => {
+    const eth = withToken({ ...sent, amount: "1", hash: "0xe" }, "ETH");
+    const usdc = withToken({ ...sent, amount: "2", hash: "0xu" }, "USDC");
+    const ordered = [usdc, eth, sent].sort(compareActivityByAmount);
+    // ETH and USDC each keep their own order; 2 USDC never outranks 1 ETH.
+    expect(ordered.map((entry) => entry.token)).toEqual(["ETH", "STRK", "USDC"]);
+  });
+
+  test("sorts a token-less row, and a row with no numeric amount, last", () => {
     const undated: ActivityEntry = {
       accountId: account.id,
       counterparty: CONTACT_SHORT,
@@ -272,10 +288,49 @@ describe("compareActivityByAmount", () => {
     };
     expect(compareActivityByAmount(undated, sent)).toBeGreaterThan(0);
     expect(compareActivityByAmount(sent, undated)).toBeLessThan(0);
-    // Two entries with no amount keep the feed's newest-first order.
-    expect(
-      compareActivityByAmount(undated, { submittedAt: undated.submittedAt + 1000 }),
-    ).toBeGreaterThan(0);
+    // Two rows with no amount, in one token, keep the feed's newest-first order.
+    const newer: ActivityEntry = { ...undated, submittedAt: undated.submittedAt + 1000 };
+    expect(compareActivityByAmount(undated, newer)).toBeGreaterThan(0);
+    // A row with no token at all sorts after every token-bearing row.
+    expect(compareActivityByAmount(swapped, sent)).toBeGreaterThan(0);
+    expect(compareActivityByAmount(sent, swapped)).toBeLessThan(0);
+  });
+});
+
+describe("reconcileActivityFilter", () => {
+  const options = activityFilterOptions([swapped, sent, received]);
+
+  test("passes a filter whose values the feed still offers", () => {
+    const kept = filter({ action: "Sent", status: "accepted", token: "strk" });
+    // The token axis compares case-insensitively, so "strk" still matches STRK.
+    expect(reconcileActivityFilter(kept, options)).toBe(kept);
+  });
+
+  test("resets only the stale axes, keeping the query and the sort", () => {
+    const stale = filter({
+      action: "Approved",
+      query: "ada",
+      sort: "amount",
+      status: "reverted",
+      token: "eth",
+    });
+    expect(reconcileActivityFilter(stale, options)).toEqual({
+      action: "all",
+      query: "ada",
+      sort: "amount",
+      status: "all",
+      token: "all",
+    });
+  });
+
+  test("clears every axis when the feed offers no options", () => {
+    const stale = filter({ action: "Sent", status: "accepted", token: "STRK", query: "x" });
+    expect(reconcileActivityFilter(stale, { actions: [], statuses: [], tokens: [] })).toEqual({
+      ...stale,
+      action: "all",
+      status: "all",
+      token: "all",
+    });
   });
 });
 

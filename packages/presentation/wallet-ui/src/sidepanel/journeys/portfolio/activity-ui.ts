@@ -3,7 +3,8 @@
  * degraded history honestly so local-only records are never mistaken for a
  * complete on-chain account history. The filter, sort and search controls write
  * only the ephemeral view state; the filter and the search are applied to the
- * rendered rows, while the sort changes the feed's shape and repaints.
+ * rendered rows, while the sort changes the feed's shape and asks the shell for
+ * a local repaint of the data it already holds.
  */
 
 import { activityToCsv } from "@bramble/transactions/activity";
@@ -22,10 +23,14 @@ import { activityViewState, setActivityViewState } from "./activity-view-state";
 /**
  * Dependencies used by the activity controls. All wallet reads stay behind the
  * permissioned runtime client and failures surface without mutating local data.
+ * `render` is the shell's status-driven repaint (the refresh button needs a
+ * fresh read); `repaint` re-renders the current screen from the data the shell
+ * already holds, so changing the sort never waits on the wallet.
  */
 export type ActivityUiDeps = {
   readonly app: Element | null;
   readonly render: (status: WalletStatus) => Promise<void>;
+  readonly repaint: () => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -118,8 +123,9 @@ const restoreSearchFocus = (app: Element | null): void => {
 
 /**
  * Wires the Activity filter, sort and search controls. `repaint` re-renders the
- * screen so the sort can change the feed's shape; the filter and the search are
- * applied in place.
+ * screen locally so the sort can change the feed's shape; the filter and the
+ * search are applied in place. The sort never reads the wallet, so a failed
+ * status read can no longer leave the pressed control and the state disagreeing.
  */
 const bindActivityView = (app: Element | null, repaint: () => void): void => {
   const search = app?.querySelector<HTMLInputElement>("#activity-search");
@@ -162,7 +168,7 @@ const bindActivityView = (app: Element | null, repaint: () => void): void => {
 /**
  * Binds the activity screen refresh, CSV export and feed-filter controls.
  */
-export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
+export const bindActivity = ({ app, render, repaint, wallet }: ActivityUiDeps): void => {
   const refreshButton = app?.querySelector<HTMLButtonElement>("#activity-refresh");
   const exportButton = app?.querySelector<HTMLButtonElement>("#activity-export");
 
@@ -175,12 +181,7 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
       control.addEventListener("click", (event) => event.stopPropagation());
     });
 
-  bindActivityView(app, () => {
-    void wallet
-      .loadStatus()
-      .then(render)
-      .catch(() => undefined);
-  });
+  bindActivityView(app, repaint);
 
   refreshButton?.addEventListener("click", () => {
     buttonBusy(refreshButton, true);

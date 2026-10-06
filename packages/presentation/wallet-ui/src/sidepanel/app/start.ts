@@ -183,7 +183,7 @@ export const startWalletUi = async (
     });
     bindDrawerFolders({ ...drawerFolders, app, render, wallet });
     bindReveal({ app, wallet });
-    transfer.bindActivity({ app, render, wallet });
+    transfer.bindActivity({ app, render, repaint: paint, wallet });
     transfer.bindTransfer({
       app,
       back: goBack,

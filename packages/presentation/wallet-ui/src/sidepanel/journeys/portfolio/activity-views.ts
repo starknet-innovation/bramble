@@ -21,11 +21,13 @@ import { approvalCard } from "../approvals/approval-cards";
 import {
   type ActivityContact,
   type ActivityFilter,
+  type ActivityFilterOptions,
   activityFilterOptions,
   compareActivityByAmount,
+  reconcileActivityFilter,
 } from "./activity-filter";
 import type { ActivityPricing } from "./activity-format";
-import { activityViewState } from "./activity-view-state";
+import { activityViewState, setActivityViewState } from "./activity-view-state";
 import { activityEmptyCopy, transactionGroups, transactionList } from "./home-tabs";
 
 const HISTORY_UNAVAILABLE_NOTICE =
@@ -41,11 +43,10 @@ const STATUS_TEXT: Readonly<Record<ActivityStatus, string>> = {
   reverted: "Reverted",
 };
 
-// The filter, sort and search controls. Every option is derived from the feed
-// so a control never offers a value that would match nothing, and every value
-// is selected from the view state so a repaint keeps the user's choice.
-const activityToolbar = (entries: readonly ActivityEntry[], filter: ActivityFilter): string => {
-  const options = activityFilterOptions(entries);
+// The filter, sort and search controls. Each select option comes from the
+// options the feed currently offers, so a control never offers a value that
+// would match nothing, and every value is selected from the reconciled filter.
+const activityToolbar = (filter: ActivityFilter, options: ActivityFilterOptions): string => {
   return `<div class="activity-toolbar">
     <label class="activity-search"><span>Search</span>${inputControl({
       ariaLabel: "Search activity by address or saved name",
@@ -135,7 +136,14 @@ export const activityScreen = (
   todayKey: number | null = null,
   contacts: readonly ActivityContact[] = [],
 ): string => {
-  const filter = activityViewState();
+  const options = activityFilterOptions(transactions);
+  const stored = activityViewState();
+  const filter = reconcileActivityFilter(stored, options);
+  // A repaint can outlive the value a filter axis was set to (a pending
+  // transaction settles, a token leaves the feed). Reset the state here, before
+  // the toolbar renders, so the select, the applied filter and the rows agree
+  // instead of the control reading "All" while the feed stays empty.
+  if (filter !== stored) setActivityViewState(filter);
   return dockScreen(
     "activity",
     `<div class="section-head activity-head"${multisig ? ` data-activity-account-id="${escapeHtml(multisig.id)}"` : ""}>
@@ -173,7 +181,7 @@ export const activityScreen = (
       ${
         transactions.length === 0
           ? emptyState(activityEmptyCopy(historyUnavailable))
-          : `${activityToolbar(transactions, filter)}
+          : `${activityToolbar(filter, options)}
       <section class="activity-summary" id="activity-party-summary" aria-label="Counterparty summary" hidden></section>
       <div id="activity-feed" data-activity-feed>${activityFeed(transactions, pricing, todayKey, contacts, filter)}</div>
       <p class="activity-empty" id="activity-no-matches" hidden>No matching transactions.</p>`

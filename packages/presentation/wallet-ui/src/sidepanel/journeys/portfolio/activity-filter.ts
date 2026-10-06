@@ -230,15 +230,23 @@ const numericAmount = (amount: string | undefined): number | null => {
 };
 
 /**
- * Comparator for the amount sort: recorded amount descending, then most recent
- * first. Amounts are compared numerically across tokens, the only ordering a
- * multi-token feed can offer, and the PR discloses it. An entry with no numeric
- * amount sorts last rather than being dropped.
+ * Comparator for the amount sort. A recorded amount is only comparable within
+ * its own token (1 ETH is not less than 2 USDC), so rows group by token symbol
+ * and each token's rows order by recorded amount descending, then most recent
+ * first. A token-less row sorts last, and an entry with no numeric amount sorts
+ * last within its token rather than being dropped.
  */
 export const compareActivityByAmount = (
-  left: Pick<ActivityEntry, "amount" | "submittedAt">,
-  right: Pick<ActivityEntry, "amount" | "submittedAt">,
+  left: Pick<ActivityEntry, "amount" | "submittedAt" | "token">,
+  right: Pick<ActivityEntry, "amount" | "submittedAt" | "token">,
 ): number => {
+  const leftToken = left.token?.trim().toLowerCase() ?? "";
+  const rightToken = right.token?.trim().toLowerCase() ?? "";
+  if (leftToken !== rightToken) {
+    if (leftToken.length === 0) return 1;
+    if (rightToken.length === 0) return -1;
+    return byText(leftToken, rightToken);
+  }
   const leftAmount = numericAmount(left.amount);
   const rightAmount = numericAmount(right.amount);
   if (leftAmount === null && rightAmount === null) return right.submittedAt - left.submittedAt;
@@ -246,6 +254,32 @@ export const compareActivityByAmount = (
   if (rightAmount === null) return -1;
   if (leftAmount !== rightAmount) return rightAmount - leftAmount;
   return right.submittedAt - left.submittedAt;
+};
+
+/**
+ * Reconciles a stored filter against the options the current feed offers: an
+ * axis whose chosen value is no longer present resets to `all`. Without this a
+ * repaint can leave the state filtering on a value the toolbar no longer shows
+ * (the select falls back to its first option), hiding every row while the
+ * control reads "All", and nothing the user picks fires a change. The query and
+ * the sort are not options and pass through unchanged. Returns the same object
+ * when nothing is stale, so a caller can skip writing unchanged state.
+ */
+export const reconcileActivityFilter = (
+  filter: ActivityFilter,
+  options: ActivityFilterOptions,
+): ActivityFilter => {
+  const action =
+    filter.action === "all" || options.actions.includes(filter.action) ? filter.action : "all";
+  const status =
+    filter.status === "all" || options.statuses.includes(filter.status) ? filter.status : "all";
+  const token =
+    filter.token === "all" ||
+    options.tokens.some((candidate) => candidate.toLowerCase() === filter.token.toLowerCase())
+      ? filter.token
+      : "all";
+  if (action === filter.action && status === filter.status && token === filter.token) return filter;
+  return { ...filter, action, status, token };
 };
 
 /** One visible row's facts as the per-counterparty summary needs them. */
