@@ -99,9 +99,10 @@ export const sendRecipientAccounts = (
 
 /**
  * Parses a strictly positive, finite decimal amount from a field string, or
- * null when the text is empty, non-numeric or not greater than zero. The Send
- * surfaces share this one gate, so a half-typed amount (for example a comma
- * decimal) is refused in the same way at the amount step and in the fee preview.
+ * null when the text is empty, non-numeric or not greater than zero. The fee
+ * preview gates on this rule, the same strictly-positive-finite test the submit
+ * path applies inline, so a half-typed amount (for example a comma decimal) is
+ * refused at the amount step too.
  */
 export const finitePositive = (value: string): number | null => {
   const parsed = Number(value);
