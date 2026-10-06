@@ -154,10 +154,6 @@ export type DeploymentStatusResponse = {
   readonly ok: true;
 };
 
-/**
- * Active-account signability verdict for the Home read-only flag. `reason` is
- * present exactly when `readOnly` is true.
- */
 /** A seed-recoverable account's on-chain recovery state for the Home flag. */
 export type RecoveryState = {
   readonly delaySeconds: number;
@@ -447,7 +443,7 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   isAccountId(value["accountId"]) &&
   typeof value["deployed"] === "boolean";
 
-/** Validates the signability verdict before the Home flag renders from it. */
+// Validates the recovery state a signability verdict may carry.
 const isRecoveryState = (value: unknown): value is RecoveryState =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["delaySeconds", "pendingUntil", "stage"]) &&
@@ -461,7 +457,7 @@ export const isAccountSignabilityResponse = (value: unknown): value is AccountSi
   isJson(value) &&
   hasOnlyKnownKeys(value, ["accountId", "ok", "readOnly", "reason", "recovery"]) &&
   value["ok"] === true &&
-  typeof value["accountId"] === "string" &&
+  isAccountId(value["accountId"]) &&
   typeof value["readOnly"] === "boolean" &&
   (value["readOnly"] === true
     ? isReadOnlyReason(value["reason"])
