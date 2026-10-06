@@ -40,7 +40,7 @@ const makeHandler = (
   account: AccountRef,
   options: {
     readonly argentState?: ArgentRecoveryState;
-    readonly deployed?: boolean;
+    readonly deployed?: boolean | "throws";
     readonly probe?: ProbeBehaviour;
   } = {},
 ) => {
@@ -76,6 +76,7 @@ const makeHandler = (
         return options.probe === "strong-signer" ? "strong-signer" : null;
       },
       async getDeploymentStatus() {
+        if (options.deployed === "throws") throw new Error("rpc unavailable");
         return options.deployed ?? true;
       },
       ...(options.argentState
@@ -268,5 +269,13 @@ describe("background account signability", () => {
     expect(await stageFor("present")).toBe("backup-guardian");
     expect(await stageFor("unknown")).toBe("backup-unknown");
     expect(await stageFor("absent")).toBe("owner-escape");
+  });
+
+  test('a failed deployment read is no verdict, never "Not deployed"', async () => {
+    for (const account of [braavosAccount, argentAccount]) {
+      const flaky = makeHandler(account, { deployed: "throws", probe: "strong-signer" });
+      expect(await flaky.ask()).toEqual({ accountId: account.id, ok: true, readOnly: false });
+      expect(flaky.probeCalls).toHaveLength(0);
+    }
   });
 });

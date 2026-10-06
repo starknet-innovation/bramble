@@ -75,9 +75,15 @@ export const handleAccountSignability = async (
     STARKNET_NETWORKS[context.networkId],
     await deps.preferencesStore.read(),
   );
+  // A failed read is no verdict, never "undeployed": a deployed Braavos must
+  // not flip to "Not deployed" on an RPC flake. Unknown answers signable, as
+  // a failed probe does below; the transaction path still checks for real.
   const deployed = await deps.runtimeRpc
     .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
-    .catch(() => false);
+    .catch(() => null);
+  if (deployed === null) {
+    return { accountId: account.id, ok: true, readOnly: false };
+  }
   if (!deployed) {
     return undeployedVerdict(account.id, vendor, account.classHash);
   }
