@@ -166,7 +166,7 @@
     "address": "0x750f660b93383da77fb68c676004544a10121a8a096c8d830114b33d332137e",
     "pubkey": "0x176e87a322ec271e9b6fb1c3b2e35baf62cf34e8594f0d58f601643bb1c477a",
     "classAtDeploy": null,
-    "expected": "missed by ETH/STRK probe despite holding native USDC (needs richer probes)",
+    "expected": "found once the native-USDC probe lands (D3 ERC-20 detection, feat/erc20-discovery-probe); undeployed, holds USDC only",
     "detectability": "D3",
     "backedBy": "none",
     "state": {
@@ -361,7 +361,7 @@
     "address": "0x4bff176c9426c57519057513c1635cebc905ffeb334b9b5515f55414329a58c",
     "pubkey": "0x51af56241a90565cda7d72927cc5729804d974d61492636438720d09dbcd5f0",
     "classAtDeploy": null,
-    "expected": "undeployed, native-USDC only \u2014 invisible to the ETH/STRK probe",
+    "expected": "found once the native-USDC probe lands; undeployed, holds USDC only on the vendor axis",
     "detectability": "D3",
     "backedBy": "none",
     "state": {
