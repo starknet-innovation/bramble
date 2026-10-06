@@ -115,6 +115,26 @@ export const BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH =
   "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
 
 /**
+ * The older Braavos implementation class (the table's "braavos legacy") that
+ * accounts upgraded before the current release still run.
+ */
+export const BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH =
+  "0x00816dd0297efc55dc1e7559020a3a825e81ef734b558f03c83325d4da7e6253";
+
+/**
+ * The Braavos classes a deployed account may be found RUNNING when this wallet
+ * signs for it: implementation releases that expose `get_signers` and verify a
+ * bare `(r, s)` against the first stark signer. The deployment classes are
+ * deliberately absent — their constructors replace themselves with an
+ * implementation, so a live account reporting one is not a state whose
+ * authorization rules this wallet has established, and it is refused.
+ */
+export const BRAAVOS_SIGNING_CLASS_HASHES: readonly string[] = [
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH,
+];
+
+/**
  * Every class this wallet recognises, with its role and constructor shape.
  * Ordered most-common-first so a candidate scan finds the usual case early.
  */
@@ -145,7 +165,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
   },
   {
     authorizationShape: "stark-pair",
-    classHash: "0x00816dd0297efc55dc1e7559020a3a825e81ef734b558f03c83325d4da7e6253",
+    classHash: BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH,
     constructorShape: "public-key",
     family: "braavos",
     label: "braavos legacy",

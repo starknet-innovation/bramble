@@ -19,6 +19,12 @@ import type { RpcProvider } from "starknet";
 
 import { withRpcFallback } from "../rpc/provider";
 import { isBlockNotFoundError, isContractNotFoundError } from "../rpc/rpc-not-found";
+import {
+  braavosSignerVerdict,
+  isBraavosSigningClass,
+  requireBraavosSigningClass,
+  requireCompatibleBraavosSigner,
+} from "./braavos-compatibility";
 
 /** The account fields the signer check reads. */
 type ArgentSignerSubject = {
@@ -80,7 +86,7 @@ export const requireLiveAuthorizableClass = async (
     // authorize anything yet (deployment is unsupported), so absence refuses.
     const blockIdentifier = await acceptedBlockIdentifier(provider);
     const liveClassHash = await provider.getClassHashAt(account.address, blockIdentifier);
-    requireAuthorizableBraavosClass(liveClassHash);
+    requireBraavosSigningClass(liveClassHash);
     await requireCompatibleBraavosSigner(provider, account, blockIdentifier);
     return;
   }
@@ -183,39 +189,23 @@ export const argentSigningRestriction = async (
 
 /**
  * Advisory signability classification for a deployed Braavos recovery
- * candidate: the live class must be a known Braavos release, the stark key a
- * registered signer, and any active strong signer (2FA/3FA) marks the account
- * view-only — unless a deferred-removal request has already expired by the
- * latest block's timestamp. Advisory only; the authoritative fail-closed check
- * is {@link requireCompatibleBraavosSigner}.
+ * candidate: the live class must be a Braavos implementation release this
+ * wallet signs for, the stark key the account's first stark signer, and any
+ * active strong signer (2FA/3FA) marks the account view-only — unless a
+ * deferred-removal request has already expired by the latest block's
+ * timestamp. Advisory only; the same rules run fail-closed at a pinned block
+ * through {@link requireLiveAuthorizableClass} and
+ * {@link isCompatibleAccountDeployed}.
  */
 export const braavosSigningRestriction = async (
   provider: RpcProvider,
   account: { readonly address: string; readonly publicKeyX: string },
 ): Promise<RecoverySigningRestriction | null> => {
   const liveClass = await provider.getClassHashAt(account.address, "latest");
-  const entry = accountClassEntry(liveClass);
-  if (entry === null || entry.family !== "braavos") {
+  if (!isBraavosSigningClass(liveClass)) {
     return "release";
   }
-  const read = (entrypoint: string) =>
-    provider.callContract({ calldata: [], contractAddress: account.address, entrypoint }, "latest");
-  const signers = parseBraavosSigners(await read("get_signers"));
-  if (!signers.stark.some((signer) => sameFelt(signer, account.publicKeyX))) {
-    return "owner-changed";
-  }
-  if (signers.strongCount === 0) {
-    return null;
-  }
-  const [expireAtFelt] = await read("get_deferred_remove_signers");
-  const expireAt = expireAtFelt === undefined ? 0n : BigInt(expireAtFelt);
-  if (expireAt !== 0n) {
-    const block = await provider.getBlock("latest");
-    if (BigInt(block.timestamp) > expireAt) {
-      return null;
-    }
-  }
-  return "strong-signer";
+  return braavosSignerVerdict(provider, account, "latest");
 };
 
 /**
@@ -253,79 +243,6 @@ const requireCompatibleArgentSigner = async (
   const guardian = await readSignerState("get_guardian");
   if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
     throw new WalletError("Deployed Argent account guardian is not supported by this wallet");
-  }
-};
-
-// get_signers serializes three felt arrays: [stark_len, ...stark,
-// secp256r1_len, ...secp256r1, webauthn_len, ...webauthn].
-type BraavosSigners = {
-  readonly stark: readonly string[];
-  readonly strongCount: number;
-};
-
-const parseBraavosSigners = (result: readonly string[]): BraavosSigners => {
-  const take = (offset: number): { readonly next: number; readonly values: readonly string[] } => {
-    const length = Number(BigInt(result[offset] ?? "0x0"));
-    if (!Number.isSafeInteger(length) || length < 0 || offset + 1 + length > result.length) {
-      throw new WalletError("Braavos account returned a malformed signer list");
-    }
-    return { next: offset + 1 + length, values: result.slice(offset + 1, offset + 1 + length) };
-  };
-  const stark = take(0);
-  const secp256r1 = take(stark.next);
-  const webauthn = take(secp256r1.next);
-  return {
-    stark: stark.values,
-    strongCount: secp256r1.values.length + webauthn.values.length,
-  };
-};
-
-/**
- * Refuses a deployed Braavos account whose live class this wallet cannot
- * authorize for: the class must be a known Braavos release that verifies plain
- * stark signatures. Worded apart from the signer refusals because "unknown
- * release" and "extra signer" lead a user elsewhere.
- */
-const requireAuthorizableBraavosClass = (classHash: string): void => {
-  const deployed = accountClassEntry(classHash);
-  if (deployed === null || deployed.family !== "braavos") {
-    throw new WalletError("Deployed Braavos account class is not a release this wallet recognizes");
-  }
-};
-
-/**
- * Refuses a deployed Braavos account this wallet cannot sign for: the stark
- * key must be a registered signer, and no strong signer (2FA/3FA) may be
- * active — unless a deferred-removal request has expired by the pinned
- * block's own timestamp, after which the account itself treats the strong
- * signers as gone. Fail-closed: malformed reads refuse rather than sign a
- * transaction the account would reject.
- */
-const requireCompatibleBraavosSigner = async (
-  provider: RpcProvider,
-  account: ArgentSignerSubject,
-  blockIdentifier: string,
-): Promise<void> => {
-  const read = (entrypoint: string) =>
-    provider.callContract(
-      { calldata: [], contractAddress: account.address, entrypoint },
-      blockIdentifier,
-    );
-  const signers = parseBraavosSigners(await read("get_signers"));
-  if (!signers.stark.some((signer) => sameFelt(signer, account.publicKeyX))) {
-    throw new WalletError("Deployed Braavos account owner does not match the wallet signer");
-  }
-  if (signers.strongCount === 0) {
-    return;
-  }
-  const [expireAtFelt] = await read("get_deferred_remove_signers");
-  const expireAt = expireAtFelt === undefined ? 0n : BigInt(expireAtFelt);
-  if (expireAt === 0n) {
-    throw new WalletError("Deployed Braavos account has an active 2FA signer");
-  }
-  const block = await provider.getBlock(blockIdentifier);
-  if (BigInt(block.timestamp) <= expireAt) {
-    throw new WalletError("Deployed Braavos account has an active 2FA signer");
   }
 };
 
@@ -439,7 +356,7 @@ export const isCompatibleAccountDeployed = async (
     return true;
   }
   if (account.accountContractType === "braavos") {
-    requireAuthorizableBraavosClass(classHash);
+    requireBraavosSigningClass(classHash);
     await requireCompatibleBraavosSigner(provider, requireSignerSubject(account), blockIdentifier);
     return true;
   }

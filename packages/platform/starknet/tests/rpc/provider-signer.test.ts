@@ -11,7 +11,11 @@ import {
   serializeAccountSignature,
 } from "@bramble/starknet/account-contracts";
 import { argentQueryAccount, krustyAccount } from "@bramble/starknet/provider";
-import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
+import {
+  BRAAVOS_BASE_CLASS_HASH,
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
 import { EDataAvailabilityMode, ETransactionVersion3, RpcProvider, type Signature } from "starknet";
@@ -154,6 +158,20 @@ describe("krustyAccount signer", () => {
           ...account,
           accountContractType: "braavos",
           classHash: "0x9999",
+          deploymentSalt: PUBLIC_KEY,
+        },
+        signHash,
+      ),
+    ).toThrow("Braavos account class hash is not a release this wallet recognizes");
+    // The stored class fixes the address, so it must be a deployment class; an
+    // implementation-only class there derives an address that is nobody's.
+    expect(() =>
+      krustyAccount(
+        provider,
+        {
+          ...account,
+          accountContractType: "braavos",
+          classHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
           deploymentSalt: PUBLIC_KEY,
         },
         signHash,

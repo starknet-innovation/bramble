@@ -8,7 +8,11 @@ import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import { memoryActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
-import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
+import {
+  BRAAVOS_BASE_CLASS_HASH,
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import {
   type AccountRef,
   ARGENT_ACCOUNT_CLASS_HASH,
@@ -200,7 +204,10 @@ describe("signTypedData approval gate", () => {
   test("refuses typed data for a 2FA Braavos account before using the key", async () => {
     // Stark-only Braavos signs; a strong signer refuses at the live check,
     // before the key is ever touched (issue 542 family).
-    const run = async (signers: readonly string[]) => {
+    const run = async (
+      signers: readonly string[],
+      liveClass = BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+    ) => {
       let signed = 0;
       const session = createUnlockSession();
       session.unlock(PASSPHRASE);
@@ -212,7 +219,7 @@ describe("signTypedData approval gate", () => {
             ({
               getBlock: async () => ({ block_hash: "0x9", timestamp: 1 }),
               getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 1 }),
-              getClassHashAt: async () => BRAAVOS_BASE_CLASS_HASH,
+              getClassHashAt: async () => liveClass,
               callContract: async ({ entrypoint }: { readonly entrypoint: string }) => {
                 if (entrypoint === "get_signers") return [...signers];
                 if (entrypoint === "get_deferred_remove_signers") return ["0x0"];
@@ -248,6 +255,13 @@ describe("signTypedData approval gate", () => {
     expect(guarded.signed).toBe(0);
     const starkOnly = await run(["0x1", account.publicKeyX, "0x0", "0x0"]);
     expect(starkOnly.signed).toBe(1);
+    // A live account reporting the base class is no implementation this
+    // wallet signs for, even with a clean stark-only signer list.
+    const onBase = await run(["0x1", account.publicKeyX, "0x0", "0x0"], BRAAVOS_BASE_CLASS_HASH);
+    expect(onBase.response).toEqual({
+      error: expect.stringContaining("not a release this wallet recognizes"),
+    });
+    expect(onBase.signed).toBe(0);
   });
 
   test("valid request never auto-signs — it queues and holds until approval", async () => {

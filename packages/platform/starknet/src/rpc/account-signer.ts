@@ -4,6 +4,7 @@ import { WalletError } from "@bramble/core/errors";
 import {
   accountClassEntry,
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  deploymentClasses,
 } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { isStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
@@ -214,9 +215,11 @@ const signerInputs = (
     ) {
       throw new WalletError("Argent account class hash is not a release this wallet recognizes");
     }
+    // A Braavos address derives from a deployment class, which is all the
+    // stored class can be; the implementation it runs is checked live.
     if (
       account.accountContractType === "braavos" &&
-      accountClassEntry(account.classHash)?.family !== "braavos"
+      !deploymentClasses("braavos").some((entry) => sameFelt(entry.classHash, account.classHash))
     ) {
       throw new WalletError("Braavos account class hash is not a release this wallet recognizes");
     }

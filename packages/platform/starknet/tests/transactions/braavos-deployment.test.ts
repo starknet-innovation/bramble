@@ -67,7 +67,8 @@ test("checks a deployed Braavos account's live signers instead of refusing by fa
     ({
       getBlock: async () => ({ block_hash: "0xb", timestamp: 1 }),
       getBlockLatestAccepted: async () => ({ block_hash: "0xb", block_number: 1 }),
-      getClassHashAt: async () => BRAAVOS_BASE_CLASS_HASH,
+      // A deployed Braavos account runs an implementation, never its base.
+      getClassHashAt: async () => BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
       callContract: async ({ entrypoint }: { readonly entrypoint: string }) => {
         if (entrypoint === "get_signers") return [...signers];
         if (entrypoint === "get_deferred_remove_signers") return ["0x0"];

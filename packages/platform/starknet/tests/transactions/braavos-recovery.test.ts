@@ -5,7 +5,10 @@ import {
   getBraavosRecoveryState,
   reviewBraavosRecovery,
 } from "@bramble/starknet/rpc";
-import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
+import {
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { RpcProvider } from "starknet";
 
@@ -38,7 +41,7 @@ const providerWith = (
 ): RpcProvider =>
   ({
     async getClassHashAt() {
-      return BRAAVOS_DEPLOYMENT_CLASS_HASH;
+      return BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH;
     },
     async getBlock() {
       return { block_hash: "0xb", timestamp: 1 };
