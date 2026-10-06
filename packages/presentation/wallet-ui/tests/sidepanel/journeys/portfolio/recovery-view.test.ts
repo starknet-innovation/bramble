@@ -125,4 +125,18 @@ describe("read-only recovery notice", () => {
     );
     expect(unknown).not.toContain('id="recover-account"');
   });
+
+  test("a pending change to a new guardian is shown neutrally, never as a removal", () => {
+    const markup = notice({
+      readOnly: true,
+      reason: "guardian",
+      recovery: { delaySeconds: 604_800, pendingUntil: null, stage: "guardian-change" },
+    });
+    expect(markup).toContain(
+      "A change to a new guardian, started with this account&#39;s key, is pending.",
+    );
+    expect(markup).not.toContain("Removing the guardian");
+    expect(markup).not.toContain("Complete recovery");
+    expect(markup).toContain('id="recover-account"');
+  });
 });

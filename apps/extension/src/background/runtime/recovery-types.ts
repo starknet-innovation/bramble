@@ -11,7 +11,8 @@ import type { FeeEstimate } from "@bramble/starknet/rpc";
  * `pendingUntil` is when a running removal takes effect (Braavos) or can be
  * completed (Ready); `expiresAt` ends Ready's completion window (absent for Braavos).
  * `stage` is Ready-only: the escape's live status, `owner-escape` when a
- * guardian-approved key change is pending instead, or `backup-guardian` /
+ * guardian-approved key change is pending instead, `guardian-change` when an
+ * escape to a NEW guardian is pending (never a removal), or `backup-guardian` /
  * `backup-unknown` when a backup guardian (or a failed read of it) makes the
  * phrase escape unavailable.
  */
@@ -23,6 +24,7 @@ export type AccountRecoveryState = {
     | "backup-guardian"
     | "backup-unknown"
     | "expired"
+    | "guardian-change"
     | "owner-escape"
     | "pending"
     | "ready";
@@ -41,7 +43,10 @@ export type RecoveryReviewResponse = {
   readonly fee: FeeEstimate;
   readonly ok: true;
   readonly readyAt: number;
-  readonly replaces: { readonly kind: "owner-escape"; readonly readyAt: number } | null;
+  readonly replaces: {
+    readonly kind: "guardian-change" | "owner-escape";
+    readonly readyAt: number;
+  } | null;
   readonly step: "complete" | "start";
 };
 

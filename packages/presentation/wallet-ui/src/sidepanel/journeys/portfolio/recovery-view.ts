@@ -46,6 +46,10 @@ const READY_CANCEL = "Cancelling needs this account's key and your guardian toge
 // trigger_escape_owner is accepted only when the guardian signs: a live owner
 // escape is a key replacement the guardian approved.
 const OWNER_ESCAPE = "Your guardian has started replacing this account's key.";
+// trigger_escape_guardian(Some(new)) is accepted when the owner alone signs:
+// a guardian escape to a new guardian was started with this account's
+// key. Completing it installs that guardian, so it is never shown as a removal.
+const GUARDIAN_CHANGE = "A change to a new guardian, started with this account's key, is pending.";
 
 // trigger_escape_guardian(None) is rejected while a backup guardian is set, so
 // the phrase cannot remove the guardian; a failed read is shown, not guessed.
@@ -96,6 +100,8 @@ export const readOnlyNotice = (
     body = `${detail(`The last guardian removal expired on ${at(expiresAt)} without being completed.`)}${button("Recover account")}`;
   } else if (kind === "argent" && stage === "owner-escape") {
     body = `${detail(OWNER_ESCAPE)}${button("Recover account")}`;
+  } else if (kind === "argent" && stage === "guardian-change") {
+    body = `${detail(GUARDIAN_CHANGE)}${button("Recover account")}`;
   } else if (kind === "argent" && pendingUntil !== null && expiresAt !== undefined) {
     body = detail(
       `Removing the guardian — you can complete it after ${at(pendingUntil)}, until ${at(expiresAt)}. ${READY_CANCEL}`,
@@ -159,9 +165,9 @@ const recoveryConfirmCopy = (
     ],
     title: "Remove the guardian from this account?",
     warning:
-      review.replaces !== null
-        ? `${OWNER_ESCAPE} Continuing cancels that change. If you asked for it, don't continue.`
-        : null,
+      review.replaces === null
+        ? null
+        : `${review.replaces.kind === "owner-escape" ? OWNER_ESCAPE : GUARDIAN_CHANGE} Continuing cancels that change. If you asked for it, don't continue.`,
   };
 };
 

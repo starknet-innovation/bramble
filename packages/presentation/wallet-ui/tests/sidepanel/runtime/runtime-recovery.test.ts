@@ -123,6 +123,9 @@ describe("recovery reply validators", () => {
       false,
     );
     expect(isRecoveryReview({ ...REVIEW, replaces: { kind: "other", readyAt: 1 } })).toBe(false);
+    expect(isRecoveryReview({ ...REVIEW, replaces: { kind: "guardian-change", readyAt: 1 } })).toBe(
+      true,
+    );
     expect(isRecoveryReview({ ...REVIEW, delaySeconds: 1 })).toBe(false);
     expect(isRecoveryReview({ ...REVIEW, fee: { overallFee: "1", unit: "BTC" } })).toBe(false);
     expect(isRecoveryReview({ ...REVIEW, expiresAt: null })).toBe(true);
@@ -131,6 +134,7 @@ describe("recovery reply validators", () => {
   test("accept the recovery state stages and nothing else", () => {
     expect(isRecoveryState({ delaySeconds: 1, pendingUntil: null })).toBe(true);
     for (const stage of [
+      "guardian-change",
       "backup-guardian",
       "backup-unknown",
       "expired",

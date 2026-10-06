@@ -15,7 +15,8 @@ const isTime = (value: unknown): value is number =>
  * `pendingUntil` is when a running removal takes effect (Braavos) or can be
  * completed (Ready); `expiresAt` closes Ready's completion window; `stage` is
  * Ready-only: the escape's status, `owner-escape` when a guardian-approved key
- * change is pending, or `backup-guardian` / `backup-unknown` when a backup
+ * change is pending, `guardian-change` when an escape to a NEW guardian is
+ * pending (never a removal), or `backup-guardian` / `backup-unknown` when a backup
  * guardian (or a failed read of it) makes the phrase escape unavailable.
  */
 export type RecoveryState = {
@@ -26,6 +27,7 @@ export type RecoveryState = {
     | "backup-guardian"
     | "backup-unknown"
     | "expired"
+    | "guardian-change"
     | "owner-escape"
     | "pending"
     | "ready";
@@ -35,6 +37,7 @@ const RECOVERY_STAGES: readonly unknown[] = [
   "backup-guardian",
   "backup-unknown",
   "expired",
+  "guardian-change",
   "owner-escape",
   "pending",
   "ready",
@@ -51,14 +54,14 @@ export const isRecoveryState = (value: unknown): value is RecoveryState =>
 
 /** A pending escape a Ready start would cancel, identified by its `readyAt`. */
 export type RecoveryReplacedEscape = {
-  readonly kind: "owner-escape";
+  readonly kind: "guardian-change" | "owner-escape";
   readonly readyAt: number;
 };
 
 const isReplacedEscape = (value: unknown): value is RecoveryReplacedEscape =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["kind", "readyAt"]) &&
-  value["kind"] === "owner-escape" &&
+  (value["kind"] === "owner-escape" || value["kind"] === "guardian-change") &&
   isTime(value["readyAt"]);
 
 /**

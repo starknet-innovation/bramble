@@ -66,7 +66,7 @@ const BACKUP_UNCHECKED = "Could not check this account's backup guardian";
  * so an acknowledgement covers that escape and not a later replacement.
  */
 type PendingEscapeChange = {
-  readonly kind: "owner-escape";
+  readonly kind: "guardian-change" | "owner-escape";
   readonly readyAt: number;
 };
 
@@ -78,8 +78,10 @@ export type ArgentRecoveryStep = "complete" | "start";
  * `readyAt`/`expiresAt` bound the window in which a guardian escape can be
  * completed (`expiresAt = readyAt + securityPeriodSeconds`), null when none is
  * recorded. `pendingChange` reports a live escape that starting a removal
- * would cancel — an OWNER escape (a key replacement the guardian approved) —
- * with its `readyAt`, which identifies that exact escape for the confirmation.
+ * would cancel — an OWNER escape (a key replacement the guardian approved) or
+ * a guardian escape to a NEW guardian (a guardian change started with this
+ * account's key, which this flow never completes) — with its `readyAt`, which
+ * identifies that exact escape for the confirmation.
  * `guardianBackup` is `present` when the account also has a backup guardian
  * (the phrase cannot remove the guardian then) and `unknown` when that read
  * failed; callers treat `unknown` as unavailable, never as absent.
@@ -169,6 +171,32 @@ const readGuardianBackup = async (
   return BigInt(value) === 0n ? "absent" : "present";
 };
 
+// The new_signer of a guardian escape, from its Option<SignerStorageValue>
+// serde: None (a removal) is the variant felt 1 alone; Some (a change to a new
+// guardian) is the variant felt 0 followed by stored_value and signer_type.
+// Anything else fails closed.
+const guardianEscapeTarget = (escapeFelts: readonly string[]): "change" | "removal" => {
+  const variant = escapeFelts[2] === undefined ? null : BigInt(escapeFelts[2]);
+  if (variant === 1n && escapeFelts.length === 4) return "removal";
+  if (variant === 0n && escapeFelts.length === 6) return "change";
+  throw new WalletError("The account reported an unrecognised escape");
+};
+
+// Which pending change, if any, an escape is rather than a guardian removal:
+// an owner escape (a key replacement the guardian approved), or a guardian
+// escape to a NEW guardian (escape_guardian() would install it, not remove the
+// guardian). Null for a guardian removal; an unknown type fails closed.
+const pendingChangeOf = (
+  escapeType: bigint,
+  escapeFelts: readonly string[],
+): PendingEscapeChange["kind"] | null => {
+  if (escapeType === OWNER_ESCAPE_TYPE) return "owner-escape";
+  if (escapeType !== GUARDIAN_ESCAPE_TYPE) {
+    throw new WalletError("The account reported an unrecognised escape type");
+  }
+  return guardianEscapeTarget(escapeFelts) === "change" ? "guardian-change" : null;
+};
+
 const feltOrZero = (value: string | undefined): bigint =>
   value === undefined ? 0n : BigInt(value);
 
@@ -207,17 +235,13 @@ const readEscapeState = async (
   if (readyAt === 0n || status === "none") {
     return { ...none, pendingChange: null };
   }
-  if (escapeType === OWNER_ESCAPE_TYPE) {
-    // An expired owner escape is inert; a live one is a key replacement in
-    // progress that starting a guardian escape would cancel.
+  const change = pendingChangeOf(escapeType, escapeFelts);
+  if (change !== null) {
+    // Not a removal this flow can show or complete. A live one is cancelled by
+    // starting a removal (trigger_escape_guardian resets any escape); an
+    // expired one is inert.
     const live = status === "pending" || status === "ready";
-    return {
-      ...none,
-      pendingChange: live ? { kind: "owner-escape", readyAt: Number(readyAt) } : null,
-    };
-  }
-  if (escapeType !== GUARDIAN_ESCAPE_TYPE) {
-    throw new WalletError("The account reported an unrecognised escape type");
+    return { ...none, pendingChange: live ? { kind: change, readyAt: Number(readyAt) } : null };
   }
   return {
     expiresAt: Number(readyAt) + securityPeriodSeconds,
@@ -301,6 +325,29 @@ const estimateStep = (
     tip: RECOVERY_TIP,
   });
 
+// The live step, refused unless it is the one the user confirmed and, when it
+// cancels a pending escape, the acknowledgement names that exact escape (a
+// cancelled and re-triggered one has a different ready_at).
+const confirmedStep = (
+  state: ArgentRecoveryState,
+  expectedStep: ArgentRecoveryStep,
+  replaceEscapeReadyAt: number | undefined,
+): ArgentRecoveryStep => {
+  const step = nextStep(state.status);
+  if (step !== expectedStep) {
+    throw new WalletError("The recovery step changed. Review it and try again.");
+  }
+  const pending = step === "start" ? state.pendingChange : null;
+  if (pending !== null && replaceEscapeReadyAt !== pending.readyAt) {
+    throw new WalletError(
+      pending.kind === "owner-escape"
+        ? "A guardian-approved key change is pending. Review it and try again."
+        : "A guardian change is pending. Review it and try again.",
+    );
+  }
+  return step;
+};
+
 /**
  * Estimates the next escape step and returns what its confirmation states.
  * Refuses an account the flow does not apply to, an escape still in its
@@ -369,18 +416,7 @@ export const submitArgentRecovery = async (
       }
       await requireRecoverableArgent(provider, account);
       const state = await readEscapeState(provider, account.address);
-      const step = nextStep(state.status);
-      if (step !== expectedStep) {
-        throw new WalletError("The recovery step changed. Review it and try again.");
-      }
-      // The acknowledgement covers the exact escape the confirmation showed: a
-      // cancelled and re-triggered one has a different ready_at and is refused.
-      const pending = step === "start" ? state.pendingChange : null;
-      if (pending !== null && input.replaceEscapeReadyAt !== pending.readyAt) {
-        throw new WalletError(
-          "A guardian-approved key change is pending. Review it and try again.",
-        );
-      }
+      const step = confirmedStep(state, expectedStep, input.replaceEscapeReadyAt);
       const estimate = await estimateStep(provider, account, step, makeQueryAccount);
       requireWithinReviewedRecoveryFee(estimate, reviewedFee, MAX_ESCAPE_FEE_FRI);
       const capture = capturingRecoverySigner(input.signHash, input.isAuthorized, input.onSigned);

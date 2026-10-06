@@ -135,8 +135,10 @@ const recoveryState = async (
   }
   // A guardian-approved key change in progress is surfaced, never read as
   // "nothing pending": starting a guardian escape would cancel it.
-  if (state.pendingChange?.kind === "owner-escape") {
-    return { delaySeconds, pendingUntil: null, stage: "owner-escape" };
+  if (state.pendingChange !== null) {
+    // An owner escape, or a guardian escape to a NEW guardian: either way not a
+    // removal this flow can show as pending or complete.
+    return { delaySeconds, pendingUntil: null, stage: state.pendingChange.kind };
   }
   // No escape: the flag offers a fresh "Recover account". A running, ready or
   // expired one carries its window so the flag can state it.

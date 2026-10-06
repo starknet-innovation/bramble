@@ -168,6 +168,18 @@ describe("recovery confirmation", () => {
     expect(app.querySelector("#recovery-confirm")?.textContent).toBe("Start removal");
   });
 
+  test("warns that starting cancels a pending change to a new guardian", async () => {
+    const { app } = mount("guardian", {
+      ...ARGENT_START,
+      replaces: { kind: "guardian-change", readyAt: 1_899_000_000 },
+    });
+    await open(app);
+    expect(text(app)).toContain(
+      "A change to a new guardian, started with this account's key, is pending. Continuing cancels that change. If you asked for it, don't continue.",
+    );
+    expect(text(app)).not.toContain("Your guardian has started replacing");
+  });
+
   test("says completing a Ready escape is immediate", async () => {
     const { app } = mount("guardian", { ...ARGENT_START, step: "complete" }, { stage: "ready" });
     await open(app);

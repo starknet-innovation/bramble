@@ -242,6 +242,11 @@ describe("background account signability", () => {
       pendingUntil: null,
       stage: "owner-escape",
     });
+    // A guardian escape to a NEW guardian is never a removal: no window, no
+    // pending/ready stage, only its own neutral stage.
+    expect(
+      await verdictFor({ ...none, pendingChange: { kind: "guardian-change", readyAt: 1_500 } }),
+    ).toEqual({ delaySeconds: 600, pendingUntil: null, stage: "guardian-change" });
   });
 
   test("a backup guardian, or an unanswered read of it, withholds Ready recovery", async () => {
