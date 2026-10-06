@@ -49,8 +49,9 @@ type AccountHideDecision =
  * three outcomes can be asserted directly.
  *
  * The last-visible refusal is per network, not per wallet: `accountForNetwork`
- * falls back to the first account of a network from the unfiltered vault, so a
- * network left with no visible account would open on one no list renders.
+ * prefers a visible account on the network and only falls back to a hidden one
+ * when none is visible, so a network left with no visible account would open on
+ * one no list renders.
  */
 export const decideAccountHide = (
   accounts: readonly AccountRef[],
