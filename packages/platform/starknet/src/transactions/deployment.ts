@@ -1,6 +1,6 @@
 /**
  * Counterfactual account deployment: address-proven DEPLOY_ACCOUNT parameters
- * plus status reads and submissions for OpenZeppelin accounts.
+ * plus status reads and submissions for OpenZeppelin, Argent, and Braavos.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -401,9 +401,9 @@ export const getDeploymentStatus = async (
 };
 
 /**
- * Estimates counterfactual deployment without private signing or broadcast.
- * Argent uses a shape-correct query signature with validation enabled; OZ
- * skips validation so a Ledger review never prompts the device.
+ * Estimates counterfactual deployment without broadcast. Argent validates on a
+ * mock query signature and OZ skips validation (no Ledger prompt); Braavos signs
+ * its query-version deploy for real with the account key, never submittable.
  */
 export const estimateAccountDeploymentFee = async (
   { account, rpcUrls, signHash }: DeployAccountInput,
