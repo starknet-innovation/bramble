@@ -8,7 +8,11 @@ import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@bramble/vault/accounts";
 import { isVaultV2, isVaultV8, isVaultV11, type Vault } from "@bramble/vault/schema";
-import { BRAAVOS_DEPLOYMENT_CLASS_HASH, isAccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
+import {
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  isAccountRef,
+  isKeylessAccount,
+} from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath, READY_EIP2645_APPLICATION } from "@bramble/wallet-model/ledger-path";
 import { sameFelt } from "@bramble/wallet-model/networks";
 

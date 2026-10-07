@@ -17,7 +17,11 @@ import {
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
-import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import type {
+  AccountRef,
+  DerivedAccountRef,
+  LedgerAccountRef,
+} from "@bramble/wallet-model/accounts";
 import { hash, logger, type RpcProvider } from "starknet";
 
 logger.setLogLevel("FATAL");
@@ -42,6 +46,25 @@ const braavos: DerivedAccountRef = {
   publicKeyY: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
 
+// The same Braavos account, but owned by a Ledger key: keyless and x-only, at
+// Ready's `argentx` Ledger scheme. The deploy path is key-source-agnostic, so a
+// Ledger-owned Braavos must produce the identical extended signature.
+const braavosLedger: LedgerAccountRef = {
+  accountContractType: "braavos",
+  address: ADDRESS,
+  classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  deploymentSalt: PUBLIC_KEY,
+  derivation: {
+    accountIndex: 0,
+    eip2645application: "argentx",
+    kind: "ledger",
+    path: "m/2645'/1195502025'/1148870696'/0'/0'/0",
+  },
+  id: `SN_SEPOLIA:${ADDRESS}`,
+  networkId: "SN_SEPOLIA",
+  publicKeyX: PUBLIC_KEY,
+};
+
 // The AdditionalDeploymentParams the signer must bind, and their hash.
 const PARAMS = [BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH, ...Array(9).fill("0x0"), CHAIN_ID];
 const AUX_HASH = hash.computePoseidonHashOnElements(PARAMS);
@@ -54,6 +77,7 @@ type Recorded = { readonly args: readonly unknown[]; readonly method: string };
 const harness = (
   options: {
     readonly accept?: (signed: readonly string[]) => string;
+    readonly account?: AccountRef;
     readonly auxKey?: string;
   } = {},
 ) => {
@@ -105,7 +129,12 @@ const harness = (
     const publicKey = messageHash === AUX_HASH ? (options.auxKey ?? PUBLIC_KEY) : PUBLIC_KEY;
     return { publicKey, r: messageHash, s: "0x5" };
   };
-  const input = { account: braavos, reviewedFee: REVIEWED, rpcUrls: [], signHash };
+  const input = {
+    account: options.account ?? braavos,
+    reviewedFee: REVIEWED,
+    rpcUrls: [],
+    signHash,
+  };
   return { calls, input, makeProvider: () => provider, signed };
 };
 
@@ -195,4 +224,24 @@ test("refuses a Braavos deployment whose parameters signature is from another ke
     expect(of(h.calls, "getEstimateFee")).toHaveLength(0);
     expect(of(h.calls, "deployAccount")).toHaveLength(0);
   }
+});
+
+test("deploys a Ledger-owned Braavos account through the identical extended signature", async () => {
+  // A keyless, x-only Braavos account owned by a Ledger key signs its deploy no
+  // differently from a phrase-derived one: the same aux-then-deploy pair, the
+  // deploy hash signed last and accepted by the node. Guards against a keyless
+  // guard ever blocking the one family a device can own but not create here.
+  const h = harness({ account: braavosLedger });
+  const result = await submitAccountDeployment(
+    { ...h.input, rpcUrls: rpcUrls("ledger") },
+    h.makeProvider,
+  );
+  const broadcasts = of(h.calls, "deployAccount");
+  expect(broadcasts).toHaveLength(1);
+  expect(h.signed).toHaveLength(4);
+  expect(h.signed[2]).toBe(AUX_HASH);
+  expect(result.transactionHash).toBe(h.signed[3] as string);
+  expect(result.transactionHash).not.toBe(AUX_HASH);
+  const [transaction] = (broadcasts[0]?.args ?? []) as [Invocation];
+  expectExtendedSignature(transaction.signature, result.transactionHash);
 });
