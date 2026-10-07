@@ -8,9 +8,11 @@
 
 import { resolveSpring } from "@bramble/ui-kit/spring";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { prefersReducedMotion, projectMomentum } from "../../shared/motion";
+import { bindRecoverAccount } from "./recovery-ui";
 
 /**
  * State accessors and services the home bindings close over. State lives in
@@ -20,10 +22,8 @@ export type HomeUiDeps = {
   readonly app: Element | null;
   readonly drawerOpen: () => boolean;
   readonly setDrawerOpen: (open: boolean) => void;
-  readonly drawerGroupFilter: () => string | null;
-  readonly setDrawerGroupFilter: (filter: string | null) => void;
   readonly networkId: () => string;
-  readonly render: (status: WalletStatus) => Promise<void>;
+  readonly render: (status: WalletStatus, refreshReason?: RefreshReason) => Promise<void>;
   readonly selectPortfolio?: (multisigId: string | null) => void;
   readonly startAddAccount?: () => void;
   readonly wallet: SidepanelWallet;
@@ -95,10 +95,17 @@ const bindDrawerDrag = (root: HTMLElement, isOpen: () => boolean, close: () => v
     backdrop.style.opacity = dismiss ? "0" : "1";
   };
 
+  // Account rows are HTML5 drag sources. A gesture that starts on one is the
+  // filing drag, so the sheet-dismiss gesture leaves that pointer alone.
+  const startsOnAccountRow = (event: PointerEvent): boolean => {
+    const target = event.target;
+    return target instanceof Element && target.closest("[data-drag-account]") !== null;
+  };
+
   drawer.addEventListener("pointerdown", (event: PointerEvent) => {
     // Ignore extra touch points once a gesture is in progress so a second
     // finger cannot reset the origin and jump the sheet mid-drag.
-    if (!isOpen() || event.button !== 0 || armed) {
+    if (!isOpen() || event.button !== 0 || armed || startsOnAccountRow(event)) {
       return;
     }
     armed = true;
@@ -266,21 +273,6 @@ const bindDrawer = (deps: HomeUiDeps): void => {
     });
   });
 
-  // Folder filter chips narrow the listed accounts to a group's members; the
-  // selection persists across re-renders via the entrypoint module var, so the
-  // drawer reopens showing the same folder.
-  root.querySelectorAll<HTMLButtonElement>("[data-group-filter]").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const value = chip.dataset["groupFilter"];
-      const next = !value || value === "all" ? null : value;
-      if (next === deps.drawerGroupFilter()) {
-        return;
-      }
-      deps.setDrawerGroupFilter(next);
-      void deps.wallet.loadStatus().then(deps.render);
-    });
-  });
-
   const addButton = root.querySelector<HTMLButtonElement>("#drawer-add-account");
   addButton?.addEventListener("click", () => {
     deps.setDrawerOpen(false);
@@ -377,11 +369,9 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
   }
 };
 
-/**
- * Binds the account drawer and portfolio menu on the home screen. Safe to call
- * on every render; screens without these regions are skipped.
- */
+/** Wires the Home drawer, portfolio menu, and the read-only recover-account entry. */
 export const bindHomeUi = (deps: HomeUiDeps): void => {
   bindDrawer(deps);
   bindPortfolioMenu(deps);
+  bindRecoverAccount(deps);
 };

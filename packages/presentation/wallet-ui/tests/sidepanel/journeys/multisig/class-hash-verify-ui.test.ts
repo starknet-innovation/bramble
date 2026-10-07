@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { isClassHashVerificationResponse } from "../../../../src/popup/responses/responses";
-import { classHashVerificationBadge } from "../../../../src/sidepanel/app/screens/flows";
+import { classHashVerificationBadge } from "../../../../src/sidepanel/journeys/send/receive-view";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const ON_CHAIN = "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3";
@@ -116,6 +116,8 @@ describe("classHashVerificationBadge", () => {
     expect(html).toContain("verify-status mismatch");
     expect(html).toContain('role="alert"');
     expect(html).toContain(ON_CHAIN);
+    expect(html).toContain("0x1");
+    expect(html).toContain("the class this wallet expects");
     expect(html).toContain("Do not trust this account");
   });
 

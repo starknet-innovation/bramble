@@ -4,9 +4,10 @@ import { canonicalFelt, sameFelt } from "../networks/networks";
 import { ARGENT_ACCOUNT_CLASS_HASH, deploymentClasses } from "./account-families";
 import {
   type AccountContractType,
-  type DerivedAccountRef,
   isAccountContractType,
-  isDerivedAccountRef,
+  isRecoverableAccountRef,
+  type RecoverableAccountRef,
+  recoveryLadderIndex,
 } from "./accounts";
 
 /** Shared recovery bounds consumed by input validation, scanning, and UI. */
@@ -14,6 +15,9 @@ export const RECOVERY_SCAN_LIMITS = {
   batchSize: 4,
   defaultCount: 20,
   maxIndex: 0x7fffffff,
+  // Fail-safe ceiling on how many indices one scan may cover, so an endpoint
+  // that answers "deployed" to every probe cannot extend the scan forever.
+  maxScannedIndexes: 200,
   maxSelections: 40,
 } as const;
 
@@ -32,13 +36,52 @@ export type RecoveryAccountSelection = {
   readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
   readonly classHash?: string;
+  readonly derivation?: RecoveryDerivationKind;
 };
 
-/** One derived account and the chain evidence that made it discoverable. */
+/**
+ * Which key ladder a selection's index walks. Absent means the family's own
+ * vendor scheme — Ready's ETH-seeded address axis for Argent (issue 505), the
+ * BIP-44 address axis for Braavos, this wallet's hardened account axis for
+ * OpenZeppelin — so only an Argent account created by this wallet on its own
+ * ladder needs to spell `starknet-bip44` out.
+ */
+export type RecoveryDerivationKind = "argentx-bip44" | "starknet-bip44";
+
+/**
+ * Why a detected account can be watched but not signed for from this wallet
+ * (issue 542): a guardian is a second approver the phrase cannot supply, a
+ * changed owner means the phrase no longer holds the key, an unsupported owner
+ * type signs in a way this wallet cannot produce, an unauthorizable live
+ * release expects an encoding it does not emit, and a strong signer (Braavos
+ * 2FA/3FA) demands a device approval beside the key.
+ */
+export type RecoverySigningRestriction =
+  | "guardian"
+  | "owner-changed"
+  | "owner-type"
+  | "release"
+  | "strong-signer";
+
+const SIGNING_RESTRICTIONS: readonly RecoverySigningRestriction[] = [
+  "guardian",
+  "owner-changed",
+  "owner-type",
+  "release",
+  "strong-signer",
+];
+
+/**
+ * One derived account and the chain evidence that made it discoverable.
+ * `restriction` is the scan's advisory signability verdict for a deployed
+ * Argent candidate; absent means none found or the probe did not answer — the
+ * transaction path re-checks authoritatively either way.
+ */
 export type RecoveryAccountCandidate = {
-  readonly account: DerivedAccountRef;
+  readonly account: RecoverableAccountRef;
   readonly deployed: boolean;
   readonly funded: boolean;
+  readonly restriction?: RecoverySigningRestriction;
 };
 
 /** True for a valid hardened BIP-44 account index. */
@@ -73,10 +116,23 @@ const hasSelectableClass = (
  */
 export const isRecoveryAccountSelection = (value: unknown): value is RecoveryAccountSelection =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountContractType", "accountIndex", "classHash"]) &&
+  hasOnlyKnownKeys(value, ["accountContractType", "accountIndex", "classHash", "derivation"]) &&
   isAccountContractType(value["accountContractType"]) &&
   isRecoveryAccountIndex(value["accountIndex"]) &&
-  hasSelectableClass(value["accountContractType"], value["classHash"]);
+  hasSelectableClass(value["accountContractType"], value["classHash"]) &&
+  hasSelectableDerivation(value["accountContractType"], value["derivation"]);
+
+// Only Argent accounts exist on two ladders (the vendor's and this wallet's
+// own); every other family walks exactly one, so naming a scheme there is
+// either redundant or wrong, and wrong fails closed.
+const hasSelectableDerivation = (
+  accountContractType: AccountContractType,
+  derivation: unknown,
+): boolean => {
+  if (derivation === undefined) return true;
+  if (derivation !== "argentx-bip44" && derivation !== "starknet-bip44") return false;
+  return derivation === "starknet-bip44" || accountContractType === "argent";
+};
 
 /**
  * The identity of one recovery coordinate, used to reject duplicate selections.
@@ -85,7 +141,22 @@ export const isRecoveryAccountSelection = (value: unknown): value is RecoveryAcc
  * and an unpadded spelling of one hash do not read as two coordinates.
  */
 export const recoverySelectionKey = (selection: RecoveryAccountSelection): string =>
-  [selection.accountContractType, selectionClass(selection), selection.accountIndex].join(":");
+  [
+    selection.accountContractType,
+    selectionDerivation(selection),
+    selectionClass(selection),
+    selection.accountIndex,
+  ].join(":");
+
+/**
+ * The key ladder a selection restores on, with the family default applied
+ * (issue 505): Argent means Ready's scheme unless the selection names this
+ * wallet's own ladder. Single-sourced so the duplicate check, the scan, and
+ * the vault derivation can never disagree about what an index means.
+ */
+export const selectionDerivation = (selection: RecoveryAccountSelection): RecoveryDerivationKind =>
+  selection.derivation ??
+  (selection.accountContractType === "argent" ? "argentx-bip44" : "starknet-bip44");
 
 // An absent Argent class means the release this wallet creates, so it has to key
 // the same as naming that release outright; otherwise one account, selected
@@ -99,10 +170,54 @@ const selectionClass = (selection: RecoveryAccountSelection): string => {
     : "default";
 };
 
+/**
+ * How many indices a scan must cover given what it has already found: at least
+ * `defaultCount`, and always `defaultCount` past the highest index with
+ * on-chain evidence (deployed or funded), so a ladder of real accounts keeps
+ * the search going and a quiet tail of `defaultCount` indices ends it.
+ * Candidates offered only as creatable defaults extend nothing. Bounded by
+ * `maxScannedIndexes`; an empty list yields the floor, so there is no failure
+ * path. Single-sourced here so the background's completion verdict and the
+ * UI's progress denominator cannot disagree.
+ */
+export const recoveryScanTarget = (candidates: readonly RecoveryAccountCandidate[]): number => {
+  const highestActive = candidates.reduce(
+    (highest, candidate) =>
+      candidate.deployed || candidate.funded
+        ? Math.max(highest, recoveryLadderIndex(candidate.account))
+        : highest,
+    -1,
+  );
+  return Math.min(
+    Math.max(
+      RECOVERY_SCAN_LIMITS.defaultCount,
+      highestActive + 1 + RECOVERY_SCAN_LIMITS.defaultCount,
+    ),
+    RECOVERY_SCAN_LIMITS.maxScannedIndexes,
+  );
+};
+
+/**
+ * Why the active account cannot sign on the wallet's own surfaces (issue 54x):
+ * one of the per-account signing restrictions; "braavos", a Braavos account
+ * this wallet cannot authorize for at all; or "undeployed", a Braavos
+ * counterfactual that must be deployed through its own reviewed step before
+ * it can send anything.
+ */
+export type ReadOnlyReason = RecoverySigningRestriction | "braavos" | "undeployed";
+
+/** Validates a read-only reason at runtime boundaries. */
+export const isReadOnlyReason = (value: unknown): value is ReadOnlyReason =>
+  value === "braavos" ||
+  value === "undeployed" ||
+  SIGNING_RESTRICTIONS.includes(value as RecoverySigningRestriction);
+
 /** Validates one public discovery result before caching or rendering it. */
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["account", "deployed", "funded"]) &&
-  isDerivedAccountRef(value["account"]) &&
+  hasOnlyKnownKeys(value, ["account", "deployed", "funded", "restriction"]) &&
+  isRecoverableAccountRef(value["account"]) &&
   typeof value["deployed"] === "boolean" &&
-  typeof value["funded"] === "boolean";
+  typeof value["funded"] === "boolean" &&
+  (value["restriction"] === undefined ||
+    SIGNING_RESTRICTIONS.includes(value["restriction"] as RecoverySigningRestriction));

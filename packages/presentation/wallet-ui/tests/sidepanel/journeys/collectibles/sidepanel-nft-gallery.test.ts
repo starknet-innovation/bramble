@@ -120,6 +120,7 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain('data-view="nft-hidden"');
     const hidden = nftHiddenFlow(status, withSpam, account);
     expect(hidden).toContain('data-nft-spam-value="false"');
+    expect(hidden).toContain('data-copy="0x511a2b3"');
     expect(html).toContain("0 shown");
   });
 

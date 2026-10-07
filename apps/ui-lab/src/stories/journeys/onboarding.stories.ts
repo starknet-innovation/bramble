@@ -25,6 +25,11 @@ export const ChooseImportMethod = checkpointStory(
   "onboarding",
   "method",
 );
+export const ChooseImportMethodNoLedger = checkpointStory(
+  "Existing wallet · choose method (no Ledger transport)",
+  "onboarding",
+  "method-no-ledger",
+);
 export const EnterRecoveryPhrase = checkpointStory(
   "Existing wallet · recovery phrase",
   "onboarding",
@@ -69,6 +74,11 @@ export const BackupConfirmed = checkpointStory(
   "Generated phrase · backup confirmed",
   "onboarding",
   "backup-confirmed",
+);
+export const BackupMismatch = checkpointStory(
+  "Generated phrase · words don't match",
+  "onboarding",
+  "backup-mismatch",
 );
 export const LedgerPassword = checkpointStory(
   "Ledger wallet · local passphrase",

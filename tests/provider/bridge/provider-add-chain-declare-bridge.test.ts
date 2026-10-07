@@ -54,6 +54,29 @@ describe("wallet_addStarknetChain bridge mapping", () => {
     ).toBeNull();
   });
 
+  test("accepts the optional api_version beside the chain fields and drops it", () => {
+    const expected = toRuntimeMessage(request("wallet_addStarknetChain", chainParams), origin);
+    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+      expect(
+        toRuntimeMessage(
+          request("wallet_addStarknetChain", { ...chainParams, api_version }),
+          origin,
+        ),
+      ).toEqual(expected);
+    }
+  });
+
+  test("rejects a malformed api_version", () => {
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+      expect(
+        toRuntimeMessage(
+          request("wallet_addStarknetChain", { ...chainParams, api_version }),
+          origin,
+        ),
+      ).toBeNull();
+    }
+  });
+
   test("maps an added result to a boolean true", () => {
     expect(toProviderPayload({ added: true, ok: true }, "wallet_addStarknetChain")).toEqual({
       result: true,
@@ -79,6 +102,40 @@ describe("wallet_addDeclareTransaction bridge mapping", () => {
       origin,
       type: "wallet.addDeclareTransaction",
     });
+  });
+
+  test("accepts the optional top-level api_version and drops it", () => {
+    const expected = toRuntimeMessage(
+      request("wallet_addDeclareTransaction", declareParams),
+      origin,
+    );
+    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+      expect(
+        toRuntimeMessage(
+          request("wallet_addDeclareTransaction", { ...declareParams, api_version }),
+          origin,
+        ),
+      ).toEqual(expected);
+    }
+  });
+
+  test("rejects a malformed api_version, or one nested inside the declare", () => {
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+      expect(
+        toRuntimeMessage(
+          request("wallet_addDeclareTransaction", { ...declareParams, api_version }),
+          origin,
+        ),
+      ).toBeNull();
+    }
+    expect(
+      toRuntimeMessage(
+        request("wallet_addDeclareTransaction", {
+          declare_transaction: { ...declareParams.declare_transaction, api_version: "0.10.4" },
+        }),
+        origin,
+      ),
+    ).toBeNull();
   });
 
   test("rejects a declare missing its contract class", () => {

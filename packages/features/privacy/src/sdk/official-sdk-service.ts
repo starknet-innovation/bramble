@@ -33,7 +33,7 @@ import {
 } from "./official-sdk-budget";
 import { strk20RegistrationBuilderFor } from "./official-sdk-builder";
 import { mapStrk20StageError } from "./official-sdk-errors";
-import { createStrk20MaturityRuntime } from "./official-sdk-maturity";
+import { createStrk20MaturityRuntime, type Strk20SubmissionJournal } from "./official-sdk-maturity";
 import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
 import { strk20ReadMethods } from "./official-sdk-reads";
 import type { ServiceRetryPause } from "./official-sdk-retry";
@@ -123,7 +123,7 @@ export const createOfficialStrk20Service = ({
   const submission = <P, T extends { readonly transactionHash: string }>(
     input: Strk20AccountContext,
     prepare: (provider: RpcProvider, scope: Strk20MaturityScope) => Promise<P>,
-    broadcast: (prepared: P) => Promise<T>,
+    broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
   ): Promise<T> => {
     const config = requireStrk20Config(input);
     const nodeUrl = input.rpcUrls[0];
@@ -217,12 +217,13 @@ export const createOfficialStrk20Service = ({
         // reached the message boundary as a raw starknet.js error and its revert
         // reason was replaced by a generic failure. Map it with the submission
         // stage so the on-chain reason survives, sanitized, to the user.
-        async (callAndProof) => {
+        async (callAndProof, journal) => {
           const allowanceGrants = approveCalls([], config.poolAddress, reviewedPoolFee);
           reportStrk20Phase(input.onPhase, "broadcasting");
           try {
             const result = await submitInvoke({
               account: input.account,
+              onSigned: journal,
               calls: [
                 ...allowanceGrants,
                 {
@@ -302,7 +303,7 @@ export const createOfficialStrk20Service = ({
           // error whose message embeds the serialized request params — the
           // invoke calldata and the proof blob. Map it with the submission
           // stage so only the sanitized on-chain reason survives to the user.
-          async (callAndProof) => {
+          async (callAndProof, journal) => {
             const allowanceGrants = approveCalls(
               input.actions,
               config.poolAddress,
@@ -312,6 +313,7 @@ export const createOfficialStrk20Service = ({
             try {
               const result = await submitInvoke({
                 account: input.account,
+                onSigned: journal,
                 calls: [
                   ...allowanceGrants,
                   {
@@ -359,6 +361,7 @@ export const createOfficialStrk20Service = ({
             },
             config: paymaster,
             ...(http ? { http } : {}),
+            isAuthorized: input.isAuthorized,
             nowSeconds: nowSeconds(),
             plan: privatePlan,
             proof: callAndProof.proof,
@@ -417,11 +420,12 @@ export const createOfficialStrk20Service = ({
           await maturity.provingBlock(provider, scope);
           return input;
         },
-        async (prepared) => {
+        async (prepared, journal) => {
           reportStrk20Phase(input.onPhase, "broadcasting");
           const result = await submitInvoke({
             account: prepared.account,
             calls,
+            onSigned: journal,
             isAuthorized: prepared.isAuthorized,
             proof: prepared.proof,
             ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),

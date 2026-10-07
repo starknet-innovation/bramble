@@ -80,8 +80,10 @@ export {
 import { isWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import { type AllowanceView, isAllowanceView } from "@bramble/transactions/allowance-discovery";
 import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-model/accounts";
+import { isReadOnlyReason, type ReadOnlyReason } from "@bramble/wallet-model/recovery";
 import type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
+import { isRecoveryState, type RecoveryState } from "./responses-recovery";
 
 /**
  * Shared wallet status and network response shapes after runtime validation.
@@ -151,6 +153,31 @@ export type DeploymentStatusResponse = {
   readonly accountId: string;
   readonly deployed: boolean;
   readonly ok: true;
+};
+
+/** A recoverable account's on-chain recovery state, validated in ./responses-recovery. */
+export type { RecoveryState } from "./responses-recovery";
+
+/** The Home flag's input: signable, or read-only with its reason. */
+export type SignabilityVerdict =
+  | { readonly readOnly: false }
+  | {
+      readonly readOnly: true;
+      readonly reason: ReadOnlyReason;
+      readonly recovery?: RecoveryState;
+    };
+
+/**
+ * Active-account signability verdict for the Home read-only flag. `reason` is
+ * present exactly when `readOnly` is true; `recovery` accompanies an account
+ * the phrase can recover (Braavos 2FA, Ready guardian).
+ */
+export type AccountSignabilityResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly readOnly: boolean;
+  readonly reason?: ReadOnlyReason;
+  readonly recovery?: RecoveryState;
 };
 
 /**
@@ -411,3 +438,16 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   value["ok"] === true &&
   isAccountId(value["accountId"]) &&
   typeof value["deployed"] === "boolean";
+
+/** Validates the signability verdict (with any recovery state) before the flag renders. */
+export const isAccountSignabilityResponse = (value: unknown): value is AccountSignabilityResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "ok", "readOnly", "reason", "recovery"]) &&
+  value["ok"] === true &&
+  isAccountId(value["accountId"]) &&
+  typeof value["readOnly"] === "boolean" &&
+  (value["readOnly"] === true
+    ? isReadOnlyReason(value["reason"])
+    : value["reason"] === undefined) &&
+  (value["recovery"] === undefined || isRecoveryState(value["recovery"]));

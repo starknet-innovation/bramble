@@ -64,7 +64,7 @@ const click = (root: ParentNode, selector: string): void => {
   button.click();
 };
 
-const mount = (options?: { readonly validate?: boolean }) => {
+const mount = (options?: { readonly importFails?: boolean; readonly validate?: boolean }) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(importPhraseFlow(status)));
@@ -89,7 +89,9 @@ const mount = (options?: { readonly validate?: boolean }) => {
       selections: readonly RecoveryAccountSelection[],
     ) {
       imports.push([mnemonic, networkId, selections]);
-      return Promise.resolve([accountAt(1, "openzeppelin")]);
+      return options?.importFails
+        ? Promise.reject(new Error("Import rejected"))
+        : Promise.resolve([accountAt(1, "openzeppelin")]);
     },
     loadStatus: () => Promise.resolve(status),
     recoverAccounts(...args: readonly unknown[]) {
@@ -99,18 +101,15 @@ const mount = (options?: { readonly validate?: boolean }) => {
     validateMnemonic: () => Promise.resolve(options?.validate ?? true),
   } as unknown as SidepanelWallet;
   bindImportPhrase({
-    activeAccountId: () => null,
     app,
     existingAccountIds: () => new Set([accountAt(0, "openzeppelin").id]),
     expandedGroup: () => null,
     networkId: () => "SN_MAIN",
-    openAssign: () => null,
     refresh: () => wallet.loadStatus(),
     render: async () => {
       renders += 1;
     },
     setExpandedGroup: () => undefined,
-    setOpenAssign: () => undefined,
     startAddAccount: () => undefined,
     wallet,
   });
@@ -126,6 +125,14 @@ const fillPhrase = (root: ParentNode): void => {
 describe("import-phrase flow", () => {
   beforeEach(() => {
     document.body.replaceChildren();
+  });
+
+  test("states that the phrase controls its accounts", () => {
+    // Cut by the copy review and restored as one fact (mc-wallet #476).
+    const flow = mount();
+    expect(flow.app.querySelector('[role="note"]')?.textContent).toBe(
+      "Anyone with this phrase controls its accounts.",
+    );
   });
 
   test("pasting a whole phrase into one cell distributes it across the grid", () => {
@@ -194,12 +201,12 @@ describe("import-phrase flow", () => {
     expect(rows[1]?.checked).toBe(true);
     expect(flow.app.textContent).toContain("Already in this wallet");
 
-    const ack = flow.app.querySelector<HTMLInputElement>('input[name="recoveryMainnetAck"]');
-    if (!ack) {
-      throw new Error("missing acknowledgement");
-    }
-    ack.checked = true;
-    ack.dispatchEvent(new window.Event("change", { bubbles: true }));
+    // The scan fields are shared with first-run onboarding, so the real-funds
+    // tickbox removed there is gone here too; the selection is the only gate.
+    expect(flow.app.querySelector('input[name="recoveryMainnetAck"]')).toBeNull();
+    expect(flow.app.querySelector<HTMLButtonElement>("#recover-accounts-button")?.disabled).toBe(
+      false,
+    );
     click(flow.app, "#recover-accounts-button");
     await tick();
 
@@ -209,5 +216,55 @@ describe("import-phrase flow", () => {
     // The first-run path is never used from the in-wallet flow.
     expect(flow.recoveries).toEqual([]);
     expect(flow.renders()).toBe(1);
+  });
+
+  const importedCells = (root: ParentNode): readonly HTMLInputElement[] =>
+    Array.from(root.querySelectorAll<HTMLInputElement>('input[data-recovery-kind="import"]'));
+
+  const scanAndImport = async (flow: ReturnType<typeof mount>): Promise<void> => {
+    fillPhrase(flow.app);
+    click(flow.app, "#import-phrase-search");
+    await tick();
+    await tick();
+    click(flow.app, "#recover-accounts-button");
+    await tick();
+    await tick();
+  };
+
+  test("wipes the imported phrase from the form once the import succeeds", async () => {
+    // The screen is the same before and after, so the repaint keeps this form;
+    // the binder is what has to take the words out of it (audit #250).
+    const flow = mount();
+    await scanAndImport(flow);
+    expect(flow.imports).toHaveLength(1);
+
+    const cells = importedCells(flow.app);
+    expect(cells.length).toBe(24);
+    expect(cells.every((cell) => cell.value === "")).toBe(true);
+    expect(cells.slice(12).every((cell) => cell.hidden)).toBe(true);
+    expect(flow.app.querySelector<HTMLElement>("#import-phrase-scan")?.hidden).toBe(true);
+    expect(flow.app.querySelector("#recovery-accounts-result")?.textContent).not.toContain(
+      "Restoring",
+    );
+    const restore = flow.app.querySelector<HTMLButtonElement>("#recover-accounts-button");
+    expect(restore?.hasAttribute("data-busy")).toBe(false);
+    expect(restore?.disabled).toBe(true);
+    expect(flow.app.querySelectorAll("input.select-check").length).toBe(0);
+    expect(flow.app.querySelector<HTMLButtonElement>("#import-phrase-search")?.disabled).toBe(true);
+  });
+
+  test("keeps the words for a retry when the import is rejected", async () => {
+    const flow = mount({ importFails: true });
+    await scanAndImport(flow);
+    expect(flow.imports).toHaveLength(1);
+    expect(importedCells(flow.app).map((cell) => cell.value)).toEqual([
+      ...MNEMONIC.split(" "),
+      ...Array.from({ length: 12 }, () => ""),
+    ]);
+    expect(flow.app.querySelector<HTMLElement>("#import-phrase-scan")?.hidden).toBe(false);
+    expect(flow.app.querySelector("#recovery-accounts-result")?.textContent).toBe(
+      "Import rejected",
+    );
+    expect(flow.renders()).toBe(0);
   });
 });

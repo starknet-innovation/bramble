@@ -39,7 +39,7 @@ export const Watch: LabStory = {
     await expect(body?.querySelectorAll("#multisig-add-form input")).toHaveLength(1);
     await expect(body?.querySelector('input[name="address"]')).toBeVisible();
     await expect(body?.querySelector('button[type="submit"]')).toHaveTextContent(
-      "Add shared account",
+      "Add multisig account",
     );
   },
 };
@@ -150,7 +150,7 @@ export const DeployApproval: LabStory = {
     await expect(body?.querySelector(".flow-header [data-nav-back]")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
-      "Review deployment",
+      "Check fee and address",
     );
   },
 };
@@ -298,7 +298,7 @@ export const HomeEmpty: LabStory = {
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector('[data-view="multisig-track"]')).toHaveTextContent(
-      "Import intent",
+      "Import transaction",
     );
     const actions = body?.querySelector(".multisig-primary-actions");
     await expect(actions).not.toHaveTextContent("Import");
@@ -390,7 +390,7 @@ export const IntentHandoff: LabStory = {
       "Share the reviewed transaction",
     );
     await expect(body?.querySelector("[data-ms-copy-package]")).toHaveTextContent(
-      "Copy full intent package",
+      "Copy full transaction package",
     );
     await expect(body?.querySelector("[data-ms-share]")).toHaveTextContent(
       "Share securely with co-signers",
@@ -482,7 +482,7 @@ export const IntentFeeReplacement: LabStory = {
     );
     await expect(body?.querySelector(".decision-technical")).toHaveAttribute("open");
     await expect(body?.querySelector("[data-ms-delete-intent]")).toHaveTextContent(
-      "Delete saved intent",
+      "Delete saved transaction",
     );
   },
 };

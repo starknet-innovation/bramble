@@ -5,7 +5,16 @@ import {
   BRAAVOS_BASE_CLASS_HASH,
   deploymentClasses,
 } from "@bramble/wallet-model/account-families";
-import { isRecoveryAccountSelection, recoverySelectionKey } from "@bramble/wallet-model/recovery";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
+import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
+import {
+  isRecoveryAccountCandidate,
+  isRecoveryAccountSelection,
+  RECOVERY_SCAN_LIMITS,
+  recoveryScanTarget,
+  recoverySelectionKey,
+  selectionDerivation,
+} from "@bramble/wallet-model/recovery";
 
 const argent030 = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
 if (!argent030) throw new Error("argent 0.3.0 missing from the class table");
@@ -75,6 +84,127 @@ describe("recovery selections", () => {
     expect(recoverySelectionKey(at())).toBe(recoverySelectionKey(at(ARGENT_ACCOUNT_CLASS_HASH)));
     expect(recoverySelectionKey(at(argent030.classHash))).toBe(
       recoverySelectionKey(at(argent030.classHash.replace("0x0", "0x"))),
+    );
+  });
+});
+
+describe("recovery selection derivation (issue 505)", () => {
+  const argentAt1 = { accountContractType: "argent" as const, accountIndex: 1 };
+
+  test("admits a scheme only where the family can walk that ladder", () => {
+    expect(isRecoveryAccountSelection({ ...argentAt1, derivation: "argentx-bip44" })).toBe(true);
+    expect(isRecoveryAccountSelection({ ...argentAt1, derivation: "starknet-bip44" })).toBe(true);
+    expect(
+      isRecoveryAccountSelection({
+        accountContractType: "openzeppelin",
+        accountIndex: 0,
+        derivation: "starknet-bip44",
+      }),
+    ).toBe(true);
+    // Only Argent exists on the Ready ladder.
+    expect(
+      isRecoveryAccountSelection({
+        accountContractType: "openzeppelin",
+        accountIndex: 0,
+        derivation: "argentx-bip44",
+      }),
+    ).toBe(false);
+    expect(
+      isRecoveryAccountSelection({
+        accountContractType: "braavos",
+        accountIndex: 0,
+        classHash: BRAAVOS_BASE_CLASS_HASH,
+        derivation: "argentx-bip44",
+      }),
+    ).toBe(false);
+    expect(isRecoveryAccountSelection({ ...argentAt1, derivation: "ledger" })).toBe(false);
+  });
+
+  test("defaults every family to its vendor scheme", () => {
+    expect(selectionDerivation(argentAt1)).toBe("argentx-bip44");
+    expect(selectionDerivation({ accountContractType: "openzeppelin", accountIndex: 0 })).toBe(
+      "starknet-bip44",
+    );
+    expect(selectionDerivation({ accountContractType: "braavos", accountIndex: 2 })).toBe(
+      "starknet-bip44",
+    );
+  });
+
+  test("keys one Argent index on the two ladders as two coordinates", () => {
+    const vendor = recoverySelectionKey({ ...argentAt1, derivation: "argentx-bip44" });
+    const own = recoverySelectionKey({ ...argentAt1, derivation: "starknet-bip44" });
+    expect(vendor).not.toBe(own);
+    // Absent means the vendor ladder, however it is spelled.
+    expect(recoverySelectionKey(argentAt1)).toBe(vendor);
+  });
+});
+
+describe("recovery candidate restriction (issue 542)", () => {
+  const account = {
+    accountContractType: "argent" as const,
+    address: "0x1",
+    classHash: canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH) as string,
+    deploymentSalt: "0x3",
+    derivation: { addressIndex: 0, kind: "argentx-bip44" as const },
+    id: "SN_MAIN:0x1",
+    networkId: "SN_MAIN" as const,
+    publicKeyX: "0x4",
+  };
+  const candidate = { account, deployed: true, funded: false };
+
+  test("admits each named restriction and nothing else", () => {
+    expect(isRecoveryAccountCandidate(candidate)).toBe(true);
+    for (const restriction of ["guardian", "owner-changed", "owner-type", "release"]) {
+      expect(isRecoveryAccountCandidate({ ...candidate, restriction })).toBe(true);
+    }
+    expect(isRecoveryAccountCandidate({ ...candidate, restriction: "frozen" })).toBe(false);
+    expect(isRecoveryAccountCandidate({ ...candidate, restriction: 1 })).toBe(false);
+  });
+});
+
+describe("recovery scan target", () => {
+  const candidateAt = (
+    accountIndex: number,
+    evidence: Partial<Pick<RecoveryAccountCandidate, "deployed" | "funded">> = {},
+  ): RecoveryAccountCandidate => ({
+    account: {
+      accountContractType: "openzeppelin",
+      address: `0x${(accountIndex + 1).toString(16)}`,
+      classHash: "0x1",
+      derivation: { accountIndex, addressIndex: 0, kind: "starknet-bip44" },
+      id: `SN_MAIN:0x${(accountIndex + 1).toString(16)}`,
+      networkId: "SN_MAIN",
+      publicKeyX: "0x2",
+      publicKeyY: "0x3",
+    },
+    deployed: false,
+    funded: false,
+    ...evidence,
+  });
+
+  test("covers the floor when nothing was found", () => {
+    expect(recoveryScanTarget([])).toBe(RECOVERY_SCAN_LIMITS.defaultCount);
+  });
+
+  test("reaches a quiet tail past the last on-chain evidence", () => {
+    // Activity at index 19 would be the last account a fixed window ever
+    // offers; the target keeps the scan going for a full tail beyond it.
+    expect(recoveryScanTarget([candidateAt(19, { deployed: true })])).toBe(
+      20 + RECOVERY_SCAN_LIMITS.defaultCount,
+    );
+    expect(recoveryScanTarget([candidateAt(25, { funded: true })])).toBe(
+      26 + RECOVERY_SCAN_LIMITS.defaultCount,
+    );
+  });
+
+  test("ignores candidates offered without on-chain evidence", () => {
+    // A creatable default at index 0 is an offer, not a finding.
+    expect(recoveryScanTarget([candidateAt(17)])).toBe(RECOVERY_SCAN_LIMITS.defaultCount);
+  });
+
+  test("never exceeds the fail-safe ceiling", () => {
+    expect(recoveryScanTarget([candidateAt(5000, { deployed: true })])).toBe(
+      RECOVERY_SCAN_LIMITS.maxScannedIndexes,
     );
   });
 });

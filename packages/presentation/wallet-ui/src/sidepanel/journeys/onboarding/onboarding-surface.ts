@@ -46,7 +46,6 @@ export const onboardingLaunch = (): string => `
         label: "Open full-screen setup",
         target: "_blank",
       })}
-      <p class="onboarding-local-note">${icon("lock")} Encrypted locally on this device</p>
     </div>
   </main>`;
 
@@ -58,13 +57,7 @@ export const onboardingComplete = (): string => `
   <main class="screen flow gate onboarding-complete">
     <div class="gate-brand onboarding-complete-mark">${icon("check")}</div>
     <div class="gate-head">
-      <p class="eyebrow">Setup complete</p>
       <h1>You’re all set</h1>
-      <p class="lede">Your account is ready in Bramble. Open the side panel to receive assets, connect to an app, or deploy when you’re ready.</p>
-    </div>
-    <div class="onboarding-complete-details">
-      <div class="onboarding-complete-detail">${icon("lock")} <span>Vault encrypted locally on this device</span></div>
-      <div class="onboarding-complete-detail">${icon("shield")} <span>Recovery and signing material stay behind the wallet boundary</span></div>
     </div>
     <div class="onboarding-complete-actions">
       ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open Bramble" })}

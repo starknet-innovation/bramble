@@ -38,7 +38,7 @@ describe("locked gate view", () => {
     expect(locked(lockedStatus(false))).toMatch(/<button type="submit" disabled>Unlock<\/button>/);
   });
 
-  test("explains that an origin request will continue after unlock", () => {
+  test("names the waiting origin request without a lede repeating it", () => {
     const html = locked(lockedStatus(true), [
       {
         id: "123e4567-e89b-42d3-a456-426614174000",
@@ -47,7 +47,9 @@ describe("locked gate view", () => {
       },
     ]);
 
-    expect(html).toContain("Unlock to review the wallet request waiting for you.");
+    // The callout below the heading already says a site is waiting and which
+    // one; a lede above it said the same thing in different words.
+    expect(html).not.toContain("Unlock to review the wallet request waiting for you.");
     expect(html).toContain("Site request waiting");
     expect(html).toContain("https://terminal.example");
   });

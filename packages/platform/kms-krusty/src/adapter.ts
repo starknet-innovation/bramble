@@ -21,7 +21,12 @@ import { isMnemonicPassphrase, isMnemonicText } from "@bramble/wallet-model/pass
 
 type Callable = (...args: unknown[]) => unknown;
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
-const KRUSTY_RESULT_CLASSES = new Set(["WasmKeypair", "WasmNostrPublicKey", "WasmStarkSignature"]);
+const KRUSTY_RESULT_CLASSES = new Set([
+  "WasmKeypair",
+  "WasmNostrPublicKey",
+  "WasmStarkSignature",
+  "WasmStarkXOnlyKeypair",
+]);
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
 const isNostrIdentifier = (value: string): boolean =>
   value.length > 0 && value.length <= 128 && /^[ -~]+$/.test(value);
@@ -122,6 +127,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
   const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
   const deriveNostrPublicKey = requireFunction(module, "deriveNostrPublicKey");
   const deriveScopedStrk20ViewingKey = requireFunction(module, "deriveScopedStrk20ViewingKey");
+  const deriveArgentLegacyKeypair = requireFunction(module, "deriveArgentLegacyKeypair");
   const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
   const generateMnemonic = requireFunction(module, "generateMnemonic");
   const getAccountClassHashes = requireFunction(module, "getAccountClassHashes");
@@ -181,6 +187,19 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
         throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
       }
       return canonicalFelt(result) as string;
+    },
+    async deriveArgentLegacyKeypair(mnemonic, addressIndex) {
+      await ready;
+      if (!isMnemonicText(mnemonic) || !isDerivationIndex(addressIndex)) {
+        throw new WalletError("Invalid Stark derivation input");
+      }
+      // Ready's scheme fixes the hardened account field at zero; the wasm
+      // export keeps the parameter for parity, so pin it here.
+      const result = await deriveArgentLegacyKeypair(mnemonic, addressIndex, 0);
+      return {
+        privateKey: requirePrivateKeyField(result, "private_key"),
+        publicKeyX: requireFieldElementField(result, "public_key_x"),
+      };
     },
     async deriveStarknetKeypair(mnemonic, addressIndex, accountIndex, passphrase) {
       await ready;

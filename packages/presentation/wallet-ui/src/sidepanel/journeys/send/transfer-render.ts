@@ -6,24 +6,27 @@
  */
 
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
-import { accountLabel } from "../../shared/parts";
+import { applyOutcomeHash } from "../../shared/outcome-hash";
+import { reviewFeeBlocked } from "../../shared/review-render";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
+  TRANSFER_FAILURE_TITLE,
+  TRANSFER_SENT_FAILURE_REASON,
+  TRANSFER_SENT_FAILURE_TITLE,
+  TRANSFER_UNKNOWN_TITLE,
   type TransferMode,
   transferModeCopy,
   transferModeFor,
   transferStageTitle,
-  transferSuccessSummary,
 } from "./transfer-mode";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
 import {
   setSendProgress,
-  setTaskStatus,
   setText,
   type WorkingStatus,
   workingStatus,
 } from "./transfer-progress-ui";
-import { reviewDetailsHtml, reviewSummaryHtml } from "./transfer-review-markup";
+import { reviewRisksHtml, reviewSummaryHtml, successReceiptHtml } from "./transfer-review-markup";
 import { routeReviewFeeHtml } from "./transfer-review-routes";
 import { transferRoute } from "./transfer-route";
 import type { TransferReview } from "./transfer-submit";
@@ -109,13 +112,7 @@ const applyModeCopy = (form: HTMLFormElement, mode: TransferMode, reviewing: boo
   form.querySelector("#send-amount-input")?.setAttribute("aria-label", copy.amountLabel);
   setText(form, "send-amount-label", copy.amountLabel);
   setText(form, "send-review-label", reviewing ? `${copy.preparing}…` : copy.reviewLabel);
-  setText(form, "send-review-heading", copy.reviewLabel);
-  // A form the template marked unsendable keeps its own note about that.
-  if (form.dataset["sendAvailable"] !== "false") {
-    setText(form, "send-review-note", copy.reviewNote);
-  }
   setText(form, "send-success-title", copy.successTitle);
-  setText(form, "send-failure-title", copy.failureTitle);
 };
 
 /**
@@ -130,16 +127,75 @@ export const applyTransferProgress = <Review>(
   applyWorkingStatus(form, workingStatus(state, modeOf(form, state.fields)));
 };
 
-// Paints the working screen — title, copy, liveness, and the four task rows —
-// from one status, so a job's progress poll and a full repaint agree.
+// Paints the working screen from one status, so a job's progress poll and a
+// full repaint agree on what it says.
 const applyWorkingStatus = (form: HTMLFormElement, status: WorkingStatus): void => {
   setText(form, "send-working-title", status.title);
   setText(form, "send-working-copy", status.copy);
-  setText(form, "send-liveness", status.liveness);
-  setTaskStatus(form, "review", status.labels[0], status.states[0]);
-  setTaskStatus(form, "authorize", status.labels[1], status.states[1]);
-  setTaskStatus(form, "broadcast", status.labels[2], status.states[2]);
-  setTaskStatus(form, "confirm", status.labels[3], status.states[3]);
+  form.querySelector("#send-working-copy")?.toggleAttribute("hidden", status.copy === "");
+};
+
+// Paints the receipt: the copyable sender/recipient sentence, the hash with its
+// copy control, and the Starkscan link. The link comes only from the shared
+// explorer gate, so a network without an explorer (devnet) or a malformed hash
+// hides it instead of pointing somewhere that cannot resolve.
+const applySuccessReceipt = (
+  form: HTMLFormElement,
+  fields: TransferFields,
+  mode: TransferMode,
+): void => {
+  const region = form.querySelector<HTMLElement>("#send-success-summary");
+  if (!region) {
+    return;
+  }
+  region.innerHTML = successReceiptHtml(
+    fields,
+    { address: form.dataset["sender"] ?? "", label: form.dataset["senderLabel"] ?? "" },
+    mode,
+  );
+  // Freshly rendered markup: the shell's copy binding ran before this paint.
+  bindCopyButtons(region);
+};
+
+// The failure receipt. A hash means it was submitted: the chain rejected or
+// reverted it, so the heading must not say "not sent", and the balance may have
+// paid a fee. An unknown submission (its reply was lost) is neither: it gets a
+// warning, not a failure, and leads with Activity rather than Try again, since
+// a re-send could pay twice (audit 173).
+const applyFailureReceipt = (
+  form: HTMLFormElement,
+  state: Pick<TransferState<TransferReview>, "error" | "submissionUnknown" | "transactionHash">,
+): void => {
+  const submitted = Boolean(state.transactionHash);
+  const unknown = state.submissionUnknown && !submitted;
+  setText(
+    form,
+    "send-failure-title",
+    unknown
+      ? TRANSFER_UNKNOWN_TITLE
+      : submitted
+        ? TRANSFER_SENT_FAILURE_TITLE
+        : TRANSFER_FAILURE_TITLE,
+  );
+  const section = form.querySelector<HTMLElement>("#send-failure");
+  if (unknown) section?.setAttribute("data-severity", "warning");
+  else section?.removeAttribute("data-severity");
+  form.querySelector("#send-retry")?.toggleAttribute("hidden", unknown);
+  form.querySelector("#send-failure-activity")?.toggleAttribute("hidden", !unknown);
+  const reason =
+    state.error ||
+    (submitted
+      ? TRANSFER_SENT_FAILURE_REASON
+      : "The transaction was not sent. Your balance is unchanged.");
+  setText(form, "send-failure-copy", reason);
+  // What is worth taking to support is the reason, not the identifier the
+  // transaction never got. The hash, when there is one, copies from its own
+  // row above.
+  const copyError = form.querySelector<HTMLElement>("#send-failure-copy-error");
+  copyError?.setAttribute("data-copy", reason);
+  // Bound through the row: `bindCopyButtons` scans descendants, so handing it
+  // the control itself finds nothing.
+  bindCopyButtons(copyError?.parentElement ?? null);
 };
 
 /**
@@ -167,7 +223,6 @@ export const applyTransferUi = (
   currentForm.dataset["stage"] = state.stage;
   currentForm.toggleAttribute("aria-busy", working);
   const stageIds: Readonly<Record<string, TransferStage>> = {
-    "send-asset-stage": "asset",
     "send-details": "details",
     "send-failure": "failed",
     "send-pending": "pending",
@@ -180,7 +235,13 @@ export const applyTransferUi = (
   }
   form.querySelector("#send-working")?.toggleAttribute("hidden", !working);
   const mode = modeOf(form, state.fields);
-  setText(form.ownerDocument, "send-header-title", transferStageTitle(state.stage, mode));
+  // An unknown outcome did not fail, so the header names the operation only.
+  const unknownOutcome = state.stage === "failed" && state.submissionUnknown;
+  setText(
+    form.ownerDocument,
+    "send-header-title",
+    unknownOutcome ? transferModeCopy(mode).noun : transferStageTitle(state.stage, mode),
+  );
   if (state.fields) applyModeCopy(form, mode, reviewing);
   setSendProgress(form, state.stage);
   restoreTransferFields(form, state.fields);
@@ -190,7 +251,7 @@ export const applyTransferUi = (
   buttonBusy(form.querySelector<HTMLButtonElement>("#send-review-button"), reviewing);
   buttonBusy(confirmButton, state.stage === "authorizing");
   if (confirmButton && state.stage === "review") {
-    confirmButton.disabled = state.review?.feeEstimateFailed === true;
+    confirmButton.disabled = state.review != null && reviewFeeBlocked(state.review);
   }
   setText(
     form,
@@ -199,9 +260,14 @@ export const applyTransferUi = (
   );
 
   const route = state.fields ? transferRoute(state.fields) : null;
-  const reviewPanel = form.querySelector<HTMLElement>("#review-panel");
-  if (reviewPanel) {
-    reviewPanel.innerHTML = state.review ? reviewDetailsHtml(state.review) : "";
+  // Only real warnings reach the confirm face. There is no "nothing was
+  // detected" line and no decoded-call list: a quiet transfer shows nothing
+  // here, and a flagged one can no longer hide behind a collapsed disclosure.
+  const reviewRisks = form.querySelector<HTMLElement>("#send-review-risks");
+  if (reviewRisks) {
+    const risks = state.review ? reviewRisksHtml(state.review) : "";
+    reviewRisks.innerHTML = risks;
+    reviewRisks.toggleAttribute("hidden", risks === "");
   }
   const reviewFee = form.querySelector<HTMLElement>("#send-review-fee");
   if (reviewFee && route) {
@@ -215,7 +281,12 @@ export const applyTransferUi = (
   }
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {
-    reviewSummary.innerHTML = state.fields ? reviewSummaryHtml(state.fields, mode) : "";
+    reviewSummary.innerHTML = state.fields
+      ? reviewSummaryHtml(state.fields, mode, {
+          address: form.dataset["sender"] ?? "",
+          label: form.dataset["senderLabel"] ?? "",
+        })
+      : "";
     // Freshly rendered markup: the shell's copy binding ran before this paint.
     bindCopyButtons(reviewSummary);
   }
@@ -226,24 +297,17 @@ export const applyTransferUi = (
   if (working) {
     applyWorkingStatus(form, workingStatus(state, mode));
   }
+
   if (state.fields && state.transactionHash) {
-    const summary = transferSuccessSummary(
-      mode,
-      state.fields.amount,
-      state.fields.tokenSymbol,
-      state.fields.recipientLabel || accountLabel(state.fields.recipient),
-    );
-    setText(form, "send-success-summary", summary);
-    setText(form, "send-success-hash", state.transactionHash);
-    setText(form, "send-pending-hash", state.transactionHash);
-    setText(form, "send-failure-hash", state.transactionHash);
+    applySuccessReceipt(form, state.fields, mode);
+  }
+  // Always applied, including with no hash: that is what withdraws the row on
+  // an outcome that never got one.
+  for (const id of ["send-success-hash", "send-pending-hash", "send-failure-hash"]) {
+    applyOutcomeHash(form, id, state.transactionHash ?? "", form.dataset["sendNetwork"] ?? "");
   }
   if (state.stage === "failed") {
-    setText(
-      form,
-      "send-failure-copy",
-      state.error || "The transaction was not sent. Your balance is unchanged.",
-    );
+    applyFailureReceipt(form, state);
   }
   setText(form, "transfer-result", state.stage === "failed" ? "" : state.error);
   if (previousStage && previousStage !== state.stage) {

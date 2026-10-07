@@ -5,6 +5,17 @@ import { hasUniqueStrings } from "./json";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
+/**
+ * Normalizes a URL hostname for comparison: lowercases it and strips a single
+ * trailing dot so a fully-qualified name ("example.com.") compares as
+ * "example.com". The WHATWG URL parser keeps that dot on a domain host, which
+ * would otherwise slip past an exact denylist match. Pure and total.
+ */
+export const normalizeHostname = (hostname: string): string => {
+  const lower = hostname.toLowerCase();
+  return lower.endsWith(".") ? lower.slice(0, -1) : lower;
+};
+
 const isUrlFor = (value: unknown, secureProtocol: string, loopbackProtocol: string): boolean => {
   if (typeof value !== "string" || value.length === 0 || value.length > 2048) return false;
   try {
@@ -52,6 +63,16 @@ export const isWebSocketServiceUrl = (value: unknown): value is string =>
  */
 export const isServiceUrlList = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.length > 0 && value.every(isServiceUrl) && hasUniqueStrings(value);
+
+/**
+ * Checks an endpoint list a dapp sent: an {@link isServiceUrlList} with at most
+ * `maxEntries` entries. The count bound keeps one approval from writing
+ * hundreds of kilobytes of URLs into stored preferences (Sherlock audit 153).
+ */
+export const isBoundedServiceUrlList = (
+  value: unknown,
+  maxEntries: number,
+): value is readonly string[] => isServiceUrlList(value) && value.length <= maxEntries;
 
 /**
  * Checks an optional endpoint list: absent, or a well-formed

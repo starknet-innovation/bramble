@@ -97,36 +97,6 @@ export const JOURNEY_STYLES = `
     width: 92px;
   }
   .nft-send-art .icon { height: 26px; width: 26px; }
-  .nft-transfer-outcome {
-    align-items: flex-start;
-    background: var(--bramble-positive-soft);
-    border-radius: ${RADIUS.lg};
-    color: var(--bramble-positive);
-    display: grid;
-    gap: ${SPACE.md};
-    grid-template-columns: auto minmax(0, 1fr);
-    padding: ${SPACE.lg};
-  }
-  .nft-transfer-outcome > div { display: grid; gap: 3px; min-width: 0; }
-  .nft-transfer-outcome p { color: var(--bramble-text); font-size: ${TYPE.caption.size}; }
-  .nft-transfer-outcome code {
-    color: var(--bramble-muted);
-    font-size: ${TYPE.micro.size};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
-  .nft-transfer-mark {
-    align-items: center;
-    background: var(--bramble-positive);
-    border-radius: ${RADIUS.full};
-    color: var(--bramble-bg);
-    display: inline-flex;
-    height: 30px;
-    justify-content: center;
-    width: 30px;
-  }
-  .nft-transfer-mark .icon { height: 16px; width: 16px; }
   #nft-send-form[data-stage="reviewing"] #nft-review-panel,
   #nft-send-form[data-stage="submitting"] #nft-review-panel { opacity: 0.62; }
 

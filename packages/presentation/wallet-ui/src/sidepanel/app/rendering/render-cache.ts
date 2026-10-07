@@ -7,7 +7,7 @@
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
-import type { WalletStatus } from "../../../popup/responses/responses";
+import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 
@@ -40,6 +40,7 @@ export type RenderData = {
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
   deployment: boolean | null;
+  signability: SignabilityVerdict | null;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
   preferences: WalletPreferences | null;
   changes: LoadedPrices["changes"];
@@ -82,6 +83,7 @@ export const updateRenderScope = (
           multisigBalanceId: null,
           multisigBalances: { error: "multisig balances unavailable" },
           deployment: null,
+          signability: null,
           multisigClassDeclared: null,
           multisigsError: false,
           ...(networkChanged ? { multisigsNetworkId: null } : {}),
@@ -110,6 +112,7 @@ export const emptyRenderCache = (): RenderData => ({
   classHashVerification: null,
   connectedSites: [],
   deployment: null,
+  signability: null,
   ...emptyActivityCache(),
   pending: [],
   changes: {},

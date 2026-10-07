@@ -67,8 +67,6 @@ export type TransferModeCopy = {
   readonly closeLabel: string;
   /** Label of the final confirm control for a software signer. */
   readonly confirmLabel: string;
-  /** Heading of the failure receipt. */
-  readonly failureTitle: string;
   /** The operation as a title-case noun: the amount step's header. */
   readonly noun: string;
   /**
@@ -96,7 +94,6 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
     amountLabel: "Amount to send",
     closeLabel: "Close Send",
     confirmLabel: "Confirm and send",
-    failureTitle: "Send not completed",
     noun: "Send",
     preparing: "Preparing send",
     progressive: "Sending",
@@ -110,7 +107,6 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
     amountLabel: "Amount to shield",
     closeLabel: "Close Shield",
     confirmLabel: "Confirm and shield",
-    failureTitle: "Shield not completed",
     noun: "Shield",
     preparing: "Preparing shield",
     progressive: "Shielding",
@@ -125,7 +121,6 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
     amountLabel: "Amount to unshield",
     closeLabel: "Close Unshield",
     confirmLabel: "Confirm and unshield",
-    failureTitle: "Unshield not completed",
     noun: "Unshield",
     preparing: "Preparing unshield",
     progressive: "Unshielding",
@@ -139,6 +134,31 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
 };
 
 /**
+ * Heading of the failure receipt, in every mode, when nothing was submitted.
+ * The flow header above it already names the operation ("Shield failed"), so
+ * this line carries the fact the header does not. Mode-independent on purpose:
+ * "Shield not completed" under "Shield failed" said one thing twice.
+ */
+export const TRANSFER_FAILURE_TITLE = "Transaction not sent";
+
+/**
+ * Heading of the failure receipt once a transaction was submitted and the chain
+ * then rejected or reverted it. It was sent, its hash is shown, and a fee may
+ * have been paid, so "not sent" would be false.
+ */
+export const TRANSFER_SENT_FAILURE_TITLE = "Transaction failed";
+
+/**
+ * Heading of the receipt when the submission's reply was lost: it may or may
+ * not be on chain, so neither "not sent" nor "failed" is true.
+ */
+export const TRANSFER_UNKNOWN_TITLE = "Status unknown";
+
+/** Default reason for a submitted transaction that failed without its own message. */
+export const TRANSFER_SENT_FAILURE_REASON =
+  "The transaction was sent but did not complete. Check its status in Activity.";
+
+/**
  * The copy table for one mode. Total over the union, so no caller falls back
  * to "Send" by accident.
  */
@@ -147,17 +167,19 @@ export const transferModeCopy = (mode: TransferMode): TransferModeCopy => COPY[m
 /**
  * Human-readable header title for the current Send checkpoint, in the mode's
  * own words. The recipient step is only reachable as a send — a shield has
- * nobody to choose — so it keeps its "Send to" prompt.
+ * nobody to choose — and the stage's own "Send to" label names the step, so the
+ * header stays the verb rather than repeating it.
  */
 export const transferStageTitle = (stage: TransferStage, mode: TransferMode = "send"): string => {
   const copy = COPY[mode];
-  if (stage === "recipient") return mode === "send" ? "Send to" : copy.noun;
-  if (stage === "asset") return "Select an asset";
+  if (stage === "recipient") return copy.noun;
   if (stage === "details" || stage === "reviewing") return copy.noun;
   if (stage === "review") return `Review ${copy.verb}`;
-  if (stage === "authorizing") return `Authorize ${copy.verb}`;
-  if (stage === "broadcasting") return copy.progressive;
-  if (stage === "confirming") return "Confirming";
+  // Authorizing, broadcasting and confirming are one wait as far as the reader
+  // is concerned: the wallet is sending, and the steps between are its own.
+  if (stage === "authorizing" || stage === "broadcasting" || stage === "confirming") {
+    return copy.progressive;
+  }
   if (stage === "pending") return "Confirmation pending";
   if (stage === "submitted") return "Confirmed";
   return `${copy.noun} failed`;

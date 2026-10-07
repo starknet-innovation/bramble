@@ -19,6 +19,9 @@ import type {
 } from "@bramble/wallet-model/preferences";
 import type { AccountGroupIcon, AccountGroups } from "./groups";
 
+/** Who added a tracked token: a dapp (wallet_watchAsset) or the user. */
+export type TokenSource = "dapp" | "user";
+
 /**
  * Current plain preferences schema. Optional fields keep preferences stored
  * before they existed validating.
@@ -29,6 +32,13 @@ export type WalletPreferences = {
   readonly approvalSurface?: ApprovalSurfacePreference;
   readonly addressBook: readonly AddressBookEntry[];
   readonly customNetworks?: readonly CustomNetwork[];
+  /**
+   * Ids of tracked tokens a dapp added (wallet_watchAsset) and the user has not
+   * added themselves since. Their metadata came from the site, so the call
+   * reviewer does not trust them unless they match a curated token. Absent on
+   * preferences written before the field existed (those tokens stay trusted).
+   */
+  readonly dappTokenIds?: readonly string[];
   readonly displayCurrency?: DisplayCurrency;
   /** Per-network Starkscan-compatible read API override. */
   readonly explorerApiUrls?: ExplorerApiOverrides;
@@ -39,6 +49,13 @@ export type WalletPreferences = {
    */
   readonly explorerFallback?: ExplorerFallback;
   readonly groups?: AccountGroups;
+  /**
+   * Ids of accounts the user has hidden. A hidden account leaves the account
+   * drawer and the Send/Receive pickers but keeps its grants and its signing
+   * material: hiding is a view filter, not a permission change, so it lives
+   * here rather than in the vault and needs no schema migration.
+   */
+  readonly hiddenAccountIds?: readonly string[];
   readonly hiddenTokens?: readonly string[];
   readonly nftIndexerUrl?: string;
   readonly nfts?: readonly WatchedNft[];
@@ -72,6 +89,11 @@ export type WalletPreferencesStore = {
   readonly removeAddress: (id: string) => Promise<WalletPreferences>;
   readonly removeGroup: (input: { readonly id: string }) => Promise<WalletPreferences>;
   readonly removeNft: (id: string) => Promise<WalletPreferences>;
+  /**
+   * Removes a tracked token that is not a built-in default, with its hidden
+   * flag. Throws for an unknown id or a default token.
+   */
+  readonly removeToken: (input: { readonly tokenId: string }) => Promise<WalletPreferences>;
   readonly renameGroup: (input: {
     readonly id: string;
     readonly name: string;
@@ -104,6 +126,15 @@ export type WalletPreferencesStore = {
     readonly id: string;
     readonly spam: boolean;
   }) => Promise<WalletPreferences>;
+  /**
+   * Hides or reveals one account. Hiding is refused for the last account a
+   * network would still show, and the background switches the active account
+   * away before hiding it, so no list ever opens on an account it omits.
+   */
+  readonly setAccountHidden: (input: {
+    readonly accountId: string;
+    readonly hidden: boolean;
+  }) => Promise<WalletPreferences>;
   readonly setAccountLabel: (input: {
     readonly accountId: string;
     readonly label: string;
@@ -128,5 +159,13 @@ export type WalletPreferencesStore = {
     readonly hidden: boolean;
     readonly tokenId: string;
   }) => Promise<WalletPreferences>;
-  readonly upsertToken: (token: Omit<TokenConfig, "id">) => Promise<WalletPreferences>;
+  /**
+   * Adds or replaces a tracked token. `source` records who added it: "dapp"
+   * marks it as dapp-supplied in `dappTokenIds`, "user" (an explicit add in the
+   * wallet) clears that mark. Required so no caller trusts a token by omission.
+   */
+  readonly upsertToken: (
+    token: Omit<TokenConfig, "id">,
+    source: TokenSource,
+  ) => Promise<WalletPreferences>;
 };

@@ -1,7 +1,8 @@
 /**
  * Account-group (folder) layer of the side panel stylesheet: the drawer's
- * filter chips, the per-account assignment panel, the icon picker, and the
- * manage-accounts group accordion with its bulk members editor. Split from
+ * filter chips, the per-account assignment panel, the icon picker, the
+ * manage-accounts group accordion with its bulk members editor, and the
+ * account-names list that sits above it on the same screen. Split from
  * ./styles-home.ts to keep both layers within the size budget; composed just
  * before the home layer in ./styles.ts so home's reduced-motion block still
  * wins over everything here.
@@ -83,7 +84,7 @@ export const GROUP_STYLES = `
   .new-group-form, .edit-group-form { display: grid; gap: ${SPACE.sm}; }
   .group-name-input {
     background: var(--bramble-elevated);
-    border-radius: ${RADIUS.sm};
+    border-radius: ${RADIUS.md};
     color: var(--bramble-text);
     min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
@@ -110,6 +111,54 @@ export const GROUP_STYLES = `
     button.group-icon-option[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); color: var(--bramble-accent); }
   }
   button.group-icon-option[aria-pressed="true"] { background: var(--bramble-accent-soft); color: var(--bramble-accent); }
+  /* Account names: one row per account — avatar, the name field with the
+     account's address and folders beneath it, and its own save control. The
+     field carries the generated name as a placeholder, so an unnamed account
+     still reads as the name the rest of the wallet shows. */
+  .account-name-list {
+    background: var(--bramble-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    overflow: hidden;
+  }
+  .account-name-row {
+    align-items: start;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: ${SPACE.sm};
+    position: relative;
+  }
+  .account-name-row + .account-name-row::before {
+    background: var(--bramble-hairline);
+    content: "";
+    height: 1px;
+    left: ${SPACE.sm};
+    position: absolute;
+    right: ${SPACE.sm};
+    top: 0;
+  }
+  .account-name-row > .option-avatar { margin-top: 4px; }
+  .account-name-actions { align-self: start; display: flex; gap: 4px; margin-top: 4px; }
+  .account-name-copy { display: grid; gap: 4px; min-width: 0; }
+  .account-name-copy label { display: grid; }
+  .account-name-copy input {
+    background: var(--bramble-elevated);
+    border-radius: ${RADIUS.sm};
+    color: var(--bramble-text);
+    min-height: ${CONTROL.hitSmall};
+    padding: 0 ${SPACE.sm};
+    width: 100%;
+  }
+  .account-name-meta {
+    align-items: center;
+    color: var(--bramble-muted);
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: 4px;
+    min-width: 0;
+  }
+  .account-name-meta code { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .group-manage-list {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};

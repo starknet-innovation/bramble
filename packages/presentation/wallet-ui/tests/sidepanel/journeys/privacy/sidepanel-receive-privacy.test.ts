@@ -57,7 +57,9 @@ describe("receive privacy-pool notice", () => {
     const html = privacyPoolNotice(settled("unregistered"), "deploy-first");
 
     expect(html).toContain('data-privacy-deploy-register=""');
-    expect(html).toContain("Deploy and enable");
+    // The call to action is the same in both states; the sub-line below it is
+    // what says this one takes a deployment first.
+    expect(html).toContain("Enable privacy");
     // The copy is honest that this is two transactions: Starknet cannot batch a
     // DEPLOY_ACCOUNT with an invoke.
     expect(html).toContain("two transactions: deploy, then register");

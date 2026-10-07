@@ -42,16 +42,6 @@ export const ONBOARDING_WELCOME_STYLES = `
     min-height: 34px;
     text-decoration: none;
   }
-  .onboarding-local-note {
-    align-items: center;
-    color: var(--bramble-muted);
-    display: inline-flex;
-    font-size: ${TYPE.caption.size};
-    gap: 6px;
-    justify-content: center;
-    margin-top: ${SPACE.sm};
-  }
-  .onboarding-local-note .icon { height: 13px; width: 13px; }
   @media (hover: hover) and (pointer: fine) {
     .onboarding-welcome-actions .onboarding-launch:hover { color: var(--bramble-text); }
   }

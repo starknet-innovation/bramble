@@ -25,6 +25,12 @@ const mainnetToken = (symbol: "ETH" | "STRK") => {
 
 export const ETH_TOKEN = mainnetToken("ETH");
 export const STRK_TOKEN = mainnetToken("STRK");
+/**
+ * The pool's action fee in STRK base units (6 STRK), the value the STRK20
+ * checkpoints render. Kept in one place so the activation review and the
+ * dapp-registration review cannot disagree about it.
+ */
+export const POOL_FEE_FRI = "0x53444835ec580000";
 const SPAM_TOKEN = withTokenId({
   address: "0x099999",
   decimals: 6,

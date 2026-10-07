@@ -6,6 +6,7 @@
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
+import { strkAvailableForFees } from "../portfolio/home-view";
 import type { SendIntent } from "../send/send-model";
 import { loadPrivacyDisclosure, type PrivacyUiDeps } from "./privacy-disclosure";
 import {
@@ -28,6 +29,11 @@ export type PrivacyControllerOptions = {
   readonly openSend?: (intent: SendIntent) => void;
   readonly paint: () => void;
   readonly preferences: () => WalletPreferences | null;
+  /**
+   * The app's injected wall clock. The settled-private-move watch measures its
+   * bounded window with it; without a clock the watch is not armed.
+   */
+  readonly now?: (() => number) | null;
   readonly status: () => WalletStatus;
   readonly wallet: SidepanelWallet;
 };
@@ -40,6 +46,10 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
   let disclosure: PrivacyDisclosureState = emptyPrivacyDisclosure();
   let generation = 0;
   let journey: PrivacyJourneyState = { stage: "idle" };
+  // Start time of the last private operation this controller was told had
+  // settled, or null when none is being watched. The settle poll reads it while
+  // the privacy indexer catches up.
+  let settledAt: number | null = null;
   const deps = (): PrivacyUiDeps => ({
     ...options,
     balances: () => {
@@ -47,6 +57,7 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
       return "balances" in state ? state.balances : [];
     },
     disclosure: () => disclosure,
+    fundedForFees: () => strkAvailableForFees(options.balances()),
     generation: () => generation,
     journey: () => journey,
     setDisclosure: (state) => {
@@ -54,6 +65,12 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
     },
     setJourney: (state) => {
       journey = state;
+    },
+    settledAt: () => settledAt,
+    // The settle watch calls this when its bounded window closes, so the
+    // controller stops holding a settling time that is no longer watched.
+    clearSettledAt: () => {
+      settledAt = null;
     },
   });
   return {
@@ -72,12 +89,23 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
       disclosure = emptyPrivacyDisclosure();
     },
     journey: (): PrivacyJourneyState => journey,
+    /**
+     * Arms a bounded re-read for a private operation the chain has accepted.
+     * The move is not visible until the privacy indexer reflects it, so a single
+     * read can latch the pre-settlement balance; the poll replaces it in place
+     * until the window closes. Call when a private send confirms, not when it
+     * merely broadcasts.
+     */
+    markPrivateSendSettled(): void {
+      settledAt = options.now?.() ?? null;
+    },
     /** Retries the same guarded discovery used by the ordinary privacy UI. */
     reload: (): Promise<boolean> => loadPrivacyDisclosure(deps()),
     reset(): void {
       generation += 1;
       disclosure = emptyPrivacyDisclosure();
       journey = { stage: "idle" };
+      settledAt = null;
     },
   };
 };

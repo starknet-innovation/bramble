@@ -36,10 +36,14 @@ import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-
 import { resolveOriginAccount } from "../provider/provider-grant";
 import { queueInvokeApproval, type ResolvedOriginAccount } from "../provider/provider-ops";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import { networkRpcUrls } from "../runtime/runtime-state";
+import { networkRpcUrls, observedVaultAccountAddresses } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PassiveUnlockSession } from "../runtime/session";
 import { recordSubmittedActivity } from "../transactions/activity-recording";
+import {
+  type TrustedRecipientDeps,
+  withTrustedRecipients,
+} from "../transactions/trusted-recipients";
 import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
 import { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
 import type { Strk20DisclosureRequest } from "./strk20-approval-types";
@@ -165,7 +169,7 @@ export const stageApprovedStrk20Registration = async (
 export type ResolvedAccount = {
   readonly account: AccountRef;
   readonly passphrase: string;
-  readonly preferences: Awaited<ReturnType<WalletPreferencesStore["read"]>>;
+  readonly preferences: ResolvedOriginAccount["preferences"];
   readonly rpcUrls: readonly string[];
 };
 
@@ -318,12 +322,14 @@ export const strk20ErrorMessage = (error: unknown): string =>
  * error — never with a stale account. The session read is a non-renewing peek.
  */
 export const resolveAccount = async (
-  deps: Pick<Strk20ExecuteDeps, "preferencesStore" | "session" | "wallet">,
+  deps: Pick<Strk20ExecuteDeps, "preferencesStore" | "session" | "wallet"> & TrustedRecipientDeps,
   origin: string,
   expected?: ApprovalContext,
 ): Promise<ResolvedAccount | { readonly error: string }> => {
   const resolved = await resolveOriginAccount(
     {
+      activity: deps.activity,
+      multisigStore: deps.multisigStore,
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,
@@ -357,11 +363,16 @@ const recordPoolAllowances = (
   });
 
 const assertCurrentRecipientPolicy = async (
-  deps: Pick<Strk20ExecuteDeps, "preferencesStore">,
+  deps: Pick<Strk20ExecuteDeps, "activity" | "preferencesStore" | "session" | "wallet">,
   account: AccountRef,
   actions: readonly Strk20Action[],
 ): Promise<void> => {
-  const refusal = refusePoisonedStrk20Actions(account, await deps.preferencesStore.read(), actions);
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    await observedVaultAccountAddresses(deps.wallet, deps.session),
+  );
+  const refusal = refusePoisonedStrk20Actions(account, preferences, actions);
   if (refusal) {
     throw new WalletError(refusal.error);
   }

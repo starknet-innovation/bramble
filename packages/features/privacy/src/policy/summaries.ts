@@ -1,6 +1,7 @@
 /** Review summaries and invoke conversion for STRK20 wire values. */
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
+import { DEFAULT_TOKENS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action, Strk20InvokeCall } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20SubmissionPlan } from "./submission-plan";
@@ -11,10 +12,17 @@ const shortAddress = (value: string): string =>
 /**
  * Builds display-only summaries from validated actions; approval identity stays
  * bound to the exact structured payload, never this text.
+ *
+ * A `deposit` that names a recipient other than `depositor` credits that
+ * account's private balance, so it is summarized as a payment naming the payee
+ * rather than as a shield. Without a `depositor` a recipient-bearing deposit is
+ * always summarized as a payment: the self case is only claimed when proven.
  */
-export const summarizeStrk20Action = (action: Strk20Action): string => {
+export const summarizeStrk20Action = (action: Strk20Action, depositor?: string): string => {
   if (action.type === "deposit") {
-    return `Deposit ${action.amount} to private balance (${shortAddress(action.token)})`;
+    return action.recipient === undefined || sameFelt(action.recipient, depositor)
+      ? `Deposit ${action.amount} to private balance (${shortAddress(action.token)})`
+      : `Pay ${action.amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
   }
   if (action.type === "withdraw") {
     return `Withdraw ${action.amount} to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
@@ -55,6 +63,27 @@ const displayFeeAmount = (raw: string, asset: Strk20FeeAsset | undefined): strin
 };
 
 /**
+ * The pool's own fee is charged in STRK on every network, so its display
+ * metadata is the wallet's bundled STRK entry rather than a second spelling of
+ * the decimals the balance paths already read. Resolved once: if the bundled
+ * registry ever stopped describing STRK, every pool-fee summary would fall back
+ * to its raw felt rather than guess a decimal point.
+ */
+const STRK_FEE_ASSET: Strk20FeeAsset | undefined = (() => {
+  const strk = DEFAULT_TOKENS.find((token) => sameFelt(token.address, STRK_TOKEN_ADDRESS));
+  return strk ? { decimals: strk.decimals, symbol: strk.symbol } : undefined;
+})();
+
+/**
+ * Renders the pool fee, which the pool always charges in STRK, in STRK rather
+ * than as the raw felt integer it arrives as. Display-only, and on the
+ * approval path: an amount that cannot be rendered degrades to the raw felt
+ * with its unit rather than throwing a review surface away.
+ */
+export const formatStrk20PoolFee = (poolFeeFri: string): string =>
+  displayFeeAmount(poolFeeFri, STRK_FEE_ASSET) ?? `${poolFeeFri} STRK fri`;
+
+/**
  * Describes the route without exposing private relay typed data. The returned
  * text is display-only; approval binds the structured plan instead.
  *
@@ -68,7 +97,7 @@ export const summarizeStrk20Plan = (
   feeAsset?: Strk20FeeAsset,
 ): string => {
   if (plan.mode === "account") {
-    return `Public account pool fee ${plan.poolFeeFri} STRK fri — first deposits are linked to this wallet`;
+    return `Public account pool fee ${formatStrk20PoolFee(plan.poolFeeFri)} — first deposits are linked to this wallet`;
   }
   const amount = displayFeeAmount(plan.feeAction.amount, feeAsset);
   const ceiling = plan.feeCeiling ? displayFeeAmount(plan.feeCeiling.ceiling, feeAsset) : null;

@@ -2,7 +2,6 @@
  * Shared side-panel helpers for extension E2E tests.
  */
 
-import { BACKUP_VERIFY_POSITIONS } from "@bramble/wallet-ui/lab";
 import type { Page, Route } from "@playwright/test";
 import { expect } from "@playwright/test";
 
@@ -48,21 +47,18 @@ const fullScreenSetup = async (
   };
 };
 
-const acknowledgeMainnetIfPresent = async (sidepanel: Page): Promise<void> => {
-  const checkbox = sidepanel.locator('input[name="mainnetAck"]');
-  if ((await checkbox.count()) === 0 || !(await checkbox.isVisible())) {
-    return;
-  }
-  await checkbox.check();
-};
-
 /**
- * Fills backup-verification inputs using the same positions as onboarding UI.
+ * Fills the backup-verification inputs. Which words are asked varies per wallet,
+ * so the positions are read off the field labels rather than assumed — which
+ * also proves the labels name the words the predicate actually checks.
  */
 const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> => {
   const words = phraseWords(phrase);
   await expect(sidepanel.getByRole("heading", { name: "Confirm your backup" })).toBeVisible();
-  for (const [index, position] of BACKUP_VERIFY_POSITIONS.entries()) {
+  const labels = await sidepanel.locator(".verify-grid label > span:first-child").allTextContents();
+  expect(labels.length).toBeGreaterThan(0);
+  for (const [index, label] of labels.entries()) {
+    const position = Number(label.replace(/\D+/g, ""));
     await sidepanel.locator(`input[name="verify-${index}"]`).fill(words[position - 1] ?? "");
   }
   await expect(sidepanel.locator("#verify-result")).toHaveText("Backup confirmed.");
@@ -77,30 +73,57 @@ const protectAndSelectAccount = async (
   await sidepanel.getByRole("button", { name: "Review account" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Review your account" })).toBeVisible();
   await sidepanel.locator("#account-preview").click();
-  await acknowledgeMainnetIfPresent(sidepanel);
   await expect(sidepanel.getByRole("button", { name: "Add selected account" })).toBeEnabled();
   await sidepanel.getByRole("button", { name: "Add selected account" }).click();
+};
+
+type RecoveryRpcCall = {
+  readonly id?: string | number | null;
+  readonly method?: unknown;
+};
+
+const isRecoveryRpcCall = (value: unknown): value is RecoveryRpcCall =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Class hash and balance are the reads recovery needs: contract-not-found and a
+// zero uint256. Every other method, including one batched into the same HTTP
+// request, gets a JSON-RPC error. Aborting the connection would fail import on
+// an incidental method the scan does not use.
+const recoveryRpcResponse = (
+  call: RecoveryRpcCall,
+): {
+  readonly error?: { readonly code: number; readonly message: string };
+  readonly id: string | number | null;
+  readonly jsonrpc: "2.0";
+  readonly result?: readonly string[];
+} => {
+  const id = call.id ?? null;
+  if (call.method === "starknet_getClassHashAt") {
+    return { error: { code: 20, message: "Contract not found" }, id, jsonrpc: "2.0" };
+  }
+  if (call.method === "starknet_call") {
+    return { id, jsonrpc: "2.0", result: ["0x0", "0x0"] };
+  }
+  return { error: { code: -32601, message: "Method not found" }, id, jsonrpc: "2.0" };
 };
 
 const mockEmptyRecoveryChain = async (page: Page): Promise<() => Promise<void>> => {
   const pattern = "https://*.starknet.org/**";
   const handler = async (route: Route): Promise<void> => {
-    const request = route.request().postDataJSON() as {
-      readonly id?: unknown;
-      readonly method?: unknown;
-    };
-    const id = request.id ?? 1;
-    if (request.method === "starknet_getClassHashAt") {
+    let body: unknown;
+    try {
+      body = route.request().postDataJSON();
+    } catch {
       await route.fulfill({
-        json: { error: { code: 20, message: "Contract not found" }, id, jsonrpc: "2.0" },
+        json: { error: { code: -32700, message: "Parse error" }, id: null, jsonrpc: "2.0" },
       });
       return;
     }
-    if (request.method === "starknet_call") {
-      await route.fulfill({ json: { id, jsonrpc: "2.0", result: ["0x0", "0x0"] } });
+    if (Array.isArray(body)) {
+      await route.fulfill({ json: body.filter(isRecoveryRpcCall).map(recoveryRpcResponse) });
       return;
     }
-    await route.abort();
+    await route.fulfill({ json: recoveryRpcResponse(isRecoveryRpcCall(body) ? body : {}) });
   };
   await page.context().route(pattern, handler);
   return () => page.context().unroute(pattern, handler);
@@ -117,7 +140,6 @@ const protectAndRecoverAccounts = async (onboarding: Page, passphrase: string): 
   const brambleGroup = onboarding.locator('[data-recovery-group="openzeppelin"]');
   await brambleGroup.locator("summary").click();
   await brambleGroup.locator('input[type="checkbox"]').first().check();
-  await onboarding.locator('input[name="recoveryMainnetAck"]').check();
   await onboarding.getByRole("button", { name: "Restore selected accounts" }).click();
 };
 
@@ -137,7 +159,7 @@ export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<
   const phrase = await phraseInputs.evaluateAll((inputs) =>
     inputs.map((input) => (input as HTMLInputElement).value).join(" "),
   );
-  await onboarding.getByRole("button", { name: "Show recovery phrase" }).click();
+  await onboarding.getByRole("button", { name: "Show", exact: true }).click();
   await onboarding.getByRole("button", { name: "I saved my phrase" }).click();
   await fillBackupVerify(onboarding, phrase);
   await onboarding.getByRole("button", { name: "Continue" }).click();
@@ -244,6 +266,29 @@ export const openPendingWalletSurface = async (
     )
     .toBeGreaterThan(0);
   await sidepanel.reload();
+};
+
+/**
+ * Opens a pending transaction review and asserts Approve stays withheld.
+ *
+ * The suite blocks egress, so the fee cannot be priced. The card must keep
+ * Approve disabled. Callers still owe the dapp a deny or the held promise
+ * stays pending; this helper does not decide the request.
+ */
+export const expectInvokeApprovalWithheld = async (
+  sidepanel: Page,
+  origin: string,
+): Promise<void> => {
+  await openPendingWalletSurface(sidepanel);
+  await expect(sidepanel.getByText("Review request")).toBeVisible();
+  await expect(sidepanel.getByText("Transaction request", { exact: true }).first()).toBeVisible();
+  await expect(sidepanel.getByTitle(origin).first()).toBeVisible();
+  await expect(
+    sidepanel.getByText(
+      "Couldn't estimate the network fee right now. Check your connection and retry before sending.",
+    ),
+  ).toBeVisible();
+  await expect(sidepanel.locator('[data-approval-action="approve"]')).toBeDisabled();
 };
 
 /**

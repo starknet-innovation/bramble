@@ -2,14 +2,14 @@
  * Edge-case coverage for the account-groups ("folders") UI, complementing the
  * core journeys in ./sidepanel-groups-ui.test.ts. Uses the same shared harness so
  * every assertion checks both the store call and the re-derived DOM. Covers the
- * drawer's quick per-row folder picker (None), self-heal of the drawer's active
- * filter when its group is deleted from the manage view, duplicate names,
+ * drawer's fallback to the home folder when a folder is deleted from the manage
+ * view, the drawer carrying no group-CRUD of its own, duplicate names,
  * rename-to-empty rejection, cross-surface icon propagation, the NEGATIVE Journey
  * 3 assertion (no per-account assign panel on the manage flow), and focus
  * restoration across the full-repaint that each mutation triggers.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { AccountGroups } from "@bramble/settings/groups";
+import { type AccountGroups, DEFAULT_GROUP_IDS } from "@bramble/settings/groups";
 import { preferences } from "@bramble/testkit/sidepanel";
 import {
   captureRepaintFocus,
@@ -18,7 +18,6 @@ import {
   restoreRepaintFocus,
 } from "../../../../src/sidepanel/app/rendering/focus-memo";
 import { accountFlow } from "../../../../src/sidepanel/app/screens/flows";
-import { healTransientGroupState } from "../../../../src/sidepanel/journeys/settings/group-state";
 import { type IconName, icon } from "../../../../src/sidepanel/shared/icons";
 import { accountDrawer } from "../../../../src/sidepanel/shell/account-drawer";
 import {
@@ -44,52 +43,15 @@ const glyphHtml = (glyph: IconName): string => {
   return probe.querySelector(".icon")?.outerHTML ?? "";
 };
 
-describe("account drawer quick picker edge cases", () => {
+describe("account drawer folder edge cases", () => {
   beforeEach(() => {
     document.body.replaceChildren();
   });
 
-  test("picking None clears the account's folder while the picker stays open", async () => {
-    const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer");
-
-    click(harness.container.querySelector(`[data-assign-toggle="${acctA.id}"]`));
-    await harness.tick();
-    // The account starts filed under Work. The drawer omits the redundant
-    // metadata icon below the address; the Work option remains selected.
-    let row = harness.container
-      .querySelector(`[data-switch-account="${acctA.id}"]`)
-      ?.closest(".drawer-account-item");
-    expect(row?.querySelector(".account-groups-line")).toBeNull();
-    expect(
-      harness.container
-        .querySelector(`[data-group-pick="work"][data-account="${acctA.id}"]`)
-        ?.getAttribute("aria-pressed"),
-    ).toBe("true");
-
-    click(harness.container.querySelector(`[data-group-pick="none"][data-account="${acctA.id}"]`));
-    await harness.tick();
-
-    expect(harness.calls.setAccountInGroup).toEqual([[acctA.id, "work", false]]);
-    expect(harness.groups()[0]?.accountIds).not.toContain(acctA.id);
-    // None is now the selected pick and the picker is still open.
-    expect(
-      harness.container
-        .querySelector(`[data-group-pick="none"][data-account="${acctA.id}"]`)
-        ?.getAttribute("aria-pressed"),
-    ).toBe("true");
-    row = harness.container
-      .querySelector(`[data-switch-account="${acctA.id}"]`)
-      ?.closest(".drawer-account-item");
-    expect(row?.querySelector(".account-groups-line")).toBeNull();
-    expect(
-      harness.container.querySelector(`[data-group-assign="${acctA.id}"]`)?.hasAttribute("hidden"),
-    ).toBe(false);
-  });
-
-  test("deleting the active-filter group heals the drawer filter back to All", async () => {
-    // Delete the group through the manage view (the one place that deletes now),
-    // then prove the shared paint-loop heal drops the drawer's now-dangling
-    // filter and the re-derived drawer shows every account again.
+  test("deleting a folder re-files its accounts under My accounts", async () => {
+    // Delete the group through the manage view (the one place that deletes), then
+    // prove the re-derived drawer still lists every account: an account whose
+    // folder is gone falls back to the home folder rather than disappearing.
     const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "account");
 
     click(harness.container.querySelector('[data-group-expand="work"]'));
@@ -101,30 +63,42 @@ describe("account drawer quick picker edge cases", () => {
     await harness.tick();
 
     expect(harness.calls.removeGroup).toEqual(["work"]);
-    expect(harness.groups().length).toBe(0);
-
-    // The drawer had "work" as its active filter. On the next paint the shared
-    // heal drops it, so the re-derived drawer shows All (no chips, both rows).
-    const healed = healTransientGroupState(
-      { drawerGroupFilter: "work", expandedGroupId: null, openAssignId: null },
-      harness.groups(),
-      status.accounts.map((stored) => stored.id),
-    );
-    expect(healed.drawerGroupFilter).toBeNull();
+    expect(harness.groupById("work")).toBeUndefined();
 
     const rendered = document
       .createRange()
       .createContextualFragment(
-        accountDrawer(
-          status,
-          acctA,
-          { ...preferences, groups: harness.groups() },
-          healed.drawerGroupFilter,
-        ),
+        accountDrawer(status, acctA, { ...preferences, groups: harness.groups() }),
       );
-    expect(rendered.querySelector(".group-chips")).toBeNull();
     expect(rendered.querySelectorAll(".drawer-account-item").length).toBe(2);
     expect(rendered.querySelector(`[data-switch-account="${acctB.id}"]`)).not.toBeNull();
+    // Both rows sit under the seeded home folder, which is never deletable.
+    const home = rendered.querySelector(`[data-folder="${DEFAULT_GROUP_IDS.home}"]`);
+    expect(home?.querySelectorAll(".drawer-account-item").length).toBe(2);
+  });
+
+  test("keeps hidden accounts out of the drawer's account list", () => {
+    const rendered = document
+      .createRange()
+      .createContextualFragment(
+        accountDrawer(status, acctA, { ...preferences, hiddenAccountIds: [acctB.id] }),
+      );
+
+    // The wallet still holds the account; the drawer just stops listing it, so
+    // hiding is not a removal and nothing on this surface offers to reveal it.
+    expect(rendered.querySelectorAll(".drawer-account-item").length).toBe(1);
+    expect(rendered.querySelector(`[data-switch-account="${acctB.id}"]`)).toBeNull();
+    expect(rendered.querySelector(`[data-switch-account="${acctA.id}"]`)).not.toBeNull();
+  });
+
+  test("the drawer keeps no group-CRUD controls of its own", () => {
+    const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer");
+
+    // Renaming, re-iconing and deleting a folder all live on the manage view; the
+    // drawer only lists, moves by drag, and adds.
+    expect(harness.container.querySelector("[data-remove-group]")).toBeNull();
+    expect(harness.container.querySelector("[data-edit-group]")).toBeNull();
+    expect(harness.container.querySelector("#drawer-add-folder")).not.toBeNull();
   });
 });
 
@@ -136,7 +110,7 @@ describe("manage-accounts group edge cases", () => {
   test("creates distinct ids for duplicate group names", async () => {
     const harness = mount([group("briefcase", "work", "Work")], "account");
 
-    // Open the "Create a group" accordion panel, then create a second "Work".
+    // Open the "Create a folder" accordion panel, then create a second "Work".
     click(harness.container.querySelector('[data-group-expand="__create__"]'));
     await harness.tick();
 
@@ -149,9 +123,15 @@ describe("manage-accounts group edge cases", () => {
     await harness.tick();
 
     expect(harness.calls.createGroup).toEqual([["Work", "folder"]]);
-    // Same display name, deterministic collision-free ids.
-    expect(harness.groups().map((entry) => entry.id)).toEqual(["work", "work-2"]);
-    expect(harness.groups().map((entry) => entry.name)).toEqual(["Work", "Work"]);
+    // Same display name, deterministic collision-free ids — between the two
+    // default folders, which the write path seeds.
+    expect(harness.groups().map((entry) => entry.id)).toEqual([
+      DEFAULT_GROUP_IDS.home,
+      "work",
+      "work-2",
+      DEFAULT_GROUP_IDS.archived,
+    ]);
+    expect(harness.groupById("work-2")?.name).toBe("Work");
   });
 
   test("rejects a rename to whitespace without mutating the group", async () => {
@@ -171,10 +151,10 @@ describe("manage-accounts group edge cases", () => {
     // The empty name is rejected before any store call; the group is unchanged.
     expect(harness.calls.renameGroup).toEqual([]);
     expect(harness.calls.setGroupIcon).toEqual([]);
-    expect(harness.groups()[0]?.name).toBe("Work");
+    expect(harness.groupById("work")?.name).toBe("Work");
   });
 
-  test("propagates an icon change made in the manage view to the drawer chip", async () => {
+  test("propagates an icon change made in the manage view to the drawer folder", async () => {
     const harness = mount([group("folder", "work", "Work")], "account");
 
     click(harness.container.querySelector('[data-group-expand="work"]'));
@@ -183,10 +163,10 @@ describe("manage-accounts group edge cases", () => {
     click(form?.querySelector('[data-group-icon="star"]') ?? null);
     submit(form);
     await harness.tick();
-    expect(harness.groups()[0]?.icon).toBe("star");
+    expect(harness.groupById("work")?.icon).toBe("star");
 
-    // Render the drawer from the same mutated store: its filter chip re-derives
-    // the new glyph, proving the change is visible cross-surface.
+    // Render the drawer from the same mutated store: its folder heading
+    // re-derives the new glyph, proving the change is visible cross-surface.
     const probe = document.createElement("div");
     probe.append(
       document
@@ -195,8 +175,10 @@ describe("manage-accounts group edge cases", () => {
           accountDrawer(status, acctA, { ...preferences, groups: harness.groups() }),
         ),
     );
-    const chipGlyph = probe.querySelector('[data-group-filter="work"]')?.querySelector(".icon");
-    expect(chipGlyph?.outerHTML).toBe(glyphHtml("star"));
+    const headGlyph = probe
+      .querySelector('[data-folder="work"] .drawer-folder-icon')
+      ?.querySelector(".icon");
+    expect(headGlyph?.outerHTML).toBe(glyphHtml("star"));
   });
 
   test("does not render the old per-account assign panel on the manage-accounts flow", () => {
@@ -229,21 +211,21 @@ describe("group control focus restoration", () => {
     return app;
   };
 
-  // The lean drawer (folder quick picker) and the manage view (group editors).
-  const drawer = (groups: AccountGroups, openAssign: string | null) =>
-    accountDrawer(status, acctA, { ...preferences, groups }, null, openAssign);
+  // The lean drawer (folder sections) and the manage view (group editors).
+  const drawer = (groups: AccountGroups) =>
+    accountDrawer(status, acctA, { ...preferences, groups });
   const manage = (groups: AccountGroups, expanded: string | null) =>
-    accountFlow(status, acctA, { ...preferences, groups }, expanded);
+    accountFlow(status, { ...preferences, groups }, expanded);
 
-  test("reclaims focus on the acted-on folder pick after a repaint", () => {
+  test("reclaims focus on the acted-on membership toggle after a repaint", () => {
     const groups = [group("briefcase", "work", "Work")];
-    const app = paintApp(drawer(groups, acctA.id));
-    const selector = `[data-group-pick="work"][data-account="${acctA.id}"]`;
+    const app = paintApp(manage(groups, "work"));
+    const selector = `[data-group-toggle="work"][data-account="${acctA.id}"]`;
     app.querySelector<HTMLElement>(selector)?.focus();
     const memo = focusMemo();
 
-    // Repaint: the pick is now a fresh node. Focus must return to it.
-    paintApp(drawer(groups, acctA.id));
+    // Repaint: the toggle is now a fresh node. Focus must return to it.
+    paintApp(manage(groups, "work"));
     restoreFocus(app, memo);
     expect(document.activeElement).toBe(app.querySelector(selector));
   });
@@ -255,21 +237,24 @@ describe("group control focus restoration", () => {
     const memo = focusMemo();
 
     // The group is deleted, so neither its remove button nor its expander exist
-    // on the repaint; focus falls through to the next group's expander.
+    // on the repaint. Focus falls through to the first remaining folder, which
+    // is My accounts — it is always on this screen, ahead of any user folder.
     const remaining = [group("piggyBank", "savings", "Savings")];
     paintApp(manage(remaining, null));
     restoreFocus(app, memo);
-    expect(document.activeElement).toBe(app.querySelector('[data-group-expand="savings"]'));
+    expect(document.activeElement).toBe(
+      app.querySelector(`[data-group-expand="${DEFAULT_GROUP_IDS.home}"]`),
+    );
   });
 
   test("does not move focus when no tracked control was focused", () => {
     const groups = [group("briefcase", "work", "Work")];
-    const app = paintApp(drawer(groups, null));
+    const app = paintApp(drawer(groups));
     // Nothing group-related is focused (a non-user/streaming repaint case).
     const memo = focusMemo();
     expect(memo).toEqual([]);
 
-    paintApp(drawer(groups, null));
+    paintApp(drawer(groups));
     const before = document.activeElement;
     restoreFocus(app, memo);
     // Focus is untouched — restoration never steals onto a group control.
@@ -337,5 +322,25 @@ describe("group control focus restoration", () => {
     );
     restoreRepaintFocus(app, secretFocus);
     expect(app.querySelector<HTMLInputElement>('[name="vaultPassphrase"]')?.value).toBe("");
+  });
+
+  test("keeps a half-typed drawer folder name across a repaint", () => {
+    const app = paintApp('<input id="drawer-folder-name" name="folderName" value="">');
+    const input = app.querySelector<HTMLInputElement>('[name="folderName"]');
+    if (!input) {
+      throw new Error("folder name missing");
+    }
+    input.focus();
+    input.value = "Trading";
+    input.setSelectionRange(4, 4);
+    const focus = captureRepaintFocus();
+
+    paintApp('<input id="drawer-folder-name" name="folderName" value="">');
+    restoreRepaintFocus(app, focus);
+
+    const after = app.querySelector<HTMLInputElement>('[name="folderName"]');
+    expect(document.activeElement).toBe(after);
+    expect(after?.value).toBe("Trading");
+    expect(after?.selectionStart).toBe(4);
   });
 });

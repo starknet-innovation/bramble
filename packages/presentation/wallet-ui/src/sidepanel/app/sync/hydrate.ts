@@ -13,6 +13,7 @@ import type { RenderData } from "../rendering/render-cache";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
 import type { RefreshReason } from "./refresh-scheduler";
+import type { SignabilityCache } from "./signability-cache";
 
 /**
  * Inputs `hydrateView` needs: the current status/view, the shared render cache,
@@ -28,6 +29,7 @@ export type HydrateDeps = {
   readonly wallet: SidepanelWallet;
   readonly multisig: MultisigClient;
   readonly deployment: DeploymentCache;
+  readonly signability: SignabilityCache;
   readonly paint: () => void;
   readonly refreshReason?: RefreshReason;
 };
@@ -212,6 +214,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     wallet,
     multisig,
     deployment,
+    signability,
     refreshReason,
     isCurrent = () => true,
     paint,
@@ -300,6 +303,13 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       },
       true,
     );
+    fill(
+      () => signability.load(status, activeView, refreshReason === "action"),
+      (value) => {
+        cache.signability = value;
+      },
+      true,
+    );
   }
   if (activityView) {
     fill(
@@ -316,7 +326,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       activeView !== "activity",
     );
   }
-  if (activeView === "account") {
+  if (activeView === "receive") {
     fill(wallet.loadClassHashVerification(), (value) => {
       cache.classHashVerification = value;
     });

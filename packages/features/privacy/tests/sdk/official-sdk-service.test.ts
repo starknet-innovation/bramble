@@ -23,7 +23,7 @@ describe("official STRK20 SDK adapter", () => {
   test("routes the vault-only viewing key into discovery and preserves requested token order", async () => {
     let seenViewingKey = "";
     const sdk = runtime((input) => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         seenViewingKey = await input.viewingKeyProvider.getViewingKey();
         return {
@@ -47,14 +47,7 @@ describe("official STRK20 SDK adapter", () => {
 
   test("maps a simulated SDK call and canonical empty proof", async () => {
     const sdk = runtime(() => ({
-      build: () =>
-        builder({
-          callAndProof: {
-            call: { calldata: ["0x1"], contractAddress: poolAddress, entrypoint: "apply_actions" },
-            proof: { data: "", output: [], proofFacts: [] },
-          },
-          warnings: [],
-        }),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -91,17 +84,6 @@ describe("official STRK20 SDK adapter", () => {
             ]);
             return self;
           },
-          simulate: async () => ({
-            ...executeResult(),
-            callAndProof: {
-              call: {
-                calldata: ["0x1"],
-                contractAddress: poolAddress,
-                entrypoint: "apply_actions",
-              },
-              proof: { data: "", output: [], proofFacts: [] },
-            },
-          }),
           surplusTo(recipient: string, withdraw?: boolean) {
             seen.push(["surplusTo", recipient, withdraw]);
             return self;
@@ -194,7 +176,7 @@ describe("official STRK20 SDK adapter", () => {
       [BigInt(token), [{ amount: 5n }]],
     ]);
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes };
       },
@@ -217,7 +199,7 @@ describe("official STRK20 SDK adapter", () => {
       [BigInt(token), Array.from({ length: 4_097 }, () => ({ amount: 1n }))],
     ]);
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes };
       },
@@ -246,7 +228,7 @@ describe("official STRK20 SDK adapter", () => {
     let sdkInput: Record<string, unknown> | null = null;
     const sdk: PrivacySdkRuntime = {
       ...runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),
@@ -254,7 +236,7 @@ describe("official STRK20 SDK adapter", () => {
       createPrivateTransfers(input) {
         sdkInput = input as Record<string, unknown>;
         return {
-          build: () => builder(executeResult()),
+          build: () => builder(),
           discoverNotes: async () => ({ notes: new Map() }),
           executeWithInvocation: async () => executeResult(),
         };
@@ -297,7 +279,7 @@ describe("official STRK20 SDK adapter", () => {
 
   test("prepares a proof and derives both forms of subaccount commitment", async () => {
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -325,7 +307,7 @@ describe("official STRK20 SDK adapter", () => {
 
   test("blocks USER_LINKAGE before sending a proof request", async () => {
     let proved = false;
-    const linkedBuilder = builder(executeResult(), {
+    const linkedBuilder = builder({
       warnings: [{ code: "USER_LINKAGE", message: "multiple channels" }],
     });
     const sdk = runtime(() => ({
@@ -359,11 +341,11 @@ describe("official STRK20 SDK adapter", () => {
       {},
     ]) {
       const sdk = runtime(() => ({
-        build: () => builder(warningResult),
+        build: () => builder(),
         async discoverNotes() {
           return { notes: new Map() };
         },
-        executeWithInvocation: async () => executeResult(),
+        executeWithInvocation: async () => warningResult,
       }));
       await expect(
         createOfficialStrk20Service({ providerFor, sdk }).prepare({
@@ -381,18 +363,14 @@ describe("official STRK20 SDK adapter", () => {
       { calldata: ["0x1"], contractAddress: poolAddress, entrypoint: "transfer" },
     ]) {
       const sdk = runtime(() => ({
-        build: () =>
-          builder({
-            callAndProof: {
-              call,
-              proof: { data: "", output: [], proofFacts: [] },
-            },
-            warnings: [],
-          }),
+        build: () => builder(),
         async discoverNotes() {
           return { notes: new Map() };
         },
-        executeWithInvocation: async () => executeResult(),
+        executeWithInvocation: async () => ({
+          callAndProof: { call, proof: { data: "", output: [], proofFacts: [] } },
+          warnings: [],
+        }),
       }));
       await expect(
         createOfficialStrk20Service({ providerFor, sdk }).prepare({
@@ -406,7 +384,7 @@ describe("official STRK20 SDK adapter", () => {
 
   test("maps SDK insufficient-note failures to the stable wallet error", async () => {
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         throw new Error("not enough private notes");
       },

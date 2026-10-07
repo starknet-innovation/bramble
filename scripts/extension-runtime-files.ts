@@ -1,6 +1,10 @@
 /**
- * Exact runtime files allowed in the packaged MV3 extension. Both browser
- * targets ship this same set; only their manifests differ.
+ * Exact runtime file sets allowed in each packaged extension build.
+ */
+import { FIREFOX_EXCLUDED_FILES } from "../apps/extension/firefox-manifest";
+
+/**
+ * Exact runtime files allowed in the packaged MV3 extension.
  */
 export const EXPECTED_RUNTIME_FILES = [
   "background/index.js",
@@ -25,3 +29,14 @@ export const EXPECTED_RUNTIME_FILES = [
   "sidepanel/index.js",
   "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;
+
+/**
+ * Exact runtime files allowed in the packaged Firefox extension, derived from
+ * the Chrome set so a new packaged file is reviewed once rather than twice. The
+ * difference is the collectible renderer, which the Gecko manifest cannot
+ * declare as sandboxed at this build's minimum Firefox — see
+ * `apps/extension/firefox-manifest.ts`.
+ */
+export const FIREFOX_RUNTIME_FILES: readonly string[] = EXPECTED_RUNTIME_FILES.filter(
+  (file) => !FIREFOX_EXCLUDED_FILES.includes(file),
+);

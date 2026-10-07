@@ -84,7 +84,8 @@ is reset on lock, account switch, network switch, side-panel reload, or extensio
    discovers private note totals for tracked tokens on the active network.
 2. An unregistered account gets an **Activate private balances** action. Its immutable review
    identifies the network, pool, public account route, and public link between the wallet address
-   and its viewing-key commitment. No registration is silent.
+   and its viewing-key commitment. The same batch opens the account's own private channel, so a
+   later shield to another wallet opens only that recipient's channel. No registration is silent.
 3. After activation, each tracked asset detail has a **Shield SYMBOL** action. The composer keeps
    token identity, public balance, amount shortcuts, and destination network together.
 4. The shielding review freezes the amount, token metadata, pool, actions, submission route, and
@@ -96,7 +97,8 @@ is reset on lock, account switch, network switch, side-panel reload, or extensio
    discovery; failures never retry automatically.
 
 The UI Lab contains deterministic checkpoints under **Wallet journeys / 04 Private balances** for
-disclosure off, discovery, registration, empty notes, asset entry, compose, public shielding,
+disclosure off, discovery, registration, the registration funding shortfall, empty notes, asset
+entry, compose, public shielding,
 Wallet API private-relay review, proving, success, service failure, missing configuration, and the
 unsupported Ledger boundary. Fixtures never call a real vault, SDK service, RPC, or hardware
 device.
@@ -125,6 +127,12 @@ device.
    formally reviewed. No viewing key is logged or returned through a browser message.
 4. The SDK performs note discovery, transaction assembly, and proving. `USER_LINKAGE` warnings map
    to the Wallet API privacy-leak error; every other non-empty or malformed warning fails closed.
+   A simulation (`simulate: true`) is proved by the configured prover exactly like a real proof,
+   and its proof is then replaced by an empty one so it cannot be submitted. The wallet never
+   calls the SDK's own `simulate`: it sends the viewing-key-bearing `compile_actions` invocation
+   to the JSON-RPC node, which may be a user-set override. A simulation skips the final
+   pre-proof policy gate, since it produces nothing submittable, and counts against the prover's
+   rate limits and proving budget like any other proof.
 5. Before a dapp invoke approval appears, the wallet runs only public/pure action checks, rejects a
    deposit/withdraw correlation, and requests and freezes the relayer fee action and any typed
    data. It never discovers private balances, generates a proof, or signs before approval.

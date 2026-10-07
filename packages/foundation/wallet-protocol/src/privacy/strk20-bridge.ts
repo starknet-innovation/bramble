@@ -10,6 +10,7 @@ import {
   JSON_BUDGETS,
   type Json,
 } from "@bramble/core/json";
+import { isOptionalApiVersion } from "../provider/versions";
 import {
   isStrk20BalanceEntry,
   isStrk20CallAndProof,
@@ -32,26 +33,39 @@ export type {
   Strk20Proof,
 } from "./strk20";
 
+// The spec's `valid_until` Timestamp: a non-negative integer of Unix seconds.
+const isUnixSeconds = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
 /**
- * Parses `wallet_strk20Balances` params (`{ tokens: ADDRESS[] }`) into the
- * validated token list, or null when malformed.
+ * Parses `wallet_strk20Balances` params (`{ tokens: ADDRESS[], valid_until?,
+ * api_version? }`) into the validated token list, or null when malformed.
+ * The two optional params are shape-checked, then dropped. `valid_until` only
+ * requests an authorization window, which the spec leaves to the wallet; here
+ * every read is its own user approval and grants nothing past that read, so
+ * no request can widen what a dapp learns. `api_version` is not negotiated
+ * beyond the discovery methods, matching wallet_getPermissions.
  */
 export const readStrk20BalancesParams = (params: Json | undefined): readonly string[] | null =>
-  isRecord(params) && hasOnlyKnownKeys(params, ["tokens"])
+  isRecord(params) &&
+  hasOnlyKnownKeys(params, ["api_version", "tokens", "valid_until"]) &&
+  isOptionalApiVersion(params["api_version"]) &&
+  (params["valid_until"] === undefined || isUnixSeconds(params["valid_until"]))
     ? readStrk20Tokens(params["tokens"])
     : null;
 
 /**
- * Parses `wallet_strk20PrepareInvoke` params (`{ actions, simulate? }`) into the
- * validated action list and simulate flag (default false), or null when
- * malformed.
+ * Parses `wallet_strk20PrepareInvoke` params (`{ actions, simulate?,
+ * api_version? }`) into the validated action list and simulate flag (default
+ * false), or null when malformed. A well-formed `api_version` is dropped.
  */
 export const readStrk20PrepareParams = (
   params: Json | undefined,
 ): { readonly actions: readonly Strk20Action[]; readonly simulate: boolean } | null => {
   if (
     !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["actions", "simulate"]) ||
+    !hasOnlyKnownKeys(params, ["actions", "api_version", "simulate"]) ||
+    !isOptionalApiVersion(params["api_version"]) ||
     (params["simulate"] !== undefined && typeof params["simulate"] !== "boolean")
   ) {
     return null;
@@ -61,23 +75,29 @@ export const readStrk20PrepareParams = (
 };
 
 /**
- * Parses `wallet_strk20InvokeTransaction` params (`{ actions }`) into the
- * validated action list, or null when malformed.
+ * Parses `wallet_strk20InvokeTransaction` params (`{ actions, api_version? }`)
+ * into the validated action list, or null when malformed. A well-formed
+ * `api_version` is dropped.
  */
 export const readStrk20InvokeParams = (params: Json | undefined): readonly Strk20Action[] | null =>
-  isRecord(params) && hasOnlyKnownKeys(params, ["actions"])
+  isRecord(params) &&
+  hasOnlyKnownKeys(params, ["actions", "api_version"]) &&
+  isOptionalApiVersion(params["api_version"])
     ? readStrk20Actions(params["actions"])
     : null;
 
 /**
- * Parses the dapp-scoped sub-account commitment request.
+ * Parses the dapp-scoped sub-account commitment request (`{ dapp_name, nonce?,
+ * api_version? }`), or null when malformed. A well-formed `api_version` is
+ * dropped.
  */
 export const readStrk20SubaccountCommitmentParams = (
   params: Json | undefined,
 ): { readonly dappName: string; readonly nonce?: string } | null => {
   if (
     !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["dapp_name", "nonce"]) ||
+    !hasOnlyKnownKeys(params, ["api_version", "dapp_name", "nonce"]) ||
+    !isOptionalApiVersion(params["api_version"]) ||
     !isStrk20DappName(params["dapp_name"]) ||
     (params["nonce"] !== undefined && !isStrk20Felt(params["nonce"]))
   ) {

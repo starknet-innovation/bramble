@@ -3,11 +3,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-  type WalletPreferencesStore,
-} from "@bramble/settings/preferences";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import type { Vault } from "@bramble/vault/schema";
 import { findVaultAccount } from "@bramble/vault/vault-account";
@@ -33,79 +29,9 @@ const networkOptions = (): readonly NetworkOption[] =>
   }));
 
 /**
- * Fallback preferences store used by tests that do not wire browser storage.
+ * Re-exported fallback preferences store so callers keep one import path.
  */
-export const unavailablePreferencesStore: WalletPreferencesStore = {
-  async addCustomNetwork() {
-    throw new Error("preferences unavailable");
-  },
-  async addNft() {
-    throw new Error("preferences unavailable");
-  },
-  async createGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async importPreferences() {
-    throw new Error("preferences unavailable");
-  },
-  async read() {
-    return defaultWalletPreferences();
-  },
-  async removeAddress() {
-    throw new Error("preferences unavailable");
-  },
-  async removeGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async removeNft() {
-    throw new Error("preferences unavailable");
-  },
-  async renameGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async setAccountInGroup() {
-    throw new Error("preferences unavailable");
-  },
-  async setExplorerFallback() {
-    throw new Error("preferences unavailable");
-  },
-  async setGroupIcon() {
-    throw new Error("preferences unavailable");
-  },
-  async setAccountLabel() {
-    throw new Error("preferences unavailable");
-  },
-  async setDisplay() {
-    throw new Error("preferences unavailable");
-  },
-  async setNftIndexerUrl() {
-    throw new Error("preferences unavailable");
-  },
-  async setNostrRelayUrl() {
-    throw new Error("preferences unavailable");
-  },
-  async setNftSpam() {
-    throw new Error("preferences unavailable");
-  },
-  async saveAddress() {
-    throw new Error("preferences unavailable");
-  },
-  async setActiveNetwork(networkId) {
-    return { ...defaultWalletPreferences(), activeNetworkId: networkId };
-  },
-  async setRpcOverride() {
-    throw new Error("preferences unavailable");
-  },
-  async setStrk20NetworkConfig() {
-    throw new Error("preferences unavailable");
-  },
-  async setTokenHidden() {
-    throw new Error("preferences unavailable");
-  },
-  async upsertToken() {
-    throw new Error("preferences unavailable");
-  },
-};
+export { unavailablePreferencesStore } from "./unavailable-preferences-store";
 
 /**
  * Ordered RPC endpoints for a network, preferring the user's custom override
@@ -120,14 +46,19 @@ export const networkRpcUrls = (
 };
 
 /**
- * Returns the active account for a network, falling back to the first account on that network.
+ * Returns the active account for a network, falling back to the first account
+ * on that network the user has not hidden, and only then to the first at all.
  */
 const accountForNetwork = (
   vault: Vault,
   networkId: StarknetNetworkId,
-  accountId?: string | null,
+  accountId: string | null | undefined,
+  hiddenAccountIds: readonly string[] = [],
 ): AccountRef | null =>
   vault.accounts.find((account) => account.id === accountId && account.networkId === networkId) ??
+  vault.accounts.find(
+    (account) => account.networkId === networkId && !hiddenAccountIds.includes(account.id),
+  ) ??
   vault.accounts.find((account) => account.networkId === networkId) ??
   null;
 
@@ -174,7 +105,12 @@ const reconcileActiveAccountWithGuard = async (
     preferencesStore.read(),
     wallet.readVault(vaultPassphrase),
   ]);
-  const account = accountForNetwork(vault, preferences.activeNetworkId, vault.activeAccountId);
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
+  );
   if (!account || account.id === vault.activeAccountId) {
     return account;
   }
@@ -249,6 +185,53 @@ const requireCurrentAccountSelection = (authorized: () => boolean): void => {
  * mutation. The plain network preference records intent first; any subsequent
  * failure locks only the session generation that authorized the operation so
  * the provider cannot expose a different account under the new network.
+ *
+ * The caller must already hold the active-state coordinator (or be the only
+ * writer): this does not take it, so a composite operation can switch inside
+ * one serialized section instead of nesting coordinator runs.
+ */
+export const selectAccountLocked = async (
+  wallet: WalletStatusReader,
+  session: UnlockSession,
+  preferencesStore: WalletPreferencesStore,
+  accountId: string,
+): Promise<AccountRef | null> => {
+  const passphrase = session.getPassphrase();
+  if (!passphrase) {
+    return null;
+  }
+  const generation = session.generation();
+  const authorized = captureSessionAuthorization(session).isCurrent;
+  const target = findVaultAccount(await wallet.readVault(passphrase), accountId);
+  requireCurrentAccountSelection(authorized);
+  return runGuardedNetworkMutation(
+    session,
+    preferencesStore,
+    target.networkId,
+    passphrase,
+    generation,
+    "Unlock session changed during account selection",
+    (vaultPassphrase) => wallet.setActiveAccount({ accountId, vaultPassphrase }),
+  );
+};
+
+/**
+ * Reads the vault under the session's current credential, or null when the
+ * session holds none. Kept in this boundary module so the session and vault
+ * accessors are named in one audited place; callers pass the returned vault
+ * around and never the credential.
+ */
+export const readUnlockedVault = async (
+  wallet: WalletStatusReader,
+  session: UnlockSession,
+): Promise<Vault | null> => {
+  const passphrase = session.getPassphrase();
+  return passphrase ? wallet.readVault(passphrase) : null;
+};
+
+/**
+ * Selects an existing account and its network, serialized on the active-state
+ * coordinator. See {@link selectAccountLocked} for the mutation itself.
  */
 export const selectActiveAccount = async (
   wallet: WalletStatusReader,
@@ -257,38 +240,30 @@ export const selectActiveAccount = async (
   accountId: string,
   coordinator?: ActiveStateCoordinator,
 ): Promise<AccountRef | null> =>
-  runActiveStateMutation(coordinator, async () => {
-    const passphrase = session.getPassphrase();
-    if (!passphrase) {
-      return null;
-    }
-    const generation = session.generation();
-    const authorized = captureSessionAuthorization(session).isCurrent;
-    const target = findVaultAccount(await wallet.readVault(passphrase), accountId);
-    requireCurrentAccountSelection(authorized);
-    return runGuardedNetworkMutation(
-      session,
-      preferencesStore,
-      target.networkId,
-      passphrase,
-      generation,
-      "Unlock session changed during account selection",
-      (vaultPassphrase) => wallet.setActiveAccount({ accountId, vaultPassphrase }),
-    );
-  });
+  runActiveStateMutation(coordinator, () =>
+    selectAccountLocked(wallet, session, preferencesStore, accountId),
+  );
 
 const selectNetworkAccount = async (
   wallet: WalletStatusReader,
   networkId: StarknetNetworkId,
   passphrase: string,
   authorized: () => boolean,
+  hiddenAccountIds: readonly string[],
+  preferredAccountId?: string,
 ): Promise<AccountRef | null> => {
   const vault = await wallet.readVault(passphrase);
   requireCurrentNetworkSwitch(authorized);
-  const account = accountForNetwork(vault, networkId, vault.activeAccountId);
-  if (account?.id === vault.activeAccountId) {
-    return account;
+  const fallback = accountForNetwork(vault, networkId, vault.activeAccountId, hiddenAccountIds);
+  if (fallback?.id === vault.activeAccountId) {
+    return fallback;
   }
+  // A preferred account wins over "first on the network" only when it really
+  // is a vault account on the target network; anything else is ignored.
+  const account =
+    vault.accounts.find(
+      (stored) => stored.id === preferredAccountId && stored.networkId === networkId,
+    ) ?? fallback;
   if (account) {
     const selected = await wallet.setActiveAccount({
       accountId: account.id,
@@ -310,6 +285,10 @@ const selectNetworkAccount = async (
 
 /**
  * Switches the active network and selects or derives the matching wallet account.
+ * When the vault's active account is not on the target network, an optional
+ * `preferredAccountId` on that network is selected ahead of the first account
+ * there (a dapp switch lands on an account the origin already holds); an id
+ * that is unknown or on another network is ignored.
  */
 export const switchActiveNetwork = async (
   wallet: WalletStatusReader,
@@ -317,6 +296,7 @@ export const switchActiveNetwork = async (
   preferencesStore: WalletPreferencesStore,
   networkId: StarknetNetworkId,
   coordinator?: ActiveStateCoordinator,
+  options: { readonly preferredAccountId?: string } = {},
 ): Promise<AccountRef | null> =>
   runActiveStateMutation(coordinator, async () => {
     // The plain preference is the durable selection intent. Writing it first
@@ -329,6 +309,7 @@ export const switchActiveNetwork = async (
     }
     const generation = session.generation();
     const authorized = captureSessionAuthorization(session).isCurrent;
+    const { hiddenAccountIds = [] } = await preferencesStore.read();
     return runGuardedNetworkMutation(
       session,
       preferencesStore,
@@ -336,7 +317,15 @@ export const switchActiveNetwork = async (
       passphrase,
       generation,
       "Unlock session changed during network switch",
-      (vaultPassphrase) => selectNetworkAccount(wallet, networkId, vaultPassphrase, authorized),
+      (vaultPassphrase) =>
+        selectNetworkAccount(
+          wallet,
+          networkId,
+          vaultPassphrase,
+          authorized,
+          hiddenAccountIds,
+          options.preferredAccountId,
+        ),
     );
   });
 
@@ -365,7 +354,12 @@ const accountContextFor = async (
   }
   const preferences = await preferencesStore.read();
   const vault = await wallet.readVault(vaultPassphrase);
-  const account = accountForNetwork(vault, preferences.activeNetworkId, vault.activeAccountId);
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
+  );
   if (!account) {
     return { error: "no account for selected network" };
   }
@@ -402,6 +396,42 @@ export const observedAccountContext = (
   preferencesStore: WalletPreferencesStore,
 ): Promise<ActiveAccountContext> =>
   accountContextFor(wallet, session.peekPassphrase(), preferencesStore);
+
+/** The public half of a vault account: what the poisoning check trusts. */
+export type VaultAccountAddress = Pick<AccountRef, "address" | "networkId">;
+
+/**
+ * Reads the vault's public account addresses with a passphrase the caller
+ * already holds, for the address-poisoning trust set (audit #163). Only
+ * `address` and `networkId` leave this boundary module; a failed read yields
+ * `[]`, which leaves the check as strict as the address book alone.
+ */
+export const vaultAccountAddresses = async (
+  wallet: Pick<WalletStatusReader, "readVault">,
+  passphrase: string,
+): Promise<readonly VaultAccountAddress[]> => {
+  try {
+    return (await wallet.readVault(passphrase)).accounts.map(({ address, networkId }) => ({
+      address,
+      networkId,
+    }));
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * {@link vaultAccountAddresses} for callers that hold no passphrase. Reads it
+ * through the non-renewing session view, so the read never extends the unlock
+ * period; a locked wallet yields `[]`.
+ */
+export const observedVaultAccountAddresses = (
+  wallet: Pick<WalletStatusReader, "readVault">,
+  session: Pick<PassiveUnlockSession, "peekPassphrase">,
+): Promise<readonly VaultAccountAddress[]> => {
+  const passphrase = session.peekPassphrase();
+  return passphrase ? vaultAccountAddresses(wallet, passphrase) : Promise.resolve([]);
+};
 
 /**
  * Builds passive extension-page status. Vault results are disclosed only to
@@ -442,7 +472,12 @@ export const statusResponse = async (
     if (!authorized.isCurrent()) {
       return lockedStatus;
     }
-    const activeAccount = accountForNetwork(vault, network.id, vault.activeAccountId);
+    const activeAccount = accountForNetwork(
+      vault,
+      network.id,
+      vault.activeAccountId,
+      preferences.hiddenAccountIds,
+    );
     return {
       ...status,
       accountCount: vault.accounts.length,

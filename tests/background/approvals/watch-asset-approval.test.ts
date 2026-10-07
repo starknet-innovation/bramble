@@ -6,7 +6,9 @@
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
+import { verificationContext, verifyCalls } from "@bramble/transactions/verify";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
@@ -314,5 +316,119 @@ describe("watch-asset approval lifecycle", () => {
       { event: "accountsChanged", type: "wallet.event" },
       { event: "approvalsChanged", type: "wallet.event" },
     ]);
+  });
+});
+
+// A dapp-watched token that borrows a known ticker is stored hidden, exactly as
+// wallet.addToken stores it (audit 171); an ordinary token stays visible.
+describe("watch-asset spoof handling (audit 171)", () => {
+  const SPOOF = "0x0bad00000000000000000000000000000000000000000000000000000000001";
+  const PLAIN = "0x0777000000000000000000000000000000000000000000000000000000000002";
+
+  const approveWatch = async (address: string, symbol: string) => {
+    const { handler, preferencesStore } = makeHandler(async () => ({
+      decimals: 6,
+      name: `${symbol} Token`,
+      symbol,
+    }));
+    const held = handler({ asset: { address }, origin, type: "wallet.watchAsset" }, contentSender);
+    await flushHeld();
+    const id = await pendingId(handler);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await held;
+    return preferencesStore.read();
+  };
+
+  test("hides a token that spoofs a curated ticker", async () => {
+    const preferences = await approveWatch(SPOOF, "USDC");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, SPOOF));
+    if (!stored) throw new Error("token not stored");
+    expect(preferences.hiddenTokens ?? []).toContain(stored.id);
+  });
+
+  test("keeps a non-colliding token visible", async () => {
+    const preferences = await approveWatch(PLAIN, "PLAIN");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, PLAIN));
+    if (!stored) throw new Error("token not stored");
+    expect(preferences.hiddenTokens ?? []).not.toContain(stored.id);
+  });
+});
+
+// A dapp-watched token lends nothing to the call reviewer unless it is exactly
+// a curated token, on every network: the spam heuristic only knows the curated
+// tickers (none on Sepolia), so a site-named "STRK" there, or an uncurated
+// mainnet ticker, must stay an unknown contract summarized in units (audit 171).
+describe("watch-asset tokens are not trusted by the call reviewer (audit 171)", () => {
+  const SPOOF = "0x0bad00000000000000000000000000000000000000000000000000000000001";
+  const PAYEE = "0x0abc000000000000000000000000000000000000000000000000000000000de1";
+
+  const watchAndReview = async (input: {
+    readonly address: string;
+    readonly metadata: {
+      readonly decimals: number;
+      readonly name: string;
+      readonly symbol: string;
+    };
+    readonly networkId: "SN_MAIN" | "SN_SEPOLIA";
+  }) => {
+    const { handler, preferencesStore } = makeHandler(async () => input.metadata);
+    await preferencesStore.setActiveNetwork(input.networkId);
+    const held = handler(
+      { asset: { address: input.address }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
+    await handler({ id: await pendingId(handler), type: "wallet.approveOrigin" }, extensionSender);
+    await held;
+    const preferences = await preferencesStore.read();
+    // The review the invoke route runs (provider-ops queueInvokeApproval).
+    const report = verifyCalls(
+      [
+        {
+          calldata: [PAYEE, "0x3b9aca00", "0x0"],
+          contractAddress: input.address,
+          entrypoint: "transfer",
+        },
+      ],
+      verificationContext({ address: account.address, networkId: input.networkId }, preferences),
+    );
+    return {
+      codes: report.flags.map((flag) => flag.code),
+      preferences,
+      summary: report.calls[0]?.summary,
+    };
+  };
+
+  test("a Sepolia token named after default-tracked STRK stays unknown", async () => {
+    const { codes, preferences, summary } = await watchAndReview({
+      address: SPOOF,
+      metadata: { decimals: 18, name: "Starknet Token", symbol: "STRK" },
+      networkId: "SN_SEPOLIA",
+    });
+    expect(preferences.dappTokenIds).toHaveLength(1);
+    expect(codes).toContain("unknown-contract");
+    expect(summary).toContain("units");
+    expect(summary).not.toContain("STRK");
+  });
+
+  test("an uncurated mainnet ticker stays unknown", async () => {
+    const { codes, summary } = await watchAndReview({
+      address: SPOOF,
+      metadata: { decimals: 6, name: "Lords", symbol: "LORDS" },
+      networkId: "SN_MAIN",
+    });
+    expect(codes).toContain("unknown-contract");
+    expect(summary).not.toContain("LORDS");
+  });
+
+  test("a curated token watched by a dapp stays trusted", async () => {
+    const REAL_USDC = "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+    const { codes, summary } = await watchAndReview({
+      address: REAL_USDC,
+      metadata: { decimals: 6, name: "USD Coin", symbol: "USDC" },
+      networkId: "SN_MAIN",
+    });
+    expect(codes).not.toContain("unknown-contract");
+    expect(summary).toContain("1000 USDC");
   });
 });

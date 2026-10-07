@@ -10,6 +10,8 @@ import {
 } from "../../../apps/extension/src/background/approvals/approval-context";
 import {
   createStrk20WalletPreparationStore,
+  STRK20_PREPARATION_KEEPALIVE_MS,
+  STRK20_PREPARATION_LIFETIME_MS,
   type Strk20DepositPreparation,
   type Strk20RegistrationPreparation,
   strk20WalletPreparationPayload,
@@ -61,7 +63,54 @@ const privateDeposit = async (): Promise<Strk20DepositPreparation> => {
   return { ...unsigned, context, id: context.payloadDigest };
 };
 
+const USDT = "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8";
+
+const relayedTransfer = async (feeToken: string) => {
+  const mainnetToken: TokenConfig = { ...token, id: "SN_MAIN:ETH:0x456", networkId: "SN_MAIN" };
+  const unsigned = {
+    actions: [
+      { amount: "0x1", recipient: "0x999", token: token.address, type: "transfer" as const },
+    ],
+    amount: "1",
+    amountRaw: "1",
+    kind: "transfer" as const,
+    plan: {
+      feeAction: {
+        amount: "0x124f80",
+        recipient: "0x4",
+        token: feeToken,
+        type: "withdraw" as const,
+      },
+      mode: "private-relay" as const,
+    },
+    poolAddress: "0x123",
+    recipient: "0x999",
+    summaries: ["Send 1 ETH privately"],
+    token: mainnetToken,
+  };
+  const context = await createApprovalContext(account, strk20WalletPreparationPayload(unsigned));
+  return { ...unsigned, context, id: context.payloadDigest };
+};
+
 describe("STRK20 wallet preparation store", () => {
+  // #358: a relay fee converted out of STRK must reach the panel with its own
+  // token's display metadata, from the registry rather than preferences.
+  test("describes the relay fee token from the registry, and only when it knows it", async () => {
+    const store = createStrk20WalletPreparationStore();
+
+    expect(store.put(await relayedTransfer(USDT)).relayFee).toEqual({
+      amount: "0x124f80",
+      asset: { decimals: 6, symbol: "USDT" },
+      recipient: "0x4",
+      token: USDT,
+    });
+    expect(store.put(await relayedTransfer("0x777")).relayFee).toEqual({
+      amount: "0x124f80",
+      recipient: "0x4",
+      token: "0x777",
+    });
+  });
+
   test("returns a display-safe review and claims a deep clone exactly once", async () => {
     const store = createStrk20WalletPreparationStore();
     const value = await registration();
@@ -119,5 +168,100 @@ describe("STRK20 wallet preparation store", () => {
 
     expect(store.claim(values[0]?.id ?? "")).toBeNull();
     expect(store.claim(values[20]?.id ?? "")).not.toBeNull();
+  });
+});
+
+describe("STRK20 preparation review hold", () => {
+  const hold = () => {
+    const cancels = { value: 0 };
+    const intervals: number[] = [];
+    const ticks: (() => void)[] = [];
+    return {
+      cancels,
+      intervals,
+      ticks,
+      schedule: (tick: () => void, intervalMs: number) => {
+        ticks.push(tick);
+        intervals.push(intervalMs);
+        return () => {
+          cancels.value += 1;
+        };
+      },
+    };
+  };
+
+  test("holds the worker open while a review is pending, shares one hold, and releases it on claim", async () => {
+    const harness = hold();
+    const clock = { value: 1_000 };
+    const touches = { value: 0 };
+    const store = createStrk20WalletPreparationStore({
+      keepAlive: () => {
+        touches.value += 1;
+      },
+      now: () => clock.value,
+      schedule: harness.schedule,
+    });
+    const first = await registration();
+    const second = await registration("b");
+
+    store.put(first);
+    expect(harness.intervals).toEqual([STRK20_PREPARATION_KEEPALIVE_MS]);
+    store.put(second);
+    expect(harness.ticks).toHaveLength(1);
+
+    harness.ticks[0]?.();
+    expect(touches.value).toBe(1);
+
+    // Claiming one of the two keeps the hold for the other.
+    expect(store.claim(first.id)).not.toBeNull();
+    expect(harness.cancels.value).toBe(0);
+    expect(store.claim(second.id)).not.toBeNull();
+    expect(harness.cancels.value).toBe(1);
+  });
+
+  test("retires an unconfirmed review at the lifetime and drops the hold", async () => {
+    const harness = hold();
+    const clock = { value: 0 };
+    const touches = { value: 0 };
+    const store = createStrk20WalletPreparationStore({
+      keepAlive: () => {
+        touches.value += 1;
+      },
+      now: () => clock.value,
+      schedule: harness.schedule,
+    });
+    const value = await registration();
+    store.put(value);
+
+    clock.value = STRK20_PREPARATION_LIFETIME_MS;
+    harness.ticks[0]?.();
+    expect(touches.value).toBe(1);
+    expect(harness.cancels.value).toBe(1);
+
+    // The refusal is the existing one the panel reads as an expired review.
+    expect(store.claim(value.id)).toBeNull();
+  });
+
+  test("refuses a claim past the lifetime even before the next hold tick", async () => {
+    const harness = hold();
+    const clock = { value: 0 };
+    const store = createStrk20WalletPreparationStore({
+      keepAlive: () => undefined,
+      now: () => clock.value,
+      schedule: harness.schedule,
+    });
+    const value = await registration();
+    store.put(value);
+
+    clock.value = STRK20_PREPARATION_LIFETIME_MS;
+    expect(store.claim(value.id)).toBeNull();
+    expect(harness.cancels.value).toBe(1);
+  });
+
+  test("starts no hold when no keepalive is available", async () => {
+    const harness = hold();
+    const store = createStrk20WalletPreparationStore({ schedule: harness.schedule });
+    store.put(await registration());
+    expect(harness.ticks).toHaveLength(0);
   });
 });

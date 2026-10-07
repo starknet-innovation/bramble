@@ -85,32 +85,31 @@ const mount = (options?: { readonly createKeyVault?: () => Promise<string> }) =>
   return { app, created, renders: () => renders };
 };
 
-const ack = (root: ParentNode): void => {
-  const checkbox = root.querySelector<HTMLInputElement>('input[name="importKeyMainnetAck"]');
-  if (!checkbox) {
-    throw new Error("missing import-key acknowledgement");
-  }
-  checkbox.checked = true;
-  checkbox.dispatchEvent(new window.Event("change", { bubbles: true }));
-};
-
 describe("onboarding private-key import", () => {
   beforeEach(() => {
     document.body.replaceChildren();
   });
 
-  test("gates Continue on a key and the Mainnet acknowledgement", () => {
+  test("gates Continue on a key, with no acknowledgement left to tick", () => {
     const flow = mount();
     click(flow.app, "#add-existing-button");
     click(flow.app, "#key-method-button");
     expect(activeStep(flow.app)).toBe("import-key");
+    // The consequence of holding the key stays on the step (mc-wallet #476).
+    expect(
+      flow.app.querySelector('[data-onboarding-step="import-key"] [role="note"]')?.textContent,
+    ).toBe("Anyone with this key controls the account.");
 
     const continueButton = flow.app.querySelector<HTMLButtonElement>("#import-key-continue");
     expect(continueButton?.disabled).toBe(true);
     setValue(flow.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
-    expect(continueButton?.disabled).toBe(true);
-    ack(flow.app);
     expect(continueButton?.disabled).toBe(false);
+    // The real-funds tickbox was removed in the copy review. A gate that
+    // survived it would leave Continue permanently dead on this step.
+    expect(flow.app.querySelector("#import-key-mainnet-ack")).toBeNull();
+    expect(flow.app.querySelector('input[name="importKeyMainnetAck"]')).toBeNull();
+    setValue(flow.app, 'textarea[name="importKeyRaw"]', "  ");
+    expect(continueButton?.disabled).toBe(true);
   });
 
   test("creates the key vault from the passphrase step and renders the wallet", async () => {
@@ -118,7 +117,6 @@ describe("onboarding private-key import", () => {
     click(flow.app, "#add-existing-button");
     click(flow.app, "#key-method-button");
     setValue(flow.app, 'textarea[name="importKeyRaw"]', ` ${RAW_KEY} `);
-    ack(flow.app);
     click(flow.app, "#import-key-continue");
     expect(activeStep(flow.app)).toBe("password");
     expect(
@@ -144,7 +142,6 @@ describe("onboarding private-key import", () => {
     setValue(flow.app, 'select[name="importKeyContractType"]', "argent");
     setValue(flow.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
     setValue(flow.app, 'input[name="importKeySalt"]', "0x777");
-    ack(flow.app);
     click(flow.app, "#import-key-continue");
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);

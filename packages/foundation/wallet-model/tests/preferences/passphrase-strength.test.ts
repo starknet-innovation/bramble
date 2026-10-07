@@ -10,7 +10,6 @@ import {
   isVaultPassphrase,
   MIN_VAULT_PASSPHRASE_LENGTH,
   RECOMMENDED_VAULT_PASSPHRASE_LENGTH,
-  requiresWeakPassphraseAcknowledgement,
 } from "@bramble/wallet-model/passphrase";
 
 describe("estimatePassphraseStrength", () => {
@@ -42,13 +41,14 @@ describe("estimatePassphraseStrength", () => {
     expect(estimatePassphraseStrength("aaaaaaaaaaaa").level).toBe("weak");
   });
 
-  test("advises a longer passphrase below the recommended length without refusing it", () => {
-    // Accepted, so the user is never blocked — but the hint names the cheapest
-    // way to improve it. At or above the recommended length the advice stops.
-    expect(estimatePassphraseStrength("Tr0ub4dor&3").hint).toContain(
-      `${RECOMMENDED_VAULT_PASSPHRASE_LENGTH}+ characters is safer`,
-    );
-    expect(estimatePassphraseStrength("Tr0ub4dor&3xyz9!").hint).toBe("Strong passphrase");
+  test("names the band it reached and nothing else", () => {
+    // The hint is the band. Length advice used to ride along with it, which put
+    // a third sentence on a screen whose bar already showed the same thing;
+    // accepting a short passphrase is still not blocked.
+    expect(estimatePassphraseStrength("Tr0ub4dor&3").hint).toBe("Strong");
+    expect(estimatePassphraseStrength("Tr0ub4dor&3xyz9!").hint).toBe("Strong");
+    expect(estimatePassphraseStrength("correcthorse").hint).toBe("Fair");
+    expect(estimatePassphraseStrength("aaaaaaaaaaaa").hint).toBe("Weak");
   });
 
   test("bands a valid passphrase by estimated entropy", () => {
@@ -70,14 +70,14 @@ describe("estimatePassphraseStrength", () => {
     expect(previous).toBe(1);
   });
 
-  test("asks for an acknowledgement only for an acceptable but weak passphrase", () => {
-    // The point of lowering the floor is that nothing acceptable is refused, so
-    // the speed bump moves here. A value below the floor is already blocked and
-    // must not also be asked to acknowledge something it cannot use.
-    expect(requiresWeakPassphraseAcknowledgement("aaaaaaaaaaaa")).toBe(true);
-    expect(requiresWeakPassphraseAcknowledgement("short")).toBe(false);
-    expect(requiresWeakPassphraseAcknowledgement("")).toBe(false);
-    expect(requiresWeakPassphraseAcknowledgement("Tr0ub4dor&3")).toBe(false);
-    expect(requiresWeakPassphraseAcknowledgement("correct horse battery staple")).toBe(false);
+  test("still bands an acceptable but poor passphrase as weak", () => {
+    // Onboarding asks for no acknowledgement any more, so the meter is the only
+    // thing that tells someone their accepted passphrase is a poor one. A value
+    // that clears the floor and nothing else must still read weak, and a varied
+    // one of the same length must not.
+    expect(isVaultPassphrase("aaaaaaaaaaaa")).toBe(true);
+    expect(estimatePassphraseStrength("aaaaaaaaaaaa").level).toBe("weak");
+    expect(estimatePassphraseStrength("Tr0ub4dor&3").level).not.toBe("weak");
+    expect(estimatePassphraseStrength("correct horse battery staple").level).not.toBe("weak");
   });
 });

@@ -116,25 +116,6 @@ export const PRIVACY_STYLES = `
      fill, which is the brightest surface a dark skin has and the darkest a light
      one has — no single token is the same shade in both, so the inversion is what
      travels. */
-  button.send-route-toggle {
-    background: var(--bramble-sunken);
-    border-radius: ${RADIUS.full};
-    color: var(--bramble-muted);
-    font-size: ${TYPE.caption.size};
-    font-weight: ${WEIGHT.medium};
-    min-height: ${CONTROL.hitSmall};
-    min-width: 72px;
-    padding: 0 ${SPACE.md};
-  }
-  button.send-route-toggle[data-bucket="private"] {
-    background: var(--bramble-text);
-    color: var(--bramble-bg);
-  }
-  button.send-route-toggle:not(:disabled):hover { background: var(--bramble-hover); }
-  button.send-route-toggle[data-bucket="private"]:not(:disabled):hover {
-    background: var(--bramble-text);
-    opacity: 0.9;
-  }
   .send-route-reason {
     color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
@@ -222,15 +203,6 @@ export const PRIVACY_STYLES = `
     top: 6px;
     width: 5px;
   }
-  .privacy-warning {
-    background: var(--bramble-elevated);
-    border-radius: ${RADIUS.sm};
-    color: var(--bramble-muted);
-    font-size: ${TYPE.caption.size};
-    line-height: ${TYPE.caption.line};
-    margin: 0;
-    padding: ${SPACE.md};
-  }
   .privacy-token-context,
   .privacy-network {
     align-items: center;
@@ -294,6 +266,12 @@ export const PRIVACY_STYLES = `
   }
   .privacy-success .privacy-outcome-mark { color: var(--bramble-positive); }
   .privacy-failure .privacy-outcome-mark { color: var(--bramble-danger); }
+  /* A submission whose reply was lost is not a failure: the amber tone and a
+     "!" mark, never the red cross that invites a retry (mc-wallet issue 382). */
+  .privacy-failure[data-severity="warning"] .privacy-outcome-mark { color: var(--bramble-warning); }
+  .privacy-unknown-mark,
+  .privacy-failure[data-severity="warning"] .send-failure-mark { display: none; }
+  .privacy-failure[data-severity="warning"] .privacy-unknown-mark { display: inline; }
   /* A prerequisite, not a failure: the shield mark in the muted tone, drawn at
      the registry icon's own weight rather than the receipt marks' heavier one. */
   .privacy-blocked .privacy-outcome-mark { color: var(--bramble-muted); }

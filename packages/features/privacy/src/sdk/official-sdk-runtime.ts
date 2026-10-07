@@ -32,7 +32,9 @@ export type SdkTokenBuilder = {
 };
 
 /**
- * Reviewed proof/action builder subset.
+ * Reviewed proof/action builder subset. The SDK's `simulate` is deliberately
+ * absent: it sends the viewing-key-bearing `compile_actions` invocation to the
+ * RPC node, so simulations go through `createProofInvocation` and the prover.
  */
 export type SdkBuilder = {
   readonly createProofInvocation: (options: unknown) => Promise<unknown>;
@@ -43,7 +45,6 @@ export type SdkBuilder = {
     },
   ) => SdkBuilder;
   readonly register?: () => SdkBuilder;
-  readonly simulate: (options: unknown) => Promise<unknown>;
   readonly surplusTo: (recipient: string, withdraw?: boolean) => SdkBuilder;
   readonly subaccounts: (dappName: string) => {
     readonly commitment: (nonce: BigNumberish) => Promise<bigint>;

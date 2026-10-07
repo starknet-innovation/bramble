@@ -3,6 +3,7 @@
  * only accepted activity reaches the green receipt, while reverted and delayed
  * statuses retain distinct recovery states.
  */
+
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
@@ -10,13 +11,14 @@ import type { ActivityStatus } from "@bramble/transactions/activity";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/journeys/send/send-views";
 import {
-  CONFIRMATION_DELAYS_MS,
-  confirmationOutcome,
-} from "../../../../src/sidepanel/journeys/send/transfer-model";
-import {
   bindTransfer,
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import {
+  CONFIRMATION_DELAYS_MS,
+  confirmationOutcome,
+} from "../../../../src/sidepanel/shared/confirm-submitted";
+import { accountDisplayName, accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x1234";
@@ -57,14 +59,18 @@ afterAll(unregisterDom);
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-const mountOutcome = (chainStatus: ActivityStatus) => {
+const mountOutcome = (
+  chainStatus: ActivityStatus,
+  prefs: WalletPreferences = preferences,
+  submit: () => Promise<string> = async () => HASH,
+) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(
     document
       .createRange()
       .createContextualFragment(
-        sendFlow(status, account, preferences, [BALANCE], { [TOKEN_ADDRESS]: 1 }),
+        sendFlow(status, account, prefs, [BALANCE], { [TOKEN_ADDRESS]: 1 }),
       ),
   );
   document.body.append(app);
@@ -95,7 +101,7 @@ const mountOutcome = (chainStatus: ActivityStatus) => {
       };
     },
     async submitTransfer() {
-      return HASH;
+      return submit();
     },
   };
   const deps: TransferUiDeps = {
@@ -134,7 +140,119 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
+  });
+
+  test("reads the receipt as sender sent amount to recipient, with copy and explorer", async () => {
+    const { app, form } = mountOutcome("accepted");
+    await submitTwice(form);
+    const receipt = app.querySelector("#send-success-summary");
+    expect(receipt?.textContent).toContain("sent 1 TST to Treasury");
+    // The sender is named the way the rest of the wallet names the account.
+    expect(receipt?.querySelector("strong")?.textContent).toBe(
+      accountDisplayName(account, preferences),
+    );
+    const copies = [...(receipt?.querySelectorAll<HTMLElement>("[data-copy]") ?? [])];
+    expect(copies.map((button) => button.dataset["copy"] ?? null)).toEqual([
+      account.address,
+      RECIPIENT,
+    ]);
+    // The hash row is the shared outcome hash: shortened, linked to the
+    // explorer, and copyable in full.
+    expect(
+      app.querySelector<HTMLElement>('#send-success [aria-label="Copy transaction hash"]')?.dataset[
+        "copy"
+      ],
+    ).toBe(HASH);
+    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-hash-link");
+    expect(explorer?.getAttribute("href")).toBe(`https://starkscan.co/tx/${HASH}`);
+    expect(explorer?.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(app.querySelector("#send-view-activity")?.textContent).toBe("View in Activity tab");
+  });
+
+  test("names the sender with the user's own label, rendered as text", async () => {
+    const label = '<img src=x onerror="alert(1)"> Savings & "Ops"';
+    const { app, form } = mountOutcome("accepted", {
+      ...preferences,
+      accountLabels: { [account.id]: label },
+    });
+    await submitTwice(form);
+    const receipt = app.querySelector("#send-success-summary");
+    expect(receipt?.querySelector("strong")?.textContent).toBe(label);
+    expect(receipt?.querySelector("img")).toBeNull();
+  });
+
+  test("copies from the receipt without writing into the error line", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+    const { app, form } = mountOutcome("accepted");
+    await submitTwice(form);
+    for (const label of ["Copy sender address", "Copy transaction hash"]) {
+      app.querySelector<HTMLButtonElement>(`#send-success [aria-label="${label}"]`)?.click();
+      await flush();
+    }
+    expect(copied).toEqual([account.address, HASH]);
+    // The error line is an alert, so copy feedback goes to the success toast.
+    expect(app.querySelector("#transfer-result")?.textContent).toBe("");
+  });
+
+  test("the failure control copies the error, and no hash row is left empty", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+    const { app, form } = mountOutcome("rejected");
+    await submitTwice(form);
+    expect(form.dataset["stage"]).toBe("failed");
+    const reason = app.querySelector("#send-failure-copy")?.textContent ?? "";
+    expect(reason.length).toBeGreaterThan(0);
+    // What is worth taking to support is the reason, not the identifier — this
+    // control used to copy the hash, which a failure usually does not have.
+    app.querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy the error"]')?.click();
+    await flush();
+    expect(copied).toEqual([reason]);
+    // A chain rejection does have a hash, so its row stays.
+    expect(
+      app
+        .querySelector("#send-failure-hash")
+        ?.closest(".send-outcome-hash")
+        ?.hasAttribute("hidden"),
+    ).toBe(false);
+  });
+
+  test("withdraws the hash row from an outcome that never got one", async () => {
+    const { app, form } = mountOutcome("accepted");
+    // Before any submission every outcome row is empty; showing one would be an
+    // empty line beside a control that copies nothing.
+    for (const id of ["send-success-hash", "send-pending-hash", "send-failure-hash"]) {
+      expect(
+        app.querySelector(`#${id}`)?.closest(".send-outcome-hash")?.hasAttribute("hidden"),
+      ).toBe(true);
+    }
+    await submitTwice(form);
+    expect(
+      app
+        .querySelector("#send-success-hash")
+        ?.closest(".send-outcome-hash")
+        ?.hasAttribute("hidden"),
+    ).toBe(false);
+  });
+
+  test("leaves the hash unlinked on a network without an explorer", async () => {
+    const { app, form } = mountOutcome("accepted");
+    // Devnet has no public explorer; the form carries the network it rendered
+    // for, under its own key — `data-network-id` on a Send container is what
+    // once made every click inside the flow navigate to Settings.
+    form.dataset["sendNetwork"] = "SN_DEVNET";
+    await submitTwice(form);
+    const explorer = app.querySelector<HTMLAnchorElement>("#send-success-hash-link");
+    expect(explorer?.hasAttribute("href")).toBe(false);
+    // The hash and its copy control stay: only the link is withheld.
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   // The point of the fast-confirmation work: a pre-confirmation is a real
@@ -145,7 +263,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
   });
 
   test("shows the failure recovery state when Starknet rejects", async () => {
@@ -153,6 +271,8 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("failed");
     expect(app.querySelector("#send-failure-copy")?.textContent).toContain("rejected");
+    // It was submitted (the hash is shown), so the heading must not say "not sent".
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction failed");
   });
 
   test("shows the failure recovery state when Starknet reverts", async () => {
@@ -161,6 +281,16 @@ describe("Send confirmation outcomes", () => {
     expect(form.dataset["stage"]).toBe("failed");
     expect(app.querySelector("#send-failure-copy")?.textContent).toContain("reverted");
     expect(app.querySelector("#send-failure")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction failed");
+  });
+
+  test("a failure before anything was submitted still says it was not sent", async () => {
+    const { app, form } = mountOutcome("accepted", preferences, async () => {
+      throw new Error("The network fee could not be estimated");
+    });
+    await submitTwice(form);
+    expect(form.dataset["stage"]).toBe("failed");
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction not sent");
   });
 
   test("keeps an unconfirmed hash in an honest pending state", async () => {
@@ -168,7 +298,8 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("pending");
     expect(app.querySelector("#send-pending")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-pending-hash")?.textContent).toBe(HASH);
+    expect(app.querySelector("#send-pending-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-pending-hash")?.getAttribute("title")).toBe(HASH);
   });
 });
 

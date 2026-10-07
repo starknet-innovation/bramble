@@ -51,11 +51,11 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("transfer");
     expect(html).toContain("0xdef");
     expect(html).toContain("What will happen");
-    expect(html).toContain("Maximum cost and constraints");
+    expect(html).toContain("Cost");
     expect(html).toContain("Technical details");
     expect(html).not.toContain("Collaborator note");
     expect(html).toContain('data-ms-sign="');
-    expect(html).toContain("Copy full intent package");
+    expect(html).toContain("Copy full transaction package");
     expect(html).not.toContain('data-ms-submit="');
   });
 
@@ -143,7 +143,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).not.toContain('data-ms-sign="');
     expect(html).toContain("Co-signer handoff");
     expect(html).toContain("Share securely with co-signers");
-    expect(html).toContain("Copy full intent package");
+    expect(html).toContain("Copy full transaction package");
     expect(html).toContain("Individual signature fragments");
     expect(html).toContain("1 of 1");
   });
@@ -183,11 +183,11 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(home).toContain(`data-ms-open-intent="${fixture.readyIntent.id}"`);
     expect(home).toContain(`data-ms-intent-account="${fixture.record.id}"`);
     expect(home).toContain("Ready to submit · 1 of 1");
-    expect(home).toContain("Awaiting verification &amp; signature");
+    expect(home).toContain("Waiting for a signature");
     expect(home).toContain(`href="https://starkscan.co/contract/${fixture.record.address}"`);
     expect(home).toContain('aria-label="Open this account on the block explorer"');
     expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
-    expect(home).toContain("Import intent");
+    expect(home).toContain("Import transaction");
     expect(home).not.toContain('data-ms-submit="');
 
     const detail = multisigDetailFlow(
@@ -364,7 +364,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       null,
       "multisig-home",
     );
-    expect(home).toContain("No intents are awaiting verification or signature");
+    expect(home).toContain("Nothing to sign");
     expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
     expect(home.match(/data-view="multisig-track"/g)).toHaveLength(1);
   });
@@ -382,7 +382,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       fixture.view,
       [accepted],
     );
-    expect(detail).toContain("No intents are awaiting verification or signature");
+    expect(detail).toContain("Nothing to sign");
     expect(detail).not.toContain("Transaction complete");
     expect(detail).not.toContain(accepted.summary);
   });
@@ -421,7 +421,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       [fixture.readyIntent],
     );
 
-    expect(html).toContain("does not exactly match this intent snapshot");
+    expect(html).toContain("no longer match this transaction");
     expect(html).not.toContain('data-ms-sign="');
     expect(html).not.toContain('data-ms-submit="');
     expect(html).not.toContain("Import signature fragment");
@@ -433,7 +433,6 @@ describe("Argent frozen-intent composer", () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigWatchFlow(fixture.status, fixture.status.accounts[0] ?? null);
     expect(html).toContain('name="address"');
-    expect(html).toContain("If deployed, signer authority syncs from Starknet");
     expect(html).not.toContain('name="signerPublicKeys"');
     expect(html).not.toContain('name="signerAccountId"');
     expect(html).not.toContain('name="threshold"');

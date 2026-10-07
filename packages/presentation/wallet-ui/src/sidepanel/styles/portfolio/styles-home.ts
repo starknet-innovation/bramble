@@ -5,12 +5,20 @@
  * confirmation). Composed last in ./styles.ts so its reduced-motion block wins
  * over every earlier animation and transition.
  */
-import { MOTION, RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
+import { MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
+  /* Read-only flag body and the recovery confirmation that replaces it:
+     consent copy stacked above Cancel / confirm. */
+  .read-only-notice .read-only-body { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xs}; }
+  .recovery-confirm { display: grid; gap: ${SPACE.xs}; max-width: 34ch; text-align: center; }
+  .recovery-confirm .recovery-confirm-title { font-weight: 600; margin: 0; }
+  .recovery-confirm .recovery-confirm-warning { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; margin: 0; }
+  .recovery-confirm .read-only-detail { max-width: none; }
+  .recovery-confirm .button-row { justify-content: center; margin-top: ${SPACE.xs}; }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */
@@ -74,9 +82,108 @@ export const HOME_STYLES = `
     visibility: visible;
   }
   .drawer-head { align-items: center; display: flex; gap: ${SPACE.sm}; justify-content: space-between; }
-  .drawer-title { display: grid; gap: 1px; min-width: 0; }
+  .drawer-title { display: grid; gap: ${SPACE.xs}; justify-items: start; min-width: 0; }
   .drawer-title p { font-size: ${TYPE.caption.size}; }
-  .drawer-list { align-content: start; display: grid; flex: 1; gap: 6px; overflow-y: auto; }
+  /* The pill is the switch control here, so it takes a button's affordances
+     while keeping the pill's shape. The list is absolute so opening it does not
+     push the account rows down. */
+  .drawer-network { position: relative; }
+  .drawer-network-pill {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: ${RADIUS.full};
+    color: var(--bramble-muted);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 2px;
+    min-height: 0;
+    padding: 0;
+  }
+  .drawer-network-pill:hover { color: var(--bramble-text); }
+  .drawer-network-pill .icon { height: 14px; width: 14px; }
+  .drawer-network-pill[aria-expanded="true"] .icon { transform: rotate(180deg); }
+  /* Elevation and a hairline, never a stroke — the same structure the token
+     dropdown uses. */
+  .drawer-network-menu {
+    background: var(--bramble-panel);
+    border-radius: ${RADIUS.md};
+    box-shadow: ${SHADOW.md};
+    display: grid;
+    inset-inline-start: 0;
+    min-width: 200px;
+    padding: ${SPACE.xs};
+    position: absolute;
+    top: calc(100% + ${SPACE.xs});
+    z-index: 3;
+  }
+  .drawer-network-option {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: ${RADIUS.sm};
+    color: var(--bramble-text);
+    cursor: pointer;
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.sm};
+    justify-content: space-between;
+    min-height: 36px;
+    padding: 0 ${SPACE.sm};
+    text-align: left;
+    width: 100%;
+  }
+  .drawer-network-option:hover { background: var(--bramble-elevated); }
+  .drawer-network-option[aria-selected="true"] { color: var(--bramble-accent); }
+  .drawer-network-option .icon { height: 15px; width: 15px; }
+  .drawer-list { align-content: start; display: grid; gap: 6px; }
+  /* The folders are the drawer's one scroll region, so the head stays put and
+     "Add account" stays reachable however many folders there are. */
+  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; }
+  /* Folders: a heading that collapses its own list, and a section that is the
+     drop target — an account can be dropped onto an empty folder, not only
+     between rows. */
+  .drawer-folder { display: grid; gap: 6px; }
+  .drawer-folder + .drawer-folder { margin-block-start: ${SPACE.sm}; }
+  button.drawer-folder-head {
+    align-items: center;
+    background: transparent;
+    border-radius: ${RADIUS.sm};
+    color: var(--bramble-muted);
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: flex-start;
+    min-height: 32px;
+    padding: 0 ${SPACE.xs};
+    text-align: start;
+    width: 100%;
+  }
+  .drawer-folder-copy { display: flex; flex: 1; gap: ${SPACE.xs}; min-width: 0; }
+  .drawer-folder-copy strong { color: var(--bramble-text); font-size: ${TYPE.label.size}; }
+  .drawer-folder-copy small { font-size: ${TYPE.micro.size}; }
+  .drawer-folder-icon, .drawer-folder-mark { display: inline-flex; flex: none; }
+  .drawer-folder-icon .icon, .drawer-folder-mark .icon { height: 14px; width: 14px; }
+  .drawer-folder-empty {
+    border-radius: ${RADIUS.md};
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    padding: ${SPACE.sm};
+    text-align: center;
+  }
+  .drawer-folder[data-drop-target="true"] {
+    background: var(--bramble-hover);
+    border-radius: ${RADIUS.md};
+  }
+  .drawer-account-item[data-dragging="true"] { opacity: 0.5; }
+  .drawer-add-folder { display: grid; gap: ${SPACE.xs}; justify-items: start; }
+  .drawer-folder-form { display: flex; gap: ${SPACE.xs}; width: 100%; }
+  .drawer-folder-form input { flex: 1; min-width: 0; }
+  .drawer-folder-error:empty { display: none; }
+  .drawer-folder-error {
+    color: var(--bramble-danger);
+    font-size: ${TYPE.caption.size};
+    margin: 0;
+  }
   button.drawer-account {
     align-items: center;
     background: transparent;

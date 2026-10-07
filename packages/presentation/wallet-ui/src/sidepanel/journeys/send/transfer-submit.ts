@@ -9,7 +9,10 @@
  */
 
 import type { SendRoute } from "@bramble/transactions/send-routes";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { errorMessage } from "../../shared/dom";
+import { reviewFeeBlocked } from "../../shared/review-render";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
 
@@ -122,7 +125,7 @@ export const reviewedState = (
   fields: TransferFields,
   key: string,
 ): TransferState<TransferReview> => {
-  const feeFailed = review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
+  const feeFailed = reviewFeeBlocked(review);
   const blocked = review.flags.some((flag) => flag.code === "address-poisoning");
   return {
     error: blocked
@@ -137,6 +140,7 @@ export const reviewedState = (
     review,
     reviewedKey: blocked || feeFailed ? null : key,
     stage: "review",
+    submissionUnknown: false,
     transactionHash: null,
   };
 };
@@ -162,6 +166,70 @@ export const preparedState = (
     review,
     reviewedKey: review.feeEstimateFailed ? null : key,
     stage: "review",
+    submissionUnknown: false,
     transactionHash: null,
+  };
+};
+
+/**
+ * What a rejected confirm does to the Send state: the next state, whether to
+ * follow a captured hash through confirmation, and the toast to show (if any).
+ */
+export type SubmitRejection = {
+  readonly follow: boolean;
+  readonly state: TransferState<TransferReview>;
+  readonly toast: string | null;
+};
+
+/**
+ * Settles a rejected submit (public) or execute (pool route).
+ *
+ * Every branch drops the review and its key, so Try again always runs a fresh
+ * review before anything is signed again (audits 173 and 247). A
+ * {@link SubmissionUnknownError} is never reported as "not sent": the write may
+ * already be on chain. With a captured hash the journey follows it like any
+ * submitted transaction; without one the receipt says the status is unknown
+ * and offers Activity instead of a re-send.
+ */
+export const submitRejection = (
+  state: TransferState<TransferReview>,
+  error: unknown,
+  fallback: string,
+): SubmitRejection => {
+  const cleared: TransferState<TransferReview> = {
+    ...state,
+    privatePreparation: null,
+    progress: null,
+    review: null,
+    reviewedKey: null,
+  };
+  if (error instanceof SubmissionUnknownError) {
+    return error.transactionHash
+      ? {
+          follow: true,
+          state: {
+            ...cleared,
+            error: "",
+            stage: "confirming",
+            submissionUnknown: false,
+            transactionHash: error.transactionHash,
+          },
+          toast: null,
+        }
+      : {
+          follow: false,
+          state: { ...cleared, error: error.message, stage: "failed", submissionUnknown: true },
+          toast: null,
+        };
+  }
+  return {
+    follow: false,
+    state: {
+      ...cleared,
+      error: `The transaction was not sent. ${errorMessage(error, fallback)}`,
+      stage: "failed",
+      submissionUnknown: false,
+    },
+    toast: "Transaction was not sent",
   };
 };

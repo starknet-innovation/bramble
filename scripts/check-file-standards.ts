@@ -68,10 +68,8 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
   "apps/extension/src/content/index.ts",
 ]);
 
-import { SECRET_MATERIAL_FILES } from "./file-standards-policy";
+import { SECRET_MATERIAL_FILES, SECRET_MATERIAL_PATTERN } from "./file-standards-policy";
 
-const SECRET_MATERIAL_PATTERN =
-  /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
 const SUPPRESSION_MARKERS = [
   "@ts-" + "expect-error",
   "@ts-" + "ignore",
@@ -100,6 +98,11 @@ const HTML_SINK_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/tokens-ui.ts",
+  // AVNU catalog rows, written into the tokens screen's list region as the
+  // fetched list arrives: symbol and name pass through escapeHtml, the address
+  // through tokenGlyph, and the actions through the ui-kit button helper — the
+  // same profile as the detected-token rows in tokens-ui.ts.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/token-catalog-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-ui.ts",
   // Send-screen rendering split out of transfer-ui.ts; the review panels it
   // writes come from the same escaped markup helpers that file used.

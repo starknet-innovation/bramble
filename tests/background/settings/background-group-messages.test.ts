@@ -1,9 +1,11 @@
 /**
  * Account-group message checks: the group preference operations round-trip
  * through the background dispatcher, need an extension-page sender, and reject
- * malformed payloads.
+ * malformed payloads. Every write seeds the two default folders, so each stored
+ * list is bracketed by "My accounts" and "Archived accounts".
  */
 import { describe, expect, test } from "bun:test";
+import { DEFAULT_GROUP_IDS } from "@bramble/settings/groups";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
@@ -30,7 +32,13 @@ describe("account group messages", () => {
     );
     expect(created).toMatchObject({
       ok: true,
-      preferences: { groups: [{ icon: "briefcase", id: "trading", name: "Trading" }] },
+      preferences: {
+        groups: [
+          { id: DEFAULT_GROUP_IDS.home },
+          { icon: "briefcase", id: "trading", name: "Trading" },
+          { id: DEFAULT_GROUP_IDS.archived },
+        ],
+      },
     });
 
     const assigned = await handler(
@@ -39,7 +47,7 @@ describe("account group messages", () => {
     );
     expect(assigned).toMatchObject({
       ok: true,
-      preferences: { groups: [{ accountIds: [account.id] }] },
+      preferences: { groups: [{}, { accountIds: [account.id], id: "trading" }, {}] },
     });
 
     await handler({ id: "trading", name: "Desk", type: "wallet.renameGroup" }, extensionSender);
@@ -49,11 +57,17 @@ describe("account group messages", () => {
     );
     expect(reIconed).toMatchObject({
       ok: true,
-      preferences: { groups: [{ icon: "rocket", name: "Desk" }] },
+      preferences: { groups: [{}, { icon: "rocket", name: "Desk" }, {}] },
     });
 
+    // Deleting the user's folder leaves only the two the wallet guarantees.
     const removed = await handler({ id: "trading", type: "wallet.removeGroup" }, extensionSender);
-    expect(removed).toMatchObject({ ok: true, preferences: { groups: [] } });
+    expect(removed).toMatchObject({
+      ok: true,
+      preferences: {
+        groups: [{ id: DEFAULT_GROUP_IDS.home }, { id: DEFAULT_GROUP_IDS.archived }],
+      },
+    });
   });
 
   test("buckets several accounts into a group and keeps membership exclusive", async () => {
@@ -74,7 +88,14 @@ describe("account group messages", () => {
     }
     expect(latest).toMatchObject({
       ok: true,
-      preferences: { groups: [{ id: "work", accountIds: [...ids] }, { id: "personal" }] },
+      preferences: {
+        groups: [
+          { id: DEFAULT_GROUP_IDS.home },
+          { id: "work", accountIds: [...ids] },
+          { id: "personal" },
+          { id: DEFAULT_GROUP_IDS.archived },
+        ],
+      },
     });
 
     // A no-op re-toggle keeps membership stable (idempotent).
@@ -85,8 +106,10 @@ describe("account group messages", () => {
     expect(latest).toMatchObject({
       preferences: {
         groups: [
+          { id: DEFAULT_GROUP_IDS.home },
           { id: "work", accountIds: [...ids] },
           { id: "personal", accountIds: [] },
+          { id: DEFAULT_GROUP_IDS.archived },
         ],
       },
     });
@@ -110,8 +133,10 @@ describe("account group messages", () => {
       ok: true,
       preferences: {
         groups: [
+          { id: DEFAULT_GROUP_IDS.home },
           { id: "work", accountIds: [] },
           { id: "personal", accountIds: [ids[0]] },
+          { id: DEFAULT_GROUP_IDS.archived },
         ],
       },
     });

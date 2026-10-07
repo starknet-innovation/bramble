@@ -3,6 +3,7 @@
  * becomes render state.
  */
 import { describe, expect, test } from "bun:test";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import { createPrivacyRuntimeClient } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 
@@ -79,12 +80,16 @@ describe("privacy runtime client", () => {
             balances: [
               {
                 balance: "0x2",
+                // The bounded converted pool fee, in the 0x-hex shape the
+                // background produces for a token other than the fee token.
+                feeCeiling: "0x53444835ec580000",
                 formatted: "2",
                 symbol: "ETH",
                 token: "0x456",
                 tokenId: preparation.tokenId,
               },
             ],
+            feeToken: STRK_TOKEN_ADDRESS,
             networkId: "SN_MAIN",
             poolFeeFri: "0x1",
             relayConfigured: true,
@@ -102,7 +107,8 @@ describe("privacy runtime client", () => {
     });
 
     await expect(client.loadPrivacyState()).resolves.toMatchObject({
-      balances: [{ balance: "0x2", symbol: "ETH" }],
+      balances: [{ balance: "0x2", feeCeiling: "0x53444835ec580000", symbol: "ETH" }],
+      feeToken: STRK_TOKEN_ADDRESS,
       registration: "registered",
     });
     await expect(
@@ -166,6 +172,33 @@ describe("privacy runtime client", () => {
     await expect(
       client.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
     ).rejects.toThrow("Shielding preparation failed");
+  });
+
+  test("refuses a converted fee ceiling that is not a field element", async () => {
+    // The background serializes the bounded converted pool fee as 0x-hex, so a
+    // decimal string must not slip through the trust boundary.
+    const client = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20State: {
+        accountId: "SN_MAIN:0xabc",
+        balances: [
+          {
+            balance: "0x1",
+            feeCeiling: "6000000000000000000",
+            formatted: "1",
+            symbol: "ETH",
+            token: "0x1",
+            tokenId: preparation.tokenId,
+          },
+        ],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
+        registration: "registered",
+      },
+    }));
+
+    await expect(client.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
   });
 
   test("rejects a malformed balance inside an otherwise valid state", async () => {
@@ -364,6 +397,36 @@ describe("privacy runtime client", () => {
       await expect(
         withoutRelayFee.preparePrivacyWithdraw("SN_MAIN:ETH:0x456", RECIPIENT, "1"),
       ).rejects.toThrow("Unshielding preparation failed");
+    });
+
+    test("keeps a valid relay fee token's display metadata and refuses a malformed one", async () => {
+      const asset = { decimals: 6, symbol: "USDC" };
+      const fee = { amount: "0x2", recipient: "0x3", token: "0x4" };
+      const withAsset = { ...relayed("transfer"), relayFee: { ...fee, asset } };
+      await expect(
+        createPrivacyRuntimeClient(async () => ({
+          ok: true,
+          strk20Preparation: withAsset,
+        })).preparePrivacyTransfer("SN_MAIN:ETH:0x456", RECIPIENT, "1.25"),
+      ).resolves.toMatchObject({ relayFee: { asset } });
+
+      for (const malformed of [
+        { decimals: -1, symbol: "USDC" },
+        { decimals: 6, symbol: "" },
+        { decimals: 6, extra: true, symbol: "USDC" },
+        "USDC",
+      ]) {
+        const client = createPrivacyRuntimeClient(async () => ({
+          ok: true,
+          strk20Preparation: {
+            ...relayed("transfer"),
+            relayFee: { ...fee, asset: malformed },
+          },
+        }));
+        await expect(
+          client.preparePrivacyTransfer("SN_MAIN:ETH:0x456", RECIPIENT, "1.25"),
+        ).rejects.toThrow("Private send preparation failed");
+      }
     });
 
     test("reads a recipient's registration and rejects any other answer", async () => {

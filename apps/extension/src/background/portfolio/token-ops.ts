@@ -22,7 +22,12 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
-import { readAddTokenInput, readSetTokenHiddenInput, readTokenChartInput } from "./token-inputs";
+import {
+  readAddTokenInput,
+  readRemoveTokenInput,
+  readSetTokenHiddenInput,
+  readTokenChartInput,
+} from "./token-inputs";
 
 /**
  * Dependencies shared by the token operation handlers.
@@ -98,6 +103,16 @@ const handleAddToken: TokenHandler = async (deps, message) => {
   }
   const preferences = await preferencesStore.read();
   const network = STARKNET_NETWORKS[preferences.activeNetworkId];
+  // An address already tracked stays one record, whatever symbol the contract
+  // reports now; re-adding it is a no-op rather than a second balance row. A
+  // record a dapp supplied (audit 171) goes on, so the store replaces it with
+  // the chain's metadata and the user's add is what makes it trusted.
+  const tracked = preferences.tokens.find(
+    (token) => token.networkId === network.id && sameFelt(token.address, input.address),
+  );
+  if (tracked && !(preferences.dappTokenIds ?? []).includes(tracked.id)) {
+    return { ok: true, preferences };
+  }
   const metadata = await fetchTokenMetadata(
     runtimeRpc,
     input.address,
@@ -110,7 +125,7 @@ const handleAddToken: TokenHandler = async (deps, message) => {
   if (!record) {
     return { error: "unsupported token symbol" };
   }
-  const preferencesWithToken = await preferencesStore.upsertToken(record);
+  const preferencesWithToken = await preferencesStore.upsertToken(record, "user");
   // Run the full spam heuristics (not just the symbol regex) so a spoofed or
   // malformed token is still added but hidden by default rather than
   // presented as trusted; the user can always reveal it later.
@@ -173,6 +188,16 @@ const handleSetTokenHidden: TokenHandler = async (deps, message) => {
   return { ok: true, preferences: await deps.preferencesStore.setTokenHidden(input) };
 };
 
+// Recovery for a token a dapp added (Sherlock audit 134). The store refuses built-in
+// defaults and unknown ids; the router reports that refusal to the page.
+const handleRemoveToken: TokenHandler = async (deps, message) => {
+  const input = readRemoveTokenInput(message);
+  if (!input) {
+    return { error: "invalid remove token request" };
+  }
+  return { ok: true, preferences: await deps.preferencesStore.removeToken(input) };
+};
+
 const handlePrices: TokenHandler = async (deps, message) => {
   const { preferencesStore, prices } = deps;
   const input = readPricesInput(message);
@@ -221,6 +246,7 @@ const TOKEN_HANDLERS: Readonly<Record<string, TokenHandler>> = {
   "wallet.addToken": handleAddToken,
   "wallet.detectTokens": handleDetectTokens,
   "wallet.prices": handlePrices,
+  "wallet.removeToken": handleRemoveToken,
   "wallet.setTokenHidden": handleSetTokenHidden,
   "wallet.tokenChart": handleTokenChart,
 };

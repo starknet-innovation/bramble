@@ -21,6 +21,7 @@ import type {
   ConnectedSite,
   DiscoveredNft,
   PendingApproval,
+  SignabilityVerdict,
   TokenBalance,
   WalletStatus,
 } from "../../../popup/responses/responses";
@@ -48,6 +49,7 @@ import {
 } from "../../journeys/multisig/multisig-views";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
 import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
+import { tokenCatalogFlow } from "../../journeys/portfolio/token-catalog-view";
 import {
   DEFAULT_CURRENCY,
   tokenAddFlow,
@@ -67,6 +69,7 @@ import type { BalanceState } from "../../runtime/runtime";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
 import { accountDrawer } from "../../shell/account-drawer";
+import { INITIAL_COLLAPSED_FOLDERS } from "../../shell/drawer-folders";
 import { walletDock, walletHeader } from "../../shell/wallet-shell";
 import { backupFlow, simpleFlowScreen } from "./flows";
 
@@ -226,6 +229,9 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
   if (activeView === "token-add") {
     return tokenAddFlow(context.status);
   }
+  if (activeView === "token-catalog") {
+    return tokenCatalogFlow(context.status);
+  }
   if (activeView === "token-discover") {
     return tokenDiscoverFlow(context.status);
   }
@@ -252,7 +258,6 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.currency,
     context.privacy,
     context.deployment,
-    context.fundedForFees,
   );
 };
 
@@ -280,12 +285,12 @@ export const dashboard = (
   multisigIntents: readonly ArgentMultisigSigningIntent[] = [],
   selectedMultisigId: string | null = null,
   multisigClassDeclared: boolean | "error" | null = null,
-  drawerGroupFilter: string | null = null,
+  collapsedFolders: readonly string[] = INITIAL_COLLAPSED_FOLDERS,
   expandedGroupId: string | null = null,
   priceStale = false,
   priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
-  openAssignId: string | null = null,
+  addFolderOpen = false,
   classHashVerification: ClassHashVerification | null = null,
   historyUnavailable = false,
   snoozedApprovalIds: readonly string[] = [],
@@ -301,6 +306,7 @@ export const dashboard = (
   sendIntent: SendIntent | null = null,
   selectedMultisigIntentId: string | null = null,
   todayKey: number | null = null,
+  signability: SignabilityVerdict | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -309,7 +315,7 @@ export const dashboard = (
   const selectedPortfolioBalances =
     selectedMultisigId !== null && multisigBalanceId === selectedMultisigId
       ? multisigBalances
-      : { error: "Shared balances are loading." };
+      : { error: "Multisig balances are loading." };
   const journeyContext: JourneyContext = {
     deployment,
     account,
@@ -364,6 +370,7 @@ export const dashboard = (
     prices,
     selectedMultisigId,
     privacy,
+    selectedTokenId,
     ...(sendIntent ? { sendIntent } : {}),
     status,
   });
@@ -389,7 +396,7 @@ export const dashboard = (
     return revealFlow(status);
   }
   if (activeView === "privacy") {
-    return privacyFlow(status, preferences, privacyJourney);
+    return privacyFlow(status, preferences, privacyJourney, privacy);
   }
   const sharedIdentity =
     activeView === "multisig-home" || activeView === "activity" || activeView === "settings"
@@ -450,6 +457,7 @@ export const dashboard = (
               changes,
               currency,
               privacy,
+              signability,
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}
@@ -459,8 +467,8 @@ export const dashboard = (
       status,
       account,
       preferences,
-      drawerGroupFilter,
-      openAssignId,
+      collapsedFolders,
+      addFolderOpen,
       multisigs,
       multisigIntents,
       selectedMultisigId,

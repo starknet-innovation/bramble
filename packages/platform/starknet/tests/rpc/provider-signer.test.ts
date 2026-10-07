@@ -11,7 +11,11 @@ import {
   serializeAccountSignature,
 } from "@bramble/starknet/account-contracts";
 import { argentQueryAccount, krustyAccount } from "@bramble/starknet/provider";
-import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
+import {
+  BRAAVOS_BASE_CLASS_HASH,
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
 import { EDataAvailabilityMode, ETransactionVersion3, RpcProvider, type Signature } from "starknet";
@@ -130,8 +134,11 @@ describe("krustyAccount signer", () => {
     await expect(signer.signRaw("0xabc")).resolves.toEqual(["1", "0", PUBLIC_KEY, "0x1", "0x2"]);
   });
 
-  test("never builds a signer for a Braavos account", () => {
+  test("builds a Braavos signer only for a class the table recognizes", () => {
     const { signHash, signed } = recordingSignHash();
+    // A known Braavos deployment class signs the same plain pair as OZ; the
+    // strong-signer and live-class gates run on chain state at the
+    // transaction boundary, not here.
     expect(() =>
       krustyAccount(
         provider,
@@ -143,16 +150,42 @@ describe("krustyAccount signer", () => {
         },
         signHash,
       ),
-    ).toThrow("cannot yet authorize transactions");
+    ).not.toThrow();
+    expect(() =>
+      krustyAccount(
+        provider,
+        {
+          ...account,
+          accountContractType: "braavos",
+          classHash: "0x9999",
+          deploymentSalt: PUBLIC_KEY,
+        },
+        signHash,
+      ),
+    ).toThrow("Braavos account class hash is not a release this wallet recognizes");
+    // The stored class fixes the address, so it must be a deployment class; an
+    // implementation-only class there derives an address that is nobody's.
+    expect(() =>
+      krustyAccount(
+        provider,
+        {
+          ...account,
+          accountContractType: "braavos",
+          classHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+          deploymentSalt: PUBLIC_KEY,
+        },
+        signHash,
+      ),
+    ).toThrow("Braavos account class hash is not a release this wallet recognizes");
     expect(signed).toEqual([]);
   });
 
-  test("never serializes a Braavos signature, whichever path asks", () => {
+  test("serializes a Braavos signature as the plain stark pair", () => {
     // Typed-data and relayed signing reach this serializer without building a
-    // transaction signer, so the refusal has to live here too.
-    expect(() =>
+    // transaction signer; stark-only Braavos verifies exactly (r, s).
+    expect(
       serializeAccountSignature("braavos", { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
-    ).toThrow("cannot yet authorize transactions");
+    ).toEqual(["0x1", "0x2"]);
   });
 
   test("emits exact GUID-sorted Argent multisig aggregates", async () => {

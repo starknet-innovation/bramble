@@ -176,7 +176,7 @@ describe("wallet operations", () => {
 
   test("surfaces a pre-confirmed transaction as provisional in the feed", async () => {
     const { handler } = makeHarness({
-      statusReport: { finalizedOnL1: false, found: true, status: "preconfirmed" },
+      statusReport: { finalizedOnL1: false, found: true, seen: true, status: "preconfirmed" },
     });
     await handler(
       {
@@ -197,7 +197,7 @@ describe("wallet operations", () => {
 
   test("drains a late-failure notice exactly once through wallet.transactionAlerts", async () => {
     const { activity: activityLog, handler } = makeHarness({
-      statusReport: { finalizedOnL1: false, found: true, status: "reverted" },
+      statusReport: { finalizedOnL1: false, found: true, seen: true, status: "reverted" },
     });
     await activityLog.record({
       accountId: account.id,

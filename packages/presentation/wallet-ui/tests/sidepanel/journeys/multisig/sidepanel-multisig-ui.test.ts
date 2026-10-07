@@ -232,7 +232,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain("Fund 0x");
     expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
     expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
-      "Review deployment",
+      "Check fee and address",
     );
   });
 
@@ -415,7 +415,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
     expect(form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
     expect(form?.querySelector('button[type="submit"]')?.textContent).toContain(
-      "Review deployment",
+      "Check fee and address",
     );
   });
 
@@ -447,8 +447,8 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(newest).toContain("0x999");
     expect(newest).toContain("0x2");
     expect(newest).toContain("What will happen");
-    expect(newest).toContain("Risk and recovery");
-    expect(newest).toContain("Maximum cost and constraints");
+    expect(newest).not.toContain("Risk and recovery");
+    expect(newest).toContain('aria-label="Cost"');
     expect(newest).toContain("Technical details");
     pending[0]?.resolve(fixture.deploymentReview);
     await flush();
@@ -477,7 +477,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     const tabs = Array.from(app.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]"));
     const panels = Array.from(app.querySelectorAll<HTMLElement>("[data-ms-home-panel]"));
     expect(tabs).toHaveLength(2);
-    expect(tabs[1]?.getAttribute("aria-label")).toBe("Signing intents, 0 open");
+    expect(tabs[1]?.getAttribute("aria-label")).toBe("Transactions, 0 open");
     const selectedTab = tabs[1];
     if (!selectedTab) throw new Error("intents tab unavailable");
     expect(tabs.map((tab) => tab.getAttribute("aria-controls"))).toEqual(

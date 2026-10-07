@@ -53,7 +53,7 @@ const vault = {
   importedSeeds: [],
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 10,
+  schemaVersion: 11,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -343,6 +343,41 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     async submitAccountDeployment() {
       Object.assign(state, { accountDeployed: true });
       return { transactionHash: "0x7de" };
+    },
+    async reviewBraavosRecovery() {
+      return {
+        delaySeconds: 345_600,
+        effectiveAfter: 1_000,
+        fee: { overallFee: "1", unit: "FRI" },
+      };
+    },
+    async submitBraavosRecovery() {
+      return { pendingUntil: 1_000, transactionHash: "0x7ec" };
+    },
+    async getBraavosRecoveryState() {
+      return { delaySeconds: 345_600, pendingUntil: null };
+    },
+    async reviewArgentRecovery() {
+      return {
+        expiresAt: 2_000,
+        fee: { overallFee: "1", unit: "FRI" as const },
+        readyAt: 1_000,
+        replaces: null,
+        step: "start" as const,
+      };
+    },
+    async submitArgentRecovery() {
+      return { expiresAt: 2_000, readyAt: 1_000, transactionHash: "0x7ed" };
+    },
+    async getArgentRecoveryState() {
+      return {
+        expiresAt: null,
+        guardianBackup: "absent" as const,
+        pendingChange: null,
+        readyAt: null,
+        securityPeriodSeconds: 604_800,
+        status: "none" as const,
+      };
     },
     async getNftOwner() {
       return account.address;

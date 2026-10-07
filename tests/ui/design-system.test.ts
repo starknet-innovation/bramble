@@ -143,7 +143,7 @@ describe("design system", () => {
     expect(violations).toEqual([]);
   });
 
-  test("full-screen onboarding consumes shared controls and defaults to Mainnet", () => {
+  test("full-screen onboarding consumes shared controls and pins the Bramble account", () => {
     const markup = onboarding(status);
     expect(markup).toContain(
       button({
@@ -158,7 +158,16 @@ describe("design system", () => {
     // The private-key import keeps the contract choice for existing accounts.
     expect(markup).toContain('id="key-method-button"');
     expect(markup).toContain("Ready Account");
-    expect(markup).toContain("Bramble Account — Recommended");
-    expect(markup).toContain("Starknet Mainnet");
+    expect(markup).toContain("Bramble Account");
+    // The real-funds tickbox is gone, but its consequence is stated instead, on
+    // every step that creates, imports or restores accounts on Mainnet (the
+    // binder pins onboarding to DEFAULT_NETWORK).
+    expect(markup).not.toContain('type="checkbox" name="mainnetAck"');
+    const consequence = "This wallet is on Starknet Mainnet and holds real funds.";
+    for (const step of ["import-key", "recovery-accounts", "accounts", "ledger"]) {
+      const section =
+        markup.split(`data-onboarding-step="${step}"`)[1]?.split("</section>")[0] ?? "";
+      expect(section).toContain(consequence);
+    }
   });
 });

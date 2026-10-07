@@ -4,7 +4,7 @@
  * the browser under test.
  */
 
-import { isServiceUrl } from "@bramble/core/service-url";
+import { isServiceUrl, normalizeHostname } from "@bramble/core/service-url";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   isNonZeroStarkFieldElement,
@@ -51,7 +51,7 @@ const httpsServiceUrl = (value: string | undefined, name: string): string => {
 
 const dedicatedRpcUrl = (value: string | undefined): string => {
   const rpcUrl = httpsServiceUrl(value, "BRAMBLE_STRK20_E2E_RPC_URL");
-  if (SHARED_MAINNET_RPC_HOSTS.has(new URL(rpcUrl).hostname)) {
+  if (SHARED_MAINNET_RPC_HOSTS.has(normalizeHostname(new URL(rpcUrl).hostname))) {
     throw new Error("BRAMBLE_STRK20_E2E_RPC_URL must be a dedicated test RPC endpoint");
   }
   return rpcUrl;

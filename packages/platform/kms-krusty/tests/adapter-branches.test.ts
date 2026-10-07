@@ -10,6 +10,12 @@ import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 
 const createModule = (overrides: Record<string, unknown> = {}) => ({
+  deriveArgentLegacyKeypair() {
+    return {
+      private_key: "0x321",
+      public_key_x: "0xcba",
+    };
+  },
   deriveNostrPublicKey() {
     return { public_key: "11".repeat(32) };
   },

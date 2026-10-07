@@ -368,6 +368,7 @@ describe("STRK20 proof maturity", () => {
             call: paymasterCall,
             config: paymasterConfig,
             http,
+            isAuthorized: () => true,
             nowSeconds: 2,
             plan: {
               feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },

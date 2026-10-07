@@ -97,15 +97,15 @@ export type OfficialBuilder = ReturnType<
   ReturnType<PrivacySdkRuntime["createPrivateTransfers"]>["build"]
 >;
 
-export const officialBuilder = (
-  result: unknown,
-  proofInvocation: unknown = { warnings: [] },
-): OfficialBuilder => {
+/**
+ * Self-referential SDK builder double. Proof results come from the transfers
+ * double's `executeWithInvocation`, the only path the adapter proves through.
+ */
+export const officialBuilder = (proofInvocation: unknown = { warnings: [] }): OfficialBuilder => {
   const self = {
     createProofInvocation: async () => proofInvocation,
     invoke: () => self,
     register: () => self,
-    simulate: async () => result,
     subaccounts: () => ({
       commitment: async () => 0x123n,
       invoke: () => self,

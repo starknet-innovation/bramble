@@ -1,8 +1,8 @@
 /**
  * First-run Ledger onboarding under happy-dom:
  *   - bindLedgerFirstRun gates the "Set up with a Ledger" button on a valid
- *     unlock passphrase (and, on Mainnet, the real-funds acknowledgement) and
- *     hands the captured network + passphrase to its owner;
+ *     unlock passphrase and hands the captured network + passphrase to its
+ *     owner;
  *   - createLedgerOnboardEntry drives the shared overlay and branches its create
  *     step: a first-run stash creates a brand-new Ledger vault, while no stash
  *     adds a keyless account to the already-unlocked wallet.
@@ -91,70 +91,42 @@ describe("bindLedgerFirstRun", () => {
     document.body.replaceChildren();
   });
 
-  test("gates the button until the passphrase and Mainnet ack are satisfied", () => {
+  test("gates the button on a confirmed passphrase and renders no acknowledgement", () => {
     const { app, captured } = mountOnboarding(mainnetStatus);
     const button = app.querySelector<HTMLButtonElement>("#ledger-setup-button");
     expect(button?.disabled).toBe(true);
 
     setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
-    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
-    // Passphrase alone is not enough on Mainnet — the ack must be checked too.
+    // One field is not enough: the confirmation must agree.
     expect(button?.disabled).toBe(true);
-
-    const ack = app.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
-    if (ack) {
-      ack.checked = true;
-      ack.dispatchEvent(new window.Event("change", { bubbles: true }));
-    }
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
     expect(button?.disabled).toBe(false);
+
+    // The real-funds tickbox was removed in the copy review; nothing else gates
+    // the button, so it must not reappear as a silent block.
+    expect(app.querySelector("#ledger-mainnet-ack")).toBeNull();
+    expect(app.querySelector('input[name="ledgerMainnetAck"]')).toBeNull();
 
     click(app, "#ledger-setup-button");
     expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
   });
 
-  test("requires an explicit acknowledgement for a weak passphrase, never a refusal", () => {
+  test("accepts a weak passphrase without asking, and renders no acknowledgement", () => {
     const { app, captured } = mountOnboarding(mainnetStatus);
     const button = app.querySelector<HTMLButtonElement>("#ledger-setup-button");
     const weak = "aaaaaaaaaaaa";
 
     setValue(app, 'input[name="ledgerVaultPassphrase"]', weak);
     setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', weak);
-    const ack = app.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
-    if (ack) {
-      ack.checked = true;
-      ack.dispatchEvent(new window.Event("change", { bubbles: true }));
-    }
 
-    // Long enough to be accepted, weak enough to be asked about: the control is
-    // revealed and setup stays gated until it is ticked.
-    const weakAck = app.querySelector<HTMLInputElement>('input[name="ledgerWeakPassphraseAck"]');
-    expect(app.querySelector<HTMLElement>("#ledger-weak-passphrase-ack")?.hidden).toBe(false);
-    expect(button?.disabled).toBe(true);
-
-    if (weakAck) {
-      weakAck.checked = true;
-      weakAck.dispatchEvent(new window.Event("change", { bubbles: true }));
-    }
+    // Neither credential screen asks about a weak passphrase any more. The
+    // control is not rendered, and setup is not gated on one — the length floor
+    // is the only bar left, and the meter still bands the value.
+    expect(app.querySelector("#ledger-weak-passphrase-ack")).toBeNull();
+    expect(app.querySelector('input[name="ledgerWeakPassphraseAck"]')).toBeNull();
     expect(button?.disabled).toBe(false);
     click(app, "#ledger-setup-button");
     expect(captured).toEqual([["SN_MAIN", weak]]);
-  });
-
-  test("hides the weak acknowledgement and drops its tick once the passphrase improves", () => {
-    const { app } = mountOnboarding(mainnetStatus);
-    const weak = "aaaaaaaaaaaa";
-    setValue(app, 'input[name="ledgerVaultPassphrase"]', weak);
-    const weakAck = app.querySelector<HTMLInputElement>('input[name="ledgerWeakPassphraseAck"]');
-    if (weakAck) {
-      weakAck.checked = true;
-      weakAck.dispatchEvent(new window.Event("change", { bubbles: true }));
-    }
-    expect(weakAck?.checked).toBe(true);
-
-    // A tick made for one value must not carry over to another.
-    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
-    expect(app.querySelector<HTMLElement>("#ledger-weak-passphrase-ack")?.hidden).toBe(true);
-    expect(weakAck?.checked).toBe(false);
   });
 
   test("shows a passphrase hint for a too-short passphrase", () => {
@@ -173,20 +145,9 @@ describe("bindLedgerFirstRun", () => {
     });
     setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
     setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
-    check(app, 'input[name="ledgerMainnetAck"]');
     click(app, "#ledger-setup-button");
     expect(app.querySelector('select[name="ledgerNetworkId"]')).toBeNull();
     expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
-  });
-
-  test("blocks setup and toasts when the Mainnet ack is missing at click time", () => {
-    const { app, captured } = mountOnboarding(mainnetStatus);
-    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
-    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
-    // Valid passphrase but the Mainnet ack is unchecked: clicking must not start.
-    click(app, "#ledger-setup-button");
-    expect(captured).toEqual([]);
-    expect(document.querySelector(".toast.error")?.textContent).toContain("real-funds");
   });
 
   test("blocks setup and toasts when the passphrase is too short at click time", () => {
@@ -283,6 +244,7 @@ const entryHarness = () => {
     connector,
     mount,
     openImport: () => undefined,
+    openFindAccounts: () => undefined,
     openImportSeed: () => undefined,
     openMultisig: () => {
       multisigs += 1;

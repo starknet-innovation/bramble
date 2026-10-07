@@ -64,13 +64,6 @@ export const settingsScenario: WalletScenario = {
       state: { requestSurface: "side-panel" },
     },
     {
-      content: () => walletDashboard({ preferences: journeyPreferences, view: "security" }),
-      id: "security",
-      label: "Security & permissions",
-      narrative: "External access and recovery destinations are separated before any action.",
-      state: { groups: ["external access", "recovery"] },
-    },
-    {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "network" }),
       id: "network",
       label: "Choose network",
@@ -123,10 +116,6 @@ export const settingsScenario: WalletScenario = {
     {
       content: () =>
         walletDashboard({
-          classHashVerification: {
-            onChainClassHash: softwareAccount.classHash,
-            status: "verified",
-          },
           expandedGroupId: "operations",
           preferences: journeyPreferences,
           view: "account",
@@ -134,8 +123,20 @@ export const settingsScenario: WalletScenario = {
       id: "accounts",
       label: "Accounts and groups",
       narrative:
-        "Switching, folders, naming, and on-chain identity stay together; account creation branches from one chooser.",
-      state: { classHash: "verified", group: "operations" },
+        "Naming and filing stay together: every account is renameable in place, folders bucket them, and account creation branches from one chooser. Switching accounts is the drawer's job; the identifiers are Receive's.",
+      state: { group: "operations" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          preferences: { ...journeyPreferences, hiddenAccountIds: [ledgerAccount.id] },
+          view: "account",
+        }),
+      id: "hidden-accounts",
+      label: "Hidden accounts",
+      narrative:
+        "Hiding takes an account out of the drawer and the send pickers without removing it: the manage screen keeps the hidden one in its own list with the control that shows it again.",
+      state: { hiddenAccounts: 1 },
     },
     {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "import-key" }),
@@ -154,6 +155,14 @@ export const settingsScenario: WalletScenario = {
       state: { vault: "encrypted", view: "import-phrase" },
     },
     {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "find-accounts" }),
+      id: "find-accounts",
+      label: "Find my other accounts",
+      narrative:
+        "The wallet rescans the phrase it already holds: the panel asks for no words and no passphrase, and the grouped scan stays hidden until the reader starts it.",
+      state: { vault: "encrypted", view: "find-accounts" },
+    },
+    {
       content: () =>
         walletDashboard({
           classHashVerification: {
@@ -162,12 +171,12 @@ export const settingsScenario: WalletScenario = {
             status: "mismatch",
           },
           preferences: journeyPreferences,
-          view: "account",
+          view: "receive",
         }),
       id: "class-mismatch",
       label: "Account class mismatch",
       narrative:
-        "A contract identity mismatch is assertive and never presented as a benign loading error.",
+        "A contract identity mismatch is assertive, never a benign loading error, and it leads the Receive card rather than hiding behind Pro with the rest of the identifiers.",
       state: { classHash: "mismatch", trust: "blocked" },
     },
     {
@@ -263,12 +272,12 @@ export const settingsScenario: WalletScenario = {
     "settings",
     "appearance",
     "request-settings",
-    "security",
     "network",
     "advanced-network",
     "account",
     "import-key",
     "import-phrase",
+    "find-accounts",
     "backup",
     "backup-export",
     "backup-restore",

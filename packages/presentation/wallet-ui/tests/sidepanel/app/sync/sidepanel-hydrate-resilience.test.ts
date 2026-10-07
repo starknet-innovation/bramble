@@ -28,6 +28,7 @@ describe("cached hydration resilience", () => {
         activeView: "activity",
         cache,
         deployment: {},
+        signability: {},
         multisig: {},
         paint: () => undefined,
         ...(refreshReason ? { refreshReason } : {}),
@@ -53,6 +54,38 @@ describe("cached hydration resilience", () => {
     ]);
   });
 
+  test("verifies the class hash for Receive, the screen that shows it", async () => {
+    // The verdict renders beside the class hash in Receive's Pro fields. Loading
+    // it anywhere else is an RPC nothing displays, so the lane follows the
+    // screen: the manage-accounts view no longer asks.
+    const reads: string[] = [];
+    const run = (activeView: "account" | "receive") => {
+      const cache = emptyRenderCache();
+      cache.multisigsNetworkId = "SN_MAIN";
+      return hydrateView({
+        activeView,
+        cache,
+        deployment: {},
+        signability: {},
+        multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
+        paint: () => undefined,
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadClassHashVerification: async () => {
+            reads.push(activeView);
+            return null;
+          },
+        },
+      } as never);
+    };
+
+    await run("receive");
+    await run("account");
+    expect(reads).toEqual(["receive"]);
+  });
+
   test("skips allowance discovery on ambient ticks and refreshes it on entry", async () => {
     let reads = 0;
     const run = (refreshReason: "ambient" | undefined) =>
@@ -60,6 +93,7 @@ describe("cached hydration resilience", () => {
         activeView: "allowances",
         cache: emptyRenderCache(),
         deployment: {},
+        signability: {},
         multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
         paint: () => undefined,
         ...(refreshReason ? { refreshReason } : {}),
@@ -173,6 +207,7 @@ describe("cached hydration resilience", () => {
         activeView: "multisig-home",
         cache,
         deployment: {},
+        signability: {},
         multisig: {
           loadBalances: async () => ({ error: "offline" }),
           loadMultisigs: async () => cache.multisigs,

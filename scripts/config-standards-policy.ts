@@ -15,12 +15,12 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.13",
+  "@biomejs/biome": "2.5.14",
   "@playwright/test": "1.63.0",
   "@types/bun": "1.4.2",
-  "@types/node": "26.5.1",
-  "fast-check": "4.10.0",
-  knip: "6.35.1",
+  "@types/node": "26.6.2",
+  "fast-check": "4.10.2",
+  knip: "6.37.0",
   madge: "8.0.0",
   typescript: "6.0.3",
   // Mozilla's own add-on tooling. `web-ext lint` wraps the exact validator
@@ -125,8 +125,10 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "build:all": "bun run --filter @bramble/extension build:all",
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
-  "check:audit": "bun audit --audit-level=high",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
+  "check:audit": "bun audit --audit-level=high --ignore=GHSA-86w9-cpqp-85rv",
+  // Warns only, never fails: wording is a judgement call. See docs/COPY_STYLE.md.
+  "check:copy": "bun run scripts/check-copy.ts",
   "check:coverage": "bun run scripts/check-coverage.ts",
   "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
   "check:deadcode": "knip",

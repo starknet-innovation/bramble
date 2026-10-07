@@ -10,7 +10,7 @@
  * handler reads the current value, so recorded entries and history-sync stamps
  * are ordered the way they would be in a real session.
  */
-import type { TransactionStatusReport } from "@bramble/starknet/rpc";
+import type { TransactionStatusReport, TransferInput } from "@bramble/starknet/rpc";
 import { createMemoryStore } from "@bramble/store/kv";
 import { type ActivityEntry, createActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
@@ -84,6 +84,8 @@ export const makeHarness = (options?: {
   readonly historyThrows?: boolean;
   readonly statusReport?: TransactionStatusReport;
   readonly strkBalance?: string;
+  /** Replaces the default successful transfer submission. */
+  readonly submitTransfer?: (input: TransferInput) => Promise<{ readonly transactionHash: string }>;
 }) => {
   let historyRequests = 0;
   const history =
@@ -149,7 +151,12 @@ export const makeHarness = (options?: {
         return Object.fromEntries(
           hashes.map((hash) => [
             hash,
-            options?.statusReport ?? { finalizedOnL1: false, found: true, status: "accepted" },
+            options?.statusReport ?? {
+              finalizedOnL1: false,
+              found: true,
+              seen: true,
+              status: "accepted",
+            },
           ]),
         );
       },
@@ -159,7 +166,14 @@ export const makeHarness = (options?: {
       async submitAccountDeployment() {
         return { transactionHash: "0x7de" };
       },
-      async submitErc20Transfer() {
+      async submitErc20Transfer(input) {
+        if (options?.submitTransfer) {
+          const { transactionHash } = await options.submitTransfer(input);
+          return {
+            call: { calldata: [], contractAddress: ETH, entrypoint: "transfer" },
+            transactionHash,
+          };
+        }
         return {
           call: {
             calldata: ["0x777", "1500000000000000000", "0"],

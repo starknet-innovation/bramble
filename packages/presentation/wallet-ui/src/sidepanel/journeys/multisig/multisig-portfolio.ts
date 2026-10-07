@@ -32,7 +32,7 @@ export type MultisigPortfolioData = {
  * returns. It renders no cached signer assets.
  */
 export const EMPTY_MULTISIG_PORTFOLIO: MultisigPortfolioData = {
-  balances: { error: "Shared balances are loading." },
+  balances: { error: "Multisig balances are loading." },
   changes: {},
   currency: "usd",
   prices: {},
@@ -47,7 +47,7 @@ const portfolioHero = (
   const hasPrices = visible.some((balance) => data.prices[balance.address] !== undefined);
   const total = hasPrices ? portfolioTotal(visible, data.prices) : null;
   const delta = hasPrices ? portfolioDelta(visible, data.prices, data.changes) : null;
-  return `<section class="hero multisig-portfolio-hero" aria-label="Shared account balance" data-live-group>
+  return `<section class="hero multisig-portfolio-hero" aria-label="Multisig balance" data-live-group>
     <p class="hero-total" data-live-key="multisig-total:${escapeHtml(record.id)}" data-live-value="${total ?? "unknown"}">${total === null ? "—" : escapeHtml(formatFiat(total, data.currency))}</p>
     ${
       delta
@@ -63,7 +63,7 @@ const portfolioHero = (
 const tokenPanel = (preferences: WalletPreferences | null, data: MultisigPortfolioData): string => {
   if ("error" in data.balances) {
     return `<div class="panel-error">
-      ${emptyState("Shared balances are unavailable right now.")}
+      ${emptyState("Multisig balances are unavailable right now.")}
       ${button({
         attributes: { "data-multisig-portfolio-retry": true },
         icon: "refresh",
@@ -75,7 +75,7 @@ const tokenPanel = (preferences: WalletPreferences | null, data: MultisigPortfol
   }
   const visible = visibleHomeBalances(data.balances, preferences);
   return visible.length === 0
-    ? emptyState("No tracked token balances are held by this shared account.")
+    ? emptyState("No tracked token balances are held by this multisig.")
     : `<ul class="token-list">${visible
         .map((token) =>
           balanceRow(token, data.prices[token.address], data.changes[token.address], data.currency),
@@ -133,17 +133,17 @@ export const multisigPortfolio = (input: {
                   : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
-  <section class="home-tabs multisig-portfolio-tabs" aria-label="Shared account">
+  <section class="home-tabs multisig-portfolio-tabs" aria-label="Multisig account">
     <div class="tab-bar">
-      <div class="tab-set" role="tablist" aria-label="Shared account sections">
+      <div class="tab-set" role="tablist" aria-label="Multisig sections">
         <button class="home-tab" id="multisig-tab-assets" data-ms-home-tab="assets" type="button" role="tab" aria-controls="multisig-panel-assets" aria-selected="true" tabindex="0">Tokens</button>
-        <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Signing intents, ${openCountText} open" tabindex="-1">Intents${openCount > 0 ? `<span class="home-tab-count">${openCountText}</span>` : ""}</button>
+        <button class="home-tab" id="multisig-tab-intents" data-ms-home-tab="intents" type="button" role="tab" aria-controls="multisig-panel-intents" aria-selected="false" aria-label="Transactions, ${openCountText} open" tabindex="-1">Transactions${openCount > 0 ? `<span class="home-tab-count">${openCountText}</span>` : ""}</button>
       </div>
     </div>
     <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
     <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>
       <div class="multisig-intent-sync">
-        <div><strong>Co-signer updates</strong><span>Check securely for intents and signatures shared by known contacts.</span></div>
+        <div><strong>Co-signer updates</strong><span>Check securely for transactions and signatures shared by known contacts.</span></div>
         ${button({ attributes: { "data-ms-sync-intents": true }, icon: "refresh", label: "Check for updates", size: "small", variant: "secondary" })}
       </div>
       ${compactIntentListView(input.intentList.heading, input.intentList.items, input.intentList.emptyMessage)}

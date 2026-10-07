@@ -12,11 +12,7 @@ import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountId } from "@bramble/wallet-model/accounts";
-import {
-  isCustomNetwork,
-  isCustomRpcUrl,
-  normalizeChainId,
-} from "@bramble/wallet-model/custom-network";
+import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
 import {
   DEFAULT_NETWORK,
   DEFAULT_TOKENS,
@@ -30,26 +26,28 @@ import {
   isDisplayCurrency,
   isLabel,
   isThemeChoice,
-  isTokenConfig,
   isTokenId,
   withAddressBookId,
   withTokenId,
 } from "@bramble/wallet-model/preferences";
-import {
-  createGroup as createGroupPure,
-  normalizeAccountGroups,
-  removeGroup as removeGroupPure,
-  renameGroup as renameGroupPure,
-  setAccountInGroup as setAccountInGroupPure,
-  setGroupIcon as setGroupIconPure,
-} from "./groups";
+import { normalizeAccountGroups } from "./groups";
+import { withAccountHidden } from "./preferences-accounts";
+import { withCustomNetwork } from "./preferences-custom-networks";
 import { withExplorerSettings } from "./preferences-explorer";
+import {
+  withAccountInGroup,
+  withCreatedGroup,
+  withGroupIcon,
+  withoutGroup,
+  withRenamedGroup,
+} from "./preferences-groups";
 import { withNostrRelayUrl } from "./preferences-nostr";
 import {
   isWalletPreferences,
   normalizeStoredPreferences,
   pickImportablePreferences,
 } from "./preferences-stored";
+import { withoutToken, withUpsertedToken } from "./preferences-tokens";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /** Re-exported entry types so callers keep importing them from this store. */
@@ -67,8 +65,13 @@ export type {
 } from "@bramble/wallet-model/preferences";
 /** Explorer-lane resolver colocated with the preferences it reads. */
 export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
+/** Custom-network count bound, re-exported with the store that applies it. */
+export { MAX_CUSTOM_NETWORKS } from "./preferences-custom-networks";
+/** Added-token count bound, re-exported with the store that applies it. */
+export { MAX_ADDED_TOKENS_PER_NETWORK } from "./preferences-tokens";
 /** Re-exported store schema and capability types. */
 export type {
+  TokenSource,
   WalletPreferences,
   WalletPreferencesStore,
 } from "./preferences-types";
@@ -123,6 +126,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   explorerFallback: {},
   explorerApiUrls: {},
   groups: [],
+  hiddenAccountIds: [],
   hiddenTokens: [],
   nfts: [],
   productAnalytics: true,
@@ -215,15 +219,7 @@ export const createPreferencesStore = ({
   return serializeStoreMutations<WalletPreferencesStore>(
     {
       async addCustomNetwork(network) {
-        if (!isCustomNetwork(network)) {
-          throw new WalletError("Invalid custom network");
-        }
-        const preferences = await read();
-        const key = normalizeChainId(network.chainId);
-        const existing = (preferences.customNetworks ?? []).filter(
-          (stored) => normalizeChainId(stored.chainId) !== key,
-        );
-        const next = { ...preferences, customNetworks: [...existing, network] };
+        const next = withCustomNetwork(await read(), network);
         await writePreferences(store, next);
         return next;
       },
@@ -239,11 +235,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async createGroup({ icon, name }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: createGroupPure(preferences.groups ?? [], name, icon),
-        };
+        const next = withCreatedGroup(await read(), name, icon);
         await writePreferences(store, next);
         return next;
       },
@@ -258,7 +250,14 @@ export const createPreferencesStore = ({
         // organisational fields; every trust-bearing setting the review layer
         // reads — including the contacts the address-poisoning guard compares
         // against — keeps its stored value (see `pickImportablePreferences`).
-        const next = { ...(await readImportBase()), ...pickImportablePreferences(backup) };
+        const merged = { ...(await readImportBase()), ...pickImportablePreferences(backup) };
+        // Stored exactly as a read would return it, so the record the caller is
+        // told was applied is the record that comes back: the group repair
+        // (single membership, both default folders) is part of that shape.
+        const next =
+          merged.groups === undefined
+            ? merged
+            : { ...merged, groups: normalizeAccountGroups(merged.groups) };
         await writePreferences(store, next);
         return next;
       },
@@ -275,9 +274,13 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
+      async removeToken({ tokenId }) {
+        const next = withoutToken(await read(), tokenId);
+        await writePreferences(store, next);
+        return next;
+      },
       async removeGroup({ id }) {
-        const preferences = await read();
-        const next = { ...preferences, groups: removeGroupPure(preferences.groups ?? [], id) };
+        const next = withoutGroup(await read(), id);
         await writePreferences(store, next);
         return next;
       },
@@ -294,20 +297,17 @@ export const createPreferencesStore = ({
         return next;
       },
       async renameGroup({ id, name }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: renameGroupPure(preferences.groups ?? [], id, name),
-        };
+        const next = withRenamedGroup(await read(), id, name);
         await writePreferences(store, next);
         return next;
       },
       async setAccountInGroup({ accountId, groupId, member }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: setAccountInGroupPure(preferences.groups ?? [], groupId, accountId, member),
-        };
+        const next = withAccountInGroup(await read(), { accountId, groupId, member });
+        await writePreferences(store, next);
+        return next;
+      },
+      async setAccountHidden({ accountId, hidden }) {
+        const next = withAccountHidden(await read(), accountId, hidden);
         await writePreferences(store, next);
         return next;
       },
@@ -317,11 +317,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async setGroupIcon({ icon, id }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: setGroupIconPure(preferences.groups ?? [], id, icon),
-        };
+        const next = withGroupIcon(await read(), id, icon);
         await writePreferences(store, next);
         return next;
       },
@@ -481,15 +477,12 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
-      async upsertToken(token) {
-        const nextToken = withTokenId(token);
-        if (!isTokenConfig(nextToken)) {
-          throw new WalletError("Invalid token");
-        }
+      async upsertToken(token, source) {
         const preferences = await read();
-        const tokens = preferences.tokens.filter((stored) => stored.id !== nextToken.id);
-        const next = { ...preferences, tokens: [...tokens, nextToken] };
-        await writePreferences(store, next);
+        const next = withUpsertedToken(preferences, token, source);
+        if (next !== preferences) {
+          await writePreferences(store, next);
+        }
         return next;
       },
     },

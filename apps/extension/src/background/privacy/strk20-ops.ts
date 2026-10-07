@@ -7,12 +7,14 @@
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 
 import {
+  formatStrk20PoolFee,
   quoteStrk20Plan,
   summarizeStrk20Action,
   summarizeStrk20Plan,
 } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { ActivityLog } from "@bramble/transactions/activity";
+import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -88,12 +90,15 @@ type Strk20OpsHandler = (
 const actionTokenAddresses = (actions: readonly Strk20Action[]): readonly string[] =>
   actions.flatMap((action) => ("token" in action ? [action.token] : []));
 
+// Card labels come from the same network-scoped, spam- and source-filtered
+// trusted set the call reviewer uses, never raw preferences: a dapp-watched or
+// spoof token must not lend its ticker to a card (audit 171).
 const reviewAssetsFor = (
   resolved: ResolvedAccount,
   addresses: readonly string[],
 ): readonly { readonly address: string; readonly symbol: string }[] =>
-  resolved.preferences.tokens
-    .filter((token) => addresses.some((address) => sameFelt(address, token.address)))
+  verificationContext(resolved.account, resolved.preferences)
+    .tokens.filter((token) => addresses.some((address) => sameFelt(address, token.address)))
     .map((token) => ({ address: token.address, symbol: token.symbol }));
 
 const queueDisclosure = async (
@@ -184,8 +189,9 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
         "Activate private balances for this account",
         `Privacy pool ${config.poolAddress}`,
         `Registration preflight token ${token.address}`,
-        `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee`,
+        `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee`,
         "Publishes a viewing-key commitment, never the viewing key",
+        "Opens this account's own private channel",
       ],
     });
   } catch (error) {
@@ -257,7 +263,7 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
     origin: input.origin,
     request: { actions: input.actions, simulate: input.simulate, type: "prepare" },
     summaries: [
-      ...input.actions.map(summarizeStrk20Action),
+      ...input.actions.map((action) => summarizeStrk20Action(action, resolved.account.address)),
       input.simulate
         ? "Simulate only — no submittable proof"
         : "Generate a submittable private proof for this site",
@@ -309,7 +315,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
       summaries: [
-        ...input.actions.map(summarizeStrk20Action),
+        ...input.actions.map((action) => summarizeStrk20Action(action, resolved.account.address)),
         summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
       ],
     });

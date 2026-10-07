@@ -5,13 +5,17 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
+import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
 import { button } from "@bramble/ui-kit/controls";
+import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
   reviewCallsList,
   reviewConstraints,
+  reviewCostNote,
   reviewFeeSection,
   reviewOutcome,
   reviewPanel,
@@ -23,6 +27,7 @@ import {
   signRequestWarnings,
 } from "../../shared/sign-request";
 import { tokenGlyph } from "../portfolio/token-row";
+import { invokeCallReview, strk20ActionReview } from "./approval-call-parameters";
 import {
   declarationDetails,
   declarationFeeUnavailable,
@@ -103,76 +108,6 @@ const contextDisclosure = (approval: PendingApproval): string => {
     : "";
 };
 
-const exactCalldata = (calldata: readonly string[]): string =>
-  calldata.length === 0
-    ? "None"
-    : `<code>${calldata.map((item) => escapeHtml(item)).join(", ")}</code>`;
-
-const invokeCallReview = (approval: PendingApproval): string => {
-  const calls = approval.callReviews;
-  if (!calls || calls.length === 0) {
-    return "";
-  }
-  return `<details class="disclosure request-technical">
-    <summary>
-      <span class="menu-copy"><strong>Exact call parameters</strong><small>${calls.length} call${calls.length === 1 ? "" : "s"} · full addresses and calldata</small></span>
-      <span class="disclosure-mark">${icon("chevronRight")}</span>
-    </summary>
-    <div class="disclosure-body">${calls
-      .map(
-        (call, index) =>
-          `<section class="strk20-action-call"><strong>Call ${index + 1}</strong><dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(call.contractAddress)}</code></dd></div><div><dt>Entrypoint</dt><dd><code>${escapeHtml(call.entrypoint)}</code></dd></div><div><dt>Calldata (${call.calldata.length})</dt><dd>${exactCalldata(call.calldata)}</dd></div></dl></section>`,
-      )
-      .join("")}</div>
-  </details>`;
-};
-
-const strk20ActionParameters = (
-  action: NonNullable<PendingApproval["actionReviews"]>[number],
-  index: number,
-): string => {
-  if (action.type === "deposit") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · Deposit</strong><dl class="request-detail"><div><dt>Token</dt><dd><code>${escapeHtml(action.token)}</code></dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div></dl></section>`;
-  }
-  if (action.type === "withdraw" || action.type === "transfer") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · ${action.type === "withdraw" ? "Withdraw" : "Private transfer"}</strong><dl class="request-detail"><div><dt>Token</dt><dd><code>${escapeHtml(action.token)}</code></dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div><div><dt>Recipient</dt><dd><code>${escapeHtml(action.recipient)}</code></dd></div></dl></section>`;
-  }
-  if (action.type === "invoke") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · Contract invoke</strong><dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(action.contract)}</code></dd></div><div><dt>Calldata (${action.calldata.length})</dt><dd>${exactCalldata(action.calldata)}</dd></div></dl></section>`;
-  }
-  const collect =
-    action.collect_policy.type === "exact"
-      ? `Exact · ${action.collect_policy.amount}`
-      : action.collect_policy.type;
-  const calls = action.calls
-    .map(
-      (call, callIndex) =>
-        `<section class="strk20-action-call"><strong>Call ${callIndex + 1}</strong><dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(call.contract_address)}</code></dd></div><div><dt>Entrypoint</dt><dd><code>${escapeHtml(call.entry_point)}</code></dd></div><div><dt>Calldata (${call.calldata.length})</dt><dd>${exactCalldata(call.calldata)}</dd></div></dl></section>`,
-    )
-    .join("");
-  return `<section class="strk20-action-review"><strong>Action ${index + 1} · Subaccount invoke</strong><dl class="request-detail"><div><dt>Dapp</dt><dd>${escapeHtml(action.dapp_name)}</dd></div><div><dt>Nonce</dt><dd><code>${escapeHtml(action.nonce)}</code></dd></div><div><dt>Collect policy</dt><dd>${escapeHtml(collect)}</dd></div></dl>${calls}</section>`;
-};
-
-const strk20ActionReview = (approval: PendingApproval): string => {
-  const actions = approval.actionReviews;
-  if (!actions) {
-    return "";
-  }
-  const relayFee = approval.relayFeeAction;
-  const reviewedActionCount = actions.length + (relayFee ? 1 : 0);
-  const relayFeeReview = relayFee
-    ? `<section class="strk20-action-review"><strong>Relay fee action · Withdrawal</strong><dl class="request-detail"><div><dt>Token</dt><dd><code>${escapeHtml(relayFee.token)}</code></dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(relayFee.amount)}</code></dd></div><div><dt>Recipient</dt><dd><code>${escapeHtml(relayFee.recipient)}</code></dd></div></dl></section>`
-    : "";
-  const actionCountHint = relayFee ? "including relay fee" : "expand before approving";
-  return `<details class="disclosure request-technical">
-    <summary>
-      <span class="menu-copy"><strong>Exact action parameters</strong><small>${reviewedActionCount} action${reviewedActionCount === 1 ? "" : "s"} · ${actionCountHint}</small></span>
-      <span class="disclosure-mark">${icon("chevronRight")}</span>
-    </summary>
-    <div class="disclosure-body">${actions.map(strk20ActionParameters).join("")}${relayFeeReview}</div>
-  </details>`;
-};
-
 const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => {
   const actions = approval.actionReviews ?? [];
   return actions.some((action) => action.type === "deposit") &&
@@ -181,6 +116,23 @@ const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => 
         "This mixed batch includes a public deposit approval, linking this account to the private relay transaction. Split the deposit and private actions if that linkage is not intended.",
       ]
     : [];
+};
+
+// A deposit naming a recipient credits that account's private balance, so a
+// site can dress a payment up as a shield. Only a recipient proven equal to the
+// approval's bound account reads as a self-deposit; with no bound account the
+// card cannot prove that, so it warns.
+const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[] => {
+  const account = approval.context ? accountIdAddress(approval.context.accountId) : undefined;
+  return (approval.actionReviews ?? []).flatMap((action) =>
+    action.type === "deposit" &&
+    action.recipient !== undefined &&
+    !sameFelt(action.recipient, account)
+      ? [
+          `This deposit pays ${accountLabel(action.recipient)}: the amount becomes that account's private note, not your private balance.`,
+        ]
+      : [],
+  );
 };
 
 const requestIdentity = (origin: string, kind: string): string => {
@@ -217,7 +169,7 @@ const connectCard = (approval: PendingApproval, status: WalletStatus): string =>
       ${connectIdentity(status)}
       ${reviewOutcome(
         approval.existingGrant
-          ? "Adds this account to the accounts already shared with this site."
+          ? "Adds this account to the ones already shared with this site, until you disconnect it."
           : "Shares this account's address with this site until you disconnect it.",
       )}
     </div>
@@ -232,6 +184,24 @@ const connectCard = (approval: PendingApproval, status: WalletStatus): string =>
     )}
   </li>`;
 
+// Fixed copy per spam reason (audit 171): the card the user decides on says why
+// the token looks wrong, and that the wallet will store it hidden.
+const SPAM_WARNINGS: Readonly<Record<SpamReason, string>> = {
+  "absurd-decimals": "This token reports an implausible number of decimals.",
+  "empty-name": "This token has no name.",
+  "symbol-spoof": "This token uses the ticker of a different, known token contract.",
+};
+
+const watchAssetWarnings = (token: NonNullable<PendingApproval["token"]>): readonly string[] => {
+  const reasons = tokenSpamReasons(token);
+  return reasons.length === 0
+    ? []
+    : [
+        ...reasons.map((reason) => SPAM_WARNINGS[reason]),
+        "If added, it stays hidden until you show it.",
+      ];
+};
+
 const watchAssetCard = (approval: PendingApproval): string => {
   const token = approval.token;
   if (!token) {
@@ -244,7 +214,7 @@ const watchAssetCard = (approval: PendingApproval): string => {
       <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
       ${reviewOutcome("Add this token contract to the wallet's tracked asset list.")}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel([...watchAssetWarnings(token), ...(approval.insights ?? [])])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(approval, "Add token", false)}
   </li>`;
@@ -266,6 +236,9 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
     ${
+      // An undeployed Braavos account deploys only through its own step: say
+      // so, with no fee and no retry, and Approve stays disabled (no fee).
+      (approval.deployFirst === true && reviewCostNote(UNDEPLOYED_BRAAVOS_REFUSAL)) ||
       reviewFeeSection(
         {
           fee: approval.fee ?? null,
@@ -276,7 +249,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
         },
         { "data-approval-retry-fee": approval.id },
       ) ||
-      reviewConstraints(
+      reviewCostNote(
         "The network fee is unavailable. Approval remains disabled until a fee can be reviewed.",
       )
     }
@@ -293,6 +266,8 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     )}
   </li>`;
 
+// summaries[0] names the message; any further entries are the decoded calls an
+// OutsideExecution authorizes, listed with its risk flags (audit 144).
 // A sign card only offers to sign what the decoder could place on one side of
 // the signed hash or the other; an unclassified payload gets the warning and a
 // Deny-only row instead, because a partial view of a message is exactly what a
@@ -305,9 +280,11 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
       ${requestIdentity(approval.origin, "Sign request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Signatures can authorize transfers or account access. Only sign requests you understand."}</p>
       ${reviewOutcome("Create a signed authorization over the decoded message shown below and return it to this site.")}
+      ${reviewCallsList(approval.summaries?.slice(1) ?? [])}
     </div>
     ${view.html}
     ${reviewPanel([
+      ...riskFlagMessages(approval.flags ?? []),
       ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
       ...signRequestWarnings(approval.typedData),
       ...(approval.insights ?? []),
@@ -325,8 +302,8 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       ${status.locked ? '<p class="hint">Unlock the wallet to review this private transaction.</p>' : ""}
       ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
     </div>
-    ${reviewPanel([...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
-    ${reviewConstraints("This approval carries no public wallet fee. Wallet-funded routes require a separate exact-call fee review.")}
+    ${reviewPanel([...strk20DepositPayeeWarnings(approval), ...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
+    ${reviewConstraints("This approval charges no public wallet fee. A relay fee, if listed above, is paid from the private balance. If the wallet pays the network fee for this route, you will review that fee separately.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
     ${decisionRow(approval, "Approve", status.locked)}
@@ -348,7 +325,7 @@ const strk20DisclosureCard = (
       ${status.locked ? `<p class="hint">${copy.lockedHint}</p>` : ""}
       ${approvalCalls(approval) || reviewOutcome(copy.hint)}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel([...strk20DepositPayeeWarnings(approval), ...(approval.insights ?? [])])}
     ${reviewConstraints("This approval carries no transaction fee. Any later transaction requires its own review.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
@@ -359,7 +336,7 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Network switch request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network. Nothing changes unless you approve."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network."}</p>
       ${approvalCalls(approval) || reviewOutcome("Switch the wallet to the requested Starknet network.")}
     </div>
     ${reviewPanel(approval.insights ?? [])}
@@ -371,14 +348,14 @@ const addChainCard = (approval: PendingApproval): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Add network request")}
-      <p class="hint">This site is asking to add a custom Starknet network. Nothing is saved unless you approve.</p>
+      <p class="hint">This site is asking to add a custom Starknet network.</p>
       ${approvalCalls(approval) || reviewOutcome("Add the requested custom Starknet network to the wallet.")}
     </div>
     ${reviewPanel([
       "Custom network endpoints can observe requests sent through them. Review the network details before use.",
       ...(approval.insights ?? []),
     ])}
-    ${reviewConstraints("Adding the network does not sign a transaction or charge a fee.")}
+    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(approval, "Add network", false)}
   </li>`;
 
@@ -390,8 +367,8 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       ${reviewOutcome("Register this exact Cairo contract class on the active network from the reviewed account.")}
     </div>
     ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])], "Declaration registers code but does not deploy a contract or transfer assets.")}
-    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-      <p class="decision-label">Maximum cost and constraints</p>
+    <section class="decision-layer decision-boundary" aria-label="Cost">
+      <p class="decision-label">Cost</p>
       ${declarationDetails(approval)}
     </section>
     ${contextDisclosure(approval)}

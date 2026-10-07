@@ -10,17 +10,37 @@
  */
 
 /**
+ * What counts as naming secret material, kept beside the exemption list it is
+ * paired with so a test can pin it. The session credential accessors and the
+ * vault decrypt count too, so renaming the local that holds their result
+ * cannot carry a vault read out of the approved boundary modules (audit #163:
+ * the trust-set vault read must stay inside those modules).
+ */
+export const SECRET_MATERIAL_PATTERN =
+  /\b(?:accountSecrets|getPassphrase|mnemonic|mnemonicPassphrase|passphrase|peekPassphrase|privateKey|readVault|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
+
+/**
  * Modules permitted to name secret material. Each one sits on a key, vault, or
  * signing boundary where the field names are unavoidable; everywhere else,
  * naming them is the signal that secret material has leaked out of its
  * boundary.
  */
 export const SECRET_MATERIAL_FILES = new Set([
+  // Translates raw background diagnostics into reader-facing sentences. Three
+  // of its lookup keys name secret-material fields because that is the exact
+  // text the background threw; nothing here reads, logs, or persists one.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy.ts",
+  // Split from friendly-error-copy.ts by the size budget: same contract — its
+  // lookup keys quote diagnostics that name secret-material fields verbatim.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy-multisig.ts",
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Privileged first-run boundary: the phrase is validated through Krusty and
   // only the boolean verdict returns; the phrase is never logged or persisted.
   "apps/extension/src/background/onboarding/onboarding-ops.ts",
+  // Builds the signHash for the recovery submissions; the phrase key signs
+  // in the platform layer and nothing is logged or persisted.
+  "apps/extension/src/background/accounts/account-recovery.ts",
   "apps/extension/src/background/routing/account-creation-handlers.ts",
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
@@ -29,6 +49,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // vault credential only to re-check a claimed approval's granted account
   // against the vault at decision time; never logs, persists, or returns it.
   "apps/extension/src/background/approvals/approval-claim-context.ts",
+  // Claim-time session view: wraps the session's credential accessors so a
+  // deferred executor cannot adopt a later unlock; it reads no value itself.
+  "apps/extension/src/background/approvals/approval-session.ts",
   "apps/extension/src/background/provider/add-chain-ops.ts",
   "apps/extension/src/background/approvals/approval-decisions.ts",
   "apps/extension/src/background/transactions/chain-ops.ts",
@@ -100,11 +123,13 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Setup strength meter: reads the typed vault credential only to score and
   // describe it; nothing is stored, logged, or sent.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-meter.ts",
+  // Show/hide on a passphrase being created: names the field in its own
+  // accessible label and flips the input type. It never reads the value.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-reveal.ts",
   // Weak-credential acknowledgement shared by the software and Ledger setup
   // flows: reads the typed vault credential only to decide whether to reveal a
   // checkbox and whether the step may proceed. It holds no reference to the
   // value, stores nothing, and sends nothing.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/weak-passphrase-ack.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   // Recovery discovery keeps the phrase and vault credential only in the
   // first-run DOM closure and forwards them to the privileged background.
@@ -173,6 +198,15 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/vault/src/schema/schema.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
+  // Split from accounts.ts by the size budget: same boundary, same rules — the
+  // mnemonic and derived keys pass through to the encrypted vault, unlogged.
+  "packages/platform/vault/src/accounts/derivation-core.ts",
+  // Assembles the Braavos 2FA-removal request through the signing boundary;
+  // the phrase key signs here and nothing is logged or persisted.
+  "packages/platform/starknet/src/transactions/braavos-recovery.ts",
+  // Assembles the Ready guardian-escape request through the signing boundary;
+  // the phrase key signs here and nothing is logged or persisted.
+  "packages/platform/starknet/src/transactions/argent-recovery.ts",
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
   "packages/platform/vault/src/accounts/network-account.ts",
   "packages/platform/vault/src/service/reveal.ts",

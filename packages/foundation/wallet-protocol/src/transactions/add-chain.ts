@@ -5,8 +5,9 @@
  */
 
 import { hasOnlyKnownKeys, isNetworkLabel, isRecord, type Json } from "@bramble/core/json";
-import { isOptionalServiceUrlList, isServiceUrlList } from "@bramble/core/service-url";
+import { isBoundedServiceUrlList } from "@bramble/core/service-url";
 import { isCanonicalChainId } from "@bramble/wallet-model/networks";
+import { isOptionalApiVersion } from "../provider/versions";
 
 /**
  * A custom Starknet chain a dapp asks the wallet to add, after bridge
@@ -21,25 +22,42 @@ export type ProviderChain = {
   readonly rpcUrls?: readonly string[];
 };
 
+/**
+ * Most entries a dapp may send in each `wallet_addStarknetChain` URL list.
+ * Spec dapps send one or two RPCs. Without a bound one approved card could
+ * fill the 1 MiB preferences record (Sherlock audit 153). The bridge and the
+ * background both apply it, so an oversized request fails before any prompt.
+ */
+export const MAX_CHAIN_URLS = 4;
+
+const isChainUrlList = (value: unknown): value is readonly string[] =>
+  isBoundedServiceUrlList(value, MAX_CHAIN_URLS);
+
+const isOptionalChainUrlList = (value: unknown): value is readonly string[] | undefined =>
+  value === undefined || isChainUrlList(value);
+
 // Validates an optional URI array against the shared endpoint-list rule
 // (`isServiceUrlList`, the same predicate `isCustomNetwork` applies to the
-// stored network), returning null when the value is malformed.
+// stored network) plus the entry bound, returning null when it is malformed.
 const readUrlList = (value: unknown): readonly string[] | null | undefined => {
   if (value === undefined) {
     return undefined;
   }
-  return isServiceUrlList(value) ? [...value] : null;
+  return isChainUrlList(value) ? [...value] : null;
 };
 
 /**
  * Parses a `{ id, chain_id, chain_name, rpc_urls?, ... }` STARKNET_CHAIN object,
  * accepting only the spec-required fields plus optional URI lists. Returns the
- * internal camelCase chain, or null for any malformed descriptor.
+ * internal camelCase chain, or null for any malformed descriptor. The spec's
+ * optional `api_version` rides beside the chain fields and is dropped when
+ * well-formed; it is never part of the stored chain.
  */
 export const readProviderChain = (params: Json | undefined): ProviderChain | null => {
   if (
     !isRecord(params) ||
     !hasOnlyKnownKeys(params, [
+      "api_version",
       "block_explorer_url",
       "chain_id",
       "chain_name",
@@ -48,6 +66,7 @@ export const readProviderChain = (params: Json | undefined): ProviderChain | nul
       "native_currency",
       "rpc_urls",
     ]) ||
+    !isOptionalApiVersion(params["api_version"]) ||
     !isNetworkLabel(params["id"]) ||
     !isCanonicalChainId(params["chain_id"]) ||
     !isNetworkLabel(params["chain_name"]) ||
@@ -88,6 +107,6 @@ export const isProviderChain = (value: unknown): value is ProviderChain =>
   isCanonicalChainId(value["chainId"]) &&
   isNetworkLabel(value["chainName"]) &&
   isNetworkLabel(value["id"]) &&
-  isOptionalServiceUrlList(value["rpcUrls"]) &&
-  isOptionalServiceUrlList(value["blockExplorerUrls"]) &&
-  isOptionalServiceUrlList(value["iconUrls"]);
+  isOptionalChainUrlList(value["rpcUrls"]) &&
+  isOptionalChainUrlList(value["blockExplorerUrls"]) &&
+  isOptionalChainUrlList(value["iconUrls"]);

@@ -16,8 +16,12 @@ const gateBrand = (): string => `<div class="gate-brand">${BRAMBLE_MARK}</div>`;
 
 /**
  * First-run screen: a staged fresh-wallet, recovery-phrase, or Ledger journey.
+ * `ledgerAvailable` false omits the Ledger path when the runtime cannot reach a
+ * device; it defaults to true so a caller that does not report capability keeps
+ * the offered state.
  */
-export const onboarding = (status: WalletStatus): string => onboardingWizard(status);
+export const onboarding = (status: WalletStatus, ledgerAvailable = true): string =>
+  onboardingWizard(status, ledgerAvailable);
 
 /**
  * Unlock screen for an existing but locked vault.
@@ -29,7 +33,6 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
     ${gateBrand()}
     <div class="gate-head">
       <h1>Welcome back</h1>
-      <p class="lede">${request ? "Unlock to review the wallet request waiting for you." : "Unlock your wallet to continue."}</p>
     </div>
     ${
       request

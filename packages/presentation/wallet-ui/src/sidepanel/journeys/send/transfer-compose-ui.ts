@@ -6,6 +6,8 @@
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { formatFiat } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
+import { bindTokenDropdown } from "../../shared/token-dropdown";
+import { setAddressBookDraft } from "../../shell/address-draft";
 import {
   balanceShortcut,
   fiatInputToken,
@@ -15,6 +17,7 @@ import {
 } from "./send-model";
 import {
   recipientFieldError,
+  type TransferExitView,
   type TransferFields,
   type TransferStage,
   transferFields,
@@ -36,6 +39,17 @@ const setSendFormValue = (form: HTMLFormElement, name: string, value: string): v
   if (input) input.value = value;
 };
 
+/**
+ * Clears the chosen recipient when the user steps back to the recipient stage,
+ * so no review can be built from a recipient the current step no longer shows
+ * (audit 248). A scoped-intent recipient is cleared too: going Back is an
+ * explicit request to choose again.
+ */
+export const clearSendRecipient = (form: HTMLFormElement): void => {
+  setSendFormValue(form, "recipient", "");
+  setSendFormValue(form, "recipientLabel", "");
+};
+
 const copySelectedGlyph = (form: HTMLFormElement, source: Element | null): void => {
   const target = form.querySelector<HTMLElement>("#send-selected-token-glyph");
   if (!target || !source) return;
@@ -53,6 +67,11 @@ export const restoreTransferCompose = (form: HTMLFormElement, fields: TransferFi
   };
   text("send-recipient-name", fields.recipientLabel || accountLabel(fields.recipient));
   text("send-recipient-label", accountLabel(fields.recipient));
+  const recipientCopy = form.querySelector<HTMLButtonElement>("#send-recipient-copy");
+  if (recipientCopy) {
+    recipientCopy.dataset["copy"] = fields.recipient;
+    recipientCopy.hidden = fields.recipient === "";
+  }
   text("send-selected-token-symbol", fields.tokenSymbol);
   // An empty formatted balance is one the bucket controls could not read.
   text(
@@ -140,37 +159,85 @@ const applySelectedAsset = (form: HTMLFormElement, row: HTMLElement): void => {
   setSendFormValue(form, "fiatEstimate", "");
 };
 
+// The name of the row the typed address belongs to: one of the user's own
+// accounts, a saved contact, or a shared account, all on this network. Compared
+// as felts, so a padded or differently cased spelling of a known address is
+// still known. Names only ever come from the user's own rows, never from the
+// typed text, and the review keeps the real address beside them.
+const knownRecipientLabel = (form: HTMLFormElement, address: string): string | undefined =>
+  [...form.querySelectorAll<HTMLElement>("[data-send-recipient]")].find((row) =>
+    sameFelt(row.dataset["sendRecipient"] ?? "", address),
+  )?.dataset["sendRecipientLabel"];
+
+// True when the typed address matches no row on the screen. The same lookup as
+// the name, so "Save address" and the name shown can never disagree.
+const isUnlistedRecipient = (form: HTMLFormElement, address: string): boolean =>
+  knownRecipientLabel(form, address) === undefined;
+
+// True when the row sits in a folder the user has minimized. The archive starts
+// that way; every other folder starts open.
+const inCollapsedFolder = (row: HTMLElement): boolean =>
+  row.closest<HTMLElement>("[data-send-folder]")?.dataset["collapsed"] === "true";
+
 const bindRecipientControls = (
   form: HTMLFormElement,
   goTo: (stage: TransferStage) => void,
   onFields: (fields: TransferFields) => void,
+  navigate?: (view: TransferExitView) => void,
 ): void => {
   const search = form.querySelector<HTMLInputElement>("#send-recipient-search");
   const continueButton = form.querySelector<HTMLButtonElement>("#send-recipient-continue");
+  const saveRow = form.querySelector<HTMLElement>("#send-recipient-save-row");
   const updateSearch = (): void => {
     const query = search?.value.trim().toLowerCase() ?? "";
     let visible = 0;
-    const panel = form.querySelector<HTMLElement>("[data-send-recipient-panel]:not([hidden])");
-    panel?.querySelectorAll<HTMLElement>("[data-send-recipient]").forEach((row) => {
+    form.querySelectorAll<HTMLElement>("[data-send-recipient]").forEach((row) => {
       const matches = query.length === 0 || (row.dataset["sendSearch"] ?? "").includes(query);
-      row.toggleAttribute("hidden", !matches);
+      // A search reaches into a minimized folder: a recipient the user is
+      // looking for must be findable wherever it is filed. With no query the
+      // folder decides, so the archive stays out of the way.
+      const folded = query.length === 0 && inCollapsedFolder(row);
+      row.toggleAttribute("hidden", !matches || folded);
       if (matches) visible += 1;
     });
+    // A folder with nothing to show during a search drops out rather than
+    // leaving a heading over an empty space.
+    form.querySelectorAll<HTMLElement>("[data-send-folder]").forEach((folder) => {
+      const rows = [...folder.querySelectorAll<HTMLElement>("[data-send-recipient]")];
+      const shown = rows.filter((row) => !row.hasAttribute("hidden")).length;
+      folder.toggleAttribute("hidden", query.length > 0 && shown === 0);
+    });
     form.querySelector("#send-recipient-empty")?.toggleAttribute("hidden", visible > 0);
-    if (continueButton) continueButton.disabled = recipientFieldError(search?.value ?? "") !== null;
+    const typed = search?.value ?? "";
+    const valid = recipientFieldError(typed) === null;
+    if (continueButton) continueButton.disabled = !valid;
+    // Offered only for an address that is both usable and not already known,
+    // so saving is a deliberate act on a new recipient rather than a way to
+    // duplicate a contact under a second name.
+    saveRow?.toggleAttribute("hidden", !(navigate && valid && isUnlistedRecipient(form, typed)));
   };
   search?.addEventListener("input", updateSearch);
-  form.querySelectorAll<HTMLElement>("[data-send-recipient-tab]").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const id = tab.dataset["sendRecipientTab"];
-      form.querySelectorAll<HTMLElement>("[data-send-recipient-tab]").forEach((candidate) => {
-        candidate.setAttribute("aria-selected", String(candidate === tab));
-      });
-      form.querySelectorAll<HTMLElement>("[data-send-recipient-panel]").forEach((panel) => {
-        panel.toggleAttribute("hidden", panel.dataset["sendRecipientPanel"] !== id);
-      });
+  // Folder state is DOM-local: the recipient stage is toggled rather than
+  // re-rendered, so a collapse survives without threading state through the
+  // entrypoint the way the drawer does.
+  form.querySelectorAll<HTMLButtonElement>("[data-send-folder-toggle]").forEach((head) => {
+    head.addEventListener("click", () => {
+      const folder = head.closest<HTMLElement>("[data-send-folder]");
+      if (!folder) {
+        return;
+      }
+      const collapsed = folder.dataset["collapsed"] !== "true";
+      folder.dataset["collapsed"] = String(collapsed);
+      head.setAttribute("aria-expanded", String(!collapsed));
       updateSearch();
     });
+  });
+  form.querySelector("#send-recipient-save")?.addEventListener("click", () => {
+    const typed = search?.value.trim() ?? "";
+    if (recipientFieldError(typed) === null) {
+      setAddressBookDraft(typed);
+      navigate?.("address-book");
+    }
   });
   const choose = (address: string, label: string): void => {
     setSendFormValue(form, "recipient", address);
@@ -183,40 +250,50 @@ const bindRecipientControls = (
       choose(row.dataset["sendRecipient"] ?? "", row.dataset["sendRecipientLabel"] ?? ""),
     );
   });
-  continueButton?.addEventListener("click", () => {
+  // Commits the typed address as the recipient. Shared by "Continue with
+  // address" and Enter in the search field: without the latter, Enter fell
+  // through to implicit form submission and reviewed the PREVIOUSLY chosen
+  // hidden recipient, not the address on screen (audit 248).
+  const commitTyped = (): void => {
     const address = search?.value.trim() ?? "";
     if (recipientFieldError(address)) {
       search?.focus();
       return;
     }
-    choose(address, accountLabel(address));
+    // A pasted address that is already on the screen reads as the row it
+    // matches, the same as tapping that row would.
+    choose(address, knownRecipientLabel(form, address) || accountLabel(address));
+  };
+  continueButton?.addEventListener("click", commitTyped);
+  search?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitTyped();
+    }
   });
   updateSearch();
 };
 
 const bindAssetControls = (
   form: HTMLFormElement,
-  goTo: (stage: TransferStage) => void,
   onFields: (fields: TransferFields) => void,
+  navigate?: (view: TransferExitView) => void,
 ): void => {
-  form.querySelector("#send-token-trigger")?.addEventListener("click", () => goTo("asset"));
-  const search = form.querySelector<HTMLInputElement>("#send-asset-search");
-  search?.addEventListener("input", () => {
-    const query = search.value.trim().toLowerCase();
-    let visible = 0;
-    form.querySelectorAll<HTMLElement>("[data-send-asset]").forEach((row) => {
-      const matches = query.length === 0 || (row.dataset["sendSearch"] ?? "").includes(query);
-      row.toggleAttribute("hidden", !matches);
-      if (matches) visible += 1;
-    });
-    form.querySelector("#send-asset-empty")?.toggleAttribute("hidden", visible > 0);
-  });
-  form.querySelectorAll<HTMLElement>("[data-send-asset]").forEach((row) => {
-    row.addEventListener("click", () => {
-      applySelectedAsset(form, row);
+  bindTokenDropdown({
+    onAction: () => navigate?.("tokens"),
+    onSelect: (tokenId) => {
+      // The dropdown returns an id; the token's numbers come from the hidden
+      // carrier the view rendered for it, so composing reads one source.
+      const facts = form.querySelector<HTMLElement>(`[data-send-asset="${CSS.escape(tokenId)}"]`);
+      if (!facts) {
+        return;
+      }
+      applySelectedAsset(form, facts);
       onFields(transferFields(form));
-      goTo("details");
-    });
+    },
+    panelId: "send-token-options",
+    root: form.querySelector("#send-token-trigger")?.closest(".token-dropdown") ?? null,
+    triggerId: "send-token-trigger",
   });
   // Open on STRK rather than "Select": it pays every fee on Starknet, so it is
   // the asset a send most often means. Only applied when nothing is chosen yet,
@@ -291,16 +368,19 @@ const bindAmountControls = (
 export const bindTransferCompose = ({
   form,
   goTo,
+  navigate,
   onFields,
   spendable,
 }: {
   readonly form: HTMLFormElement;
   readonly goTo: (stage: TransferStage) => void;
   readonly onFields: (fields: TransferFields) => void;
+  /** Leaves Send for another screen: the address book, or token management. */
+  readonly navigate?: (view: TransferExitView) => void;
   /** Raw spendable units for the composed route; `null` withholds Max/Half. */
   readonly spendable?: () => bigint | null;
 }): void => {
-  bindRecipientControls(form, goTo, onFields);
-  bindAssetControls(form, goTo, onFields);
+  bindRecipientControls(form, goTo, onFields, navigate);
+  bindAssetControls(form, onFields, navigate);
   bindAmountControls(form, onFields, spendable);
 };

@@ -76,7 +76,7 @@ describe("onboarding gate view", () => {
     expect(html).toContain('data-recovery-grid="generated"');
     expect(html).toContain("recovery-grid is-masked");
     expect(html).toContain('id="phrase-toggle"');
-    expect(html).toContain("Show recovery phrase");
+    expect(html).toContain("Show");
   });
 
   test("keeps Ledger as a separate keyless path with passphrase confirmation", () => {
@@ -106,5 +106,25 @@ describe("onboarding gate view", () => {
     // contract families and creation is pinned to Bramble.
     expect(onboarding(sepolia)).not.toContain('name="ledgerAccountContractType"');
     expect(onboarding(sepolia)).not.toContain('name="networkId"');
+  });
+
+  test("omits the Ledger path entirely when the runtime cannot reach a device", () => {
+    const html = onboarding(status, false);
+
+    expect(html).not.toContain('id="ledger-method-button"');
+    expect(html).not.toContain('data-onboarding-step="ledger"');
+    expect(html).not.toContain('id="ledger-setup-form"');
+    expect(html).not.toContain("ledgerVaultPassphrase");
+    // The other two import methods are unaffected.
+    expect(html).toContain('id="recovery-method-button"');
+    expect(html).toContain('id="key-method-button"');
+  });
+
+  test("offers the Ledger path by default, so a caller that does not report capability is unchanged", () => {
+    const html = onboarding(status);
+
+    expect(html).toContain('id="ledger-method-button"');
+    expect(html).toContain('data-onboarding-step="ledger"');
+    expect(html).toContain('id="ledger-setup-form"');
   });
 });

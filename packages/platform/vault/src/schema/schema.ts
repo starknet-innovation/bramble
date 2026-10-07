@@ -15,6 +15,7 @@ import {
   isLegacyV6AccountRef,
   isLegacyV8AccountRef,
   isLegacyV9AccountRef,
+  isLegacyV10AccountRef,
   type LegacyAccountRef,
   type LegacyV6AccountRef,
 } from "@bramble/wallet-model/accounts";
@@ -45,7 +46,7 @@ import {
  * identities. Version 4 introduced optional account secrets separated from
  * public {@link AccountRef} metadata.
  */
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11;
 
 /**
  * Current encrypted vault schema. Optional account secrets are deliberately
@@ -122,9 +123,16 @@ export type VaultV9 = Omit<VaultV8, "schemaVersion"> & { readonly schemaVersion:
 export type VaultV10 = Omit<VaultV9, "schemaVersion"> & { readonly schemaVersion: 10 };
 
 /**
+ * Current encrypted vault schema. Version 11 admits accounts derived with
+ * Ready's ETH-seeded scheme (`argentx-bip44`, issue 505); the record shape is
+ * unchanged, only the derivation kinds a record may hold have widened.
+ */
+export type VaultV11 = Omit<VaultV10, "schemaVersion"> & { readonly schemaVersion: 11 };
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV10;
+export type Vault = VaultV11;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -153,7 +161,7 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV10 => ({
+export const emptyVault = (): VaultV11 => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
@@ -187,7 +195,7 @@ const hasValidKeyBindings = (
 // before "current" holds no Braavos and pins Argent to the release this wallet
 // creates; every shape before "v9" also pins Ledger derivations to Bramble's
 // `LedgerW` scheme. Those are the only records such vaults could have stored.
-type VaultAccountShape = "current" | "v9" | "v7v8" | "v6" | "v1v5";
+type VaultAccountShape = "current" | "v10" | "v9" | "v7v8" | "v6" | "v1v5";
 
 type VaultReferenceOptions = {
   readonly accounts: VaultAccountShape;
@@ -203,6 +211,8 @@ const isVaultAccountShape = (
   switch (shape) {
     case "current":
       return canonical ? isAccountRef(account) : canonicalAccountRef(account) !== null;
+    case "v10":
+      return isLegacyV10AccountRef(account);
     case "v9":
       return isLegacyV9AccountRef(account);
     case "v7v8":
@@ -401,7 +411,9 @@ const hasValidSeedBindings = (value: Record<string, unknown>): boolean => {
     Array.isArray(accounts) &&
     accounts.every((account) => {
       const seedId =
-        isAccountRef(account) && account.derivation.kind === "starknet-bip44"
+        isAccountRef(account) &&
+        (account.derivation.kind === "starknet-bip44" ||
+          account.derivation.kind === "argentx-bip44")
           ? account.derivation.seedId
           : undefined;
       return seedId === undefined || seeds.some((seed) => seed.id === seedId);
@@ -440,10 +452,25 @@ export const isVaultV9 = (value: unknown): value is VaultV9 =>
   hasValidSeedBindings(value);
 
 /**
- * Validates the current schema-v10 vault and all internal references, admitting
- * Braavos accounts and Argent accounts at any deployable release.
+ * Validates canonical schema-v10 vaults for their one-step migration: the
+ * current shape, but no Ready-scheme (`argentx-bip44`) account record. Legacy
+ * vault validators only.
  */
 export const isVaultV10 = (value: unknown): value is VaultV10 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V8_KEYS) &&
+  value["schemaVersion"] === 10 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, { accounts: "v10", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v10", canonical: true }) &&
+  hasValidSeedBindings(value);
+
+/**
+ * Validates the current schema-v11 vault and all internal references, admitting
+ * accounts derived with Ready's ETH-seeded scheme alongside everything v10 held.
+ */
+export const isVaultV11 = (value: unknown): value is VaultV11 =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, V8_KEYS) &&

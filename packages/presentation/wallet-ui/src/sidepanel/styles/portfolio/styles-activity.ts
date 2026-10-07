@@ -23,21 +23,41 @@ const GLYPH_SIZE = "16px";
  */
 export const ACTIVITY_STYLES = `
   /* Activity list: rows breathe on a 4px gap with no rule between them; the
-     rounded hover fill is the only affordance, since the verb is a link. */
+     rounded hover fill is the only affordance, since the verb is a link. Row
+     content sits on the page's text column — glyphs line up with the screen
+     title and the day headings — and the fill bleeds one step past it, the
+     same geometry as the token list on Home. */
   .tx-list { display: grid; gap: ${SPACE.xs}; }
-  .tx-row {
-    align-items: center; border-radius: ${RADIUS.md}; display: flex; gap: ${SPACE.sm};
-    justify-content: space-between; min-width: 0; padding: ${SPACE.sm} ${SPACE.lg};
-    transition: background ${MOTION.pressMs}ms ${MOTION.ease};
+  .tx-row { border-radius: ${RADIUS.md}; margin: 0 -${SPACE.sm}; min-width: 0; }
+  /* The row opens in place, so its summary carries the layout the row used to
+     have and the panel below it belongs to the same block. */
+  .tx-disclosure > summary {
+    align-items: center; border-radius: ${RADIUS.md}; cursor: pointer; display: flex;
+    gap: ${SPACE.sm}; justify-content: space-between; list-style: none; min-width: 0;
+    padding: ${SPACE.sm}; transition: background ${MOTION.pressMs}ms ${MOTION.ease};
   }
+  .tx-disclosure > summary::-webkit-details-marker { display: none; }
   @media (hover: hover) and (pointer: fine) {
-    li.tx-row:hover { background: var(--bramble-hover); }
+    .tx-disclosure > summary:hover { background: var(--bramble-hover); }
   }
+  .tx-disclosure > summary:focus-visible { outline: 2px solid var(--bramble-accent); outline-offset: -2px; }
+  .tx-disclosure[open] > summary { background: var(--bramble-hover); }
+  .tx-disclosure > summary > .disclosure-mark { color: var(--bramble-muted); flex: none; }
+  .tx-disclosure[open] > summary > .disclosure-mark { transform: rotate(90deg); }
+  .tx-disclosure > .disclosure-body { padding: 0 ${SPACE.sm} ${SPACE.sm}; }
+  /* The shortened hash under the heading: the row's one link, and the only
+     place the transaction's own identifier appears. */
+  .tx-hash-row { align-items: center; display: flex; gap: 2px; min-width: 0; }
+  .tx-hash {
+    color: var(--bramble-muted); font-size: ${TYPE.body.size}; min-width: 0; overflow: hidden;
+    text-decoration: none; text-overflow: ellipsis; text-wrap: nowrap;
+  }
+  .tx-hash:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .tx-hash > code { font-variant-numeric: tabular-nums; }
   /* Leading column: the only flexible track. It takes the slack and gives it
      back first, so every line here ellipsises rather than pushing the figures
      or the mark out of the panel. The detail sits flush with the glyph. */
   .tx-copy { display: grid; flex: 1 1 0%; gap: ${SPACE.xs}; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-  .tx-title { align-items: center; display: flex; gap: ${SPACE.xs}; min-width: 0; }
   /* The kind glyph is inline beside the verb, not a chip. Status hues are
      meaning, not decoration, and ride the semantic tokens; a settled row keeps
      the neutral secondary tone (the row rule below outranks the shared one). */
@@ -51,7 +71,7 @@ export const ACTIVITY_STYLES = `
   .tx-kind-icon.preconfirmed { color: var(--bramble-positive); opacity: 0.68; }
   .tx-kind-icon.rejected, .tx-kind-icon.reverted { color: var(--bramble-danger); }
   .tx-row .tx-kind-icon.accepted { color: ${SECONDARY_TEXT}; }
-  .tx-summary, .tx-summary-link {
+  .tx-title {
     color: var(--bramble-text);
     display: block;
     font-size: ${TYPE.row.size};
@@ -63,20 +83,6 @@ export const ACTIVITY_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  .tx-summary-link:hover { text-decoration: underline; text-underline-offset: 3px; }
-  .tx-detail {
-    color: var(--bramble-muted);
-    font-size: ${TYPE.body.size};
-    font-weight: ${WEIGHT.regular};
-    line-height: ${TYPE.body.line};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
-  /* A recorded counterparty carries its copy control on the same line; the
-     truncated address is the part that clips, the control stays. */
-  .tx-counterparty { align-items: center; display: flex; gap: 2px; }
-  .tx-counterparty > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   /* Only a row Starknet has not settled says so, in the same hue as its glyph. */
   .tx-meta {
     font-size: ${TYPE.caption.size};
@@ -90,30 +96,14 @@ export const ACTIVITY_STYLES = `
   .tx-meta.pending { color: var(--bramble-warning); }
   .tx-meta.preconfirmed { color: var(--bramble-positive); }
   .tx-meta.rejected, .tx-meta.reverted { color: var(--bramble-danger); }
-  /* Trailing figures never shrink below their content — a cut amount would
-     misstate value — but they are capped so an absurd figure ellipsises inside
-     its own column instead of widening the panel. */
-  .tx-side {
-    display: grid; flex: 0 0 auto; gap: ${SPACE.xs}; justify-items: end; max-width: 60%; min-width: 0; text-align: right;
-  }
-  .tx-fiat, .tx-amount {
-    font-variant-numeric: tabular-nums;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
-  .tx-fiat { color: var(--bramble-text); font-size: ${TYPE.row.size}; font-weight: ${WEIGHT.medium}; line-height: ${TYPE.row.line}; }
-  .tx-amount { color: var(--bramble-muted); font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.regular}; line-height: ${TYPE.body.line}; }
-  /* An unknown figure is a quiet dash, never a bold claim. */
-  .tx-side .is-unknown { color: var(--bramble-muted); font-weight: ${WEIGHT.regular}; }
   /* Token mark trails the row at the kit's 36px, reusing the shared glyph
      renderers (bundled logo or tinted letter badge; the network mark when the
      entry names no token). No network badge: every row here is on Starknet. */
   .tx-avatar { display: inline-flex; flex: none; }
   .tx-avatar > .token-logo, .tx-avatar > .token-mark { height: ${SIZE.avatar}; width: ${SIZE.avatar}; }
-  /* One heading per UTC day in the kit's small medium voice, aligned with the
-     rows' inner edge; the list hangs 12px below it and days sit 32px apart. */
+  /* One heading per UTC day in the kit's small medium voice, on the same text
+     column as the rows' content; the list hangs 12px below it and days sit
+     32px apart. */
   .tx-day { display: grid; gap: ${SPACE.md}; }
   .tx-day + .tx-day { margin-top: calc(${SPACE.lg} * 2); }
   .tx-day-label {
@@ -122,6 +112,5 @@ export const ACTIVITY_STYLES = `
     font-weight: ${WEIGHT.medium};
     line-height: ${TYPE.body.line};
     margin: 0;
-    padding: 0 ${SPACE.lg};
   }
 `;

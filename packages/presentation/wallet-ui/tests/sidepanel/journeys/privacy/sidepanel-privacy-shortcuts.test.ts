@@ -359,6 +359,9 @@ describe("undeployed privacy entry points", () => {
   };
   const balance = { ...token, balance: "1000000000000000000", formatted: "1" };
 
+  // Every entry point is labelled Shield, whatever the account still needs:
+  // deployment is a step the wallet takes, not a thing to ask the reader for.
+  // The blocker is explained on the screen each of these lands on.
   for (const [name, render] of [
     ["token detail", () => tokenDetailFlow(status, token, balance, [], null, "usd", failed, false)],
     [
@@ -386,7 +389,8 @@ describe("undeployed privacy entry points", () => {
       const entry = app.querySelector<HTMLButtonElement>(
         "[data-privacy-open], [data-privacy-register]",
       );
-      expect(entry?.textContent).toContain("Deploy and enable");
+      expect(entry?.textContent).toContain("Shield");
+      expect(entry?.textContent).not.toContain("Deploy and enable");
       entry?.click();
       await tick();
       expect(blockerOf(journeys)).toBe("deploy");
@@ -442,7 +446,7 @@ describe("undeployed privacy entry points", () => {
       {
         deployment: () => false,
         preferences: prefs,
-        html: "<button data-privacy-deploy-register>Deploy and enable</button>",
+        html: "<button data-privacy-deploy-register>Shield</button>",
       },
     );
     const originalSetTimeout = globalThis.setTimeout;

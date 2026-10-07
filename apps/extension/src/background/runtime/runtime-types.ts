@@ -16,13 +16,13 @@ import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { SwapCatalogToken } from "@bramble/transactions/avnu";
-import type { RiskFlag } from "@bramble/transactions/verify";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
+import type { ReadOnlyReason, RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
+import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
 import type {
@@ -40,6 +40,16 @@ import type {
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
+import type {
+  AccountRecoveryState,
+  RecoverAccountResponse,
+  RecoveryReviewResponse,
+} from "./recovery-types";
+import type {
+  FeeReviewResponse,
+  TransferResponse,
+  TransferReviewResponse,
+} from "./runtime-review-types";
 
 /** Successful account-import response. */
 type CreateAccountResponse = {
@@ -204,9 +214,8 @@ type TokenChartResponse = {
 };
 
 /**
- * Verified AVNU token catalog returned to extension pages for the swap
- * picker. Directory data only — a selected untracked token is re-validated
- * on-chain by the add-token flow before the wallet trusts it.
+ * Verified AVNU token catalog for the swap picker. Directory data only — a
+ * selected untracked token is re-validated on-chain before the wallet trusts it.
  */
 type SwapTokensResponse = {
   readonly ok: true;
@@ -235,41 +244,6 @@ type SwapQuoteResponse = {
 type SwapPreparationResponse = {
   readonly ok: true;
   readonly swapPreparation: SwapPreparationReview;
-};
-
-/**
- * Transfer submission response returned to extension pages.
- */
-type TransferResponse = {
-  readonly ok: true;
-  readonly transactionHash: string;
-};
-
-/**
- * Pre-sign transfer review returned to extension pages.
- */
-type TransferReviewResponse = {
-  readonly ok: true;
-  readonly review: {
-    readonly deploymentFee?: FeeEstimate | null;
-    readonly deploymentFeeEstimateFailed?: boolean;
-    readonly fee: FeeEstimate | null;
-    /**
-     * Warn-only fee-affordability verdict from the shared predicate (issue
-     * 191); "unknown" means no claim was possible and must never block.
-     */
-    readonly feeAffordability: "insufficient" | "ok" | "unknown";
-    readonly feeEstimateFailed: boolean;
-    readonly flags: readonly RiskFlag[];
-    readonly requiresDeployment: boolean;
-    readonly summaries: readonly string[];
-  };
-};
-
-/** Fee a wallet-initiated operation must display before its confirmation. */
-type FeeReviewResponse = {
-  readonly feeReview: FeeEstimate;
-  readonly ok: true;
 };
 
 /**
@@ -307,10 +281,20 @@ type DeploymentStatusResponse = {
 };
 
 /**
- * On-chain class-hash verification returned to extension pages. `verification`
- * carries the discriminated {@link ClassHashVerification} outcome so the UI can
- * distinguish verified / mismatch / undeployed / unreachable without re-reading
- * the chain.
+ * Active-account signability verdict for the Home read-only flag; `reason`
+ * accompanies `readOnly: true` and never carries secret material.
+ */
+type AccountSignabilityResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly readOnly: boolean;
+  readonly reason?: ReadOnlyReason;
+  readonly recovery?: AccountRecoveryState;
+};
+
+/**
+ * On-chain class-hash verification: the discriminated
+ * {@link ClassHashVerification} outcome, so the UI need not re-read the chain.
  */
 type ClassHashVerificationResponse = {
   readonly accountId: string;
@@ -437,6 +421,9 @@ type LedgerAccountStatusResponse = {
  * Union of supported background message responses.
  */
 export type RuntimeResponse =
+  | AccountSignabilityResponse
+  | RecoveryReviewResponse
+  | RecoverAccountResponse
   | AccountsResponse
   | ActivityResponse
   | AddChainResponse
@@ -493,6 +480,7 @@ export type RuntimeResponse =
   | TokenChartResponse
   | TransactionAlertsResponse
   | TransferResponse
+  | SubmissionUnknownResponse
   | ValidateMnemonicResponse
   | WalletStatus
   | WatchAssetResponse

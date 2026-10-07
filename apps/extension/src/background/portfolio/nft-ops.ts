@@ -24,6 +24,7 @@ import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import {
   type NftTarget,
   readAddNftInput,
@@ -252,7 +253,11 @@ const prepareNftTransfer = async (deps: WalletOpsDeps, input: NftTransferInput) 
   if (input.networkId !== context.networkId) {
     return { error: "switch to the NFT's network first" } as const;
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    context.accounts,
+  );
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
   // Watched NFTs are not scoped to an account, so both review and confirmation
   // prove ownership for the active account instead of trusting gallery state.
@@ -319,6 +324,9 @@ const handleReviewNftTransfer = async (
       // remain intact, including the submission-blocking poisoning check.
       flags: report.flags.filter((flag) => flag.code !== "unknown-contract"),
       requiresDeployment: fees.requiresDeployment,
+      // Same DTO and renderer as the ERC-20 review: when the send also deploys
+      // the account, a Ledger signs both, and the review says so here too.
+      signsTwice: fees.requiresDeployment && context.account.derivation.kind === "ledger",
       summaries: report.calls.map((decoded) => decoded.summary),
     },
   };
@@ -361,6 +369,8 @@ const handleTransferNft = async (
   });
   await recordSubmittedActivity(deps.activity, {
     accountId: context.account.id,
+    // The NFT's recipient is a payee like an ERC20 send's (audit #163).
+    counterparty: input.recipient,
     hash: result.transactionHash,
     kind: "invoke",
     networkId: context.networkId,

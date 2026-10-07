@@ -8,7 +8,7 @@ import {
   STRK_TOKEN_ADDRESS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
@@ -43,9 +43,8 @@ const run = (
       await rerender(deps);
     },
     (error: unknown) => {
-      const message = errorMessage(error, "Ready multisig request failed");
-      setResult(deps, resultId, message);
-      showToast(message, "error", button ?? deps.app);
+      setResult(deps, resultId, errorLine(error, "That request didn't go through"));
+      showToast(errorMessage(error, "Ready multisig request failed"), "error", button ?? deps.app);
       buttonBusy(button, false);
     },
   );
@@ -129,7 +128,7 @@ const bindList = (deps: MultisigUiDeps): void => {
           throw error;
         }
         deps.openList();
-        return "Ready multisig removed from this wallet";
+        return "Multisig removed from this wallet";
       });
     });
   });
@@ -218,6 +217,13 @@ const bindTransferComposer = (form: HTMLFormElement): void => {
     });
     form.querySelector("#multisig-asset-empty")?.toggleAttribute("hidden", visible > 0);
   });
+  // Enter in the token search must never implicitly submit the form, which
+  // would prepare a transfer of the PREVIOUSLY selected hidden token rather
+  // than the one being searched for (audit 248, multisig twin of the Send
+  // token search). Choosing is done on an asset row.
+  form.querySelector("#multisig-asset-search")?.addEventListener("keydown", (event) => {
+    if ((event as KeyboardEvent).key === "Enter") event.preventDefault();
+  });
   form.querySelectorAll<HTMLButtonElement>("[data-ms-propose-asset]").forEach((asset) => {
     asset.addEventListener("click", () => applyTransferAsset(form, asset));
   });
@@ -244,7 +250,7 @@ const preparedCall = (form: HTMLFormElement) => {
     );
     const balance = String(data.get("tokenBalance") ?? "");
     if (balance && amount > BigInt(balance)) {
-      throw new Error("Amount exceeds the shared account balance");
+      throw new Error("Amount exceeds the multisig account balance");
     }
     const call = buildErc20TransferCall(
       normalizeFeltInput(String(data.get("tokenAddress") ?? "")),

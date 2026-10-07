@@ -4,6 +4,7 @@
  */
 import { hasOnlyKnownKeys, isRecord, isSafeDecimals, type Json } from "@bramble/core/json";
 import { isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
+import { isOptionalApiVersion } from "../provider/versions";
 
 /**
  * Dapp-provided ERC20 watch-asset options after bridge validation.
@@ -31,12 +32,15 @@ export const isProviderWatchAsset = (value: unknown): value is ProviderWatchAsse
 
 /**
  * Parses a `{ type: "ERC20", options: { address, ... } }` watch-asset payload,
- * accepting only an ERC20 token with a non-zero hex address.
+ * accepting only an ERC20 token with a non-zero hex address. The spec's
+ * optional `api_version` sits beside `type`, never inside `options`; a
+ * well-formed one is dropped and a malformed one rejects the request.
  */
 export const readProviderWatchAsset = (params: Json | undefined): ProviderWatchAsset | null => {
   if (
     !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["options", "type"]) ||
+    !hasOnlyKnownKeys(params, ["api_version", "options", "type"]) ||
+    !isOptionalApiVersion(params["api_version"]) ||
     params["type"] !== "ERC20" ||
     !isProviderWatchAsset(params["options"])
   ) {

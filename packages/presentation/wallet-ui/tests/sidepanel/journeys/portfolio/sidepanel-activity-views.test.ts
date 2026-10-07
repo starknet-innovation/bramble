@@ -78,7 +78,7 @@ describe("activity journey boundaries", () => {
 
     expect(html).toContain('<h1 aria-label="Activity on Starknet Mainnet">Activity</h1>');
     expect(html).not.toContain("Only Starknet Mainnet activity");
-    expect(html).toContain("Send 1 STRK");
+    expect(html).toContain("Sent 1 STRK");
     expect(html).toContain('data-view="requests"');
     expect(html).toContain("1");
     expect(html).not.toContain("https://dapp.example");
@@ -95,20 +95,27 @@ describe("activity journey boundaries", () => {
     expect(html).not.toContain('class="tx-list"');
   });
 
-  test("uses the transaction summary as the sole explorer action", () => {
+  test("puts the explorer link on the visible transaction hash", () => {
     const html = activityScreen(pending, status, [transaction], false);
 
+    // The heading used to be the link, which gave a reader no sign that the
+    // row led anywhere. The hash is printed now and carries the link itself.
     expect(html).toContain('href="https://starkscan.co/tx/0x123"');
-    expect(html).toContain('class="tx-summary-link"');
-    // The visible text is the verb; the accessible name keeps the whole record
-    // (prefixed by the verb, since "Send 1 STRK" does not start with "Sent").
-    expect(html).toContain(
-      'aria-label="Sent. Send 1 STRK. accepted, 00:00 UTC. View transaction on Starkscan">Sent</a>',
-    );
+    expect(html).toContain('class="tx-hash"');
+    expect(html).toContain('aria-label="View this transaction on Starkscan"');
+    expect(html).not.toContain("tx-summary-link");
     // A new browsing context, never one that can reach back into the panel.
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
-    expect(html).not.toContain('data-copy="0x123"');
-    expect(html).not.toContain("0x123…0x123");
+  });
+
+  test("opens the row in place for the rest of the record", () => {
+    const html = activityScreen(pending, status, [transaction], false);
+
+    // Open state survives the shell repaint through the shared disclosure
+    // bookkeeping, so a refresh cannot snap an expanded row shut.
+    expect(html).toContain('<details class="disclosure tx-disclosure" data-disclosure="tx:0x123">');
+    expect(html).toContain("<dt>Submitted</dt>");
+    expect(html).toContain("1 Jan 1970");
   });
 
   test("says nothing beneath a settled row and only the status word beneath a provisional one", () => {
@@ -127,18 +134,12 @@ describe("activity journey boundaries", () => {
     // row's tooltip, so the feed reads like the kit without losing the record.
     expect(html.match(/<span class="tx-meta/g)?.length).toBe(2);
     expect(html).toContain('<li class="tx-row" data-live-group title="Accepted · 14:05 UTC">');
-    expect(html).toContain(
-      '<span class="tx-meta preconfirmed" aria-hidden="true">Pre-confirmed</span>',
-    );
+    expect(html).toContain('<span class="tx-meta preconfirmed">Pre-confirmed</span>');
     expect(html).toContain('<li class="tx-row" data-live-group title="Pre-confirmed · 14:06 UTC">');
-    expect(html).toContain('<span class="tx-meta pending" aria-hidden="true">Pending</span>');
+    expect(html).toContain('<span class="tx-meta pending">Pending</span>');
     // The status and time still reach assistive tech through the summary's own label.
-    expect(html).toContain(
-      'aria-label="Sent. Send 1 STRK. accepted, 14:05 UTC. View transaction on Starkscan"',
-    );
-    expect(html).toContain(
-      'aria-label="Sent. Send 1 STRK. pre-confirmed, 14:06 UTC. View transaction on Starkscan"',
-    );
+    expect(html).toContain('aria-label="Sent 1 STRK. accepted, 14:05 UTC"');
+    expect(html).toContain('aria-label="Sent 1 STRK. pre-confirmed, 14:06 UTC"');
   });
 
   test("groups the newest-first feed under one heading per UTC day", () => {
@@ -210,24 +211,12 @@ describe("activity journey boundaries", () => {
       false,
     );
 
-    expect(html).toContain(
-      'class="tx-kind-icon tx-kind-transfer accepted" aria-label="Transfer, accepted"',
-    );
-    expect(html).toContain(
-      'class="tx-kind-icon tx-kind-swap accepted" aria-label="Swap, accepted"',
-    );
-    expect(html).toContain(
-      'class="tx-kind-icon tx-kind-stake accepted" aria-label="Stake, accepted"',
-    );
-    expect(html).toContain(
-      'class="tx-kind-icon tx-kind-unstake accepted" aria-label="Unstake, accepted"',
-    );
-    expect(html).toContain(
-      'class="tx-kind-icon tx-kind-reward accepted" aria-label="Claim rewards, accepted"',
-    );
-    expect(html).toContain(
-      'class="tx-kind-icon tx-kind-private accepted" aria-label="Private transaction, accepted"',
-    );
+    expect(html).toContain('class="tx-kind-icon tx-kind-transfer accepted" aria-hidden="true"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-swap accepted" aria-hidden="true"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-stake accepted" aria-hidden="true"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-unstake accepted" aria-hidden="true"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-reward accepted" aria-hidden="true"');
+    expect(html).toContain('class="tx-kind-icon tx-kind-private accepted" aria-hidden="true"');
     // Each kind carries the design kit's outline glyph (Lucide paths, verbatim).
     const glyph = (type: string): string =>
       html.match(new RegExp(`tx-kind-${type} accepted"[^>]*><svg[^>]*>(.*?)</svg>`))?.[1] ?? "";
@@ -252,15 +241,16 @@ describe("activity journey boundaries", () => {
 
     expect(html).not.toContain("data-tx-explorer");
     expect(html).not.toContain("starkscan.co");
-    expect(html).not.toContain('data-copy="0x123"');
-    // No link, so the verb is plain text and the record plus status follow it
-    // for assistive tech only.
-    expect(html).toContain(
-      '<strong class="tx-summary">Sent<span class="sr-only">. Send 1 STRK. accepted, 00:00 UTC.</span></strong>',
-    );
+    // The hash is still copyable where it cannot be linked.
+    expect(html).toContain('data-copy="0x123"');
+    // No explorer, so the hash is printed as plain text rather than a link
+    // that could not resolve.
+    expect(html).toContain('<code class="tx-hash is-plain">');
+    expect(html).not.toContain('class="tx-hash" href');
   });
 
-  test("lays each row out as verb, detail, signed fiat delta, asset amount, and token mark", () => {
+  test("leads with the verb and its amount, and files the rest under the row", () => {
+    const party = "0x0123456789abcdef0123456789abcdef";
     const html = activityScreen(
       [],
       status,
@@ -268,14 +258,14 @@ describe("activity journey boundaries", () => {
         {
           ...transaction,
           amount: "12.345678",
-          counterparty: "0x0123456789abcdef0123456789abcdef",
+          counterparty: party,
           summary: "Send 12.345678 STRK to 0x0123…cdef",
           token: "STRK",
         },
         {
           ...transaction,
           amount: "3",
-          counterparty: "0x0123456789abcdef0123456789abcdef",
+          counterparty: party,
           hash: "0x124",
           summary: "Received 3 STRK from 0x0123…cdef",
           token: "STRK",
@@ -286,88 +276,47 @@ describe("activity journey boundaries", () => {
       pricing,
     );
 
-    // Sent: verb, "To <short address>" with a copy control carrying the full
-    // recorded counterparty, a negative delta over the amount.
-    const party = "0x0123456789abcdef0123456789abcdef";
-    expect(html).toContain(
-      'aria-label="Sent. Send 12.3456 STRK to 0x0123…cdef. accepted, 00:00 UTC. View transaction on Starkscan">Sent</a>',
-    );
-    expect(html).toContain(
-      `<span class="tx-detail tx-counterparty"><span title="${party}">To 0x0123…cdef</span><button class="icon-button ghost copy-inline" data-copy="${party}" type="button" aria-label="Copy recipient address"`,
-    );
-    expect(html).toContain('<span class="tx-fiat">−$6.17</span>');
-    expect(html).toContain('<span class="tx-amount">12.3456 STRK</span>');
-    // Received: the summary already starts with the verb, so the name is the record.
-    expect(html).toContain(
-      'aria-label="Received 3 STRK from 0x0123…cdef. accepted, 00:00 UTC. View transaction on Starkscan">Received</a>',
-    );
-    expect(html).toContain(
-      `<span class="tx-detail tx-counterparty"><span title="${party}">From 0x0123…cdef</span><button class="icon-button ghost copy-inline" data-copy="${party}" type="button" aria-label="Copy sender address"`,
-    );
-    // The visible line stays truncated; only the control carries the full value.
+    // The figure reads on the collapsed line beside the verb, where the asset
+    // column used to carry it alone.
+    expect(html).toContain('<strong class="tx-title">Sent 12.3456 STRK</strong>');
+    expect(html).toContain('<strong class="tx-title">Received 3 STRK</strong>');
+    // The counterparty moved into the expansion, still truncated on the line
+    // with the full value on its copy control.
+    expect(html).toContain(`<dt>Recipient</dt>`);
+    expect(html).toContain(`<dt>Sender</dt>`);
+    expect(html).toContain(`data-copy="${party}"`);
     expect(html).not.toContain(`>To ${party}<`);
-    // The transaction hash itself is never offered for copy — the summary link
-    // is the sole explorer action.
-    expect(html).not.toContain('data-copy="0x123"');
-    expect(html).toContain('<span class="tx-fiat">+$1.50</span>');
-    expect(html).toContain('<span class="tx-amount">3 STRK</span>');
+    // No fiat anywhere: a figure from today's price is not what these were
+    // worth when they were sent.
+    expect(html).not.toContain("tx-fiat");
+    expect(html).not.toContain("tx-side");
+    expect(html).not.toContain("$6.17");
     // The trailing mark is the bundled STRK logo, resolved from the tracked
     // token, and nothing else: every row is on Starknet, so no network badge.
     expect(html.match(/<span class="tx-avatar"><svg class="token-logo"/g)?.length).toBe(2);
     expect(html).not.toContain("tx-avatar-badge");
-    // Structure: leading copy, trailing figures, then the mark.
-    expect(html).toMatch(
-      /<li class="tx-row" data-live-group title="[^"]*">\s*<div class="tx-copy">[\s\S]*?<\/div>\s*<div class="tx-side">[\s\S]*?<\/div>\s*<span class="tx-avatar">/,
-    );
   });
 
-  test("never shows a fiat figure for an entry whose token or price is unknown", () => {
+  test("shows no fiat figure at all, priced or not", () => {
     const unknownToken = { ...transaction, amount: "2", summary: "Send 2 XYZ", token: "XYZ" };
-    const priced = {
-      ...transaction,
-      amount: "2",
-      hash: "0x124",
-      summary: "Send 2 STRK",
-      token: "STRK",
-    };
-    const approval = {
-      ...transaction,
-      amount: "5",
-      hash: "0x125",
-      kind: "invoke" as const,
-      summary: "Allow 0x0123…cdef to spend 5 STRK",
-      token: "STRK",
-    };
+    const priced = { ...transaction, amount: "2", hash: "0x124", token: "STRK" };
 
-    // Untracked symbol: the asset amount stands alone; the mark is a letter badge.
+    // Whatever the pricing state, the row states the asset amount and makes no
+    // claim about what it was worth — the wallet only knows today's price.
+    for (const html of [
+      activityScreen([], status, [unknownToken], false, null, pricing),
+      activityScreen([], status, [priced], false, null, { ...pricing, prices: {} }),
+      activityScreen([], status, [priced], false),
+    ]) {
+      expect(html).not.toContain("tx-fiat");
+      expect(html).not.toContain("$");
+    }
+
+    // The amount still reads, on the heading, and an untracked symbol still
+    // gets its letter badge.
     const noToken = activityScreen([], status, [unknownToken], false, null, pricing);
-    expect(noToken).toContain('<span class="tx-fiat is-unknown">—</span>');
-    expect(noToken).toContain('<span class="tx-amount">2 XYZ</span>');
+    expect(noToken).toContain('<strong class="tx-title">Sent 2 XYZ</strong>');
     expect(noToken).toContain('<span class="tx-avatar"><span class="token-mark"');
-
-    // Tracked symbol without a cached price.
-    const noPrice = activityScreen([], status, [priced], false, null, { ...pricing, prices: {} });
-    expect(noPrice).toContain('<span class="tx-fiat is-unknown">—</span>');
-    expect(noPrice).toContain('<span class="tx-amount">2 STRK</span>');
-
-    // A symbol two tracked tokens share is ambiguous, so it prices nothing.
-    const ambiguous = activityScreen([], status, [priced], false, null, {
-      ...pricing,
-      tokens: [strk, { ...strk, address: "0x777", id: "SN_MAIN:STRK:0x777" }],
-    });
-    expect(ambiguous).toContain('<span class="tx-fiat is-unknown">—</span>');
-
-    // No prices threaded at all (design-system specimen, older callers).
-    const unpriced = activityScreen([], status, [priced], false);
-    expect(unpriced).toContain('<span class="tx-fiat is-unknown">—</span>');
-    expect(unpriced).toContain('<span class="tx-amount">2 STRK</span>');
-
-    // An approval moves no value: amount shown, never a signed delta.
-    const allowance = activityScreen([], status, [approval], false, null, pricing);
-    expect(allowance).toContain('aria-label="Approval, accepted"');
-    expect(allowance).toContain('<span class="tx-fiat is-unknown">—</span>');
-    expect(allowance).toContain('<span class="tx-amount">5 STRK</span>');
-    expect(allowance).toContain('<span class="tx-detail">0x0123…cdef to spend 5 STRK</span>');
   });
 
   test("derives the verb and detail line from the record without repeating either", () => {
@@ -380,7 +329,7 @@ describe("activity journey boundaries", () => {
           amount: "1",
           hash: "0x124",
           kind: "invoke",
-          summary: "Swap 1 STRK for ~2.5 USDC via AVNU",
+          summary: "Swap 1 STRK for ~2.5 USDC via avnu",
           token: "STRK",
         },
         { ...transaction, hash: "0x125", kind: "invoke", summary: "Unstake 10 STRK" },
@@ -401,20 +350,20 @@ describe("activity journey boundaries", () => {
       pricing,
     );
 
-    expect(html).toContain(">Swapped</a>");
-    expect(html).toContain('<span class="tx-detail">STRK to USDC</span>');
-    expect(html).toContain(">Unstaked</a>");
-    expect(html).toContain('<span class="tx-detail">10 STRK</span>');
-    expect(html).toContain(">Claimed rewards</a>");
-    expect(html).toContain(">Interacted</a>");
-    expect(html).toContain('<span class="tx-detail">Supplied 200 USDC to Vesu</span>');
-    expect(html).toContain(">Deployed</a>");
-    expect(html).toContain('<span class="tx-detail">Account contract</span>');
-    expect(html).toContain(">Private transfer</a>");
-    expect(html).toContain('<span class="tx-amount">5 USDC</span>');
-    // A record that says nothing beyond its verb has no detail line at all.
-    expect(html).not.toContain('<span class="tx-detail"></span>');
-    expect(html.match(/<span class="tx-detail">/g)?.length).toBe(4);
+    expect(html).toContain('<strong class="tx-title">Swapped 1 STRK</strong>');
+
+    expect(html).toContain('<strong class="tx-title">Unstaked 10 STRK</strong>');
+
+    expect(html).toContain('<strong class="tx-title">Claimed rewards</strong>');
+    expect(html).toContain("Supplied 200 USDC to Vesu");
+
+    expect(html).toContain('<strong class="tx-title">Deployed Account contract</strong>');
+
+    expect(html).toContain('<strong class="tx-title">Private transfer 5 USDC</strong>');
+
+    // Nothing repeats: a verb that already carries its figure gets no Detail
+    // row in the panel below it.
+    expect(html).not.toContain("<dd></dd>");
     // The tracked STRK swap and the four token-less rows (network mark) carry a
     // bundled logo; the untracked USDC row gets a letter badge.
     expect(html.match(/<span class="tx-avatar"><svg class="token-logo"/g)?.length).toBe(5);

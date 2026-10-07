@@ -8,6 +8,15 @@ export type PrivacyBlockerKind = "deploy" | "fund" | "ledger" | "network" | "pen
 /** Registration is an invoke and requires an existing account contract. */
 export const PRIVACY_DEPLOY_REQUIRED = "Deploy this account before enabling private balances";
 
+/**
+ * The next step for an account that cannot pay to go private. Raised ahead of
+ * the deployment when the balance read says it cannot, so the refusal arrives
+ * as a screen with somewhere to go rather than a failed fee estimate. The
+ * screen's own title and body carry the explanation; this is the instruction
+ * under them, so it stays a single clause and names the one action to take.
+ */
+export const PRIVACY_FUNDS_REQUIRED = "Deposit some STRK, then come back";
+
 /** Curated wallet refusal; carries its action independently of display wording. */
 export class PrivacyBlockerError extends WalletError {
   public constructor(

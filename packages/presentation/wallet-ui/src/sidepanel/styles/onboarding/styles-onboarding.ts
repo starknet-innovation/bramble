@@ -136,6 +136,10 @@ export const ONBOARDING_STYLES = `
     width: 100%;
   }
   .onboarding-step-cta button, .onboarding-welcome-actions button { width: 100%; }
+  /* The hit shell is only the button's box. A disabled Continue lets the click
+     fall through to that shell, not into the CTA padding above it. */
+  .verify-continue-hit { display: grid; }
+  #verify-continue:disabled { pointer-events: none; }
 
   .onboarding-gate {
     justify-content: center;
@@ -225,6 +229,16 @@ export const ONBOARDING_STYLES = `
     color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
+  }
+  /* A wallet address is data, not a caption: read it in the mono voice at the
+     body size, at full text strength, so it is not smaller or quieter than the
+     account name above it. Matches the app's other address surfaces. */
+  .onboarding-account-copy [data-preview-address] {
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-mono);
+    font-size: ${TYPE.body.size};
+    line-height: ${TYPE.body.line};
+    overflow-wrap: anywhere;
   }
   .onboarding-account {
     grid-template-columns: 44px minmax(0, 1fr) 40px;
@@ -378,24 +392,6 @@ export const ONBOARDING_STYLES = `
     background: var(--bramble-positive);
     color: var(--bramble-accent-text);
   }
-  .onboarding-complete-details {
-    display: grid;
-    gap: ${SPACE.sm};
-    width: min(100%, 360px);
-  }
-  .onboarding-complete-detail {
-    align-items: center;
-    background: var(--bramble-elevated);
-    border-radius: ${RADIUS.md};
-    color: var(--bramble-muted);
-    display: flex;
-    font-size: ${TYPE.caption.size};
-    gap: ${SPACE.sm};
-    min-height: 44px;
-    padding: 0 ${SPACE.md};
-    text-align: left;
-  }
-  .onboarding-complete-detail .icon { color: var(--bramble-text); height: 16px; width: 16px; }
   .onboarding-complete-actions {
     display: grid;
     gap: ${SPACE.sm};
@@ -406,6 +402,9 @@ export const ONBOARDING_STYLES = `
 
   html[data-onboarding-direction]::view-transition-old(root),
   html[data-onboarding-direction]::view-transition-new(root) { animation: none; }
+  /* The snapshot sits in the top layer. A transition that never settles would
+     otherwise swallow every click on the live step. */
+  ::view-transition { pointer-events: none; }
   ::view-transition-group(onboarding-stage) {
     animation-duration: ${ONBOARDING_TRANSITION.enterMs}ms;
     animation-timing-function: ${EASE.out};

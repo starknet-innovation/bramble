@@ -26,7 +26,10 @@ import {
  * wallet already saw on chain is treated as gone. A pre-confirmed transaction
  * disappears exactly this way when its block proposal fails to commit, but a
  * single miss is ordinary node noise, so the wallet matches starknet.js's
- * three-observation precedent rather than alarming on the first one.
+ * three-observation precedent rather than alarming on the first one. A
+ * transaction never seen on chain is not judged by this count at all: a
+ * just-broadcast hash can be unknown to a lagging or sibling node for a while,
+ * so it stays pending until {@link UNRESOLVED_WINDOW_MS} retires it.
  */
 export const NOT_FOUND_FAILURE_THRESHOLD = 3;
 
@@ -132,12 +135,22 @@ const owesNotice = (entry: ActivityEntry, next: ActivityStatus): boolean =>
 const withNotice = (entry: ActivityEntry, outcome: ActivityOutcome): ActivityOutcome =>
   owesNotice(entry, outcome.status) ? { ...outcome, failureNotice: "pending" } : outcome;
 
+// Whether the wallet has evidence the chain held this transaction: an explicit
+// sighting, or (for rows stored before the flag existed) a status that only a
+// real chain answer could have produced.
+const wasSeenOnChain = (entry: ActivityEntry): boolean =>
+  entry.seenOnChain === true || entry.status === "preconfirmed" || entry.status === "accepted";
+
 // A hash the node has no record of. Below the threshold this is treated as
-// noise and only the tally moves; at the threshold the transaction is gone —
-// its block proposal never committed — which is a rejection, not a revert.
+// noise and only the tally moves; at the threshold a transaction the wallet
+// saw is gone — its block proposal never committed — which is a rejection,
+// not a revert. A never-seen transaction is not declared gone (audit #247):
+// "not found" right after broadcast is as likely a lagging node as a drop, and
+// a false rejection invites a duplicate send. It stays pending and is retired
+// with an honest "could not confirm" notice once its window lapses.
 const disappearedOutcome = (entry: ActivityEntry): ActivityOutcome => {
   const notFoundCount = (entry.notFoundCount ?? 0) + 1;
-  return notFoundCount < NOT_FOUND_FAILURE_THRESHOLD
+  return notFoundCount < NOT_FOUND_FAILURE_THRESHOLD || !wasSeenOnChain(entry)
     ? { notFoundCount, status: entry.status }
     : withNotice(entry, { notFoundCount, status: "rejected" });
 };
@@ -146,7 +159,8 @@ const disappearedOutcome = (entry: ActivityEntry): ActivityOutcome => {
  * Folds one chain report into the outcome to persist for an entry.
  *
  * Any answer that finds the transaction clears the not-found tally, so
- * intermittent misses never accumulate into a false failure. Progress and L1
+ * intermittent misses never accumulate into a false failure. Only an answer
+ * with a real finality marks the entry as seen on chain. Progress and L1
  * finality are monotonic: a lagging failover node cannot move an accepted
  * transaction back to pre-confirmed/pending or erase observed L1 finality.
  */
@@ -161,6 +175,9 @@ export const reconciledOutcome = (
   return withNotice(entry, {
     finalizedOnL1: entry.finalizedOnL1 === true || report.finalizedOnL1,
     notFoundCount: 0,
+    // Only a parsed finality counts as a sighting; a synthesized pending
+    // answer (odd RPC error, unknown finality) is `found` but not `seen`.
+    ...(entry.seenOnChain === true || report.seen ? { seenOnChain: true } : {}),
     status,
   });
 };

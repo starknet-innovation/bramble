@@ -103,6 +103,28 @@ Migrations must be deterministic. See README "Migration Workflow".
 - Commit style follows the existing history: imperative summary line, optional scope prefix like
   `ci:`, body explains the why.
 
+## Writing copy
+
+Anything a user reads is governed by `docs/COPY_STYLE.md`. **Read its "Every word counts"
+section before adding or editing a user-facing string** — it is eight rules, each one a habit a
+copy review had to delete from this wallet, and the standing feedback is that the extension uses
+too many words for people to read any of them.
+
+- The short version: say the subject once per screen, keep the user's verb on the control, state
+  a consequence rather than collecting a tick, do not narrate the wallet's internals, do not
+  reassure in advance, say what to do rather than how it works, label only what is true, and put
+  a number in one place. Before adding a sentence, check whether the heading or the control
+  already says it, and whether the reader can act on it.
+- `bun run check:copy` warns about the mechanical half and **never fails the build** — wording is
+  a judgement call. A hit is a question, not a verdict; the patterns live in
+  `scripts/copy-policy.ts` and are pinned by `tests/scripts/copy-policy.test.ts` against strings
+  this repository actually shipped and deleted.
+- Two categories are exempt and must not be tightened: activity summaries (dedup guards match on
+  them) and approval/review/signing sentences, which are edited as a reviewed group against "did
+  we lose a fact?" rather than "is this shorter?". A mistranslation there is a security bug.
+- Changing a string usually breaks a test. That is the intended cost — the assertion is how you
+  find every place it is load-bearing. Update it in the same commit.
+
 ## Reuse before writing (anti-drift)
 
 This repo has been built by multiple agents in sequence, and every real consistency bug so far

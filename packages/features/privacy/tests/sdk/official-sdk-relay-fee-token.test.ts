@@ -94,7 +94,7 @@ describe("fee token follows the token being sent", () => {
       nowSeconds: () => 1_000,
       providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
       sdk: runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         // Enough shielded balance in the sent token for the transfer and a
         // fee in that same token, so submission's balance guard is not what
         // decides these cases.

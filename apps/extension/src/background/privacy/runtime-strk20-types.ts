@@ -41,11 +41,23 @@ export type Strk20WalletStateResponse = {
     readonly accountId: string;
     readonly balances: readonly {
       readonly balance: string;
+      /**
+       * The bounded converted pool fee in this token's base units, when an
+       * independent reference priced the pool's STRK charge in it. Absent when
+       * no bound exists, in which case a private batch falls back to the
+       * configured fee token.
+       */
+      readonly feeCeiling?: string;
       readonly formatted: string;
       readonly symbol: string;
       readonly token: string;
       readonly tokenId: string;
     }[];
+    /**
+     * The configured fee token a private relayed batch falls back to when the
+     * relay cannot quote its fee in the token being sent. Absent means STRK.
+     */
+    readonly feeToken?: string;
     readonly networkId: StarknetNetworkId;
     /** Pool action fee in FRI. A failed read rejects the state request. */
     readonly poolFeeFri: string;

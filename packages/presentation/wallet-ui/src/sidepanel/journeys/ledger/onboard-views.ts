@@ -1,6 +1,6 @@
 /**
  * Pure templates for the Ledger onboarding subflow: the add-account chooser
- * (HD / import / Connect Ledger / Restore a Ready Ledger account), the connect
+ * (HD / import / Connect Ledger), the connect
  * and reading device states, the onboarding error state, and the multi-index
  * account picker showing each candidate's address, on-chain deployed status,
  * and balance. Logic-free string builders; all dynamic text is escaped and all
@@ -69,9 +69,11 @@ const chooserOption = (
 
 /**
  * The shared add-account chooser used by both the account drawer and Manage
- * accounts. Each tile routes on its own click.
+ * accounts. Each tile routes on its own click. `ledgerAvailable` false omits
+ * the Ledger route on a runtime that cannot reach a device; it defaults to true
+ * so a caller that does not report capability keeps the offered state.
  */
-export const addAccountChooser = (): string => {
+export const addAccountChooser = (ledgerAvailable = true): string => {
   return `
   <div class="onboard-hero add-account-hero">
     <header class="add-account-header">
@@ -85,9 +87,8 @@ export const addAccountChooser = (): string => {
     </header>
     <div class="add-account-chooser" role="group" aria-label="Add an account">
       ${chooserOption("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
-      ${chooserOption("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.")}
-      ${chooserOption("restore-ready-ledger", "shield", "Restore a Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X). Reads your device at Ready’s derivation path.")}
-      ${chooserOption("multisig", "users", "Multisig account", "Create or add a shared account controlled by multiple signers.")}
+      ${ledgerAvailable ? chooserOption("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.") : ""}
+      ${chooserOption("multisig", "users", "Multisig account", "Create or add a multisig account controlled by multiple signers.")}
       ${chooserOption("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
     </div>
   </div>`;
@@ -95,11 +96,14 @@ export const addAccountChooser = (): string => {
 
 /**
  * The in-wallet second stage of "Import an existing account": a recovery
- * phrase (retained for later re-derivation, with its own scan) or a single raw
- * private key. Ledger import lives on the top-level Ledger route, whose picker
- * already finds existing device accounts.
+ * phrase (retained for later re-derivation, with its own scan), a single raw
+ * private key, or a Ledger account created in Ready — all three bring over an
+ * account the user already owns, which is what separates them from the tiles
+ * that create one. The plain Ledger route stays on the chooser above, since it
+ * also creates accounts on Bramble's own derivation path. `ledgerAvailable`
+ * false omits the Ready Ledger route on a runtime that cannot reach a device.
  */
-export const importAccountChooser = (): string => {
+export const importAccountChooser = (ledgerAvailable = true): string => {
   return `
   <div class="onboard-hero add-account-hero">
     <header class="add-account-header">
@@ -112,8 +116,10 @@ export const importAccountChooser = (): string => {
       })}
     </header>
     <div class="add-account-chooser" role="group" aria-label="Import an existing account">
+      ${chooserOption("find-accounts", "users", "Find my other accounts", "Search this wallet for accounts it does not list yet.")}
       ${chooserOption("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
       ${chooserOption("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
+      ${ledgerAvailable ? chooserOption("restore-ready-ledger", "shield", "Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X).") : ""}
     </div>
     <div class="onboard-actions">
       ${button({
@@ -326,11 +332,11 @@ const pickerCopy = (
   application === READY_EIP2645_APPLICATION
     ? {
         heading: "Select Ready accounts",
-        lede: "Each address is read from your device at Ready’s derivation path; Ready accounts with on-chain activity are preselected. Ready numbers Ledger accounts after the accounts already in that wallet, so yours may be a few pages in — use Show more.",
+        lede: "Accounts with activity are preselected. Ready lists Ledger accounts last, so yours may be a few pages in — use Show more.",
       }
     : {
         heading: "Select accounts",
-        lede: "Each address is read from your device; accounts with on-chain activity are preselected.",
+        lede: "Accounts with activity are preselected.",
       };
 
 /**

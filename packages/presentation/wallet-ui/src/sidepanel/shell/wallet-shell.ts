@@ -8,7 +8,7 @@ import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { callout } from "@bramble/ui-kit/content";
-import { button, iconButton, iconLink } from "@bramble/ui-kit/controls";
+import { iconButton, iconLink } from "@bramble/ui-kit/controls";
 import { dockNavigation } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { explorerAccountUrl } from "@bramble/wallet-model/networks";
@@ -185,52 +185,31 @@ export const shieldTile = (
   ready: boolean,
   deployment: boolean | null = null,
   fundedForFees: boolean | null = true,
+  readOnly = false,
 ): string => {
   const needsDeploy = deployment === false;
   const needsFunds = needsDeploy && fundedForFees === false;
-  const tileLabel = needsFunds ? "Fund with STRK" : needsDeploy ? "Deploy and enable" : "Shield";
   const body = `<span class="tile-icon">${icon("shield")}</span>
-      <span class="tile-label">${tileLabel}</span>`;
+      <span class="tile-label">Shield</span>`;
+  // A read-only account cannot sign the activation or the shield, so the tile
+  // is a true disabled control, not a link into a flow that fails at the end.
+  if (readOnly) {
+    return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable — this account is read only">${body}</button>`;
+  }
   if (tokenId === null) {
     return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
   }
-  if (needsFunds) {
-    return `<button class="action-tile" data-view="receive" type="button" aria-label="Receive STRK before deploying this account">${body}</button>`;
-  }
+  // One tile, one word, whatever the account still needs: deployment and
+  // funding are steps on the way to shielding, and the privacy screen this
+  // opens names whichever one is in the way. The accessible name carries that
+  // reason, so a screen reader is told before the tap rather than after.
   const attribute = ready && !needsDeploy ? "data-send-shield" : "data-privacy-open";
-  const label = needsDeploy
-    ? "Deploy and enable"
-    : ready
-      ? "Shield public value into your private balance"
-      : "Activate private balances";
+  const label = needsFunds
+    ? "Shield — add STRK to this account first"
+    : needsDeploy
+      ? "Shield — deploy this account first"
+      : ready
+        ? "Shield public value into your private balance"
+        : "Activate private balances";
   return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };
-
-/**
- * Renders the counterfactual-account status when chain state is conclusively
- * undeployed. Home only directs the user to the next task; fee review and
- * submission stay in their dedicated transaction journeys.
- */
-export const deployNotice = (
-  account: AccountRef | null,
-  deployment: boolean | null,
-  fundedForFees: boolean | null = true,
-): string =>
-  account === null || deployment !== false
-    ? ""
-    : `<div class="deploy-notice">
-        ${button({
-          attributes: {
-            "data-view": fundedForFees === false ? "receive" : "deploy-account",
-            title:
-              fundedForFees === false
-                ? "Deploying costs a network fee. Receive STRK into this account first."
-                : "This account contract is not on-chain yet. Deploying it enables transactions.",
-          },
-          className: "deploy-chip",
-          icon: "alert",
-          label: fundedForFees === false ? "Fund with STRK" : "Deploy account",
-          size: "small",
-          variant: "secondary",
-        })}
-      </div>`;

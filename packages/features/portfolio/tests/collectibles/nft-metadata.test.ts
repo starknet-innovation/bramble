@@ -31,6 +31,17 @@ describe("normalizeImageUrl", () => {
     expect(normalizeImageUrl(undefined)).toBe("");
   });
 
+  test("drops literal local and private hosts, including fully-qualified names", () => {
+    expect(normalizeImageUrl("https://localhost/a.png")).toBe("");
+    expect(normalizeImageUrl("https://localhost./a.png")).toBe("");
+    expect(normalizeImageUrl("https://sub.localhost/a.png")).toBe("");
+    expect(normalizeImageUrl("https://printer.local/a.png")).toBe("");
+    expect(normalizeImageUrl("https://printer.local./a.png")).toBe("");
+    expect(normalizeImageUrl("https://127.0.0.1/a.png")).toBe("");
+    expect(normalizeImageUrl("https://127.0.0.1./a.png")).toBe("");
+    expect(normalizeImageUrl("https://[::1]/a.png")).toBe("");
+  });
+
   test("passes safe image data URIs through verbatim (idempotent)", () => {
     // A Game-of-Life-style on-chain SVG: base64 image data URI.
     const svg = `data:image/svg+xml;base64,${btoa("<svg xmlns='http://www.w3.org/2000/svg'/>")}`;

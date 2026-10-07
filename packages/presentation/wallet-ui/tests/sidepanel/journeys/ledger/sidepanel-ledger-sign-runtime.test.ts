@@ -242,7 +242,7 @@ describe("Ledger sign runtime (DOM)", () => {
     const value = h.mount.querySelector(".ledger-hash-value")?.textContent ?? "";
     expect(value).toBe(padded);
     // Copy hands over the unbroken value, never the grouped rendering.
-    const copy = h.mount.querySelector<HTMLButtonElement>("[data-copy]");
+    const copy = h.mount.querySelector<HTMLButtonElement>(".ledger-hash-check [data-copy]");
     expect(copy?.dataset["copy"]).toBe(padded);
   });
 

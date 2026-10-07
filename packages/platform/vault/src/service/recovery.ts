@@ -6,11 +6,12 @@ import {
   RECOVERY_SCAN_LIMITS,
   type RecoveryAccountSelection,
   recoverySelectionKey,
+  selectionDerivation,
 } from "@bramble/wallet-model/recovery";
 import { deriveAccount } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { isVaultV10, type Vault } from "../schema/schema";
+import { isVaultV11, type Vault } from "../schema/schema";
 
 /** Privileged recovery input; the phrase and unlock credential never leave this boundary. */
 export type RecoverVaultAccountsInput = {
@@ -33,6 +34,10 @@ const deriveSeedSelections = async (
     derived.push(
       await deriveAccount(kms, {
         ...selection,
+        // Stamp the family default (issue 505): the vault's own default stays
+        // this wallet's ladder so creation flows are untouched, but a restore
+        // means the vendor's scheme unless the selection spelled otherwise.
+        derivation: selectionDerivation(selection),
         mnemonic: input.mnemonic,
         networkId: input.networkId,
         ...(seedId === undefined ? {} : { seedId }),
@@ -87,6 +92,7 @@ export const recoverVaultAccounts = async (
     derived.push(
       await deriveAccount(kms, {
         ...selection,
+        derivation: selectionDerivation(selection),
         mnemonic: input.mnemonic,
         networkId: input.networkId,
       }),
@@ -102,7 +108,7 @@ export const recoverVaultAccounts = async (
     mnemonic: input.mnemonic,
     signingKeys: derived.map(({ account, privateKey }) => ({ accountId: account.id, privateKey })),
   };
-  if (!isVaultV10(next)) throw new WalletError("Invalid recovered vault");
+  if (!isVaultV11(next)) throw new WalletError("Invalid recovered vault");
   await encryptedStore.write(next, input.vaultPassphrase);
   return next.accounts;
 };
@@ -148,7 +154,7 @@ export const importSeedVaultAccounts = async (
       ...derived.map(({ account, privateKey }) => ({ accountId: account.id, privateKey })),
     ],
   };
-  if (!isVaultV10(next)) throw new WalletError("Invalid imported-seed vault");
+  if (!isVaultV11(next)) throw new WalletError("Invalid imported-seed vault");
   await encryptedStore.write(next, input.vaultPassphrase);
   return derived.map(({ account }) => account);
 };

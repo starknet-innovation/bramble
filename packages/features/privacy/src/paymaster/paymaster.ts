@@ -254,6 +254,31 @@ export const buildStrk20PaymasterPlan = async (input: {
   };
 };
 
+// The public half of an `invoke_and_apply_action`: the reviewed typed data,
+// signed only while its execution window still has ten seconds to run.
+const signedPublicInvoke = async (
+  input: {
+    readonly accountAddress: string;
+    readonly nowSeconds: number;
+    readonly signTypedData: (typedData: unknown) => Promise<readonly string[]>;
+  },
+  typedData: unknown,
+  authorization: NonNullable<Strk20PrivateRelayPlan["authorization"]>,
+): Promise<{
+  readonly signature: readonly string[];
+  readonly typed_data: unknown;
+  readonly user_address: string;
+}> => {
+  if (!isPaymasterAuthorizationLive(authorization, input.nowSeconds, 10n)) {
+    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
+  return {
+    signature: await input.signTypedData(typedData),
+    typed_data: typedData,
+    user_address: requirePaymasterFelt(input.accountAddress, false),
+  };
+};
+
 /**
  * Submits the frozen proof and paymaster plan. The returned transaction hash is
  * strictly validated before it reaches wallet activity state. Public typed
@@ -268,12 +293,17 @@ export const buildStrk20PaymasterPlan = async (input: {
  * hash in it) throws an {@link IndeterminateRpcWriteError} instead: the relay
  * may already have forwarded the transaction, so the caller must hold its state
  * closed rather than retry.
+ *
+ * `isAuthorized` is the unlock-session guard. It is read immediately before
+ * the broadcast, after any typed-data signature, so a lock during proving or
+ * signing refuses the relay with `wallet locked` before anything is sent.
  */
 export const submitStrk20PaymasterPlan = async (input: {
   readonly accountAddress: string;
   readonly call: Call;
   readonly config: Strk20PaymasterConfig;
   readonly http?: PaymasterHttp;
+  readonly isAuthorized: () => boolean;
   readonly nowSeconds: number;
   readonly plan: Strk20PrivateRelayPlan;
   readonly proof: Strk20Proof;
@@ -293,22 +323,16 @@ export const submitStrk20PaymasterPlan = async (input: {
   if (!sameFelt(feeToken, input.config.feeToken) && input.plan.feeCeiling === undefined) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
-  let invoke:
-    | {
-        readonly signature: readonly string[];
-        readonly typed_data: unknown;
-        readonly user_address: string;
-      }
-    | undefined;
-  if (typedData !== undefined && authorization !== undefined) {
-    if (!isPaymasterAuthorizationLive(authorization, input.nowSeconds, 10n)) {
-      throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-    }
-    invoke = {
-      signature: await input.signTypedData(typedData),
-      typed_data: typedData,
-      user_address: requirePaymasterFelt(input.accountAddress, false),
-    };
+  const invoke =
+    typedData !== undefined && authorization !== undefined
+      ? await signedPublicInvoke(input, typedData, authorization)
+      : undefined;
+  // The proof can take minutes and typed-data signing awaits RPC reads, so the
+  // session may have been locked since the last signer check. This is the last
+  // point before the broadcast, matching the public lane's check before
+  // `execute`.
+  if (!input.isAuthorized()) {
+    throw new WalletError("wallet locked");
   }
   const result = await rpc(input.http ?? fetch, input.config.url, BROADCAST_PAYMASTER_METHOD, {
     parameters: { ...PARAMETERS, fee_mode: feeMode(feeToken) },

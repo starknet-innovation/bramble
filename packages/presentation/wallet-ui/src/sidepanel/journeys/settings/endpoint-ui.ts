@@ -9,7 +9,7 @@ import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { HostPermissionApi } from "../../runtime/runtime-global";
-import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 
 /**
  * Dependencies the endpoint bindings close over.
@@ -39,7 +39,7 @@ const requestHostAccess = (
   const origins = [...new Set(configured.map((value) => `${new URL(value).origin}/*`))];
   if (origins.length === 0) return Promise.resolve(true);
   if (!permissions) {
-    return Promise.reject(new Error("Chrome host permission controls are unavailable"));
+    return Promise.reject(new Error("Host permission controls are unavailable in this browser"));
   }
   return permissions.request({ origins });
 };
@@ -68,7 +68,7 @@ const bindEndpointForm = (
       : Promise.resolve(true);
     void access
       .then((granted) => {
-        if (!granted) throw new Error("Chrome did not grant access to that service host");
+        if (!granted) throw new Error("Your browser did not grant access to that service host");
         return submit(value);
       })
       .then(
@@ -77,10 +77,9 @@ const bindEndpointForm = (
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          const message = errorMessage(error, fail);
-          showToast(message, "error", form, errorDetails(error, fail));
+          showToast(errorMessage(error, fail), "error", form, errorDetails(error, fail));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, fail);
           }
           buttonBusy(submitButton, false);
         },
@@ -127,7 +126,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
     buttonBusy(submitButton, true);
     void requestHostAccess(deps.permissions, [discoveryUrl, ohttpRelayUrl, paymasterUrl, proverUrl])
       .then((granted) => {
-        if (!granted) throw new Error("Chrome did not grant access to those service hosts");
+        if (!granted) throw new Error("Your browser did not grant access to those service hosts");
         return deps.wallet.setStrk20NetworkConfig(deps.networkId(), config);
       })
       .then(
@@ -138,10 +137,9 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
         },
         (error: unknown) => {
           const fallback = "Privacy service configuration failed";
-          const message = errorMessage(error, fallback);
-          showToast(message, "error", form, errorDetails(error, fallback));
+          showToast(errorMessage(error, fallback), "error", form, errorDetails(error, fallback));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, fallback);
           }
           buttonBusy(submitButton, false);
         },
@@ -166,7 +164,7 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
     buttonBusy(submitButton, true);
     void requestHostAccess(deps.permissions, [apiUrl])
       .then((granted) => {
-        if (!granted) throw new Error("Chrome did not grant access to that explorer host");
+        if (!granted) throw new Error("Your browser did not grant access to that explorer host");
         return deps.wallet.setExplorerFallback(deps.networkId(), enabled, apiUrl);
       })
       .then(
@@ -176,10 +174,9 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
         },
         (error: unknown) => {
           const fallback = "Explorer fallback update failed";
-          const message = errorMessage(error, fallback);
-          showToast(message, "error", form, errorDetails(error, fallback));
+          showToast(errorMessage(error, fallback), "error", form, errorDetails(error, fallback));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, fallback);
           }
           buttonBusy(submitButton, false);
         },

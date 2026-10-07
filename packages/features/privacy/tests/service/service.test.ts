@@ -305,8 +305,8 @@ describe("STRK20 wallet policy", () => {
       }),
     ).rejects.toThrow(STRK20_PRIVACY_LEAK);
     expect(relayQuotes).toBe(0);
-    expect(summarizeStrk20Plan({ mode: "account", poolFeeFri: "0x1" })).toContain(
-      "Public account pool fee 0x1",
+    expect(summarizeStrk20Plan({ mode: "account", poolFeeFri: "0x53444835ec580000" })).toContain(
+      "Public account pool fee 6 STRK",
     );
   });
 

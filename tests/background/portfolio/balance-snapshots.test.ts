@@ -13,6 +13,7 @@ import type { WalletStatus } from "../../../packages/presentation/wallet-ui/src/
 import { emptyRenderCache } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/rendering/render-cache";
 import { createDeploymentCache } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/sync/deployment-cache";
 import { hydrateView } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/sync/hydrate";
+import { createSignabilityCache } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/sync/signability-cache";
 
 const token = defaultWalletPreferences().tokens[0];
 if (!token) throw new Error("token fixture unavailable");
@@ -192,6 +193,11 @@ describe("balance snapshots", () => {
         rpcReads += 1;
         return { accountId: status.activeAccountId ?? "", deployed: false };
       },
+      // The fixture account is the wallet's own: the background answers its
+      // signability from the family alone, with no chain read to count.
+      async loadAccountSignability() {
+        return { accountId: status.activeAccountId ?? "", ok: true, readOnly: false };
+      },
       async loadPrices() {
         return { asOf: null, changes: {}, prices: {}, stale: false };
       },
@@ -200,12 +206,14 @@ describe("balance snapshots", () => {
       },
     };
     const deployment = createDeploymentCache(wallet as never, () => now);
+    const signability = createSignabilityCache(wallet as never, () => now);
     const cache = emptyRenderCache();
     const run = (refreshReason?: "action" | "ambient" | "event") =>
       hydrateView({
         activeView: "home",
         cache,
         deployment,
+        signability,
         multisig: {
           async loadMultisigs() {
             return { intents: [], multisigs: [] };

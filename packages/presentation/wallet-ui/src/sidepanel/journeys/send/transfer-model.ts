@@ -4,9 +4,8 @@
  * explicit and independently testable.
  */
 
-import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { ValueBucket } from "@bramble/transactions/send-routes";
-import { isStarkFieldElement, normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
+import { isStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { errorMessage } from "../../shared/dom";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
@@ -37,10 +36,16 @@ export const friendlyReviewError = (error: unknown): string => {
 };
 
 /**
+ * Screens Send can hand off to by name: where a finished or abandoned send
+ * lands, and the two screens its composition controls open (the address book
+ * for a new recipient, token management for a token it does not list).
+ */
+export type TransferExitView = "activity" | "address-book" | "home" | "multisig-deploy" | "tokens";
+
+/**
  * Deterministic screens owned by the Send state machine.
  */
 export type TransferStage =
-  | "asset"
   | "authorizing"
   | "broadcasting"
   | "confirming"
@@ -93,6 +98,12 @@ export type TransferState<Review> = {
   readonly review: Review | null;
   readonly reviewedKey: string | null;
   readonly stage: TransferStage;
+  /**
+   * True on a `failed` stage whose submission may still land (its reply was
+   * lost and no hash was captured). The receipt then says the status is
+   * unknown and offers Activity instead of Try again.
+   */
+  readonly submissionUnknown: boolean;
   readonly transactionHash: string | null;
 };
 
@@ -108,6 +119,7 @@ export const initialTransferState = <Review>(): TransferState<Review> => ({
   review: null,
   reviewedKey: null,
   stage: "recipient",
+  submissionUnknown: false,
   transactionHash: null,
 });
 
@@ -161,60 +173,3 @@ export const transferKey = (fields: TransferFields): string =>
     speed: fields.speed,
     tokenId: fields.tokenId,
   });
-
-/**
- * Finds the current chain status for one submitted hash.
- */
-export const confirmationStatus = (
-  entries: readonly ActivityEntry[],
-  transactionHash: string,
-): ActivityEntry["status"] | null =>
-  entries.find((entry) => sameFelt(entry.hash, transactionHash))?.status ?? null;
-
-/**
- * What the Send journey should do about the latest chain status.
- *
- * A pre-confirmation is a real answer — the proposer has executed the
- * transaction and its revert status is already known — so the journey completes
- * on it rather than sitting on a spinner waiting for L2 acceptance. Background
- * reconciliation keeps verifying the transaction through to L1 finality and
- * raises a notice if it later fails. `null` means keep waiting.
- */
-export type ConfirmationOutcome =
-  | { readonly kind: "failed"; readonly message: string; readonly toast: string }
-  | { readonly kind: "succeeded"; readonly toast: string };
-
-// One row per status the journey acts on. Statuses absent here — `pending`, and
-// no status observed yet — mean keep waiting.
-const CONFIRMATION_OUTCOMES: Partial<Record<ActivityEntry["status"], ConfirmationOutcome>> = {
-  accepted: { kind: "succeeded", toast: "Transaction confirmed on Starknet" },
-  preconfirmed: { kind: "succeeded", toast: "Transaction pre-confirmed on Starknet" },
-  rejected: {
-    kind: "failed",
-    message: "Starknet rejected this transaction. No transfer was completed.",
-    toast: "Transaction was not confirmed",
-  },
-  reverted: {
-    kind: "failed",
-    message: "Starknet reverted this transaction. Review its activity details before retrying.",
-    toast: "Transaction was not confirmed",
-  },
-};
-
-/**
- * Confirmation checkpoints in milliseconds, paired with the outcome table above:
- * a tight burst for the common case, then ten-second checks out to roughly a
- * minute. Every checkpoint is a live chain read, so this is the journey's
- * patience rather than the chain's — it completes on PRE_CONFIRMED, but a
- * proposer can take longer than a ten-second burst to report even that.
- */
-export const CONFIRMATION_DELAYS_MS: readonly number[] = [
-  0, 250, 500, 900, 1_500, 2_500, 4_000, 5_000, 7_500, 10_000, 10_000, 10_000,
-];
-
-/**
- * Maps the latest observed status onto that decision.
- */
-export const confirmationOutcome = (
-  status: ActivityEntry["status"] | null,
-): ConfirmationOutcome | null => (status === null ? null : (CONFIRMATION_OUTCOMES[status] ?? null));

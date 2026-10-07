@@ -112,37 +112,14 @@ export const estimatePassphraseStrength = (value: string): PassphraseStrength =>
   if (!isVaultPassphrase(value)) {
     return { hint: tooShortHint, level: "weak", ratio: Math.min(ratio, 0.4) };
   }
-  // Accepted, but shorter than we would advise: say so without blocking. The
-  // band still comes from the entropy estimate, so this never contradicts it.
-  const short = value.trim().length < RECOMMENDED_VAULT_PASSPHRASE_LENGTH;
-  const longerHint = `${RECOMMENDED_VAULT_PASSPHRASE_LENGTH}+ characters is safer`;
+  // The meter names the band it reached. The bar beside it already shows how far
+  // that is from the next one, so the advice it used to carry was the third
+  // thing on screen saying the same.
   if (bits >= STRONG_BITS) {
-    return {
-      hint: short ? `Strong — ${longerHint}` : "Strong passphrase",
-      level: "strong",
-      ratio: 1,
-    };
+    return { hint: "Strong", level: "strong", ratio: 1 };
   }
   if (bits >= FAIR_BITS) {
-    return {
-      hint: short ? `Fair — ${longerHint}` : "Fair — longer, or mix in numbers and symbols",
-      level: "fair",
-      ratio,
-    };
+    return { hint: "Fair", level: "fair", ratio };
   }
-  return { hint: "Weak — use more characters, or more varied ones", level: "weak", ratio };
+  return { hint: "Weak", level: "weak", ratio };
 };
-
-/**
- * Whether a passphrase is accepted but weak enough that the user should say so
- * deliberately before it protects a vault. Lowering the length floor means a
- * genuinely poor passphrase can now clear the validator, so the speed bump
- * moves from the validator to an explicit acknowledgement: nothing is refused,
- * but nothing poor is accepted silently either.
- *
- * False for a value that is not acceptable at all — that case is already
- * blocked, and asking someone to acknowledge a passphrase they cannot use
- * would be nonsense.
- */
-export const requiresWeakPassphraseAcknowledgement = (value: string): boolean =>
-  isVaultPassphrase(value) && estimatePassphraseStrength(value).level === "weak";

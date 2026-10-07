@@ -5,7 +5,7 @@ import {
 } from "@bramble/multisig/chain";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
 import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
@@ -60,6 +60,13 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         selectedKey.value = participant.publicKeyX;
         selectionName.textContent = participant.label;
         selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(participant.publicKeyX)}`;
+        const copy = selection.querySelector<HTMLButtonElement>(
+          "[data-participant-selection-copy]",
+        );
+        if (copy) {
+          copy.dataset["copy"] = participant.address ?? "";
+          copy.hidden = !participant.address;
+        }
         selection.hidden = false;
         button.disabled = false;
         return null;
@@ -99,9 +106,12 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
             deps.openDetail(multisigId, "multisig-detail");
           },
           (error: unknown) => {
-            const message = errorMessage(error, "Prepare signer change failed");
-            setResult(deps, "multisig-signers-result", message);
-            showToast(message, "error", button ?? form);
+            setResult(
+              deps,
+              "multisig-signers-result",
+              errorLine(error, "Couldn't prepare that signer change"),
+            );
+            showToast(errorMessage(error, "Prepare signer change failed"), "error", button ?? form);
             buttonBusy(button, false);
           },
         );
@@ -170,9 +180,12 @@ const bindCompleteSignerConfig = (deps: MultisigUiDeps): void => {
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          const message = errorMessage(error, "Complete signer setup failed");
-          setResult(deps, "multisig-complete-config-result", message);
-          showToast(message, "error", button ?? form);
+          setResult(
+            deps,
+            "multisig-complete-config-result",
+            errorLine(error, "Couldn't finish signer setup"),
+          );
+          showToast(errorMessage(error, "Complete signer setup failed"), "error", button ?? form);
           buttonBusy(button, false);
         },
       );

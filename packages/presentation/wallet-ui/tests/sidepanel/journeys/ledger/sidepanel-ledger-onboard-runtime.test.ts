@@ -116,6 +116,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     openImport: () => {
       imports += 1;
     },
+    openFindAccounts: () => undefined,
     openImportSeed: () => {
       seedImports += 1;
     },
@@ -314,15 +315,17 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="multisig"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="restore-ready-ledger"]')).not.toBeNull();
-    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(5);
+    // Restoring a Ready Ledger account is an import, so it lives one level in.
+    expect(h.mount.querySelector('[data-add-kind="restore-ready-ledger"]')).toBeNull();
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(4);
 
     // One click routes: the Ledger tile opens the connect prompt directly.
     click(h.mount, '[data-add-kind="ledger"]');
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
-    // So does the Ready restore tile; its connect prompt is the same gesture.
+    // The Ready restore reaches the same connect gesture from inside Import.
     h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="import"]');
     click(h.mount, '[data-add-kind="restore-ready-ledger"]');
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
@@ -352,5 +355,27 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, '[data-add-kind="multisig"]');
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);
+  });
+
+  test("startAddAccount omits the Ledger route when the connector reports no transport", () => {
+    const h = mountRuntime({
+      connector: {
+        isAvailable: () => false,
+        openConnected: () => Promise.resolve(null),
+        request: () => Promise.reject(new Error("no device expected")),
+      },
+    });
+    h.runtime.startAddAccount();
+    expect(h.mount.hidden).toBe(false);
+    expect(h.mount.textContent).toContain("Add a new account");
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(3);
+  });
+
+  test("startAddAccount keeps the Ledger route when the connector does not report capability", () => {
+    const h = mountRuntime();
+    h.runtime.startAddAccount();
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
   });
 });

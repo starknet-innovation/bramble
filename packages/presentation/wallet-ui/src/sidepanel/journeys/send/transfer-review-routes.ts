@@ -13,7 +13,8 @@
 import { escapeHtml } from "@bramble/core/html";
 import type { SendDisclosure, SendRoute } from "@bramble/transactions/send-routes";
 import { formatFri } from "../../shared/parts";
-import { reviewFeeSection } from "../../shared/review-render";
+import { reviewCostSection, reviewFeeSection } from "../../shared/review-render";
+import { isStrkRelayFee, relayFeeAmountText } from "../privacy/privacy-relay-fee";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferReview } from "./transfer-submit";
 
@@ -48,7 +49,10 @@ export const routeDisclosureHtml = (route: SendRoute): string => {
   const hidden = ORDER.filter((item) => !route.reveals.includes(item));
   const shown = ORDER.filter((item) => route.reveals.includes(item));
   const movement = `You are sending from a ${route.source} balance to a ${route.destination} balance.`;
-  return `<p class="review-fee">${escapeHtml(`${movement}${clause(hidden, "confidential")}${clause(shown, "public")}`)}</p>`;
+  return `<section class="decision-layer" aria-label="Visibility">
+    <p class="decision-label">Visibility</p>
+    <p class="review-fee">${escapeHtml(`${movement}${clause(hidden, "confidential")}${clause(shown, "public")}`)}</p>
+  </section>`;
 };
 
 /**
@@ -79,9 +83,22 @@ const relayCut = (total: string, poolFeeFri: string): bigint | null => {
 // it, and the sender's only broadcast cost is whatever the relay keeps above the
 // pool's charge. A deposit's gas is not knowable here at all: its proof, and so
 // the calldata being estimated, is built at submission.
-const networkFeeHtml = (route: SendRoute, state: RouteFeeState): string => {
+const networkFeeHtml = (
+  route: SendRoute,
+  state: RouteFeeState,
+  poolFee: string,
+  poolFeeFri: string | undefined,
+): string => {
   if (route.submission === "relay") {
     const relayFee = state.preparation?.relayFee;
+    if (relayFee !== undefined && !isStrkRelayFee(relayFee)) {
+      // A fee converted out of STRK covers the pool's STRK charge, which the
+      // relay pays, but cannot be split against it or added to it: the two are
+      // in different tokens. It is reported whole, in its own token.
+      return reviewCostSection(
+        feeLine("Fee taken from your private balance", relayFeeAmountText(relayFee)),
+      );
+    }
     const total = relayFee?.amount;
     const cut =
       total !== undefined && state.poolFeeFri !== undefined
@@ -90,15 +107,36 @@ const networkFeeHtml = (route: SendRoute, state: RouteFeeState): string => {
     if (total !== undefined && cut === null) {
       // The withdrawal does not decompose against the known pool fee, so it is
       // reported whole rather than split into parts that were guessed.
-      return `${feeLine("Fee taken from your private balance", formatFri(total))}${relayFee ? feeLine("Relay fee recipient", `${relayFee.recipient} (${relayFee.token})`) : ""}`;
+      return reviewCostSection(
+        `${feeLine("Fee taken from your private balance", formatFri(total))}${poolFee}`,
+      );
     }
-    return `${feeLine(
-      "Estimated fee",
-      cut === null || cut === 0n ? "Sponsored" : formatFri(`0x${cut.toString(16)}`),
-    )}${relayFee ? feeLine("Relay fee recipient", `${relayFee.recipient} (${relayFee.token})`) : ""}`;
+    // A sponsored route costs the pool charge and nothing else, so its total
+    // would only repeat the line above it.
+    const network = cut === null || cut === 0n ? null : `0x${cut.toString(16)}`;
+    return reviewCostSection(
+      `${feeLine("Estimated fee", network === null ? "Sponsored" : formatFri(network))}${poolFee}${
+        network !== null && poolFeeFri !== undefined
+          ? feeLine(
+              "Total fees",
+              formatFri(`0x${(BigInt(network) + BigInt(poolFeeFri)).toString(16)}`),
+            )
+          : ""
+      }`,
+    );
   }
-  const estimate = state.review ? reviewFeeSection(state.review, { id: "review-retry-fee" }) : "";
-  return estimate || feeLine("Estimated fee", "charged at submission");
+  const estimate = state.review
+    ? reviewFeeSection(
+        state.review,
+        { id: "review-retry-fee" },
+        // The pool charge goes in as a figure as well as a line, so the section
+        // can state what the two come to together.
+        { extra: poolFee, rule: false, ...(poolFeeFri === undefined ? {} : { poolFeeFri }) },
+      )
+    : "";
+  return (
+    estimate || reviewCostSection(`${feeLine("Estimated fee", "charged at submission")}${poolFee}`)
+  );
 };
 
 // The pool's per-batch charge, always named separately and always attributed to
@@ -118,11 +156,12 @@ const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
  * a deposit no network-fee line at all and named the relayed routes' charges
  * differently again.
  */
-export const routeFeeHtml = (route: SendRoute, state: RouteFeeState): string =>
-  `${networkFeeHtml(route, state)}${poolFeeHtml(
-    route,
-    route.submission === "account" ? state.preparation?.poolFeeFri : state.poolFeeFri,
-  )}`;
+export const routeFeeHtml = (route: SendRoute, state: RouteFeeState): string => {
+  const poolFeeFri =
+    route.submission === "account" ? state.preparation?.poolFeeFri : state.poolFeeFri;
+  const charged = route.poolFeeRequired && route.feeBucket !== "none" ? poolFeeFri : undefined;
+  return networkFeeHtml(route, state, poolFeeHtml(route, poolFeeFri), charged);
+};
 
 /**
  * The fee lines followed by the disclosure, which is what the review screen

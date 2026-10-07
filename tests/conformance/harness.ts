@@ -90,7 +90,7 @@ const walletStub = (bump: Bump) => ({
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [ACCOUNT.id], origin: ORIGIN }],
-      schemaVersion: 10 as const,
+      schemaVersion: 11 as const,
       signingKeys: [{ accountId: ACCOUNT.id, privateKey: "0x123456" }],
     };
   },

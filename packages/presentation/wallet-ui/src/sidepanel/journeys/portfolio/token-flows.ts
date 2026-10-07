@@ -1,7 +1,7 @@
 /**
  * Token management and detail flow screens. The tokens flow adds custom
- * tokens, auto-detects held registry tokens, and hides or reveals tracked
- * ones; the detail flow shows price, a self-drawn 7-day sparkline, holdings,
+ * tokens, auto-detects held registry tokens, hides or reveals tracked ones,
+ * and removes ones that are not built in; the detail flow shows price, a self-drawn 7-day sparkline, holdings,
  * and contract facts. Pure templates — bindings live in ./tokens-ui.ts.
  */
 
@@ -13,9 +13,9 @@ import type {
   WalletPreferences,
 } from "@bramble/settings/preferences";
 import { emptyState, receipt } from "@bramble/ui-kit/content";
-import { button } from "@bramble/ui-kit/controls";
+import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { isDefaultToken, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -88,6 +88,16 @@ const trackedRow = (
       ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
     </div>
     ${toggle}
+    ${
+      isDefaultToken(token)
+        ? ""
+        : iconButton({
+            attributes: { "data-token-remove": token.id },
+            icon: "x",
+            label: `Remove ${token.symbol}`,
+            tone: "danger",
+          })
+    }
   </li>`;
 };
 
@@ -112,6 +122,7 @@ export const tokensFlow = (
       "tokens",
       `<section class="section">
         <div class="menu-list" role="group" aria-label="Token actions">
+          ${walletMenuRow("token-catalog", "Pick tokens from the avnu list", "coins")}
           ${walletMenuRow("token-add", "Add by contract", "plus")}
           ${walletMenuRow("token-discover", "Find held tokens", "search")}
         </div>
@@ -172,7 +183,7 @@ export const tokenDiscoverFlow = (status: WalletStatus): string =>
   flowScreen(
     "token-discover",
     `<section class="section">
-      <p class="hint">Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.</p>
+      <p class="hint">Likely-spam tokens stay hidden from Home.</p>
       ${button({
         attributes: { id: "detect-tokens" },
         icon: "refresh",
@@ -191,25 +202,38 @@ const sparkline = (points: readonly number[]): string => {
   return `<svg class="sparkline sparkline-${sparklineTrend(points)}" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}" /></svg>`;
 };
 
+// Send and Swap for the token on screen, above the privacy pair. Both are
+// always offered: an empty balance is discovered on the amount step, exactly as
+// it is when Send is opened from Home. Send seeds the asset and nothing else —
+// the recipient is still chosen on the first step — while Shield and Unshield
+// below carry a recipient and open on the amount.
+const tokenActions = (tokenId: string): string =>
+  `<div class="token-privacy-actions">${button({
+    attributes: { "data-send-token": tokenId },
+    icon: "send",
+    label: "Send",
+  })}${button({
+    attributes: { "data-swap-token": tokenId },
+    icon: "swap",
+    label: "Swap",
+    variant: "secondary",
+  })}</div>`;
+
+// Deployment and funding are steps on the way to shielding, not alternatives
+// to it, so the control keeps the verb and the privacy screen it opens names
+// whichever prerequisite is in the way.
 const privacyActions = (
   tokenId: string,
   privacy: PrivacyDisclosureState,
   deployment: boolean | null,
-  fundedForFees: boolean | null = true,
 ): string => {
   const seen = deploymentKnownFromPrivacy(deployment, privacy);
   if (privacyIneligibleKind(privacy)) return "";
-  if (seen === false && fundedForFees === false)
-    return button({
-      attributes: { "data-view": "receive" },
-      icon: "qrCode",
-      label: "Fund with STRK",
-    });
   if (seen === false)
     return button({
       attributes: { "data-privacy-open": tokenId },
       icon: "shield",
-      label: "Deploy and enable",
+      label: "Shield",
     });
   if (privacy.error) return "";
   if (privacy.value?.registration === "registered")
@@ -239,7 +263,6 @@ export const tokenDetailFlow = (
     value: null,
   },
   deployment: boolean | null = null,
-  fundedForFees: boolean | null = true,
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
@@ -286,7 +309,8 @@ export const tokenDetailFlow = (
               </div>`
                 : ""
         }
-        ${privacyActions(token.id, privacy, deployment, fundedForFees)}
+        ${tokenActions(token.id)}
+        ${privacyActions(token.id, privacy, deployment)}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>

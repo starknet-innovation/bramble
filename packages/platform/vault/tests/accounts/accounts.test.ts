@@ -352,3 +352,55 @@ describe("deriveAccountRef", () => {
     expect(sameFelt(account.address, argentAccountAddress(account.publicKeyX))).toBe(false);
   });
 });
+
+describe("vendor-ladder derivation (issue 505)", () => {
+  test("derives a Ready-scheme Argent account through Krusty's legacy export", async () => {
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "argent",
+      accountIndex: 3,
+      derivation: "argentx-bip44",
+      mnemonic,
+    });
+    expect(account.derivation).toEqual({ addressIndex: 3, kind: "argentx-bip44" });
+    // fakeKms' legacy keys are distinct from its plain ladder on purpose.
+    expect(account.publicKeyX).toBe("0xa93bc");
+    expect("publicKeyY" in account).toBe(false);
+    expect(account.accountContractType).toBe("argent");
+  });
+
+  test("refuses the Ready scheme off Argent and under a passphrase", async () => {
+    await expect(
+      deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
+        accountIndex: 0,
+        derivation: "argentx-bip44",
+        mnemonic,
+      }),
+    ).rejects.toThrow("Ready derivation is only valid for Argent accounts");
+    await expect(
+      deriveAccountRef(fakeKms(), {
+        accountContractType: "argent",
+        accountIndex: 0,
+        derivation: "argentx-bip44",
+        mnemonic,
+        mnemonicPassphrase: "extra word",
+      }),
+    ).rejects.toThrow("Ready derivation does not take a passphrase");
+  });
+
+  test("walks the address axis for Braavos and records the real coordinate", async () => {
+    const braavosClass = deploymentClasses("braavos")[0];
+    if (!braavosClass) throw new Error("no braavos deployment class");
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "braavos",
+      accountIndex: 2,
+      classHash: braavosClass.classHash,
+      mnemonic,
+    });
+    expect(account.derivation).toEqual({
+      accountIndex: 0,
+      addressIndex: 2,
+      kind: "starknet-bip44",
+    });
+  });
+});
