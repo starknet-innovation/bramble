@@ -43,13 +43,16 @@ export const candidateAccount = (
   index: number,
   accountContractType: AccountContractType = "openzeppelin",
 ): LedgerAccountRef => {
-  const address = `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
+  const prefix =
+    accountContractType === "argent" ? "e" : accountContractType === "braavos" ? "b" : "";
+  const address = `0x${prefix}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
   return {
-    // A device account is never Braavos; anything not Argent is this wallet's
-    // own OpenZeppelin account, which carries no deployment salt.
-    ...(accountContractType === "argent"
-      ? ({ accountContractType, deploymentSalt: "0x1" } as const)
-      : ({ accountContractType: "openzeppelin" } as const)),
+    // A Ledger account is this wallet's own OpenZeppelin (no deployment salt),
+    // Argent (Bramble's own and Ready's), or Braavos (which owns it with a
+    // device key at Ready's scheme); the salted families carry a salt.
+    ...(accountContractType === "openzeppelin"
+      ? ({ accountContractType: "openzeppelin" } as const)
+      : ({ accountContractType, deploymentSalt: "0x1" } as const)),
     address,
     classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     derivation: {
@@ -66,10 +69,8 @@ export const candidateAccount = (
 
 // Selection is keyed on the candidate's account id (unique across the two
 // contract families derived from the same device key).
-export const idOf = (
-  index: number,
-  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
-) => candidateAccount(index, accountContractType).id;
+export const idOf = (index: number, accountContractType: AccountContractType = "openzeppelin") =>
+  candidateAccount(index, accountContractType).id;
 
 export const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -161,7 +162,7 @@ export const kinds = (views: readonly (LedgerOnboardView | null)[]): readonly (s
 
 export const pickerIndexes = (
   view: LedgerOnboardView | null | undefined,
-  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
+  accountContractType: AccountContractType = "openzeppelin",
 ): readonly number[] => {
   if (view?.kind !== "picker") {
     throw new Error("expected a picker view");

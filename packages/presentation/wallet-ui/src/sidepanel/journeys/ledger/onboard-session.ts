@@ -228,13 +228,19 @@ export const createLedgerOnboardController = (
       );
       await closeLedgerSessionQuietly(session);
       session = null;
-      // Ready deploys only Argent accounts for a Ledger, so a key read at its
-      // scheme derives that one family. Under Bramble's scheme both families
-      // derive from the same device key, so the picker can group Bramble and
-      // Argent-model accounts side by side.
+      // Ready and Braavos both own their Ledger accounts at the `argentx`
+      // scheme, so a key read there derives one account of each family — the
+      // same device key, two classes, two addresses — and the on-chain probe
+      // reveals which is live. Under Bramble's scheme the device key derives an
+      // OpenZeppelin and an Argent account, grouped side by side.
       const accounts =
         application === READY_EIP2645_APPLICATION
-          ? await deps.derive(entries, "argent", application)
+          ? (
+              await Promise.all([
+                deps.derive(entries, "argent", application),
+                deps.derive(entries, "braavos", application),
+              ])
+            ).flat()
           : (
               await Promise.all([
                 deps.derive(entries, "openzeppelin", application),

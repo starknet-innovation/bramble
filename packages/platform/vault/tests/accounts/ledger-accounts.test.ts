@@ -8,7 +8,7 @@ import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@bramble/vault/accounts";
 import { isVaultV2, isVaultV8, isVaultV11, type Vault } from "@bramble/vault/schema";
-import { isAccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
+import { BRAAVOS_DEPLOYMENT_CLASS_HASH, isAccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath, READY_EIP2645_APPLICATION } from "@bramble/wallet-model/ledger-path";
 import { sameFelt } from "@bramble/wallet-model/networks";
 
@@ -98,6 +98,34 @@ describe("deriveLedgerAccount", () => {
     });
     expect(bramble.derivation.path).toBe(ledgerAccountPath(12, READY_EIP2645_APPLICATION));
     expect(bramble.address).toBe(EXPECTED_ADDRESS);
+  });
+
+  test("a Braavos Ledger account stores Ready's path with the live Braavos address", async () => {
+    // Ground truth: a real Braavos account owned by a Ledger key (mainnet,
+    // index 0). Braavos derives it at Ready's `argentx` scheme, at the Braavos
+    // deploy class with salt = owner public key, so the same device key yields a
+    // Braavos address alongside Ready's Argent one. The address is pinned to the
+    // live account read from chain — a drift in class, salt, or path breaks this.
+    const ownerPublicKey = "0x511c4be1c541ad29c27e94735cd01ad792959de4754bf3acabfdde755dff7c0";
+    const liveAddress = "0x31b4440890dfe1dbd07b8a05e9cca4a5015cfc420499c4aef3598f53d0496f1";
+    const [account] = await deriveLedgerAccountRefs(fakeKms(), {
+      accountContractType: "braavos",
+      eip2645application: READY_EIP2645_APPLICATION,
+      entries: [{ accountIndex: 0, publicKeyX: ownerPublicKey }],
+      networkId: "SN_MAIN",
+    });
+    expect(account?.accountContractType).toBe("braavos");
+    expect(sameFelt(account?.classHash ?? "0x0", BRAAVOS_DEPLOYMENT_CLASS_HASH)).toBe(true);
+    expect(sameFelt(account?.deploymentSalt ?? "0x0", ownerPublicKey)).toBe(true);
+    expect(sameFelt(account?.address ?? "0x0", liveAddress)).toBe(true);
+    expect(account?.derivation).toEqual({
+      accountIndex: 0,
+      eip2645application: "argentx",
+      kind: "ledger",
+      path: "m/2645'/1195502025'/1148870696'/0'/0'/0",
+    });
+    expect(account && isAccountRef(account)).toBe(true);
+    expect(account && isKeylessAccount(account)).toBe(true);
   });
 
   test("rejects an unknown path application before deriving", async () => {
