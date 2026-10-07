@@ -44,8 +44,8 @@ export function envSeed(name: string): string {
 type Keypair = { readonly priv: string; readonly pub: string };
 
 /** Ready/Argent X: ETH key at m/44'/60'/0'/0/0 seeds the stark tree. */
-export function readyKeypair(mnemonic: string, index: number, passphrase = ""): Keypair {
-  const eth = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic, passphrase)).derive(
+export function readyKeypair(mnemonic: string, index: number): Keypair {
+  const eth = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive(
     "m/44'/60'/0'/0/0",
   );
   if (!eth.privateKey) throw new Error("derivation failed");
@@ -56,8 +56,8 @@ export function readyKeypair(mnemonic: string, index: number, passphrase = ""): 
 }
 
 /** Braavos: BIP-39 seed directly, address axis. */
-export function braavosKeypair(mnemonic: string, index: number, passphrase = ""): Keypair {
-  const node = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic, passphrase)).derive(
+export function braavosKeypair(mnemonic: string, index: number): Keypair {
+  const node = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive(
     `m/44'/9004'/0'/0/${index}`,
   );
   if (!node.privateKey) throw new Error("derivation failed");
@@ -120,7 +120,6 @@ export type ManifestEntry = {
   readonly seed: string; // env var name, never words
   readonly vendorDerivation: "ready-double" | "braavos-direct";
   readonly index: number;
-  readonly passphrase?: boolean;
   readonly address: string;
   readonly pubkey: string;
   readonly classAtDeploy: string | null;

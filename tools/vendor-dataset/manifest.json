@@ -483,27 +483,6 @@
       "funded 0x4675b38da3bb122191982d337383343776a1edcc7ff54e9c3025a78f04a8a31"
     ]
   },
-  "passphrase/0": {
-    "id": "passphrase/0",
-    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
-    "vendorDerivation": "ready-double",
-    "index": 0,
-    "address": "0xd83ad21e62fefea0573bf5f814a403e744b2a5e7c2bdb16c50c44fd5ae102e",
-    "pubkey": "0x1da9b47d1caf215cd54b9dfa2179fa8e6379fe1286fb7a7e720d9a0b13292cf",
-    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
-    "expected": "same words + 25th word = disjoint account universe; found only if import asks for a passphrase",
-    "detectability": "D2",
-    "backedBy": "none",
-    "state": {
-      "deployed": true,
-      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
-    },
-    "log": [
-      "fee float 0xbfb02316112ac1d206ff88f82adc45385b84fc8edf3424f18b7f4d11a0029a",
-      "deployed 0x167718f2378628b41edc7eab21b4862e176de4f433723052abe0c03659912c2"
-    ],
-    "passphrase": true
-  },
   "control/bramble-axis-1": {
     "id": "control/bramble-axis-1",
     "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",

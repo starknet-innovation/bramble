@@ -1,9 +1,9 @@
 {
   "generated": "2026-10-06",
-  "provenance": "Four seeds (READY_MAIN, BRAAVOS_MAIN, READY_MATRIX, BRAAVOS_MATRIX) scraped live on mainnet with the USDC discovery probe build; the GAPS seed is carried from the prior run because its deep index-25 scan reproducibly crashes the Playwright browser (tooling limit, not probe). gaps/* score #504 gap-limit, already verified.",
+  "provenance": "Four seeds (READY_MAIN, BRAAVOS_MAIN, READY_MATRIX, BRAAVOS_MATRIX) scraped live on mainnet with the USDC discovery probe build; the GAPS seed is carried from the prior run because its deep index-25 scan reproducibly crashes the Playwright browser (tooling limit, not probe). gaps/* score #504 gap-limit, already verified. passphrase/0 removed (was 37): neither Ready nor Braavos exposes a BIP-39 passphrase field, so a 25th-word account is not a reachable vendor state.",
   "tally": {
     "found": 27,
-    "total": 37,
+    "total": 36,
     "carried": 2
   },
   "scorecard": {
@@ -144,12 +144,6 @@
       "detectability": "D5",
       "source": "run3",
       "note": "funded at a custom-salt counterfactual — invisible from the seed by any method"
-    },
-    "passphrase/0": {
-      "found": false,
-      "detectability": "D2",
-      "source": "run3",
-      "note": "same words + 25th word = disjoint account universe; found only if import asks for a passphrase"
     },
     "control/bramble-axis-1": {
       "found": true,

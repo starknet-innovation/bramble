@@ -1,6 +1,6 @@
 /**
  * Phase-3 stage E: Braavos 2FA-at-deploy, the D4 shapes (custom salt, UDC
- * third-party deploy), the D5 funded counterfactual, the BIP-39 passphrase
+ * third-party deploy) and the D5 funded counterfactual
  * fixture, a Bramble-axis control, and the R1/B1 ground-truth accounts folded
  * into the manifest. Idempotent; dust-sized; prints public data only.
  */
@@ -203,31 +203,6 @@ const ensureFloat = async (address: string, entry: ManifestEntry): Promise<void>
       console.log(`   funded: ${short(tx)}`);
     } else console.log("   already funded");
     en.state = { deployed: false, salt: SALT, funded: "STRK" };
-  }, e);
-}
-
-// ── passphrase/0: 25th word on the Ready matrix seed, deployed 0.4.0 ──
-{
-  const pass = envSeed("BRAMBLE_DATASET_PASSPHRASE");
-  const kp = readyKeypair(envSeed("BRAMBLE_DATASET_SEED_READY_MATRIX"), 0, pass);
-  const address = argentAddress(kp.pub, CLASSES.argent040);
-  const e = entryFor("passphrase/0", "BRAMBLE_DATASET_SEED_READY_MATRIX", "ready-double", 0, CLASSES.argent040,
-    "same words + 25th word = disjoint account universe; found only if import asks for a passphrase", "D2", "none", address, kp.pub);
-  (e as { passphrase?: boolean }).passphrase = true;
-  await run("passphrase/0", async (en) => {
-    if (!(await classAt(address))) {
-      await ensureFloat(address, en);
-      const account = new Account({ provider, address, signer: kp.priv, cairoVersion: "1" });
-      const { transaction_hash } = await account.deployAccount({
-        classHash: CLASSES.argent040,
-        constructorCalldata: argentConstructor(kp.pub, CLASSES.argent040),
-        addressSalt: kp.pub,
-      });
-      await provider.waitForTransaction(transaction_hash);
-      en.log.push(`deployed ${transaction_hash}`);
-      console.log(`   deployed: ${short(transaction_hash)}`);
-    } else console.log("   already deployed");
-    en.state = { deployed: true, liveClass: await classAt(address) };
   }, e);
 }
 

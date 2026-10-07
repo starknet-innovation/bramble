@@ -36,9 +36,7 @@ both.
 slot (`READY_MATRIX`, `BRAAVOS_MATRIX`, `GAPS`, `SEED_DEPLOYER`) — the
 calibration project has `gen-seed.ts` for this — store each in the password
 manager, paste into the env file. These seeds never touch a vendor app; the
-Phase-3 script derives and deploys everything from them. Set
-`BRAMBLE_DATASET_PASSPHRASE` to any word only if the 25th-word dimension should
-run.
+Phase-3 script derives and deploys everything from them.
 
 **Deployer funding (~$150, after the seeds exist):** the script derives the
 deployer account from `BRAMBLE_DATASET_SEED_DEPLOYER` and prints its address —
@@ -206,7 +204,7 @@ with zero off-class results:
   index-0 accounts, and the real app-made Braavos #1 ("Deployed · view only").
 - **Missed (20 × D2):** everything behind the derivation bugs and table gaps —
   the entire Ready population (both real and scripted, #505), Braavos index 1+
-  (vendor axis), the gap fixture at index 7, the passphrase universe.
+  (vendor axis), the gap fixture at index 7.
 - **Missed (4 × D3):** the USDC-only and past-window fixtures — richer probes
   (#504 covers `gaps/25`).
 - **Missed (3 × D4, 3 × D5):** confirmed unreachable without an indexer /
