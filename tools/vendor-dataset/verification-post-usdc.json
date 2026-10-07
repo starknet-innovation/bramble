@@ -1,0 +1,233 @@
+{
+  "generated": "2026-10-06",
+  "provenance": "Four seeds (READY_MAIN, BRAAVOS_MAIN, READY_MATRIX, BRAAVOS_MATRIX) scraped live on mainnet with the USDC discovery probe build; the GAPS seed is carried from the prior run because its deep index-25 scan reproducibly crashes the Playwright browser (tooling limit, not probe). gaps/* score #504 gap-limit, already verified.",
+  "tally": {
+    "found": 27,
+    "total": 37,
+    "carried": 2
+  },
+  "scorecard": {
+    "ready-matrix/0": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found once #505 fixed (0.4.0, deployed)"
+    },
+    "ready-matrix/2": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found once #505 fixed (0.3.0, view-only)"
+    },
+    "ready-matrix/4": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found once #505 fixed (0.3.1, view-only)"
+    },
+    "ready-matrix/5": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found once #505 fixed (undeployed, ETH balance probe)"
+    },
+    "ready-matrix/6": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found once #505 fixed (undeployed, STRK balance probe)"
+    },
+    "ready-matrix/9": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found once #505 fixed (deployed, used, near-zero balance)"
+    },
+    "gaps/7": {
+      "found": false,
+      "detectability": "D2",
+      "source": "carried-prior",
+      "note": "found after a 7-index gap (#504 + #505)"
+    },
+    "gaps/25": {
+      "found": false,
+      "detectability": "D3",
+      "source": "carried-prior",
+      "note": "found past the old 0-19 window only via #504's extension"
+    },
+    "ready-matrix/7": {
+      "found": true,
+      "detectability": "D3",
+      "source": "run3",
+      "note": "found once the native-USDC probe lands (D3 ERC-20 detection, feat/erc20-discovery-probe); undeployed, holds USDC only"
+    },
+    "ready-matrix/3": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "address only derivable via the 0.3.0 shape; live class is 0.4.0"
+    },
+    "ready-matrix/11": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found; signing must be refused while get_guardian != 0"
+    },
+    "ready-matrix/12": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found and signable; a cached guardian verdict would wrongly exclude it"
+    },
+    "ready-matrix/13": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found; mid-escape account a wallet may import in-flight"
+    },
+    "ready-matrix/14": {
+      "found": true,
+      "detectability": "D5",
+      "source": "run3",
+      "note": "after pass 2 the live owner key is foreign to the seed (D5 for ownership)"
+    },
+    "braavos-matrix/0": {
+      "found": true,
+      "detectability": "D1",
+      "source": "run3",
+      "note": "found today at index 0 (the single overlapping coordinate), view-only"
+    },
+    "braavos-matrix/1": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "missed today (address axis); found once the scan walks the vendor axis"
+    },
+    "braavos-matrix/2": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "undeployed, STRK-funded on the vendor axis"
+    },
+    "braavos-matrix/3": {
+      "found": true,
+      "detectability": "D3",
+      "source": "run3",
+      "note": "found once the native-USDC probe lands; undeployed, holds USDC only on the vendor axis"
+    },
+    "cross-vendor/braavos-0": {
+      "found": true,
+      "detectability": "D1",
+      "source": "run3",
+      "note": "same seed also carries Ready accounts; a scanner must surface both families"
+    },
+    "braavos-matrix/4": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "found by address; stark-key signing must be refused while the strong signer is active"
+    },
+    "ready-matrix/16": {
+      "found": false,
+      "detectability": "D4",
+      "source": "run3",
+      "note": "seed-owned key, unguessable address (salt != pubkey) — indexer-only"
+    },
+    "ready-matrix/17": {
+      "found": false,
+      "detectability": "D4",
+      "source": "run3",
+      "note": "deployed by the dataset deployer via UDC unique=1 — deployer folds into the address"
+    },
+    "ready-matrix/18": {
+      "found": false,
+      "detectability": "D5",
+      "source": "run3",
+      "note": "funded at a custom-salt counterfactual — invisible from the seed by any method"
+    },
+    "passphrase/0": {
+      "found": false,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "same words + 25th word = disjoint account universe; found only if import asks for a passphrase"
+    },
+    "control/bramble-axis-1": {
+      "found": true,
+      "detectability": "D1",
+      "source": "run3",
+      "note": "control: on Bramble's current ladder, so today's scan MUST find it"
+    },
+    "ground-truth/ready-1": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "app-made, deployed 0.4.0"
+    },
+    "ground-truth/ready-2": {
+      "found": false,
+      "detectability": "D4",
+      "source": "run3",
+      "note": "smart account, backend salt; guardian 0x7601f48c…"
+    },
+    "ground-truth/ready-3": {
+      "found": true,
+      "detectability": "D5",
+      "source": "run3",
+      "note": "discarded in the Ready UI, empty; still the seed's account"
+    },
+    "ground-truth/ready-4": {
+      "found": false,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "app-recorded, untouched"
+    },
+    "ground-truth/ready-5": {
+      "found": false,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "app-recorded, untouched"
+    },
+    "ground-truth/braavos-1": {
+      "found": true,
+      "detectability": "D1",
+      "source": "run3",
+      "note": "app-made, deployed, 2FA (+3FA if enrolled)"
+    },
+    "ground-truth/braavos-2": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "app-made, deployed plain"
+    },
+    "ground-truth/braavos-3": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "app-made, 2.3 STRK, undeployed"
+    },
+    "ground-truth/braavos-4": {
+      "found": false,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "app-recorded, untouched"
+    },
+    "braavos-matrix/5": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "wallet-deployed Braavos account, stark-only, fully signable"
+    },
+    "braavos-matrix/6": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "wallet-deployed Braavos account, stark-only, fully signable"
+    },
+    "ready-matrix/20": {
+      "found": true,
+      "detectability": "D2",
+      "source": "run3",
+      "note": "Ready guardian-escape recovery proof — triggered via the wallet, pending ~7 days then completable"
+    }
+  }
+}

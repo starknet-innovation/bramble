@@ -1,0 +1,31 @@
+/**
+ * Derives the dataset deployer's counterfactual address from
+ * BRAMBLE_DATASET_SEED_DEPLOYER: standard BIP-39 → m/44'/9004'/0'/0/0 → grind,
+ * OpenZeppelin 3.0.0 class, salt = pubkey, constructor [pubkey], deployer 0.
+ * Prints only the public key and address.
+ */
+import { readFileSync } from "node:fs";
+import { HDKey } from "@scure/bip32";
+import { mnemonicToSeedSync } from "@scure/bip39";
+import { grindKey, getStarkKey } from "@scure/starknet";
+import { hash } from "starknet";
+
+const OZ_300 = "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
+const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
+
+const seed = (() => {
+  for (const line of readFileSync(ENV_PATH, "utf8").split("\n")) {
+    const m = line.match(/^BRAMBLE_DATASET_SEED_DEPLOYER="?([^"]+)"?\s*$/);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+  throw new Error("BRAMBLE_DATASET_SEED_DEPLOYER is empty");
+})();
+
+if (seed.split(/\s+/).length !== 12) throw new Error("deployer seed is not 12 words");
+
+const node = HDKey.fromMasterSeed(mnemonicToSeedSync(seed)).derive("m/44'/9004'/0'/0/0");
+if (!node.privateKey) throw new Error("derivation failed");
+const pub = getStarkKey("0x" + grindKey(node.privateKey));
+const address = hash.calculateContractAddressFromHash(pub, OZ_300, [pub], 0);
+console.log("deployer pubkey: ", pub);
+console.log("deployer address:", "0x" + BigInt(address).toString(16));
