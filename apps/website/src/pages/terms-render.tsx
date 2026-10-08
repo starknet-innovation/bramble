@@ -12,7 +12,7 @@ const INLINE = /(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g;
 
 const resolveEscapes = (value: string): string => value.replace(/\\([.()[\]\\*_`+-])/g, "$1");
 
-export const renderInline = (text: string): ReactNode[] => {
+const renderInline = (text: string): ReactNode[] => {
   const nodes: ReactNode[] = [];
   let index = 0;
   for (const token of text.split(INLINE)) {
