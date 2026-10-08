@@ -6,9 +6,13 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { type AccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
-import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
+import type {
+  SignabilityVerdict,
+  TokenBalance,
+  WalletStatus,
+} from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 
 /**
@@ -29,6 +33,7 @@ import { dockScreen, noAccountEmpty } from "../../shared/parts";
 import { actionTile, pendingCallout, shieldTile } from "../../shell/wallet-shell";
 import { deploymentKnownFromPrivacy, type PrivacyDisclosureState } from "../privacy/privacy-model";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
+import { readOnlyNotice } from "./recovery-view";
 
 const heroDelta = (
   balances: readonly TokenBalance[],
@@ -61,7 +66,13 @@ export const homeScreen = (
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState,
+  signability: SignabilityVerdict | null = null,
 ): string => {
+  // Read-only until proven otherwise never — the flag is advisory UX; the
+  // transaction path enforces. Null (unknown) renders as a normal account.
+  const readOnly = signability?.readOnly === true;
+  // An undeployed Braavos account can still reach Shield's deploy-first step.
+  const shieldReadOnly = readOnly && signability.reason !== "undeployed";
   const unified = unifiedHomeBalances(balances, privacy, preferences);
   const shieldedIncluded = visiblePrivateHomeBalances(privacy, preferences).some(
     (token) => BigInt(token.balance) > 0n,
@@ -94,18 +105,20 @@ export const homeScreen = (
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
+      ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
       ${account ? "" : noAccountEmpty(status)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">
       <div class="action-row">
-        ${actionTile("send", "Send", "send", account !== null)}
-        ${actionTile("swap", "Swap", "shuffle", account !== null)}
+        ${actionTile("send", "Send", "send", account !== null && !readOnly)}
+        ${actionTile("swap", "Swap", "shuffle", account !== null && !readOnly)}
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
         ${shieldTile(
           strkTokenId,
           privateReady,
           deploymentKnownFromPrivacy(deployment, privacy),
           fundedForFees,
+          shieldReadOnly,
         )}
       </div>
     </section>

@@ -11,6 +11,14 @@ import { MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@bramble/ui-kit/tokens";
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
+  /* Read-only flag body and the recovery confirmation that replaces it:
+     consent copy stacked above Cancel / confirm. */
+  .read-only-notice .read-only-body { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xs}; }
+  .recovery-confirm { display: grid; gap: ${SPACE.xs}; max-width: 34ch; text-align: center; }
+  .recovery-confirm .recovery-confirm-title { font-weight: 600; margin: 0; }
+  .recovery-confirm .recovery-confirm-warning { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; margin: 0; }
+  .recovery-confirm .read-only-detail { max-width: none; }
+  .recovery-confirm .button-row { justify-content: center; margin-top: ${SPACE.xs}; }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */

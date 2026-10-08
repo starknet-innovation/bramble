@@ -101,6 +101,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
+  { message: { type: "wallet.accountSignability" }, sender: extensionSender },
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
   { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
   {
@@ -347,6 +348,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: { accountId: account.id, label: "Main", type: "wallet.setAccountLabel" },
+    sender: extensionSender,
+  },
+  {
+    message: { accountId: account.id, hidden: false, type: "wallet.setAccountHidden" },
     sender: extensionSender,
   },
   { message: { displayCurrency: "usd", type: "wallet.setDisplay" }, sender: extensionSender },

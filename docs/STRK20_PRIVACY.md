@@ -97,7 +97,8 @@ is reset on lock, account switch, network switch, side-panel reload, or extensio
    discovery; failures never retry automatically.
 
 The UI Lab contains deterministic checkpoints under **Wallet journeys / 04 Private balances** for
-disclosure off, discovery, registration, empty notes, asset entry, compose, public shielding,
+disclosure off, discovery, registration, the registration funding shortfall, empty notes, asset
+entry, compose, public shielding,
 Wallet API private-relay review, proving, success, service failure, missing configuration, and the
 unsupported Ledger boundary. Fixtures never call a real vault, SDK service, RPC, or hardware
 device.

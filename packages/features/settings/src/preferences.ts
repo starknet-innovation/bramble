@@ -31,6 +31,7 @@ import {
   withTokenId,
 } from "@bramble/wallet-model/preferences";
 import { normalizeAccountGroups } from "./groups";
+import { withAccountHidden } from "./preferences-accounts";
 import { withCustomNetwork } from "./preferences-custom-networks";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
@@ -125,6 +126,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   explorerFallback: {},
   explorerApiUrls: {},
   groups: [],
+  hiddenAccountIds: [],
   hiddenTokens: [],
   nfts: [],
   productAnalytics: true,
@@ -301,6 +303,11 @@ export const createPreferencesStore = ({
       },
       async setAccountInGroup({ accountId, groupId, member }) {
         const next = withAccountInGroup(await read(), { accountId, groupId, member });
+        await writePreferences(store, next);
+        return next;
+      },
+      async setAccountHidden({ accountId, hidden }) {
+        const next = withAccountHidden(await read(), accountId, hidden);
         await writePreferences(store, next);
         return next;
       },

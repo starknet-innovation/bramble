@@ -142,6 +142,38 @@ export const createAccountRuntimeClient = (
     }
     throw responseError(response, "seed import failed");
   },
+  /**
+   * Read-only rescan of the wallet's OWN phrase. The phrase stays inside the
+   * vault boundary; the request carries only the network and an optional manual
+   * index.
+   */
+  async discoverOwnAccounts(networkId: string, manualIndex?: number) {
+    const response = await sendMessage({
+      ...(manualIndex === undefined ? {} : { manualIndex }),
+      networkId,
+      type: "wallet.discoverOwnAccounts",
+    });
+    if (isRecoveryDiscoveryResponse(response)) return response;
+    throw responseError(response, "account discovery unavailable");
+  },
+  /**
+   * Adds selected discovered accounts of the wallet's OWN phrase. The background
+   * reads the phrase inside the vault boundary through the live session.
+   */
+  async importOwnAccounts(
+    networkId: string,
+    selections: readonly RecoveryAccountSelection[],
+  ): Promise<readonly AccountRef[]> {
+    const response = await sendMessage({
+      networkId,
+      selections,
+      type: "wallet.importOwnAccounts",
+    });
+    if (isRecoveredAccountsResponse(response)) {
+      return response.accounts;
+    }
+    throw responseError(response, "account import failed");
+  },
   async recoverAccounts(
     mnemonic: string,
     networkId: string,

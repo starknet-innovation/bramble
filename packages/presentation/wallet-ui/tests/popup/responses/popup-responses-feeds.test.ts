@@ -1,5 +1,6 @@
 /**
- * The activity-feed, allowances, and deployment-status response validators
+ * The activity-feed, allowances, deployment-status, and account-signability
+ * response validators
  * reject malformed background data before it reaches the popup: each guard's
  * true path plus every false/edge arm (bad ok flag, non-array payload, invalid
  * item, wrong-typed optional field, unknown key).
@@ -10,6 +11,7 @@ import {
   MAX_TRANSACTION_ALERTS_PER_DRAIN,
 } from "@bramble/transactions/alerts";
 import {
+  isAccountSignabilityResponse,
   isActivityResponse,
   isAllowancesResponse,
   isDeploymentStatusResponse,
@@ -106,6 +108,19 @@ describe("isDeploymentStatusResponse", () => {
     expect(
       isDeploymentStatusResponse({ accountId: "SN_MAIN:0x123", deployed: true, ok: false }),
     ).toBe(false);
+  });
+});
+
+describe("isAccountSignabilityResponse", () => {
+  test("validates the account id with the shared account-id grammar", () => {
+    // The id keys the signability cache and is compared with the active
+    // account, so it is held to the same grammar as the deployment status.
+    expect(
+      isAccountSignabilityResponse({ accountId: "SN_MAIN:0x123", ok: true, readOnly: false }),
+    ).toBe(true);
+    for (const accountId of ["not-an-account", "SN_MAIN:0x0123", "", 7]) {
+      expect(isAccountSignabilityResponse({ accountId, ok: true, readOnly: false })).toBe(false);
+    }
   });
 });
 

@@ -291,4 +291,12 @@ describe("advanced endpoints explorer-fallback control", () => {
 
     expect(saved).toEqual(["wss://relay.team.example"]);
   });
+
+  test("the endpoint note names the browser, not Chrome, now that it also fires on Gecko", () => {
+    const html = advancedNetworkFlow(status, null);
+
+    expect(html).toContain("Your browser asks before granting access to a new service host");
+    // The note fires on every browser build, so no Chrome-only attribution.
+    expect(html).not.toContain("Chrome asks before granting");
+  });
 });

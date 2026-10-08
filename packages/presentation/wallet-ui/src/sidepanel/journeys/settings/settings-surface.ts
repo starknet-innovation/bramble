@@ -6,10 +6,12 @@
  * are bound together rather than re-listed at the entry point.
  */
 
+import { bindFindAccounts } from "./find-accounts-ui";
 import { bindImportKey } from "./import-key-ui";
 import { bindImportPhrase } from "./import-phrase-ui";
 import {
   bindAccountLabel,
+  bindAccountVisibility,
   bindAddAccount,
   bindAppearance,
   bindBackup,
@@ -31,9 +33,11 @@ export type SettingsSurfaceDeps = SettingsUiDeps;
  */
 export const bindSettingsSurface = (deps: SettingsSurfaceDeps): void => {
   bindAccountLabel(deps);
+  bindAccountVisibility(deps);
   bindAddAccount(deps);
   bindImportKey(deps);
   bindImportPhrase(deps);
+  bindFindAccounts(deps);
   bindAppearance(deps);
   bindBackup(deps);
   bindContacts(deps);

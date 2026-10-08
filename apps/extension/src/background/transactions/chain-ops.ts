@@ -185,9 +185,10 @@ export const executeSignApproval = async (
   // hang on an unhandled throw. Fails closed — no signature returned on error.
   try {
     // OpenZeppelin is the only family whose encoding does not depend on a live
-    // class. Every other family is checked before the key is used: Braavos is
-    // view-only, and an unupgraded Argent 0.3.x account cannot verify the 0.4
-    // encoding this wallet emits.
+    // class. Every other family is checked before the key is used: a Braavos
+    // account must run a known implementation with the wallet key as its first
+    // stark signer and no active 2FA, and an unupgraded Argent 0.3.x account
+    // cannot verify the 0.4 encoding this wallet emits.
     if (account.accountContractType !== "openzeppelin") {
       await withRpcFallback(
         networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),

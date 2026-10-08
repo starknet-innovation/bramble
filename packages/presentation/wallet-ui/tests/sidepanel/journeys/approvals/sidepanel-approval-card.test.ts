@@ -140,6 +140,22 @@ describe("invoke approval card fee review (#189)", () => {
     );
   });
 
+  test("an undeployed Braavos account is told to deploy first, with no retry", () => {
+    const deployFirst: PendingApproval = {
+      ...withFee,
+      deployFirst: true,
+      fee: null,
+      requiresDeployment: true,
+    };
+    const html = activity([deployFirst]);
+    expect(html).toContain("Deploy this account first (Settings → Deploy account).");
+    expect(html).not.toContain("estimated once this account is deployed");
+    expect(html).not.toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
+    expect(html).toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
+    );
+  });
+
   test("an undeployed account reuses the Send wording instead of a fee amount", () => {
     const undeployed: PendingApproval = { ...withFee, fee: null, requiresDeployment: true };
     expect(activity([undeployed])).toContain(

@@ -52,16 +52,23 @@ export type RecoveryDerivationKind = "argentx-bip44" | "starknet-bip44";
  * Why a detected account can be watched but not signed for from this wallet
  * (issue 542): a guardian is a second approver the phrase cannot supply, a
  * changed owner means the phrase no longer holds the key, an unsupported owner
- * type signs in a way this wallet cannot produce, and an unauthorizable live
- * release expects an encoding it does not emit.
+ * type signs in a way this wallet cannot produce, an unauthorizable live
+ * release expects an encoding it does not emit, and a strong signer (Braavos
+ * 2FA/3FA) demands a device approval beside the key.
  */
-export type RecoverySigningRestriction = "guardian" | "owner-changed" | "owner-type" | "release";
+export type RecoverySigningRestriction =
+  | "guardian"
+  | "owner-changed"
+  | "owner-type"
+  | "release"
+  | "strong-signer";
 
 const SIGNING_RESTRICTIONS: readonly RecoverySigningRestriction[] = [
   "guardian",
   "owner-changed",
   "owner-type",
   "release",
+  "strong-signer",
 ];
 
 /**
@@ -189,6 +196,21 @@ export const recoveryScanTarget = (candidates: readonly RecoveryAccountCandidate
     RECOVERY_SCAN_LIMITS.maxScannedIndexes,
   );
 };
+
+/**
+ * Why the active account cannot sign on the wallet's own surfaces (issue 54x):
+ * one of the per-account signing restrictions; "braavos", a Braavos account
+ * this wallet cannot authorize for at all; or "undeployed", a Braavos
+ * counterfactual that must be deployed through its own reviewed step before
+ * it can send anything.
+ */
+export type ReadOnlyReason = RecoverySigningRestriction | "braavos" | "undeployed";
+
+/** Validates a read-only reason at runtime boundaries. */
+export const isReadOnlyReason = (value: unknown): value is ReadOnlyReason =>
+  value === "braavos" ||
+  value === "undeployed" ||
+  SIGNING_RESTRICTIONS.includes(value as RecoverySigningRestriction);
 
 /** Validates one public discovery result before caching or rendering it. */
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>

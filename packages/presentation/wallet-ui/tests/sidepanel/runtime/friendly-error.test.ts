@@ -20,6 +20,14 @@ describe("friendlyError", () => {
     }
   });
 
+  // A broken class-hash answer can surface on any family's live check, so its
+  // copy names neither Argent nor Braavos.
+  test("reads an invalid class-hash answer as an unreadable account", () => {
+    expect(friendlyError("RPC returned an invalid account class hash").message).toBe(
+      "Couldn't read this account. Try again.",
+    );
+  });
+
   // The raw string names neither cause nor remedy, so the mapping supplies the
   // fix — and stays network-agnostic, since the guard fires on every network.
   test("turns the write-path chain guard into an actionable endpoint hint", () => {
@@ -27,6 +35,62 @@ describe("friendlyError", () => {
     expect(result.message).toContain("nothing was submitted");
     expect(result.message).toContain("Advanced");
     expect(result.message).not.toContain("Devnet");
+  });
+
+  // The exact strings argent-recovery.ts and account-recovery.ts throw.
+  test("maps the recovery refusals to reviewed copy", () => {
+    for (const [raw, message] of [
+      [
+        "This account has a backup guardian, so the guardian cannot be removed with the recovery phrase",
+        "This account has a backup guardian, so the recovery phrase can't remove its guardian.",
+      ],
+      [
+        "Could not check this account's backup guardian",
+        "Couldn't check this account's backup guardian. Try again.",
+      ],
+      [
+        "Account recovery is not available for Ledger accounts",
+        "Removing 2FA or a guardian isn't available for Ledger accounts.",
+      ],
+      [
+        "The active account changed. Review the recovery again.",
+        "You switched accounts. Review the recovery again.",
+      ],
+      [
+        "This account allows one escape attempt every 12 hours",
+        "This account allows one escape attempt every 12 hours. Try again later.",
+      ],
+      [
+        "Could not check this account's escape limit",
+        "Couldn't check this account's escape limit. Try again.",
+      ],
+      [
+        "second factor removal unavailable",
+        "Couldn't load 2FA or guardian removal. Check your connection and try again.",
+      ],
+      [
+        "second factor removal unconfirmed",
+        "Couldn't confirm the 2FA or guardian removal. Check activity before trying again.",
+      ],
+      [
+        "Deployed Argent account class is not one this wallet can recover",
+        "This account runs a Ready release this wallet can't recover. Use it in Ready.",
+      ],
+      [
+        "This account's signer setup cannot be recovered with the recovery phrase",
+        "This account's signers can't be recovered with the recovery phrase.",
+      ],
+      [
+        "The account reported an unrecognised escape",
+        "This account reported a guardian state this wallet can't read. Use it in Ready.",
+      ],
+    ] as const) {
+      expect(friendlyError(raw).message).toBe(message);
+    }
+    // The account-discovery flow keeps its own wording.
+    expect(friendlyError("account recovery unavailable").message).toBe(
+      "Couldn't recover accounts. Check your connection and try again.",
+    );
   });
 
   test("maps 'wallet unavailable' to a friendly message", () => {

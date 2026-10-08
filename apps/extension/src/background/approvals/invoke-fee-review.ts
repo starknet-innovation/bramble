@@ -16,9 +16,11 @@
  */
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { UndeployedBraavosError } from "@bramble/starknet/deployment";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
@@ -89,12 +91,28 @@ export const FAILED_INVOKE_FEE: InvokeFeeReview = {
 };
 
 /**
+ * The review of an invoke from an undeployed Braavos account: it deploys only
+ * through its own reviewed step, so the card says so instead of offering a fee
+ * or a retry, and Approve stays disabled (there is no fee to bind).
+ */
+const DEPLOY_FIRST_INVOKE_FEE: InvokeFeeReview = {
+  deployFirst: true,
+  fee: null,
+  feeAffordability: "unknown",
+  feeEstimateFailed: false,
+  feeEstimatePending: false,
+  requiresDeployment: true,
+};
+
+/**
  * Estimates the fee for a queued dapp invoke, mirroring the Send review's shape
  * (deployment status → estimate → `resolveReviewFee`) so both journeys classify
  * fee outcomes identically. Nothing is broadcast or signed because the RPC
  * estimate skips account validation. Any failure — transport, RPC, or signer
  * construction — degrades to a retryable "estimate failed" state rather than
- * throwing, so a queued approval never dies of a fee it could not price.
+ * throwing, so a queued approval never dies of a fee it could not price. The
+ * one exception is an undeployed Braavos account, answered with a deploy-first
+ * review — by account state, or by the platform's typed refusal.
  */
 export const estimateInvokeApprovalFee = async (
   deps: InvokeFeeReviewDeps,
@@ -109,6 +127,7 @@ export const estimateInvokeApprovalFee = async (
   const deployed = await deps.runtimeRpc
     .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
     .catch(() => true);
+  if (!deployed && isDeployableBraavos(account)) return DEPLOY_FIRST_INVOKE_FEE;
   let estimated: FeeEstimate | null = null;
   if (deployed) {
     try {
@@ -119,7 +138,8 @@ export const estimateInvokeApprovalFee = async (
         rpcUrls,
         signHash: review.signer(),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof UndeployedBraavosError) return DEPLOY_FIRST_INVOKE_FEE;
       estimated = null;
     }
   }

@@ -45,6 +45,7 @@ export const createBackgroundPreferences = ({
     removeToken: async (input) => (await required()).removeToken(input),
     renameGroup: async (input) => (await required()).renameGroup(input),
     saveAddress: async (input) => (await required()).saveAddress(input),
+    setAccountHidden: async (input) => (await required()).setAccountHidden(input),
     setAccountInGroup: async (input) => (await required()).setAccountInGroup(input),
     setAccountLabel: async (input) => (await required()).setAccountLabel(input),
     setActiveNetwork: async (input) => (await required()).setActiveNetwork(input),

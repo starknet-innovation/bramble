@@ -77,12 +77,21 @@ if (
 }
 
 // Reviewed security pins for transitive dependencies used by build/terminal tooling.
+// source-map-js reaches the build through postcss (via vite, jsdom and web-ext's
+// addons-linter) and madge; 1.2.2 is the first release without
+// GHSA-68fv-2mgg-jv7q. sharp reaches the website through wrangler/miniflare;
+// 0.35.5 is the first release without GHSA-wq5f-xc86-pv6w. shell-quote reaches
+// web-ext through fx-runner, which pins 1.10.0; 1.11.0 is the first release
+// without GHSA-pqg4-j6r4-53mv. The pins keep `bun audit` green until the
+// parents' ranges move up on their own.
 const overrides = packageJson["overrides"];
 if (
   !isRecord(overrides) ||
-  !hasOnlyKeys(overrides, ["qs", "sharp"]) ||
+  !hasOnlyKeys(overrides, ["qs", "sharp", "shell-quote", "source-map-js"]) ||
   overrides["qs"] !== "6.16.0" ||
-  overrides["sharp"] !== "0.35.4"
+  overrides["sharp"] !== "0.35.5" ||
+  overrides["shell-quote"] !== "1.11.0" ||
+  overrides["source-map-js"] !== "1.2.2"
 ) {
   failures.push("package.json must retain the reviewed security overrides");
 }

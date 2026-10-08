@@ -6,6 +6,7 @@ import {
   isBoundedServiceUrlList,
   isServiceUrl,
   isWebSocketServiceUrl,
+  normalizeHostname,
   trimTrailingSlashes,
 } from "@bramble/core/service-url";
 
@@ -34,6 +35,13 @@ describe("service URLs", () => {
       "https://service.example/path",
     );
     expect(trimTrailingSlashes("////")).toBe("");
+  });
+
+  test("normalizes a hostname for comparison without changing the rest", () => {
+    expect(normalizeHostname("Example.COM")).toBe("example.com");
+    expect(normalizeHostname("example.com.")).toBe("example.com");
+    expect(normalizeHostname("sub.example.com.")).toBe("sub.example.com");
+    expect(normalizeHostname("127.0.0.1")).toBe("127.0.0.1");
   });
 
   test("bounds the number of entries in a dapp endpoint list (Sherlock audit 153)", () => {

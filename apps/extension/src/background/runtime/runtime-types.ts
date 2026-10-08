@@ -19,7 +19,7 @@ import type { SwapCatalogToken } from "@bramble/transactions/avnu";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
+import type { ReadOnlyReason, RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
 import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
@@ -40,6 +40,11 @@ import type {
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
+import type {
+  AccountRecoveryState,
+  RecoverAccountResponse,
+  RecoveryReviewResponse,
+} from "./recovery-types";
 import type {
   FeeReviewResponse,
   TransferResponse,
@@ -209,9 +214,8 @@ type TokenChartResponse = {
 };
 
 /**
- * Verified AVNU token catalog returned to extension pages for the swap
- * picker. Directory data only — a selected untracked token is re-validated
- * on-chain by the add-token flow before the wallet trusts it.
+ * Verified AVNU token catalog for the swap picker. Directory data only — a
+ * selected untracked token is re-validated on-chain before the wallet trusts it.
  */
 type SwapTokensResponse = {
   readonly ok: true;
@@ -277,10 +281,20 @@ type DeploymentStatusResponse = {
 };
 
 /**
- * On-chain class-hash verification returned to extension pages. `verification`
- * carries the discriminated {@link ClassHashVerification} outcome so the UI can
- * distinguish verified / mismatch / undeployed / unreachable without re-reading
- * the chain.
+ * Active-account signability verdict for the Home read-only flag; `reason`
+ * accompanies `readOnly: true` and never carries secret material.
+ */
+type AccountSignabilityResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly readOnly: boolean;
+  readonly reason?: ReadOnlyReason;
+  readonly recovery?: AccountRecoveryState;
+};
+
+/**
+ * On-chain class-hash verification: the discriminated
+ * {@link ClassHashVerification} outcome, so the UI need not re-read the chain.
  */
 type ClassHashVerificationResponse = {
   readonly accountId: string;
@@ -407,6 +421,9 @@ type LedgerAccountStatusResponse = {
  * Union of supported background message responses.
  */
 export type RuntimeResponse =
+  | AccountSignabilityResponse
+  | RecoveryReviewResponse
+  | RecoverAccountResponse
   | AccountsResponse
   | ActivityResponse
   | AddChainResponse

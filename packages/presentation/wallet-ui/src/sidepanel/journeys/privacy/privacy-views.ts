@@ -16,7 +16,11 @@ import { networkDisplayName } from "../../shared/network-label";
 import { flowHeader, flowScreen, formatFri } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { formatFeeEstimate, reviewPanel } from "../../shared/review-render";
-import type { PrivacyBlockerKind, PrivacyJourneyState } from "./privacy-model";
+import type {
+  PrivacyBlockerKind,
+  PrivacyDisclosureState,
+  PrivacyJourneyState,
+} from "./privacy-model";
 import { type PreparationProgress, preparationProgressText } from "./privacy-preparation-job";
 
 /**
@@ -208,17 +212,35 @@ const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "succes
     </div>
   </section>`;
 
-const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failure" }>): string => `
-  <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive">
-    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg></span>
-    <h2>Private transaction not completed</h2>
+const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failure" }>): string => {
+  // A submission whose reply was lost is a warning, not a failure: it may still
+  // be on chain, so it leads with Activity rather than the Try again a failure
+  // offers (issue 382). The mark switches to the "!" the send receipt uses.
+  const warning = journey.severity === "warning";
+  return `
+  <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive" data-severity="${journey.severity}">
+    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /><path class="privacy-unknown-mark" d="M28 17v13m0 8v1" /></svg></span>
+    <h2>${warning ? "Status unknown" : "Private transaction not completed"}</h2>
     <p>${escapeHtml(journey.error)}</p>
-    <p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>
+    ${
+      warning
+        ? ""
+        : '<p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>'
+    }
     <div class="privacy-actions">
-      ${button({ attributes: { id: "privacy-retry" }, label: "Try again" })}
+      ${
+        warning
+          ? button({
+              attributes: { "data-view": "activity" },
+              icon: "activity",
+              label: "View activity",
+            })
+          : button({ attributes: { id: "privacy-retry" }, label: "Try again" })
+      }
       ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
     </div>
   </section>`;
+};
 
 type BlockedCopy = {
   readonly action: string;
@@ -278,14 +300,27 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
   },
 };
 
-const blocked = (journey: Extract<PrivacyJourneyState, { readonly stage: "blocked" }>): string => {
+const blocked = (
+  journey: Extract<PrivacyJourneyState, { readonly stage: "blocked" }>,
+  disclosure: PrivacyDisclosureState | null,
+): string => {
   const copy = BLOCKED_COPY[journey.blocker.kind];
+  // The refusal names the missing STRK but not the amount. The fund screen is
+  // the one place the reader can act on a number, so it states the pool fee the
+  // registration needs when the disclosure has read one; a network-fee estimate
+  // does not exist yet, so that cost is named without a figure.
+  const poolFeeFri = journey.blocker.kind === "fund" ? disclosure?.value?.poolFeeFri : undefined;
+  const requirement =
+    poolFeeFri === undefined
+      ? ""
+      : `<p class="hint">Registration needs ${escapeHtml(formatFri(poolFeeFri))} for the pool fee, plus a network fee.</p>`;
   return `
   <section class="privacy-outcome privacy-blocked" role="status" aria-live="polite" data-privacy-blocker="${journey.blocker.kind}">
     <span class="privacy-outcome-mark" aria-hidden="true">${icon("shield")}</span>
     <h2>${escapeHtml(copy.title)}</h2>
     <p>${escapeHtml(copy.body)}</p>
     <p class="hint">${escapeHtml(journey.blocker.message)}</p>
+    ${requirement}
     <div class="privacy-actions">
       ${copy.action}
       ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
@@ -300,6 +335,7 @@ export const privacyFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
   journey: PrivacyJourneyState,
+  disclosure: PrivacyDisclosureState | null = null,
 ): string => {
   const tokenId = journey.stage === "idle" ? null : journey.tokenId;
   const token =
@@ -310,7 +346,7 @@ export const privacyFlow = (
     journey.stage === "activate-review"
       ? preparationDetails(journey, status)
       : journey.stage === "blocked"
-        ? blocked(journey)
+        ? blocked(journey, disclosure)
         : journey.stage === "preparing"
           ? preparing(journey)
           : journey.stage === "working"

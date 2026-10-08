@@ -290,6 +290,76 @@ describe("recovery discovery", () => {
     expect(probed.every((address) => argentAddresses.has(address))).toBe(true);
   });
 
+  test("labels deployed Braavos candidates with the Braavos signability probe", async () => {
+    // The Braavos probe, not the Argent one, answers for deployed Braavos rows
+    // (a 2FA signer labels the row view-only); OpenZeppelin is never probed.
+    const probed: Array<readonly [string, string]> = [];
+    const deps = {
+      activeStateCoordinator: createActiveStateCoordinator(),
+      preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+      recoveryDiscovery: createRecoveryDiscoveryCache(),
+      runtimeRpc: {
+        ...defaultRuntimeRpc,
+        async getArgentSigningRestriction({ accountAddress }: { readonly accountAddress: string }) {
+          probed.push(["argent", accountAddress]);
+          return null;
+        },
+        async getBraavosSigningRestriction({
+          accountAddress,
+        }: {
+          readonly accountAddress: string;
+        }) {
+          probed.push(["braavos", accountAddress]);
+          return "strong-signer" as const;
+        },
+        async getDeploymentStatus() {
+          return true;
+        },
+      },
+      session: createUnlockSession(),
+      wallet: {
+        ...walletStub,
+        async previewAccount(input: AccountDerivationInput) {
+          const base = accountFor(input);
+          if (input.accountContractType !== "braavos") return base;
+          // One distinct Braavos address per deployment class scanned.
+          const classIndex = deploymentClasses("braavos").findIndex(
+            (entry) => entry.classHash === input.classHash,
+          );
+          const address = `0x${(0xb00 + (input.accountIndex ?? 0) * 8 + classIndex).toString(16)}`;
+          return {
+            ...base,
+            accountContractType: "braavos" as const,
+            address,
+            classHash: canonicalFelt(input.classHash ?? "") ?? "",
+            deploymentSalt: base.publicKeyX,
+            id: `SN_MAIN:${address}`,
+          };
+        },
+      },
+    };
+    const response = (await handleOnboardingOps(deps, "wallet.discoverRecoveryAccounts", {
+      manualIndex: 0,
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      networkId: "SN_MAIN",
+      type: "wallet.discoverRecoveryAccounts",
+    })) as { readonly candidates: readonly RecoveryAccountCandidate[] };
+
+    const byFamily = (family: string) =>
+      response.candidates.filter((candidate) => candidate.account.accountContractType === family);
+    const braavos = byFamily("braavos");
+    expect(braavos.length).toBeGreaterThan(0);
+    expect(braavos.every((candidate) => candidate.restriction === "strong-signer")).toBe(true);
+    expect(byFamily("argent").every((candidate) => candidate.restriction === undefined)).toBe(true);
+    const braavosAddresses = new Set(braavos.map((candidate) => candidate.account.address));
+    const braavosProbes = probed.filter(([family]) => family === "braavos");
+    expect(braavosProbes.map(([, address]) => address).sort()).toEqual(
+      [...braavosAddresses].sort(),
+    );
+    const ozAddresses = new Set(byFamily("openzeppelin").map((c) => c.account.address));
+    expect(probed.some(([, address]) => ozAddresses.has(address))).toBe(false);
+  });
+
   test("previews every Argent release an account could have been deployed with", async () => {
     // A Ready account deployed at Argent 0.3.x keeps that address forever,
     // whatever it upgrades to. Scanning only the release this wallet creates

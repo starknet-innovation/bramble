@@ -53,6 +53,22 @@ describe("PendingApproval fee review validation (#189)", () => {
     );
   });
 
+  test("accepts a deploy-first review only in its one consistent shape", () => {
+    const deployFirst = { deployFirst: true, fee: null, requiresDeployment: true };
+    expect(isPendingApprovalsResponse(response(invokeApproval(deployFirst)))).toBe(true);
+    for (const contradiction of [
+      { deployFirst: false },
+      { ...deployFirst, fee: { overallFee: "1", unit: "FRI" } },
+      { ...deployFirst, requiresDeployment: false },
+      { ...deployFirst, feeEstimateFailed: true },
+      { ...deployFirst, feeEstimatePending: true },
+    ]) {
+      expect(isPendingApprovalsResponse(response(invokeApproval(contradiction)))).toBe(false);
+    }
+    const connect = { id: INVOKE_ID, kind: "connect", origin: "https://dapp.example" };
+    expect(isPendingApprovalsResponse(response({ ...connect, deployFirst: true }))).toBe(false);
+  });
+
   test("accepts the undeployed and estimate-failed states", () => {
     expect(
       isPendingApprovalsResponse(response(invokeApproval({ fee: null, requiresDeployment: true }))),

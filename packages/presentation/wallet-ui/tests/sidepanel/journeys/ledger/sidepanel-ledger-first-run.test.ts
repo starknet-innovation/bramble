@@ -244,6 +244,7 @@ const entryHarness = () => {
     connector,
     mount,
     openImport: () => undefined,
+    openFindAccounts: () => undefined,
     openImportSeed: () => undefined,
     openMultisig: () => {
       multisigs += 1;
