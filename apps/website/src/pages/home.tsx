@@ -10,7 +10,7 @@ const features = [
   ],
   [
     "Super fast transactions.",
-    "Starknet's fastest moving wallet. Requests confirm in a breath, and fees stay small enough to forget.",
+    "Starknet's fastest moving wallet. Requests confirm in a breath, with minimal protocol fees.",
   ],
   [
     "Every request in plain words.",
