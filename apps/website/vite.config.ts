@@ -20,6 +20,7 @@ export default defineConfig({
         home: `${root}index.html`,
         privacy: `${root}privacy/index.html`,
         support: `${root}support/index.html`,
+        terms: `${root}terms/index.html`,
       },
     },
   },
