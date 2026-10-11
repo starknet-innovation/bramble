@@ -221,6 +221,12 @@ const retryDeclarationFee = async (
   }
   const revision = deps.approvals.beginFeeEstimate(input.id);
   if (!revision) return { error: "approval not found" };
+  // Withdraw the reviewed fee while the estimate is redone, so nothing can be
+  // approved against it. The withdrawn shape is a failed estimate, the one
+  // fee-less shape the panel accepts: an "estimating" shape (no fee, no
+  // failure) is dropped by the panel's validator, which hid the card, and an
+  // early return below would have left it hidden (Sherlock 241). A failed
+  // estimate keeps the card on screen with its retry control.
   if (
     !approval.declaration ||
     !deps.approvals.updateFee(revision, {
@@ -230,7 +236,7 @@ const retryDeclarationFee = async (
         deploymentFee: null,
         deploymentFeeEstimateFailed: false,
         fee: null,
-        feeEstimateFailed: false,
+        feeEstimateFailed: true,
       },
       kind: "declare",
     })
