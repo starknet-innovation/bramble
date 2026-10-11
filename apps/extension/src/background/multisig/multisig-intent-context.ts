@@ -5,7 +5,9 @@ import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import { matchesArgentPublicConfig, storedArgentPublicConfig } from "./multisig-config-reconcile";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
+import { recoverStaleArgentIntent } from "./multisig-operation-recovery";
 import { type ArgentMultisigContext, currentChainConfigFor } from "./multisig-ops";
+import { ARGENT_INTENT_ALREADY_SENT, refuseResendOfStaleIntent } from "./multisig-stale-intents";
 
 const contextForIntent = async (
   deps: MultisigOpsDeps,
@@ -37,6 +39,26 @@ const sameConfig = (
   left.signerGuids.length === right.signerGuids.length &&
   left.signerGuids.every((guid, index) => guid === right.signerGuids[index]);
 
+const NONCE_NOT_CURRENT = "Argent multisig intent nonce is no longer current";
+
+// A used nonce may have been used by this very transaction, sent by a
+// co-signer holding the same signed package (Sherlock 177), so the signed hash
+// is looked up before the intent is left stale.
+const nonceMismatch = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  nonce: string,
+  markStale: boolean,
+): Promise<string> => {
+  if (!markStale) return NONCE_NOT_CURRENT;
+  const stale: ArgentMultisigSigningIntent = { ...intent, state: "stale" };
+  await deps.multisigStore.upsertIntent(stale);
+  if (BigInt(nonce) <= BigInt(intent.prepared.nonce)) return NONCE_NOT_CURRENT;
+  return (await recoverStaleArgentIntent(deps, stale)).kind === "submitted"
+    ? ARGENT_INTENT_ALREADY_SENT
+    : NONCE_NOT_CURRENT;
+};
+
 /**
  * Re-resolves current account authority and nonce; stale intent authority is
  * refused and, for local operations, durably marked stale without signing.
@@ -66,9 +88,14 @@ export const currentArgentIntentContext = async (
       rpcUrls: context.rpcUrls,
     });
     if (!sameFelt(nonce, intent.prepared.nonce)) {
-      if (markStale) await deps.multisigStore.upsertIntent({ ...intent, state: "stale" });
-      return { error: "Argent multisig intent nonce is no longer current" };
+      return { error: await nonceMismatch(deps, intent, nonce, markStale) };
     }
+    // An earlier stale version of these calls may have landed since this one
+    // was prepared; signing or sending this one too would pay twice.
+    const resent = markStale
+      ? await refuseResendOfStaleIntent(deps, intent.accountId, intent.prepared.calls)
+      : null;
+    if (resent) return resent;
     const stored = storedArgentPublicConfig(context.record);
     return {
       config,

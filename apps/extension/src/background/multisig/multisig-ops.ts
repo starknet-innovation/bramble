@@ -46,6 +46,7 @@ import {
   readMultisigsInput,
 } from "./multisig-inputs";
 import { handleMultisigSignerOps } from "./multisig-signer-ops";
+import { recoverStaleIntentsFor } from "./multisig-stale-intents";
 import {
   type ArgentMultisigView,
   pendingDeploymentIds,
@@ -448,6 +449,7 @@ const refreshMultisig = async (
     config,
     context.rpcUrls,
   );
+  await recoverStaleIntentsFor(deps, refreshed.record.id);
   await markObservedArgentIntentOutcomes(deps, refreshed.record);
   await markChangedIntentsStale(deps.multisigStore, context.record.id, config);
   const intents = (await deps.multisigStore.listIntents()).filter(
