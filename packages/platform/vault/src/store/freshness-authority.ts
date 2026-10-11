@@ -21,7 +21,16 @@
  * cleared when the browser exits, so the first read of each session has nothing
  * to compare against. That read seeds the shadow with the commit it accepted,
  * so the window is one read and not the stretch until the next write. A
- * runtime without session storage has no shadow at all. Alongside the
+ * runtime without session storage has no shadow at all.
+ *
+ * The durable record also has a local mirror, in the area that holds the
+ * envelope. `storage.sync` is the fragile area: a sync-account change, a
+ * profile reset or quota eviction can drop it while `storage.local` survives,
+ * and a missing record used to be terminal. The mirror is consulted only when
+ * the durable record is absent, so a rolled-back `local` (envelope and mirror
+ * together) is still refused whenever `sync` holds the newer record; replaying
+ * it also takes deleting the `sync` record, which is the coordinated rollback
+ * of both areas this design already accepts as residual. Alongside the
  * per-lineage records the shadow keeps one store-wide marker naming the last
  * lineage promoted to current, because a version-2 envelope carries no lineage
  * and a downgrade to one could otherwise not be caught. Split out of
@@ -81,7 +90,12 @@ const vouchesFor = (state: CommitState, commit: string): boolean =>
 
 /** The two authorities a store writes its freshness records to. */
 export type FreshnessAuthority = {
-  /** Reads the durable record for a lineage, or undefined when there is none. */
+  /**
+   * Reads the durable record for a lineage, or undefined when neither it nor
+   * its local mirror exists. The durable record governs whenever it exists and
+   * is copied to the mirror; a mirror read only because the durable record is
+   * missing is copied back to the durable area.
+   */
   readonly read: (lineage: string) => Promise<CommitState | undefined>;
   /**
    * Throws when this session has already seen a committed lineage current for
@@ -97,9 +111,9 @@ export type FreshnessAuthority = {
    * shadow store.
    */
   readonly requireShadow: (lineage: string, commit: string) => Promise<void>;
-  /** Removes the record from both authorities. */
+  /** Removes the record from every authority and the mirror. */
   readonly remove: (lineage: string) => Promise<void>;
-  /** Records a transition in both authorities, the shadow first. */
+  /** Records a transition in every authority: the shadow, the mirror, then the durable record. */
   readonly set: (lineage: string, state: CommitState) => Promise<void>;
 };
 
@@ -108,12 +122,15 @@ export type FreshnessAuthority = {
  *
  * `sessionFreshnessStore` is optional because a runtime may have no session
  * storage; its absence means the durable authority is the only one, which is
- * the behaviour this store had before the shadow existed.
+ * the behaviour this store had before the shadow existed. `mirrorStore` is
+ * optional because a store whose durable records already live beside the
+ * envelope has nothing to mirror.
  */
 export const createFreshnessAuthority = (
   key: string,
   freshnessStore: KeyValueStore,
   sessionFreshnessStore?: KeyValueStore,
+  mirrorStore?: KeyValueStore,
 ): FreshnessAuthority => {
   const commitKey = (lineage: string): string => `${key}:commit:${lineage}`;
   const promotedKey = `${key}:promoted`;
@@ -160,9 +177,34 @@ export const createFreshnessAuthority = (
     }
   };
 
+  const sameState = (left: CommitState, right: CommitState): boolean =>
+    left.current === right.current && left.pending === right.pending;
+
+  // A mirror that runs ahead of the durable record is harmless for the same
+  // reason a shadow that runs ahead is, so the mirror is written before it.
+  const writeMirror = async (lineage: string, state: CommitState): Promise<void> => {
+    await mirrorStore?.set(commitKey(lineage), state);
+  };
+
   return {
-    read: (lineage) => readFrom(freshnessStore, lineage),
+    async read(lineage) {
+      const durable = await readFrom(freshnessStore, lineage);
+      const mirror = mirrorStore ? await readFrom(mirrorStore, lineage) : undefined;
+      if (durable !== undefined) {
+        if (mirrorStore && (mirror === undefined || !sameState(mirror, durable))) {
+          await writeMirror(lineage, durable);
+        }
+        return durable;
+      }
+      if (mirror !== undefined) {
+        await freshnessStore.set(commitKey(lineage), mirror);
+      }
+      return mirror;
+    },
     async remove(lineage) {
+      // Mirror first: a crash between the two must not leave a mirror that
+      // would restore a durable record already removed.
+      await mirrorStore?.remove(commitKey(lineage));
       await freshnessStore.remove(commitKey(lineage));
       if (!sessionFreshnessStore) {
         return;
@@ -192,6 +234,7 @@ export const createFreshnessAuthority = (
     },
     async set(lineage, state) {
       await writeShadow(lineage, state);
+      await writeMirror(lineage, state);
       await freshnessStore.set(commitKey(lineage), state);
     },
   };

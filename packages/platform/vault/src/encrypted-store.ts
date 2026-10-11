@@ -249,10 +249,19 @@ export const createEncryptedStore = (
 ): EncryptedStore => {
   assertStorageKey(key);
   const scope = `bramble:encrypted-store:${key}`;
-  const freshness = createFreshnessAuthority(key, freshnessStore, sessionFreshnessStore);
+  const freshness = createFreshnessAuthority(
+    key,
+    freshnessStore,
+    sessionFreshnessStore,
+    freshnessStore === store ? undefined : store,
+  );
   // This authority is deliberately store-wide, not keyed to the one v2
   // envelope present during migration. Once any v3 commit for this store is
-  // current, every earlier authentic v2 envelope must be rejected.
+  // current, every earlier authentic v2 envelope must be rejected. It lives
+  // beside the envelope, not in `freshnessStore`: `storage.sync` is shared by
+  // every synced install of this extension, and a marker one install wrote
+  // there refused another install's own, never-migrated v2 vault. A marker
+  // left there by an earlier release is moved here by the first committed read.
   const legacyKey = `${key}:legacy`;
   const keyCache = new Map<string, CryptoKey>();
   let keyCacheGeneration = 0;
@@ -276,7 +285,7 @@ export const createEncryptedStore = (
     // current in this session, any version-2 envelope is a downgrade — even one
     // whose durable legacy marker was deleted along with it.
     await freshness.requireNotPromoted();
-    const legacy = await freshnessStore.get(legacyKey);
+    const legacy = await store.get(legacyKey);
     if (legacy === undefined) {
       return envelope;
     }
@@ -294,7 +303,7 @@ export const createEncryptedStore = (
       // Migration crashed after both prepare records but before replacing the
       // legacy envelope. Abort that uncommitted write and keep v2 recoverable.
       await freshness.remove(legacy.lineage);
-      await freshnessStore.remove(legacyKey);
+      await store.remove(legacyKey);
       return envelope;
     }
     throw new WalletError("Encrypted store rollback detected");
@@ -323,6 +332,7 @@ export const createEncryptedStore = (
         version: 1,
       });
     }
+    await claimLegacyState(envelope.lineage);
     return envelope;
   };
 
@@ -341,12 +351,31 @@ export const createEncryptedStore = (
   };
 
   const prepareLegacyState = async (lineage: string): Promise<void> => {
-    const legacy = await freshnessStore.get(legacyKey);
+    const legacy = await store.get(legacyKey);
     if (legacy !== undefined && !isLegacyState(legacy)) {
       throw new WalletError("Invalid encrypted store commit state");
     }
     if (legacy === undefined) {
-      await freshnessStore.set(legacyKey, { lineage, version: 1 });
+      await store.set(legacyKey, { lineage, version: 1 });
+    }
+  };
+
+  // A committed envelope that has just been accepted proves this store is
+  // past version 2, so the local marker can be written without a write: an
+  // install migrated by an earlier release, whose marker went to the shared
+  // area, gets its own here. The shared marker is removed only when it names
+  // this lineage, so it stops refusing the v2 vault of another synced install
+  // still on an earlier release; a marker naming another lineage is not ours.
+  const claimLegacyState = async (lineage: string): Promise<void> => {
+    if ((await store.get(legacyKey)) === undefined) {
+      await store.set(legacyKey, { lineage, version: 1 });
+    }
+    if (freshnessStore === store) {
+      return;
+    }
+    const shared = await freshnessStore.get(legacyKey);
+    if (isLegacyState(shared) && shared.lineage === lineage) {
+      await freshnessStore.remove(legacyKey);
     }
   };
 
