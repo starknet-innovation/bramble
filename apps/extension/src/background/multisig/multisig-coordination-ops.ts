@@ -1,4 +1,5 @@
 /** Explicit Nostr share and sync operations for existing Argent multisig intents. */
+import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type {
   ArgentMultisigRecord,
@@ -248,23 +249,57 @@ const nostrSyncSince = (nowSeconds: number, syncedAt: number | undefined): numbe
       : nowSeconds - NOSTR_SYNC_LOOKBACK_SECONDS,
   );
 
+// Import refusals that depend only on the package and the account's settled
+// history, so retrying the same wrap can never succeed. Any other refusal
+// (another active network, an RPC or storage failure, a full intent store) is
+// left without a receipt and retried while the wrap stays inside the
+// incremental lookback (Sherlock 129).
+const FINAL_IMPORT_REFUSALS: ReadonlySet<string> = new Set([
+  "Argent multisig intent conflict",
+  "Argent multisig intent invalid",
+  "Argent multisig intent is stale after a configuration change",
+  "Argent multisig intent nonce is no longer current",
+  "Argent multisig not found",
+  "conflicting Argent multisig intent id",
+  "invalid Argent multisig intent package",
+]);
+
+/** What one opened wrap did, and whether it may be skipped by later syncs. */
+type SharedIntentImport = { readonly intentId?: string; readonly final: boolean };
+
 const importSharedIntent = async (
   deps: MultisigOpsDeps,
   opened: NostrApplicationData,
   contacts: readonly AddressBookEntry[],
   records: readonly ArgentMultisigRecord[],
-): Promise<string | null> => {
+): Promise<SharedIntentImport> => {
   const input = trustedSharedIntent(opened, contacts, records);
-  if (!input) return null;
+  if (!input) return { final: true };
   const current = await deps.multisigStore.getIntent(input.package.intent.id);
-  if (!sharedIntentHasUpdate(current, input.package.intent)) return null;
+  if (!sharedIntentHasUpdate(current, input.package.intent)) return { final: true };
   const response = await runActiveStateMutation(deps.activeStateCoordinator, () =>
     handleMultisigTxOps(deps, "wallet.importArgentMultisigIntent", {
       package: input.package,
       type: "wallet.importArgentMultisigIntent",
     }),
   );
-  return response && !("error" in response) ? input.package.intent.id : null;
+  if (!response) return { final: false };
+  if (!("error" in response)) return { final: true, intentId: input.package.intent.id };
+  const refusal = response.error;
+  return { final: typeof refusal === "string" && FINAL_IMPORT_REFUSALS.has(refusal) };
+};
+
+// One wrap can never stop the rest of a sync (Sherlock 141). The call-safety
+// validators throw a `WalletError` for a call set that can never become valid,
+// which is final; any other throw is treated as a failure worth retrying.
+const importSharedIntentSafely = async (
+  ...args: Parameters<typeof importSharedIntent>
+): Promise<SharedIntentImport> => {
+  try {
+    return await importSharedIntent(...args);
+  } catch (error) {
+    return { final: error instanceof WalletError };
+  }
 };
 
 const importGiftWraps = async (
@@ -289,10 +324,12 @@ const importGiftWraps = async (
     if (!isAuthorized()) return null;
     const content = opened[index];
     if (!content) continue;
+    const result = await importSharedIntentSafely(deps, content, contacts, records);
+    if (result.intentId) imported.add(result.intentId);
+    // A receipt only for a wrap this sync finished with: imported, a no-op, or
+    // refused for good. A wrap refused for a passing reason is opened again.
     const event = events[index];
-    if (event) verifiedEventIds.add(event.id);
-    const intentId = await importSharedIntent(deps, content, contacts, records);
-    if (intentId) imported.add(intentId);
+    if (event && result.final) verifiedEventIds.add(event.id);
   }
   return { intentIds: [...imported], verifiedEventIds: [...verifiedEventIds] };
 };
