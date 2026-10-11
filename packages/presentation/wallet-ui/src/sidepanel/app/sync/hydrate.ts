@@ -377,14 +377,23 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (multisigBalanceView && selectedMultisigId) {
     fill(multisig.loadBalances(selectedMultisigId, false, refreshReason === "action"), (value) => {
+      // A failed read keeps only this account's own last balances, marked
+      // stale. Another account's balances must never be relabelled as this
+      // one's (Sherlock 209).
+      const previous = cache.multisigBalances;
+      const ownPrevious =
+        cache.multisigBalanceId === selectedMultisigId &&
+        "balances" in previous &&
+        previous.accountId === selectedMultisigId &&
+        previous.networkId === status.networkId;
       cache.multisigBalanceId = selectedMultisigId;
       if ("balances" in value) {
         cache.multisigBalances =
           value.accountId !== selectedMultisigId || value.networkId !== status.networkId
             ? { error: "multisig balances unavailable" }
             : value;
-      } else if (!("error" in cache.multisigBalances)) {
-        cache.multisigBalances = { ...cache.multisigBalances, stale: true };
+      } else if (ownPrevious) {
+        cache.multisigBalances = { ...previous, stale: true };
       } else {
         cache.multisigBalances = value;
       }
