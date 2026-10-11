@@ -148,6 +148,8 @@ const session = createBackgroundUnlockSession({
     for (const store of [vaultStores?.primary, vaultStores?.staging]) {
       store?.clearKeys();
     }
+    // Declared below; this runs only when the session locks, long after.
+    void wallet.then((service) => service?.clearGrantCache());
   },
 });
 // Storage lockdown is a startup prerequisite, not a best-effort side effect.

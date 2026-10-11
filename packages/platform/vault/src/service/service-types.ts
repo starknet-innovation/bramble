@@ -292,6 +292,12 @@ export type WalletVaultService = {
     vaultPassphrase: string,
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /**
+   * Drops the in-memory grant projection `getGrantedAccounts` answers from.
+   * Called when the wallet locks, beside the derived-key caches; the next
+   * read after unlock repopulates it.
+   */
+  readonly clearGrantCache: () => void;
   /** Restores a confirmed bounded set in one encrypted-vault commit. */
   /**
    * Imports selected accounts from another recovery phrase into the unlocked
