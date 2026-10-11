@@ -213,6 +213,27 @@ export const showToast = (
   tone: ToastTone,
   context: Document | Element | null | undefined,
   details: string = message,
+): void =>
+  renderToast(tone === "error" ? friendlyError(message).message : message, tone, context, details);
+
+/**
+ * Shows a sentence the wallet wrote itself as an error toast, exactly as
+ * written. `showToast` maps an error through `friendlyError`, which rewrites a
+ * message by the words it contains; a wallet-authored notice quoting a
+ * dapp-chosen summary must not be rewritten into unrelated copy, such as a
+ * revert warning shown as a rate-limit message because the summary says 429
+ * (Sherlock 219).
+ */
+export const showNoticeToast = (
+  message: string,
+  context: Document | Element | null | undefined,
+): void => renderToast(message, "error", context, message);
+
+const renderToast = (
+  display: string,
+  tone: ToastTone,
+  context: Document | Element | null | undefined,
+  details: string,
 ): void => {
   const doc = documentFor(context);
   const stackId = "toast-stack";
@@ -224,7 +245,6 @@ export const showToast = (
     doc.body.append(stack);
   }
 
-  const friendly = tone === "error" ? friendlyError(message) : null;
   const toast = doc.createElement("div");
   toast.className = `toast ${tone}`;
   const mark = doc.createElement("span");
@@ -233,7 +253,7 @@ export const showToast = (
   toast.append(mark);
   const text = doc.createElement("span");
   text.className = "toast-text";
-  text.textContent = friendly ? friendly.message : message;
+  text.textContent = display;
   toast.append(text);
   if (tone === "error") {
     toast.append(toastCopyButton(doc, details));
