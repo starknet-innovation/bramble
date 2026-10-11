@@ -168,6 +168,9 @@ describe("wallet operations", () => {
     expect(activity[0]?.hash).toBe("0x7ab");
     expect(activity[0]?.status).toBe("accepted");
     expect(activity[0]?.summary).toContain("Send 1.5 ETH");
+    // Recorded as outgoing, so the feed never reads the direction from the
+    // symbol in the summary (Sherlock 196).
+    expect((activity[0] as { direction?: string } | undefined)?.direction).toBe("out");
     expect(statusRequests).toEqual([["0x7ab"]]);
     const stored = await activityLog.list();
     expect(stored.find((entry) => entry.hash === "0x8ab")?.status).toBe("pending");

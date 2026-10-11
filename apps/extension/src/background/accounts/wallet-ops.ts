@@ -338,6 +338,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     accountId: account.id,
     amount: input.amount,
     counterparty: input.recipient,
+    direction: "out" as const,
     hash,
     kind: "transfer" as const,
     networkId: account.networkId,

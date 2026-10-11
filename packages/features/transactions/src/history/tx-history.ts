@@ -200,6 +200,7 @@ export const onChainActivityEntry = (input: {
     accountId,
     amount,
     counterparty: decoded.counterparty,
+    direction: decoded.direction,
     hash: decoded.hash,
     kind: "transfer",
     networkId,

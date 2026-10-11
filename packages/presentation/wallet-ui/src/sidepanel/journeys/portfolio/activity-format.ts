@@ -104,12 +104,37 @@ const privateAppearance = (summary: string): ActivityAppearance => {
   return { ...base, direction: null, title: "Private transaction" };
 };
 
+const transferAppearance = (direction: "in" | "out"): ActivityAppearance => ({
+  direction,
+  icon: direction === "in" ? "arrowDownLeft" : "arrowDownRight",
+  label: "Transfer",
+  title: direction === "in" ? "Received" : "Sent",
+  type: "transfer",
+});
+
+// The direction of a transfer row, read from what the wallet recorded rather
+// than from words anywhere in the summary. A summary embeds the token symbol,
+// which a third party chooses, so "SWAP" or "RECEIVED" as a symbol must not
+// change the verb or the arrow (Sherlock 196). Discovered rows written before
+// `direction` existed begin with the wallet's own "Received " or "Sent ".
+const recordedTransferDirection = (entry: ActivityEntry): "in" | "out" | null => {
+  if (entry.kind !== "transfer") return null;
+  if (entry.direction !== undefined) return entry.direction;
+  if (entry.origin === "wallet") return null;
+  if (entry.summary.startsWith("Received ")) return "in";
+  if (entry.summary.startsWith("Sent ")) return "out";
+  return null;
+};
+
 /**
- * Classifies an entry from its summary and kind. The summary wording is the
- * only signal for swaps, staking, rewards, privacy, and approvals; the stored
- * kind decides the rest, so a transfer always reads as Received or Sent.
+ * Classifies an entry. A transfer whose direction the wallet recorded reads as
+ * Received or Sent from that alone. Otherwise the summary wording is the only
+ * signal for swaps, staking, rewards, privacy, and approvals, and the stored
+ * kind decides the rest.
  */
 export const activityAppearance = (entry: ActivityEntry): ActivityAppearance => {
+  const recorded = recordedTransferDirection(entry);
+  if (recorded !== null) return transferAppearance(recorded);
   const summary = entry.summary.toLowerCase();
   if (SWAP.test(summary))
     return {
@@ -152,16 +177,7 @@ export const activityAppearance = (entry: ActivityEntry): ActivityAppearance => 
       title: /\brevok/.test(summary) ? "Revoked" : "Approved",
       type: "approval",
     };
-  if (entry.kind === "transfer") {
-    const received = RECEIVED.test(summary);
-    return {
-      direction: received ? "in" : "out",
-      icon: received ? "arrowDownLeft" : "arrowDownRight",
-      label: "Transfer",
-      title: received ? "Received" : "Sent",
-      type: "transfer",
-    };
-  }
+  if (entry.kind === "transfer") return transferAppearance(RECEIVED.test(summary) ? "in" : "out");
   if (entry.kind === "deploy")
     return {
       direction: null,

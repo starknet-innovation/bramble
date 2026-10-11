@@ -124,3 +124,11 @@ describe("timestamps past the Date range", () => {
     expect(entries.map((entry) => entry.hash)).toEqual(["0xb22"]);
   });
 });
+
+describe("recorded direction (Sherlock 196)", () => {
+  test("accepts in and out, and refuses anything else", () => {
+    expect(isActivityEntry({ ...row(1), direction: "in" })).toBe(true);
+    expect(isActivityEntry({ ...row(1), direction: "out" })).toBe(true);
+    expect(isActivityEntry({ ...row(1), direction: "sideways" })).toBe(false);
+  });
+});

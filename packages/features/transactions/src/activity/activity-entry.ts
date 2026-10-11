@@ -65,6 +65,15 @@ export type ActivityEntry = {
   readonly amount?: string;
   readonly counterparty?: string;
   /**
+   * Whether value came into or went out of the account, recorded where it is
+   * known: from the decoded transfer for discovered rows, and `"out"` for a
+   * public send this wallet made. The Activity feed reads it before anything
+   * in `summary`, which embeds a token symbol a third party can choose
+   * (Sherlock 196). Absent on legacy rows and on rows that are not a single
+   * value movement.
+   */
+  readonly direction?: "in" | "out";
+  /**
    * Set to `"pending"` when reconciliation observes a failure the user has
    * already moved past, and flipped to `"delivered"` once the side panel has
    * shown it. Absent means there is nothing to tell the user.
@@ -133,8 +142,8 @@ export type ActivityScope = {
   readonly networkId: StarknetNetworkId;
 };
 
-/** Longest summary an activity row stores; a longer one is cut by {@link clampActivitySummary}. */
-export const MAX_ACTIVITY_SUMMARY_LENGTH = 200;
+// Longest summary an activity row stores; a longer one is cut by clampActivitySummary.
+const MAX_ACTIVITY_SUMMARY_LENGTH = 200;
 
 /**
  * The last instant an ECMAScript `Date` can hold. A later `submittedAt` is a
@@ -196,6 +205,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "accountId",
     "amount",
     "counterparty",
+    "direction",
     "failureNotice",
     "finalizedOnL1",
     "hash",
@@ -224,6 +234,9 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   value["summary"].length <= MAX_ACTIVITY_SUMMARY_LENGTH &&
   isOptionalDetail(value["amount"]) &&
   isOptionalDetail(value["counterparty"]) &&
+  (value["direction"] === undefined ||
+    value["direction"] === "in" ||
+    value["direction"] === "out") &&
   isOptionalDetail(value["token"]) &&
   isFailureNotice(value["failureNotice"]) &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
