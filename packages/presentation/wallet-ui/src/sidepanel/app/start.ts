@@ -432,6 +432,15 @@ export const startWalletUi = async (
       paint,
     });
   };
+  // Navigation renders fire and forget. A failed status read or a render that
+  // throws must not become an unhandled rejection; the refresh lifecycle's
+  // next tick renders again (Sherlock 239).
+  const renderLatest = (): void => {
+    void wallet
+      .loadStatus()
+      .then(render)
+      .catch(() => undefined);
+  };
   const navigate = (view: WalletView): void => {
     if (isParkedCollectibleView(view)) {
       return;
@@ -443,7 +452,7 @@ export const startWalletUi = async (
     if (view !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
-    void wallet.loadStatus().then(render);
+    renderLatest();
   };
   const goBack = (): void => {
     const popped = popView(viewHistory);
@@ -453,9 +462,9 @@ export const startWalletUi = async (
     if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
-    void wallet.loadStatus().then(render);
+    renderLatest();
   };
   applyTheme();
   startRefreshLifecycle({ mutationRuntime, render, runtime, wallet });
-  void render(await wallet.loadStatus());
+  void render(await wallet.loadStatus()).catch(() => undefined);
 };
