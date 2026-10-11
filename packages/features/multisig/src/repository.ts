@@ -107,6 +107,15 @@ export type MultisigStore = {
     record: ArgentMultisigRecord,
     isAuthorized?: () => boolean,
   ) => Promise<MultisigStoreWriteResult>;
+  /**
+   * `upsertMultisig` that never adds a record: a missing id is `invalid`. Reads
+   * off the active-state lane enrich through it, so a late write cannot
+   * re-create a record the user removed meanwhile (Sherlock 225).
+   */
+  readonly enrichMultisig: (
+    record: ArgentMultisigRecord,
+    isAuthorized?: () => boolean,
+  ) => Promise<MultisigStoreWriteResult>;
 };
 
 type StoredShape = {
@@ -336,6 +345,25 @@ const claimOperationIn = (
   };
 };
 
+// Applies one record mutation under the caller's authorization, checked before
+// the read, before the write and after it; a lost authorization rolls back.
+const commitAuthorized = async (
+  read: () => Promise<StoredShape>,
+  write: (shape: StoredShape) => Promise<void>,
+  isAuthorized: () => boolean,
+  mutate: (shape: StoredShape) => ShapeMutation,
+): Promise<MultisigStoreWriteResult> => {
+  if (!isAuthorized()) return "unauthorized";
+  const previous = await read();
+  const mutation = mutate(previous);
+  if (mutation.result !== "stored") return mutation.result;
+  if (!isAuthorized()) return "unauthorized";
+  await write(mutation.shape);
+  if (isAuthorized()) return "stored";
+  await write(previous);
+  return "unauthorized";
+};
+
 const createStoreMethods = (
   read: () => Promise<StoredShape>,
   write: (shape: StoredShape) => Promise<void>,
@@ -423,50 +451,22 @@ const createStoreMethods = (
     });
   },
   async updateCurrentConfig(id, expected, next, isAuthorized = () => true) {
-    if (!isAuthorized()) return "unauthorized";
-    const previous = await read();
-    const mutation = updateCurrentConfigIn(previous, id, expected, next);
-    if (mutation.result === "stored") {
-      if (!isAuthorized()) return "unauthorized";
-      await write(mutation.shape);
-      if (!isAuthorized()) {
-        await write(previous);
-        return "unauthorized";
-      }
-    }
-    return mutation.result;
+    return commitAuthorized(read, write, isAuthorized, (shape) =>
+      updateCurrentConfigIn(shape, id, expected, next),
+    );
   },
   async upsertIntent(record, isAuthorized = () => true) {
-    if (!isAuthorized()) {
-      return "unauthorized";
-    }
-    const previous = await read();
-    const mutation = upsertIntentIn(previous, record);
-    if (mutation.result === "stored") {
-      if (!isAuthorized()) {
-        return "unauthorized";
-      }
-      await write(mutation.shape);
-      if (!isAuthorized()) {
-        await write(previous);
-        return "unauthorized";
-      }
-    }
-    return mutation.result;
+    return commitAuthorized(read, write, isAuthorized, (shape) => upsertIntentIn(shape, record));
+  },
+  async enrichMultisig(record, isAuthorized = () => true) {
+    return commitAuthorized(read, write, isAuthorized, (shape) =>
+      shape.multisigs.some((stored) => stored.id === record.id)
+        ? upsertMultisigIn(shape, record)
+        : { result: "invalid", shape },
+    );
   },
   async upsertMultisig(record, isAuthorized = () => true) {
-    if (!isAuthorized()) return "unauthorized";
-    const previous = await read();
-    const mutation = upsertMultisigIn(previous, record);
-    if (mutation.result === "stored") {
-      if (!isAuthorized()) return "unauthorized";
-      await write(mutation.shape);
-      if (!isAuthorized()) {
-        await write(previous);
-        return "unauthorized";
-      }
-    }
-    return mutation.result;
+    return commitAuthorized(read, write, isAuthorized, (shape) => upsertMultisigIn(shape, record));
   },
 });
 

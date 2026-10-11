@@ -77,7 +77,7 @@ describe("shared-account balances after a failed read", () => {
     await hydrateFailing(cache, MULTISIG_B);
 
     expect(cache.multisigBalanceId).toBe(MULTISIG_B);
-    expect(cache.multisigBalances).toEqual(unavailable);
+    expect(cache.multisigBalances as unknown).toEqual(unavailable);
   });
 
   test("keep the selected account's own last balances, marked stale", async () => {
@@ -97,6 +97,6 @@ describe("shared-account balances after a failed read", () => {
 
     await hydrateFailing(cache, MULTISIG_B);
 
-    expect(cache.multisigBalances).toEqual(unavailable);
+    expect(cache.multisigBalances as unknown).toEqual(unavailable);
   });
 });

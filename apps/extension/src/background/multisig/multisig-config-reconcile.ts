@@ -140,7 +140,7 @@ export const enrichArgentAddressOnlyWatch = async (
       },
     };
     return {
-      record: (await deps.multisigStore.upsertMultisig(observed)) === "stored" ? observed : record,
+      record: (await deps.multisigStore.enrichMultisig(observed)) === "stored" ? observed : record,
       unsupportedSigners: [],
     };
   }
@@ -163,7 +163,7 @@ export const enrichArgentAddressOnlyWatch = async (
     currentConfig: { signerPublicKeys: discovered.signerPublicKeys, threshold: config.threshold },
   };
   return {
-    record: (await deps.multisigStore.upsertMultisig(enriched)) === "stored" ? enriched : record,
+    record: (await deps.multisigStore.enrichMultisig(enriched)) === "stored" ? enriched : record,
     unsupportedSigners: discovered.unsupportedSigners,
   };
 };
