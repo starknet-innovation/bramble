@@ -84,10 +84,18 @@ type DiscoveryOpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-const handleSupportedVersions: DiscoveryOpsHandler = async (_deps, messageType, message) => {
+const handleSupportedVersions: DiscoveryOpsHandler = async (deps, messageType, message, sender) => {
   const input = readDiscoveryInput(message, messageType);
   if (!input) {
     return { error: "invalid discovery request" };
+  }
+  // Same perimeter as every other dapp surface: a blocked origin learns
+  // nothing from this wallet, not even its supported versions (Sherlock 165).
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
   }
   if (!apiVersionSupported(input.apiVersion)) {
     return { error: "unsupported api version" };

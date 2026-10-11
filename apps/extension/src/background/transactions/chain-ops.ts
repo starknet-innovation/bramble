@@ -287,11 +287,20 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   return waiters.register(approval.id);
 };
 
-const handleGetChainId: ChainOpsHandler = async (deps, message) => {
-  // The content bridge sends { origin, type }; chain id is public data so the
-  // origin is not gated, but the message must still be well-formed.
-  if (!readOriginRequestInput(message, "wallet.getChainId")) {
+const handleGetChainId: ChainOpsHandler = async (deps, message, sender) => {
+  // The chain id is public data, but the origin is corroborated and checked
+  // against the blocklist like every other dapp surface, so a blocked origin
+  // learns nothing from this wallet, including which network is active
+  // (Sherlock 165).
+  const input = readOriginRequestInput(message, "wallet.getChainId");
+  if (!input) {
     return { error: "invalid chain id request" };
+  }
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
   }
   const preferences = await deps.preferencesStore.read();
   return { chainId: STARKNET_NETWORKS[preferences.activeNetworkId].chainId, ok: true };
