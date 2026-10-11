@@ -334,6 +334,7 @@ export const createEncryptedStore = (
     // the pair stays self-consistent; the session shadow it cannot reach is
     // what disagrees.
     await freshness.requireShadow(envelope.lineage, envelope.commit);
+    await freshness.restoreDurable(envelope.lineage);
     if (state.pending !== null) {
       await freshness.set(envelope.lineage, {
         current: envelope.commit,

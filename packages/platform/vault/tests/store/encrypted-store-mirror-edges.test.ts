@@ -201,3 +201,27 @@ describe("an interrupted abort of a v2 migration", () => {
     expect(await encrypted.read(passphrase)).toEqual({ revision: 1 });
   });
 });
+
+describe("a mirror the session shadow refuses", () => {
+  // `storage.sync` syncs to the browser account, so a refused record copied
+  // there would overwrite the newer one and vouch for the rollback after the
+  // next restart, when there is no shadow left to disagree.
+  test("is never copied back to sync", async () => {
+    const local = createMemoryStore();
+    const sync = createMemoryStore();
+    const session = createMemoryStore();
+    const encrypted = createEncryptedStore(local, VAULT_STORE_KEY, sync, session, true);
+    await encrypted.write({ revision: 1 }, passphrase);
+    const envelope = await local.get(VAULT_STORE_KEY);
+    const commitKey = `${VAULT_STORE_KEY}:commit:${lineageOf(envelope)}`;
+    const staleMirror = await local.get(commitKey);
+    await encrypted.write({ revision: 2 }, passphrase);
+
+    await sync.remove(commitKey);
+    await local.set(VAULT_STORE_KEY, envelope as Json);
+    await local.set(commitKey, staleMirror as Json);
+
+    await expect(encrypted.read(passphrase)).rejects.toThrow("Encrypted store rollback detected");
+    expect(await sync.get(commitKey)).toBeUndefined();
+  });
+});

@@ -96,10 +96,18 @@ export type FreshnessAuthority = {
   /**
    * Reads the durable record for a lineage, or undefined when neither it nor
    * its local mirror exists. The durable record governs whenever it exists and
-   * is copied to the mirror; a mirror read only because the durable record is
-   * missing is copied back to the durable area.
+   * is copied to the mirror; the mirror is read only when it is missing.
    */
   readonly read: (lineage: string) => Promise<CommitState | undefined>;
+  /**
+   * Copies the mirror back to a missing durable record. Called only once an
+   * envelope the mirror vouched for has passed every check, the session shadow
+   * included: copying earlier would write a refused, rolled-back record into
+   * `storage.sync`, which syncs it over the newer one and vouches for the
+   * rollback after the next restart. Best effort, so a `sync` area that refuses
+   * the write (quota, rate limit) cannot turn the recovery into a lockout.
+   */
+  readonly restoreDurable: (lineage: string) => Promise<void>;
   /**
    * Throws when this session has already seen a committed lineage current for
    * the store: a version-2 envelope read afterwards is a downgrade. Silent when
@@ -200,13 +208,16 @@ export const createFreshnessAuthority = (
         }
         return durable;
       }
+      return mirror;
+    },
+    async restoreDurable(lineage) {
+      if (!mirrorStore || (await readFrom(freshnessStore, lineage)) !== undefined) {
+        return;
+      }
+      const mirror = await readFrom(mirrorStore, lineage);
       if (mirror !== undefined) {
-        // Best effort: the mirror already vouches for this read, and a `sync`
-        // area that refuses the write (quota, rate limit) must not turn the
-        // recovery this mirror exists for back into a lockout.
         await freshnessStore.set(commitKey(lineage), mirror).catch(() => undefined);
       }
-      return mirror;
     },
     async remove(lineage) {
       // Mirror first: a crash between the two must not leave a mirror that
