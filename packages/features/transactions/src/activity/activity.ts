@@ -13,6 +13,7 @@ import {
   type ActivityOutcome,
   type ActivityScope,
   activityForScope,
+  clampActivitySummary,
   isActivityEntry,
   matchesScope,
   monotonicActivityStatus,
@@ -26,8 +27,11 @@ export {
   type ActivityScope,
   type ActivityStatus,
   activityForScope,
+  activityOrigin,
+  clampActivitySummary,
   isActivityEntry,
   isUnresolvedActivityStatus,
+  MAX_ACTIVITY_TIMESTAMP_MS,
   monotonicActivityStatus,
 } from "./activity-entry";
 
@@ -200,7 +204,12 @@ export const createActivityLog = ({
         return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
       },
       async record(entry) {
-        const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
+        const next: ActivityEntry = {
+          ...entry,
+          status: "pending",
+          submittedAt: now(),
+          summary: clampActivitySummary(entry.summary),
+        };
         if (!isActivityEntry(next)) {
           return;
         }
@@ -260,7 +269,12 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
       return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
     },
     async record(entry) {
-      const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
+      const next: ActivityEntry = {
+        ...entry,
+        status: "pending",
+        submittedAt: now(),
+        summary: clampActivitySummary(entry.summary),
+      };
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
     },
     async markHistorySynced(scope, syncedAt, unavailable) {

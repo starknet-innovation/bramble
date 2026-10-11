@@ -133,6 +133,40 @@ export type ActivityScope = {
   readonly networkId: StarknetNetworkId;
 };
 
+/** Longest summary an activity row stores; a longer one is cut by {@link clampActivitySummary}. */
+export const MAX_ACTIVITY_SUMMARY_LENGTH = 200;
+
+/**
+ * The last instant an ECMAScript `Date` can hold. A later `submittedAt` is a
+ * safe integer that every date formatter throws on, so a row carrying one
+ * would break the Activity screen on every render (Sherlock 238).
+ */
+export const MAX_ACTIVITY_TIMESTAMP_MS = 8_640_000_000_000_000;
+
+// Long enough for any ordinary site; a longer origin keeps its end, where the
+// registrable domain is, rather than its start.
+const MAX_ACTIVITY_ORIGIN_LENGTH = 80;
+
+/**
+ * Cuts a summary to {@link MAX_ACTIVITY_SUMMARY_LENGTH}, ending it with an
+ * ellipsis, so a row is shortened rather than refused by the validator.
+ */
+export const clampActivitySummary = (summary: string): string =>
+  summary.length <= MAX_ACTIVITY_SUMMARY_LENGTH
+    ? summary
+    : `${summary.slice(0, MAX_ACTIVITY_SUMMARY_LENGTH - 1)}…`;
+
+/**
+ * A dapp origin as an activity summary names it. Origins have no length bound,
+ * so one past 80 characters keeps only its end, which carries the registrable
+ * domain: cutting the end instead would let `https://app.example.com.<more>`
+ * read as `example.com` (Sherlock 180).
+ */
+export const activityOrigin = (origin: string): string =>
+  origin.length <= MAX_ACTIVITY_ORIGIN_LENGTH
+    ? origin
+    : `…${origin.slice(-(MAX_ACTIVITY_ORIGIN_LENGTH - 1))}`;
+
 const isActivityStatus = (value: unknown): value is ActivityStatus =>
   value === "accepted" ||
   value === "pending" ||
@@ -184,9 +218,10 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   typeof value["submittedAt"] === "number" &&
   Number.isSafeInteger(value["submittedAt"]) &&
   value["submittedAt"] >= 0 &&
+  value["submittedAt"] <= MAX_ACTIVITY_TIMESTAMP_MS &&
   typeof value["summary"] === "string" &&
   value["summary"].length > 0 &&
-  value["summary"].length <= 200 &&
+  value["summary"].length <= MAX_ACTIVITY_SUMMARY_LENGTH &&
   isOptionalDetail(value["amount"]) &&
   isOptionalDetail(value["counterparty"]) &&
   isOptionalDetail(value["token"]) &&

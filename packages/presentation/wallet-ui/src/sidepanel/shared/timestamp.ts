@@ -9,6 +9,7 @@
  * combined format leaves the joiner to the ICU version (", " vs " at "), so a
  * label would vary across Chrome builds and test environments.
  */
+import { MAX_ACTIVITY_TIMESTAMP_MS } from "@bramble/transactions/activity";
 
 const DAY_FORMAT = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
@@ -30,7 +31,10 @@ const CLOCK_FORMAT = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
 });
 
-const isTimestamp = (value: number): boolean => Number.isFinite(value) && value > 0;
+// Past the ECMAScript Date range every formatter throws, so such a value is
+// treated like a missing one rather than breaking the whole screen.
+const isTimestamp = (value: number): boolean =>
+  Number.isFinite(value) && value > 0 && value <= MAX_ACTIVITY_TIMESTAMP_MS;
 
 /**
  * Calendar day in UTC without the year, e.g. `12 Sep`. Returns null for a

@@ -14,7 +14,11 @@
  */
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import { type ActivityEntry, isUnresolvedActivityStatus } from "@bramble/transactions/activity";
+import {
+  type ActivityEntry,
+  clampActivitySummary,
+  isUnresolvedActivityStatus,
+} from "@bramble/transactions/activity";
 import {
   canonicalFelt,
   isStarkFieldElement,
@@ -24,8 +28,6 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import { hash } from "starknet";
-
-const MAX_SUMMARY_LENGTH = 200;
 
 /**
  * The Starknet event selector emitted by an ERC20 `transfer`.
@@ -171,8 +173,6 @@ export const decodeTransferEvent = (
 const shortAddress = (address: string): string =>
   address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
 
-const clampSummary = (summary: string): string => summary.slice(0, MAX_SUMMARY_LENGTH);
-
 /**
  * Folds a decoded on-chain transfer into a canonical {@link ActivityEntry} for
  * the feed. The status is always `accepted` — `getEvents` only returns events
@@ -205,7 +205,7 @@ export const onChainActivityEntry = (input: {
     networkId,
     status: "accepted",
     submittedAt: timestampMs,
-    summary: clampSummary(summary),
+    summary: clampActivitySummary(summary),
     token: token.symbol,
   };
 };
