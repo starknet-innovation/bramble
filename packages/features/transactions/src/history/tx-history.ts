@@ -265,47 +265,81 @@ export const withoutPlantedRows = (entries: readonly ActivityEntry[]): readonly 
   });
 
 /**
+ * Which lane discovered a set of history rows. Only `"chain-events"`, the
+ * wallet's own RPC `getEvents` scan, proves that a transaction was included:
+ * an emitted `Transfer` exists only in a block. An `"explorer"` row is a
+ * third party's HTTP answer, which adds history but proves nothing about a
+ * transaction the wallet is still observing (Sherlock 150).
+ */
+export type HistoryLane = "chain-events" | "explorer";
+
+// Local rows by leg, plus the leg keys each local transaction owns.
+const indexLocalLegs = (
+  local: readonly ActivityEntry[],
+): {
+  readonly byKey: Map<string, ActivityEntry>;
+  readonly localLegs: ReadonlyMap<string, readonly string[]>;
+} => {
+  const byKey = new Map<string, ActivityEntry>();
+  const localLegs = new Map<string, string[]>();
+  for (const entry of local) {
+    const key = legKey(entry);
+    if (byKey.has(key)) {
+      continue;
+    }
+    byKey.set(key, entry);
+    localLegs.set(txKey(entry), [...(localLegs.get(txKey(entry)) ?? []), key]);
+  }
+  return { byKey, localLegs };
+};
+
+const promoteUnresolved = (byKey: Map<string, ActivityEntry>, keys: readonly string[]): void => {
+  for (const key of keys) {
+    const entry = byKey.get(key);
+    if (entry !== undefined && isUnresolvedActivityStatus(entry.status)) {
+      byKey.set(key, { ...entry, status: "accepted" });
+    }
+  }
+};
+
+/**
  * Merges the wallet's locally recorded activity with transactions discovered on
  * chain, sorted newest-first. A locally submitted transaction collapses every
  * chain leg that shares its hash: the local record carries the richer,
  * user-facing summary, so it keeps its identity while purely chain-discovered
- * transactions are added around it. The one exception is status: a local row
- * still unresolved (`pending` or the provisional `preconfirmed`) is reconciled
- * to `accepted` when the chain scan found a
- * `Transfer` event for its hash, since an emitted event proves the transaction
- * was included and succeeded (a reverted transaction emits none). This closes
- * the gap where the status re-poll fails but the event scan succeeds,
- * which would otherwise leave a confirmed transfer showing as provisional.
+ * transactions are added around it.
+ *
+ * The one exception is status, and only for the `"chain-events"` lane: a local
+ * row still unresolved (`pending` or the provisional `preconfirmed`) is
+ * reconciled to `accepted` when the wallet's own event scan found a `Transfer`
+ * for its hash, since an emitted event proves the transaction was included and
+ * succeeded (a reverted transaction emits none). This closes the gap where the
+ * status re-poll fails but the event scan succeeds. An `"explorer"` row never
+ * changes a local row's status, because `accepted` cannot be walked back and
+ * would also cancel the "could not confirm" notice the observation owes.
  * Terminal local states (`accepted`, `rejected`, `reverted`) are authoritative
- * and left untouched. Chain rows with no local record are de-duplicated per leg, so a
- * swap or multicall keeps all of its transfers rather than showing one arbitrary
- * leg. The result is the union, never fewer rows than the local log.
+ * and left untouched.
+ *
+ * Both sides are keyed per leg, so a swap or multicall keeps all of its
+ * transfers rather than showing one arbitrary leg. That includes the local
+ * side: a merged result is persisted and comes back as `local` on the next
+ * merge, so keying local rows per transaction would collapse a stored
+ * multi-leg transaction for good (Sherlock 204). The result is the union,
+ * never fewer rows than the local log.
  */
 export const mergeActivity = (
   local: readonly ActivityEntry[],
   onChain: readonly ActivityEntry[],
+  lane: HistoryLane,
 ): readonly ActivityEntry[] => {
-  const byKey = new Map<string, ActivityEntry>();
-  const localTxKeys = new Set<string>();
-  for (const entry of local) {
-    localTxKeys.add(txKey(entry));
-    byKey.set(txKey(entry), entry);
-  }
+  const { byKey, localLegs } = indexLocalLegs(local);
   for (const entry of onChain) {
-    const tk = txKey(entry);
-    if (localTxKeys.has(tk)) {
+    const owned = localLegs.get(txKey(entry));
+    if (owned !== undefined) {
       // A local record owns this transaction and keeps its richer summary, so
-      // the chain leg adds no row. But an emitted `Transfer` proves the
-      // transaction was included and succeeded, so a still-unresolved local row
-      // is reconciled to `accepted` even when the status re-poll never
-      // landed. Terminal local states are left untouched.
-      const localMatch = byKey.get(tk);
-      if (
-        localMatch !== undefined &&
-        isUnresolvedActivityStatus(localMatch.status) &&
-        entry.status === "accepted"
-      ) {
-        byKey.set(tk, { ...localMatch, status: "accepted" });
+      // the chain leg adds no row; it can only settle the local rows' status.
+      if (lane === "chain-events" && entry.status === "accepted") {
+        promoteUnresolved(byKey, owned);
       }
       continue;
     }

@@ -20,7 +20,11 @@ import {
   type ActivityScope,
   activityForScope,
 } from "@bramble/transactions/activity";
-import { mergeActivity, withoutPlantedRows } from "@bramble/transactions/tx-history";
+import {
+  type HistoryLane,
+  mergeActivity,
+  withoutPlantedRows,
+} from "@bramble/transactions/tx-history";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
@@ -166,17 +170,22 @@ export const reconcileScope = async (
   });
 };
 
-/** Serializes a discovered-history merge with every status reconciliation. */
+/**
+ * Serializes a discovered-history merge with every status reconciliation.
+ * `lane` names where `onChain` came from; only the wallet's own event scan may
+ * settle a transaction still under observation (see `mergeActivity`).
+ */
 export const mergeReconciledHistory = (
   deps: ReconcileDeps,
   scope: ActivityScope,
   onChain: readonly ActivityEntry[],
+  lane: HistoryLane,
 ): Promise<readonly ActivityEntry[]> =>
   runReconciliation(async () => {
     // Stored rows planted before audit #163's decoder filter are purged here,
     // and replaceScope writes the cleaned scope back.
     const stored = withoutPlantedRows(activityForScope(await deps.activity.list(), scope));
-    const merged = mergeActivity(stored, onChain);
+    const merged = mergeActivity(stored, onChain, lane);
     await deps.activity.replaceScope?.(merged, scope).catch(() => undefined);
     return merged;
   });
