@@ -108,7 +108,11 @@ class RelayConnection {
     return new Set(events.filter((_, index) => accepted[index]).map((event) => event.id));
   }
 
-  async sync(recipientPublicKey: string, since: number): Promise<readonly NostrEvent[]> {
+  async sync(
+    recipientPublicKey: string,
+    since: number,
+    until?: number,
+  ): Promise<readonly NostrEvent[]> {
     await this.#ready;
     this.#cancelIdleClose();
     const subscriptionId = `mcw-${(++this.#subscriptionSequence).toString(36)}`;
@@ -131,7 +135,13 @@ class RelayConnection {
         JSON.stringify([
           "REQ",
           subscriptionId,
-          { "#p": [recipientPublicKey], kinds: [1_059], limit: MAX_NOSTR_BATCH_ITEMS, since },
+          {
+            "#p": [recipientPublicKey],
+            kinds: [1_059],
+            limit: MAX_NOSTR_BATCH_ITEMS,
+            since,
+            ...(until === undefined ? {} : { until }),
+          },
         ]),
       );
     } catch {
@@ -294,12 +304,13 @@ export const createNostrRelayPool = (socketFactory: RelaySocketFactory, idleMs: 
       relay: string,
       recipientPublicKey: string,
       since: number,
+      until?: number,
     ): Promise<readonly NostrEvent[]> {
-      const key = `${relay}|${recipientPublicKey}|${since}`;
+      const key = `${relay}|${recipientPublicKey}|${since}|${until ?? ""}`;
       const existing = syncs.get(key);
       if (existing) return existing;
       const sync = connectionFor(relay)
-        .sync(recipientPublicKey, since)
+        .sync(recipientPublicKey, since, until)
         .finally(() => syncs.delete(key));
       syncs.set(key, sync);
       return sync;

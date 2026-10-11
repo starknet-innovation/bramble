@@ -233,9 +233,10 @@ const recentGiftWraps = async (
   since: number,
   relayUrls: readonly string[],
   transport: NostrRelayTransport,
+  seenEventIds: ReadonlySet<string>,
 ): Promise<readonly NostrEvent[] | null> => {
   try {
-    return await transport.sync(publicKey, since, relayUrls);
+    return await transport.sync(publicKey, since, relayUrls, seenEventIds);
   } catch {
     return null;
   }
@@ -420,16 +421,17 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
   const relayUrls = coordinationRelayUrls(preferences);
   const nowSeconds = Math.floor(deps.now() / 1_000);
   const checkpoint = await deps.nostrCoordinationStore.getCheckpoint(record.id, relayUrls);
+  const seenEventIds = new Set(checkpoint?.eventIds ?? []);
   const events = await recentGiftWraps(
     nostrPublicKey,
     nostrSyncSince(nowSeconds, checkpoint?.syncedAt),
     relayUrls,
     deps.nostrRelayTransport ?? nativeNostrRelayTransport,
+    seenEventIds,
   );
   if (!events) {
     return { error: "Secure co-signer updates are unavailable. Try again shortly" };
   }
-  const seenEventIds = new Set(checkpoint?.eventIds ?? []);
   const unseenEvents = events.filter((event) => !seenEventIds.has(event.id));
   const imported = await importGiftWraps(
     deps,

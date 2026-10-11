@@ -123,7 +123,7 @@ const coSigners = async (targetOptions: MultisigHarnessOptions = {}) => {
         coordinationRelayUrls(defaultWalletPreferences()),
       )
     )?.eventIds ?? [];
-  return { prepare, publishAsA, receipts, share, source, syncTarget, target };
+  return { network, prepare, publishAsA, receipts, share, source, syncTarget, target };
 };
 
 describe("relay sync receipts", () => {
@@ -157,6 +157,9 @@ describe("relay sync receipts", () => {
 
     await expect(pair.syncTarget()).resolves.toMatchObject({ imported: 1, received: 1 });
     await expect(pair.syncTarget()).resolves.toMatchObject({ imported: 0, received: 0 });
+    // The relay transport is told which wraps to skip before it bounds a batch.
+    expect(pair.network.seenEventIds.at(-1)).toEqual(await pair.receipts());
+    expect(await pair.receipts()).toHaveLength(1);
   });
 
   test("does not open a wrap again once it was refused for good", async () => {

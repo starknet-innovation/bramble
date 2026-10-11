@@ -12,6 +12,7 @@ export const coordinationNetwork = () => {
   const events: NostrEvent[] = [];
   const relaySelections: string[][] = [];
   const sinceValues: number[] = [];
+  const seenEventIds: (readonly string[])[] = [];
   const transport: NostrRelayTransport = {
     async publish(eventJson, recipientPublicKey, relayUrls) {
       const event = JSON.parse(eventJson) as NostrEvent;
@@ -22,9 +23,10 @@ export const coordinationNetwork = () => {
       relaySelections.push([...relayUrls]);
       return 1;
     },
-    async sync(recipientPublicKey, since, relayUrls) {
+    async sync(recipientPublicKey, since, relayUrls, seen) {
       relaySelections.push([...relayUrls]);
       sinceValues.push(since);
+      seenEventIds.push([...(seen ?? [])]);
       return events.filter((event) =>
         event.tags.some((tag) => tag[0] === "p" && tag[1] === recipientPublicKey),
       );
@@ -66,6 +68,7 @@ export const coordinationNetwork = () => {
     identity,
     pushEvent: (event: NostrEvent) => events.push(event),
     relaySelections,
+    seenEventIds,
     sinceValues,
   };
 };
