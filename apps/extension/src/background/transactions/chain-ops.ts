@@ -212,36 +212,60 @@ type ChainOpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extension, preferencesStore, session, waiters, wallet } = deps;
+// The perimeter a typed-data request passes before any session or vault read:
+// a well-formed message, a truthfully claimed and unblocked origin, and room in
+// that origin's share of the approval queue.
+const admitSignTypedData = (
+  deps: ChainOpsDeps,
+  message: unknown,
+  sender: RuntimeSender | undefined,
+):
+  | { readonly input: NonNullable<ReturnType<typeof readSignTypedDataInput>> }
+  | { readonly refusal: RuntimeResponse } => {
   const input = readSignTypedDataInput(message);
   if (!input) {
-    return { error: "invalid sign typed data request" };
+    return { refusal: { error: "invalid sign typed data request" } };
   }
-  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
-    return { error: "sender origin mismatch" };
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
+    return { refusal: { error: "sender origin mismatch" } };
   }
   // A blocklisted origin gets no signing prompt even if it still holds an old
   // connection grant — the phishing feed is the defense for the post-grant
   // case. Mirror the sibling dapp surfaces (provider-ops, declare, strk20).
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
-    return { error: "origin blocked" };
+    return { refusal: { error: "origin blocked" } };
   }
   // Refuse a flooding origin BEFORE the expensive work, not after it. Hashing a
   // maximum-size SNIP-12 document can monopolize synchronous Pedersen work in
   // the service worker that also serves the panel, and reading the grants decrypts
   // the vault — paying both for a request the queue cap will refuse anyway is
   // how a per-origin cap that bounds memory leaves CPU unbounded.
-  requireApprovalAdmission(approvals, input.origin);
+  requireApprovalAdmission(deps.approvals, input.origin);
+  return { input };
+};
+
+const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
+  const { approvals, preferencesStore, session, waiters, wallet } = deps;
+  const admitted = admitSignTypedData(deps, message, sender);
+  if ("refusal" in admitted) {
+    return admitted.refusal;
+  }
+  const { input } = admitted;
   // Read the session only after the message is well-formed and its origin is
   // both claimed truthfully and unblocked: the background must validate type,
-  // origin, and capability before it acts on a message at all.
+  // origin, and capability before it acts on a message at all. The
+  // authorization is re-checked after every await, so a lock that lands
+  // mid-request admits no card (Sherlock 166).
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
   const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     // Mirror provider-ops: a formerly granted origin gets a reconnect prompt
@@ -272,12 +296,16 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   if (review && "error" in review) {
     return review;
   }
+  const context = await createApprovalContext(account, { typedData: input.typedData });
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
   // Never auto-sign: queue a per-request approval and hold this response until
   // the user decides in the side panel. The signature is computed and returned
   // through this same channel on approval, so it reaches only the requesting
   // origin and tab.
   const approval = approvals.requestSignTypedData({
-    context: await createApprovalContext(account, { typedData: input.typedData }),
+    context,
     origin: input.origin,
     ...(review ? { review } : {}),
     summary: describeTypedData(input.typedData),
@@ -324,12 +352,14 @@ const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
   if (!networkId) {
     return { error: "unsupported chain" };
   }
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
   // Only an origin that already holds a connection grant may ask to switch the
   // network — and even then it may only ask: the switch never happens without
-  // an explicit user approval. A locked or unconnected site is refused.
-  if (granted.length === 0) {
+  // an explicit user approval. A locked or unconnected site is refused, and a
+  // lock that lands during the grant read counts as locked (Sherlock 166).
+  if (granted.length === 0 || !authorized.isCurrent()) {
     return { error: "origin not connected" };
   }
   const approval = approvals.requestSwitchChain({
