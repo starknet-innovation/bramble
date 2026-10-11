@@ -8,6 +8,7 @@ import {
   STRK_TOKEN_ADDRESS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
+import { UNDEPLOYED_REMOVAL_PROMPT } from "../../runtime/friendly-error-copy-multisig";
 import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
@@ -95,6 +96,23 @@ const bindAdd = (deps: MultisigUiDeps): void => {
   });
 };
 
+// The second press a removal needs, by why the background asked for it: an
+// undeployed multisig whose setup only this wallet holds (Sherlock 214), or
+// saved transactions and history that go with it.
+const removalConfirmation = (
+  message: string,
+): { readonly label: string; readonly prompt: string } | null => {
+  if (/undeployed/i.test(message)) {
+    return { label: "Remove anyway", prompt: UNDEPLOYED_REMOVAL_PROMPT };
+  }
+  return /history|terminal|intent/i.test(message)
+    ? {
+        label: "Confirm removal and delete terminal history",
+        prompt: "Review the warning and click again to delete terminal history",
+      }
+    : null;
+};
+
 const bindList = (deps: MultisigUiDeps): void => {
   const confirmedRemovals = new WeakSet<HTMLButtonElement>();
   deps.app
@@ -116,14 +134,14 @@ const bindList = (deps: MultisigUiDeps): void => {
         try {
           await deps.multisig.removeMultisig(id, confirmedRemovals.has(button));
         } catch (error) {
-          if (
-            !confirmedRemovals.has(button) &&
-            error instanceof Error &&
-            /history|terminal|intent/i.test(error.message)
-          ) {
+          const confirmation =
+            !confirmedRemovals.has(button) && error instanceof Error
+              ? removalConfirmation(error.message)
+              : null;
+          if (confirmation) {
             confirmedRemovals.add(button);
-            button.lastChild?.replaceWith("Confirm removal and delete terminal history");
-            throw new Error("Review the warning and click again to delete terminal history");
+            button.lastChild?.replaceWith(confirmation.label);
+            throw new Error(confirmation.prompt);
           }
           throw error;
         }

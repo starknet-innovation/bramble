@@ -7,7 +7,7 @@ import { readPortfolioBalances } from "../portfolio/portfolio-balances";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { contextFor } from "./multisig-context";
+import { type ArgentMultisigContext, contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import {
   readMultisigBalancesInput,
@@ -23,6 +23,38 @@ const removeIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
   return result === "removed"
     ? { ok: true }
     : { error: result === "missing" ? "Argent multisig intent not found" : "wallet locked" };
+};
+
+/**
+ * Refusal when removing a multisig whose deployment this record alone can
+ * reproduce. Answered until the caller confirms with `confirmHistoryRemoval`.
+ */
+export const UNDEPLOYED_REMOVAL_UNCONFIRMED = "confirm removal of an undeployed Argent multisig";
+
+// A record that carries a deployment commitment and is not deployed holds the
+// only copy of the salt, signer set and threshold behind its counterfactual
+// address: the chain has no record of it yet. Removing it then needs the same
+// confirmation as deleting history (Sherlock 214). A failed read counts as not
+// deployed, which costs one extra press rather than a silent loss.
+const holdsUndeployedCommitment = async (
+  deps: MultisigOpsDeps,
+  context: ArgentMultisigContext,
+): Promise<boolean> => {
+  if (context.record.deployment === undefined) return false;
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: context.record.address, rpcUrls: context.rpcUrls })
+    .catch(() => false);
+  return !deployed;
+};
+
+// Why an unconfirmed removal must wait for a second press, if it must.
+const unconfirmedRemoval = async (
+  deps: MultisigOpsDeps,
+  context: ArgentMultisigContext,
+  hasHistory: boolean,
+): Promise<string | null> => {
+  if (await holdsUndeployedCommitment(deps, context)) return UNDEPLOYED_REMOVAL_UNCONFIRMED;
+  return hasHistory ? "confirm removal of terminal Argent multisig history" : null;
 };
 
 const removeMultisig = async (
@@ -71,9 +103,10 @@ const removeMultisig = async (
   if (pendingIntent || unresolvedOperation) {
     return { error: "Argent multisig has a pending or unresolved operation" };
   }
-  if ((intents.length > 0 || operations.length > 0) && !input.confirmHistoryRemoval) {
-    return { error: "confirm removal of terminal Argent multisig history" };
-  }
+  const unconfirmed = input.confirmHistoryRemoval
+    ? null
+    : await unconfirmedRemoval(deps, context, intents.length > 0 || operations.length > 0);
+  if (unconfirmed) return { error: unconfirmed };
   if (!authorized.isCurrent()) return { error: "wallet locked" };
   return (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
     "removed"
