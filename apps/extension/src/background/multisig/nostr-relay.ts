@@ -159,8 +159,9 @@ const syncWithPool = async (
       result.status === "fulfilled",
   );
   if (successful.length === 0) throw new Error("Nostr relays are unavailable");
-  // Relay-provided ids are untrusted until Krusty authenticates each wrap.
-  // Round-robin the bounded relay results so one hostile relay cannot fill the
+  // Relay-provided ids are never authenticated: Krusty opens a wrap's content
+  // but returns no event id, so ids only save repeated work and never decide
+  // whether an intent may be imported. Round-robin the bounded relay results so one hostile relay cannot fill the
   // authentication batch or suppress a same-id candidate from another relay.
   return [...boundedRelayCandidates(successful.map((result) => result.value))].sort(
     (left, right) => right.created_at - left.created_at || left.id.localeCompare(right.id),

@@ -49,6 +49,8 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | `bramble:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
 | `bramble:allowances` | `storage.local`, plain | public ERC20 approvals | account + network + token + spender; 200 total | discard invalid rows |
 | `bramble:argent-multisigs:v2` | `storage.local`, plain, trusted contexts only | public contracts, frozen transaction intents, exact-hash authorization fragments | network + canonical contract; 20 multisigs / 100 intents / 100 operations | discard invalid or orphaned rows; never silently evict active authority |
+| `bramble:nostr-coordination:v1` | `storage.local`, plain | relay sync checkpoints: relay selection, last sync time, receipted gift-wrap event ids | multisig account; 20 accounts / 200 event ids each | discard invalid rows; event ids only save repeated work and never decide an import |
+| `bramble:nostr-coordination:removed:v1` | `storage.local`, plain | ids of intents the user removed | multisig account; 20 accounts / newest 100 intent ids each | discard invalid rows; relay sync never re-imports a listed intent |
 | `bramble:origin-history` | `storage.local`, plain | first-seen dapp origins | valid HTTPS/localhost origin; 500 origins | discard invalid entries |
 | `bramble:prices`, `bramble:charts` | `storage.local`, plain | recoverable market cache | TTL and cache-size bounded | cached-or-empty |
 | `bramble:phishing-feed` | `storage.local`, plain | signed/validated blocklist cache | TTL and response bounds | bundled baseline remains active |

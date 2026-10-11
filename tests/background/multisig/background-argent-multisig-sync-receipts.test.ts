@@ -245,3 +245,60 @@ describe("a co-signer's signature on an intent this wallet words differently", (
     });
   });
 });
+
+describe("an intent the user removed (Sherlock 168, 237)", () => {
+  test("is not brought back by relay sync under a new event id", async () => {
+    const pair = await coSigners();
+    const intent = await pair.prepare();
+    await pair.share(intent);
+    await expect(pair.syncTarget()).resolves.toMatchObject({ imported: 1 });
+    await expect(
+      pair.target.handler(
+        { intentId: intent.id, type: "wallet.removeArgentMultisigIntent" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ ok: true });
+
+    // The same package served again under an event id never receipted.
+    await pair.share(intent);
+    await expect(pair.syncTarget()).resolves.toMatchObject({ imported: 0, received: 1 });
+    await expect(pair.target.multisigStore.getIntent(intent.id)).resolves.toBeNull();
+  });
+
+  test("can still be imported by hand, and then takes co-signer signatures again", async () => {
+    const pair = await coSigners();
+    const intent = await pair.prepare();
+    await pair.share(intent);
+    await pair.syncTarget();
+    await pair.target.handler(
+      { intentId: intent.id, type: "wallet.removeArgentMultisigIntent" },
+      harnessExtensionSender,
+    );
+
+    await expect(
+      pair.target.handler(
+        {
+          package: argentMultisigIntentPackage(intent),
+          type: "wallet.importArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    const signed = (
+      (await pair.source.handler(
+        {
+          intentId: intent.id,
+          signerAccountId: harnessAccountA.id,
+          type: "wallet.signArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      )) as { readonly intent: ArgentMultisigSigningIntent }
+    ).intent;
+    await pair.share(signed);
+
+    await expect(pair.syncTarget()).resolves.toMatchObject({ imported: 1 });
+    await expect(pair.target.multisigStore.getIntent(intent.id)).resolves.toMatchObject({
+      signatures: [{ publicKey: harnessAccountA.publicKeyX }],
+    });
+  });
+});

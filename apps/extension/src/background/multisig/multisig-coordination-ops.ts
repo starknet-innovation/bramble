@@ -275,8 +275,14 @@ const importSharedIntent = async (
 ): Promise<SharedIntentImport> => {
   const input = trustedSharedIntent(opened, contacts, records);
   if (!input) return { final: true };
-  const current = await deps.multisigStore.getIntent(input.package.intent.id);
-  if (!sharedIntentHasUpdate(current, input.package.intent)) return { final: true };
+  const incoming = input.package.intent;
+  const current = await deps.multisigStore.getIntent(incoming.id);
+  // A relay can serve a removed intent again under any event id, so the
+  // removal itself is what keeps it out (Sherlock 168, 237).
+  const removed =
+    !current &&
+    (await deps.nostrCoordinationStore.isRemovedIntent(incoming.accountId, incoming.id));
+  if (removed || !sharedIntentHasUpdate(current, incoming)) return { final: true };
   const response = await runActiveStateMutation(deps.activeStateCoordinator, () =>
     handleMultisigTxOps(deps, "wallet.importArgentMultisigIntent", {
       package: input.package,

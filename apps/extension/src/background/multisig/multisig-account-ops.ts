@@ -19,6 +19,16 @@ const removeIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
   const input = readRemoveIntentInput(message);
   if (!input) return { error: "invalid Argent multisig intent removal request" };
   const authorized = captureSessionAuthorization(deps.session);
+  // Recorded first: a record for an intent that is still stored changes
+  // nothing, while a removal with no record lets relay sync bring it back.
+  const intent = await deps.multisigStore.getIntent(input.intentId);
+  if (intent) {
+    await deps.nostrCoordinationStore.recordRemovedIntent(
+      intent.accountId,
+      intent.id,
+      authorized.isCurrent,
+    );
+  }
   const result = await deps.multisigStore.removeIntent(input.intentId, authorized.isCurrent);
   return result === "removed"
     ? { ok: true }
