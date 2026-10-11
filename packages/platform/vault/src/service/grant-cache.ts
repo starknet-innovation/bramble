@@ -20,8 +20,8 @@
 import type { EncryptedStore } from "../encrypted-store";
 import type { Vault } from "../schema/schema";
 
-/** The part of a decrypted vault that grant resolution reads. */
-export type GrantProjection = Pick<Vault, "accounts" | "activeAccountId" | "originGrants">;
+// The part of a decrypted vault that grant resolution reads.
+type GrantProjection = Pick<Vault, "accounts" | "activeAccountId" | "originGrants">;
 
 /** In-memory grant projection with write-driven invalidation. */
 export type GrantCache = {
