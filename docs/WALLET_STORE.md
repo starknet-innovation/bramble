@@ -48,6 +48,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage | rollback refused; a missing primary record is restored from the local mirror |
 | `bramble:vault:commit:<lineage>` mirror (primary vault only) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
 | `bramble:vault:legacy` | `storage.local`, plain | marker that this install has committed a version-3 envelope | one per install | any version-2 envelope after it is a rollback |
+| `bramble:vault:recovering` | `storage.local`, plain | lineage of an Unlock anyway write in progress | only while a recovery writes | the next recovery removes the records an interrupted one left |
 | `bramble:vault:commit:<lineage>`, `bramble:vault:promoted` shadow | `storage.session`, plain | session copy of the commit record and the last promoted lineage | browser session | a durable record that disagrees is a rollback |
 | `bramble:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
 | `bramble:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |

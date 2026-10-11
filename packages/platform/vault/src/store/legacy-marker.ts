@@ -45,6 +45,12 @@ export type LegacyMarker = {
    * earlier release's shared marker when it names this lineage.
    */
   readonly claim: (lineage: string) => Promise<void>;
+  /**
+   * Points the marker at `lineage` whatever it held, for a recovery that
+   * replaces an unverifiable envelope, and removes an earlier release's shared
+   * marker naming the replaced lineage.
+   */
+  readonly replace: (lineage: string, replacedLineage: string | undefined) => Promise<void>;
 };
 
 /**
@@ -59,6 +65,15 @@ export const createLegacyMarker = (
   freshness: FreshnessAuthority,
 ): LegacyMarker => {
   const legacyKey = `${key}:legacy`;
+  const removeShared = async (lineage: string): Promise<void> => {
+    if (freshnessStore === store) {
+      return;
+    }
+    const shared = await freshnessStore.get(legacyKey);
+    if (isLegacyState(shared) && shared.lineage === lineage) {
+      await freshnessStore.remove(legacyKey);
+    }
+  };
   return {
     async recover(envelope) {
       // A legacy envelope carries no lineage for the session shadow to check, so
@@ -110,12 +125,12 @@ export const createLegacyMarker = (
       if ((await store.get(legacyKey)) === undefined) {
         await store.set(legacyKey, { lineage, version: 1 });
       }
-      if (freshnessStore === store) {
-        return;
-      }
-      const shared = await freshnessStore.get(legacyKey);
-      if (isLegacyState(shared) && shared.lineage === lineage) {
-        await freshnessStore.remove(legacyKey);
+      await removeShared(lineage);
+    },
+    async replace(lineage, replacedLineage) {
+      await store.set(legacyKey, { lineage, version: 1 });
+      if (replacedLineage !== undefined) {
+        await removeShared(replacedLineage);
       }
     },
   };

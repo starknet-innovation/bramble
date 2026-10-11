@@ -131,3 +131,84 @@ describe("accepting an unverified vault", () => {
     expect(await open().health()).not.toBe("ok");
   });
 });
+
+describe("recovery bookkeeping", () => {
+  const commitKeys = async (
+    area: ReturnType<typeof createMemoryStore>,
+    lineages: readonly string[],
+  ) =>
+    (
+      await Promise.all(lineages.map((lineage) => area.get(`${vaultKey}:commit:${lineage}`)))
+    ).filter((record) => record !== undefined).length;
+
+  test("recovers a v2 vault whose marker is malformed, and points the marker at the new lineage", async () => {
+    const { local, open, store } = install();
+    await store.write({ revision: 1 }, passphrase);
+    const scope = `bramble:encrypted-store:${vaultKey}`;
+    await local.set(vaultKey, (await legacyEnvelope({ revision: 0 }, passphrase, scope)) as Json);
+    await local.set(`${vaultKey}:legacy`, { lineage: "not a lineage", version: 1 });
+    const recovering = open();
+    expect(await recovering.health()).toBe("rollback");
+
+    await recovering.replaceUnverified({ recovered: true, revision: 0 }, passphrase);
+
+    const lineage = lineageOf(await local.get(vaultKey));
+    expect(await local.get(`${vaultKey}:legacy`)).toEqual({ lineage, version: 1 });
+    expect(await open().read(passphrase)).toEqual({ recovered: true, revision: 0 });
+  });
+
+  test("leaves no records behind from an attempt interrupted before its envelope write", async () => {
+    const { local, open, sync } = await unverifiedInstall();
+    const lineages: string[] = [];
+    let failEnvelope = true;
+    const faulting: typeof local = {
+      get: (key) => local.get(key),
+      remove: (key) => local.remove(key),
+      async set(key, value) {
+        if (key === `${vaultKey}:recovering`) {
+          lineages.push(value as string);
+        }
+        if (key === vaultKey && failEnvelope) {
+          failEnvelope = false;
+          throw new Error("injected envelope write");
+        }
+        await local.set(key, value);
+      },
+    };
+    const interrupted = createEncryptedStore(faulting, vaultKey, sync, createMemoryStore(), true);
+    await expect(interrupted.replaceUnverified({ revision: 1 }, passphrase)).rejects.toThrow(
+      "injected envelope write",
+    );
+    expect(await commitKeys(sync, lineages)).toBe(1);
+
+    await createEncryptedStore(
+      faulting,
+      vaultKey,
+      sync,
+      createMemoryStore(),
+      true,
+    ).replaceUnverified({ revision: 1 }, passphrase);
+
+    const current = lineageOf(await local.get(vaultKey));
+    expect(lineages).toHaveLength(2);
+    expect(await commitKeys(sync, lineages)).toBe(1);
+    expect(await commitKeys(local, lineages)).toBe(1);
+    expect(await sync.get(`${vaultKey}:commit:${current}`)).toBeDefined();
+    expect(await local.get(`${vaultKey}:recovering`)).toBeUndefined();
+    expect(await open().health()).toBe("ok");
+  });
+
+  test("removes an earlier release's shared marker naming the replaced lineage", async () => {
+    const { envelope, local, store, sync } = await rolledBackInstall();
+    const replaced = lineageOf(envelope);
+    await sync.set(`${vaultKey}:legacy`, { lineage: replaced, version: 1 });
+
+    await store.replaceUnverified({ revision: 1 }, passphrase);
+
+    expect(await sync.get(`${vaultKey}:legacy`)).toBeUndefined();
+    expect(await local.get(`${vaultKey}:legacy`)).toEqual({
+      lineage: lineageOf(await local.get(vaultKey)),
+      version: 1,
+    });
+  });
+});

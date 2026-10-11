@@ -277,6 +277,7 @@ export const createEncryptedStore = (
     mirrorFreshness && freshnessStore !== store ? store : undefined,
   );
   const legacy = createLegacyMarker(key, store, freshnessStore, freshness);
+  const recoveringKey = `${key}:recovering`;
   const keyCache = new Map<string, CryptoKey>();
   let keyCacheGeneration = 0;
 
@@ -454,16 +455,30 @@ export const createEncryptedStore = (
     // A fresh lineage, so neither a missing record nor one naming a newer
     // commit for the old lineage has any say over the replacement. The old
     // lineage's records are removed only once the replacement is committed.
+    // Notes the in-flight lineage so a retry drops an interrupted attempt's
+    // records; the marker is repointed even if malformed (a reason to be here).
     async replaceUnverified(value, passphrase) {
       const previous = await requireUnverified();
+      const replaced = previous.version === 3 ? previous.lineage : undefined;
+      const abandoned = await store.get(recoveringKey);
+      if (
+        typeof abandoned === "string" &&
+        /^[0-9a-f]{32}$/.test(abandoned) &&
+        abandoned !== replaced
+      ) {
+        await freshness.remove(abandoned);
+      }
       const lineage = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+      await store.set(recoveringKey, lineage);
+      await legacy.replace(lineage, replaced);
       await writeEnvelope(
         await encryptJson(value, passphrase, scope, resolveKey, lineage),
         undefined,
       );
-      if (previous.version === 3) {
-        await freshness.remove(previous.lineage);
+      if (replaced !== undefined) {
+        await freshness.remove(replaced);
       }
+      await store.remove(recoveringKey);
     },
     async upgradeLegacyEnvelope(passphrase) {
       const envelope = await readEnvelope();

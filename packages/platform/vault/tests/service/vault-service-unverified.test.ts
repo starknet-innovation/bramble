@@ -112,11 +112,61 @@ describe("status", () => {
     expect((await parts.open().status()).recovery).toBe("invalid");
   });
 
-  test("leaves an interrupted migration to the normal unlock", async () => {
+  test("still offers recovery when the staged copy does not verify", async () => {
     const parts = await populated();
     await dropRecords(parts);
     await parts.local.set(migrationKey, { staged: true });
+    expect((await parts.open().status()).recovery).toBe("unverified");
+  });
+
+  test("leaves a staged copy that verifies to the normal unlock, which then succeeds", async () => {
+    const parts = await populated();
+    const envelope = await parts.local.get(vaultKey);
+    const commitKey = `${vaultKey}:commit:${lineageOf(envelope)}`;
+    const mirror = await parts.local.get(commitKey);
+    await parts.open().revokeOrigin({ origin: "https://example.com", vaultPassphrase });
+    const current = await parts.open().readVault(vaultPassphrase);
+    await parts.local.set(vaultKey, envelope as Json);
+    await parts.local.set(commitKey, mirror as Json);
+    // An interrupted migration's staged copy, with its own live records.
+    await createEncryptedStore(parts.local, migrationKey, parts.sync).write(
+      current,
+      vaultPassphrase,
+    );
+
+    const service = parts.open();
+    expect((await service.status()).recovery).toBeUndefined();
+    expect(await service.readVault(vaultPassphrase)).toEqual(current);
+
+    expect(await parts.local.get(migrationKey)).toBeUndefined();
     expect((await parts.open().status()).recovery).toBeUndefined();
+  });
+
+  test("answers without a recovery reason when storage fails", async () => {
+    const local = createMemoryStore();
+    await local.set(vaultKey, { corrupted: true });
+    const failing = {
+      get: () => Promise.reject(new Error("sync unavailable")),
+      remove: () => Promise.reject(new Error("sync unavailable")),
+      set: () => Promise.reject(new Error("sync unavailable")),
+    };
+    const store = createEncryptedStore(local, vaultKey, failing, createMemoryStore(), true);
+    const service = createWalletVaultService({
+      encryptedStore: {
+        ...store,
+        health: () => Promise.reject(new Error("sync unavailable")),
+      },
+      kms: fakeKms(),
+      migrationStore: createEncryptedStore(local, migrationKey, failing),
+    });
+
+    expect(await service.status()).toEqual({
+      accountCount: 0,
+      activeAccountId: null,
+      hasVault: true,
+      locked: true,
+      ready: true,
+    });
   });
 });
 

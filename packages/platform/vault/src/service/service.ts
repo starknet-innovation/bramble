@@ -111,15 +111,21 @@ export const createWalletVaultService = ({
 
   // Health reads may write (a session shadow, a mirror, the v2 marker), so they
   // queue behind mutations like any other vault access. An interrupted schema
-  // migration leaves a staged copy that a normal unlock recovers from, so the
-  // primary's health alone does not decide recovery while one exists.
+  // migration can leave a staged copy that verifies, which a normal unlock
+  // recovers from, so recovery is not offered while one exists. A storage
+  // failure is not a recovery reason: status still answers, and the unlock
+  // reports the failure.
   const vaultRecovery = (): Promise<VaultRecovery | undefined> =>
     serialized(async () => {
-      const health = await encryptedStore.health();
-      if (health === "absent" || health === "ok" || (await migrationStore.exists())) {
+      try {
+        const health = await encryptedStore.health();
+        if (health === "absent" || health === "ok" || (await migrationStore.health()) === "ok") {
+          return undefined;
+        }
+        return health;
+      } catch {
         return undefined;
       }
-      return health;
     });
 
   const service: WalletVaultService = {
