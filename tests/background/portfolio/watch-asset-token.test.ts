@@ -63,3 +63,28 @@ describe("watch-asset address canonicalization (A-L8)", () => {
     expect(lower?.address).toBe(padded?.address);
   });
 });
+
+describe("watch-asset token name fallback (Sherlock 252)", () => {
+  const metadata = (name: string) => ({ decimals: 6, name, symbol: "USDC" });
+  const request = { address: ADDRESS, symbol: "USDC" };
+
+  test("keeps a usable on-chain name, cut to 64 characters", () => {
+    expect(watchAssetToken(request, metadata("USD Coin"), "SN_MAIN")?.name).toBe("USD Coin");
+    expect(watchAssetToken(request, metadata("A".repeat(80)), "SN_MAIN")?.name).toBe(
+      "A".repeat(64),
+    );
+  });
+
+  test("falls back from an empty on-chain name to the site's name, then the symbol", () => {
+    expect(watchAssetToken({ ...request, name: "USD Coin" }, metadata(""), "SN_MAIN")?.name).toBe(
+      "USD Coin",
+    );
+    expect(watchAssetToken(request, metadata(""), "SN_MAIN")?.name).toBe("USDC");
+  });
+
+  test("still refuses a hostile name the site sends when the chain gives none", () => {
+    expect(
+      watchAssetToken({ ...request, name: "<img src=x>" }, metadata(""), "SN_MAIN"),
+    ).toBeNull();
+  });
+});

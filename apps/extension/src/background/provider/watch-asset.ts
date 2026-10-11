@@ -194,7 +194,13 @@ export const watchAssetToken = (
     return null;
   }
   const symbol = rawSymbol.trim().toUpperCase();
-  const name = (metadata?.name ?? request.name ?? symbol).trim();
+  // The on-chain name wins when it is usable, cut to 64 characters as
+  // `wallet.addToken` stores it. An empty or over-long one no longer refuses a
+  // token `wallet.addToken` would accept: it falls back to the site's name, then
+  // the symbol (Sherlock 252). A name the site sends is still refused when it
+  // is not a valid token name.
+  const onChainName = metadata?.name?.trim().slice(0, 64);
+  const name = isTokenName(onChainName) ? onChainName : (request.name?.trim() ?? symbol);
   if (!isTokenSymbol(symbol) || !isTokenName(name) || !isSafeDecimals(decimals)) {
     return null;
   }
