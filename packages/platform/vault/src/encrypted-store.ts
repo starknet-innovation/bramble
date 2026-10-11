@@ -240,12 +240,19 @@ const isLegacyState = (value: unknown): value is LegacyState =>
  * memoizes derived AES keys per (passphrase fingerprint, salt, iterations) so
  * the PBKDF2 work runs once per unlock rather than on every read or signature;
  * the keys are non-extractable and are dropped by `clearKeys` on lock.
+ *
+ * `mirrorFreshness` keeps a copy of each durable commit record in `store`, read
+ * only when the durable record is missing. Only a store whose durable record
+ * the wallet never deletes while its envelope may still be replayed can take
+ * one: the migration staging store removes its record after every migration,
+ * so a mirror there would let a restored copy of `store` vouch for itself.
  */
 export const createEncryptedStore = (
   store: KeyValueStore,
   key: string,
   freshnessStore: KeyValueStore = store,
   sessionFreshnessStore?: KeyValueStore,
+  mirrorFreshness = false,
 ): EncryptedStore => {
   assertStorageKey(key);
   const scope = `bramble:encrypted-store:${key}`;
@@ -253,7 +260,7 @@ export const createEncryptedStore = (
     key,
     freshnessStore,
     sessionFreshnessStore,
-    freshnessStore === store ? undefined : store,
+    mirrorFreshness && freshnessStore !== store ? store : undefined,
   );
   // This authority is deliberately store-wide, not keyed to the one v2
   // envelope present during migration. Once any v3 commit for this store is
@@ -302,8 +309,10 @@ export const createEncryptedStore = (
     if (state.current === null && state.pending !== null) {
       // Migration crashed after both prepare records but before replacing the
       // legacy envelope. Abort that uncommitted write and keep v2 recoverable.
-      await freshness.remove(legacy.lineage);
+      // The marker goes first: a crash between the two then leaves the
+      // never-migrated state, not a marker naming records that are gone.
       await store.remove(legacyKey);
+      await freshness.remove(legacy.lineage);
       return envelope;
     }
     throw new WalletError("Encrypted store rollback detected");

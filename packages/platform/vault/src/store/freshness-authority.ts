@@ -23,14 +23,17 @@
  * so the window is one read and not the stretch until the next write. A
  * runtime without session storage has no shadow at all.
  *
- * The durable record also has a local mirror, in the area that holds the
- * envelope. `storage.sync` is the fragile area: a sync-account change, a
+ * The primary vault's durable record also has a local mirror, in the area that
+ * holds the envelope. `storage.sync` is the fragile area: a sync-account change, a
  * profile reset or quota eviction can drop it while `storage.local` survives,
  * and a missing record used to be terminal. The mirror is consulted only when
  * the durable record is absent, so a rolled-back `local` (envelope and mirror
  * together) is still refused whenever `sync` holds the newer record; replaying
  * it also takes deleting the `sync` record, which is the coordinated rollback
- * of both areas this design already accepts as residual. Alongside the
+ * of both areas this design already accepts as residual. That holds only while
+ * the wallet itself never deletes a record whose envelope could be replayed,
+ * which is why the migration staging store, whose record is removed after
+ * every migration, has no mirror. Alongside the
  * per-lineage records the shadow keeps one store-wide marker naming the last
  * lineage promoted to current, because a version-2 envelope carries no lineage
  * and a downgrade to one could otherwise not be caught. Split out of
@@ -123,8 +126,9 @@ export type FreshnessAuthority = {
  * `sessionFreshnessStore` is optional because a runtime may have no session
  * storage; its absence means the durable authority is the only one, which is
  * the behaviour this store had before the shadow existed. `mirrorStore` is
- * optional because a store whose durable records already live beside the
- * envelope has nothing to mirror.
+ * optional: a store whose durable records already live beside the envelope has
+ * nothing to mirror, and a store that deletes its own durable record while its
+ * envelope could still be replayed must not have one (see `mirrorFreshness` in `../encrypted-store`).
  */
 export const createFreshnessAuthority = (
   key: string,
@@ -197,7 +201,10 @@ export const createFreshnessAuthority = (
         return durable;
       }
       if (mirror !== undefined) {
-        await freshnessStore.set(commitKey(lineage), mirror);
+        // Best effort: the mirror already vouches for this read, and a `sync`
+        // area that refuses the write (quota, rate limit) must not turn the
+        // recovery this mirror exists for back into a lockout.
+        await freshnessStore.set(commitKey(lineage), mirror).catch(() => undefined);
       }
       return mirror;
     },

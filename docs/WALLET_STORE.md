@@ -45,8 +45,8 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | --- | --- | --- | --- | --- |
 | `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v10; account ids unique; strict cross-references | fail closed |
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
-| `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage | rollback refused; missing record restored from the local mirror |
-| `bramble:vault:commit:<lineage>` mirror, and the `vault-migration` one | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
+| `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage | rollback refused; a missing primary record is restored from the local mirror |
+| `bramble:vault:commit:<lineage>` mirror (primary vault only) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
 | `bramble:vault:legacy` | `storage.local`, plain | marker that this install has committed a version-3 envelope | one per install | any version-2 envelope after it is a rollback |
 | `bramble:vault:commit:<lineage>`, `bramble:vault:promoted` shadow | `storage.session`, plain | session copy of the commit record and the last promoted lineage | browser session | a durable record that disagrees is a rollback |
 | `bramble:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
@@ -67,8 +67,10 @@ so there `local` and `sync` stay reachable from this extension's own content scr
 
 The commit record lives in `storage.sync` so that restoring an old copy of `storage.local` does not
 roll the vault back: `sync` still names the newer commit and refuses the old envelope. `storage.sync`
-can also be dropped on its own (a sync-account change, a profile reset, quota eviction), so the record
-is mirrored in `storage.local` and the mirror is read only when the `sync` record is missing.
+can also be dropped on its own (a sync-account change, a profile reset, quota eviction), so the primary
+vault's record is mirrored in `storage.local` and the mirror is read only when the `sync` record is
+missing. The `vault-migration` staging store has no mirror: the wallet removes its `sync` record after
+every migration, so a mirror there would let a restored `storage.local` vouch for its own staged copy.
 Replaying an old vault therefore takes rolling back `local` and deleting the `sync` record together,
 the coordinated rollback of both areas this design already accepts. The version-2 downgrade marker
 stays in `storage.local`, because every synced install of the extension shares one `storage.sync`

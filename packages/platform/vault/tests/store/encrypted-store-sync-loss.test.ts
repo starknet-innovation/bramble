@@ -25,7 +25,12 @@ const install = () => {
   const local = createMemoryStore();
   const sync = createMemoryStore();
   const session = createMemoryStore();
-  return { local, session, store: createEncryptedStore(local, vaultKey, sync, session), sync };
+  return {
+    local,
+    session,
+    store: createEncryptedStore(local, vaultKey, sync, session, true),
+    sync,
+  };
 };
 
 describe("a lost sync commit record", () => {
@@ -49,7 +54,7 @@ describe("a lost sync commit record", () => {
     await store.write({ revision: 1 }, passphrase);
     await sync.remove(`${vaultKey}:commit:${lineageOf(await local.get(vaultKey))}`);
 
-    const restarted = createEncryptedStore(local, vaultKey, sync, createMemoryStore());
+    const restarted = createEncryptedStore(local, vaultKey, sync, createMemoryStore(), true);
 
     expect(await restarted.read(passphrase)).toEqual({ revision: 1 });
   });
@@ -106,7 +111,7 @@ describe("the local mirror does not reopen local rollback", () => {
     await local.set(vaultKey, envelope as Json);
     await local.set(commitKey, staleMirror as Json);
 
-    const restarted = createEncryptedStore(local, vaultKey, sync, createMemoryStore());
+    const restarted = createEncryptedStore(local, vaultKey, sync, createMemoryStore(), true);
 
     await expect(restarted.read(passphrase)).rejects.toThrow("Encrypted store rollback detected");
     // The sync record governed, and the stale mirror was brought back in line with it.

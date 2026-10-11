@@ -18,31 +18,12 @@ import {
   VAULT_MIGRATION_STORE_KEY,
   VAULT_STORE_KEY,
 } from "@bramble/vault/store-migration";
-import { legacyEnvelope } from "./legacy-envelope";
+import { account, legacyEnvelope, vaultV3 } from "./legacy-envelope";
 
 const passA = "device A passphrase for tests";
 const passB = "correct horse battery staple";
 const scope = `bramble:encrypted-store:${VAULT_STORE_KEY}`;
 const legacyKey = `${VAULT_STORE_KEY}:legacy`;
-
-const account = {
-  address: "0x123",
-  classHash: "0xabc",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },
-  id: "SN_MAIN:0x123",
-  networkId: "SN_MAIN" as const,
-  publicKeyX: "0x456",
-  publicKeyY: "0x789",
-};
-// A schema-3 vault, as a pre-0.9.2 install would hold, for the unlock path.
-const vaultV3 = {
-  accounts: [account],
-  activeAccountId: account.id,
-  mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
-  originGrants: [],
-  schemaVersion: 3 as const,
-  signingKeys: [{ accountId: account.id, privateKey: "0x654321" }],
-};
 
 // One install wired like `background/index.ts`, sharing `sync` with the others.
 const install = (sync: KeyValueStore) => {
@@ -50,7 +31,7 @@ const install = (sync: KeyValueStore) => {
   const session = createMemoryStore();
   return {
     local,
-    primary: createEncryptedStore(local, VAULT_STORE_KEY, sync, session),
+    primary: createEncryptedStore(local, VAULT_STORE_KEY, sync, session, true),
     staging: createEncryptedStore(local, VAULT_MIGRATION_STORE_KEY, sync, session),
   };
 };
@@ -107,6 +88,7 @@ describe("a downgrade on the install that migrated", () => {
       VAULT_STORE_KEY,
       sync,
       createMemoryStore(),
+      true,
     );
 
     await expect(restarted.read(passB)).rejects.toThrow("Encrypted store rollback detected");
@@ -129,13 +111,20 @@ describe("a downgrade on the install that migrated", () => {
       VAULT_STORE_KEY,
       sync,
       createMemoryStore(),
+      true,
     );
     expect(await restarted.read(passB)).toEqual({ revision: 1 });
 
     expect(await device.local.get(legacyKey)).toEqual({ lineage, version: 1 });
     expect(await sync.get(legacyKey)).toBeUndefined();
     await device.local.set(VAULT_STORE_KEY, legacy as Json);
-    const again = createEncryptedStore(device.local, VAULT_STORE_KEY, sync, createMemoryStore());
+    const again = createEncryptedStore(
+      device.local,
+      VAULT_STORE_KEY,
+      sync,
+      createMemoryStore(),
+      true,
+    );
     await expect(again.read(passB)).rejects.toThrow("Encrypted store rollback detected");
   });
 

@@ -123,7 +123,13 @@ describe("createEncryptedStore", () => {
           await target.set(key, value);
         },
       });
-      const encrypted = createEncryptedStore(faulting(backend), vaultKey, faulting(freshness));
+      const encrypted = createEncryptedStore(
+        faulting(backend),
+        vaultKey,
+        faulting(freshness),
+        undefined,
+        true,
+      );
       await encrypted.write({ revision: 1 }, "correct horse battery staple");
       writes = 0;
       armed = true;
@@ -353,7 +359,10 @@ describe("createEncryptedStore", () => {
   });
 
   test("recovers every interrupted v2-to-v3 migration write", async () => {
-    for (const failAt of [1, 2, 3, 4]) {
+    // With the mirror on, a migration writes: the pending mirror, the pending
+    // durable record, the local legacy marker, the envelope, the promoted
+    // mirror, the promoted durable record.
+    for (const failAt of [1, 2, 3, 4, 5, 6]) {
       const backend = createMemoryStore();
       const freshnessBackend = createMemoryStore();
       let writes = 0;
@@ -374,6 +383,8 @@ describe("createEncryptedStore", () => {
         faulting(backend),
         vaultKey,
         faulting(freshnessBackend),
+        undefined,
+        true,
       );
       const legacy = await legacyEnvelope(
         { schemaVersion: 1 },
