@@ -3,14 +3,18 @@
 import { withDefaultGroups } from "@bramble/settings/groups";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
-import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import { receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
-import type { ConnectedSite, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
+import type {
+  AllowanceListing,
+  ConnectedSite,
+  TokenBalance,
+  WalletStatus,
+} from "../../../popup/responses/responses";
 import { recoveryScanFields, recoveryWordInputs } from "../../journeys/onboarding/onboarding-views";
 import { allowancesFlow } from "../../journeys/portfolio/allowance-views";
 import type { PrivacyDisclosureState } from "../../journeys/privacy/privacy-model";
@@ -295,7 +299,7 @@ export const simpleFlowScreen = (
   activeView: WalletView,
   ctx: {
     readonly account: AccountRef | null;
-    readonly allowances: readonly AllowanceView[];
+    readonly allowances: AllowanceListing;
     readonly balances: readonly TokenBalance[];
     readonly changes: Readonly<Record<string, number>>;
     readonly classHashVerification: ClassHashVerification | null;

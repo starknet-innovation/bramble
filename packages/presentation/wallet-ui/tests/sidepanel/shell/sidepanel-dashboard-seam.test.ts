@@ -64,7 +64,7 @@ const renderSeam = (
     {}, // prices
     [], // chart
     null, // selectedTokenId
-    [], // allowances
+    { entries: [], notices: [], unavailable: false }, // allowances
     null, // selectedNftId
     {}, // changes
     [], // multisigs

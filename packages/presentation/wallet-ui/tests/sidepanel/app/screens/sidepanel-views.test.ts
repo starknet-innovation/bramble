@@ -268,7 +268,7 @@ describe("sidepanel views", () => {
       {},
       [],
       null,
-      [],
+      { entries: [], notices: [], unavailable: false },
       null,
       {},
       [],
@@ -377,7 +377,7 @@ describe("sidepanel views", () => {
       { "0x00aa": 5 },
       [1, 2, 3, 4],
       null,
-      [],
+      { entries: [], notices: [], unavailable: false },
       null,
       { "0x00aa": 4 },
     );

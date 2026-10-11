@@ -10,14 +10,16 @@ import { escapeHtml } from "@bramble/core/html";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
+  type AllowanceNotice,
   type AllowanceView,
   isUnlimitedAllowance,
 } from "@bramble/transactions/allowance-discovery";
+import { ALLOWANCE_LIMITS } from "@bramble/transactions/allowance-store";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import type { WalletStatus } from "../../../popup/responses/responses";
+import type { AllowanceListing, WalletStatus } from "../../../popup/responses/responses";
 import {
   accountLabel,
   contextHelp,
@@ -72,6 +74,29 @@ const amountLabel = (allowance: AllowanceView, token: TokenConfig | null): strin
 const UNCONFIRMED_TOKEN_NOTE =
   "This wallet cannot confirm this contract is a token, so the value may be an NFT item id rather than an amount. Revoke it from the site that asked for it.";
 
+// What the listing could not vouch for. Shown above the list, and above the
+// "none found" line too, because an empty list from a partial reading is not a
+// statement that nothing is outstanding (Sherlock 181, 183, 190).
+const NOTICE_COPY: Readonly<Record<AllowanceNotice, string>> = {
+  "multisig-unread":
+    "A watched multisig could not be read, so approvals it granted may be missing.",
+  "retention-full": `This wallet keeps ${ALLOWANCE_LIMITS.entriesPerScope} approvals per account and drops the smallest first, so some may be missing.`,
+  "scan-incomplete":
+    "This list may be incomplete. Some older approvals on your tokens could not be checked.",
+};
+
+const UNAVAILABLE_COPY = "Allowances could not be loaded. Refresh to try again.";
+
+const noticeLines = (notices: readonly AllowanceNotice[]): string =>
+  notices
+    .map((notice) => `<p class="hint allowance-notice">${escapeHtml(NOTICE_COPY[notice])}</p>`)
+    .join("");
+
+// A revoke this wallet sent that the chain has not confirmed. The row keeps
+// the grant's amount and its revoke control: if the revoke reverted, the grant
+// still stands (Sherlock 192).
+const REVOKING_NOTE = "Revoke sent. It stays listed until the network confirms it.";
+
 const SOURCE_LABELS: Readonly<Record<AllowanceView["source"], string>> = {
   external: "on-chain",
   multisig: "granted by a multisig you sign for",
@@ -93,6 +118,7 @@ const allowanceRow = (allowance: AllowanceView, token: TokenConfig | null): stri
       <span class="allowance-spender"><code title="${escapeHtml(allowance.spender)}">${escapeHtml(accountLabel(allowance.spender))}</code>${inlineCopyButton(allowance.spender, "Copy spender address")}</span>
       <p class="hint"><span class="allowance-amount" title="${escapeHtml(allowance.token)}">${escapeHtml(amountLabel(allowance, token))}</span>${token ? "" : ` of <span title="${escapeHtml(allowance.token)}">${escapeHtml(accountLabel(allowance.token))}</span>`} · ${escapeHtml(SOURCE_LABELS[allowance.source])}${inlineCopyButton(allowance.token, "Copy token contract address")}</p>
       ${allowance.unconfirmedToken ? `<p class="hint">${escapeHtml(UNCONFIRMED_TOKEN_NOTE)}</p>` : ""}
+      ${allowance.revoking ? `<p class="hint">${escapeHtml(REVOKING_NOTE)}</p>` : ""}
       <p class="allowance-review" data-allowance-review-for="${escapeHtml(allowance.id)}" role="status" hidden></p>
     </div>
     ${
@@ -115,19 +141,23 @@ const allowanceRow = (allowance: AllowanceView, token: TokenConfig | null): stri
 export const allowancesFlow = (
   status: WalletStatus,
   account: AccountRef | null,
-  allowances: readonly AllowanceView[],
+  listing: AllowanceListing,
   preferences: WalletPreferences | null,
 ): string => {
   // Defence in depth behind the background's own scoping: an entry must be on
   // the displayed network and either belong to the active account or be one the
   // background authorized as a multisig this account signs for.
-  const scoped = allowances.filter(
+  const scoped = listing.entries.filter(
     (allowance) =>
       allowance.networkId === status.networkId &&
       (allowance.accountId === account?.id || allowance.source === "multisig"),
   );
   return (
-    flowHeader("Allowances", status, `${scoped.length} outstanding`) +
+    flowHeader(
+      "Allowances",
+      status,
+      listing.unavailable ? "Not loaded" : `${scoped.length} outstanding`,
+    ) +
     flowScreen(
       "allowances",
       `<section class="section">
@@ -140,14 +170,17 @@ export const allowancesFlow = (
           "What this list includes",
           "It includes approvals granted here and approvals discovered on-chain for tracked ERC-20 tokens. 'At least' means the wallet can only prove a lower bound. NFT approvals and untracked tokens are outside this scan; unconfirmed contracts keep no revoke control because an ERC-20 revoke call could grant an NFT instead.",
         )}
+        ${account === null || listing.unavailable ? "" : noticeLines(listing.notices)}
         ${
           account === null
             ? emptyState("Unlock an account on this network to manage allowances.")
-            : scoped.length === 0
-              ? emptyState(
-                  "No outstanding allowances found for this account. Approvals on tokens you don't track are not scanned.",
-                )
-              : `<ul class="allowance-list">${scoped.map((allowance) => allowanceRow(allowance, tokenFor(allowance, preferences))).join("")}</ul>`
+            : listing.unavailable
+              ? emptyState(UNAVAILABLE_COPY, "alert")
+              : scoped.length === 0
+                ? emptyState(
+                    "No outstanding allowances found for this account. Approvals on tokens you don't track are not scanned.",
+                  )
+                : `<ul class="allowance-list">${scoped.map((allowance) => allowanceRow(allowance, tokenFor(allowance, preferences))).join("")}</ul>`
         }
         <p id="allowance-result" role="status"></p>
       </section>`,

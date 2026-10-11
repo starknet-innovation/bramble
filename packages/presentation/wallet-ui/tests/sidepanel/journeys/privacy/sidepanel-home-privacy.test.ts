@@ -81,7 +81,7 @@ const privateDashboard = (privacy: PrivacyDisclosureState): string =>
     { [token.address]: 2_000 },
     [],
     null,
-    [],
+    { entries: [], notices: [], unavailable: false },
     null,
     { [token.address]: 5 },
     [],

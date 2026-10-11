@@ -14,16 +14,17 @@ import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
-import type {
-  ConnectedSite,
-  DiscoveredNft,
-  PendingApproval,
-  SignabilityVerdict,
-  TokenBalance,
-  WalletStatus,
+import {
+  type AllowanceListing,
+  type ConnectedSite,
+  type DiscoveredNft,
+  EMPTY_ALLOWANCE_LISTING,
+  type PendingApproval,
+  type SignabilityVerdict,
+  type TokenBalance,
+  type WalletStatus,
 } from "../../../popup/responses/responses";
 import { actionableApprovals, approvalTakeover } from "../../journeys/approvals/approval-screen";
 import { nftSendFlow } from "../../journeys/collectibles/nft-send-view";
@@ -278,7 +279,7 @@ export const dashboard = (
   prices: Readonly<Record<string, number>> = {},
   chart: readonly number[] = [],
   selectedTokenId: string | null = null,
-  allowances: readonly AllowanceView[] = [],
+  allowances: AllowanceListing = EMPTY_ALLOWANCE_LISTING,
   selectedNftId: string | null = null,
   changes: Readonly<Record<string, number>> = {},
   multisigs: readonly ArgentMultisigView[] = [],

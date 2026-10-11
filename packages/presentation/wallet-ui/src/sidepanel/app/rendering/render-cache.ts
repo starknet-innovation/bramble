@@ -7,7 +7,11 @@
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
-import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
+import {
+  EMPTY_ALLOWANCE_LISTING,
+  type SignabilityVerdict,
+  type WalletStatus,
+} from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 
@@ -100,7 +104,7 @@ export const updateRenderScope = (
  * value null. Used to prime the cache at boot and to reset it on lock.
  */
 export const emptyRenderCache = (): RenderData => ({
-  allowances: [],
+  allowances: EMPTY_ALLOWANCE_LISTING,
   multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
   multisigsNetworkId: null,

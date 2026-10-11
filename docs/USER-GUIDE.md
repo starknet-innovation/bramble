@@ -190,8 +190,16 @@ An amount shown as **"at least N"** is one the wallet can only bound from below:
 part of the allowance was granted somewhere else (or has aged out of the log) and
 no on-chain reading was available, so the spender's true reach is N or more.
 
-Two limits are worth knowing. Approvals for tokens you do not track and never
-approved here may not appear, so this view is not a complete chain index. And
+After you revoke, the row stays, marked "Revoke sent", until the chain reads the
+allowance as zero: a revoke that fails leaves the approval live, and it stays
+listed so you can try again.
+
+Three limits are worth knowing. Approvals for tokens you do not track and never
+approved here may not appear, so this view is not a complete chain index; when
+the on-chain search for a tracked token stops before reaching all of its
+approvals, or a watched multisig cannot be read, the screen says the list may be
+incomplete. The wallet keeps 50 approvals per account and, when full, forgets
+the smallest first, and the screen says so when that limit is reached. And
 **NFT collection approvals are not token allowances**: `set_approval_for_all`,
 which lets a marketplace move every item you own in a collection, is flagged
 loudly on the review screen before you sign but is not listed or revokable here —

@@ -119,7 +119,7 @@ describe("emptyRenderCache (lock-reset single source)", () => {
   });
 
   test("clears the remaining view-scoped lists and price fields", () => {
-    expect(empty.allowances).toEqual([]);
+    expect(empty.allowances).toEqual({ entries: [], notices: [], unavailable: false });
     expect(empty.connectedSites).toEqual([]);
     expect(empty.chart).toEqual([]);
     expect(empty.deployment).toBeNull();

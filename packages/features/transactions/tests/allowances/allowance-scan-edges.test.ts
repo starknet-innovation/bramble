@@ -25,7 +25,7 @@ const ozEvent = (owner: string, spender: string): AllowanceEvent => ({
 });
 
 describe("collectExternalAllowances edges", () => {
-  test("stops discovering spenders at the per-token cap of 50", async () => {
+  test("stops discovering spenders at the per-token cap of 50, as incomplete", async () => {
     // 60 distinct approved spenders in one page; discovery must cap at 50.
     const spenders = Array.from({ length: 60 }, (_, index) => `0x${(0x1000 + index).toString(16)}`);
     const rpc: AllowanceRpc = {
@@ -39,7 +39,8 @@ describe("collectExternalAllowances edges", () => {
     };
 
     const found = await collectExternalAllowances(rpc, { owner: OWNER, tokens: [TOKEN] });
-    expect(found).toHaveLength(50);
+    expect(found.allowances).toHaveLength(50);
+    expect(found.complete).toBe(false);
   });
 
   test("accumulates per token in token order, skipping a token that yields no spenders", async () => {
@@ -63,9 +64,10 @@ describe("collectExternalAllowances edges", () => {
       owner: OWNER,
       tokens: [TOKEN, TOKEN_WITHOUT_SPENDERS],
     });
-    expect(found).toEqual([
-      { amount: "100", spender: canonical(SPENDER), token: canonical(TOKEN) },
-    ]);
+    expect(found).toEqual({
+      allowances: [{ amount: "100", spender: canonical(SPENDER), token: canonical(TOKEN) }],
+      complete: true,
+    });
   });
 
   test("propagates a transport error rather than skipping the token", async () => {
@@ -98,7 +100,7 @@ describe("scanExternalAllowances", () => {
   test("returns an empty list without touching RPC when no tokens are tracked", async () => {
     expect(
       await scanExternalAllowances({ owner: OWNER, rpcUrls: ["http://127.0.0.1:9"], tokens: [] }),
-    ).toEqual([]);
+    ).toEqual({ allowances: [], complete: true });
   });
 
   test("discovers a live allowance through the real provider adapter", async () => {
@@ -106,8 +108,9 @@ describe("scanExternalAllowances", () => {
       { owner: OWNER, rpcUrls: ["https://rpc.example"], tokens: [TOKEN] },
       () => rpcProvider,
     );
-    expect(found).toEqual([
-      { amount: "1000", spender: canonical(SPENDER), token: canonical(TOKEN) },
-    ]);
+    expect(found).toEqual({
+      allowances: [{ amount: "1000", spender: canonical(SPENDER), token: canonical(TOKEN) }],
+      complete: true,
+    });
   });
 });
