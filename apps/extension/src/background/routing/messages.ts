@@ -263,11 +263,16 @@ const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
     : { error: "invalid diagnostics request" };
 };
 
+// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway": it first
+// accepts a vault the store cannot verify (the service drops every site
+// connection and retained Ledger viewing key while doing so), then unlocks it
+// exactly like `wallet.unlock`. The service refuses a vault that verifies, so
+// this cannot be used to skip the freshness check on a healthy wallet.
 const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.unlock") {
+  if (messageType !== "wallet.unlock" && messageType !== "wallet.unlockUnverified") {
     return null;
   }
-  const input = readUnlockInput(message);
+  const input = readUnlockInput(message, messageType);
   if (!input) {
     return { error: "invalid unlock request" };
   }
@@ -276,6 +281,15 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
     return await ctx.activeStateCoordinator.run(async () => {
       if (ctx.session.generation() !== generation) {
         return { error: "wallet locked" };
+      }
+      if (messageType === "wallet.unlockUnverified") {
+        if (!ctx.wallet.recoverUnverifiedVault) {
+          return { error: "wallet unavailable" };
+        }
+        await ctx.wallet.recoverUnverifiedVault(input.vaultPassphrase);
+        if (ctx.session.generation() !== generation) {
+          return { error: "wallet locked" };
+        }
       }
       await ctx.wallet.readVault(input.vaultPassphrase);
       if (ctx.session.generation() !== generation) {

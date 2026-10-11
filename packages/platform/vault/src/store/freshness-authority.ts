@@ -45,6 +45,7 @@ import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { hasBase64Bytes } from "./envelope-bytes";
+import { INVALID_COMMIT_STATE, ROLLBACK_DETECTED } from "./store-errors";
 
 const COMMIT_STATE_KEYS = ["current", "pending", "version"] as const;
 const PROMOTED_STATE_KEYS = ["lineage", "version"] as const;
@@ -156,7 +157,7 @@ export const createFreshnessAuthority = (
       return undefined;
     }
     if (!isCommitState(state)) {
-      throw new WalletError("Invalid encrypted store commit state");
+      throw new WalletError(INVALID_COMMIT_STATE);
     }
     return state;
   };
@@ -167,7 +168,7 @@ export const createFreshnessAuthority = (
       return undefined;
     }
     if (!isPromotedState(state)) {
-      throw new WalletError("Invalid encrypted store commit state");
+      throw new WalletError(INVALID_COMMIT_STATE);
     }
     return state;
   };
@@ -234,7 +235,7 @@ export const createFreshnessAuthority = (
     },
     async requireNotPromoted() {
       if ((await readPromoted()) !== undefined) {
-        throw new WalletError("Encrypted store rollback detected");
+        throw new WalletError(ROLLBACK_DETECTED);
       }
     },
     async requireShadow(lineage, commit) {
@@ -247,7 +248,7 @@ export const createFreshnessAuthority = (
         return;
       }
       if (!vouchesFor(shadow, commit)) {
-        throw new WalletError("Encrypted store rollback detected");
+        throw new WalletError(ROLLBACK_DETECTED);
       }
     },
     async set(lineage, state) {

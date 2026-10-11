@@ -17,6 +17,7 @@ import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
 import type { FreshnessAuthority } from "./freshness-authority";
+import { INVALID_COMMIT_STATE, ROLLBACK_DETECTED } from "./store-errors";
 
 const LEGACY_STATE_KEYS = ["lineage", "version"] as const;
 
@@ -70,14 +71,14 @@ export const createLegacyMarker = (
         return envelope;
       }
       if (!isLegacyState(legacy)) {
-        throw new WalletError("Invalid encrypted store commit state");
+        throw new WalletError(INVALID_COMMIT_STATE);
       }
       const state = await freshness.read(legacy.lineage);
       if (state === undefined) {
         // The legacy marker is written only after the pending commit state. Its
         // presence without that state cannot be a valid interrupted write; it is
         // lost/corrupt freshness authority and must not reopen v2 rollback.
-        throw new WalletError("Encrypted store rollback detected");
+        throw new WalletError(ROLLBACK_DETECTED);
       }
       if (state.current === null && state.pending !== null) {
         // Migration crashed after both prepare records but before replacing the
@@ -88,12 +89,12 @@ export const createLegacyMarker = (
         await freshness.remove(legacy.lineage);
         return envelope;
       }
-      throw new WalletError("Encrypted store rollback detected");
+      throw new WalletError(ROLLBACK_DETECTED);
     },
     async prepare(lineage) {
       const legacy = await store.get(legacyKey);
       if (legacy !== undefined && !isLegacyState(legacy)) {
-        throw new WalletError("Invalid encrypted store commit state");
+        throw new WalletError(INVALID_COMMIT_STATE);
       }
       if (legacy === undefined) {
         await store.set(legacyKey, { lineage, version: 1 });

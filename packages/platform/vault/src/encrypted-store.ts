@@ -8,6 +8,21 @@ import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-
 import { base64ToBytes, bytesToBase64, bytesToHex, hasBase64Bytes } from "./store/envelope-bytes";
 import { createFreshnessAuthority } from "./store/freshness-authority";
 import { createLegacyMarker } from "./store/legacy-marker";
+import {
+  COMMIT_STATE_MISSING,
+  type EncryptedStoreHealth,
+  healthFor,
+  INVALID_ENVELOPE,
+  ROLLBACK_DETECTED,
+  UNVERIFIED_HEALTH,
+} from "./store/store-errors";
+
+export {
+  COMMIT_STATE_MISSING,
+  type EncryptedStoreHealth,
+  INVALID_ENVELOPE,
+  ROLLBACK_DETECTED,
+} from "./store/store-errors";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -192,7 +207,7 @@ export const decryptJson = async (
   resolveKey: KeyResolver = deriveKey,
 ): Promise<unknown> => {
   if (envelope.scope !== scope) {
-    throw new WalletError("Invalid encrypted store envelope");
+    throw new WalletError(INVALID_ENVELOPE);
   }
 
   const key = await resolveKey(passphrase, base64ToBytes(envelope.salt), envelope.iterations);
@@ -212,12 +227,20 @@ export const decryptJson = async (
 /**
  * Passphrase-protected JSON store over a key-value backend. `clearKeys` drops
  * the in-memory derived-key cache and must be called when the wallet locks.
+ *
+ * `readUnverified` and `replaceUnverified` exist only for a vault whose health
+ * is `unverified` or `rollback`, and throw otherwise. They skip the freshness
+ * check that makes replaying an old envelope detectable, so a caller must have
+ * the user's explicit consent to accept a possibly older copy.
  */
 export type EncryptedStore = {
   readonly clearKeys: () => void;
   readonly exists: () => Promise<boolean>;
+  readonly health: () => Promise<EncryptedStoreHealth>;
   readonly read: (passphrase: string) => Promise<unknown>;
+  readonly readUnverified: (passphrase: string) => Promise<unknown>;
   readonly remove: () => Promise<void>;
+  readonly replaceUnverified: (value: Json, passphrase: string) => Promise<void>;
   readonly upgradeLegacyEnvelope: (passphrase: string) => Promise<void>;
   readonly write: (value: Json, passphrase: string) => Promise<void>;
 };
@@ -263,7 +286,7 @@ export const createEncryptedStore = (
       return undefined;
     }
     if (!isEncryptedEnvelope(envelope)) {
-      throw new WalletError("Invalid encrypted store envelope");
+      throw new WalletError(INVALID_ENVELOPE);
     }
     return envelope as EncryptedEnvelope;
   };
@@ -273,10 +296,10 @@ export const createEncryptedStore = (
   ): Promise<EncryptedEnvelope> => {
     const state = await freshness.read(envelope.lineage);
     if (state === undefined) {
-      throw new WalletError("Encrypted store commit state missing");
+      throw new WalletError(COMMIT_STATE_MISSING);
     }
     if (state.current !== envelope.commit && state.pending !== envelope.commit) {
-      throw new WalletError("Encrypted store rollback detected");
+      throw new WalletError(ROLLBACK_DETECTED);
     }
     // Both authorities must vouch for the envelope. `freshnessStore` is
     // `storage.sync`, which a content script can write on Firefox, so an
@@ -356,6 +379,27 @@ export const createEncryptedStore = (
     await writeEnvelope(await encryptJson(value, passphrase, scope, resolveKey, lineage), previous);
   };
 
+  const currentHealth = async (): Promise<EncryptedStoreHealth> => {
+    try {
+      return (await readEnvelope()) === undefined ? "absent" : "ok";
+    } catch (error) {
+      const health = healthFor(error);
+      if (health === undefined) {
+        throw error;
+      }
+      return health;
+    }
+  };
+
+  const requireUnverified = async (): Promise<EncryptedEnvelope> => {
+    if (!UNVERIFIED_HEALTH.has(await currentHealth())) {
+      throw new WalletError("Encrypted store is not awaiting recovery");
+    }
+    const envelope = await readRawEnvelope();
+    invariant(envelope !== undefined, "Encrypted store is not awaiting recovery");
+    return envelope as EncryptedEnvelope;
+  };
+
   const resolveKey: KeyResolver = async (passphrase, salt, iterations) => {
     const generation = keyCacheGeneration;
     const cacheId = `${await passphraseFingerprint(passphrase)}:${bytesToBase64(salt)}:${iterations}`;
@@ -386,6 +430,7 @@ export const createEncryptedStore = (
     async exists() {
       return (await store.get(key)) !== undefined;
     },
+    health: currentHealth,
     async read(passphrase) {
       const envelope = await readEnvelope();
       if (envelope === undefined) {
@@ -393,11 +438,31 @@ export const createEncryptedStore = (
       }
       return decryptJson(envelope, passphrase, scope, resolveKey);
     },
+    async readUnverified(passphrase) {
+      return decryptJson(await requireUnverified(), passphrase, scope, resolveKey);
+    },
+    // A malformed envelope is removed too: removal is how a wallet that cannot
+    // be opened is reset, and refusing to delete what cannot be parsed would
+    // leave that wallet stuck.
     async remove() {
-      const envelope = await readRawEnvelope();
+      const raw = await store.get(key);
       await store.remove(key);
-      if (envelope?.version === 3) {
-        await freshness.remove(envelope.lineage);
+      if (isEncryptedEnvelope(raw) && raw.version === 3) {
+        await freshness.remove(raw.lineage);
+      }
+    },
+    // A fresh lineage, so neither a missing record nor one naming a newer
+    // commit for the old lineage has any say over the replacement. The old
+    // lineage's records are removed only once the replacement is committed.
+    async replaceUnverified(value, passphrase) {
+      const previous = await requireUnverified();
+      const lineage = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+      await writeEnvelope(
+        await encryptJson(value, passphrase, scope, resolveKey, lineage),
+        undefined,
+      );
+      if (previous.version === 3) {
+        await freshness.remove(previous.lineage);
       }
     },
     async upgradeLegacyEnvelope(passphrase) {

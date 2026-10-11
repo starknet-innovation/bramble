@@ -3,8 +3,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-
-const ENVELOPE_ERROR_MESSAGE = "Invalid encrypted store envelope";
+import { INVALID_ENVELOPE } from "@bramble/vault/encrypted-store";
 
 // An AES-GCM authentication failure surfaces as a DOMException named
 // "OperationError": it is thrown when the derived key cannot decrypt the
@@ -20,7 +19,7 @@ const isDecryptionFailure = (error: unknown): boolean =>
  * returned unchanged.
  */
 export const unlockFailureError = (error: unknown): Error => {
-  if (error instanceof WalletError && error.message === ENVELOPE_ERROR_MESSAGE) {
+  if (error instanceof WalletError && error.message === INVALID_ENVELOPE) {
     return error;
   }
   if (isDecryptionFailure(error)) {
