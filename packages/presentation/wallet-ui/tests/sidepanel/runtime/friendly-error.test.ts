@@ -37,6 +37,14 @@ describe("friendlyError", () => {
     expect(result.message).not.toContain("Devnet");
   });
 
+  // The refusal wallet.addAccount returns for a vault set up from a Ledger or
+  // a private key names the way that still works (Sherlock 156).
+  test("points a phrase-less wallet's add-account refusal at import", () => {
+    expect(friendlyError("No recovery phrase stored for this wallet").message).toBe(
+      "This wallet was set up without a recovery phrase. Import an existing account instead.",
+    );
+  });
+
   // The exact strings argent-recovery.ts and account-recovery.ts throw.
   test("maps the recovery refusals to reviewed copy", () => {
     for (const [raw, message] of [

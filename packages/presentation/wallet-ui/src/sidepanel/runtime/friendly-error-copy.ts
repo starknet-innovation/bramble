@@ -206,6 +206,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "This wallet was set up without a recovery phrase, so there is nothing to search for.",
   ],
   [
+    "no recovery phrase stored for this wallet",
+    "This wallet was set up without a recovery phrase. Import an existing account instead.",
+  ],
+  [
     "account recovery unavailable",
     "Couldn't recover accounts. Check your connection and try again.",
   ],
