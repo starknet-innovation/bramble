@@ -5,6 +5,8 @@
  * imported, a no-op, or refused for good. A wrap refused for a passing reason
  * (an RPC failure, another active network) is opened again on the next sync,
  * and no single wrap, however malformed its calls, can stop the rest of a sync.
+ * A signature on an intent this wallet now words differently still merges
+ * (Sherlock 178).
  */
 import { describe, expect, test } from "bun:test";
 import { createNostrCoordinationStore } from "@bramble/multisig/coordination";
@@ -188,5 +190,58 @@ describe("a call set the safety checks refuse", () => {
       ok: true,
     });
     expect(await pair.receipts()).toHaveLength(2);
+  });
+});
+
+describe("a co-signer's signature on an intent this wallet words differently", () => {
+  test("is merged after a token the intent moves is added", async () => {
+    const pair = await coSigners();
+    const proposal = (
+      (await pair.source.handler(
+        {
+          calls: [
+            {
+              calldata: ["0x333", "0x5", "0x0"],
+              contractAddress: HARNESS_TARGET,
+              entrypoint: "transfer",
+            },
+          ],
+          multisigId: HARNESS_MULTISIG_ID,
+          type: "wallet.prepareArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      )) as { readonly intent: ArgentMultisigSigningIntent }
+    ).intent;
+    await pair.share(proposal);
+    await expect(pair.syncTarget()).resolves.toMatchObject({ imported: 1 });
+    const before = await pair.target.multisigStore.getIntent(proposal.id);
+
+    await pair.target.preferencesStore.upsertToken(
+      {
+        address: HARNESS_TARGET,
+        decimals: 18,
+        name: "Target",
+        networkId: "SN_MAIN",
+        symbol: "TGT",
+      },
+      "user",
+    );
+    const signed = (
+      (await pair.source.handler(
+        {
+          intentId: proposal.id,
+          signerAccountId: harnessAccountA.id,
+          type: "wallet.signArgentMultisigIntent",
+        },
+        harnessExtensionSender,
+      )) as { readonly intent: ArgentMultisigSigningIntent }
+    ).intent;
+    await pair.share(signed);
+
+    await expect(pair.syncTarget()).resolves.toMatchObject({ imported: 1 });
+    await expect(pair.target.multisigStore.getIntent(proposal.id)).resolves.toMatchObject({
+      signatures: [{ publicKey: harnessAccountA.publicKeyX }],
+      summary: before?.summary,
+    });
   });
 });
