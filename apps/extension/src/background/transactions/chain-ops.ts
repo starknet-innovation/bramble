@@ -11,6 +11,7 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
 import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
 import { withRpcFallback } from "@bramble/starknet/provider";
+import { SNIP12_MAX_NAME_LENGTH } from "@bramble/starknet/snip12-vocabulary";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
@@ -93,9 +94,21 @@ export type ChainOpsDeps = {
   readonly waiters: SignatureWaiters;
 };
 
+// A revision-1 domain name is a ByteArray with no length bound, and the panel
+// drops an approval whose summary is over its 300-character limit, leaving the
+// site's request waiting with nothing on screen (Sherlock 187). The summary is
+// a label; the card shows the name itself in its domain block.
+const summaryName = (name: string): string => {
+  const characters = [...name];
+  return characters.length > SNIP12_MAX_NAME_LENGTH
+    ? `${characters.slice(0, SNIP12_MAX_NAME_LENGTH).join("")}…`
+    : name;
+};
+
 /**
  * Builds a short, user-facing summary of a SNIP-12 typed-data request for the
- * approval card (primary type and, when present, the domain name).
+ * approval card (primary type and, when present, the domain name, each cut to
+ * `SNIP12_MAX_NAME_LENGTH` characters).
  */
 const describeTypedData = (typedData: unknown): string => {
   if (typeof typedData !== "object" || typedData === null) {
@@ -108,7 +121,10 @@ const describeTypedData = (typedData: unknown): string => {
       ? (record["domain"] as Record<string, unknown>)
       : {};
   const name = typeof domain["name"] === "string" ? domain["name"] : "";
-  return name ? `${primaryType} · ${name}` : primaryType;
+  // The hashing gate already bounds the primary type; cutting it here as well
+  // keeps the summary under the panel's limit without relying on that.
+  const label = summaryName(primaryType);
+  return name ? `${label} · ${summaryName(name)}` : label;
 };
 
 /**
