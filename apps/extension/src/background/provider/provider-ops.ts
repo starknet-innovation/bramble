@@ -248,7 +248,10 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   const passphrase = deps.session.peekPassphrase();
   const authorized = captureSessionAuthorization(deps.session);
   const granted = passphrase ? await deps.wallet.getGrantedAccounts(input.origin, passphrase) : [];
-  if (passphrase && !authorized.isCurrent()) return { error: "wallet locked" };
+  // A lock that lands during the read answers what a locked wallet answers,
+  // never an error only that race produces: a polling page would otherwise
+  // learn when each lock happened (Sherlock 148).
+  if (passphrase && !authorized.isCurrent()) return { ok: true, permissions: [] };
   return { ok: true, permissions: granted.length > 0 ? ["accounts"] : [] };
 };
 
