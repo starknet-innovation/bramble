@@ -10,7 +10,7 @@ const VAULT_RECOVERY_REASONS = ["invalid", "rollback", "unverified"] as const;
 /**
  * `unverified` when no record vouches for the vault, `rollback` when a record
  * names a newer copy, `invalid` when the stored data is malformed. The first
- * two can be recovered with the passphrase; `invalid` cannot be decrypted.
+ * two can be recovered with the wallet password; `invalid` cannot be decrypted.
  */
 export type VaultRecovery = (typeof VAULT_RECOVERY_REASONS)[number];
 

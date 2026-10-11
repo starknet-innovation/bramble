@@ -488,5 +488,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "Incorrect passphrase");
     },
+    async unlockUnverifiedVault(vaultPassphrase: string): Promise<WalletStatus> {
+      const response = await sendMessage({ type: "wallet.unlockUnverified", vaultPassphrase });
+      if (isWalletStatus(response)) {
+        return response;
+      }
+      throw responseError(response, "Incorrect passphrase");
+    },
   };
 };

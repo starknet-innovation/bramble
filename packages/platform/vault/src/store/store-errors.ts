@@ -16,7 +16,7 @@ export const INVALID_COMMIT_STATE = "Invalid encrypted store commit state";
 export const INVALID_ENVELOPE = "Invalid encrypted store envelope";
 
 /**
- * Whether the stored envelope can be opened, decided without the passphrase:
+ * Whether the stored envelope can be opened, decided without the password:
  * `absent` when nothing is stored; `unverified` when no authority holds its
  * commit record; `rollback` when an authority names a different commit or its
  * record is malformed; `invalid` when the envelope itself is malformed.

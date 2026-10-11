@@ -47,8 +47,33 @@ export const unlockScenario: WalletScenario = {
       prepare: prepareUnlockFailure,
       state: { gate: "locked", result: "error" },
     },
+    {
+      content: () => locked({ ...lockedStatus, recovery: "unverified" }),
+      id: "recovery-unverified",
+      label: "Wallet cannot be verified",
+      narrative:
+        "No record vouches for the stored wallet, so the gate offers Unlock anyway, states that it disconnects every site, and points to reinstalling as the alternative.",
+      state: { gate: "recovery", recovery: "unverified" },
+    },
+    {
+      content: () => locked({ ...lockedStatus, recovery: "rollback" }),
+      id: "recovery-rollback",
+      label: "Wallet is out of date",
+      narrative:
+        "A newer copy is on record, so the gate names the innocent cause (a restored backup) and the one to worry about before offering Unlock anyway.",
+      state: { gate: "recovery", recovery: "rollback" },
+    },
+    {
+      content: () => locked({ ...lockedStatus, recovery: "invalid" }),
+      id: "recovery-invalid",
+      label: "Wallet cannot be opened",
+      narrative:
+        "The stored wallet is malformed and cannot be decrypted, so the only way back is reinstalling and restoring from the recovery phrase.",
+      state: { gate: "recovery", recovery: "invalid" },
+    },
   ],
-  description: "Returning-wallet unlock, pending-request visibility, and authentication failure.",
+  description:
+    "Returning-wallet unlock, pending-request visibility, authentication failure, and recovery for a wallet that cannot be verified.",
   id: "unlock",
   surface: "sidepanel",
   title: "Returning wallet unlock",
