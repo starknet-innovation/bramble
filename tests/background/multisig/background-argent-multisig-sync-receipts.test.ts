@@ -23,6 +23,7 @@ import { createMemoryStore } from "@bramble/store/kv";
 import { num, transaction } from "starknet";
 import { coordinationRelayUrls } from "../../../apps/extension/src/background/multisig/multisig-coordination-ops";
 import { argentMultisigIntentPackage } from "../../../apps/extension/src/background/multisig/multisig-inputs";
+import { MAX_INTENTS_PER_MULTISIG } from "../../../packages/features/multisig/src/intent-capacity";
 import {
   HARNESS_MULTISIG,
   HARNESS_MULTISIG_ID,
@@ -300,5 +301,26 @@ describe("an intent the user removed (Sherlock 168, 237)", () => {
     await expect(pair.target.multisigStore.getIntent(intent.id)).resolves.toMatchObject({
       signatures: [{ publicKey: harnessAccountA.publicKeyX }],
     });
+  });
+});
+
+describe("a co-signer flooding one multisig with proposals (Sherlock 179)", () => {
+  test("fills only that multisig's share of the intent store", async () => {
+    const pair = await coSigners();
+    const first = await pair.prepare("flood0");
+    await pair.share(first);
+    for (let index = 1; index < MAX_INTENTS_PER_MULTISIG; index += 1) {
+      await pair.share(await pair.prepare(`flood${index}`));
+    }
+    await expect(pair.syncTarget()).resolves.toMatchObject({
+      imported: MAX_INTENTS_PER_MULTISIG,
+    });
+
+    // One more proposal no longer fits on this multisig, and is left to retry.
+    await pair.publishAsA(
+      withCalls(first, [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "one_more" }]),
+    );
+    await expect(pair.syncTarget()).resolves.toMatchObject({ imported: 0, received: 0 });
+    expect(await pair.target.multisigStore.listIntents()).toHaveLength(MAX_INTENTS_PER_MULTISIG);
   });
 });
