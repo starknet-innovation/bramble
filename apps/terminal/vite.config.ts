@@ -2,6 +2,7 @@ import type { Server as HttpServer } from "node:http";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import { isMissingAvnuCandleHistory } from "./src/data/avnu/avnu-proxy";
+import { devProxyUpstream } from "./src/data/core/dev-proxy-upstream";
 import { attachExtendedWebSocketBridge } from "./src/data/extended/dev-bridge";
 import { AVNU_API, EXTENDED_API_BASE } from "./src/protocols/constants";
 
@@ -68,9 +69,16 @@ const marketDataMiddleware = (): Plugin => ({
               ? AVNU_API.impulse
               : "https://starkscan.co";
           const upstreamPath = path.slice(prefix.length);
-          const upstream = new URL(upstreamPath, target);
+          const upstream = devProxyUpstream(path, prefix, target);
+          if (upstream === null) {
+            response.statusCode = 404;
+            response.setHeader("content-type", "application/json");
+            response.end(JSON.stringify({ error: "Route not allowed" }));
+            return;
+          }
           const result = await fetch(upstream, {
             headers: { accept: "application/json", "user-agent": extendedUserAgent },
+            redirect: "error",
           });
           if (isAvnuMarkets && isMissingAvnuCandleHistory(upstreamPath, result.status)) {
             response.statusCode = 200;
