@@ -82,6 +82,9 @@ const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): 
 const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) =>
   assets.length === 0 ? {} : { reviewAssets: assets.map((asset) => ({ ...asset })) };
 
+const copyFlags = (flags: NonNullable<PendingApproval["flags"]>) =>
+  flags.length === 0 ? {} : { flags: flags.map((flag) => ({ ...flag })) };
+
 /**
  * Creates a deduplicating approval queue. Connection prompts dedupe per origin;
  * watch-asset prompts dedupe per origin and token address so different tokens
@@ -292,7 +295,15 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         typedData: cloneApprovalValue(typedData),
       });
     },
-    requestStrk20Disclosure({ context, kind, origin, request, reviewAssets = [], summaries }) {
+    requestStrk20Disclosure({
+      context,
+      flags = [],
+      kind,
+      origin,
+      request,
+      reviewAssets = [],
+      summaries,
+    }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
@@ -304,6 +315,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
           ? { actionReviews: cloneApprovalValue(request.actions) }
           : {}),
         context: { ...context },
+        ...copyFlags(flags),
         id: crypto.randomUUID(),
         kind,
         origin,
@@ -312,7 +324,15 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [...summaries],
       });
     },
-    requestStrk20Invoke({ actions, context, origin, plan, reviewAssets = [], summaries }) {
+    requestStrk20Invoke({
+      actions,
+      context,
+      flags = [],
+      origin,
+      plan,
+      reviewAssets = [],
+      summaries,
+    }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
@@ -321,6 +341,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         actionReviews: cloneApprovalValue(actions),
         actions: cloneApprovalValue(actions),
         context: { ...context },
+        ...copyFlags(flags),
         id: crypto.randomUUID(),
         kind: "strk20-invoke",
         origin,

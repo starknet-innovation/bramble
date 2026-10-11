@@ -152,9 +152,12 @@ export const queueInvokeApproval = async (
     trusted,
   );
   const report = verifyCalls(input.calls, trusted, standing);
-  const refusal =
-    refuseOnAccountSelfCall(input.calls, resolved.account.address) ??
-    refuseOnPoisonedRecipient(report);
+  // The self-call refusal depends only on the connected account, which the site
+  // already knows. A poisoned recipient is not refused here: an instant refusal
+  // told the site which addresses the user has saved or paid (Sherlock 140).
+  // Its flag rides on the approval, whose card then offers Deny only, and the
+  // execution-time check below still refuses it.
+  const refusal = refuseOnAccountSelfCall(input.calls, resolved.account.address);
   if (refusal) {
     return refusal;
   }

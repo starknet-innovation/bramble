@@ -5,7 +5,6 @@
  */
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
-
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
@@ -16,6 +15,7 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-responses";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
@@ -50,7 +50,7 @@ import {
   readStrk20RegisterMessage,
   readStrk20SubaccountMessage,
 } from "./strk20-provider-inputs";
-import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
+import { poisonedStrk20ActionFlags } from "./strk20-recipient-policy";
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.
@@ -105,6 +105,7 @@ const queueDisclosure = async (
   deps: Strk20OpsDeps,
   resolved: ResolvedAccount,
   input: {
+    readonly flags?: readonly ApprovalRiskFlag[];
     readonly kind: Strk20DisclosureApprovalKind;
     readonly origin: string;
     readonly request: Strk20DisclosureRequest;
@@ -115,6 +116,7 @@ const queueDisclosure = async (
     const payload = { strk20Request: input.request };
     const approval = deps.approvals.requestStrk20Disclosure({
       context: await createApprovalContext(resolved.account, payload),
+      ...(input.flags === undefined ? {} : { flags: input.flags }),
       kind: input.kind,
       origin: input.origin,
       request: input.request,
@@ -247,18 +249,13 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   if ("error" in resolved) {
     return resolved;
   }
-  // The same recipient policy the wallet's own pool routes apply, before an
-  // approval for a poisoned payment can be queued at all — the site never gets
-  // to put a confirm button in front of the user for it.
-  const refusal = refusePoisonedStrk20Actions(
-    resolved.account,
-    resolved.preferences,
-    input.actions,
-  );
-  if (refusal) {
-    return refusal;
-  }
+  // The same recipient policy the wallet's own pool routes apply. A poisoned
+  // payment is queued with the flag, which leaves the card with Deny only,
+  // rather than refused at once: an instant refusal told the site which
+  // addresses the user has saved or paid (Sherlock 140).
+  const flags = poisonedStrk20ActionFlags(resolved.account, resolved.preferences, input.actions);
   return queueDisclosure(deps, resolved, {
+    flags,
     kind: "strk20-prepare",
     origin: input.origin,
     request: { actions: input.actions, simulate: input.simulate, type: "prepare" },
@@ -288,17 +285,11 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   if ("error" in resolved) {
     return resolved;
   }
-  // Refused before the plan is even quoted: a private transfer or withdrawal to
-  // an address that mimics a saved contact is the same attack whether the wallet
-  // composed it or the site did.
-  const refusal = refusePoisonedStrk20Actions(
-    resolved.account,
-    resolved.preferences,
-    input.actions,
-  );
-  if (refusal) {
-    return refusal;
-  }
+  // A private transfer or withdrawal to an address that mimics a saved contact
+  // is the same attack whether the wallet composed it or the site did. It is
+  // queued with the flag, Deny only, rather than refused on arrival, so the
+  // site cannot use the answer to read the address book (Sherlock 140).
+  const flags = poisonedStrk20ActionFlags(resolved.account, resolved.preferences, input.actions);
   try {
     const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
       ...strk20AccountContext(deps, resolved),
@@ -308,6 +299,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
     const approval = deps.approvals.requestStrk20Invoke({
       actions: input.actions,
       context: await createApprovalContext(resolved.account, payload),
+      flags,
       origin: input.origin,
       plan,
       reviewAssets: reviewAssetsFor(resolved, [

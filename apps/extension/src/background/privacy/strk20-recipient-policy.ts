@@ -22,6 +22,7 @@ import {
   verifyCalls,
 } from "@bramble/transactions/verify";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-responses";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 
@@ -116,3 +117,19 @@ export const refusePoisonedStrk20Actions = (
   actions: readonly Strk20Action[],
 ): { readonly error: string } | null =>
   refuseOnPoisonedCalls(account, preferences, strk20PolicyCalls(actions));
+
+/**
+ * The approval-flag form of {@link refusePoisonedStrk20Actions} for the
+ * dapp-facing routes. A site's request is queued with this flag rather than
+ * refused on arrival: an instant refusal told the site which addresses the user
+ * has saved or paid (Sherlock 140). The card then offers Deny only, and the
+ * execution-time refusal stays in place.
+ */
+export const poisonedStrk20ActionFlags = (
+  account: AccountRef,
+  preferences: Strk20TrustedPreferences,
+  actions: readonly Strk20Action[],
+): readonly ApprovalRiskFlag[] => {
+  const refusal = refusePoisonedStrk20Actions(account, preferences, actions);
+  return refusal ? [{ code: "address-poisoning", message: refusal.error }] : [];
+};
