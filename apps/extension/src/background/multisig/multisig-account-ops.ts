@@ -1,4 +1,8 @@
 /** Removal and balance operations for one resolved Argent multisig account. */
+import type {
+  ArgentMultisigOperationRecord,
+  ArgentMultisigRecord,
+} from "@bramble/multisig/repository";
 import type { TokenBalance } from "@bramble/starknet/rpc";
 import { systemClock } from "@bramble/transactions/activity";
 import { sameFelt } from "@bramble/wallet-model/networks";
@@ -14,6 +18,7 @@ import {
   readRemoveIntentInput,
   readRemoveMultisigInput,
 } from "./multisig-inputs";
+import { resolveArgentDeployment } from "./multisig-operation-recovery";
 
 const removeIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const input = readRemoveIntentInput(message);
@@ -57,6 +62,32 @@ const unconfirmedRemoval = async (
   return hasHistory ? "confirm removal of terminal Argent multisig history" : null;
 };
 
+// A deployment claim a lost reply left without a hash blocks removal until it
+// is settled. It is settled here as a retried deployment would settle it: a
+// hash found locally is recorded, and a claim the chain shows to guard nothing
+// (nothing deployed, or deployed with no hash to keep) is released. Only an
+// unreadable chain leaves it unresolved (Sherlock 197).
+const settledOperations = async (
+  deps: MultisigOpsDeps,
+  record: ArgentMultisigRecord,
+): Promise<readonly ArgentMultisigOperationRecord[]> => {
+  const ownOperations = async () =>
+    (await deps.multisigStore.listOperations()).filter(
+      (operation) => operation.accountId === record.id,
+    );
+  for (const operation of await ownOperations()) {
+    if (operation.kind !== "deploy" || operation.transactionHash !== undefined) continue;
+    const resolution = await resolveArgentDeployment(deps, record, operation.id);
+    if (
+      resolution.kind === "absent" ||
+      (resolution.kind === "deployed" && resolution.transactionHash === null)
+    ) {
+      await deps.multisigStore.releaseOperation(operation.id).catch(() => {});
+    }
+  }
+  return ownOperations();
+};
+
 const removeMultisig = async (
   deps: MultisigOpsDeps,
   message: unknown,
@@ -75,9 +106,7 @@ const removeMultisig = async (
   const intents = (await deps.multisigStore.listIntents()).filter(
     (intent) => intent.accountId === context.record.id,
   );
-  const operations = (await deps.multisigStore.listOperations()).filter(
-    (operation) => operation.accountId === context.record.id,
-  );
+  const operations = await settledOperations(deps, context.record);
   const terminalIntentHashes = intents
     .filter(
       (intent) =>
