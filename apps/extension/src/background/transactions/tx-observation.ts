@@ -135,10 +135,12 @@ const owesNotice = (entry: ActivityEntry, next: ActivityStatus): boolean =>
 const withNotice = (entry: ActivityEntry, outcome: ActivityOutcome): ActivityOutcome =>
   owesNotice(entry, outcome.status) ? { ...outcome, failureNotice: "pending" } : outcome;
 
-// Whether the wallet has evidence the chain held this transaction: an explicit
-// sighting, or (for rows stored before the flag existed) a status that only a
-// real chain answer could have produced.
-const wasSeenOnChain = (entry: ActivityEntry): boolean =>
+/**
+ * Whether the wallet has evidence the chain held this transaction: an explicit
+ * sighting, or (for rows stored before the flag existed) a status that only a
+ * real chain answer could have produced.
+ */
+export const wasSeenOnChain = (entry: ActivityEntry): boolean =>
   entry.seenOnChain === true || entry.status === "preconfirmed" || entry.status === "accepted";
 
 // A hash the node has no record of. Below the threshold this is treated as

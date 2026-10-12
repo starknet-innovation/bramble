@@ -16,7 +16,7 @@ import {
 } from "@bramble/starknet/account-contracts";
 import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/multisig-invoke";
 import { createMemoryStore } from "@bramble/store/kv";
-import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryActivityLog, systemClock } from "@bramble/transactions/activity";
 import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import type { NostrApplicationData } from "@bramble/vault/kms-port";
 import type { Vault } from "@bramble/vault/schema";
@@ -168,7 +168,8 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
   ]);
   const multisigStore = options.multisigStore ?? memoryMultisigStore();
   const storedPreferences = createPreferencesStore({ store: createMemoryStore() });
-  const activity = memoryActivityLog();
+  // The background and its activity log share one clock, as in production.
+  const activity = memoryActivityLog(options.now ?? systemClock);
   const allowanceStore = memoryAllowanceStore();
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
