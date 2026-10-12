@@ -79,7 +79,8 @@ type ValidateMnemonicResponse = {
 type RevealSecretsResponse = {
   readonly mnemonic: string | null;
   readonly ok: true;
-  readonly privateKey: string;
+  /** `null` on a network with no account: only the recovery phrase is revealed. */
+  readonly privateKey: string | null;
 };
 
 /**

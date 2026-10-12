@@ -127,7 +127,8 @@ export type GenerateMnemonicResponse = {
 export type RevealSecretsResponse = {
   readonly mnemonic: string | null;
   readonly ok: true;
-  readonly privateKey: string;
+  /** `null` on a network with no account: only the recovery phrase is revealed. */
+  readonly privateKey: string | null;
 };
 
 /**
@@ -279,8 +280,8 @@ export const isRevealSecretsResponse = (value: unknown): value is RevealSecretsR
   (value["mnemonic"] === null ||
     (typeof value["mnemonic"] === "string" &&
       value["mnemonic"].trim().split(/\s+/).length >= 12)) &&
-  typeof value["privateKey"] === "string" &&
-  isStarkFieldElement(value["privateKey"]);
+  (value["privateKey"] === null ||
+    (typeof value["privateKey"] === "string" && isStarkFieldElement(value["privateKey"])));
 
 /**
  * Checks plain preferences responses before rendering.

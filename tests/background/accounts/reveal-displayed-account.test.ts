@@ -107,7 +107,7 @@ describe("wallet.revealSecrets", () => {
     ).resolves.toEqual({ mnemonic, ok: true, privateKey: "0x1111" });
   });
 
-  test("refuses when the active network has no account", async () => {
+  test("reveals the recovery phrase alone when the active network has no account", async () => {
     const sepolialess = {
       ...wallet,
       async readVault(passphrase: string) {
@@ -115,14 +115,14 @@ describe("wallet.revealSecrets", () => {
         return { ...vault, accounts: vault.accounts.filter((a) => a.networkId === "SN_MAIN") };
       },
     };
-    const refusing = createMessageHandler(sepolialess as never, testExtension, {
+    const phraseOnly = createMessageHandler(sepolialess as never, testExtension, {
       preferencesStore: {
         ...unavailablePreferencesStore,
         read: async () => ({ ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" }),
       },
     });
     await expect(
-      refusing({ type: "wallet.revealSecrets", vaultPassphrase }, sender),
-    ).resolves.toEqual({ error: "No account selected" });
+      phraseOnly({ type: "wallet.revealSecrets", vaultPassphrase }, sender),
+    ).resolves.toEqual({ mnemonic, ok: true, privateKey: null });
   });
 });
