@@ -33,6 +33,9 @@ export const SIGN_REQUEST_STYLES = `
     border-radius: ${RADIUS.md};
     display: grid;
     gap: 6px;
+    /* One column no wider than the card: an auto track would take the widest
+       row's width and push every value past the visible edge. */
+    grid-template-columns: minmax(0, 1fr);
     margin-bottom: ${SPACE.sm};
     /* Bounded like the raw block below: an unbounded list of site-supplied rows
        would scroll its own "NOT signed" banner out of view and push the decision
@@ -44,10 +47,23 @@ export const SIGN_REQUEST_STYLES = `
   .sign-unsigned { background: var(--bramble-danger-soft); }
   .sign-more { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; font-style: italic; }
   .sign-row { align-items: baseline; display: flex; gap: ${SPACE.md}; justify-content: space-between; }
-  .sign-key { color: var(--bramble-muted); flex: none; font-size: ${TYPE.caption.size}; }
+  /* A key is a dotted path of site-chosen names with no break opportunity, so
+     it wraps anywhere and takes at most half the row. The value always keeps
+     the rest: a signed value must never be laid out at zero width beside a
+     long key (Sherlock 257). */
+  .sign-key {
+    color: var(--bramble-muted);
+    flex: 0 1 auto;
+    font-size: ${TYPE.caption.size};
+    max-width: 50%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
   .sign-val {
+    flex: 1 1 0;
     font-family: var(--bramble-font-mono);
     font-size: ${TYPE.caption.size};
+    min-width: 0;
     overflow-wrap: anywhere;
     text-align: right;
   }

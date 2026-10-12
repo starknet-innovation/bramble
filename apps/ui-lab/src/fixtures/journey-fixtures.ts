@@ -246,6 +246,44 @@ export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
       },
     },
   },
+  // A nested order whose composed keys are wider than the card (Sherlock 257).
+  signNested: {
+    context: approvalContext,
+    id: approvalId("211"),
+    kind: "sign-typed-data",
+    origin: "https://market.bramble.test",
+    typedData: {
+      domain: { chainId: "SN_MAIN", name: "Marketplace", revision: "1", version: "1" },
+      message: {
+        authorization: {
+          settlementInstruction: {
+            outboundTransfer: {
+              beneficiaryAddress: `0x05${"f1e2c3b4".repeat(7)}a59687`,
+              replayNonce: "7",
+              transferAmount: "250000000000000000000",
+            },
+          },
+        },
+      },
+      primaryType: "Order",
+      types: {
+        Authorization: [{ name: "settlementInstruction", type: "Settlement" }],
+        Order: [{ name: "authorization", type: "Authorization" }],
+        Settlement: [{ name: "outboundTransfer", type: "Transfer" }],
+        StarknetDomain: [
+          { name: "name", type: "shortstring" },
+          { name: "version", type: "shortstring" },
+          { name: "chainId", type: "shortstring" },
+          { name: "revision", type: "shortstring" },
+        ],
+        Transfer: [
+          { name: "beneficiaryAddress", type: "ContractAddress" },
+          { name: "transferAmount", type: "u128" },
+          { name: "replayNonce", type: "felt" },
+        ],
+      },
+    },
+  },
   strk20: {
     actionReviews: [
       {
