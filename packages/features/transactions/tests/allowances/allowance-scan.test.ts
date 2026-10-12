@@ -45,6 +45,9 @@ const makeRpc = (pages: readonly (readonly AllowanceEvent[])[]): AllowanceRpc =>
     const spender = canonical(String((call.calldata as string[])[1]));
     return AMOUNTS[spender] ?? ["0x0", "0x0"];
   },
+  async getLatestBlockNumber() {
+    return 100;
+  },
   async getEvents(filter: AllowanceEventFilter) {
     const page = Number(filter.continuation_token ?? "0");
     const events = pages[page] ?? [];
@@ -78,6 +81,9 @@ describe("collectExternalAllowances", () => {
     const rpc: AllowanceRpc = {
       async callContract() {
         return ["0x3e8", "0x0"];
+      },
+      async getLatestBlockNumber() {
+        return 100;
       },
       async getEvents() {
         throw new WalletError("contract has no Approval events");
