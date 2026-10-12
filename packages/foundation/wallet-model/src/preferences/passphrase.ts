@@ -1,4 +1,10 @@
 /**
+ * Length bounds for vault and recovery secrets, and the setup meter's
+ * strength estimate. Pure policy: no value is stored or sent anywhere.
+ */
+import { isGuessable } from "./guessable";
+
+/**
  * Maximum accepted vault passphrase length at message and KDF boundaries.
  */
 export const MAX_VAULT_PASSPHRASE_LENGTH = 1_024;
@@ -111,6 +117,9 @@ export const estimatePassphraseStrength = (value: string): PassphraseStrength =>
   const ratio = Math.min(1, Math.max(0.08, bits / STRONG_BITS));
   if (!isVaultPassphrase(value)) {
     return { hint: tooShortHint, level: "weak", ratio: Math.min(ratio, 0.4) };
+  }
+  if (isGuessable(value)) {
+    return { hint: "Weak", level: "weak", ratio: Math.min(ratio, 0.4) };
   }
   // The meter names the band it reached. The bar beside it already shows how far
   // that is from the next one, so the advice it used to carry was the third
