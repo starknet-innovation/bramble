@@ -56,6 +56,7 @@ import type {
   ApprovalQueue,
   ApprovalQueueOptions,
 } from "./approval-queue-types";
+import { requireRenderableSummaries } from "./approval-summary-bound";
 
 /**
  * The queue contract, re-exported so existing wiring keeps one import site.
@@ -158,6 +159,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
   };
 
   const enqueue = (approval: ApprovalRequest): PendingApproval => {
+    requireRenderableSummaries(approval);
     const live = queued();
     const refusal = approvalAdmissionRefusal(live, approval.origin);
     if (refusal) {
