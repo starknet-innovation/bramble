@@ -28,6 +28,7 @@ const routes = [
 const queuedSummary = async (
   route: (typeof routes)[number],
   recipient: string | undefined,
+  token: string = STRK20_TOKEN,
 ): Promise<string | undefined> => {
   const handler = buildStrk20Handler();
   const { kind, ...message } = route;
@@ -38,7 +39,7 @@ const queuedSummary = async (
         {
           amount: "0x5",
           ...(recipient === undefined ? {} : { recipient }),
-          token: STRK20_TOKEN,
+          token,
           type: "deposit",
         },
       ],
@@ -60,16 +61,27 @@ describe("dapp STRK20 deposit recipient summaries", () => {
   for (const route of routes) {
     test(`${route.kind} names the payee of a deposit to another account`, async () => {
       await expect(queuedSummary(route, STRK20_RECIPIENT)).resolves.toBe(
-        "Pay 0x5 privately to 0x04718f…938d (0x049d36…4dc7)",
+        "Pay 0.000000000000000005 ETH privately to 0x04718f…938d (0x049d36…4dc7)",
       );
     });
 
     test(`${route.kind} keeps a deposit to the requesting account a plain shield`, async () => {
       await expect(queuedSummary(route, account.address)).resolves.toBe(
-        "Deposit 0x5 to private balance (0x049d36…4dc7)",
+        "Deposit 0.000000000000000005 ETH to private balance (0x049d36…4dc7)",
       );
       await expect(queuedSummary(route, undefined)).resolves.toBe(
-        "Deposit 0x5 to private balance (0x049d36…4dc7)",
+        "Deposit 0.000000000000000005 ETH to private balance (0x049d36…4dc7)",
+      );
+    });
+  }
+
+  // Sherlock 154: a token outside the wallet's trusted set never lends a
+  // decimal point or ticker to the card, so its exact felt is shown.
+  for (const route of routes) {
+    test(`${route.kind} keeps the exact amount for a token the wallet does not trust`, async () => {
+      const untracked = "0x0123abc";
+      await expect(queuedSummary(route, account.address, untracked)).resolves.toBe(
+        "Deposit 0x5 to private balance (0x0123abc)",
       );
     });
   }

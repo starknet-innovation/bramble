@@ -10,34 +10,6 @@ const shortAddress = (value: string): string =>
   value.length <= 13 ? value : `${value.slice(0, 8)}…${value.slice(-4)}`;
 
 /**
- * Builds display-only summaries from validated actions; approval identity stays
- * bound to the exact structured payload, never this text.
- *
- * A `deposit` that names a recipient other than `depositor` credits that
- * account's private balance, so it is summarized as a payment naming the payee
- * rather than as a shield. Without a `depositor` a recipient-bearing deposit is
- * always summarized as a payment: the self case is only claimed when proven.
- */
-export const summarizeStrk20Action = (action: Strk20Action, depositor?: string): string => {
-  if (action.type === "deposit") {
-    return action.recipient === undefined || sameFelt(action.recipient, depositor)
-      ? `Deposit ${action.amount} to private balance (${shortAddress(action.token)})`
-      : `Pay ${action.amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
-  }
-  if (action.type === "withdraw") {
-    return `Withdraw ${action.amount} to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
-  }
-  if (action.type === "transfer") {
-    const amount = action.amount === "OPEN" ? "an open note" : action.amount;
-    return `Transfer ${amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
-  }
-  if (action.type === "subaccount_invoke") {
-    return `Private ${action.dapp_name} sub-account invoke (${action.calls.length} calls)`;
-  }
-  return `Private invoke on ${shortAddress(action.contract)}`;
-};
-
-/**
  * The fee token's display metadata, when the caller knows it. A converted fee
  * is the one number on this surface a user can sanity-check, and a raw felt
  * against a raw address is not checkable — so callers that hold the token's
@@ -60,6 +32,59 @@ const displayFeeAmount = (raw: string, asset: Strk20FeeAsset | undefined): strin
   } catch {
     return null;
   }
+};
+
+/**
+ * Display metadata for an action's token, looked up by token address. Callers
+ * pass only tokens the wallet trusts for this account and network, so a
+ * dapp-watched or spoof token never lends its ticker or decimals to a card.
+ */
+export type Strk20AssetLookup = (token: string) => Strk20FeeAsset | undefined;
+
+// An amount in the token's own units and symbol when the wallet trusts the
+// token, else the exact felt as sent: a decimal point is never guessed.
+const actionAmount = (amount: string, token: string, assetFor?: Strk20AssetLookup): string =>
+  displayFeeAmount(amount, assetFor?.(token)) ?? amount;
+
+/**
+ * Builds display-only summaries from validated actions; approval identity stays
+ * bound to the exact structured payload, never this text.
+ *
+ * A `deposit` that names a recipient other than `depositor` credits that
+ * account's private balance, so it is summarized as a payment naming the payee
+ * rather than as a shield. Without a `depositor` a recipient-bearing deposit is
+ * always summarized as a payment: the self case is only claimed when proven.
+ *
+ * Given `assetFor`, an amount in a token the wallet trusts renders in that
+ * token's decimals and symbol, beside the token address (Sherlock 154).
+ * Without it, or for a token it does not describe, the exact felt is shown.
+ */
+export const summarizeStrk20Action = (
+  action: Strk20Action,
+  depositor?: string,
+  assetFor?: Strk20AssetLookup,
+): string => {
+  if (action.type === "deposit") {
+    const amount = actionAmount(action.amount, action.token, assetFor);
+    return action.recipient === undefined || sameFelt(action.recipient, depositor)
+      ? `Deposit ${amount} to private balance (${shortAddress(action.token)})`
+      : `Pay ${amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
+  }
+  if (action.type === "withdraw") {
+    const amount = actionAmount(action.amount, action.token, assetFor);
+    return `Withdraw ${amount} to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
+  }
+  if (action.type === "transfer") {
+    const amount =
+      action.amount === "OPEN"
+        ? "an open note"
+        : actionAmount(action.amount, action.token, assetFor);
+    return `Transfer ${amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
+  }
+  if (action.type === "subaccount_invoke") {
+    return `Private ${action.dapp_name} sub-account invoke (${action.calls.length} calls)`;
+  }
+  return `Private invoke on ${shortAddress(action.contract)}`;
 };
 
 /**

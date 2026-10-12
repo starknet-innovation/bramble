@@ -9,6 +9,7 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
+  type Strk20AssetLookup,
   summarizeStrk20Action,
   summarizeStrk20Plan,
 } from "@bramble/privacy/service";
@@ -100,6 +101,16 @@ const reviewAssetsFor = (
   verificationContext(resolved.account, resolved.preferences)
     .tokens.filter((token) => addresses.some((address) => sameFelt(address, token.address)))
     .map((token) => ({ address: token.address, symbol: token.symbol }));
+
+// Action amounts on a card read in the token's own units only for a token in
+// that same trusted set (Sherlock 154); any other token keeps its exact felt.
+const trustedAssetLookup = (resolved: ResolvedAccount): Strk20AssetLookup => {
+  const tokens = verificationContext(resolved.account, resolved.preferences).tokens;
+  return (address) => {
+    const token = tokens.find((candidate) => sameFelt(candidate.address, address));
+    return token ? { decimals: token.decimals, symbol: token.symbol } : undefined;
+  };
+};
 
 const queueDisclosure = async (
   deps: Strk20OpsDeps,
@@ -263,7 +274,9 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
     origin: input.origin,
     request: { actions: input.actions, simulate: input.simulate, type: "prepare" },
     summaries: [
-      ...input.actions.map((action) => summarizeStrk20Action(action, resolved.account.address)),
+      ...input.actions.map((action) =>
+        summarizeStrk20Action(action, resolved.account.address, trustedAssetLookup(resolved)),
+      ),
       input.simulate
         ? "Simulate only — no submittable proof"
         : "Generate a submittable private proof for this site",
@@ -315,7 +328,9 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
       summaries: [
-        ...input.actions.map((action) => summarizeStrk20Action(action, resolved.account.address)),
+        ...input.actions.map((action) =>
+          summarizeStrk20Action(action, resolved.account.address, trustedAssetLookup(resolved)),
+        ),
         summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
       ],
     });
