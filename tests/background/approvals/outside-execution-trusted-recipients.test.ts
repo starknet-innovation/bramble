@@ -16,6 +16,7 @@ import { constants, outsideExecution } from "starknet";
 import { setApprovalNotifier } from "../../../apps/extension/src/background/approvals/approval-notifier";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
+import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { chromiumExtension } from "../../support/background-wallet-stub";
 import { flushHeld, waitForPendingApprovals } from "../../support/held";
@@ -108,7 +109,7 @@ const transferTo = (recipient: string): unknown =>
     ),
   );
 
-const setup = async () => {
+const setup = async (runtimeRpc?: RuntimeRpc) => {
   setApprovalNotifier(() => undefined);
   signed = 0;
   const session = createUnlockSession();
@@ -133,6 +134,7 @@ const setup = async () => {
     activity,
     multisigStore,
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+    ...(runtimeRpc ? { runtimeRpc } : {}),
     session,
   });
   const sign = (typedData: unknown) =>
@@ -156,24 +158,42 @@ const setup = async () => {
 
 const MIMICS = { error: expect.stringContaining("closely mimics") };
 
+// A lookalike is queued with its flag, not refused on arrival, so the answer
+// cannot reveal the trusted set (Sherlock 140); approving it is still refused
+// before any key is used.
+const expectFlaggedThenRefused = async (
+  handler: Awaited<ReturnType<typeof setup>>["handler"],
+): Promise<void> => {
+  await flushHeld();
+  const [queued] = await waitForPendingApprovals<{
+    readonly flags?: readonly { readonly code: string }[];
+    readonly id: string;
+  }>(handler, page);
+  expect(queued?.flags?.map((flag) => flag.code)).toContain("address-poisoning");
+  await expect(handler({ id: queued?.id, type: "wallet.approveOrigin" }, page)).resolves.toEqual(
+    MIMICS,
+  );
+  expect(signed).toBe(0);
+};
+
 describe("OutsideExecution review uses the invoke route's trusted set (audit 163)", () => {
-  test("refuses a transfer to a lookalike of a recipient this wallet paid", async () => {
-    const { activity, pending, signNow } = await setup();
+  test("flags a transfer to a lookalike of a recipient this wallet paid and refuses it at approval", async () => {
+    const { activity, handler, signNow } = await setup();
     await activity.record(paidRow(PAID));
-    await expect(signNow(transferTo(PAID_TWIN))).resolves.toEqual(MIMICS);
-    expect(await pending()).toEqual([]);
+    await expect(signNow(transferTo(PAID_TWIN))).resolves.toBe("held");
+    await expectFlaggedThenRefused(handler);
   });
 
-  test("refuses a transfer to a lookalike of the user's other vault account", async () => {
-    const { pending, signNow } = await setup();
-    await expect(signNow(transferTo(SECOND_TWIN))).resolves.toEqual(MIMICS);
-    expect(await pending()).toEqual([]);
+  test("flags a transfer to a lookalike of the user's other vault account and refuses it at approval", async () => {
+    const { handler, signNow } = await setup();
+    await expect(signNow(transferTo(SECOND_TWIN))).resolves.toBe("held");
+    await expectFlaggedThenRefused(handler);
   });
 
-  test("refuses a transfer to a lookalike of a watched shared account", async () => {
-    const { pending, signNow } = await setup();
-    await expect(signNow(transferTo(SHARED_TWIN))).resolves.toEqual(MIMICS);
-    expect(await pending()).toEqual([]);
+  test("flags a transfer to a lookalike of a watched shared account and refuses it at approval", async () => {
+    const { handler, signNow } = await setup();
+    await expect(signNow(transferTo(SHARED_TWIN))).resolves.toBe("held");
+    await expectFlaggedThenRefused(handler);
   });
 
   test("still queues a transfer to the paid recipient itself", async () => {
@@ -193,5 +213,56 @@ describe("OutsideExecution review uses the invoke route's trusted set (audit 163
     );
     await expect(held).resolves.toEqual(MIMICS);
     expect(signed).toBe(0);
+  });
+});
+
+// The dapp invoke route queues the same lookalike Deny-only (Sherlock 140) and
+// relies on its execution-time check, which must read the watched shared
+// accounts too: a forced approval is refused before anything is submitted.
+describe("execution-time lookalike check reads watched shared accounts (Sherlock 140)", () => {
+  test("a forced approval of a dapp invoke paying a shared-account twin is refused", async () => {
+    let submitted = 0;
+    const rpc = {
+      async estimateInvokeFee() {
+        return { overallFee: "1", unit: "FRI" as const };
+      },
+      async getDeploymentStatus() {
+        return true;
+      },
+      async getTokenBalances() {
+        return [];
+      },
+      async submitInvokeTransaction() {
+        submitted += 1;
+        return { calls: [], transactionHash: "0x7cd" };
+      },
+    } as unknown as RuntimeRpc;
+    const { handler } = await setup(rpc);
+    const held = handler(
+      {
+        calls: [
+          { calldata: [SHARED_TWIN, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
+        ],
+        origin: ORIGIN,
+        type: "wallet.addInvokeTransaction",
+      },
+      content,
+    );
+    type Queued = {
+      readonly fee?: { readonly overallFee: string; readonly unit: string };
+      readonly flags?: readonly { readonly code: string }[];
+      readonly id: string;
+    };
+    let queued: Queued | undefined;
+    for (let attempt = 0; attempt < 50 && !queued?.fee; attempt += 1) {
+      await flushHeld();
+      [queued] = await waitForPendingApprovals<Queued>(handler, page);
+    }
+    expect(queued?.flags?.map((flag) => flag.code)).toContain("address-poisoning");
+    await expect(
+      handler({ id: queued?.id, reviewedFee: queued?.fee, type: "wallet.approveOrigin" }, page),
+    ).resolves.toEqual(MIMICS);
+    await expect(held).resolves.toEqual(MIMICS);
+    expect(submitted).toBe(0);
   });
 });

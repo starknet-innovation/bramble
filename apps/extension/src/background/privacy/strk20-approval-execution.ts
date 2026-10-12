@@ -66,6 +66,8 @@ export type Strk20ExecuteDeps = {
    * stubs stay valid; a Ledger private transfer with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /** Watched shared accounts, trusted by the execution-time lookalike check (Sherlock 140). */
+  readonly multisigStore?: TrustedRecipientDeps["multisigStore"];
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: PassiveUnlockSession;
