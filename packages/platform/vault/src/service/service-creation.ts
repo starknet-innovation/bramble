@@ -7,6 +7,8 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
   deriveAccount,
   deriveImportedAccount,
@@ -53,6 +55,31 @@ type VaultCreationMethods = Pick<
   | "importRawKeyAccount"
 >;
 
+// The next free HD account on a network. An index whose derived account is
+// already in the vault under another derivation, such as the raw-key import
+// of that same key, is skipped rather than refused (Sherlock 226): refusing
+// it left every later account on the network failing on the same index. Each
+// skip matches a distinct stored account, so the walk ends within their count.
+const deriveNextFreeAccount = async (
+  kms: VaultCreationDeps["kms"],
+  vault: Vault,
+  input: Omit<Parameters<typeof deriveAccount>[1], "accountIndex" | "networkId"> & {
+    readonly networkId: StarknetNetworkId;
+  },
+): Promise<{ readonly account: DerivedAccountRef; readonly privateKey: string }> => {
+  const taken = new Set<number>();
+  for (let attempt = 0; attempt <= vault.accounts.length; attempt += 1) {
+    const accountIndex = nextAccountIndex(vault.accounts, input.networkId, undefined, taken);
+    const { account: derived, privateKey } = await deriveAccount(kms, { ...input, accountIndex });
+    const account = requireOwnLadderAccount(derived);
+    if (!vault.accounts.some((stored) => stored.id === account.id)) {
+      return { account, privateKey };
+    }
+    taken.add(accountIndex);
+  }
+  throw new WalletError("Account already exists");
+};
+
 /**
  * The service methods that create vaults or add accounts. Split from the main
  * factory purely by size budget; trust boundaries and failure behavior are
@@ -68,16 +95,11 @@ export const vaultCreationMethods = ({
     if (!vault.mnemonic) {
       throw new WalletError("No recovery phrase stored for this wallet");
     }
-    const { account: derived, privateKey } = await deriveAccount(kms, {
+    const { account, privateKey } = await deriveNextFreeAccount(kms, vault, {
       accountContractType: input.accountContractType,
-      accountIndex: nextAccountIndex(vault.accounts, input.networkId),
       mnemonic: vault.mnemonic,
       networkId: input.networkId,
     });
-    const account = requireOwnLadderAccount(derived);
-    if (vault.accounts.some((stored) => stored.id === account.id)) {
-      throw new WalletError("Account already exists");
-    }
 
     await writeVault(
       encryptedStore,
