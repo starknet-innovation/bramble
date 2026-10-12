@@ -108,6 +108,20 @@ describe("activity journey boundaries", () => {
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
   });
 
+  test("keeps the hash link and copy control out of the row's summary", () => {
+    const html = activityScreen(pending, status, [transaction], false);
+    const summaries = [...html.matchAll(/<summary[\s\S]*?<\/summary>/g)].map((match) => match[0]);
+
+    // A summary is one control with one accessible name, so a link or button
+    // inside it may never reach assistive tech (mc-wallet issue 476).
+    expect(summaries.length).toBeGreaterThan(0);
+    for (const summary of summaries) {
+      expect(summary).not.toMatch(/<a\s|<button/);
+    }
+    expect(html).toMatch(/<dt>Transaction<\/dt><dd class="tx-hash-row"><a class="tx-hash"/);
+    expect(html).toContain('aria-label="Copy transaction hash"');
+  });
+
   test("opens the row in place for the rest of the record", () => {
     const html = activityScreen(pending, status, [transaction], false);
 
