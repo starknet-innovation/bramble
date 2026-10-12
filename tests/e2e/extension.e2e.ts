@@ -258,6 +258,9 @@ test("surfaces a SNIP wire-format multicall as a transaction approval", async ({
     await dapp.goto(dappServer.url);
     await dapp.getByTestId("connect").click();
     await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
+    // The grant is cached between vault writes, so an invoke sent before the
+    // connection settles is refused at once as "origin not connected".
+    await expect(dapp.getByTestId("connect-result")).toContainText('"status":"resolved"');
 
     // Real dapps speak the SNIP wallet API: snake_case call fields and decimal
     // calldata, here an approve on a tracked token (mainnet STRK) plus a swap
