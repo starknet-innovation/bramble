@@ -6,6 +6,7 @@ import { isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { type AddressBookEntry, withAddressBookId } from "@bramble/wallet-model/preferences";
+import { intentPlacement, isTerminalIntent } from "./intent-capacity";
 import {
   type ArgentMultisigCurrentConfig,
   type ArgentMultisigOperationRecord,
@@ -49,11 +50,7 @@ export {
 export const MULTISIG_STORE_KEY = "bramble:argent-multisigs:v2";
 
 const MAX_MULTISIGS = 20;
-const MAX_INTENTS = 100;
 const MAX_OPERATIONS = 100;
-
-const isTerminalIntent = (intent: ArgentMultisigSigningIntent): boolean =>
-  intent.state === "accepted" || intent.state === "rejected" || intent.state === "stale";
 
 /**
  * Trusted-recipient projection of one watched shared account.
@@ -269,27 +266,21 @@ const upsertIntentIn = (shape: StoredShape, record: ArgentMultisigSigningIntent)
       },
     };
   }
-  if (shape.intents.length >= MAX_INTENTS) {
-    const evict = shape.intents.findIndex(isTerminalIntent);
-    if (evict < 0) {
-      return { result: "full", shape };
-    }
-    const evicted = shape.intents[evict];
-    if (!evicted) {
-      return { result: "full", shape };
-    }
-    return {
-      result: "stored",
-      shape: {
-        ...shape,
-        intents: [...shape.intents.filter((_, index) => index !== evict), record],
-        operations: shape.operations.filter(
-          (operation) => operation.target !== evicted.prepared.transactionHash,
-        ),
-      },
-    };
-  }
-  return { result: "stored", shape: { ...shape, intents: [...shape.intents, record] } };
+  const placement = intentPlacement(shape.intents, record.accountId);
+  if (!placement.fits) return { result: "full", shape };
+  const evicted = placement.evict === undefined ? undefined : shape.intents[placement.evict];
+  return {
+    result: "stored",
+    shape: {
+      ...shape,
+      intents: [...shape.intents.filter((intent) => intent !== evicted), record],
+      operations: evicted
+        ? shape.operations.filter(
+            (operation) => operation.target !== evicted.prepared.transactionHash,
+          )
+        : shape.operations,
+    },
+  };
 };
 
 const removeMultisigIn = (shape: StoredShape, id: string): StoredShape => ({
