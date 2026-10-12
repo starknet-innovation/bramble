@@ -11,6 +11,13 @@
  * or revoked elsewhere is read at its true current value). The RPC node is the
  * discovery source; a dedicated indexer can replace {@link scanExternalAllowances}
  * without touching callers.
+ *
+ * `getEvents` streams a token's log oldest-first, so an unfiltered read of a
+ * busy token spends its page budget on the first approvals anyone ever made and
+ * never reaches the account's own (Sherlock 181). Discovery therefore asks the
+ * node for the account's approvals by key first, and says when it could not
+ * read a log to the end, so the manager never reports "none found" for a scan
+ * that stopped early.
  */
 
 import { isTransportRpcError, withRpcFallback } from "@bramble/starknet/provider";
@@ -29,9 +36,11 @@ import {
 } from "./allowance-discovery";
 
 // Bounds so discovery stays cheap against a public RPC node: how many event
-// pages to page through per token, and the ceiling on distinct spenders whose
-// live allowance is read. A production indexer would lift these.
-const MAX_EVENT_PAGES = 5;
+// pages to page through per token for each of the two reads below, and the
+// ceiling on distinct spenders whose live allowance is read. A production
+// indexer would lift these.
+const OWNER_EVENT_PAGES = 5;
+const LOG_EVENT_PAGES = 3;
 const EVENT_CHUNK_SIZE = 100;
 const MAX_SPENDERS_PER_TOKEN = 50;
 
@@ -98,32 +107,76 @@ const spendersFromEvents = (events: readonly AllowanceEvent[], owner: string): s
   return spenders;
 };
 
+type SpenderPage = {
+  // True when an event in the legacy layout (owner and spender in the data
+  // payload) was read, which a key filter on the owner can never match.
+  readonly legacyLayout: boolean;
+  readonly spenders: readonly string[];
+  // True when the page budget ran out while the node still had events to return.
+  readonly truncated: boolean;
+};
+
+const pageSpenders = async (
+  rpc: AllowanceRpc,
+  token: string,
+  owner: string,
+  keys: readonly string[][],
+  pages: number,
+): Promise<SpenderPage> => {
+  const spenders: string[] = [];
+  let legacyLayout = false;
+  let continuationToken: string | undefined;
+  for (let page = 0; page < pages; page += 1) {
+    const chunk = await rpc.getEvents({
+      address: token,
+      chunk_size: EVENT_CHUNK_SIZE,
+      keys,
+      ...(continuationToken === undefined ? {} : { continuation_token: continuationToken }),
+    });
+    const events = chunk.events ?? [];
+    legacyLayout ||= events.some((event) => event.keys.length < 3);
+    spenders.push(...spendersFromEvents(events, owner));
+    if (chunk.continuation_token === undefined) {
+      return { legacyLayout, spenders, truncated: false };
+    }
+    continuationToken = chunk.continuation_token;
+  }
+  return { legacyLayout, spenders, truncated: true };
+};
+
+type DiscoveredSpenders = {
+  readonly complete: boolean;
+  readonly spenders: readonly string[];
+};
+
+// Two reads per token. A Cairo 1 token indexes the owner as key 1, so the first
+// read asks the node for this owner's approvals only, and the page budget is
+// spent on them rather than on every holder's. A legacy token keeps owner and
+// spender in the data payload, which no key filter can match, so the second
+// read is the unfiltered log from its start, as before. Discovery is complete
+// when the owner read reached its end and the unfiltered read either reached
+// its end too or showed only Cairo 1 events, which the owner read covers.
 const discoverSpenders = async (
   rpc: AllowanceRpc,
   token: string,
   owner: string,
-): Promise<readonly string[]> => {
-  const spenders = new Set<string>();
-  let continuationToken: string | undefined;
-  for (let page = 0; page < MAX_EVENT_PAGES; page += 1) {
-    const chunk = await rpc.getEvents({
-      address: token,
-      chunk_size: EVENT_CHUNK_SIZE,
-      keys: [[APPROVAL_EVENT_KEY]],
-      ...(continuationToken === undefined ? {} : { continuation_token: continuationToken }),
-    });
-    for (const spender of spendersFromEvents(chunk.events ?? [], owner)) {
-      spenders.add(spender);
-      if (spenders.size >= MAX_SPENDERS_PER_TOKEN) {
-        return [...spenders];
-      }
-    }
-    if (chunk.continuation_token === undefined) {
-      break;
-    }
-    continuationToken = chunk.continuation_token;
-  }
-  return [...spenders];
+): Promise<DiscoveredSpenders> => {
+  const owned = await pageSpenders(
+    rpc,
+    token,
+    owner,
+    [[APPROVAL_EVENT_KEY], [owner]],
+    OWNER_EVENT_PAGES,
+  );
+  const log = await pageSpenders(rpc, token, owner, [[APPROVAL_EVENT_KEY]], LOG_EVENT_PAGES);
+  const spenders = [...new Set([...owned.spenders, ...log.spenders])];
+  return {
+    complete:
+      !owned.truncated &&
+      (!log.truncated || !log.legacyLayout) &&
+      spenders.length <= MAX_SPENDERS_PER_TOKEN,
+    spenders: spenders.slice(0, MAX_SPENDERS_PER_TOKEN),
+  };
 };
 
 // The single `allowance(owner, spender)` read every discovery path shares, so
@@ -175,8 +228,8 @@ const collectTokenAllowances = async (
   rpc: AllowanceRpc,
   token: string,
   owner: string,
-): Promise<ExternalAllowance[]> => {
-  const spenders = await discoverSpenders(rpc, token, owner);
+): Promise<ExternalAllowanceScanResult> => {
+  const { complete, spenders } = await discoverSpenders(rpc, token, owner);
   const allowances: ExternalAllowance[] = [];
   for (const spender of spenders) {
     const allowance = await readAllowance(rpc, token, owner, spender);
@@ -184,47 +237,66 @@ const collectTokenAllowances = async (
       allowances.push(allowance);
     }
   }
-  return allowances;
+  return { allowances, complete };
 };
 
 // Collects one token's allowances, isolating a per-token failure: a semantic
 // (non-transport) fault means the contract has no usable Approval log and is
-// swallowed as an empty result, while a transport fault propagates so the caller
-// can fail over to another RPC endpoint rather than silently dropping a token.
+// skipped as an incomplete result, while a transport fault propagates so the
+// caller can fail over to another RPC endpoint rather than silently dropping a
+// token.
 const collectTokenAllowancesSafe = async (
   rpc: AllowanceRpc,
   token: string,
   owner: string,
-): Promise<readonly ExternalAllowance[]> => {
+): Promise<ExternalAllowanceScanResult> => {
   try {
     return await collectTokenAllowances(rpc, token, owner);
   } catch (error) {
     if (isTransportRpcError(error)) {
       throw error;
     }
-    return [];
+    return { allowances: [], complete: false };
   }
 };
+
+/**
+ * The outcome of discovering one owner's external allowances. `complete` is
+ * false when any token's `Approval` log could not be read to the end within the
+ * page budget, held approvals in a layout no owner filter can reach beyond it,
+ * named more spenders than are read, or could not be read at all: an empty
+ * `allowances` list then means "none found in what was read", not "none".
+ */
+export type ExternalAllowanceScanResult = {
+  readonly allowances: readonly ExternalAllowance[];
+  readonly complete: boolean;
+};
+
+const EMPTY_SCAN: ExternalAllowanceScanResult = { allowances: [], complete: true };
 
 /**
  * Collects the current external allowances for an owner across the given tokens
  * using an injected RPC surface. Separated from {@link scanExternalAllowances}
  * so the event-paging and allowance-read logic is testable without a network.
- * A per-token failure is skipped rather than aborting the whole scan.
+ * A per-token failure is skipped, and marks the result incomplete, rather than
+ * aborting the whole scan.
  */
 export const collectExternalAllowances = async (
   rpc: AllowanceRpc,
   { owner, tokens }: { readonly owner: string; readonly tokens: readonly string[] },
-): Promise<readonly ExternalAllowance[]> => {
+): Promise<ExternalAllowanceScanResult> => {
   const canonicalOwner = canonicalFelt(owner);
   if (!canonicalOwner || !isNonZeroStarkFieldElement(canonicalOwner)) {
-    return [];
+    return EMPTY_SCAN;
   }
   const discovered: ExternalAllowance[] = [];
+  let complete = true;
   for (const token of canonicalTokens(tokens)) {
-    discovered.push(...(await collectTokenAllowancesSafe(rpc, token, canonicalOwner)));
+    const result = await collectTokenAllowancesSafe(rpc, token, canonicalOwner);
+    discovered.push(...result.allowances);
+    complete &&= result.complete;
   }
-  return discovered;
+  return { allowances: discovered, complete };
 };
 
 /**
@@ -315,16 +387,16 @@ export const readTrackedAllowances = async (
 
 /**
  * Discovers external ERC20 allowances for an account across its tracked tokens,
- * failing over across the configured RPC endpoints. Returns an empty list when
- * no tokens are tracked; a caller treats a thrown transport error as
- * "discovery unavailable" and falls back to the locally tracked allowances.
+ * failing over across the configured RPC endpoints. Returns an empty, complete
+ * result when no tokens are tracked; a caller treats a thrown transport error
+ * as "discovery unavailable" and falls back to the locally tracked allowances.
  */
 export const scanExternalAllowances = async (
   { owner, rpcUrls, tokens }: ExternalAllowanceScan,
   makeProvider?: (nodeUrl: string) => RpcProvider,
-): Promise<readonly ExternalAllowance[]> => {
+): Promise<ExternalAllowanceScanResult> => {
   if (tokens.length === 0) {
-    return [];
+    return EMPTY_SCAN;
   }
   return withRpcFallback(
     rpcUrls,

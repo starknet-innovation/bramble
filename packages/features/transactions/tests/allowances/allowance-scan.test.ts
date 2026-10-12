@@ -61,17 +61,20 @@ describe("collectExternalAllowances", () => {
 
     const found = await collectExternalAllowances(rpc, { owner: OWNER, tokens: [TOKEN] });
 
-    expect(found).toEqual([
-      { amount: "1000", spender: canonical(SPENDER), token: canonical(TOKEN) },
-      {
-        amount: (1n << 128n).toString(),
-        spender: canonical(LEGACY_SPENDER),
-        token: canonical(TOKEN),
-      },
-    ]);
+    expect(found).toEqual({
+      allowances: [
+        { amount: "1000", spender: canonical(SPENDER), token: canonical(TOKEN) },
+        {
+          amount: (1n << 128n).toString(),
+          spender: canonical(LEGACY_SPENDER),
+          token: canonical(TOKEN),
+        },
+      ],
+      complete: true,
+    });
   });
 
-  test("skips a token whose event query fails without a transport error", async () => {
+  test("skips a token whose event query fails without a transport error, as incomplete", async () => {
     const rpc: AllowanceRpc = {
       async callContract() {
         return ["0x3e8", "0x0"];
@@ -80,17 +83,26 @@ describe("collectExternalAllowances", () => {
         throw new WalletError("contract has no Approval events");
       },
     };
-    expect(await collectExternalAllowances(rpc, { owner: OWNER, tokens: [TOKEN] })).toEqual([]);
+    expect(await collectExternalAllowances(rpc, { owner: OWNER, tokens: [TOKEN] })).toEqual({
+      allowances: [],
+      complete: false,
+    });
   });
 
   test("returns nothing for an invalid owner", async () => {
     const rpc = makeRpc([[ozEvent(OWNER, SPENDER)]]);
-    expect(await collectExternalAllowances(rpc, { owner: "0x0", tokens: [TOKEN] })).toEqual([]);
+    expect(await collectExternalAllowances(rpc, { owner: "0x0", tokens: [TOKEN] })).toEqual({
+      allowances: [],
+      complete: true,
+    });
   });
 });
 
 describe("scanExternalAllowances", () => {
   test("short-circuits to an empty list when no tokens are tracked", async () => {
-    expect(await scanExternalAllowances({ owner: OWNER, rpcUrls: [], tokens: [] })).toEqual([]);
+    expect(await scanExternalAllowances({ owner: OWNER, rpcUrls: [], tokens: [] })).toEqual({
+      allowances: [],
+      complete: true,
+    });
   });
 });

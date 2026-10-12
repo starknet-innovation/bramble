@@ -223,9 +223,11 @@ describe("truncated identifiers are copyable in full", () => {
     ] as const;
     for (const [view, atLeast] of screens) {
       const root = mount(
-        dashboard(view, status, [], withContacts, { balances: [] }, false, [], [], {}, [], null, [
-          allowance,
-        ]),
+        dashboard(view, status, [], withContacts, { balances: [] }, false, [], [], {}, [], null, {
+          entries: [allowance],
+          notices: [],
+          unavailable: false,
+        }),
       );
       expectEveryTruncatedIdentifierCopyable(root, atLeast);
     }
@@ -329,7 +331,7 @@ describe("truncated identifiers are copyable in full", () => {
         {},
         [],
         null,
-        [],
+        { entries: [], notices: [], unavailable: false },
         null,
         {},
         [fixture.view],
@@ -353,7 +355,7 @@ describe("truncated identifiers are copyable in full", () => {
         {},
         [],
         null,
-        [],
+        { entries: [], notices: [], unavailable: false },
         null,
         {},
         [fixture.view],
@@ -405,7 +407,7 @@ describe("the shared copy binding", () => {
         {},
         [],
         null,
-        [allowance],
+        { entries: [allowance], notices: [], unavailable: false },
       ),
     );
     bindCopyButtons(root);

@@ -14,7 +14,7 @@ import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/prefe
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import type { AllowanceNotice, AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { SwapCatalogToken } from "@bramble/transactions/avnu";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -268,6 +268,7 @@ type TransactionAlertsResponse = {
  */
 type AllowancesResponse = {
   readonly allowances: readonly AllowanceView[];
+  readonly notices?: readonly AllowanceNotice[];
   readonly ok: true;
 };
 

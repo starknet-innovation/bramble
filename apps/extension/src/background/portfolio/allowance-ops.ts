@@ -22,13 +22,20 @@
 
 import { buildErc20ApproveCall } from "@bramble/starknet/rpc";
 import {
+  type AllowanceNotice,
   type AllowanceReading,
   type AllowanceView,
-  type ExternalAllowance,
   mergeAllowanceViews,
 } from "@bramble/transactions/allowance-discovery";
-import type { TrackedAllowancePair } from "@bramble/transactions/allowance-scan";
-import { type AllowanceRecord, allowanceTarget } from "@bramble/transactions/allowance-store";
+import type {
+  ExternalAllowanceScanResult,
+  TrackedAllowancePair,
+} from "@bramble/transactions/allowance-scan";
+import {
+  ALLOWANCE_LIMITS,
+  type AllowanceRecord,
+  allowanceTarget,
+} from "@bramble/transactions/allowance-store";
 import { type ApprovedAssets, approvedAssetKind } from "@bramble/transactions/allowances";
 import { verifyCalls } from "@bramble/transactions/verify";
 import { isWatchedNftContract } from "@bramble/transactions/verify-decode";
@@ -51,21 +58,25 @@ import { allowanceOwner, recordApproveAllowances } from "./allowance-recording";
 
 /**
  * Discovers ERC20 allowances granted outside this wallet for the active
- * account's tracked tokens. Best-effort: with no discovery source wired, no
- * tracked tokens, or a failing query it yields an empty list so the manager
- * still lists the locally tracked (in-wallet) approvals.
+ * account's tracked tokens. Best-effort: with no discovery source wired or no
+ * tracked tokens it yields an empty, complete result, and a failing query
+ * yields an empty, incomplete one, so the manager still lists the locally
+ * tracked (in-wallet) approvals and says the scan did not finish.
  */
 const discoverExternalAllowances = async (
   deps: WalletOpsDeps,
   context: { readonly account: AccountRef; readonly networkId: StarknetNetworkId },
   rpcUrls: readonly string[],
   tokens: readonly string[],
-): Promise<readonly ExternalAllowance[]> => {
+): Promise<ExternalAllowanceScanResult> => {
   const scan = deps.runtimeRpc.getExternalAllowances;
   if (!scan || tokens.length === 0) {
-    return [];
+    return { allowances: [], complete: true };
   }
-  return scan({ owner: context.account.address, rpcUrls, tokens }).catch(() => []);
+  return scan({ owner: context.account.address, rpcUrls, tokens }).catch(() => ({
+    allowances: [],
+    complete: false,
+  }));
 };
 
 // Reads the live amount of the records the manager is about to show. This is
@@ -107,16 +118,34 @@ const readTrackedAmounts = async (
 // multisig intent and threshold authorization. The address is what makes a multisig row correctable
 // on-chain: `allowance(multisig, spender)` is a question only its own address
 // can answer.
+//
+// A multisig that cannot be read is left out rather than failing the list: the
+// account's own scope needs no chain read, and hiding it behind an undeployed
+// multisig showed "no allowances" over live ones (Sherlock 190).
 const allowanceScopeOwners = async (
   deps: WalletOpsDeps,
   context: { readonly account: AccountRef; readonly networkId: StarknetNetworkId },
-): Promise<ReadonlyMap<string, string>> => {
+): Promise<{ readonly owners: ReadonlyMap<string, string>; readonly multisigUnread: boolean }> => {
   const owners = new Map<string, string>([[context.account.id, context.account.address]]);
-  for (const record of await currentArgentSignerRecords(deps, context.account, context.networkId)) {
+  const signed = await currentArgentSignerRecords(deps, context.account, context.networkId).catch(
+    () => ({ records: [], unreadable: true }),
+  );
+  for (const record of signed.records) {
     owners.set(record.id, record.address);
   }
-  return owners;
+  return { multisigUnread: signed.unreadable, owners };
 };
+
+// What the listing could not vouch for, in the order the manager states it.
+const listingNotices = (flags: {
+  readonly multisigUnread: boolean;
+  readonly retentionFull: boolean;
+  readonly scanComplete: boolean;
+}): readonly AllowanceNotice[] => [
+  ...(flags.scanComplete ? [] : (["scan-incomplete"] as const)),
+  ...(flags.multisigUnread ? (["multisig-unread"] as const) : []),
+  ...(flags.retentionFull ? (["retention-full"] as const) : []),
+];
 
 // What the manager may claim about each row. A contract this account tracks as
 // a token is fungible by the user's own say-so; any other contract is fungible
@@ -181,8 +210,9 @@ const handleListAllowances: AllowanceOpsHandler = async (deps, message) => {
   const preferences = await deps.preferencesStore.read();
   const trusted = verificationContext(context.account, preferences);
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
-  const owners = await allowanceScopeOwners(deps, context);
-  const scoped = (await deps.allowanceStore.list()).filter(
+  const { multisigUnread, owners } = await allowanceScopeOwners(deps, context);
+  const stored = await deps.allowanceStore.list();
+  const scoped = stored.filter(
     (entry) =>
       entry.networkId === context.networkId &&
       owners.has(entry.accountId) &&
@@ -195,11 +225,23 @@ const handleListAllowances: AllowanceOpsHandler = async (deps, message) => {
     trusted.tokens.map((token) => token.address),
   );
   const readings = await readTrackedAmounts(deps, scoped, owners, rpcUrls);
+  // A revoke is recorded when submitted; a reading of zero is what says it
+  // took. Best effort: the listing does not depend on it.
+  await deps.allowanceStore.settleRevocations(readings).catch(() => undefined);
+  const notices = listingNotices({
+    multisigUnread,
+    // The total cap evicts too, from the fullest scopes, so a full log counts.
+    retentionFull:
+      stored.length >= ALLOWANCE_LIMITS.entriesTotal ||
+      stored.filter((entry) => entry.accountId === context.account.id).length >=
+        ALLOWANCE_LIMITS.entriesPerScope,
+    scanComplete: external.complete,
+  });
   return {
     allowances: outstandingAllowances(
       mergeAllowanceViews({
         account: context.account,
-        external,
+        external: external.allowances,
         inWallet: scoped.filter((entry) => entry.accountId === context.account.id),
         // Never both: an entry the active account owns is listed once, as its own
         // and revokable, whatever else claims the same scope id.
@@ -210,6 +252,7 @@ const handleListAllowances: AllowanceOpsHandler = async (deps, message) => {
       trusted,
       new Set(readings.map((reading) => reading.id)),
     ),
+    ...(notices.length > 0 ? { notices } : {}),
     ok: true,
   };
 };

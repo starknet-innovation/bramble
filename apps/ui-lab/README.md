@@ -66,7 +66,7 @@ Storybook section.
 
 ## Journey coverage
 
-The lab has 212 deterministic checkpoints across 15 scenario families:
+The lab has 214 deterministic checkpoints across 15 scenario families:
 
 | Family | Review surface |
 | --- | --- |

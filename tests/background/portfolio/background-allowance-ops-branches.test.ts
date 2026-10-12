@@ -59,6 +59,7 @@ const deps = (options: Options = {}): WalletOpsDeps => {
         return (options.listRecords ?? []) as never;
       },
       async record() {},
+      async settleRevocations() {},
     } as unknown as WalletOpsDeps["allowanceStore"],
     preferencesStore: {
       async read() {
@@ -121,7 +122,7 @@ describe("handleAllowanceOps external discovery", () => {
         rpcOverrides: {
           async getExternalAllowances() {
             scanned = true;
-            return [];
+            return { allowances: [], complete: true };
           },
         },
       }),

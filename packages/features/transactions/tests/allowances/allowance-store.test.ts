@@ -61,11 +61,14 @@ describe("allowance store", () => {
     expect(entries[0]?.amount).toBe("2000");
   });
 
-  test("treats a zero amount as a revoke and removes the entry", async () => {
+  test("keeps a submitted revoke as a zero bound, and drops it once the chain reads zero", async () => {
     const store = createAllowanceStore({ store: createMemoryStore() });
     await store.record(input("1000"));
     await store.record(input("0"));
 
+    const [pending] = await store.list();
+    expect(pending).toMatchObject({ amount: "1000", revoking: true });
+    await store.settleRevocations([{ amount: "0", id: pending?.id ?? "" }]);
     expect(await store.list()).toEqual([]);
   });
 
