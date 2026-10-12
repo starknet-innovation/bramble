@@ -12,6 +12,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
 import { isLikelySpam } from "@bramble/portfolio/token-registry";
@@ -60,6 +61,8 @@ export type ApprovalDecisionDeps = {
   readonly approvals: ApprovalQueue;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /** Watched shared accounts, trusted by the execution-time lookalike check (Sherlock 140). */
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -177,6 +180,7 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -203,6 +207,7 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       actions: payload.actions,
@@ -242,6 +247,7 @@ const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -263,6 +269,7 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -462,9 +469,8 @@ const applyDenyDecision = async (
     return { error: "invalid approval request" };
   }
   const denied = deps.approvals.claim(input.id)?.approval ?? null;
-  // Nothing to deny: another surface already approved or denied it, or it
-  // expired. Reporting success here showed "Request denied" while an approval
-  // from another window was being broadcast (Sherlock 220).
+  // Nothing to deny: it was answered elsewhere or expired. Reporting success
+  // showed "Request denied" over another window's broadcast (Sherlock 220).
   if (!denied) {
     return NO_LONGER_PENDING;
   }

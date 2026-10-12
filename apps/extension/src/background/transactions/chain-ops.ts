@@ -253,12 +253,15 @@ const queueSignTypedData = async (
   // prompt, so it gets the invoke route's refusals and flags (audit 144),
   // including the standing-allowance totals the invoke route flags against.
   // The trusted set is the invoke route's: contacts plus the user's own
-  // accounts and the recipients this wallet paid (audit 163).
+  // accounts and the recipients this wallet paid (audit 163). A lookalike
+  // recipient is queued with its flag, not refused, so the answer cannot reveal
+  // the address book (Sherlock 140); the signing-time review refuses it.
   const review = reviewOutsideExecution(
     input.typedData,
     account,
     await withTrustedRecipients(deps, preferences, await vaultAccountAddresses(wallet, passphrase)),
     (await deps.allowanceStore?.list().catch(() => [])) ?? [],
+    "queue",
   );
   if (review && "error" in review) {
     return review;

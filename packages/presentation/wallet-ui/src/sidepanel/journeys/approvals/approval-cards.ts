@@ -88,6 +88,7 @@ const denyOnlyRow = (approval: PendingApproval): string =>
 // the card instead of being refused on arrival, so the site cannot read the
 // address book from the answer (Sherlock 140). It can only be denied: the
 // approve control is absent, and the background refuses it at execution too.
+// The line above the row says why Approve is missing.
 const paysLookalike = (approval: PendingApproval): boolean =>
   (approval.flags ?? []).some((flag) => flag.code === "address-poisoning");
 
@@ -98,7 +99,7 @@ const paymentDecisionRow = (
   reviewedFee?: PendingApproval["fee"],
 ): string =>
   paysLookalike(approval)
-    ? denyOnlyRow(approval)
+    ? `<p class="hint">Bramble won't send this payment.</p>${denyOnlyRow(approval)}`
     : decisionRow(approval, label, locked, reviewedFee);
 
 // The signing account is identified by its `<network>:<address>` id; the row
@@ -288,7 +289,8 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
 // A sign card only offers to sign what the decoder could place on one side of
 // the signed hash or the other; an unclassified payload gets the warning and a
 // Deny-only row instead, because a partial view of a message is exactly what a
-// hostile payload wants the user to trust.
+// hostile payload wants the user to trust. An OutsideExecution paying a
+// lookalike is Deny-only too, like a payment card (Sherlock 140).
 const signCard = (approval: PendingApproval, status: WalletStatus): string => {
   const view = signRequestView(approval.typedData);
   return `
@@ -308,7 +310,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
     ])}
     ${reviewConstraints("No transaction or network fee is submitted. The signed result can still authorize site-specific actions.")}
     ${contextDisclosure(approval)}
-    ${view.classified ? decisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
+    ${view.classified ? paymentDecisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
   </li>`;
 };
 
