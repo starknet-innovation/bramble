@@ -7,6 +7,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import { isJson, isJsonWithinBudget, JSON_BUDGETS } from "@bramble/core/json";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
@@ -23,19 +24,35 @@ import { CURRENT_SCHEMA_VERSION, isVaultV11, type Vault } from "../schema/schema
 import type { WalletVaultService } from "./service-types";
 
 /**
+ * Refusal when a vault no longer fits the JSON budget its validators apply on
+ * read as on write. That budget, not an account count, is the vault's capacity:
+ * it is shared by accounts, signing keys, imported phrases, retained secrets
+ * and connected sites (Sherlock 261, sized in `docs/WALLET_STORE.md`).
+ */
+export const VAULT_FULL = "Vault storage limit reached";
+
+/**
  * Validates and persists a vault snapshot. Refuses to write anything that is
  * not a well-formed current-schema vault, so a buggy caller can never persist
- * a partial or downgraded shape.
+ * a partial or downgraded shape, and names a vault past its capacity before
+ * any storage is touched. `beforeCommit` runs after encryption, immediately
+ * before the envelope's commit starts; throwing there abandons the write with
+ * none of it stored. (Reading the previous envelope first may repair its
+ * commit records, as any read does.)
  */
 export const writeVault = async (
   encryptedStore: EncryptedStore,
   vault: Vault,
   vaultPassphrase: string,
+  beforeCommit?: () => void,
 ): Promise<void> => {
+  if (isJsonWithinBudget(vault, JSON_BUDGETS.storage) && !isJson(vault)) {
+    throw new WalletError(VAULT_FULL);
+  }
   if (!isVaultV11(vault)) {
     throw new WalletError("Invalid vault");
   }
-  await encryptedStore.write(vault, vaultPassphrase);
+  await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
 };
 
 type VaultCreationDeps = {

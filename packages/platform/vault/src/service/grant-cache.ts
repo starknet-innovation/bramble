@@ -102,9 +102,7 @@ export const createGrantCache = (): GrantCache => {
       // Re-encrypts the same plaintext in the current envelope format, so the
       // vault's content, and with it the grants, does not change.
       upgradeLegacyEnvelope: (password) => store.upgradeLegacyEnvelope(password),
-      write: invalidating((value: Parameters<EncryptedStore["write"]>[0], password: string) =>
-        store.write(value, password),
-      ),
+      write: invalidating((...args: Parameters<EncryptedStore["write"]>) => store.write(...args)),
     }),
   };
 };

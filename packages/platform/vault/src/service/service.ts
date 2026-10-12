@@ -245,6 +245,10 @@ export const createWalletVaultService = ({
       const accountIds = [...new Set([...(existing?.accountIds ?? []), account.id])];
       requireGrantAuthorization(isAuthorized);
 
+      // Re-checked after encryption, right before the commit starts: a
+      // lock during key derivation abandons the grant with nothing stored. The
+      // rollback covers only a lock during the storage writes themselves
+      // (Sherlock 255).
       await writeVault(
         encryptedStore,
         {
@@ -252,6 +256,7 @@ export const createWalletVaultService = ({
           originGrants: [...grants, { accountIds, origin: input.origin }],
         },
         input.vaultPassphrase,
+        () => requireGrantAuthorization(isAuthorized),
       );
       await rollbackRevokedGrant(isAuthorized, () =>
         writeVault(encryptedStore, vault, input.vaultPassphrase),

@@ -43,7 +43,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 
 | Key / state | Area | Sensitivity | Identity and bounds | Failure policy |
 | --- | --- | --- | --- | --- |
-| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v10; account ids unique; strict cross-references | fail closed |
+| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v10; account ids unique; strict cross-references; capacity below | fail closed |
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
 | `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage | rollback refused; a missing primary record is restored from the local mirror |
 | `bramble:vault:commit:<lineage>` mirror (primary vault only) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
@@ -83,6 +83,17 @@ install's version-3 migration (pre-0.9.2) carries no marker, so restoring that c
 version-2 vault unless this browser session has already seen a version-3 commit. Chrome documents that local data persists
 until extension removal, while session data is cleared when an extension is updated. See the
 [Chrome storage API](https://developer.chrome.com/docs/extensions/reference/api/storage).
+
+**Vault capacity.** The vault validators apply the provider JSON budget (`JSON_BUDGETS.provider`,
+1 MiB with strings charged at six bytes per character) on read as on write, so that budget is the
+vault's one capacity. It is shared by accounts, signing keys, imported phrases, retained secrets and
+connected sites, so it is not an account count: a vault of derived accounts alone holds about 243
+(pinned in `vault-capacity.test.ts`). `writeVault` refuses the first vault past it with
+`Vault storage limit reached` before any storage is touched. Every storage area validates writes
+against `JSON_BUDGETS.storage`, which is derived to admit the base64 envelope of anything the provider
+budget admits, so storage never refuses a vault its validators accepted; the store still checks the
+envelope before writing the pending commit record, so a value storage refuses leaves no half-commit
+(Sherlock 261).
 
 ## Account identity and first-class behavior
 
