@@ -44,7 +44,8 @@ export const APPROVAL_TTL_MS = 5 * 60 * 1_000;
  * queued approval under the provider budget and drops one that exceeds it, so a
  * larger approval would sit in the queue with no card, holding a slot until it
  * expired and then reading to the site as a refusal by the user (Sherlock 157).
- * The headroom covers what a fee review adds after admission.
+ * The headroom covers what a fee review adds after admission. What is measured
+ * against it is decided in `./approval-review-size`, from the site's input alone.
  */
 export const REVIEWABLE_APPROVAL_BUDGET: JsonBudget = {
   ...JSON_BUDGETS.provider,
