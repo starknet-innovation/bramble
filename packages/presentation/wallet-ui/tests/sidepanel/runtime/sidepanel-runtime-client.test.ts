@@ -384,6 +384,16 @@ describe("token and preference wrappers", () => {
     await expect(runtimeReturning({}).detectTokens()).rejects.toThrow("token detection failed");
   });
 
+  test("detectTokens drops a row the token store would refuse and keeps the rest (Sherlock 207)", async () => {
+    const [good] = detectTokensResponse.suggestions;
+    if (!good) throw new Error("fixture has no suggestion");
+    // The curated bridged-USDC ticker, which the shared symbol rule refuses.
+    const refused = { ...good, symbol: "USDC.e" };
+    expect(
+      await runtimeReturning({ ok: true, suggestions: [refused, good, good] }).detectTokens(),
+    ).toEqual([good]);
+  });
+
   test("loadPreferences returns preferences and throws when unavailable", async () => {
     expect(await runtimeReturning(preferencesResponse).loadPreferences()).toEqual(
       preferencesResponse.preferences,

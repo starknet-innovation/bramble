@@ -21,7 +21,6 @@ import {
   isConnectedSitesResponse,
   isCreateAccountResponse,
   isDeploymentStatusResponse,
-  isDetectTokensResponse,
   isErrorResponse,
   isFeeReviewResponse,
   isPreferencesResponse,
@@ -35,6 +34,7 @@ import {
   isWalletStatus,
   type PendingApproval,
   type RevealSecretsResponse,
+  readDetectedTokens,
   readPendingApprovals,
   type TokenBalance,
   type TransferReviewResponse,
@@ -260,8 +260,9 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     async detectTokens(): Promise<readonly TokenBalance[]> {
       const response = await sendMessage({ type: "wallet.detectTokens" });
-      if (isDetectTokensResponse(response)) {
-        return response.suggestions;
+      const suggestions = readDetectedTokens(response);
+      if (suggestions) {
+        return suggestions;
       }
       throw responseError(response, "token detection failed");
     },
