@@ -170,9 +170,18 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         return "error";
       }
     },
-    async prepareIntent(multisigId: string, calls: readonly ArgentMultisigCall[]) {
+    async prepareIntent(
+      multisigId: string,
+      calls: readonly ArgentMultisigCall[],
+      confirmResend = false,
+    ) {
       return intentResult(
-        { calls, multisigId, type: "wallet.prepareArgentMultisigIntent" },
+        {
+          calls,
+          ...(confirmResend ? { confirmResend: true } : {}),
+          multisigId,
+          type: "wallet.prepareArgentMultisigIntent",
+        },
         "prepare Ready multisig intent failed",
       );
     },

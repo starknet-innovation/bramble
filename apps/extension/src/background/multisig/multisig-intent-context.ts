@@ -7,7 +7,7 @@ import { matchesArgentPublicConfig, storedArgentPublicConfig } from "./multisig-
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import { recoverStaleArgentIntent } from "./multisig-operation-recovery";
 import { type ArgentMultisigContext, currentChainConfigFor } from "./multisig-ops";
-import { ARGENT_INTENT_ALREADY_SENT, refuseResendOfStaleIntent } from "./multisig-stale-intents";
+import { ARGENT_INTENT_ALREADY_SENT, refuseSigningResend } from "./multisig-stale-intents";
 
 const contextForIntent = async (
   deps: MultisigOpsDeps,
@@ -93,7 +93,7 @@ export const currentArgentIntentContext = async (
     // An earlier stale version of these calls may have landed since this one
     // was prepared; signing or sending this one too would pay twice.
     const resent = markStale
-      ? await refuseResendOfStaleIntent(deps, intent.accountId, intent.prepared.calls)
+      ? await refuseSigningResend(deps, intent.accountId, intent.prepared)
       : null;
     if (resent) return resent;
     const stored = storedArgentPublicConfig(context.record);

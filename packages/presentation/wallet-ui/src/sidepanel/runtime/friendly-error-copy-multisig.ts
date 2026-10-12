@@ -35,9 +35,11 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   // An earlier, stale version of these calls was found on chain (Sherlock
   // 177): building them again would pay twice.
   ["argent multisig intent was already sent", "This transaction was already sent."],
+  // A stale version of these calls at another nonce isn't on chain, but
+  // co-signers may have sent their own version of it (Sherlock 177).
   [
-    "could not check whether the earlier argent multisig intent was sent",
-    "Couldn't check whether this transaction was already sent. Try again.",
+    "confirm resending calls an earlier argent multisig intent may have sent",
+    "This may already have been sent by another signer. Press again to send it anyway.",
   ],
   ["argent multisig intent not found", "That transaction is no longer saved."],
   ["conflicting argent multisig intent id", "That transaction id is already in use."],

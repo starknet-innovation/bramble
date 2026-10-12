@@ -47,7 +47,7 @@ import {
   currentConfigFor,
   signerAccountFor,
 } from "./multisig-ops";
-import { refuseResendOfStaleIntent } from "./multisig-stale-intents";
+import { refuseResend } from "./multisig-stale-intents";
 
 const preparationContext = async (
   deps: MultisigOpsDeps,
@@ -135,8 +135,6 @@ const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<R
   }
   const resolved = await preparationContext(deps, input);
   if ("error" in resolved) return resolved;
-  const resent = await refuseResendOfStaleIntent(deps, resolved.record.id, input.calls);
-  if (resent) return resent;
   const prepared = await multisigRpc(deps).prepareInvoke({
     account: resolved.record,
     calls: input.calls,
@@ -146,6 +144,8 @@ const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<R
     },
     rpcUrls: resolved.context.rpcUrls,
   });
+  const resent = await refuseResend(deps, resolved.record.id, prepared, input.confirmResend);
+  if (resent) return resent;
   if (!resolved.authorized.isCurrent()) {
     return { error: "wallet locked" };
   }

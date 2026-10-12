@@ -6,6 +6,7 @@ import {
 } from "@bramble/starknet/multisig-invoke";
 import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
 import { feeReplacementIntentFor, parseArgentMultisigSignature } from "./multisig-model";
+import { armResendConfirmation, resendConfirmed } from "./multisig-resend-confirm";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 const intentById = async (deps: MultisigUiDeps, id: string) => {
@@ -24,14 +25,20 @@ const copyText = async (
   showToast(message, "success", button);
 };
 
-const openUpdatedIntent = async (deps: MultisigUiDeps, id: string): Promise<boolean> => {
+const openUpdatedIntent = async (
+  deps: MultisigUiDeps,
+  id: string,
+  confirmResend: boolean,
+): Promise<boolean> => {
   const loaded = await deps.multisig.loadMultisigs();
   if (loaded === "error") return false;
   const stale = loaded.intents.find((intent) => intent.id === id);
   if (stale?.state !== "stale") return false;
   const existing = feeReplacementIntentFor(stale, loaded.intents);
   const replacement =
-    existing ?? (await deps.multisig.prepareIntent(stale.accountId, stale.prepared.calls)).intent;
+    existing ??
+    (await deps.multisig.prepareIntent(stale.accountId, stale.prepared.calls, confirmResend))
+      .intent;
   deps.openIntent(stale.accountId, replacement.id);
   return true;
 };
@@ -156,8 +163,13 @@ const bindActions = (deps: MultisigUiDeps): void => {
       const id = button.dataset["msRefreshIntent"];
       if (!id) return;
       run(deps, button, async () => {
-        if (!(await openUpdatedIntent(deps, id)))
-          throw new Error("That transaction is unavailable");
+        try {
+          if (!(await openUpdatedIntent(deps, id, resendConfirmed(button))))
+            throw new Error("That transaction is unavailable");
+        } catch (error) {
+          armResendConfirmation(button, error);
+          throw error;
+        }
         return "Fee updated. Ready to review.";
       });
     });
