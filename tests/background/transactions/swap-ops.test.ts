@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import type { PriceService } from "@bramble/portfolio/prices";
 import { createActivityLog } from "@bramble/transactions/activity";
 import { avnuRouterAddress, type SwapCall, type SwapService } from "@bramble/transactions/avnu";
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
@@ -124,6 +125,7 @@ const makeHarness = (options?: {
   readonly buildError?: string;
   readonly activityWriteFails?: boolean;
   readonly locked?: boolean;
+  readonly prices?: PriceService;
   readonly quoteError?: string;
 }) => {
   const session = createUnlockSession();
@@ -188,6 +190,7 @@ const makeHarness = (options?: {
         return { calls: [], transactionHash: "0x5aa9" };
       },
     } as never,
+    ...(options?.prices ? { prices: options.prices } : {}),
     session,
     swap,
   });
@@ -222,6 +225,26 @@ describe("swap operations", () => {
         { address: STRK_TOKEN_ADDRESS, symbol: "STRK" },
       ],
     });
+  });
+
+  test("quote carries a value delta priced from the wallet's own feed (Sherlock 137)", async () => {
+    // The aggregator values both sides at about $18.8; the wallet's feed prices
+    // 0.01 ETH at $40 and 12.5 STRK at $10, a 75% loss.
+    const prices: PriceService = {
+      async getPrices({ currency }) {
+        const feed = { [ETH_TOKEN_ADDRESS]: 4_000, [STRK_TOKEN_ADDRESS]: 0.8 };
+        return { asOf: 1, changes: {}, currency, prices: feed, stale: false };
+      },
+      async getTokenChart({ currency }) {
+        return { currency, points: [] };
+      },
+    };
+    const { handler } = makeHarness({ prices });
+    const response = (await handler(
+      { amount: "0.01", buyTokenId, sellTokenId, type: "wallet.swapQuote" },
+      extensionSender,
+    )) as { readonly swapQuote: { readonly valueDeltaPercent?: number } };
+    expect(response.swapQuote.valueDeltaPercent).toBeCloseTo(-75, 5);
   });
 
   test("quote returns a display-ready view for the tracked pair", async () => {

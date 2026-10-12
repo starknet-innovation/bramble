@@ -235,6 +235,9 @@ type SwapQuoteResponse = {
     readonly quoteId: string;
     readonly sellAmount: string;
     readonly sellAmountInUsd: number;
+    // Value delta priced from the wallet's own feed (Sherlock 137); absent
+    // when the feed has no price for either token.
+    readonly valueDeltaPercent?: number;
   };
 };
 

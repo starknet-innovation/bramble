@@ -327,6 +327,7 @@ const HANDLERS: readonly RouterHandler[] = [
     handleSwapOps(
       {
         ...buildOpsDeps(ctx),
+        prices: ctx.prices,
         swap: ctx.swap,
         swapPreparations: ctx.swapPreparations,
       },

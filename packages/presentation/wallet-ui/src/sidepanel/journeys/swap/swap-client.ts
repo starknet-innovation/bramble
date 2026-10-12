@@ -27,6 +27,10 @@ export type SwapQuoteView = {
   readonly quoteId: string;
   readonly sellAmount: string;
   readonly sellAmountInUsd: number;
+  // Value delta the background priced from the wallet's own feed (Sherlock
+  // 137). Preferred over the aggregator's figures, which describe its own
+  // quote; absent when the feed has no price for either token.
+  readonly valueDeltaPercent?: number;
 };
 
 /**
@@ -49,6 +53,10 @@ export type SwapPreparationView = {
 const isUsd = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
 
+// A loss can be at most the whole sell side; a gain is unbounded but finite.
+const isValueDelta = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value >= -100;
+
 const isSwapQuoteView = (value: unknown): value is SwapQuoteView =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
@@ -58,6 +66,7 @@ const isSwapQuoteView = (value: unknown): value is SwapQuoteView =>
     "quoteId",
     "sellAmount",
     "sellAmountInUsd",
+    "valueDeltaPercent",
   ]) &&
   isDecimalAmountText(value["buyAmount"]) &&
   isUsd(value["buyAmountInUsd"]) &&
@@ -65,7 +74,8 @@ const isSwapQuoteView = (value: unknown): value is SwapQuoteView =>
   typeof value["quoteId"] === "string" &&
   value["quoteId"].length > 0 &&
   isDecimalAmountText(value["sellAmount"]) &&
-  isUsd(value["sellAmountInUsd"]);
+  isUsd(value["sellAmountInUsd"]) &&
+  (value["valueDeltaPercent"] === undefined || isValueDelta(value["valueDeltaPercent"]));
 
 const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
   isRecord(value) &&
@@ -101,15 +111,24 @@ const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
 
 /**
  * Value delta of a quote in percent: how much MORE (+) or LESS (−) the buy
- * side is worth than the sell side, from the aggregator's own USD figures.
- * This is the swap screen's sanity heuristic — a dust-sized order routed
- * through a thin or mispriced pool shows up here as a large negative delta
- * before the user can act on it. Null when either side is unpriced.
+ * side is worth than the sell side. This is the swap screen's sanity heuristic
+ * — a dust-sized order routed through a thin or mispriced pool shows up here
+ * as a large negative delta before the user can act on it.
+ *
+ * The delta the background priced from the wallet's own feed wins. Otherwise
+ * the aggregator's USD figures are used, and a priced sell side whose buy side
+ * is valued at zero is a total loss rather than "unpriced": a zero there would
+ * otherwise switch the warning off (Sherlock 137). Null when the sell side is
+ * unpriced.
  */
-export const swapValueDeltaPercent = (quote: SwapQuoteView): number | null =>
-  quote.sellAmountInUsd > 0 && quote.buyAmountInUsd > 0
+export const swapValueDeltaPercent = (quote: SwapQuoteView): number | null => {
+  if (quote.valueDeltaPercent !== undefined) {
+    return quote.valueDeltaPercent;
+  }
+  return quote.sellAmountInUsd > 0
     ? ((quote.buyAmountInUsd - quote.sellAmountInUsd) / quote.sellAmountInUsd) * 100
     : null;
+};
 
 /**
  * Loss thresholds (percent) for the quote sanity tiers: WARN surfaces an
