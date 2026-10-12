@@ -211,6 +211,33 @@ const walkMerkle = (
   }
 };
 
+const U256_HIGH_SHIFT = 128n;
+
+// The preset `u256` is two `u128` limbs, and the card prints each on its own
+// row, so 2^128 - 1 reads as a 39-digit number beside a zero and 2^128 as a
+// zero beside a one (Sherlock 262). When both limbs are valid `u128` values,
+// the whole amount is stated once on the struct's own row, above its limbs;
+// the limbs stay, as they are what the hash covers. Only the preset counts: a
+// payload that declares its own `u256` type has said what its fields mean.
+const pushU256Total = (
+  path: string,
+  record: Record<string, unknown>,
+  vocabulary: Vocabulary,
+  out: Split,
+): void => {
+  const revision = vocabulary.revision;
+  if (revision === null) {
+    return;
+  }
+  const low = snip12Scalar(ownFieldValue(record, "low"), "u128", revision);
+  const high = snip12Scalar(ownFieldValue(record, "high"), "u128", revision);
+  if (low === null || high === null) {
+    return;
+  }
+  const total = (BigInt(high.encoded) << U256_HIGH_SHIFT) + BigInt(low.encoded);
+  out.signed.push([path, `${total.toString()} (u256 total of high and low)`]);
+};
+
 function walkType(
   path: string,
   value: unknown,
@@ -235,6 +262,9 @@ function walkType(
     if (!isRecord(value)) {
       unclassified(out, path, value);
       return;
+    }
+    if (fields === vocabulary.presets.get("u256")) {
+      pushU256Total(path, value, vocabulary, out);
     }
     walkStruct(path, value, fields, type, vocabulary, out, depth);
     return;
