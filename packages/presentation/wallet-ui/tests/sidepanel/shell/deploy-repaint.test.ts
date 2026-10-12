@@ -10,6 +10,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account, secondAccount } from "@bramble/testkit/sidepanel";
 import type { ActivityEntry } from "@bramble/transactions/activity";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import type { WalletStatus } from "../../../src/popup/responses/responses";
 import { outcomeReceiptSection } from "../../../src/sidepanel/shared/outcome-receipt";
 import { bindDeploy, type ShellBindingDeps } from "../../../src/sidepanel/shell/shell-bindings";
@@ -224,6 +225,33 @@ describe("deploy screen across repaints", () => {
     expect(app.querySelector("#deploy-success-title")?.textContent).toBe("Deployment submitted");
     expect(calls.deploys).toBe(1);
     expect(calls.quotes).toBe(1);
+  });
+
+  test("a lost reply that lands after a repaint is amber, not a red failure", async () => {
+    const { app, paint } = panel();
+    let fail: (error: unknown) => void = () => undefined;
+    const wallet = {
+      deployAccount: async (fee?: typeof FEE) =>
+        fee
+          ? new Promise<string>((_, reject) => {
+              fail = reject;
+            })
+          : FEE,
+      loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+      loadStatus: async () => status,
+    } as unknown as ShellBindingDeps["wallet"];
+    bindDeploy(depsFor(app, wallet));
+    await settle();
+    press(app);
+    await tick();
+    paint();
+    bindDeploy(depsFor(app, wallet));
+
+    fail(new SubmissionUnknownError("status unknown", null));
+    await settle();
+    // The deployment may be on chain, so it is never reported as failed.
+    expect(document.querySelectorAll(".toast.warning")).toHaveLength(1);
+    expect(errorToasts()).toEqual([]);
   });
 
   test("leaving the screen drops its state, so coming back quotes afresh", async () => {

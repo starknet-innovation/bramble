@@ -438,7 +438,9 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       (error: unknown) => {
         journey.pressed = false;
         if (rebound()) {
-          showToast(errorDetails(error, "Deployment failed"), "error", deps.app);
+          // Amber when the reply was lost: the deployment may be on chain.
+          const tone = isOutcomeUnknown(error) ? "warning" : "error";
+          showToast(errorDetails(error, "Deployment failed"), tone, deps.app);
           return;
         }
         failed(error, "Deployment failed", reviewedFee ? "submit" : "quote");
