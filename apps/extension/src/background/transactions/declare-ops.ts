@@ -221,6 +221,12 @@ const retryDeclarationFee = async (
   }
   const revision = deps.approvals.beginFeeEstimate(input.id);
   if (!revision) return { error: "approval not found" };
+  // Withdraw the reviewed fee while the estimate is redone, so nothing can be
+  // approved against it. The withdrawn shape is a failed estimate, the one
+  // fee-less shape the panel accepts: an "estimating" shape (no fee, no
+  // failure) is dropped by the panel's validator, which hid the card, and an
+  // early return below would have left it hidden (Sherlock 241). A failed
+  // estimate keeps the card on screen with its retry control.
   if (
     !approval.declaration ||
     !deps.approvals.updateFee(revision, {
@@ -230,7 +236,7 @@ const retryDeclarationFee = async (
         deploymentFee: null,
         deploymentFeeEstimateFailed: false,
         fee: null,
-        feeEstimateFailed: false,
+        feeEstimateFailed: true,
       },
       kind: "declare",
     })
@@ -298,20 +304,38 @@ export const handleDeclareOps = async (
   // estimates two fees. An origin already holding its share of the queue is
   // refused at admission regardless, so it is refused here instead of after.
   requireApprovalAdmission(approvals, input.origin);
+  // Captured before the first read and re-checked after every await, so a
+  // lock that lands mid-request admits no card under the unlock the user just
+  // revoked (Sherlock 166).
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
   const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
   }
+  const context = await createApprovalContext(account, { declare: input.declare });
+  const declaration = await declarationReview(
+    deps,
+    account,
+    input.declare,
+    preferences,
+    passphrase,
+  );
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
   const approval = approvals.requestDeclare({
-    context: await createApprovalContext(account, { declare: input.declare }),
+    context,
     declare: input.declare,
-    declaration: await declarationReview(deps, account, input.declare, preferences, passphrase),
+    declaration,
     origin: input.origin,
     summaries: declareSummaries(input.declare),
   });

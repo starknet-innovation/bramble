@@ -381,8 +381,11 @@ export const isTransferResponse = (value: unknown): value is TransferResponse =>
 export const isApprovalDecisionResponse = (value: unknown): boolean =>
   isAccountsResponse(value) ||
   readPendingApprovals(value) !== null ||
+  // No whole-envelope budget here either: each queued approval carries its own
+  // through `readPendingApprovals`, and a budget over the whole switch-chain
+  // reply reported an applied network switch as failed once the queue behind
+  // it was large (Sherlock 251).
   (isRecord(value) &&
-    isJson(value) &&
     hasOnlyKnownKeys(value, ["chainId", "ok", "pending"]) &&
     value["ok"] === true &&
     isHexChainId(value["chainId"]) &&

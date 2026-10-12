@@ -148,6 +148,37 @@ describe("pending approval queue per-entry validation (MCW-V09-106)", () => {
   });
 });
 
+describe("switch-network decision reply (Sherlock 251)", () => {
+  // An approved network switch answers with the new chain id beside the queue.
+  // The switch has already been applied, so a large queue behind it must not
+  // turn the reply into "approval failed".
+  const switched = (...pending: readonly unknown[]): unknown => ({
+    chainId: STARKNET_NETWORKS.SN_SEPOLIA.chainId,
+    ok: true,
+    pending,
+  });
+
+  test("accepts the reply when the queue behind it only breaches the aggregate budget", () => {
+    const reply = switched(...ids.map(typedDataApproval));
+    expect(isJson(reply)).toBe(false);
+    expect(isApprovalDecisionResponse(reply)).toBe(true);
+  });
+
+  test("still rejects a reply with a malformed chain id or an unknown key", () => {
+    expect(isApprovalDecisionResponse({ chainId: "SN_SEPOLIA", ok: true, pending: [] })).toBe(
+      false,
+    );
+    expect(
+      isApprovalDecisionResponse({
+        chainId: STARKNET_NETWORKS.SN_SEPOLIA.chainId,
+        extra: true,
+        ok: true,
+        pending: [],
+      }),
+    ).toBe(false);
+  });
+});
+
 // The whole-envelope `isJson` gate used to bound the queue itself. Per-entry
 // budgeting removed it, so these pin the replacement bounds directly.
 describe("pending approval queue envelope bounds (MCW-V09-106)", () => {

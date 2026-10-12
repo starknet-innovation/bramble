@@ -197,6 +197,18 @@ describe("readProviderWatchAsset", () => {
     ).toBeNull();
   });
 
+  test("accepts the wallet-API image field and drops it (Sherlock 252)", () => {
+    expect(
+      readProviderWatchAsset({
+        ...watchParams,
+        options: { ...watchParams.options, image: "https://example.com/usdc.png" },
+      }),
+    ).toEqual({ address: tokenAddress, decimals: 6, symbol: "USDC" });
+    expect(
+      readProviderWatchAsset({ ...watchParams, options: { ...watchParams.options, image: 7 } }),
+    ).toBeNull();
+  });
+
   test("accepts the optional api_version beside type and drops it", () => {
     for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
       expect(readProviderWatchAsset({ ...watchParams, api_version })).toEqual({
@@ -300,6 +312,24 @@ describe("watchAssetToken", () => {
         null,
         "SN_MAIN",
       ),
+    ).toBeNull();
+  });
+});
+
+describe("request arguments with params set to undefined (Sherlock 254)", () => {
+  test("read the same as leaving params out, in both call forms", () => {
+    expect(
+      readProviderRequestArguments({ method: "wallet_requestChainId", params: undefined }),
+    ).toEqual({ method: "wallet_requestChainId" });
+    expect(
+      readProviderRequestArguments({ params: undefined, type: "wallet_requestChainId" }),
+    ).toEqual({ method: "wallet_requestChainId" });
+  });
+
+  test("still refuse a params value a method does not take, and unknown keys", () => {
+    expect(readProviderRequestArguments({ method: "mc_accounts", params: [] })).toBeNull();
+    expect(
+      readProviderRequestArguments({ extra: undefined, method: "wallet_requestChainId" }),
     ).toBeNull();
   });
 });
