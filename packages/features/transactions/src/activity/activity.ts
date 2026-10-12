@@ -66,7 +66,13 @@ export type ActivityLog = {
   readonly record: (
     entry: Omit<
       ActivityEntry,
-      "failureNotice" | "finalizedOnL1" | "notFoundCount" | "seenOnChain" | "status" | "submittedAt"
+      | "failureNotice"
+      | "feePaid"
+      | "finalizedOnL1"
+      | "notFoundCount"
+      | "seenOnChain"
+      | "status"
+      | "submittedAt"
     >,
   ) => Promise<void>;
   /**
@@ -123,6 +129,14 @@ const outcomeForHash = (
 ): ActivityOutcome | undefined =>
   Object.entries(outcomes).find(([candidate]) => sameFelt(candidate, hash))?.[1];
 
+// A recorded fee is final: a later read never replaces it, so an outcome's fee
+// lands only on an entry that has none.
+const recordedFee = (
+  entry: ActivityEntry,
+  outcome: ActivityOutcome,
+): Pick<ActivityEntry, "feePaid"> =>
+  entry.feePaid === undefined && outcome.feePaid !== undefined ? { feePaid: outcome.feePaid } : {};
+
 // Merges one reconciled outcome into a stored entry. Absent optional fields are
 // dropped rather than written as `undefined`, so the persisted record stays
 // JSON-clean and revalidates; a merge that would not revalidate is discarded.
@@ -139,6 +153,7 @@ const applyOutcome = (entry: ActivityEntry, outcome: ActivityOutcome): ActivityE
   const next: ActivityEntry = {
     ...entry,
     ...(failureNotice === undefined ? {} : { failureNotice }),
+    ...recordedFee(entry, outcome),
     ...(finalizedOnL1 === undefined ? {} : { finalizedOnL1 }),
     ...(seenOnChain === undefined ? {} : { seenOnChain }),
     ...(outcome.notFoundCount === undefined ? {} : { notFoundCount: outcome.notFoundCount }),

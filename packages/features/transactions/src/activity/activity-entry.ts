@@ -5,6 +5,7 @@
  * through `@bramble/transactions/activity`, which re-exports everything here.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isTransactionFee, type TransactionFee } from "@bramble/starknet/rpc";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
@@ -80,6 +81,14 @@ export type ActivityEntry = {
    */
   readonly failureNotice?: "delivered" | "pending";
   /**
+   * The fee the transaction's receipt reports it paid, read once after it
+   * reached an outcome with a receipt, and only on rows this wallet submitted
+   * (`origin: "wallet"`), since the sender pays it. Absent until then, on
+   * legacy and discovered rows, and whenever no node returned a usable fee: an
+   * estimate is never stored here.
+   */
+  readonly feePaid?: TransactionFee;
+  /**
    * True once the chain reported `ACCEPTED_ON_L1`. Reconciliation's terminal
    * condition; not a user-visible state.
    */
@@ -126,6 +135,7 @@ export type ActivityEntry = {
  */
 export type ActivityOutcome = {
   readonly failureNotice?: "pending";
+  readonly feePaid?: TransactionFee;
   readonly finalizedOnL1?: boolean;
   readonly notFoundCount?: number;
   readonly seenOnChain?: boolean;
@@ -207,6 +217,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "counterparty",
     "direction",
     "failureNotice",
+    "feePaid",
     "finalizedOnL1",
     "hash",
     "kind",
@@ -239,6 +250,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     value["direction"] === "out") &&
   isOptionalDetail(value["token"]) &&
   isFailureNotice(value["failureNotice"]) &&
+  (value["feePaid"] === undefined || isTransactionFee(value["feePaid"])) &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
   (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
   isNotFoundCount(value["notFoundCount"]) &&
