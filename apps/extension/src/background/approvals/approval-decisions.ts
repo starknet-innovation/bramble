@@ -17,14 +17,13 @@ import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
 import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import { type FeeEstimate, sameFeeEstimate } from "@bramble/starknet/fee-bounds";
+import { sameFeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { withTokenId } from "@bramble/wallet-model/preferences";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
-  type DeferredStrk20Approval,
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
   stageApprovedStrk20Deposit,
@@ -44,11 +43,12 @@ import { captureSessionAuthorization, type UnlockSession } from "../runtime/sess
 import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
 import { executeDeclareApproval } from "../transactions/declare-ops";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
+import { type ApplyResult, type ApproveDecision, reject, settleExecutor } from "./approval-applier";
 import { settleClaimError, validateClaimContext } from "./approval-claim-context";
 import { pendingFeeRefusal } from "./approval-fee-refusal";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
-import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
+import type { ApprovalClaim, ApprovalKind, ApprovalQueue } from "./approvals";
 import type { SignatureWaiters } from "./signature-waiters";
 
 /**
@@ -76,45 +76,12 @@ const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
 const NO_LONGER_PENDING: RuntimeResponse = { error: "approval no longer pending" };
 // What a connection whose active account moved between paint and click is refused with.
 const ACCOUNT_CHANGED_REFUSAL = "the account changed since this request was reviewed";
-/**
- * Outcome of applying an already-claimed approve decision.
- */
-type ApplyResult =
-  | DeferredStrk20Approval
-  | { readonly status: "reject"; readonly response: RuntimeResponse }
-  | {
-      readonly status: "settle";
-      readonly settle: RuntimeResponse;
-      readonly respond: (listPending: () => readonly PendingApproval[]) => RuntimeResponse;
-    };
-
-/**
- * What the deciding surface reported about its own render, alongside the id it
- * decided. Only the fee travels today; it is separate from the claimed approval
- * because it describes the CARD, not the queue entry.
- */
-type ApproveDecision = {
-  readonly reviewedAccountId?: string;
-  readonly reviewedFee?: FeeEstimate;
-};
-
+/** Applies one claimed approve decision for a single approval kind. */
 type ApproveApplier = (
   deps: ApprovalDecisionDeps,
   claim: ApprovalClaim,
   decision: ApproveDecision,
 ) => Promise<ApplyResult>;
-
-const reject = (response: RuntimeResponse): ApplyResult => ({ response, status: "reject" });
-
-/**
- * Shared tail for executor-backed kinds: settle the executor result either way,
- * pass its error through on failure, and surface `{ ok, pending }` on success.
- */
-const settleExecutor = (result: RuntimeResponse): ApplyResult => ({
-  respond: (listPending) => ("error" in result ? result : { ok: true, pending: listPending() }),
-  settle: result,
-  status: "settle",
-});
 
 // The store treats an address already tracked on the network as watched
 // without writing (a second origin's card for the same token) and refuses past
