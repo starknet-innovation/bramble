@@ -142,6 +142,16 @@ describe("status", () => {
     expect((await parts.open().status()).recovery).toBeUndefined();
   });
 
+  test("clears an unparseable staged value and reads a vault that verifies (Sherlock 198)", async () => {
+    const parts = await populated();
+    await parts.local.set(migrationKey, "not an envelope");
+
+    const service = parts.open();
+    expect((await service.status()).recovery).toBeUndefined();
+    expect((await service.readVault(vaultPassphrase)).accounts).toHaveLength(1);
+    expect(await parts.local.get(migrationKey)).toBeUndefined();
+  });
+
   test("answers without a recovery reason when storage fails", async () => {
     const local = createMemoryStore();
     await local.set(vaultKey, { corrupted: true });
