@@ -62,6 +62,9 @@ const WalletContext = createContext<WalletContextValue | null>(null);
 
 const WALLET_IDENTITY_CHANGED = "Wallet account or network changed before approval.";
 
+const walletIdentity = (address: string | null, chainId: string | null): string =>
+  address === null ? "" : `${address}:${chainId ?? ""}`;
+
 const declarationResult = (value: unknown): DeclarationResult | null => {
   if (typeof value !== "object" || value === null) {
     return null;
@@ -98,7 +101,8 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
   const [requestView, setRequestView] = useState<WalletRequestView | null>(null);
   const walletRef = useRef<StarknetWindowObject | null>(null);
   const pendingRequestRef = useRef<PendingWalletRequest | null>(null);
-  const identityRef = useRef("");
+  // The account and network this render's callbacks build requests for.
+  const identity = walletIdentity(address, chainId);
 
   const dropWalletRequest = useCallback((reason: string) => {
     pendingRequestRef.current?.reject(new Error(reason));
@@ -203,13 +207,13 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     if (pending === null || preview === undefined) {
       return;
     }
-    if (pending.identity !== identityRef.current) {
+    if (pending.identity !== identity) {
       dropWalletRequest(WALLET_IDENTITY_CHANGED);
       return;
     }
     setRequestView({ phase: "awaiting", preview });
     await executeWalletRequest(pending, preview);
-  }, [dropWalletRequest, executeWalletRequest, requestView]);
+  }, [dropWalletRequest, executeWalletRequest, identity, requestView]);
 
   const queueWalletRequest = useCallback(
     <Result,>(
@@ -222,7 +226,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       }
       return new Promise<Result>((resolve, reject) => {
         const pending: PendingWalletRequest = {
-          identity: identityRef.current,
+          identity,
           inFlight: false,
           perform,
           reject,
@@ -235,7 +239,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
         }
       });
     },
-    [executeWalletRequest],
+    [executeWalletRequest, identity],
   );
 
   const cancelWalletRequest = useCallback(
@@ -247,12 +251,11 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
   // the previous account or network, so it is dropped rather than sent for the
   // new one. One the wallet is already handling is left to the wallet.
   useEffect(() => {
-    identityRef.current = address === null ? "" : `${address}:${chainId ?? ""}`;
     const pending = pendingRequestRef.current;
-    if (pending !== null && !pending.inFlight && pending.identity !== identityRef.current) {
+    if (pending !== null && !pending.inFlight && pending.identity !== identity) {
       dropWalletRequest(WALLET_IDENTITY_CHANGED);
     }
-  }, [address, chainId, dropWalletRequest]);
+  }, [dropWalletRequest, identity]);
 
   const closeWalletRequest = useCallback(() => setRequestView(null), []);
 
