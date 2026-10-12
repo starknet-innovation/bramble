@@ -12,7 +12,7 @@
  */
 
 import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
-import type { TransactionStatusReport } from "@bramble/starknet/rpc";
+import type { TransactionFee, TransactionStatusReport } from "@bramble/starknet/rpc";
 import {
   type ActivityEntry,
   type ActivityLog,
@@ -101,6 +101,33 @@ const expiredOutcomes = (
     expiredObservations(entries, nowMs).map((entry) => [entry.hash, retiredOutcome(entry)]),
   );
 
+// Only an outcome the chain executed has a receipt carrying the fee paid.
+const hasReceipt = (outcome: ActivityOutcome): boolean =>
+  outcome.status === "accepted" || outcome.status === "reverted";
+
+// Reads the receipt fee, once, for each entry that now has one and no fee yet.
+// Only rows this wallet submitted qualify: a receipt's fee is paid by the
+// transaction's sender, so on a discovered incoming transfer it is someone
+// else's fee. A failed or missing read records nothing and is tried again on a
+// later pass while the transaction is still under observation.
+const receiptFees = async (
+  deps: ReconcileDeps,
+  rpcUrls: readonly string[],
+  outcomes: readonly (readonly [ActivityEntry, ActivityOutcome])[],
+): Promise<Readonly<Record<string, TransactionFee>>> => {
+  const hashes = outcomes
+    .filter(
+      ([entry, outcome]) =>
+        entry.origin === "wallet" && entry.feePaid === undefined && hasReceipt(outcome),
+    )
+    .map(([entry]) => entry.hash);
+  const read = deps.runtimeRpc.getTransactionFees;
+  if (read === undefined || hashes.length === 0) {
+    return {};
+  }
+  return read({ hashes, rpcUrls }).catch(() => ({}));
+};
+
 // Reads one network's transactions. A failed status query contributes nothing,
 // so those transactions simply stay under observation rather than being misread
 // as gone.
@@ -110,15 +137,18 @@ const networkOutcomes = async (
   networkId: StarknetNetworkId,
   entries: readonly ActivityEntry[],
 ): Promise<readonly (readonly [string, ActivityOutcome])[]> => {
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[networkId], preferences);
   const reports: Readonly<Record<string, TransactionStatusReport>> = await deps.runtimeRpc
-    .getTransactionStatuses({
-      hashes: entries.map((entry) => entry.hash),
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
-    })
+    .getTransactionStatuses({ hashes: entries.map((entry) => entry.hash), rpcUrls })
     .catch(() => ({}));
-  return entries.flatMap((entry) => {
+  const outcomes = entries.flatMap((entry) => {
     const report = reports[entry.hash];
-    return report === undefined ? [] : [[entry.hash, reconciledOutcome(entry, report)] as const];
+    return report === undefined ? [] : [[entry, reconciledOutcome(entry, report)] as const];
+  });
+  const fees = await receiptFees(deps, rpcUrls, outcomes);
+  return outcomes.map(([entry, outcome]) => {
+    const feePaid = fees[entry.hash];
+    return [entry.hash, feePaid === undefined ? outcome : { ...outcome, feePaid }] as const;
   });
 };
 
