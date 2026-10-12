@@ -36,8 +36,12 @@ const notFound = (): Error =>
 type NodeScript = {
   readonly blocks?: number[];
   readonly nonce?: unknown;
-  readonly statuses?: Array<"found" | "not-found" | "rejected" | "transport">;
+  readonly statuses?: Array<
+    "found" | "not-found" | "pending" | "preconfirmed" | "rejected" | "transport"
+  >;
   readonly receipt?: { readonly block_number: number; readonly success: boolean };
+  // Receipt waits that fail, in order, before the scripted receipt answers.
+  readonly waitFailures?: Error[];
 };
 
 // A scripted node: each status lookup consumes the next scripted answer, and
@@ -46,6 +50,7 @@ const node = (script: NodeScript) => {
   const reads: string[] = [];
   const statuses = [...(script.statuses ?? [])];
   const blocks = [...(script.blocks ?? [])];
+  const waitFailures = [...(script.waitFailures ?? [])];
   const provider = {
     getBlockNumber: async () => {
       reads.push("block");
@@ -64,10 +69,20 @@ const node = (script: NodeScript) => {
       if (answer === "rejected") {
         return { finality_status: "REJECTED" };
       }
+      if (answer === "preconfirmed") {
+        return { execution_status: "SUCCEEDED", finality_status: "PRE_CONFIRMED" };
+      }
+      if (answer === "pending") {
+        return { finality_status: "RECEIVED" };
+      }
       throw answer === "transport" ? new Error("socket hang up") : notFound();
     },
     waitForTransaction: async (hash: string) => {
       reads.push(`wait:${hash}`);
+      const failure = waitFailures.shift();
+      if (failure) {
+        throw failure;
+      }
       return {
         block_number: script.receipt?.block_number ?? 50,
         isSuccess: () => script.receipt?.success ?? true,
@@ -311,4 +326,35 @@ describe("resolving a stuck privacy write", () => {
     await expect(runtimeFor(store).provingBlock(provider, scope)).rejects.toThrow(STATUS_UNKNOWN);
     expect(await store.read(scope)).toEqual(newer);
   });
+
+  test("keeps a pre-confirmed write's signed marker until its receipt shows acceptance", async () => {
+    const store = await seeded();
+    const { provider } = node({ blocks: [100], statuses: ["preconfirmed"] });
+
+    await expect(runtimeFor(store).provingBlock(provider, scope)).resolves.toBe(90);
+    expect(await store.read(scope)).toEqual({
+      acceptedBlock: 50,
+      state: "submitted",
+      transactionHash: "0x456",
+    });
+  });
+
+  for (const status of ["preconfirmed", "pending"] as const) {
+    test(`still resolves a ${status} write that then vanished through its spent nonce`, async () => {
+      const store = await seeded();
+      // The first action finds the write in flight, but it vanishes before
+      // its receipt: the wait fails and the scope stays closed.
+      const first = node({ statuses: [status], waitFailures: [notFound()] });
+      await expect(runtimeFor(store).provingBlock(first.provider, scope)).rejects.toThrow(
+        WalletError,
+      );
+      // The marker still carries the sender and nonce.
+      expect(await store.read(scope)).toEqual(stuck);
+
+      // The next action proves the write can no longer land and releases it.
+      const next = node({ blocks: [100, 100], nonce: "0x6", statuses: ["not-found", "not-found"] });
+      await expect(runtimeFor(store).provingBlock(next.provider, scope)).resolves.toBe(90);
+      expect(await store.read(scope)).toBeNull();
+    });
+  }
 });
