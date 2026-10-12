@@ -13,6 +13,16 @@ const LOCAL_ORIGINS = new Set([
   "http://localhost:5273",
 ]);
 
+/**
+ * How long the STRK20 gateway waits for each upstream before answering 504
+ * `upstream_timeout`. The wallet's own paymaster deadline must end first
+ * (`PAYMASTER_TIMEOUT_MS` in `packages/features/privacy`, pinned by a
+ * conformance test), so a slow relay surfaces in the wallet as its own
+ * deadline expiry rather than as a gateway status.
+ */
+export const PAYMASTER_UPSTREAM_TIMEOUT_MS = 25_000;
+/** The prover's upstream deadline: proving takes far longer than a relay call. */
+export const PROVER_UPSTREAM_TIMEOUT_MS = 110_000;
 export const MAX_PROOF_CHARACTERS = 512 * 1024;
 export const MAX_PROOF_FACTS = 4_096;
 export const MAX_CALLDATA_FELTS = 4_096;

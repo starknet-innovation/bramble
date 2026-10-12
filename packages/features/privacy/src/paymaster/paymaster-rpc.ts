@@ -7,7 +7,7 @@
  * shape-checked before any field is read. Failure behaviour is deliberately
  * asymmetric: a quote never broadcasts, so its failures are determinate
  * `WalletError`s with a sanitized reason; a broadcast whose answer was lost
- * (timeout, oversized, unparseable, ended by this client's deadline) throws an
+ * (a 5xx status, oversized, unparseable, ended by this client's deadline) throws an
  * {@link IndeterminateRpcWriteError} because the relay may already have
  * forwarded the transaction, and callers must hold their state closed rather
  * than retry over a possibly-live write.
@@ -28,7 +28,16 @@ import { STRK20_SUBMISSION_UNAVAILABLE } from "../service";
 
 /** The injected transport both paymaster entry points accept. */
 export type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-const PAYMASTER_TIMEOUT_MS = 30_000;
+/**
+ * This client's deadline on one relay request. It must end before the STRK20
+ * gateway's own paymaster deadline (`PAYMASTER_UPSTREAM_TIMEOUT_MS` in
+ * `apps/terminal/api/_lib/security.ts`, pinned by a conformance test): when
+ * the gateway gives up first, the wallet learns of a lost answer only as an
+ * HTTP status, and when this client gives up first it learns of it as its own
+ * deadline expiry. Both are read as a lost answer, but the order keeps the
+ * deadline the wallet controls the one that normally fires (Sherlock 159).
+ */
+export const PAYMASTER_TIMEOUT_MS = 20_000;
 const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
 /**
  * The one relay method that puts a transaction on the wire, mirroring
@@ -124,9 +133,14 @@ const readBoundedResponse = async (response: Response): Promise<string | null> =
 // lane, and every layer above (the maturity scope in particular) holds its
 // state closed instead of releasing it for a retry over a possibly-live write.
 //
+// A 5xx status is a lost answer too. The wallet's HTTP peer is usually the
+// STRK20 gateway, not the relay, and the gateway answers 502 or 504 when its
+// own upstream deadline expires or the relay's reply breaks off, which says
+// nothing about whether the relay forwarded the transaction (Sherlock 159).
+//
 // Quote calls never broadcast, so their failures stay determinate; so does a
-// refusal the relay states for itself, whether as a JSON-RPC error object or an
-// HTTP status of its own choosing. This closes the lossy-channel case, not a
+// refusal the relay states for itself, as a JSON-RPC error object or a 4xx
+// status, since a client error means the request was refused. This closes the lossy-channel case, not a
 // relay that lies about having rejected a transaction it forwarded — no
 // classification at this boundary can, and the relay URL is wallet-configured
 // rather than dapp-supplied for exactly that reason.
@@ -168,7 +182,9 @@ export const rpc = async (
       : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   if (!response.ok) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    throw response.status >= 500
+      ? lostAnswer(method)
+      : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   let body: unknown;
   try {
