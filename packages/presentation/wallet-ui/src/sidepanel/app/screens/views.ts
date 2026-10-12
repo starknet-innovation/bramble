@@ -18,7 +18,6 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import {
   type AllowanceListing,
-  type ConnectedSite,
   type DiscoveredNft,
   EMPTY_ALLOWANCE_LISTING,
   type PendingApproval,
@@ -73,6 +72,7 @@ import { accountDrawer } from "../../shell/account-drawer";
 import { INITIAL_COLLAPSED_FOLDERS } from "../../shell/drawer-folders";
 import { walletDock, walletHeader } from "../../shell/wallet-shell";
 import { backupFlow, simpleFlowScreen } from "./flows";
+import type { ConnectedSitesState } from "./support-flows";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
@@ -275,7 +275,7 @@ export const dashboard = (
   balances: BalanceState,
   deployment: boolean | null = null,
   transactions: readonly ActivityEntry[] = [],
-  connectedSites: readonly ConnectedSite[] = [],
+  connectedSites: ConnectedSitesState = [],
   prices: Readonly<Record<string, number>> = {},
   chart: readonly number[] = [],
   selectedTokenId: string | null = null,

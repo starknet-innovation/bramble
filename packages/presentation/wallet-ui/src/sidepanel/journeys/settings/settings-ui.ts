@@ -2,6 +2,7 @@
  * Bindings for personalization journeys: account labels, contact removal,
  * appearance (theme and currency), and non-secret backup export/restore.
  */
+import { exportablePreferences } from "@bramble/settings/preferences-backup";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
@@ -325,7 +326,9 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
     buttonBusy(exportButton, true);
     void deps.wallet.loadPreferences().then(
       (preferences) => {
-        const blob = new Blob([JSON.stringify(preferences, null, 2)], {
+        // Only what a restore reapplies: the contact graph and endpoints stay
+        // in the wallet (Sherlock 213).
+        const blob = new Blob([JSON.stringify(exportablePreferences(preferences), null, 2)], {
           type: "application/json",
         });
         const url = URL.createObjectURL(blob);

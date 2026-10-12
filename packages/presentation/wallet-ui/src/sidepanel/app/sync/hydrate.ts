@@ -10,6 +10,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { RenderData } from "../rendering/render-cache";
+import type { ConnectedSitesState } from "../screens/support-flows";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
 import type { RefreshReason } from "./refresh-scheduler";
@@ -348,9 +349,18 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     });
   }
   if (activeView === "connected-sites") {
-    fill(wallet.connectedSites(), (value) => {
-      cache.connectedSites = value;
-    });
+    // A failed read keeps a list already shown (revoking still validates on
+    // the background) and otherwise shows the failure, never an empty list.
+    fill(
+      wallet.connectedSites().then(
+        (sites): ConnectedSitesState => sites,
+        (): ConnectedSitesState =>
+          Array.isArray(cache.connectedSites) ? cache.connectedSites : "error",
+      ),
+      (value) => {
+        cache.connectedSites = value;
+      },
+    );
   }
   if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {

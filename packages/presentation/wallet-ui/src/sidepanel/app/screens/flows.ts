@@ -11,7 +11,6 @@ import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   AllowanceListing,
-  ConnectedSite,
   TokenBalance,
   WalletStatus,
 } from "../../../popup/responses/responses";
@@ -61,7 +60,7 @@ import {
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
 import { outcomeReceiptSection } from "../../shared/outcome-receipt";
-import { addressBookFlow, connectedSitesFlow } from "./support-flows";
+import { addressBookFlow, type ConnectedSitesState, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
 export { backupHubFlow as backupFlow } from "../../journeys/settings/settings-views";
@@ -303,7 +302,7 @@ export const simpleFlowScreen = (
     readonly balances: readonly TokenBalance[];
     readonly changes: Readonly<Record<string, number>>;
     readonly classHashVerification: ClassHashVerification | null;
-    readonly connectedSites: readonly ConnectedSite[];
+    readonly connectedSites: ConnectedSitesState;
     readonly currency: DisplayCurrency;
     readonly deployment: boolean | null;
     readonly expandedGroupId: string | null;

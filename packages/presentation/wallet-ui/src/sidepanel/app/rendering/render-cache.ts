@@ -14,6 +14,7 @@ import {
 } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
+import type { ConnectedSitesState } from "../screens/support-flows";
 
 // The price snapshot as the runtime client returns it; the cache's price fields
 // derive from this so their types cannot drift from loadPrices.
@@ -46,7 +47,7 @@ export type RenderData = {
   // (Sherlock 210).
   chartTokenId: string | null;
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
-  connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
+  connectedSites: ConnectedSitesState;
   deployment: boolean | null;
   signability: SignabilityVerdict | null;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
@@ -119,7 +120,7 @@ export const emptyRenderCache = (): RenderData => ({
   chart: [],
   chartTokenId: null,
   classHashVerification: null,
-  connectedSites: [],
+  connectedSites: "loading",
   deployment: null,
   signability: null,
   ...emptyActivityCache(),
