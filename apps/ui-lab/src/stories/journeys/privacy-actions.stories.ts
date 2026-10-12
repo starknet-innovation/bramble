@@ -14,6 +14,11 @@ export const ShareSelectedBalances = checkpointStory(
   "balance-selective",
 );
 export const ShareEveryBalance = checkpointStory("Share every balance", "privacy", "balance-all");
+export const RegisterActivation = checkpointStory(
+  "Review dapp registration",
+  "privacy",
+  "register-activation",
+);
 export const PrepareTransfer = checkpointStory(
   "Prepare a private transfer",
   "privacy",

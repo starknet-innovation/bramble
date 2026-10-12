@@ -42,14 +42,19 @@ import {
 } from "@bramble/starknet/multisig-invoke";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import {
+  type ArgentRecoveryInput,
   type BalanceInput,
+  type BraavosRecoveryInput,
   type DeclareInput,
   type DeployAccountInput,
   type DeploymentStatusInput,
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  getArgentRecoveryState,
   getArgentSigningRestriction,
+  getBraavosRecoveryState,
+  getBraavosSigningRestriction,
   getDeploymentStatus,
   getNftOwner,
   getNftOwnership,
@@ -61,8 +66,12 @@ import {
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  reviewArgentRecovery,
+  reviewBraavosRecovery,
   type SigningRestrictionInput,
   submitAccountDeployment,
+  submitArgentRecovery,
+  submitBraavosRecovery,
   submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
@@ -171,6 +180,34 @@ export type RuntimeRpc = {
   readonly getArgentSigningRestriction?: (
     input: SigningRestrictionInput,
   ) => ReturnType<typeof getArgentSigningRestriction>;
+  /** Braavos sibling of the Argent probe; same advisory contract. */
+  readonly getBraavosSigningRestriction?: (
+    input: SigningRestrictionInput,
+  ) => ReturnType<typeof getBraavosSigningRestriction>;
+  /** Pending-state read for the Ready recovery flow; advisory, read-only. */
+  readonly getArgentRecoveryState?: (
+    input: Parameters<typeof getArgentRecoveryState>[0],
+  ) => ReturnType<typeof getArgentRecoveryState>;
+  /** Estimates the Ready recovery's next escape step. */
+  readonly reviewArgentRecovery?: (
+    input: ArgentRecoveryInput,
+  ) => ReturnType<typeof reviewArgentRecovery>;
+  /** Submits the reviewed Ready recovery step. */
+  readonly submitArgentRecovery?: (
+    input: ArgentRecoveryInput,
+  ) => ReturnType<typeof submitArgentRecovery>;
+  /** Pending-state read for the Braavos recovery flow; advisory, read-only. */
+  readonly getBraavosRecoveryState?: (
+    input: Parameters<typeof getBraavosRecoveryState>[0],
+  ) => ReturnType<typeof getBraavosRecoveryState>;
+  /** Estimates the Braavos recovery request for its review card. */
+  readonly reviewBraavosRecovery?: (
+    input: BraavosRecoveryInput,
+  ) => ReturnType<typeof reviewBraavosRecovery>;
+  /** Submits the reviewed Braavos recovery request. */
+  readonly submitBraavosRecovery?: (
+    input: BraavosRecoveryInput,
+  ) => ReturnType<typeof submitBraavosRecovery>;
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -297,7 +334,14 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
   getArgentSigningRestriction,
+  getArgentRecoveryState,
+  getBraavosRecoveryState,
+  getBraavosSigningRestriction,
   getDeploymentStatus,
+  reviewArgentRecovery,
+  reviewBraavosRecovery,
+  submitArgentRecovery,
+  submitBraavosRecovery,
   getNftMetadata,
   getNftOwner,
   getNftOwnership,

@@ -37,6 +37,23 @@ export type PrivacyUiDeps = {
   readonly preferences: () => WalletPreferences | null;
   readonly setDisclosure: (state: PrivacyDisclosureState) => void;
   readonly setJourney: (state: PrivacyJourneyState) => void;
+  /**
+   * Start time of a private operation whose settled balance the privacy
+   * indexer may not yet reflect, or null when none is being watched. The
+   * settle poll re-reads while it is set; a caller that omits it never polls.
+   */
+  readonly settledAt?: () => number | null;
+  /**
+   * Drops the settling time above once the settle watch's bounded window has
+   * closed, so later repaints bind with no watch rather than re-entering with a
+   * stale one. The controller that armed the watch supplies it.
+   */
+  readonly clearSettledAt?: () => void;
+  /**
+   * The app's injected wall clock. The settle watch measures its bounded window
+   * with it; without a clock the watch is not armed.
+   */
+  readonly now?: (() => number) | null;
   readonly status: () => WalletStatus;
   readonly wallet: SidepanelWallet;
 };

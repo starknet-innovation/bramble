@@ -9,6 +9,7 @@
  * would flip meaning mid-edit; deriving it from state cannot.
  */
 
+import { strk20SendFeeModel } from "@bramble/privacy/fee-bound";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   type PoolRegistration,
@@ -80,12 +81,25 @@ const tokenBalanceIn = (bucket: ValueBucket, context: TransferRouteContext): big
     ? privateBalanceOf(context.privacy, (entry) => entry.tokenId === context.fields.tokenId)
     : publicBalanceOf(context.publicBalances, (entry) => entry.id === context.fields.tokenId);
 
-const strkBalanceIn = (bucket: ValueBucket, context: TransferRouteContext): bigint | null =>
+const privateEntryFor = (context: TransferRouteContext, address: string) =>
+  context.privacy.value?.balances.find((entry) => sameFelt(entry.token, address));
+
+const publicEntryFor = (context: TransferRouteContext, address: string) =>
+  context.publicBalances.find((entry) => sameFelt(entry.address, address));
+
+// The source bucket's balance of an arbitrary token — used for the pool fee's
+// own token, which is not necessarily the token being sent.
+const balanceOfTokenIn = (
+  bucket: ValueBucket,
+  address: string,
+  context: TransferRouteContext,
+): bigint | null =>
   bucket === "private"
-    ? privateBalanceOf(context.privacy, (entry) => sameFelt(entry.token, STRK_TOKEN_ADDRESS))
-    : publicBalanceOf(context.publicBalances, (entry) =>
-        sameFelt(entry.address, STRK_TOKEN_ADDRESS),
-      );
+    ? rawBalance(privateEntryFor(context, address)?.balance)
+    : rawBalance(publicEntryFor(context, address)?.balance);
+
+const symbolOfToken = (context: TransferRouteContext, address: string): string | null =>
+  privateEntryFor(context, address)?.symbol ?? publicEntryFor(context, address)?.symbol ?? null;
 
 const senderRegistration = (privacy: PrivacyDisclosureState): PoolRegistration => {
   if (privacy.loading || !privacy.value) {
@@ -104,22 +118,42 @@ const senderRegistration = (privacy: PrivacyDisclosureState): PoolRegistration =
  * Relay availability comes from the privileged account-scoped disclosure. An
  * absent disclosure therefore fails private spending closed; it never guesses
  * that a relay exists.
+ *
+ * The fee token follows the same preference the relay quote applies: a relayed
+ * batch pays in the token being sent when an independent reference bounds the
+ * conversion, otherwise in the configured fee token. The account route always
+ * pays the pool's on-chain STRK charge, so its fee token is STRK.
  */
 const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
   const { fields } = context;
+  const route = routeFor(fields.source, fields.destination);
+  const state = context.privacy.value;
+  const fallbackFeeToken = state?.feeToken ?? STRK_TOKEN_ADDRESS;
+  const feeModel =
+    route.submission === "relay"
+      ? strk20SendFeeModel({
+          convertedCeiling: rawBalance(privateEntryFor(context, fields.tokenAddress)?.feeCeiling),
+          fallbackCeiling: rawBalance(privateEntryFor(context, fallbackFeeToken)?.feeCeiling),
+          fallbackFeeToken,
+          token: fields.tokenAddress,
+        })
+      : { convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS };
   return {
     amountRaw: rawAmount(fields.amount, fields.tokenDecimals),
+    convertedFeeCeilingRaw: feeModel.convertedCeiling,
     destination: fields.destination,
-    poolFeeFri: context.privacy.value?.poolFeeFri
-      ? rawBalance(context.privacy.value.poolFeeFri)
-      : null,
+    feeTokenAddress: feeModel.feeToken,
+    feeTokenSymbol:
+      symbolOfToken(context, feeModel.feeToken) ??
+      (sameFelt(feeModel.feeToken, STRK_TOKEN_ADDRESS) ? "STRK" : "fee token"),
+    poolFeeFri: state?.poolFeeFri ? rawBalance(state.poolFeeFri) : null,
     recipient: fields.recipient || null,
     recipientRegistration: context.recipientRegistration,
-    relayConfigured: context.privacy.value?.relayConfigured ?? false,
+    relayConfigured: state?.relayConfigured ?? false,
     senderAddress: context.senderAddress,
     senderRegistration: senderRegistration(context.privacy),
     source: fields.source,
-    sourceStrkBalanceRaw: strkBalanceIn(fields.source, context),
+    sourceFeeBalanceRaw: balanceOfTokenIn(fields.source, feeModel.feeToken, context),
     sourceTokenBalanceRaw: tokenBalanceIn(fields.source, context),
     tokenAddress: fields.tokenAddress,
     tokenSymbol: fields.tokenSymbol,

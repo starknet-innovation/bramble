@@ -418,6 +418,10 @@ export const createLedgerOnboardController = (
       void runChooseHd("openzeppelin");
     } else if (kind === "import") {
       deps.render({ kind: "import-chooser" });
+    } else if (kind === "find-accounts") {
+      // Rescans the phrase this wallet already holds; the panel types nothing.
+      deps.render(null);
+      deps.openFindAccounts();
     } else if (kind === "import-phrase") {
       deps.render(null);
       deps.openImportSeed();

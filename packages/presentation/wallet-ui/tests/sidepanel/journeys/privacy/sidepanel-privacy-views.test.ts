@@ -6,7 +6,10 @@ import { describe, expect, test } from "bun:test";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
-import type { PrivacyBlockerKind } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
+import type {
+  PrivacyBlockerKind,
+  PrivacyDisclosureState,
+} from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import { privacyFlow } from "../../../../src/sidepanel/journeys/privacy/privacy-views";
 
@@ -141,6 +144,7 @@ describe("privacy journey templates", () => {
 
     const failed = privacyFlow(status, preferences, {
       error: "<prover unavailable>",
+      severity: "danger",
       stage: "failure",
       tokenId: token.id,
     });
@@ -149,6 +153,21 @@ describe("privacy journey templates", () => {
     expect(failed).toContain('class="send-failure-ring"');
     expect(failed).toContain('class="send-failure-mark"');
     expect(failed).toContain('id="privacy-retry"');
+    expect(failed).toContain('data-severity="danger"');
+
+    // A submission whose reply was lost is a warning, not a failure: no red
+    // cross and no blind Try again, only Activity (issue 382).
+    const unknown = privacyFlow(status, preferences, {
+      error: "<worker lost>",
+      severity: "warning",
+      stage: "failure",
+      tokenId: token.id,
+    });
+    expect(unknown).toContain("Status unknown");
+    expect(unknown).toContain('data-severity="warning"');
+    expect(unknown).not.toContain('id="privacy-retry"');
+    expect(unknown).toContain('data-view="activity"');
+    expect(unknown).toContain('class="privacy-unknown-mark"');
 
     expect(privacyFlow(status, preferences, { stage: "idle" })).toContain(
       "Choose an asset to begin",
@@ -202,12 +221,35 @@ describe("privacy journey templates", () => {
   });
 
   test("a blocked activation explains the prerequisite and ends in its next step", () => {
-    const blocked = (kind: PrivacyBlockerKind, message: string): string =>
-      privacyFlow(status, preferences, {
-        blocker: { kind, message },
-        stage: "blocked",
-        tokenId: token.id,
-      });
+    // The disclosure the panel already holds carries the pool fee, so a settled
+    // read lets the fund screen state the amount the registration needs.
+    const disclosure: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x53444835ec580000",
+        relayConfigured: true,
+        registration: "unregistered",
+      },
+    };
+    const blocked = (
+      kind: PrivacyBlockerKind,
+      message: string,
+      read: PrivacyDisclosureState | null = null,
+    ): string =>
+      privacyFlow(
+        status,
+        preferences,
+        {
+          blocker: { kind, message },
+          stage: "blocked",
+          tokenId: token.id,
+        },
+        read,
+      );
 
     const fund = blocked("fund", "Not enough STRK for the <pool> fee");
     expect(fund).toContain("Go private");
@@ -218,6 +260,17 @@ describe("privacy journey templates", () => {
     expect(fund).toContain("Not enough STRK for the &lt;pool&gt; fee");
     expect(fund).toContain('id="privacy-cancel"');
     expect(fund).toContain('data-privacy-blocker="fund"');
+    // Without a read fee the amount is unknown, so no figure is invented.
+    expect(fund).not.toContain("Registration needs");
+
+    const funded = blocked("fund", "Not enough STRK for the pool fee", disclosure);
+    // The refusal names the shortfall, not the number; the screen adds it.
+    expect(funded).toContain("Registration needs 6 STRK for the pool fee, plus a network fee.");
+
+    // Only the fund shortfall has a figure; every other blocker is unchanged.
+    expect(blocked("deploy", "Deploy this account first", disclosure)).not.toContain(
+      "Registration needs",
+    );
 
     const deploy = blocked("deploy", "Deploy this account first");
     expect(deploy).toContain("Deploy this account first");

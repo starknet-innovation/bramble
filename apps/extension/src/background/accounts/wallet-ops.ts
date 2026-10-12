@@ -44,6 +44,14 @@ import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import { failureNoticeMessage } from "../transactions/tx-observation";
+import {
+  handleAccountSignability,
+  handleRecoverArgentAccount,
+  handleRecoverBraavosAccount,
+  handleReviewArgentRecovery,
+  handleReviewBraavosRecovery,
+} from "./account-signability";
+import { handleSetAccountHidden } from "./account-visibility-ops";
 import { handleActivity } from "./activity-ops";
 import { submitReviewedAccountDeployment } from "./deployment-ops";
 import type { WalletStatusReader } from "./wallet-reader";
@@ -433,10 +441,16 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
 const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.activity": handleActivity,
   "wallet.deployAccount": handleDeployAccount,
+  "wallet.accountSignability": handleAccountSignability,
+  "wallet.recoverArgentAccount": handleRecoverArgentAccount,
+  "wallet.recoverBraavosAccount": handleRecoverBraavosAccount,
+  "wallet.reviewArgentRecovery": handleReviewArgentRecovery,
+  "wallet.reviewBraavosRecovery": handleReviewBraavosRecovery,
   "wallet.deploymentStatus": handleDeploymentStatus,
   "wallet.getBalances": handleGetBalances,
   "wallet.lock": handleLock,
   "wallet.reviewTransfer": handleReviewTransfer,
+  "wallet.setAccountHidden": (deps, message) => handleSetAccountHidden(deps, message),
   "wallet.transactionAlerts": handleTransactionAlerts,
   "wallet.transfer": handleTransfer,
   "wallet.verifyClassHash": handleVerifyClassHash,

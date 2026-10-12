@@ -67,6 +67,58 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
 };
 
 /**
+ * Binds the account hide and show controls. Each row carries its own account id,
+ * so the write targets the row the user pressed rather than the active account.
+ * The background refuses hiding the last account a network still shows; that
+ * refusal lands in the section's status line.
+ */
+const writeAccountVisibility = (
+  deps: SettingsUiDeps,
+  accountId: string,
+  hidden: boolean,
+  control: HTMLButtonElement,
+): void => {
+  buttonBusy(control, true);
+  void deps.wallet.setAccountHidden(accountId, hidden).then(
+    async () => {
+      showToast(hidden ? "Account hidden" : "Account shown", "success", control);
+      await rerender(deps);
+    },
+    (error: unknown) => {
+      showToast(errorMessage(error, "Account update failed"), "error", control);
+      const result = deps.app?.querySelector<HTMLElement>("#account-visibility-result");
+      if (result) {
+        result.textContent = errorLine(error, "Account update failed");
+      }
+      buttonBusy(control, false);
+    },
+  );
+};
+
+/**
+ * Binds the per-row "Hide" controls and the "Show" controls in the manage
+ * screen's "Hidden accounts" section.
+ */
+export const bindAccountVisibility = (deps: SettingsUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-hide-account]").forEach((control) => {
+    const accountId = control.dataset["hideAccount"];
+    control.addEventListener("click", () => {
+      if (accountId) {
+        writeAccountVisibility(deps, accountId, true, control);
+      }
+    });
+  });
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-reveal-account]").forEach((control) => {
+    const accountId = control.dataset["revealAccount"];
+    control.addEventListener("click", () => {
+      if (accountId) {
+        writeAccountVisibility(deps, accountId, false, control);
+      }
+    });
+  });
+};
+
+/**
  * Binds the "Add account" button on the account flow. Opens the account-type
  * chooser (New HD account / Import a private key / Connect a Ledger) rather than
  * deriving directly, so every add path — including a hardware account — is

@@ -458,6 +458,7 @@ export {
   readRemoveGroupInput,
   readRenameGroupInput,
   readSaveAddressInput,
+  readSetAccountHiddenInput,
   readSetAccountInGroupInput,
   readSetAccountLabelInput,
   readSetDisplayInput,

@@ -25,6 +25,11 @@ export const ChooseImportMethod = checkpointStory(
   "onboarding",
   "method",
 );
+export const ChooseImportMethodNoLedger = checkpointStory(
+  "Existing wallet · choose method (no Ledger transport)",
+  "onboarding",
+  "method-no-ledger",
+);
 export const EnterRecoveryPhrase = checkpointStory(
   "Existing wallet · recovery phrase",
   "onboarding",

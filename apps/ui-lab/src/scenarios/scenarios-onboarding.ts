@@ -190,6 +190,15 @@ export const onboardingScenario: WalletScenario = {
       state: { choices: 3, path: "existing wallet" },
     },
     {
+      content: () => onboarding(emptyWalletStatus, false),
+      id: "method-no-ledger",
+      label: "Choose import method (no Ledger transport)",
+      narrative:
+        "A browser with no Web Bluetooth, WebUSB or WebHID is never offered a Ledger path it cannot finish.",
+      prepare: prepareMethod,
+      state: { choices: 2, ledgerTransport: "unavailable" },
+    },
+    {
       content: () => onboarding(emptyWalletStatus),
       id: "recovery",
       label: "Enter recovery phrase",
@@ -325,12 +334,28 @@ export const ledgerOnboardingScenario: WalletScenario = {
       state: { choices: 4, secretBoundary: "visible" },
     },
     {
+      content: () => addAccountChooser(false),
+      id: "method-no-ledger",
+      label: "Choose account method (no Ledger transport)",
+      narrative:
+        "Without a Ledger transport the chooser offers only the routes this browser can finish.",
+      state: { choices: 3, ledgerTransport: "unavailable" },
+    },
+    {
       content: () => importAccountChooser(),
       id: "method-import",
       label: "Import an existing account",
       narrative:
         "The import stage offers the recovery-phrase and private-key routes, each a single click.",
       state: { choices: 2 },
+    },
+    {
+      content: () => importAccountChooser(false),
+      id: "method-import-no-ledger",
+      label: "Import an existing account (no Ledger transport)",
+      narrative:
+        "The Ready Ledger restore route is likewise absent, leaving the phrase and key routes.",
+      state: { choices: 2, ledgerTransport: "unavailable" },
     },
     {
       content: ledgerConnectPrompt,

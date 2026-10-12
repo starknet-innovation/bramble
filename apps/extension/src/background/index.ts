@@ -47,6 +47,7 @@ import {
   randomAnalyticsUuid,
   withGatewayAnalyticsFlows,
 } from "./analytics/gateway-analytics";
+import { createApprovalKeepAlive } from "./approvals/approval-keepalive";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
   bindToolbarActivation,
@@ -55,6 +56,7 @@ import {
   showPendingApprovals,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
+import { createSignatureWaiters } from "./approvals/signature-waiters";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
@@ -62,6 +64,7 @@ import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
+import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-preparations";
 import { createMessageHandler } from "./routing/messages";
 import type { BackgroundBrowser } from "./runtime/background-browser";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
@@ -85,6 +88,21 @@ const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
   void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
 };
 const approvals = createApprovalQueue();
+// The held-response registry lives here rather than inside the router context
+// so the worker keepalive below can watch it alongside the approval queue: a
+// held dapp response is the thing a suspension destroys, and the two counts
+// together are what "a decision is still pending" means (#350).
+const signatureWaiters = createSignatureWaiters();
+// Firefox tears down a non-persistent event page on its idle timer even while
+// a prompt is unanswered, and the queue and the waiters above are in-memory
+// only, so one parent API call per interval is what holds the page open until
+// the user decides. The interval runs only while something is pending.
+const approvalKeepAlive = createApprovalKeepAlive({
+  isPending: () => approvals.list().length > 0 || signatureWaiters.pending() > 0,
+  ...(runtime?.getPlatformInfo
+    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+    : {}),
+});
 const sessionStore = (() => {
   try {
     return createBrowserSessionStore();
@@ -111,7 +129,10 @@ const vaultStores: { readonly primary: EncryptedStore; readonly staging: Encrypt
       // runtime has no session storage, which leaves the durable record as the
       // only authority — the behaviour before this shadow existed.
       return {
-        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore),
+        // Only the primary mirrors its commit record into `storage.local`, so a
+        // lost `storage.sync` record does not lock the vault; see
+        // `createEncryptedStore` for why staging must not.
+        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
         staging: createEncryptedStore(
           store,
           VAULT_MIGRATION_STORE_KEY,
@@ -322,6 +343,15 @@ const strk20Jobs = createStrk20JobRegistry({
     : {}),
   now: systemClock,
 });
+// A reviewed preparation is held only in worker memory too, so the same
+// extension API call keeps the worker alive while a confirmation sits on
+// screen; an unconfirmed review retires after its lifetime and drops the hold.
+const strk20Preparations = createStrk20WalletPreparationStore({
+  ...(runtime?.getPlatformInfo
+    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+    : {}),
+  now: systemClock,
+});
 // This extension's own identity. The origin MUST come from the runtime rather
 // than be built from the id: on Firefox `runtime.id` is the add-on id from
 // `browser_specific_settings` while extension pages are served from
@@ -341,6 +371,7 @@ const extension = { id: runtime?.id ?? "", origin: extensionOrigin() };
 const handleMessage = createMessageHandler(walletReader, extension, {
   activeStateCoordinator,
   approvals,
+  waiters: signatureWaiters,
   balanceSnapshots,
   nftSnapshots,
   session,
@@ -357,6 +388,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   multisigStore: multisigLog,
   nostrCoordinationStore: nostrCoordinationLog,
   strk20Jobs,
+  strk20Preparations,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm
@@ -413,15 +445,19 @@ const broadcastWalletEvents = (message: unknown, response: unknown): void => {
   }
   if (announcesApprovalsChange(events)) {
     refreshPendingApprovals();
+    approvalKeepAlive.sync();
   }
 };
 
 // A held signTypedData request queues an approval and defers its response, so
 // it pushes an approvals-changed signal at queue time via this notifier, which
-// also covers the lazy expiry sweep.
+// also covers the lazy expiry sweep. The same signal is where the pending
+// decision starts and stops the worker keepalive, so a prompt left open keeps
+// the event page alive and a decision or sweep releases it.
 setApprovalNotifier(() => {
   broadcastEvent({ event: "approvalsChanged", type: "wallet.event" });
   refreshPendingApprovals();
+  approvalKeepAlive.sync();
 });
 
 runtime?.onInstalled.addListener((details) => {

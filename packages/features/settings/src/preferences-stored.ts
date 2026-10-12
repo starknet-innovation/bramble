@@ -35,6 +35,7 @@ import {
   isApprovalSurfacePreference,
   isDisplayCurrency,
   isExplorerFallback,
+  isHiddenAccountIds,
   isHiddenTokens,
   isRpcOverrides,
   isThemeChoice,
@@ -59,6 +60,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "explorerApiUrls",
   "explorerFallback",
   "groups",
+  "hiddenAccountIds",
   "hiddenTokens",
   "nftIndexerUrl",
   "nfts",
@@ -79,19 +81,26 @@ const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
   (Array.isArray(value["customNetworks"]) &&
     value["customNetworks"].every(isCustomNetwork) &&
     hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
-const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
+// Optional entries keyed by account or token ids: names, folder membership,
+// hidden accounts, the hidden-token list and the dapp-added token ids.
+const hasValidIdKeyedEntries = (value: Record<string, unknown>): boolean =>
   (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
+  (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
+  (value["hiddenAccountIds"] === undefined || isHiddenAccountIds(value["hiddenAccountIds"])) &&
+  (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
+  (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"]));
+// Optional display and routing preferences written from the settings screens.
+const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["approvalSurface"] === undefined ||
     isApprovalSurfacePreference(value["approvalSurface"])) &&
   (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
   (value["explorerApiUrls"] === undefined || isRpcOverrides(value["explorerApiUrls"])) &&
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
-  (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
-  (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
-  (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
+const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
+  hasValidIdKeyedEntries(value) && hasValidDisplayEntries(value);
 const hasValidTelemetryEntries = (value: Record<string, unknown>): boolean =>
   (value["productAnalytics"] === undefined || typeof value["productAnalytics"] === "boolean") &&
   (value["reliabilityDiagnostics"] === undefined ||
@@ -344,6 +353,12 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
  * per-contact user action. Restoring contacts from a file needs a per-entry
  * confirmation surface that does not exist yet; until it does, silence is the
  * safe answer.
+ *
+ * `hiddenAccountIds` is excluded too. Hiding is a per-account action taken while
+ * looking at the account, and the background keeps the active account visible;
+ * a file that hid accounts would break that pairing and could leave the panel
+ * showing an account no list renders. Visibility is restored by the local user,
+ * one account at a time, so a restore leaves it exactly as stored.
  */
 export type ImportablePreferences = {
   readonly accountLabels?: AccountLabels;

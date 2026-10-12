@@ -7,6 +7,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
 import { button } from "@bramble/ui-kit/controls";
+import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -235,6 +236,9 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
     ${
+      // An undeployed Braavos account deploys only through its own step: say
+      // so, with no fee and no retry, and Approve stays disabled (no fee).
+      (approval.deployFirst === true && reviewCostNote(UNDEPLOYED_BRAAVOS_REFUSAL)) ||
       reviewFeeSection(
         {
           fee: approval.fee ?? null,

@@ -266,6 +266,12 @@ export const PRIVACY_STYLES = `
   }
   .privacy-success .privacy-outcome-mark { color: var(--bramble-positive); }
   .privacy-failure .privacy-outcome-mark { color: var(--bramble-danger); }
+  /* A submission whose reply was lost is not a failure: the amber tone and a
+     "!" mark, never the red cross that invites a retry (mc-wallet issue 382). */
+  .privacy-failure[data-severity="warning"] .privacy-outcome-mark { color: var(--bramble-warning); }
+  .privacy-unknown-mark,
+  .privacy-failure[data-severity="warning"] .send-failure-mark { display: none; }
+  .privacy-failure[data-severity="warning"] .privacy-unknown-mark { display: inline; }
   /* A prerequisite, not a failure: the shield mark in the muted tone, drawn at
      the registry icon's own weight rather than the receipt marks' heavier one. */
   .privacy-blocked .privacy-outcome-mark { color: var(--bramble-muted); }

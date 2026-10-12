@@ -135,6 +135,12 @@ export type MessageHandlerOptions = {
    */
   readonly strk20Jobs?: Strk20JobRegistry;
   readonly strk20Preparations?: Strk20WalletPreparationStore;
+  /**
+   * Held-response registry the router parks deferred sign requests in. The
+   * entrypoint supplies the instance its worker keepalive watches; the default
+   * keeps one private to this context, which is all a unit test needs.
+   */
+  readonly waiters?: SignatureWaiters;
   readonly watchAssetAdmission?: WatchAssetAdmission;
 };
 
@@ -197,6 +203,13 @@ const recoveryDiscoveryFor = (
   provided: RecoveryDiscoveryCache | undefined,
 ): RecoveryDiscoveryCache => provided ?? createRecoveryDiscoveryCache();
 
+// Split from the context literal so the router's own cognitive-complexity
+// budget stays within the gate; a caller-supplied registry (the entrypoint's)
+// is watched by that caller's worker keepalive, so the default is only for
+// tests that do not wire one.
+const waitersFor = (provided: SignatureWaiters | undefined): SignatureWaiters =>
+  provided ?? createSignatureWaiters();
+
 /**
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
@@ -216,7 +229,7 @@ export const routerContext = (
   session: UnlockSession,
 ): RouterContext => {
   const approvals = options.approvals ?? createApprovalQueue();
-  const waiters = createSignatureWaiters();
+  const waiters = waitersFor(options.waiters);
   const now = options.now ?? systemClock;
   releaseWaitersOnApprovalDrop(approvals, waiters, notifyApprovalsChanged);
   return {

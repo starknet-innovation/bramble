@@ -95,6 +95,11 @@ describe("Send view model", () => {
     expect(sendRecipientAccounts([account, second], "SN_MAIN")).toEqual([account, second]);
   });
 
+  test("drops hidden accounts from the recipient list", () => {
+    const second = { ...account, id: `${account.id}:second`, publicKeyX: "0x999" };
+    expect(sendRecipientAccounts([account, second], "SN_MAIN", [second.id])).toEqual([account]);
+  });
+
   test("still keeps recipients to the active network", () => {
     const elsewhere = { ...account, id: `${account.id}:sepolia`, networkId: "SN_SEPOLIA" } as const;
     expect(sendRecipientAccounts([account, elsewhere], "SN_MAIN")).toEqual([account]);

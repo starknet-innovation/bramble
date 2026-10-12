@@ -13,6 +13,7 @@ import {
   preferredStrk20FeeToken,
   resolveStrk20FeeBound,
   reviewedFeeCeiling,
+  strk20SendFeeModel,
   withinFeeBound,
 } from "@bramble/privacy/fee-bound";
 import {
@@ -190,5 +191,95 @@ describe("preferredStrk20FeeToken", () => {
 
   test("honours a configured fallback other than STRK", () => {
     expect(preferredStrk20FeeToken([], USDC)).toBe(USDC);
+  });
+});
+
+/**
+ * The fee token the Send affordability gate reserves against must match the one
+ * the quote above selects, or the gate blocks a send the relay would accept, or
+ * reserves the wrong balance.
+ */
+// A third token, neither STRK nor the configured fallback.
+const OTHER = "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8";
+
+describe("strk20SendFeeModel", () => {
+  test("follows the sent token when a converted ceiling bounds the fee", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: 7n,
+        fallbackCeiling: null,
+        fallbackFeeToken: STRK_TOKEN_ADDRESS,
+        token: USDC,
+      }),
+    ).toEqual({ convertedCeiling: 7n, feeToken: USDC });
+  });
+
+  test("falls back to the fee token when the sent token is the fee token", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: 7n,
+        fallbackCeiling: null,
+        fallbackFeeToken: STRK_TOKEN_ADDRESS,
+        token: STRK_TOKEN_ADDRESS,
+      }),
+    ).toEqual({ convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS });
+  });
+
+  test("falls back when no independent reference bounds a conversion", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: null,
+        fallbackCeiling: null,
+        fallbackFeeToken: STRK_TOKEN_ADDRESS,
+        token: USDC,
+      }),
+    ).toEqual({ convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS });
+  });
+
+  test("honours a configured fallback other than STRK, with its own ceiling", () => {
+    // An unpriced sent token falls back to a non-STRK fee token, so the gate
+    // needs that token's own bound: a null here used to leave Send pending.
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: null,
+        fallbackCeiling: 9n,
+        fallbackFeeToken: USDC,
+        token: OTHER,
+      }),
+    ).toEqual({ convertedCeiling: 9n, feeToken: USDC });
+  });
+
+  test("sending STRK pays the exact STRK fee even with a non-STRK fallback", () => {
+    // The quote prefers the sent token, and STRK needs no reference.
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: null,
+        fallbackCeiling: 9n,
+        fallbackFeeToken: USDC,
+        token: STRK_TOKEN_ADDRESS,
+      }),
+    ).toEqual({ convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS });
+  });
+
+  test("sending the non-STRK fee token itself reserves its own ceiling", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: 9n,
+        fallbackCeiling: 9n,
+        fallbackFeeToken: USDC,
+        token: USDC,
+      }),
+    ).toEqual({ convertedCeiling: 9n, feeToken: USDC });
+  });
+
+  test("an unpriceable non-STRK fallback leaves no bound for the gate to refuse on", () => {
+    expect(
+      strk20SendFeeModel({
+        convertedCeiling: null,
+        fallbackCeiling: null,
+        fallbackFeeToken: USDC,
+        token: OTHER,
+      }),
+    ).toEqual({ convertedCeiling: null, feeToken: USDC });
   });
 });

@@ -163,7 +163,7 @@ const welcomeStep = (ready: boolean): string => `
     </div>
   </section>`;
 
-const methodStep = (): string => `
+const methodStep = (ledgerAvailable = true): string => `
   <section class="onboarding-step" data-onboarding-step="method" hidden>
     ${flowBack("Back to welcome")}
     ${stepHead("wallet", "Import wallet")}
@@ -174,7 +174,7 @@ const methodStep = (): string => `
         "Recovery phrase",
         "Import a recovery phrase from a Bramble, Ready or Braavos wallet.",
       )}
-      ${option("ledger-method-button", "shield", "Ledger hardware wallet")}
+      ${ledgerAvailable ? option("ledger-method-button", "shield", "Ledger hardware wallet") : ""}
       ${option(
         "key-method-button",
         "link",
@@ -408,7 +408,9 @@ const accountStep = (): string => `
     </div>
   </section>`;
 
-const ledgerStep = (status: WalletStatus): string => `
+const ledgerStep = (status: WalletStatus, ledgerAvailable = true): string =>
+  ledgerAvailable
+    ? `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
     ${flowBack("Back to wallet methods")}
     ${stepHead("lock", "Choose a password")}
@@ -424,13 +426,19 @@ const ledgerStep = (status: WalletStatus): string => `
         })}
       </div>
     </form>
-  </section>`;
+  </section>`
+    : "";
 
 /**
  * First-run wizard. It preserves Bramble's real creation and Ledger paths
  * while presenting each decision as one focused, reversible step.
+ *
+ * `ledgerAvailable` false omits the Ledger method and its passphrase step
+ * entirely, so a runtime with no Web Bluetooth, WebUSB or WebHID (Gecko) is
+ * never offered a flow it cannot finish. It defaults to true so a caller that
+ * does not report capability keeps the offered state.
  */
-export const onboardingWizard = (status: WalletStatus): string => `
+export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): string => `
   <!--
   THESIS: First-run security is a short sequence of explicit choices, never one long form.
   OWN-WORLD: Neutral panel over the brand landscape, the wordmark lockup at its centre, one accent for the primary action, semantic green/red only.
@@ -441,7 +449,7 @@ export const onboardingWizard = (status: WalletStatus): string => `
   <main class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
     <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready}" novalidate>
       ${welcomeStep(status.ready)}
-      ${methodStep()}
+      ${methodStep(ledgerAvailable)}
       ${recoveryStep()}
       ${generatedStep()}
       ${verifyStep()}
@@ -450,5 +458,5 @@ export const onboardingWizard = (status: WalletStatus): string => `
       ${recoveryAccountsStep()}
       ${accountStep()}
     </form>
-    ${ledgerStep(status)}
+    ${ledgerStep(status, ledgerAvailable)}
   </main>`;

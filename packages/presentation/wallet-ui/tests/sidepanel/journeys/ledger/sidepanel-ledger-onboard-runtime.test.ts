@@ -116,6 +116,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     openImport: () => {
       imports += 1;
     },
+    openFindAccounts: () => undefined,
     openImportSeed: () => {
       seedImports += 1;
     },
@@ -354,5 +355,27 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, '[data-add-kind="multisig"]');
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);
+  });
+
+  test("startAddAccount omits the Ledger route when the connector reports no transport", () => {
+    const h = mountRuntime({
+      connector: {
+        isAvailable: () => false,
+        openConnected: () => Promise.resolve(null),
+        request: () => Promise.reject(new Error("no device expected")),
+      },
+    });
+    h.runtime.startAddAccount();
+    expect(h.mount.hidden).toBe(false);
+    expect(h.mount.textContent).toContain("Add a new account");
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(3);
+  });
+
+  test("startAddAccount keeps the Ledger route when the connector does not report capability", () => {
+    const h = mountRuntime();
+    h.runtime.startAddAccount();
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
   });
 });

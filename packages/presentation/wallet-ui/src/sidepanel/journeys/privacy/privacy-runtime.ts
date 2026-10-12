@@ -37,6 +37,8 @@ export type PreparationProgressSink = (progress: PreparationProgress) => void;
  */
 export type PrivateBalanceView = {
   readonly balance: string;
+  /** Bounded converted pool fee in this token's base units; absent when no reference bounds it. */
+  readonly feeCeiling?: string;
   readonly formatted: string;
   readonly symbol: string;
   readonly token: string;
@@ -49,6 +51,8 @@ export type PrivateBalanceView = {
 export type PrivacyAccountState = {
   readonly accountId: string;
   readonly balances: readonly PrivateBalanceView[];
+  /** Configured fee token a relayed batch falls back to; absent means STRK. */
+  readonly feeToken?: string;
   readonly networkId: string;
   /** Pool action fee in FRI. A failed read rejects the whole disclosure request. */
   readonly poolFeeFri: string;
@@ -258,6 +262,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     !hasOnlyKnownKeys(state, [
       "accountId",
       "balances",
+      "feeToken",
       "networkId",
       "poolFeeFri",
       "relayConfigured",
@@ -266,6 +271,8 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     !isStarknetNetworkId(state["networkId"]) ||
     !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
     !isPoolFee(state["poolFeeFri"]) ||
+    (state["feeToken"] !== undefined &&
+      (typeof state["feeToken"] !== "string" || !isNonZeroStarkFieldElement(state["feeToken"]))) ||
     typeof state["relayConfigured"] !== "boolean" ||
     (state["registration"] !== "pending" &&
       state["registration"] !== "registered" &&
@@ -279,9 +286,18 @@ const readState = (response: unknown): PrivacyAccountState | null => {
   for (const value of state["balances"]) {
     if (
       !isRecord(value) ||
-      !hasOnlyKnownKeys(value, ["balance", "formatted", "symbol", "token", "tokenId"]) ||
+      !hasOnlyKnownKeys(value, [
+        "balance",
+        "feeCeiling",
+        "formatted",
+        "symbol",
+        "token",
+        "tokenId",
+      ]) ||
       typeof value["balance"] !== "string" ||
       !isStarkFieldElement(value["balance"]) ||
+      (value["feeCeiling"] !== undefined &&
+        (typeof value["feeCeiling"] !== "string" || !isStarkFieldElement(value["feeCeiling"]))) ||
       !isDisplayString(value["formatted"]) ||
       !isDisplayString(value["symbol"]) ||
       typeof value["token"] !== "string" ||
@@ -293,6 +309,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     }
     balances.push({
       balance: value["balance"],
+      ...(typeof value["feeCeiling"] === "string" ? { feeCeiling: value["feeCeiling"] } : {}),
       formatted: value["formatted"],
       symbol: value["symbol"],
       token: value["token"],
@@ -305,6 +322,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
   return {
     accountId: state["accountId"],
     balances,
+    ...(typeof state["feeToken"] === "string" ? { feeToken: state["feeToken"] } : {}),
     networkId: state["networkId"],
     poolFeeFri: state["poolFeeFri"],
     relayConfigured: state["relayConfigured"],

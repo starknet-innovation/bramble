@@ -127,6 +127,18 @@ export const settingsScenario: WalletScenario = {
       state: { group: "operations" },
     },
     {
+      content: () =>
+        walletDashboard({
+          preferences: { ...journeyPreferences, hiddenAccountIds: [ledgerAccount.id] },
+          view: "account",
+        }),
+      id: "hidden-accounts",
+      label: "Hidden accounts",
+      narrative:
+        "Hiding takes an account out of the drawer and the send pickers without removing it: the manage screen keeps the hidden one in its own list with the control that shows it again.",
+      state: { hiddenAccounts: 1 },
+    },
+    {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "import-key" }),
       id: "import-key",
       label: "Import private key",
@@ -141,6 +153,14 @@ export const settingsScenario: WalletScenario = {
       narrative:
         "Another wallet's phrase enters the shared word grid, scans with the grouped picker, and imports into the unlocked vault.",
       state: { vault: "encrypted", view: "import-phrase" },
+    },
+    {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "find-accounts" }),
+      id: "find-accounts",
+      label: "Find my other accounts",
+      narrative:
+        "The wallet rescans the phrase it already holds: the panel asks for no words and no passphrase, and the grouped scan stays hidden until the reader starts it.",
+      state: { vault: "encrypted", view: "find-accounts" },
     },
     {
       content: () =>
@@ -257,6 +277,7 @@ export const settingsScenario: WalletScenario = {
     "account",
     "import-key",
     "import-phrase",
+    "find-accounts",
     "backup",
     "backup-export",
     "backup-restore",

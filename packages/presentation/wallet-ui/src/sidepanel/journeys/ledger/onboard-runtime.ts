@@ -59,6 +59,7 @@ export type LedgerOnboardRuntimeDeps = {
   readonly onCancel: () => void;
   readonly openImport: () => void;
   readonly openImportSeed: () => void;
+  readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
@@ -76,6 +77,7 @@ export type LedgerOnboardRuntime = {
 };
 
 const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
+  value === "find-accounts" ||
   value === "import" ||
   value === "import-key" ||
   value === "import-phrase" ||
@@ -94,6 +96,10 @@ export const createLedgerOnboardRuntime = (
 ): LedgerOnboardRuntime => {
   const { connector, create, describe, existingIds, mount, networkId, onCancel, refresh, wallet } =
     deps;
+  // The runtime's Ledger capability decides whether the chooser offers the
+  // Ledger routes at all. It is a UI affordance only: an absent report keeps
+  // the routes, matching the connector type's default.
+  const ledgerAvailable = connector.isAvailable?.() ?? true;
   let controller: LedgerOnboardController;
 
   const bindSelection = (): void => {
@@ -176,10 +182,10 @@ export const createLedgerOnboardRuntime = (
 
   const bodyFor = (view: LedgerOnboardView): string => {
     if (view.kind === "chooser") {
-      return addAccountChooser();
+      return addAccountChooser(ledgerAvailable);
     }
     if (view.kind === "import-chooser") {
-      return importAccountChooser();
+      return importAccountChooser(ledgerAvailable);
     }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();
@@ -221,6 +227,7 @@ export const createLedgerOnboardRuntime = (
     onCancel,
     openImport: () => deps.openImport(),
     openImportSeed: () => deps.openImportSeed(),
+    openFindAccounts: () => deps.openFindAccounts(),
     openMultisig: () => deps.openMultisig(),
     refresh,
     render,

@@ -21,7 +21,12 @@ import {
   cloneApprovalValue,
   readStoredApprovalPayload,
 } from "./approval-payload";
-import { type ApprovalRequest, approvalSnapshot, type PendingApproval } from "./approval-snapshot";
+import {
+  type ApprovalRequest,
+  approvalSnapshot,
+  type InvokeFeeReview,
+  type PendingApproval,
+} from "./approval-snapshot";
 
 /** Queue admission caps and the abandoned-approval TTL. */
 export {
@@ -58,6 +63,21 @@ import type {
 export type { ApprovalClaim, ApprovalQueue, ApprovalQueueOptions } from "./approval-queue-types";
 
 type ApprovalEntry = ApprovalRequest & { readonly feeRevision: number; readonly queuedAt: number };
+
+// An invoke entry with a fresh fee review applied. The review replaces the
+// deploy-first state rather than inheriting it from the previous one.
+const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): ApprovalEntry => {
+  const { deployFirst: _stale, ...current } = approval;
+  return {
+    ...current,
+    ...(review.deployFirst === true ? { deployFirst: true } : {}),
+    fee: review.fee && { ...review.fee },
+    feeAffordability: review.feeAffordability,
+    feeEstimateFailed: review.feeEstimateFailed,
+    feeEstimatePending: review.feeEstimatePending,
+    requiresDeployment: review.requiresDeployment,
+  };
+};
 
 const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) =>
   assets.length === 0 ? {} : { reviewAssets: assets.map((asset) => ({ ...asset })) };
@@ -242,6 +262,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
         calls: input.calls.map(cloneApprovalCall),
         context: { ...input.context },
+        ...(input.fee.deployFirst === true ? { deployFirst: true } : {}),
         fee: input.fee.fee && { ...input.fee.fee },
         feeAffordability: input.fee.feeAffordability,
         feeEstimateFailed: input.fee.feeEstimateFailed,
@@ -366,14 +387,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
           },
         });
       } else if (approval.kind === "invoke" && update.kind === "invoke") {
-        pending.set(id, {
-          ...approval,
-          fee: update.review.fee && { ...update.review.fee },
-          feeAffordability: update.review.feeAffordability,
-          feeEstimateFailed: update.review.feeEstimateFailed,
-          feeEstimatePending: update.review.feeEstimatePending,
-          requiresDeployment: update.review.requiresDeployment,
-        });
+        pending.set(id, withInvokeFeeReview(approval, update.review));
       }
       return get(id);
     },

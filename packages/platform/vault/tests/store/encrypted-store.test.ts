@@ -12,6 +12,7 @@ import {
   isEncryptedEnvelope,
 } from "@bramble/vault/encrypted-store";
 import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
+import { legacyEnvelope } from "./legacy-envelope";
 
 const vaultKey = "bramble:vault";
 const preferencesKey = "bramble:preferences";
@@ -101,7 +102,11 @@ describe("createEncryptedStore", () => {
   });
 
   test("recovers each interrupted commit point without losing the last committed value", async () => {
-    for (const failAt of [1, 2, 3]) {
+    // A commit over a separate freshness area writes, in order: the pending
+    // record's local mirror, the pending durable record, the envelope, the
+    // promoted mirror, the promoted durable record. Failing at any of them
+    // keeps the last value that reached the envelope readable.
+    for (const failAt of [1, 2, 3, 4, 5]) {
       const backend = createMemoryStore();
       const freshness = createMemoryStore();
       let writes = 0;
@@ -118,7 +123,13 @@ describe("createEncryptedStore", () => {
           await target.set(key, value);
         },
       });
-      const encrypted = createEncryptedStore(faulting(backend), vaultKey, faulting(freshness));
+      const encrypted = createEncryptedStore(
+        faulting(backend),
+        vaultKey,
+        faulting(freshness),
+        undefined,
+        true,
+      );
       await encrypted.write({ revision: 1 }, "correct horse battery staple");
       writes = 0;
       armed = true;
@@ -127,7 +138,7 @@ describe("createEncryptedStore", () => {
         encrypted.write({ revision: 2 }, "correct horse battery staple"),
       ).rejects.toThrow(`injected commit write ${failAt}`);
       const recovered = await encrypted.read("correct horse battery staple");
-      expect(recovered).toEqual({ revision: failAt === 3 ? 2 : 1 });
+      expect(recovered).toEqual({ revision: failAt > 3 ? 2 : 1 });
     }
   });
 
@@ -278,50 +289,6 @@ describe("createEncryptedStore", () => {
     expect(isEncryptedEnvelope({ ...raw, iterations: 100_000 })).toBe(false);
   });
 
-  // Builds an envelope at the pre-bump legacy strength with raw Web Crypto,
-  // independent of the store's own encryptJson, to prove compatibility with
-  // envelopes produced before the KDF iteration raise.
-  const legacyEnvelope = async (value: unknown, passphrase: string, scope: string) => {
-    const encoder = new TextEncoder();
-    const iterations = 310_000;
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const baseKey = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(passphrase),
-      "PBKDF2",
-      false,
-      ["deriveKey"],
-    );
-    const key = await crypto.subtle.deriveKey(
-      { hash: "SHA-256", iterations, name: "PBKDF2", salt: salt.slice().buffer },
-      baseKey,
-      { length: 256, name: "AES-GCM" },
-      false,
-      ["encrypt"],
-    );
-    const data = await crypto.subtle.encrypt(
-      {
-        additionalData: encoder.encode(scope).slice().buffer,
-        iv: iv.slice().buffer,
-        name: "AES-GCM",
-      },
-      key,
-      encoder.encode(JSON.stringify(value)),
-    );
-    const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
-    return {
-      cipher: "AES-256-GCM",
-      data: toBase64(new Uint8Array(data)),
-      iterations,
-      iv: toBase64(iv),
-      kdf: "PBKDF2-SHA-256",
-      salt: toBase64(salt),
-      scope,
-      version: 2,
-    };
-  };
-
   test("reads legacy-strength envelopes and upgrades them explicitly", async () => {
     const store = createMemoryStore();
     const encrypted = createEncryptedStore(store, vaultKey);
@@ -392,7 +359,10 @@ describe("createEncryptedStore", () => {
   });
 
   test("recovers every interrupted v2-to-v3 migration write", async () => {
-    for (const failAt of [1, 2, 3, 4]) {
+    // With the mirror on, a migration writes: the pending mirror, the pending
+    // durable record, the local legacy marker, the envelope, the promoted
+    // mirror, the promoted durable record.
+    for (const failAt of [1, 2, 3, 4, 5, 6]) {
       const backend = createMemoryStore();
       const freshnessBackend = createMemoryStore();
       let writes = 0;
@@ -413,6 +383,8 @@ describe("createEncryptedStore", () => {
         faulting(backend),
         vaultKey,
         faulting(freshnessBackend),
+        undefined,
+        true,
       );
       const legacy = await legacyEnvelope(
         { schemaVersion: 1 },
