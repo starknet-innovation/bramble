@@ -27,6 +27,27 @@ const numeric = (value: unknown, fallback = 0): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 const SECONDS_PER_YEAR = 31_536_000;
+const MAX_RISK_URL_LENGTH = 2_048;
+
+/**
+ * The Vesu API's risk-report link, kept only as a plain `https:` URL with no
+ * credentials and a bounded length. The value is rendered as a link `href`, so
+ * a `javascript:`, `data:` or plain-HTTP string from the API, or one that hides
+ * a user name before the host, becomes no link at all (Sherlock 206).
+ */
+export const vesuRiskUrl = (value: unknown): string | null => {
+  if (typeof value !== "string" || value.length > MAX_RISK_URL_LENGTH) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.username === "" && url.password === ""
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 const address = (value: unknown): string | null => {
   const candidate = text(value);
@@ -96,7 +117,7 @@ const parseAsset = (pool: JsonRecord, value: unknown): VesuMarket | null => {
     poolName: text(pool["name"], "Unnamed pool").trim(),
     poolOwner: owner,
     priceUsd: vesuFixed(asset?.["usdPrice"]),
-    riskUrl: typeof risk?.["url"] === "string" ? risk["url"] : null,
+    riskUrl: vesuRiskUrl(risk?.["url"]),
     rateHalfLifeSeconds: numeric(rate?.["rateHalfLife"]),
     rateUpdatedAt: typeof config?.["lastUpdated"] === "string" ? config["lastUpdated"] : null,
     supplied,

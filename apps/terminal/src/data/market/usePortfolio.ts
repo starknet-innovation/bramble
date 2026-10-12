@@ -43,16 +43,16 @@ export const usePortfolio = (address: string | null): UsePortfolioResult => {
         token.logoUri,
       ]),
     );
-    const logosBySymbol = Object.fromEntries(
-      (tokens.data ?? []).map((token) => [token.symbol.toUpperCase(), token.logoUri]),
-    );
 
     const holdings: Holding[] = rows
       .filter((balance) => balance.raw > 0n)
       .map((balance) => {
         const addressKey = canonicalAddress(balance.address) ?? balance.address.toLowerCase();
-        const price =
-          byAddress[addressKey] ?? prices.data?.bySymbol[balance.symbol.toUpperCase()];
+        // Priced and pictured by contract address only. Anyone can airdrop a
+        // token that calls itself "WBTC", so a symbol never borrows a listed
+        // token's price or logo (Sherlock 194); an unlisted token is unpriced
+        // and adds nothing to the totals.
+        const price = byAddress[addressKey];
         const priceUsd = price?.usd ?? null;
         const change24h = price?.change24h ?? null;
         const usdValue = priceUsd === null ? 0 : balance.amount * priceUsd;
@@ -60,10 +60,7 @@ export const usePortfolio = (address: string | null): UsePortfolioResult => {
           address: balance.address,
           symbol: balance.symbol,
           name: balance.name,
-          logoUri:
-            logosByAddress[addressKey] ??
-            logosBySymbol[balance.symbol.toUpperCase()] ??
-            null,
+          logoUri: logosByAddress[addressKey] ?? null,
           decimals: balance.decimals,
           display: balance.display,
           amount: balance.amount,

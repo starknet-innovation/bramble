@@ -1,7 +1,7 @@
 /**
  * Live USD prices and 24h changes from AVNU's supported market-data API. The
- * response is keyed by both contract address and symbol for portfolio and token
- * detail consumers. It shares the exact request/cache entry used by useTokens.
+ * response is keyed by contract address only: a symbol is self-declared by the
+ * token, so it cannot identify a price (Sherlock 194). It shares the exact request/cache entry used by useTokens.
  */
 import { useCallback } from "react";
 import { canonicalAddress } from "../../protocols/support/networks";
@@ -25,13 +25,11 @@ const fetchPrices = async (signal: AbortSignal): Promise<PricesData> => {
   }
 
   const byAddress: Record<string, PriceEntry> = {};
-  const bySymbol: Record<string, PriceEntry> = {};
   for (const row of rows) {
     const entry: PriceEntry = { usd: row.priceUsd, change24h: row.change24h };
     byAddress[canonicalAddress(row.address) ?? row.address.toLowerCase()] = entry;
-    bySymbol[row.symbol.toUpperCase()] = entry;
   }
-  return { byAddress, bySymbol };
+  return { byAddress };
 };
 
 /** Live AVNU market prices. `inputs` is retained as a refresh dependency for callers. */

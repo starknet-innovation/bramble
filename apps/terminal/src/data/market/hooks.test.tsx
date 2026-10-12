@@ -37,6 +37,8 @@ import { useAsyncResource } from "../core/useAsyncResource";
 const ETH = MAINNET_TOKEN_ADDRESSES.ETH;
 const USDC = MAINNET_TOKEN_ADDRESSES.USDC;
 const STRK = MAINNET_TOKEN_ADDRESSES.STRK;
+// An airdropped token that names itself after a listed one (Sherlock 194).
+const SPOOF = "0x5f00f";
 const unpadded = (address: string): string => `0x${BigInt(address).toString(16)}`;
 
 type FakeResponse = {
@@ -148,6 +150,14 @@ const routeFetch = (avnuStatus = 200): void => {
             name: "Starknet Token",
             decimals: 18,
           },
+          {
+            tokenAddress: SPOOF,
+            normalizedTokenAddress: SPOOF,
+            indexedBalanceRaw: String(rpc.balances.get(SPOOF) ?? 0n),
+            symbol: "ETH",
+            name: "Ether",
+            decimals: 18,
+          },
         ],
         exact: true,
         truncated: false,
@@ -237,14 +247,13 @@ describe("useTokens", () => {
 });
 
 describe("usePrices", () => {
-  it("keys prices by lowercased address and by symbol", async () => {
+  it("keys prices by lowercased address only", async () => {
     const { result } = renderHook(() => usePrices());
     await waitFor(() => expect(result.current.data).not.toBeNull());
     const data = result.current.data;
     expect(data?.byAddress[ETH.toLowerCase()]?.usd).toBe(3000);
     expect(data?.byAddress[ETH.toLowerCase()]?.change24h).toBe(-2.1);
-    expect(data?.bySymbol.ETH?.usd).toBe(3000);
-    expect(data?.bySymbol.STRK?.usd).toBe(0.14);
+    expect(data).not.toHaveProperty("bySymbol");
   });
 });
 
@@ -277,6 +286,16 @@ describe("usePortfolio", () => {
     expect(totalValueUsd).toBeCloseTo(3500, 5);
     const eth = holdings.find((h) => h.symbol === "ETH");
     expect(eth?.usdValue).toBeCloseTo(3000, 5);
+  });
+
+  it("never prices or pictures a token by a symbol it chose for itself", async () => {
+    rpc.balances.set(SPOOF, 2_000_000_000_000_000_000n);
+    const { result } = renderHook(() => usePortfolio(ETH));
+    await waitFor(() => expect(result.current.data.holdings.length).toBe(3));
+    const { holdings, totalValueUsd } = result.current.data;
+    const spoof = holdings.find((h) => h.address === SPOOF);
+    expect(spoof).toMatchObject({ logoUri: null, priceUsd: null, symbol: "ETH", usdValue: 0 });
+    expect(totalValueUsd).toBeCloseTo(3500, 5);
   });
 });
 
