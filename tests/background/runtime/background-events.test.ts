@@ -72,6 +72,7 @@ const MUTATOR_MESSAGE_TYPES: Readonly<Record<string, readonly string[]>> = {
   importRawKeyAccount: ["wallet.importAccount"],
   setActiveAccount: [
     "wallet.approveOrigin",
+    "wallet.importPreferences",
     "wallet.setAccountHidden",
     "wallet.setActiveAccount",
     "wallet.setActiveNetwork",
@@ -127,6 +128,18 @@ describe("walletEventBroadcasts", () => {
     expect(
       walletEventBroadcasts({ type: "wallet.setActiveAccount" }, { account: {}, ok: true }),
     ).toEqual([accountsChanged]);
+    expect(
+      walletEventBroadcasts(
+        { type: "wallet.setActiveAccount" },
+        { account: { networkId: "SN_MAIN" }, ok: true },
+      ),
+    ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
+    expect(
+      walletEventBroadcasts(
+        { type: "wallet.importPreferences" },
+        { ok: true, preferences: { activeNetworkId: "SN_MAIN" } },
+      ),
+    ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
     expect(
       walletEventBroadcasts({ type: "wallet.setActiveNetwork" }, { networkId: "SN_MAIN" }),
     ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
