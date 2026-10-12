@@ -9,11 +9,15 @@
  * commit; an envelope it does refuse is refused before the pending record.
  */
 import { describe, expect, test } from "bun:test";
+import { RefusedBeforeWrite } from "@bramble/core/errors";
 import { isJson, type Json } from "@bramble/core/json";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import { fakeKms } from "@bramble/testkit/fake-kms";
 import { createEncryptedStore } from "@bramble/vault/encrypted-store";
 import { emptyVault, isVaultV11, type Vault } from "@bramble/vault/schema";
-import { VAULT_FULL, writeVault } from "../../src/service/service-creation";
+import { createWalletVaultService } from "@bramble/vault/service";
+import { writeVault } from "../../src/service/service-creation";
+import { VAULT_FULL } from "../../src/service/vault-capacity";
 
 const vaultKey = "bramble:vault";
 const vaultPassphrase = "correct horse battery staple";
@@ -99,6 +103,31 @@ describe("vault capacity", () => {
       before,
     );
     expect(await store.read(vaultPassphrase)).toEqual(small);
+  });
+});
+
+describe("importing a phrase into a full vault", () => {
+  test("is refused as full, before anything is stored, not as an invalid vault", async () => {
+    const local = createMemoryStore();
+    const store = createEncryptedStore(local, vaultKey);
+    const full = vaultWith(capacity());
+    await writeVault(store, full, vaultPassphrase);
+    const service = createWalletVaultService({
+      encryptedStore: store,
+      kms: fakeKms(),
+      migrationStore: createEncryptedStore(local, "bramble:vault-migration"),
+    });
+
+    const refusal = service.importSeedAccounts({
+      mnemonic: "legal winner thank year wave sausage worth useful legal winner thank yellow",
+      networkId: "SN_MAIN",
+      selections: [{ accountContractType: "openzeppelin", accountIndex: 0 }],
+      vaultPassphrase,
+    });
+
+    await expect(refusal).rejects.toBeInstanceOf(RefusedBeforeWrite);
+    await expect(refusal).rejects.toThrow(VAULT_FULL);
+    expect(await store.read(vaultPassphrase)).toEqual(full);
   });
 });
 
