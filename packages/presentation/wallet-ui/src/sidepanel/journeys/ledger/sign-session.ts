@@ -206,7 +206,9 @@ export const createLedgerSignController = (
     // the browser-support message straight away; the request stays parked so
     // Cancel still rejects it cleanly.
     if (deps.connector.isAvailable?.() === false) {
-      show(errorPhase("webhid-unavailable"));
+      if (!busy) {
+        show(errorPhase("webhid-unavailable"));
+      }
       return;
     }
     const list = deps.connector.listConnected;
