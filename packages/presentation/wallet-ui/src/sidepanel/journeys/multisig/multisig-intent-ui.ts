@@ -4,7 +4,7 @@ import {
   ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE,
   isArgentMultisigFeeExpiredMessage,
 } from "@bramble/starknet/multisig-invoke";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
 import { feeReplacementIntentFor, parseArgentMultisigSignature } from "./multisig-model";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
@@ -83,7 +83,7 @@ const bindCopies = (deps: MultisigUiDeps): void => {
             "Transaction package copied",
           );
         })
-        .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error", button));
+        .catch((error: unknown) => showToast(errorDetails(error, "Copy failed"), "error", button));
     });
   });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-copy-signature]").forEach((button) => {
@@ -97,7 +97,7 @@ const bindCopies = (deps: MultisigUiDeps): void => {
           if (!signature) throw new Error("That signature is unavailable");
           return copyText(button, JSON.stringify(signature), "Signature copied");
         })
-        .catch((error: unknown) => showToast(errorMessage(error, "Copy failed"), "error", button));
+        .catch((error: unknown) => showToast(errorDetails(error, "Copy failed"), "error", button));
     });
   });
 };

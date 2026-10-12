@@ -6,7 +6,7 @@
  * the first-run scan binder so detection, grouping, and selection behave
  * identically.
  */
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { bindRecoveryAccountUi } from "../onboarding/recovery-account-ui";
 import type { SettingsUiDeps } from "./settings-ui";
 
@@ -55,7 +55,7 @@ export const bindFindAccounts = (deps: SettingsUiDeps): void => {
         if (result) {
           result.textContent = errorLine(error, "Account search is unavailable");
         }
-        showToast(errorMessage(error, "Account search is unavailable"), "error", form);
+        showToast(errorDetails(error, "Account search is unavailable"), "error", form);
       },
     );
   });

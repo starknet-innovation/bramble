@@ -13,6 +13,7 @@ import type { SidepanelWallet } from "../runtime/runtime";
 import { awaitConfirmation, type ConfirmationOutcome } from "../shared/confirm-submitted";
 import {
   buttonBusy,
+  errorDetails,
   errorLine,
   errorMessage,
   renderFragment,
@@ -98,7 +99,7 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
         void render(status, "action");
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Lock failed"), "error", lockButton);
+        showToast(errorDetails(error, "Lock failed"), "error", lockButton);
         if (result) {
           result.textContent = errorLine(error, "Lock failed");
         }
@@ -338,7 +339,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     if (reviewPanelRoot) {
       renderFragment(reviewPanelRoot, stage === "quote" ? reviewCostNote(message) : "");
     }
-    if (toast) showToast(message, "error", target);
+    if (toast) showToast(message, "error", target, errorDetails(error, fallback));
     scopedStatus(target, message);
     buttonBusy(target, false);
   };
@@ -468,7 +469,7 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
           await render(status, "action");
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Network switch failed"), "error", button);
+          showToast(errorDetails(error, "Network switch failed"), "error", button);
           if (result) {
             result.textContent = errorLine(error, "Network switch failed");
           }

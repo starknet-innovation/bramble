@@ -2,7 +2,7 @@
  * Locked-gate binder that forwards the vault passphrase directly to the
  * privileged background and never persists or renders it.
  */
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import type { OnboardingUiDeps } from "./onboarding-ui";
 
 /**
@@ -28,7 +28,7 @@ export const bindUnlock = (
         await deps.render(status);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Unlock failed"), "error", form);
+        showToast(errorDetails(error, "Unlock failed"), "error", form);
         if (result) {
           result.textContent = errorLine(error, "Unlock failed");
         }

@@ -5,7 +5,7 @@
  * encrypted vault) and is never logged, echoed, or stored in preferences.
  */
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import type { SettingsUiDeps } from "./settings-ui";
 
 /**
@@ -67,7 +67,7 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
           await deps.render(await deps.refresh());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Import failed"), "error", form);
+          showToast(errorDetails(error, "Import failed"), "error", form);
           if (result) {
             result.textContent = errorLine(error, "Import failed");
           }

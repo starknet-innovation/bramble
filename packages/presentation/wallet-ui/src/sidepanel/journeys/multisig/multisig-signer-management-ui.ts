@@ -5,7 +5,7 @@ import {
 } from "@bramble/multisig/chain";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
 import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
@@ -111,7 +111,7 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
               "multisig-signers-result",
               errorLine(error, "Couldn't prepare that signer change"),
             );
-            showToast(errorMessage(error, "Prepare signer change failed"), "error", button ?? form);
+            showToast(errorDetails(error, "Prepare signer change failed"), "error", button ?? form);
             buttonBusy(button, false);
           },
         );
@@ -185,7 +185,7 @@ const bindCompleteSignerConfig = (deps: MultisigUiDeps): void => {
             "multisig-complete-config-result",
             errorLine(error, "Couldn't finish signer setup"),
           );
-          showToast(errorMessage(error, "Complete signer setup failed"), "error", button ?? form);
+          showToast(errorDetails(error, "Complete signer setup failed"), "error", button ?? form);
           buttonBusy(button, false);
         },
       );

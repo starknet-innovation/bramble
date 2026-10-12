@@ -5,7 +5,7 @@ import { inputControl, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "@bramble/ui-kit/icons";
 import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountAvatar, accountLabel } from "../../shared/parts";
 import type { MultisigClient } from "./multisig-runtime";
 
@@ -211,7 +211,7 @@ export const bindMultisigParticipantPicker = (
     } catch (error) {
       const failure = errorMessage(error, "Contact save failed");
       result.textContent = failure;
-      showToast(failure, "error", confirm);
+      showToast(failure, "error", confirm, errorDetails(error, "Contact save failed"));
     } finally {
       buttonBusy(confirm, false);
     }
@@ -253,7 +253,7 @@ export const bindMultisigParticipantPicker = (
       });
     } catch (error) {
       result.textContent = errorLine(error, "Couldn't look up that signer");
-      showToast(errorMessage(error, "Signer key lookup failed"), "error", confirm);
+      showToast(errorDetails(error, "Signer key lookup failed"), "error", confirm);
     } finally {
       buttonBusy(confirm, false);
     }

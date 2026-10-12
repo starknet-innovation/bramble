@@ -5,7 +5,7 @@
  */
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { bindNftSendForm, type NftSendDeps } from "./nft-send-ui";
 
 /**
@@ -46,7 +46,7 @@ const bindAddForm = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't add that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't add that collectible"), "error", deps.app);
           if (result) {
             result.textContent = errorLine(error, "Couldn't add that collectible");
           }
@@ -121,7 +121,7 @@ const bindHideDiscovered = (deps: NftUiDeps): void => {
             await rerender(deps);
           },
           (error: unknown) => {
-            showToast(errorMessage(error, "Couldn't update that collectible"), "error", deps.app);
+            showToast(errorDetails(error, "Couldn't update that collectible"), "error", deps.app);
             buttonBusy(button, false);
           },
         );
@@ -151,7 +151,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't update that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't update that collectible"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -171,7 +171,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't remove that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't remove that collectible"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
