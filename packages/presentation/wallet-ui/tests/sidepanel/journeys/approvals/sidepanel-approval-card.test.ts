@@ -186,6 +186,18 @@ describe("OutsideExecution sign card (audit 144)", () => {
     expect(html).not.toContain("<b>approval</b>");
   });
 
+  // A lookalike payee is queued, not refused, so the site cannot read the
+  // address book from the answer; the card can then only deny (Sherlock 140).
+  test("a lookalike payee leaves Deny only, and says why", () => {
+    expect(activity([sign])).toContain('data-approval-action="approve"');
+    const html = activity([
+      { ...sign, flags: [{ code: "address-poisoning", message: "The recipient closely mimics" }] },
+    ]);
+    expect(html).toContain("Bramble won't send this payment.");
+    expect(html).toContain('data-approval-action="deny"');
+    expect(html).not.toContain('data-approval-action="approve"');
+  });
+
   test("a plain message lists no calls", () => {
     const html = activity([
       {

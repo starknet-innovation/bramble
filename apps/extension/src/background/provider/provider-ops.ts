@@ -1,6 +1,7 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
 import { walletErrorMessage } from "@bramble/core/errors";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
@@ -102,6 +103,11 @@ export type InvokeExecuteDeps = {
    * stubs stay valid; a Ledger invoke with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /**
+   * Watched shared accounts, read into the trusted set for the execution-time
+   * lookalike check (Sherlock 140). Omitted, that check skips them.
+   */
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**

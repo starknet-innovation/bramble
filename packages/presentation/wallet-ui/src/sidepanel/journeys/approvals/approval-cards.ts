@@ -289,7 +289,8 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
 // A sign card only offers to sign what the decoder could place on one side of
 // the signed hash or the other; an unclassified payload gets the warning and a
 // Deny-only row instead, because a partial view of a message is exactly what a
-// hostile payload wants the user to trust.
+// hostile payload wants the user to trust. An OutsideExecution paying a
+// lookalike is Deny-only too, like a payment card (Sherlock 140).
 const signCard = (approval: PendingApproval, status: WalletStatus): string => {
   const view = signRequestView(approval.typedData);
   return `
@@ -309,7 +310,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
     ])}
     ${reviewConstraints("No transaction or network fee is submitted. The signed result can still authorize site-specific actions.")}
     ${contextDisclosure(approval)}
-    ${view.classified ? decisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
+    ${view.classified ? paymentDecisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
   </li>`;
 };
 
