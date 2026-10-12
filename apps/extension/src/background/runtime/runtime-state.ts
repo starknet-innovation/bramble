@@ -48,8 +48,9 @@ export const networkRpcUrls = (
 /**
  * Returns the active account for a network, falling back to the first account
  * on that network the user has not hidden, and only then to the first at all.
+ * This is the account `wallet.status` reports as active.
  */
-const accountForNetwork = (
+export const accountForNetwork = (
   vault: Vault,
   networkId: StarknetNetworkId,
   accountId: string | null | undefined,

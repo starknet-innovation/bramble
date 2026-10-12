@@ -19,6 +19,7 @@ import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
 import { handleAddChainOps } from "../provider/add-chain-ops";
 import { handleProviderOps } from "../provider/provider-ops";
 import {
+  accountForNetwork,
   reconcileActiveAccount,
   reconcileUnlockedActiveAccount,
   selectActiveAccount,
@@ -120,9 +121,19 @@ const handleRevealSecrets: RouterHandler = async (ctx, messageType, message) => 
   if (!input) {
     return { error: "invalid reveal request" };
   }
-  const { mnemonic, privateKey } = activeAccountSecrets(
-    await ctx.wallet.readVault(input.vaultPassphrase),
+  const vault = await ctx.wallet.readVault(input.vaultPassphrase);
+  const preferences = await ctx.preferencesStore.read();
+  // The account the panel shows as active, which is per network, not the
+  // vault's stored pointer: when the pointer names an account on another
+  // network the two differ, and the screen's imported-key warning described
+  // the wrong account (Sherlock 191).
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
   );
+  const { mnemonic, privateKey } = activeAccountSecrets(vault, account?.id ?? null);
   return { mnemonic, ok: true, privateKey };
 };
 
