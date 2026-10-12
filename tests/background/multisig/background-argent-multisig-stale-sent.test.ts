@@ -222,6 +222,22 @@ describe("preparing the same calls as a stale signed intent", () => {
     expect((await t.stored(first.id))?.state).toBe("stale");
   });
 
+  test("at a later nonce waits for the user when this wallet's stale copy lacks signatures", async () => {
+    // Co-signers completed and sent nonce 7 from their own copies; this
+    // wallet only ever held its own signature.
+    const t = await setup();
+    const first = intentFrom(await t.prepare());
+    await t.sign(first.id);
+    t.chain.nonce = 8n;
+    await t.sign(first.id, harnessAccountB.id);
+    const stale = await t.stored(first.id);
+    expect(stale?.state).toBe("stale");
+    expect(stale?.signatures).toHaveLength(1);
+
+    await expect(t.prepare()).resolves.toEqual({ error: ARGENT_INTENT_RESEND_UNCONFIRMED });
+    expect(intentFrom(await t.prepare(CALLS, true)).prepared.nonce).toBe("0x8");
+  });
+
   test("a confirmation never overrides a stale version found on chain", async () => {
     const { first, t } = await staleAfterUnseenReplacement();
     t.chain.sighting = "accepted";

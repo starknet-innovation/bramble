@@ -52,26 +52,34 @@ const sameCalls = (
     );
   });
 
-const staleSignedIntents = async (
+const staleIntents = async (
   deps: MultisigOpsDeps,
   accountId: string,
 ): Promise<readonly ArgentMultisigSigningIntent[]> =>
   (await deps.multisigStore.listIntents()).filter(
-    (intent) =>
-      intent.accountId === accountId &&
-      intent.state === "stale" &&
-      intent.signatures.length === intent.configSnapshot.threshold,
+    (intent) => intent.accountId === accountId && intent.state === "stale",
+  );
+
+const staleSignedIntents = async (
+  deps: MultisigOpsDeps,
+  accountId: string,
+): Promise<readonly ArgentMultisigSigningIntent[]> =>
+  (await staleIntents(deps, accountId)).filter(
+    (intent) => intent.signatures.length === intent.configSnapshot.threshold,
   );
 
 // What the stale versions of these calls say about sending them at this nonce:
 // "sent" when one is on chain, "maybe" when one at another nonce is not.
+// A version this wallet holds with too few signatures counts too: co-signers
+// can complete and send it from their own copies, and its hash is never looked
+// up, so at another nonce it is always a "maybe".
 const staleResend = async (
   deps: MultisigOpsDeps,
   accountId: string,
   prepared: PreparedCalls,
 ): Promise<"maybe" | "sent" | null> => {
   let maybe = false;
-  for (const intent of await staleSignedIntents(deps, accountId)) {
+  for (const intent of await staleIntents(deps, accountId)) {
     if (!sameCalls(intent.prepared.calls, prepared.calls)) continue;
     const resolution = await recoverStaleArgentIntent(deps, intent);
     if (resolution.kind === "submitted") return "sent";
