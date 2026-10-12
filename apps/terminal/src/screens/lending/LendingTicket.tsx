@@ -10,6 +10,7 @@ import type { VesuMarket, VesuPair } from "../../data/index";
 import {
   buildVesuMultiplyIncreaseCalls,
   quoteVesuMultiplyIncrease,
+  verifyVesuMultiplyPool,
 } from "../../protocols/index";
 import { buildLendingCalls, quoteLending } from "../../protocols/vesu/vesu";
 import { walletNetwork } from "../../wallet/connection/wallet-connection";
@@ -137,6 +138,13 @@ export const LendingTicket = ({
         if (collateralChoice === null || multiplyCollateralOutputRaw === null) {
           throw new Error("Enter a valid Multiply margin.");
         }
+        // The pool goes to modify_lever and both delegation calls, so the
+        // pinned factory's registry must list both legs first (Sherlock 169).
+        await verifyVesuMultiplyPool(
+          market.poolId,
+          collateralChoice.market.assetAddress,
+          market.assetAddress,
+        );
         setMessage("Quoting the debt-to-collateral route on Ekubo…");
         const route = await quoteVesuMultiplyIncrease(
           collateralChoice.market.assetAddress,
@@ -204,10 +212,11 @@ export const LendingTicket = ({
             ? `Liquidation risk begins above ${collateralChoice?.pair.maxLtv.toFixed(2) ?? "—"}% LTV. Verify prices and amounts.`
             : "Rates are variable and can change when pool utilization changes.",
       });
-      if (action === "supply") {
+      if (action === "supply" && quote.vTokenAddress !== null) {
         setMessage("Supply broadcast. Add the Vesu receipt token in your wallet…");
         try {
-          await watchAsset({ address: market.vTokenAddress });
+          // The registry's vToken, not the API's (Sherlock 169).
+          await watchAsset({ address: quote.vTokenAddress });
           setMessage(`Supply broadcast. ${market.symbol} receipt token added to your wallet.`);
         } catch (cause) {
           const detail = cause instanceof Error ? cause.message : "token request stopped";

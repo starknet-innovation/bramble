@@ -125,6 +125,15 @@ export const VESU_ADDRESSES = {
 export const VESU_LENDING_ENABLED = true;
 
 /**
+ * Gate for curated Vesu vault deposits. Off: a deposit approves and pays the
+ * vault address the Vesu API names, and nothing on chain or pinned here proves
+ * that address is a Vesu vault (Sherlock 169). Redeem and claim stay available,
+ * since they only move the user's own shares out and approve nothing. Turn
+ * this on only with a pinned or on-chain-verified vault list.
+ */
+export const VESU_VAULT_DEPOSITS_ENABLED: boolean = false;
+
+/**
  * Vesu API base. The recon repo pointed at STAGING; mainnet integrations must
  * use the production base below and re-resolve pool config from it.
  */
