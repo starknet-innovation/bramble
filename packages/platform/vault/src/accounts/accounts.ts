@@ -319,22 +319,26 @@ export const sameWalletKey = (left: AccountRef, right: AccountRef): boolean => {
  * Lowest unused HD account index on a network for one seed (the founding
  * phrase when `seedId` is absent). Imported raw-key accounts hold no HD
  * position, and another seed's accounts occupy their own index space, so
- * neither shifts the result.
+ * neither shifts the result. `taken` adds indices the caller already knows
+ * are occupied some other way, such as one whose derived account was imported
+ * from its raw key.
  */
 export const nextAccountIndex = (
   accounts: readonly AccountRef[],
   networkId: StarknetNetworkId,
   seedId?: string,
+  taken: ReadonlySet<number> = new Set(),
 ): number => {
-  const used = new Set(
-    accounts.flatMap((account) =>
+  const used = new Set([
+    ...taken,
+    ...accounts.flatMap((account) =>
       account.networkId === networkId &&
       account.derivation.kind === "starknet-bip44" &&
       account.derivation.seedId === seedId
         ? [account.derivation.accountIndex]
         : [],
     ),
-  );
+  ]);
   let index = 0;
   while (used.has(index)) {
     index += 1;
