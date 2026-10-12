@@ -90,13 +90,17 @@ export type EkuboFeeTier = {
 };
 
 /**
- * Canonical Ekubo fee tiers, cheapest first.
+ * Canonical Ekubo fee tiers, cheapest first. A pool key's fee is the 0.128
+ * fixed-point value Ekubo's own tooling writes, `BigInt(rate * 2 ** 128)` in
+ * double precision, not the exact product: a key that is off in the last
+ * digits names a pool that does not exist. The 0.01%, 0.05% and 0.30% values
+ * were checked against initialised mainnet pools (Sherlock 133).
  */
 export const EKUBO_FEE_TIERS: readonly EkuboFeeTier[] = [
-  { fee: 34028236692093846346337460743176821n, label: "0.01%", tickSpacing: 200n },
-  { fee: 170141183460469231731687303715884106n, label: "0.05%", tickSpacing: 1000n },
-  { fee: 1020847100762815390390123822295304634n, label: "0.30%", tickSpacing: 5982n },
-  { fee: 3402823669209384634633746074317682115n, label: "1.00%", tickSpacing: 19802n },
+  { fee: 34028236692093847977029636859101184n, label: "0.01%", tickSpacing: 200n },
+  { fee: 170141183460469235273462165868118016n, label: "0.05%", tickSpacing: 1000n },
+  { fee: 1020847100762815411640772995208708096n, label: "0.30%", tickSpacing: 5982n },
+  { fee: 3402823669209384705469243317362360320n, label: "1.00%", tickSpacing: 19802n },
 ];
 
 /**

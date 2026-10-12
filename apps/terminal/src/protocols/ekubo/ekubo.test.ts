@@ -75,4 +75,16 @@ describe("Ekubo pool price read", () => {
     const priceRead = calls.find((call) => call.entrypoint === "get_pool_price");
     expect(priceRead?.calldata).toHaveLength(5);
   });
+
+  it("keys each tier with the fee Ekubo writes, not the exact product", () => {
+    // Pinned against initialised mainnet ETH/USDC, ETH/STRK and STRK/USDC
+    // pools; the exact products name pools that do not exist.
+    expect(EKUBO_FEE_TIERS.map((tier) => tier.fee)).toEqual([
+      BigInt(0.0001 * 2 ** 128),
+      BigInt(0.0005 * 2 ** 128),
+      BigInt(0.003 * 2 ** 128),
+      BigInt(0.01 * 2 ** 128),
+    ]);
+    expect(EKUBO_FEE_TIERS[1]?.fee).toBe(170141183460469235273462165868118016n);
+  });
 });
