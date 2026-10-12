@@ -5,6 +5,7 @@
  */
 import { mkdir, readdir, unlink } from "node:fs/promises";
 import { canonicalAddress } from "../src/protocols/support/networks";
+import { fetchLogo, safeLogoUrl } from "./token-asset-policy";
 
 const TOKEN_URL = "https://starknet.impulse.avnu.fi/v3/tokens";
 const ASSET_DIRECTORY = new URL("../public/token-assets/avnu/", import.meta.url);
@@ -41,12 +42,6 @@ const tokenList = (payload: unknown): readonly AvnuToken[] => {
   throw new Error("AVNU token response did not contain a token array");
 };
 
-const highFidelityUri = (uri: string): string =>
-  uri.replace(
-    /^(https:\/\/assets\.coingecko\.com\/coins\/images\/\d+)\/(?:small|standard)\//,
-    "$1/large/",
-  );
-
 const assetKind = (contentType: string | null): AssetKind | null =>
   ASSET_KINDS.find((kind) => contentType?.toLowerCase().startsWith(kind.mime) === true) ?? null;
 
@@ -77,30 +72,42 @@ const hasRasterSignature = (kind: AssetKind, bytes: Uint8Array): boolean => {
   return false;
 };
 
+const skipped = new Map<string, number>();
+const skip = (reason: string): null => {
+  skipped.set(reason, (skipped.get(reason) ?? 0) + 1);
+  return null;
+};
+
 const download = async (
   token: AvnuToken,
 ): Promise<readonly [address: string, filename: string] | null> => {
   if (typeof token.address !== "string" || typeof token.logoUri !== "string") {
-    return null;
+    return skip("no address or logo");
   }
   const address = canonicalAddress(token.address);
   if (address === null) {
-    return null;
+    return skip("invalid address");
+  }
+  const url = safeLogoUrl(token.logoUri);
+  if (url === null) {
+    return skip("refused logo URL");
   }
   try {
-    const response = await fetch(highFidelityUri(token.logoUri), {
+    const response = await fetchLogo((target, init) => fetch(target, init), url, {
       headers: {
         accept: "image/webp,image/png,image/jpeg",
         "accept-encoding": "identity",
         referer: "https://app.avnu.fi/",
         "user-agent": "Mozilla/5.0 Bramble-Token-Asset-Sync",
       },
-      redirect: "follow",
       signal: AbortSignal.timeout(12_000),
     });
+    if (typeof response === "string") {
+      return skip(response);
+    }
     const kind = assetKind(response.headers.get("content-type"));
     if (!response.ok || kind === null) {
-      return null;
+      return skip("not a raster image");
     }
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (
@@ -108,13 +115,13 @@ const download = async (
       bytes.length > MAX_ASSET_BYTES ||
       !hasRasterSignature(kind, bytes)
     ) {
-      return null;
+      return skip("bad image bytes or size");
     }
     const filename = `${address}.${kind.extension}`;
     await Bun.write(new URL(filename, ASSET_DIRECTORY), bytes);
     return [address, filename];
   } catch {
-    return null;
+    return skip("download failed");
   }
 };
 
@@ -148,3 +155,6 @@ console.log(
   `AVNU token artwork: ${entries.length}/${tokens.length} downloaded; ` +
     `${tokens.length - entries.length} use a provider URL or ticker fallback.`,
 );
+for (const [reason, count] of skipped) {
+  console.log(`  skipped ${count}: ${reason}`);
+}

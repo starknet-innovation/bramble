@@ -5,6 +5,7 @@
  */
 import { mkdir } from "node:fs/promises";
 import { EXTENDED_REST_DIRECT_BASE } from "../src/data/core/endpoints";
+import { isSafeSvg, MAX_SVG_LENGTH } from "./token-asset-policy";
 
 const MARKET_URL = `${EXTENDED_REST_DIRECT_BASE}/info/markets`;
 const CDN_BASE = "https://cdn.extended.exchange/crypto";
@@ -40,16 +41,6 @@ const marketSymbols = (payload: unknown): readonly string[] => {
   return [...new Set(symbols)].sort();
 };
 
-const isSafeSvg = (value: string): boolean => {
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized.startsWith("<svg") &&
-    !normalized.includes("<script") &&
-    !normalized.includes("javascript:") &&
-    !normalized.includes("<foreignobject")
-  );
-};
-
 const download = async (symbol: string): Promise<string | null> => {
   try {
     const response = await fetch(`${CDN_BASE}/${encodeURIComponent(symbol)}.svg`, {
@@ -57,6 +48,10 @@ const download = async (symbol: string): Promise<string | null> => {
       signal: AbortSignal.timeout(12_000),
     });
     if (!response.ok || !(response.headers.get("content-type") ?? "").includes("image/svg+xml")) {
+      return null;
+    }
+    // Refuse an oversized document before buffering it (Sherlock 143).
+    if (Number(response.headers.get("content-length") ?? 0) > MAX_SVG_LENGTH * 4) {
       return null;
     }
     const svg = await response.text();
