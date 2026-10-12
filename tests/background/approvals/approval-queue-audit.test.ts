@@ -198,3 +198,71 @@ describe("approvals the side panel cannot display (Sherlock 157)", () => {
     expect(readPendingApprovals({ ok: true, pending: listed })).toEqual(listed);
   });
 });
+
+describe("the size refusal reveals nothing about the user's data (Sherlock 140, 157)", () => {
+  // The same padded request, seen by a wallet with no matching data and by one
+  // whose contacts and tokens make the verifier flag the recipient, name the
+  // token and attach its ticker: everything the wallet adds is at its largest.
+  const padded = (felts: number, knowsRecipient: boolean) => (queue: ApprovalQueue) =>
+    queue.requestInvoke({
+      calls: [
+        {
+          calldata: Array.from({ length: felts }, () => `0x${"7".repeat(63)}`),
+          contractAddress: "0x1",
+          entrypoint: "transfer",
+        },
+      ],
+      context: CONTEXT,
+      fee: NO_FEE,
+      flags: knowsRecipient
+        ? Array.from({ length: 6 }, (_, index) => ({
+            code: index === 0 ? "address-poisoning" : "unknown-contract",
+            message: "m".repeat(300 - index),
+          }))
+        : [],
+      origin: `https://padded-${felts}-${knowsRecipient}.example`,
+      ...(knowsRecipient
+        ? { reviewAssets: [{ address: `0x${"1".repeat(63)}`, symbol: "STRK" }] }
+        : {}),
+      summaries: [knowsRecipient ? "s".repeat(300) : "Invoke"],
+    });
+
+  const admitted = (felts: number, knowsRecipient: boolean): boolean => {
+    try {
+      padded(felts, knowsRecipient)(createApprovalQueue());
+      return true;
+    } catch (error) {
+      expect(String(error)).toContain(APPROVAL_TOO_LARGE);
+      return false;
+    }
+  };
+
+  test("a request at the limit gets the same answer whatever the wallet knows", () => {
+    let low = 1;
+    let high = 4_096;
+    while (low + 1 < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (admitted(middle, false)) {
+        low = middle;
+      } else {
+        high = middle;
+      }
+    }
+    expect(admitted(low, false)).toBe(true);
+    expect(admitted(low, true)).toBe(true);
+    expect(admitted(high, false)).toBe(false);
+    expect(admitted(high, true)).toBe(false);
+  });
+
+  test("an admitted request carrying every wallet field stays readable by the side panel", () => {
+    const queue = createApprovalQueue();
+    let felts = 1_024;
+    while (admitted(felts + 64, true)) {
+      felts += 64;
+    }
+    padded(felts, true)(queue);
+    const listed = queue.list();
+    expect(listed).toHaveLength(1);
+    expect(readPendingApprovals({ ok: true, pending: listed })).toEqual(listed);
+  });
+});

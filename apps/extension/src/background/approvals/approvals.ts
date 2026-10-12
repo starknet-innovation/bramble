@@ -8,7 +8,6 @@
 
 import { WalletError } from "@bramble/core/errors";
 import { isUuid } from "@bramble/core/ids";
-import { isJsonWithinBudget } from "@bramble/core/json";
 import { isWalletOrigin } from "@bramble/core/origin";
 import { systemClock } from "@bramble/transactions/activity";
 import { matchesStrk20DisclosureKind } from "../privacy/strk20-approval-types";
@@ -18,13 +17,13 @@ import {
   approvalCapacityVictim,
   isExpiredApproval,
   type QueuedApproval,
-  REVIEWABLE_APPROVAL_BUDGET,
 } from "./approval-limits";
 import {
   cloneApprovalCall,
   cloneApprovalValue,
   readStoredApprovalPayload,
 } from "./approval-payload";
+import { fitsSidePanel } from "./approval-review-size";
 import {
   type ApprovalRequest,
   approvalSnapshot,
@@ -203,9 +202,10 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       throw new WalletError(refusal);
     }
     // Refused before a victim is evicted: an approval the panel cannot show
-    // must not cost another site its prompt either.
+    // must not cost another site its prompt either. Decided from the site's
+    // input alone, so the outcome cannot reveal the user's contacts or tokens.
     const snapshot = approvalSnapshot(approval);
-    if (!isJsonWithinBudget(snapshot, REVIEWABLE_APPROVAL_BUDGET)) {
+    if (!fitsSidePanel(snapshot)) {
       throw new WalletError(APPROVAL_TOO_LARGE);
     }
     const victim = approvalCapacityVictim(live);
