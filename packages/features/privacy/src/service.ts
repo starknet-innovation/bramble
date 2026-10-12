@@ -49,6 +49,7 @@ export type {
 } from "./policy/submission-plan";
 export {
   formatStrk20PoolFee,
+  type Strk20AssetLookup,
   type Strk20FeeAsset,
   strk20CallToInvoke,
   summarizeStrk20Action,

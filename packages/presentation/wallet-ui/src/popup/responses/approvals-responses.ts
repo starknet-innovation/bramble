@@ -25,13 +25,14 @@ import {
   isStarknetNetworkId,
   STARKNET_NETWORKS,
 } from "@bramble/wallet-model/networks";
-import type {
-  ApprovalContext,
-  ApprovalRiskFlag,
-  ConnectedSite,
-  DeclarationReview,
-  PendingApproval,
-  WatchAssetToken,
+import {
+  APPROVAL_SUMMARY_MAX_LENGTH,
+  type ApprovalContext,
+  type ApprovalRiskFlag,
+  type ConnectedSite,
+  type DeclarationReview,
+  type PendingApproval,
+  type WatchAssetToken,
 } from "@bramble/wallet-protocol/extension-responses";
 import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
@@ -84,7 +85,7 @@ const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
 
 const isSummaryText = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= 300;
+  typeof value === "string" && value.length > 0 && value.length <= APPROVAL_SUMMARY_MAX_LENGTH;
 
 const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
   isRecord(value) &&

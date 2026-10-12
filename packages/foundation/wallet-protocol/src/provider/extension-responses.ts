@@ -84,6 +84,14 @@ export type ApprovalReviewAsset = {
 };
 
 /**
+ * The longest summary line an approval may carry. The panel refuses an
+ * approval with a longer or empty line, so the background refuses to queue one
+ * (Sherlock 187): the site gets an error at once instead of a request that
+ * waits with nothing on screen until it expires.
+ */
+export const APPROVAL_SUMMARY_MAX_LENGTH = 300;
+
+/**
  * One display-only approval snapshot returned by the background.
  */
 export type PendingApproval = {

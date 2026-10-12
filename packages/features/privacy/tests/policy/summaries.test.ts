@@ -42,3 +42,64 @@ describe("summarizeStrk20Action deposit recipient", () => {
     ).toContain("privately to 0xa77ac4");
   });
 });
+
+describe("summarizeStrk20Action amounts (Sherlock 154)", () => {
+  const STRK = { decimals: 18, symbol: "STRK" };
+  const trusted = (token: string) => (token === TOKEN ? STRK : undefined);
+  const hundred = `0x${(100n * 10n ** 18n).toString(16)}`;
+
+  test("states a trusted token's amount in its own units and symbol", () => {
+    expect(
+      summarizeStrk20Action(
+        { amount: hundred, recipient: PAYEE, token: TOKEN, type: "withdraw" },
+        ACCOUNT,
+        trusted,
+      ),
+    ).toBe(
+      `Withdraw 100 STRK to ${PAYEE.slice(0, 8)}…${PAYEE.slice(-4)} (${TOKEN.slice(0, 8)}…${TOKEN.slice(-4)})`,
+    );
+    expect(
+      summarizeStrk20Action(
+        { amount: "0xde0b6b3a7640000", recipient: PAYEE, token: TOKEN, type: "transfer" },
+        ACCOUNT,
+        trusted,
+      ),
+    ).toContain("Transfer 1 STRK privately");
+    expect(
+      summarizeStrk20Action({ amount: hundred, token: TOKEN, type: "deposit" }, ACCOUNT, trusted),
+    ).toContain("Deposit 100 STRK to private balance");
+  });
+
+  test("keeps the exact felt for a token the wallet does not trust", () => {
+    expect(
+      summarizeStrk20Action(
+        { amount: hundred, recipient: PAYEE, token: TOKEN, type: "withdraw" },
+        ACCOUNT,
+        () => undefined,
+      ),
+    ).toContain(`Withdraw ${hundred} to`);
+    expect(
+      summarizeStrk20Action(
+        { amount: hundred, recipient: PAYEE, token: TOKEN, type: "withdraw" },
+        ACCOUNT,
+      ),
+    ).toContain(`Withdraw ${hundred} to`);
+  });
+
+  test("never guesses a decimal point from unusable metadata", () => {
+    const broken = () => ({ decimals: -1, symbol: "STRK" });
+    expect(
+      summarizeStrk20Action({ amount: hundred, token: TOKEN, type: "deposit" }, ACCOUNT, broken),
+    ).toContain(`Deposit ${hundred} to`);
+  });
+
+  test("leaves an open note as an open note", () => {
+    expect(
+      summarizeStrk20Action(
+        { amount: "OPEN", recipient: PAYEE, token: TOKEN, type: "transfer" },
+        ACCOUNT,
+        trusted,
+      ),
+    ).toContain("Transfer an open note privately");
+  });
+});

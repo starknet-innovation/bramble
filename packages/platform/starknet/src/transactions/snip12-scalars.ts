@@ -290,9 +290,11 @@ export const snip12Scalar = (
     case "i128":
       // A negative `i128` is only encodable on revision 1, where the encoder
       // wraps it into the field; revision 0 would emit the unparsable `0x-1`.
+      // Both revisions keep the `i128` ceiling (Sherlock 229): a larger value
+      // is not an `i128`, whatever the field could hold.
       return revision === "1"
         ? boundedInteger(value, type, revision, -I128_LIMIT, I128_LIMIT - 1n)
-        : boundedInteger(value, type, revision, 0n, STARK_FIELD_PRIME - 1n);
+        : boundedInteger(value, type, revision, 0n, I128_LIMIT - 1n);
     case "ClassHash":
     case "ContractAddress":
       return boundedFelt(value, type, revision);
