@@ -272,21 +272,17 @@ describe("watch-asset approval lifecycle", () => {
     await expect(held2).resolves.toEqual({ error: "request rejected" });
   });
 
-  test("falls back to dapp options when on-chain metadata is unavailable", async () => {
+  test("refuses the card when on-chain metadata is unavailable (Sherlock 125)", async () => {
     const { handler } = makeHandler(throwingRpc().getTokenMetadata);
 
-    const held = handler(
-      { asset: { address: DAI, decimals: 18, symbol: "DAI" }, origin, type: "wallet.watchAsset" },
-      contentSender,
-    );
-    await flushHeld();
+    await expect(
+      handler(
+        { asset: { address: DAI, decimals: 2, symbol: "DAI" }, origin, type: "wallet.watchAsset" },
+        contentSender,
+      ),
+    ).resolves.toEqual({ error: "invalid watch asset metadata" });
     const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-    expect((listed as { pending: readonly unknown[] }).pending.at(-1)).toMatchObject({
-      token: { address: DAI, decimals: 18, name: "DAI", symbol: "DAI" },
-    });
-    const id = await pendingId(handler);
-    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
-    await expect(held).resolves.toEqual({ error: "request rejected" });
+    expect((listed as { pending: readonly unknown[] }).pending).toEqual([]);
   });
 
   test("rejects unusable metadata and origin mismatches", async () => {

@@ -289,16 +289,18 @@ describe("watchAssetToken", () => {
     });
   });
 
-  test("falls back to dapp options when metadata is missing", () => {
+  test("refuses a token with no on-chain metadata rather than trust the dapp's decimals (Sherlock 125)", () => {
     expect(
       watchAssetToken({ address: tokenAddress, decimals: 6, symbol: "USDC" }, null, "SN_SEPOLIA"),
-    ).toEqual({
-      address: tokenAddress,
-      decimals: 6,
-      name: "USDC",
-      networkId: "SN_SEPOLIA",
-      symbol: "USDC",
-    });
+    ).toBeNull();
+    // The dapp's decimals never override the chain's, whatever it declares.
+    expect(
+      watchAssetToken(
+        { address: tokenAddress, decimals: 0, symbol: "USDC" },
+        { decimals: 18, name: "Token", symbol: "TKN" },
+        "SN_MAIN",
+      )?.decimals,
+    ).toBe(18);
   });
 
   test("rejects unusable tokens", () => {

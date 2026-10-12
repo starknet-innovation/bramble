@@ -174,6 +174,8 @@ export type WatchAssetMetadata = {
 /**
  * Builds a validated watch-asset token from on-chain metadata and dapp options,
  * or returns null when the token cannot satisfy the wallet token contract.
+ * Without on-chain metadata there is no token, because the site's options
+ * cannot be trusted for the decimals.
  *
  * The address is canonicalized through the shared {@link canonicalAddress} so a
  * dapp cannot register a second record for a token the wallet already tracks by
@@ -188,18 +190,21 @@ export const watchAssetToken = (
   if (address === null) {
     return null;
   }
-  const rawSymbol = metadata?.symbol ?? request.symbol;
-  const decimals = metadata?.decimals ?? request.decimals;
-  if (typeof rawSymbol !== "string" || decimals === undefined) {
+  // Decimals set the scale of every amount later shown for this token, so they
+  // come from the chain or not at all: a site's own `decimals` could make a
+  // large transfer read as a negligible one (Sherlock 125). With no on-chain
+  // read there is no token.
+  if (metadata === null) {
     return null;
   }
-  const symbol = rawSymbol.trim().toUpperCase();
+  const { decimals } = metadata;
+  const symbol = metadata.symbol.trim().toUpperCase();
   // The on-chain name wins when it is usable, cut to 64 characters as
   // `wallet.addToken` stores it. An empty or over-long one no longer refuses a
   // token `wallet.addToken` would accept: it falls back to the site's name, then
   // the symbol (Sherlock 252). A name the site sends is still refused when it
   // is not a valid token name.
-  const onChainName = metadata?.name?.trim().slice(0, 64);
+  const onChainName = metadata.name?.trim().slice(0, 64);
   const name = isTokenName(onChainName) ? onChainName : (request.name?.trim() ?? symbol);
   if (!isTokenSymbol(symbol) || !isTokenName(name) || !isSafeDecimals(decimals)) {
     return null;

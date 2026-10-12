@@ -181,7 +181,8 @@ const cachedChartPoints = (
   cached: ChartEntry | undefined,
   currentTime: number,
 ): readonly number[] | null => {
-  if (!platform) return cached?.points ?? [];
+  // As with prices: the chart cache only ever holds mainnet charts.
+  if (!platform) return [];
   if (cached && cached.fetchedAt > 0 && currentTime - cached.fetchedAt < CHART_TTL_MS) {
     return cached.points;
   }
@@ -331,18 +332,22 @@ export const createPriceService = ({
     async getPrices({ addresses, cached, currency, networkId }) {
       const platform = priceFeedPlatform(networkId);
       const wanted = [...new Set(addresses.map(normalizePriceAddress))].slice(0, MAX_ADDRESSES);
-      const cache = await readPriceCache();
-      const currentTime = now();
+      // No fiat by design on this network. The cache only ever holds mainnet
+      // prices, and ETH and STRK share their contract addresses across
+      // networks, so serving it here priced test tokens at live mainnet
+      // rates, reported as fresh (Sherlock 185).
       if (!platform) {
         return projectPrices({
           addresses,
           asOf: null,
-          changes: cache.changes ?? {},
+          changes: {},
           currency,
-          prices: cache.prices,
+          prices: {},
           stale: false,
         });
       }
+      const cache = await readPriceCache();
+      const currentTime = now();
       const reusable = reusablePrices({
         addresses,
         cache,

@@ -326,16 +326,20 @@ export const isTokenSymbol = (value: unknown): value is string =>
   typeof value === "string" && TOKEN_SYMBOL_PATTERN.test(value);
 
 /**
+ * Checks a value is non-empty printable ASCII with no angle brackets: the
+ * character rule for a name a site chooses and a privileged wallet surface
+ * shows. It keeps control characters, bidi overrides, and Unicode homoglyphs
+ * out of identity text. Length bounds belong to each caller's own grammar.
+ */
+export const isPrintableName = (value: unknown): value is string =>
+  typeof value === "string" && /^[\x20-\x7E]+$/.test(value) && !/[<>]/.test(value);
+
+/**
  * Checks a token display name is 1..64 printable ASCII characters with no
- * angle brackets. This keeps control characters, bidi overrides, and Unicode
- * homoglyphs out of asset identity shown by privileged wallet surfaces.
+ * angle brackets (see {@link isPrintableName}).
  */
 export const isTokenName = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length > 0 &&
-  value.length <= 64 &&
-  /^[\x20-\x7E]+$/.test(value) &&
-  !/[<>]/.test(value);
+  isPrintableName(value) && value.length <= 64;
 
 /**
  * Checks a value is a canonical base-units integer string: digits only, no sign,
