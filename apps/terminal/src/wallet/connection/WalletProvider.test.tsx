@@ -133,7 +133,10 @@ const TransactionProbe = ({
               ...(reviewMode === undefined ? {} : { reviewMode }),
               title: "Send test asset",
             })
-            .then((value) => setResult(value.transaction_hash))
+            .then(
+              (value) => setResult(value.transaction_hash),
+              (cause: Error) => setResult(`rejected: ${cause.message}`),
+            )
         }
       >
         {reviewMode === "wallet" ? "Fast send" : "Send"}
@@ -345,5 +348,89 @@ describe("WalletProvider", () => {
     await waitFor(() =>
       expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),
     );
+  });
+
+  describe("a wallet account or network change (Sherlock 222)", () => {
+    const CHANGED = "rejected: Wallet account or network changed before approval.";
+
+    const connectTransaction = async (
+      wallet: ReturnType<typeof makeWallet>,
+      reviewMode?: "wallet",
+    ): Promise<void> => {
+      mocks.waitForInjectedBramble.mockResolvedValue(wallet);
+      render(
+        <WalletProvider>
+          <TransactionProbe {...(reviewMode === undefined ? {} : { reviewMode })} />
+        </WalletProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-address").textContent).toBe("0x1234"),
+      );
+      await waitFor(() => expect(wallet.listeners.has("accountsChanged")).toBe(true));
+    };
+
+    test("drops a request under review instead of sending it for the new account", async () => {
+      const wallet = makeWallet();
+      await connectTransaction(wallet);
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      expect(await screen.findByRole("heading", { name: "Send test asset" })).toBeTruthy();
+
+      await act(async () => {
+        wallet.listeners.get("accountsChanged")?.(["0xabcd"] as never);
+        await Promise.resolve();
+      });
+
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-result").textContent).toBe(CHANGED),
+      );
+      expect(screen.queryByRole("button", { name: "Continue in wallet" })).toBeNull();
+      expect(wallet.invoke).not.toHaveBeenCalled();
+    });
+
+    test("drops a request under review when only the network changes", async () => {
+      const wallet = makeWallet();
+      await connectTransaction(wallet);
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      expect(await screen.findByRole("heading", { name: "Send test asset" })).toBeTruthy();
+
+      await act(async () => {
+        wallet.listeners.get("networkChanged")?.("SN_SEPOLIA" as never);
+        await Promise.resolve();
+      });
+
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-result").textContent).toBe(CHANGED),
+      );
+      expect(wallet.invoke).not.toHaveBeenCalled();
+    });
+
+    test("leaves a request the wallet is handling to the wallet, but never retries it", async () => {
+      const wallet = makeWallet();
+      let decline!: () => void;
+      wallet.invoke.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            decline = () => reject(Object.assign(new Error("User rejected"), { code: 113 }));
+          }),
+      );
+      await connectTransaction(wallet, "wallet");
+      fireEvent.click(screen.getByRole("button", { name: "Fast send" }));
+      await waitFor(() => expect(wallet.invoke).toHaveBeenCalledTimes(1));
+
+      await act(async () => {
+        wallet.listeners.get("accountsChanged")?.(["0xabcd"] as never);
+        await Promise.resolve();
+      });
+      expect(screen.getByText("Request sent to Bramble")).toBeTruthy();
+
+      await act(async () => decline());
+      fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-result").textContent).toBe(CHANGED),
+      );
+      expect(wallet.invoke).toHaveBeenCalledTimes(1);
+    });
   });
 });
