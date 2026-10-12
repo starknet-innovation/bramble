@@ -129,7 +129,10 @@ const vaultStores: { readonly primary: EncryptedStore; readonly staging: Encrypt
       // runtime has no session storage, which leaves the durable record as the
       // only authority — the behaviour before this shadow existed.
       return {
-        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore),
+        // Only the primary mirrors its commit record into `storage.local`, so a
+        // lost `storage.sync` record does not lock the vault; see
+        // `createEncryptedStore` for why staging must not.
+        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
         staging: createEncryptedStore(
           store,
           VAULT_MIGRATION_STORE_KEY,
