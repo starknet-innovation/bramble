@@ -302,6 +302,11 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain(
       ".toast.error .toast-icon { background: var(--bramble-danger-soft); color: var(--bramble-danger); }",
     );
+    // An unknown outcome is amber, never the danger chip (issue 382).
+    expect(SIDEPANEL_STYLES).toContain(
+      ".toast.warning .toast-icon { background: var(--bramble-warning-soft); color: var(--bramble-warning); }",
+    );
+    expect(SIDEPANEL_STYLES).toContain("--bramble-warning-soft: color-mix(");
     expect(SIDEPANEL_STYLES).toMatch(
       /\.toast-text \{[^}]*overflow-wrap: anywhere[^}]*text-wrap: pretty/s,
     );

@@ -446,7 +446,7 @@ export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): 
   FIRST VIEWPORT: One centered wallet stage; the Bramble wordmark leads to two full-width actions at the foot.
   FORM: Staged wallet setup based on the supplied reference flow, adapted to Bramble trust boundaries.
   -->
-  <main class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
+  <section class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
     <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready}" novalidate>
       ${welcomeStep(status.ready)}
       ${methodStep(ledgerAvailable)}
@@ -459,4 +459,4 @@ export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): 
       ${accountStep()}
     </form>
     ${ledgerStep(status, ledgerAvailable)}
-  </main>`;
+  </section>`;
