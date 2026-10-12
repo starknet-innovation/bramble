@@ -202,6 +202,15 @@ export const createLedgerSignController = (
   };
 
   const discover = async (): Promise<void> => {
+    // A Ledger account in a browser that cannot reach a Ledger (Firefox) gets
+    // the browser-support message straight away; the request stays parked so
+    // Cancel still rejects it cleanly.
+    if (deps.connector.isAvailable?.() === false) {
+      if (!busy) {
+        show(errorPhase("webhid-unavailable"));
+      }
+      return;
+    }
     const list = deps.connector.listConnected;
     if (!list) {
       await drive(() => deps.connector.openConnected());
