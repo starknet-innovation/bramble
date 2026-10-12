@@ -43,9 +43,20 @@ describe("swap value delta", () => {
     expect(swapValueDeltaPercent(quote(0.39, 0))).toBe(-100);
   });
 
-  test("prefers the delta priced from the wallet's own feed (Sherlock 137)", () => {
+  test("the wallet's feed can surface a loss the aggregator hides (Sherlock 137)", () => {
     // The aggregator claims parity; the wallet's prices show a 40% loss.
     expect(swapValueDeltaPercent({ ...quote(100, 100), valueDeltaPercent: -40 })).toBe(-40);
+  });
+
+  test("a wallet feed showing parity cannot hide a loss the aggregator reports", () => {
+    // A mismatched feed price reads break-even; the aggregator reports -50%.
+    const masked = swapValueDeltaPercent({ ...quote(100, 50), valueDeltaPercent: 0 }) ?? 0;
+    expect(masked).toBeCloseTo(-50, 5);
+    expect(masked).toBeLessThan(-SWAP_LOSS_HIGH_RISK_PERCENT);
+  });
+
+  test("the wallet's delta stands alone when the aggregator leaves the sell side unpriced", () => {
+    expect(swapValueDeltaPercent({ ...quote(0, 0), valueDeltaPercent: -12 })).toBe(-12);
   });
 });
 

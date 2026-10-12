@@ -14,10 +14,14 @@ const token = (address: string, symbol: string): TokenConfig =>
 const SELL = token("0xa", "AAA");
 const BUY = token("0xb", "BBB");
 
-const feed = (prices: Readonly<Record<string, number>>, fails = false): PriceService => ({
+const feed = (
+  prices: Readonly<Record<string, number>>,
+  fails = false,
+  stale = false,
+): PriceService => ({
   async getPrices({ currency }) {
     if (fails) throw new Error("price host unreachable");
-    return { asOf: 1, changes: {}, currency, prices, stale: false };
+    return { asOf: 1, changes: {}, currency, prices, stale };
   },
   async getTokenChart({ currency }) {
     return { currency, points: [] };
@@ -55,5 +59,10 @@ describe("wallet-priced swap value delta", () => {
   test("falls back when an amount does not parse", async () => {
     expect(await delta(feed({ "0xa": 10, "0xb": 5 }), "0", "3")).toBeUndefined();
     expect(await delta(feed({ "0xa": 10, "0xb": 5 }), "x", "3")).toBeUndefined();
+  });
+
+  test("falls back when the feed answered from a stale cache", async () => {
+    // A cached price for a moving token can make a loss read as break-even.
+    expect(await delta(feed({ "0xa": 10, "0xb": 5 }, false, true))).toBeUndefined();
   });
 });

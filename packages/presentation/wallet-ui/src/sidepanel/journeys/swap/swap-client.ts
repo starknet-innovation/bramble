@@ -115,19 +115,26 @@ const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
  * — a dust-sized order routed through a thin or mispriced pool shows up here
  * as a large negative delta before the user can act on it.
  *
- * The delta the background priced from the wallet's own feed wins. Otherwise
- * the aggregator's USD figures are used, and a priced sell side whose buy side
- * is valued at zero is a total loss rather than "unpriced": a zero there would
- * otherwise switch the warning off (Sherlock 137). Null when the sell side is
- * unpriced.
+ * Two figures are available: the delta the background priced from the wallet's
+ * own feed, and one from the aggregator's USD figures. The worse of the two
+ * wins: the feed keeps an aggregator from hiding a loss behind its own
+ * figures, and the aggregator's figures keep a stale or mismatched feed price
+ * from hiding a loss it reports (Sherlock 137). In the aggregator's figures a
+ * priced sell side whose buy side is valued at zero is a total loss rather
+ * than "unpriced", since a zero there would otherwise switch the warning off.
+ * Null when neither figure is available.
  */
 export const swapValueDeltaPercent = (quote: SwapQuoteView): number | null => {
-  if (quote.valueDeltaPercent !== undefined) {
-    return quote.valueDeltaPercent;
+  const aggregatorDelta =
+    quote.sellAmountInUsd > 0
+      ? ((quote.buyAmountInUsd - quote.sellAmountInUsd) / quote.sellAmountInUsd) * 100
+      : null;
+  if (quote.valueDeltaPercent === undefined) {
+    return aggregatorDelta;
   }
-  return quote.sellAmountInUsd > 0
-    ? ((quote.buyAmountInUsd - quote.sellAmountInUsd) / quote.sellAmountInUsd) * 100
-    : null;
+  return aggregatorDelta === null
+    ? quote.valueDeltaPercent
+    : Math.min(quote.valueDeltaPercent, aggregatorDelta);
 };
 
 /**

@@ -21,8 +21,10 @@ const unitPrice = (
 /**
  * Percent by which the buy side is worth more (+) or less (−) than the sell
  * side, priced from the wallet's feed. Undefined when the feed has no price for
- * either token, the amounts do not parse, or the feed cannot be read, so the
- * screen falls back to the aggregator's figures; never throws.
+ * either token, the amounts do not parse, the feed cannot be read, or the feed
+ * answered from a stale cache (a cached price for a moving token can show a
+ * loss as break-even), so the screen relies on the aggregator's figures alone;
+ * never throws.
  */
 export const walletSwapValueDelta = async (input: {
   readonly buyAmount: string;
@@ -42,6 +44,9 @@ export const walletSwapValueDelta = async (input: {
       currency: input.currency,
       networkId: input.networkId,
     });
+    if (feed.stale) {
+      return undefined;
+    }
     const sellPrice = unitPrice(feed.prices, input.sellToken);
     const buyPrice = unitPrice(feed.prices, input.buyToken);
     const sellUnits = Number(input.sellAmount);
