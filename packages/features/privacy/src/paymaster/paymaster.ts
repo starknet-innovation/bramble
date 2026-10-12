@@ -15,6 +15,7 @@ import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
+  STRK_TOKEN_ADDRESS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
@@ -319,8 +320,15 @@ export const submitStrk20PaymasterPlan = async (input: {
   // default the quote may have converted away from — names the fee mode. A
   // plan denominated in another token is only admissible when it carries the
   // ceiling it was admitted under; without one it was never quoted this way.
+  // STRK is the exception: its fee is matched exactly against the pool's
+  // charge and carries no ceiling, and the quote prefers it for a STRK-only
+  // batch whatever token is configured (Sherlock 233).
   const feeToken = input.plan.feeAction.token;
-  if (!sameFelt(feeToken, input.config.feeToken) && input.plan.feeCeiling === undefined) {
+  if (
+    !sameFelt(feeToken, input.config.feeToken) &&
+    !sameFelt(feeToken, STRK_TOKEN_ADDRESS) &&
+    input.plan.feeCeiling === undefined
+  ) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   const invoke =

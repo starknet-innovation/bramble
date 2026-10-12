@@ -281,6 +281,19 @@ const assertNoPrivacyLeak = (actions: readonly Strk20Action[]): void => {
   }
 };
 
+// The relay's fee is a public withdrawal spliced into the batch after the
+// caller's actions are checked, so the same deposit/withdrawal pairing must be
+// refused on the combined set: a fee in a token the batch also deposits links
+// the deposit to the private spend on chain (Sherlock 189).
+const assertRelayFeeUnlinked = (
+  actions: readonly Strk20Action[],
+  plan: Strk20SubmissionPlan,
+): void => {
+  if (plan.mode !== "account") {
+    assertNoPrivacyLeak([...actions, plan.feeAction]);
+  }
+};
+
 const assertActionBatch = async (
   service: Strk20Service,
   input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
@@ -336,7 +349,9 @@ export const quoteStrk20Plan = async (
     }
     return { mode: "account", poolFeeFri: canonicalStrk20PoolFee(await service.poolFee(input)) };
   }
-  return service.quoteActions(input);
+  const plan = await service.quoteActions(input);
+  assertRelayFeeUnlinked(input.actions, plan);
+  return plan;
 };
 
 /**
@@ -365,6 +380,7 @@ export const submitStrk20Actions = async (
   },
 ): Promise<Strk20SubmissionResult> => {
   await assertActionBatch(service, input);
+  assertRelayFeeUnlinked(input.actions, input.plan);
   if (input.plan.mode === "account" && !isDepositOnly(input.actions)) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
   }
