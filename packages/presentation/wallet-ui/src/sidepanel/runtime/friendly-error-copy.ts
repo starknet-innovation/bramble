@@ -181,6 +181,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // --- Address book --------------------------------------------------------
   ["address save failed", "Couldn't save that address. Try again."],
   ["address removal failed", "Couldn't remove that address. Try again."],
+  // Sherlock 258: a saved contact's keys change only by removing it first.
+  [
+    "contact keys changed",
+    "This contact is saved with different keys. Remove it first if you mean to replace them.",
+  ],
 
   // --- Accounts ------------------------------------------------------------
   ["account switch failed", "Couldn't switch accounts. Try again."],

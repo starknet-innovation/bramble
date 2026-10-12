@@ -32,6 +32,7 @@ import {
 } from "@bramble/wallet-model/preferences";
 import { normalizeAccountGroups } from "./groups";
 import { withAccountHidden } from "./preferences-accounts";
+import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
 import { withCustomNetwork } from "./preferences-custom-networks";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
@@ -385,6 +386,12 @@ export const createPreferencesStore = ({
         }
         const preferences = await read();
         const previous = preferences.addressBook.find((stored) => stored.id === nextEntry.id);
+        // A stored key is replaced only by removing the contact first: the
+        // multisig flow trusts these keys, and a card for a known address must
+        // not swap them under its label (Sherlock 258).
+        if (contactKeysChange(previous, nextEntry)) {
+          throw new WalletError(CONTACT_KEYS_CHANGED);
+        }
         const savedEntry = {
           ...nextEntry,
           ...(nextEntry.nostrPublicKey || !previous?.nostrPublicKey

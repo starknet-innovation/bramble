@@ -227,6 +227,12 @@ describe("friendlyError", () => {
     }
   });
 
+  test("tells the reader how to replace a saved contact's keys (Sherlock 258)", () => {
+    expect(friendlyError("Contact keys changed").message).toBe(
+      "This contact is saved with different keys. Remove it first if you mean to replace them.",
+    );
+  });
+
   test("falls back to a generic message for empty input", () => {
     const result = friendlyError("   ");
     expect(result.message).toBe("Something went wrong. Please try again.");
