@@ -323,6 +323,19 @@ describe("background message parsers", () => {
         vaultPassphrase,
       }),
     ).toBeNull();
+    // Past the hardened ceiling the recovery scan stops at (Sherlock 253).
+    for (const field of ["accountIndex", "addressIndex"]) {
+      const at = (index: number) =>
+        readCreateAccountInput({
+          [field]: index,
+          accountContractType: "openzeppelin",
+          mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+          type: "wallet.createAccount",
+          vaultPassphrase,
+        });
+      expect(at(0x7fffffff)).not.toBeNull();
+      expect(at(0x80000000)).toBeNull();
+    }
   });
 
   test("rejects create-account messages with a non-string mnemonic passphrase", () => {
