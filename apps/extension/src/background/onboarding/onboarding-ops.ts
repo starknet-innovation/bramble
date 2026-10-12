@@ -172,6 +172,28 @@ const scanRecoveryIndex = async (
     }),
   );
 
+type DiscoverySnapshot = NonNullable<Awaited<ReturnType<RecoveryDiscoveryCache["read"]>>>;
+
+// The progress a scan continues from. A stored scan for the same phrase and
+// network is resumed while it is still short of its horizon. Once it has
+// finished, the next page request starts a fresh walk from index 0 (Sherlock
+// 218): Retry, or reopening the picker, must read the chain again rather than
+// replay a stored "Search complete". The candidates found so far are kept, so
+// picks survive and fresh reads replace them by id. A manual-index search
+// never moves the walk's own progress.
+const discoverySnapshot = (
+  previous: DiscoverySnapshot | null,
+  fingerprint: string,
+  networkId: StarknetNetworkId,
+  manualIndex: number | undefined,
+): DiscoverySnapshot => {
+  if (previous?.fingerprint !== fingerprint || previous.networkId !== networkId) {
+    return { candidates: [], fingerprint, networkId, nextIndex: 0 };
+  }
+  const finished = previous.nextIndex >= recoveryScanTarget(previous.candidates);
+  return manualIndex === undefined && finished ? { ...previous, nextIndex: 0 } : previous;
+};
+
 // One bounded read-only discovery walk shared by first-run recovery, the
 // settings-surface import of a foreign phrase, and the rescan of the wallet's
 // own phrase. It runs OUTSIDE the vault mutation queue: each index derives a
@@ -192,16 +214,12 @@ const runRecoveryDiscovery = async (
   const fingerprintAccount = await discoveryFingerprint(deps, input);
   if (!fingerprintAccount) return { error: "account discovery is unavailable" };
   const previous = await deps.recoveryDiscovery.read().catch(() => null);
-  const matching =
-    previous?.fingerprint === fingerprintAccount.address && previous.networkId === input.networkId;
-  const snapshot = matching
-    ? previous
-    : {
-        candidates: [],
-        fingerprint: fingerprintAccount.address,
-        networkId: input.networkId,
-        nextIndex: 0,
-      };
+  const snapshot = discoverySnapshot(
+    previous,
+    fingerprintAccount.address,
+    input.networkId,
+    input.manualIndex,
+  );
   const manual = input.manualIndex;
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
