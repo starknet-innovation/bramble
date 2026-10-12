@@ -12,36 +12,67 @@ import type { ConnectedSite, WalletStatus } from "../../../popup/responses/respo
 import { accountLabel, copyButton, flowHeader, flowScreen } from "../../shared/parts";
 
 /**
- * Connected sites flow: list origins with active grants and revoke access.
+ * What the connected-sites screen knows: the granted origins, or that the read
+ * has not landed yet, or that it failed. A failed read is never shown as an
+ * empty list (Sherlock 234): "no sites are connected" is a claim the wallet
+ * can only make from an answer, and it would also hide the revoke controls.
  */
-export const connectedSitesFlow = (status: WalletStatus, sites: readonly ConnectedSite[]): string =>
-  flowHeader("Connected sites", status, `${sites.length} connected`) +
+export type ConnectedSitesState = readonly ConnectedSite[] | "error" | "loading";
+
+const connectedSiteRows = (sites: readonly ConnectedSite[]): string =>
+  sites.length === 0
+    ? emptyState("No sites are connected yet. Approving a connection request lists the site here.")
+    : `<ul class="address-book">${sites
+        .map(
+          (site) => `<li>
+              <div class="stack-tight">
+                <strong class="request-origin">${escapeHtml(site.origin)}</strong>
+                <span class="hint">${site.accountCount} account${site.accountCount === 1 ? "" : "s"} shared</span>
+              </div>
+              ${iconButton({
+                attributes: { "data-revoke-origin": site.origin },
+                icon: "x",
+                label: `Revoke ${site.origin}`,
+                tone: "danger",
+              })}
+            </li>`,
+        )
+        .join("")}</ul>`;
+
+// The retry reuses the shell's reload control, which re-reads the status and
+// re-hydrates the active screen.
+const connectedSitesBody = (sites: ConnectedSitesState): string => {
+  if (sites === "loading") return emptyState("Loading connected sites…");
+  if (sites === "error") {
+    return `<div class="panel-error">
+      ${emptyState("Couldn't load connected sites.")}
+      ${button({
+        attributes: { "aria-label": "Retry loading connected sites", "data-reload-balances": true },
+        icon: "refresh",
+        label: "Try again",
+        size: "small",
+        variant: "ghost",
+      })}
+    </div>`;
+  }
+  return connectedSiteRows(sites);
+};
+
+/**
+ * Connected sites flow: list origins with active grants and revoke access.
+ * The count and the empty state appear only once the list has been read.
+ */
+export const connectedSitesFlow = (status: WalletStatus, sites: ConnectedSitesState): string =>
+  flowHeader(
+    "Connected sites",
+    status,
+    Array.isArray(sites) ? `${sites.length} connected` : undefined,
+  ) +
   flowScreen(
     "connected-sites",
     `<section class="section">
       <p class="hint">Connected sites can see your granted account addresses. Revoke any you no longer trust; the site is asked to reconnect next time.</p>
-      ${
-        sites.length === 0
-          ? emptyState(
-              "No sites are connected yet. Approving a connection request lists the site here.",
-            )
-          : `<ul class="address-book">${sites
-              .map(
-                (site) => `<li>
-                    <div class="stack-tight">
-                      <strong class="request-origin">${escapeHtml(site.origin)}</strong>
-                      <span class="hint">${site.accountCount} account${site.accountCount === 1 ? "" : "s"} shared</span>
-                    </div>
-                    ${iconButton({
-                      attributes: { "data-revoke-origin": site.origin },
-                      icon: "x",
-                      label: `Revoke ${site.origin}`,
-                      tone: "danger",
-                    })}
-                  </li>`,
-              )
-              .join("")}</ul>`
-      }
+      ${connectedSitesBody(sites)}
       <p id="connected-sites-result" role="status"></p>
     </section>`,
   );
