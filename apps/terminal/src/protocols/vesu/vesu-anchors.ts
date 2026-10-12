@@ -56,3 +56,20 @@ export const registeredVesuVToken = async (
   }
   return `0x${BigInt(vToken).toString(16)}`;
 };
+
+/**
+ * Verifies both legs of a Multiply position against the pinned factory's
+ * registry before its calls are built. A Multiply build hands the pool to
+ * `modify_lever` and to both delegation calls, so a pool the API names but the
+ * factory never created would receive the user's margin and debt (Sherlock
+ * 169). Throws the same refusals as {@link registeredVesuVToken}.
+ */
+export const verifyVesuMultiplyPool = async (
+  pool: string,
+  collateralAsset: string,
+  debtAsset: string,
+  readWith?: <T>(run: (provider: RpcProvider) => Promise<T>) => Promise<T>,
+): Promise<void> => {
+  await registeredVesuVToken(pool, collateralAsset, readWith);
+  await registeredVesuVToken(pool, debtAsset, readWith);
+};

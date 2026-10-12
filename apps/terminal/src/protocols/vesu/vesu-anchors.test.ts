@@ -36,7 +36,7 @@ vi.mock("../support/provider", async (importActual) => {
 });
 
 const { quoteLending, buildLendingCalls } = await import("./vesu");
-const { registeredVesuVToken, VESU_REGISTRY_UNAVAILABLE, VESU_UNREGISTERED } = await import(
+const { registeredVesuVToken, verifyVesuMultiplyPool, VESU_REGISTRY_UNAVAILABLE, VESU_UNREGISTERED } = await import(
   "./vesu-anchors"
 );
 
@@ -130,5 +130,22 @@ describe("Vesu registry anchor", () => {
         poolId: POOL,
       }),
     ).rejects.toThrow(VESU_UNREGISTERED);
+  });
+
+  it("verifies both legs of a Multiply pool before its calls are built", async () => {
+    await expect(verifyVesuMultiplyPool(POOL, ETH, USDC)).resolves.toBeUndefined();
+    expect(reads.map((read) => read.contractAddress)).toEqual([
+      VESU_ADDRESSES.poolFactory,
+      VESU_ADDRESSES.poolFactory,
+    ]);
+    await expect(verifyVesuMultiplyPool("0xf00d", ETH, USDC)).rejects.toThrow(VESU_UNREGISTERED);
+    registry = { [key(POOL, ETH)]: "0xe7" };
+    await expect(verifyVesuMultiplyPool(POOL, ETH, USDC)).rejects.toThrow(VESU_UNREGISTERED);
+    registry = { [key(POOL, USDC)]: VTOKEN };
+    await expect(verifyVesuMultiplyPool(POOL, ETH, USDC)).rejects.toThrow(VESU_UNREGISTERED);
+    registryFails = true;
+    await expect(verifyVesuMultiplyPool(POOL, ETH, USDC)).rejects.toThrow(
+      VESU_REGISTRY_UNAVAILABLE,
+    );
   });
 });
