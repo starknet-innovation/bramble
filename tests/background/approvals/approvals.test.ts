@@ -81,10 +81,11 @@ describe("createApprovalQueue", () => {
     }
 
     expect(queue.request("https://app-0.example")).toEqual(first);
-    const overflow = queue.request("https://overflow.example");
+    // Every origin holds one prompt, so none is displaced for a newcomer
+    // (Sherlock 128): the new origin is refused and the first prompt stays.
+    expect(() => queue.request("https://overflow.example")).toThrow("Too many pending approvals");
     expect(queue.list()).toHaveLength(MAX_PENDING_APPROVALS);
-    expect(queue.get(first.id)).toBeNull();
-    expect(queue.get(overflow.id)).toEqual(overflow);
+    expect(queue.get(first.id)).toEqual(first);
   });
 
   test("queues watch-asset prompts per origin and token", () => {

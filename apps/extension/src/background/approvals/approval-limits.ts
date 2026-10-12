@@ -18,6 +18,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import { JSON_BUDGETS, type JsonBudget } from "@bramble/core/json";
 
 /**
  * Maximum queued dapp approvals kept in background memory across all origins.
@@ -37,6 +38,22 @@ export const MAX_PENDING_APPROVALS_PER_ORIGIN = 5;
  * answered; it never approves anything.
  */
 export const APPROVAL_TTL_MS = 5 * 60 * 1_000;
+
+/**
+ * The size an approval may have when it is queued. The side panel reads each
+ * queued approval under the provider budget and drops one that exceeds it, so a
+ * larger approval would sit in the queue with no card, holding a slot until it
+ * expired and then reading to the site as a refusal by the user (Sherlock 157).
+ * The headroom covers what a fee review adds after admission.
+ */
+export const REVIEWABLE_APPROVAL_BUDGET: JsonBudget = {
+  ...JSON_BUDGETS.provider,
+  maxBytes: JSON_BUDGETS.provider.maxBytes - 16 * 1024,
+  maxNodes: JSON_BUDGETS.provider.maxNodes - 512,
+};
+
+/** The refusal for an approval too large for the side panel to show. */
+export const APPROVAL_TOO_LARGE = "Request too large to review";
 
 /**
  * The queue state one admission or expiry decision needs: the requesting origin
@@ -67,8 +84,9 @@ export const isExpiredApproval = (approval: QueuedApproval, now: number): boolea
  * already holding `queued`, or null when there is room. Expired entries must be
  * swept before this is consulted, otherwise abandoned prompts count against the
  * caps. At the global cap a represented origin is refused, while a new origin
- * is admitted by replacing one queued prompt; otherwise enough attacker-owned
- * origins could permanently deny every later site a consent slot.
+ * is admitted by replacing one prompt of an origin holding more than one (see
+ * {@link approvalCapacityVictim}); when every origin holds a single prompt, the
+ * new origin is refused too.
  */
 export const approvalAdmissionRefusal = (
   queued: readonly QueuedApproval[],
@@ -78,7 +96,10 @@ export const approvalAdmissionRefusal = (
   if (forOrigin >= MAX_PENDING_APPROVALS_PER_ORIGIN) {
     return "Too many pending approvals for this site";
   }
-  if (queued.length >= MAX_PENDING_APPROVALS && forOrigin > 0) {
+  if (
+    queued.length >= MAX_PENDING_APPROVALS &&
+    (forOrigin > 0 || approvalCapacityVictim(queued) === null)
+  ) {
     return "Too many pending approvals";
   }
   return null;
@@ -86,7 +107,15 @@ export const approvalAdmissionRefusal = (
 
 /**
  * Oldest approval belonging to the most represented origin when a new origin
- * needs room at the global cap, or null while the queue has room.
+ * needs room at the global cap, or null while the queue has room or no origin
+ * holds more than one prompt.
+ *
+ * A victim only ever comes from an origin holding more than the one prompt the
+ * new origin is about to hold. Evicting an origin's only prompt would let
+ * enough colluding origins, each holding one, drop a prompt the user is
+ * reviewing at a moment they choose (Sherlock 128). Refusing every new origin
+ * at the cap instead would let the same origins starve every later site, so a
+ * new origin still displaces a site holding several prompts.
  */
 export const approvalCapacityVictim = <T extends QueuedApproval>(
   queued: readonly T[],
@@ -99,6 +128,9 @@ export const approvalCapacityVictim = <T extends QueuedApproval>(
     counts.set(approval.origin, (counts.get(approval.origin) ?? 0) + 1);
   }
   const largestShare = Math.max(...counts.values());
+  if (largestShare < 2) {
+    return null;
+  }
   return queued.find((approval) => counts.get(approval.origin) === largestShare) ?? null;
 };
 
@@ -132,6 +164,40 @@ export const requireApprovalAdmission = (
   const refusal = approvals.canAdmit(origin);
   if (refusal) {
     throw new WalletError(refusal);
+  }
+};
+
+/**
+ * The queue capability {@link withApprovalReservation} needs.
+ */
+export type ApprovalReservationProbe = {
+  readonly reserve: (origin: string) => () => void;
+};
+
+/**
+ * Runs a dapp request's expensive pre-queue work under an admission
+ * reservation for `origin`: refused up front with the queue's own
+ * {@link WalletError} when the queue would refuse it anyway, and counted
+ * against the caps as one more prompt until it is released, so concurrent
+ * requests from one origin cannot all pass admission before any of them queues
+ * (Sherlock 151). Use it in place of {@link requireApprovalAdmission} on a
+ * NON-deduplicating surface whose pre-queue work is CPU-heavy.
+ *
+ * `work` receives the release and must call it in the same synchronous step
+ * that queues its approval, so the queued prompt replaces the reservation with
+ * no gap in which both count. It is released anyway when `work` settles, and
+ * releasing twice is a no-op.
+ */
+export const withApprovalReservation = async <T>(
+  approvals: ApprovalReservationProbe,
+  origin: string,
+  work: (release: () => void) => Promise<T>,
+): Promise<T> => {
+  const release = approvals.reserve(origin);
+  try {
+    return await work(release);
+  } finally {
+    release();
   }
 };
 

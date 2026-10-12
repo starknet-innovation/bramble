@@ -141,6 +141,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["approval execution failed", REQUEST_UNKNOWN],
   ["wallet request failed", REQUEST_UNKNOWN],
   ["approval not found", "That request has expired. Ask the site to send it again."],
+  ["approval no longer pending", "That request was already answered or has expired."],
   [
     "no pending ledger sign for id",
     "That signing request is no longer pending. Check Activity before starting again.",

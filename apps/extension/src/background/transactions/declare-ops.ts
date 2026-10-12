@@ -20,8 +20,9 @@ import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { isProviderDeclare, type ProviderDeclare } from "@bramble/wallet-protocol/declare";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
+import { withApprovalReservation } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import type { PendingApproval } from "../approvals/approval-snapshot";
 import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
@@ -272,38 +273,16 @@ const retryDeclarationFee = async (
   return { ok: true };
 };
 
-/**
- * Handles a dapp declare message; returns null for other message types.
- */
-export const handleDeclareOps = async (
+// Everything a declare does between admission and the queue: the session and
+// vault reads, the class hash and both fee estimates. It runs under the
+// origin's admission reservation, released in the same step that queues the
+// approval.
+const queueDeclare = async (
   deps: DeclareOpsDeps,
-  messageType: string,
-  message: unknown,
-  sender: RuntimeSender | undefined,
-): Promise<RuntimeResponse | null> => {
-  if (messageType === "wallet.retryApprovalFee") {
-    return retryDeclarationFee(deps, message);
-  }
-  if (messageType !== "wallet.addDeclareTransaction") {
-    return null;
-  }
-  const { approvals, extension, preferencesStore, session, waiters, wallet } = deps;
-  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
-  const input = readAddDeclareTransactionInput(message);
-  if (!input) {
-    return { error: "invalid declare request" };
-  }
-  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
-    return { error: "sender origin mismatch" };
-  }
-  if (guard.isBlocked(input.origin)) {
-    return { error: "origin blocked" };
-  }
-  // A declare prompt never deduplicates, and everything below it is expensive:
-  // a vault read, then a declaration review that hashes the contract class and
-  // estimates two fees. An origin already holding its share of the queue is
-  // refused at admission regardless, so it is refused here instead of after.
-  requireApprovalAdmission(approvals, input.origin);
+  input: NonNullable<ReturnType<typeof readAddDeclareTransactionInput>>,
+  release: () => void,
+): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
+  const { approvals, preferencesStore, session, wallet } = deps;
   // Captured before the first read and re-checked after every await, so a
   // lock that lands mid-request admits no card under the unlock the user just
   // revoked (Sherlock 166).
@@ -339,8 +318,51 @@ export const handleDeclareOps = async (
     origin: input.origin,
     summaries: declareSummaries(input.declare),
   });
+  release();
   notifyApprovalsChanged();
-  return waiters.register(approval.id);
+  return { approval };
+};
+
+/**
+ * Handles a dapp declare message; returns null for other message types.
+ */
+export const handleDeclareOps = async (
+  deps: DeclareOpsDeps,
+  messageType: string,
+  message: unknown,
+  sender: RuntimeSender | undefined,
+): Promise<RuntimeResponse | null> => {
+  if (messageType === "wallet.retryApprovalFee") {
+    return retryDeclarationFee(deps, message);
+  }
+  if (messageType !== "wallet.addDeclareTransaction") {
+    return null;
+  }
+  const { approvals, extension, waiters } = deps;
+  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
+  const input = readAddDeclareTransactionInput(message);
+  if (!input) {
+    return { error: "invalid declare request" };
+  }
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  if (guard.isBlocked(input.origin)) {
+    return { error: "origin blocked" };
+  }
+  // A declare prompt never deduplicates, and everything below it is expensive:
+  // a vault read, then a declaration review that hashes the contract class and
+  // estimates two fees. An origin already holding its share of the queue is
+  // refused at admission regardless, so it is refused here instead of after.
+  // The reservation counts this request against the caps while that work
+  // runs, so concurrent requests cannot all start it (Sherlock 151).
+  const queued = await withApprovalReservation(approvals, input.origin, (release) =>
+    queueDeclare(deps, input, release),
+  );
+  // Registered once the reservation is released: the queued approval now
+  // counts against the caps itself, and the held response settles only when
+  // the user decides.
+  return "approval" in queued ? waiters.register(queued.approval.id) : queued;
 };
 
 /**
