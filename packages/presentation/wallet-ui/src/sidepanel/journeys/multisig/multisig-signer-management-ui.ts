@@ -7,7 +7,11 @@ import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
-import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
+import {
+  bindMultisigParticipantPicker,
+  type MultisigParticipant,
+  participantContactSaver,
+} from "./multisig-participant";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 const setResult = (deps: MultisigUiDeps, id: string, value: string): void => {
@@ -76,18 +80,15 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         {
           multisig: deps.multisig,
           onSelect: selectParticipant,
-          saveContact: (participant) =>
-            deps.wallet.saveAddress(
-              participant.label,
-              participant.address,
-              form
-                .closest<HTMLElement>("#wallet-screen-multisig-signers")
-                ?.querySelector<HTMLElement>("[data-participant-network]")?.dataset[
-                "participantNetwork"
-              ] ?? "",
-              participant.publicKeyX,
-              participant.nostrPublicKey,
-            ),
+          onUnselect: () => {
+            if (selectedKey) selectedKey.value = "";
+            if (selection) selection.hidden = true;
+            if (button) button.disabled = true;
+          },
+          saveContact: participantContactSaver(
+            deps.wallet,
+            form.closest<HTMLElement>("#wallet-screen-multisig-signers"),
+          ),
         },
       );
     }

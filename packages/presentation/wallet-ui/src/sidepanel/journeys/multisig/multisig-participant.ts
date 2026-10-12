@@ -5,6 +5,7 @@ import { inputControl, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "@bramble/ui-kit/icons";
 import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
+import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountAvatar, accountLabel } from "../../shared/parts";
 import type { MultisigClient } from "./multisig-runtime";
@@ -99,13 +100,33 @@ export const multisigParticipantScreen = (
 export type MultisigParticipantPickerDeps = {
   readonly multisig: Pick<MultisigClient, "resolveSigner">;
   readonly onSelect: (participant: MultisigParticipant) => string | null;
-  readonly saveContact?: (
-    participant: MultisigParticipant & {
-      readonly address: string;
-      readonly nostrPublicKey: string;
-    },
-  ) => Promise<void>;
+  /** Takes back a selection `onSelect` made, when the contact save after it fails. */
+  readonly onUnselect: (participant: MultisigParticipant) => void;
+  readonly saveContact?: (participant: WalletCardParticipant) => Promise<void>;
 };
+
+/** A wallet-card participant: the only kind the picker saves as a contact. */
+type WalletCardParticipant = MultisigParticipant & {
+  readonly address: string;
+  readonly nostrPublicKey: string;
+};
+
+/**
+ * Saves a wallet-card participant to the address book, on the network of the
+ * picker found inside `scope`.
+ */
+export const participantContactSaver =
+  (wallet: Pick<SidepanelWallet, "saveAddress">, scope: HTMLElement | null | undefined) =>
+  (participant: WalletCardParticipant): Promise<void> =>
+    wallet.saveAddress(
+      participant.label,
+      participant.address,
+      scope?.querySelector<HTMLElement>("[data-participant-network]")?.dataset[
+        "participantNetwork"
+      ] ?? "",
+      participant.publicKeyX,
+      participant.nostrPublicKey,
+    );
 
 /**
  * Binds one picker, validates all manual input, and restores focus/state to its origin.
@@ -206,7 +227,14 @@ export const bindMultisigParticipantPicker = (
     buttonBusy(confirm, true);
     try {
       if (!accept(participant)) return;
-      await deps.saveContact?.(participant);
+      // Selection runs first so a card the flow refuses is never saved. A save
+      // the address book refuses, such as a card whose keys differ from a saved
+      // contact's (Sherlock 258), takes the selection back: otherwise the card's
+      // keys would join the signer set while the screen reports the refusal.
+      await deps.saveContact?.(participant).catch((error: unknown) => {
+        deps.onUnselect(participant);
+        throw error;
+      });
       complete();
     } catch (error) {
       const failure = errorMessage(error, "Contact save failed");

@@ -88,8 +88,14 @@ export const revealFlow = (status: WalletStatus): string => {
           variant: "ghost",
         })}
         <p class="hint" id="reveal-copy-note">${GUARDED_COPY_NOTE}</p>
-        <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
-        <code class="reveal-value is-masked" id="reveal-key"></code>
+        ${
+          // With no account on this network there is no active key: the
+          // background reveals the recovery phrase alone.
+          activeAccount
+            ? `<p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
+        <code class="reveal-value is-masked" id="reveal-key"></code>`
+            : ""
+        }
         ${
           activeIsImported
             ? '<p class="hint" id="reveal-imported-note">This account was imported from a raw key, so the wallet recovery phrase above does not restore it — its private key shown here is its only backup.</p>'
@@ -149,7 +155,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
             secrets.mnemonic ?? "No recovery phrase is stored for this wallet.";
         }
         if (keyEl) {
-          keyEl.textContent = secrets.privateKey;
+          keyEl.textContent = secrets.privateKey ?? "";
         }
         output?.removeAttribute("hidden");
         if (result) {

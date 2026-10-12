@@ -134,7 +134,13 @@ const handleRevealSecrets: RouterHandler = async (ctx, messageType, message) => 
     vault.activeAccountId,
     preferences.hiddenAccountIds,
   );
-  const { mnemonic, privateKey } = activeAccountSecrets(vault, account?.id ?? null);
+  // A network with no account has no active key to show, but the wallet's
+  // recovery phrase is still the user's backup: reveal it on its own rather
+  // than refusing, as the screen shows no account to describe.
+  if (!account) {
+    return { mnemonic: vault.mnemonic, ok: true, privateKey: null };
+  }
+  const { mnemonic, privateKey } = activeAccountSecrets(vault, account.id);
   return { mnemonic, ok: true, privateKey };
 };
 
