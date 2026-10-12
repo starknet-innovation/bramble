@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  createSwapClient,
   SWAP_LOSS_HIGH_RISK_PERCENT,
   SWAP_LOSS_WARN_PERCENT,
   type SwapQuoteView,
@@ -34,9 +35,38 @@ describe("swap value delta", () => {
     expect(SWAP_LOSS_WARN_PERCENT).toBeLessThan(SWAP_LOSS_HIGH_RISK_PERCENT);
   });
 
-  test("unpriced sides yield null instead of a fake zero", () => {
+  test("an unpriced sell side yields null instead of a fake zero", () => {
     expect(swapValueDeltaPercent(quote(0, 0.085))).toBeNull();
-    expect(swapValueDeltaPercent(quote(0.39, 0))).toBeNull();
+  });
+
+  test("a priced sell side whose buy side is valued at zero is a total loss (Sherlock 137)", () => {
+    expect(swapValueDeltaPercent(quote(0.39, 0))).toBe(-100);
+  });
+
+  test("prefers the delta priced from the wallet's own feed (Sherlock 137)", () => {
+    // The aggregator claims parity; the wallet's prices show a 40% loss.
+    expect(swapValueDeltaPercent({ ...quote(100, 100), valueDeltaPercent: -40 })).toBe(-40);
+  });
+});
+
+describe("swap quote validation", () => {
+  const clientAnswering = (swapQuote: unknown) =>
+    createSwapClient({
+      async sendMessage() {
+        return { ok: true, swapQuote };
+      },
+    } as never);
+  const input = { amount: "1", buyTokenId: "b", sellTokenId: "s" };
+
+  test("accepts a wallet-priced value delta and rejects one past a total loss", async () => {
+    const accepted = await clientAnswering({ ...quote(1, 1), valueDeltaPercent: -40 }).quote(input);
+    expect(accepted.valueDeltaPercent).toBe(-40);
+    await expect(
+      clientAnswering({ ...quote(1, 1), valueDeltaPercent: -101 }).quote(input),
+    ).rejects.toThrow();
+    await expect(
+      clientAnswering({ ...quote(1, 1), valueDeltaPercent: Number.NaN }).quote(input),
+    ).rejects.toThrow();
   });
 });
 
