@@ -49,6 +49,11 @@ describe("sign card u256 total", () => {
     expect(body).toContain(`${((1n << 128n) + 5n).toString()} (u256 total`);
   });
 
+  test("reads decimal limbs the way the hash does", () => {
+    const body = signed(order({ high: "1", low: BELOW }));
+    expect(body).toContain(`${((1n << 128n) + (1n << 128n) - 1n).toString()} (u256 total`);
+  });
+
   test("states no total when a limb is not a u128", () => {
     const body = signHtml(order({ high: `0x${(1n << 128n).toString(16)}`, low: "0x0" }));
     expect(body).toContain("amount.low");
