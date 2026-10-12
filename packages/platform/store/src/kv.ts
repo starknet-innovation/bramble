@@ -2,7 +2,7 @@
  * Minimal key-value storage boundary for browser storage and tests.
  */
 import { WalletError } from "@bramble/core/errors";
-import { isJsonWithinBudget, JSON_BUDGETS, type Json } from "@bramble/core/json";
+import { isJsonWithinBudget, JSON_BUDGETS, type Json, type JsonBudget } from "@bramble/core/json";
 
 const STORAGE_KEY_PATTERN = /^bramble:[a-z0-9]+(?:[-:][a-z0-9]+)*$/;
 
@@ -25,12 +25,35 @@ export function assertStorageKey(key: string): void {
 }
 
 /**
- * Throws when a storage write would serialize as lossy JSON or exceed the
- * at-rest storage budget, which admits the encrypted envelope of any value the
- * provider budget admits (`JSON_BUDGETS.storage`).
+ * The only keys that hold an encrypted vault envelope: the vault and the
+ * staging copy an interrupted migration leaves (`store-migration.ts` names
+ * them; a test pins the two lists together). Their base64 ciphertext can
+ * outgrow the provider budget the plaintext was held to (Sherlock 261).
  */
-export function assertJsonValue(value: unknown): asserts value is Json {
-  if (!isJsonWithinBudget(value, JSON_BUDGETS.storage)) {
+export const ENCRYPTED_ENVELOPE_KEYS: ReadonlySet<string> = new Set([
+  "bramble:vault",
+  "bramble:vault-migration",
+]);
+
+/**
+ * The budget a write to `key` is held to. Only the vault envelope keys get the
+ * larger at-rest budget (`JSON_BUDGETS.storage`); every other key keeps the
+ * provider budget, so no other value can grow toward the browser's shared
+ * storage quota.
+ */
+export const storageBudgetFor = (key: string): JsonBudget =>
+  ENCRYPTED_ENVELOPE_KEYS.has(key) ? JSON_BUDGETS.storage : JSON_BUDGETS.provider;
+
+/**
+ * Throws when a value would serialize as lossy JSON or exceed `budget`, by
+ * default the at-rest storage budget, which admits the encrypted envelope of
+ * any value the provider budget admits. Adapters pass `storageBudgetFor(key)`.
+ */
+export function assertJsonValue(
+  value: unknown,
+  budget: JsonBudget = JSON_BUDGETS.storage,
+): asserts value is Json {
+  if (!isJsonWithinBudget(value, budget)) {
     throw new WalletError("Invalid JSON value");
   }
 }
@@ -55,7 +78,7 @@ export const createMemoryStore = (): KeyValueStore => {
     },
     async set(key, value) {
       assertStorageKey(key);
-      assertJsonValue(value);
+      assertJsonValue(value, storageBudgetFor(key));
       values.set(key, cloneJson(value));
     },
   };
