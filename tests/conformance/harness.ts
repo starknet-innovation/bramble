@@ -57,7 +57,7 @@ export type MutationSpy = {
 };
 
 /** Wallet stub methods that only read state, so they carry no counter. */
-export const WALLET_STUB_READS = [
+const WALLET_STUB_READS = [
   "generateMnemonic",
   "getGrantedAccounts",
   "readVault",
@@ -65,7 +65,7 @@ export const WALLET_STUB_READS = [
 ] as const;
 
 /** STRK20 stub methods that only read or prepare, so they carry no counter. */
-export const STRK20_STUB_READS = [
+const STRK20_STUB_READS = [
   "prepare",
   "privateBalances",
   "quoteActions",
