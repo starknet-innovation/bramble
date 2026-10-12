@@ -222,18 +222,27 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
 /**
  * Constructor calldata for one signer public key under the given convention.
  * Pure: the caller hashes it into an address, this only decides the felts.
+ *
+ * Exhaustive by construction (Sherlock 240): a new constructor shape is a
+ * build failure here until its layout is written, never a silent fall-through
+ * to another version's convention and so a wrong derived address.
  */
 export const accountConstructorCalldata = (
   shape: AccountConstructorShape,
   publicKey: string,
 ): readonly string[] => {
-  if (shape === "public-key") {
-    return [publicKey];
+  switch (shape) {
+    case "public-key":
+      return [publicKey];
+    case "owner-guardian":
+      return [publicKey, "0x0"];
+    case "signer-owner-guardian-option":
+      return ["0x0", publicKey, "0x1"];
+    default: {
+      const unreachable: never = shape;
+      throw new Error(`unknown account constructor shape: ${String(unreachable)}`);
+    }
   }
-  if (shape === "owner-guardian") {
-    return [publicKey, "0x0"];
-  }
-  return ["0x0", publicKey, "0x1"];
 };
 
 /**

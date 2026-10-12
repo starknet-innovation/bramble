@@ -13,6 +13,8 @@
 import type { TransactionStatusReport, TransferInput } from "@bramble/starknet/rpc";
 import { createMemoryStore } from "@bramble/store/kv";
 import { type ActivityEntry, createActivityLog } from "@bramble/transactions/activity";
+import type { DiscoveredHistory } from "@bramble/transactions/starkscan-wallet";
+import type { HistoryLane } from "@bramble/transactions/tx-history";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
@@ -81,6 +83,8 @@ export const makeHarness = (options?: {
   readonly deployed?: boolean;
   readonly estimateFails?: boolean;
   readonly onChainHistory?: readonly ActivityEntry[];
+  /** The lane the history double reports; defaults to the RPC event scan. */
+  readonly historyLane?: HistoryLane;
   readonly historyThrows?: boolean;
   readonly statusReport?: TransactionStatusReport;
   readonly strkBalance?: string;
@@ -91,12 +95,15 @@ export const makeHarness = (options?: {
   const history =
     options?.historyThrows || options?.onChainHistory
       ? {
-          async getTransactionHistory(): Promise<readonly ActivityEntry[]> {
+          async getTransactionHistory(): Promise<DiscoveredHistory> {
             historyRequests += 1;
             if (options.historyThrows) {
               throw new Error("fetch failed");
             }
-            return options.onChainHistory ?? [];
+            return {
+              entries: options.onChainHistory ?? [],
+              lane: options.historyLane ?? "chain-events",
+            };
           },
         }
       : {};

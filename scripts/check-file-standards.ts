@@ -1,6 +1,7 @@
 /**
  * Enforces repository file-size and TypeScript doc-comment standards.
  */
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { actionReferences, isPinnedActionReference, WORKFLOW_DIR } from "./workflow-inventory";
@@ -130,8 +131,17 @@ const VAULT_SERVICE_WIRING_FILES = new Set([
 
 const failures: string[] = [];
 
-const isProductionTypeScript = (file: string): boolean =>
+const isProductionSource = (file: string): boolean =>
   file.startsWith("apps/extension/src/") || /^packages\/[^/]+\/[^/]+\/src\//.test(file);
+
+// A module every source rule applies to: any TypeScript file, and any
+// JavaScript file on a production source path. Shipped `.js` modules (the
+// ledger-browser transport) sit outside `tsc`, so this gate is the only
+// check that holds them to the security rules (Sherlock 235). Other `.js`
+// files (website, configuration) are not wallet source and keep only the
+// generic rules.
+const isSourceModule = (file: string): boolean =>
+  file.endsWith(".ts") || (file.endsWith(".js") && isProductionSource(file));
 
 const hasExportDoc = (lines: readonly string[], index: number): boolean => {
   for (let previous = index - 1; previous >= 0; previous -= 1) {
@@ -176,15 +186,26 @@ for (const file of await walk(".")) {
     failures.push(`${file} has ${lineCount} lines; max is ${MAX_LINES}`);
   }
 
-  if (file.endsWith(".ts") && !text.trimStart().startsWith("/**")) {
+  if (isSourceModule(file) && !text.trimStart().startsWith("/**")) {
     failures.push(`${file} must start with a doc comment`);
   }
 
-  if (file.endsWith(".ts") && hasControlByte(text)) {
+  if (isSourceModule(file) && hasControlByte(text)) {
     failures.push(`${file} must not contain raw control bytes (use a \\u escape)`);
   }
 
-  if (isProductionTypeScript(file) && file.endsWith(".ts")) {
+  // A production `.js` module's API is typed and documented in its sibling
+  // declaration file, which this rule checks as `.ts`; the module itself must
+  // have one.
+  if (
+    isProductionSource(file) &&
+    file.endsWith(".js") &&
+    !existsSync(`${file.slice(0, -3)}.d.ts`)
+  ) {
+    failures.push(`${file} must declare and document its API in a sibling .d.ts`);
+  }
+
+  if (isProductionSource(file) && file.endsWith(".ts")) {
     lines.forEach((line, index) => {
       if (
         /^export (?:\{|class|const|function|interface|type)\b/.test(line) &&
@@ -195,11 +216,11 @@ for (const file of await walk(".")) {
     });
   }
 
-  if (file.endsWith(".ts") && SUPPRESSION_MARKERS.some((marker) => text.includes(marker))) {
+  if (isSourceModule(file) && SUPPRESSION_MARKERS.some((marker) => text.includes(marker))) {
     failures.push(`${file} must not suppress TypeScript or lint rules`);
   }
 
-  if (file.endsWith(".ts") && /\b(?:describe|test|it)\.(?:only|skip)\s*\(/.test(text)) {
+  if (isSourceModule(file) && /\b(?:describe|test|it)\.(?:only|skip)\s*\(/.test(text)) {
     failures.push(`${file} must not commit focused or skipped tests`);
   }
 
@@ -217,21 +238,21 @@ for (const file of await walk(".")) {
     }
   }
 
-  if (file.endsWith(".ts") && /\.postMessage\([\s\S]{0,400},\s*["']\*["']/.test(text)) {
+  if (isSourceModule(file) && /\.postMessage\([\s\S]{0,400},\s*["']\*["']/.test(text)) {
     failures.push(`${file} must not use wildcard postMessage targets`);
   }
 
-  if (file.endsWith(".ts") && DYNAMIC_CODE_PATTERN.test(text)) {
+  if (isSourceModule(file) && DYNAMIC_CODE_PATTERN.test(text)) {
     failures.push(`${file} must not use eval-style dynamic code execution`);
   }
 
-  if (isProductionTypeScript(file) && /\bconsole\./.test(text)) {
+  if (isProductionSource(file) && /\bconsole\./.test(text)) {
     failures.push(`${file} must not log from production wallet code`);
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !HTML_SINK_FILES.has(file) &&
     HTML_SINK_PATTERN.test(text)
   ) {
@@ -243,8 +264,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !SECRET_MATERIAL_FILES.has(file) &&
     SECRET_MATERIAL_PATTERN.test(text)
   ) {
@@ -260,7 +281,7 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
+    isProductionSource(file) &&
     file !== "apps/extension/src/background/runtime/session.ts" &&
     file !== "apps/extension/src/sidepanel/index.ts" && // side-panel root injects the clock
     file !== "packages/features/portfolio/src/tokens/prices.ts" &&
@@ -271,12 +292,12 @@ for (const file of await walk(".")) {
     failures.push(`${file} must keep clock access behind an explicit boundary`);
   }
 
-  if (isProductionTypeScript(file) && /\b(?:new Date|Math\.random)\b/.test(text)) {
+  if (isProductionSource(file) && /\b(?:new Date|Math\.random)\b/.test(text)) {
     failures.push(`${file} must not use implicit clock or random sources`);
   }
 
   if (
-    isProductionTypeScript(file) &&
+    isProductionSource(file) &&
     file !== "packages/platform/vault/src/encrypted-store.ts" &&
     /\bcrypto\.getRandomValues\b/.test(text)
   ) {
@@ -284,7 +305,7 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
+    isProductionSource(file) &&
     !RANDOM_UUID_FILES.has(file) &&
     /\bcrypto\.randomUUID\b/.test(text)
   ) {
@@ -292,7 +313,7 @@ for (const file of await walk(".")) {
   }
 
   if (
-    file.endsWith(".ts") &&
+    isSourceModule(file) &&
     file !== "apps/extension/src/browser-storage.ts" &&
     /\b(?:chrome|browser)\.storage\b/.test(text)
   ) {
@@ -300,8 +321,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !BROWSER_GLOBAL_FILES.has(file) &&
     /\b(?:document|window|globalThis)\./.test(text)
   ) {
@@ -309,8 +330,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     file !== "apps/extension/src/background/index.ts" &&
     file !== "apps/extension/src/browser-storage.ts" &&
     /createBrowser(?:Local|Session)Store/.test(text)
@@ -319,8 +340,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !ENCRYPTED_STORE_WIRING_FILES.has(file) &&
     /\bcreateEncryptedStore\b/.test(text)
   ) {
@@ -328,8 +349,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !VAULT_SERVICE_WIRING_FILES.has(file) &&
     /\b(?:createWalletVaultService|VAULT_STORE_KEY)\b/.test(text)
   ) {

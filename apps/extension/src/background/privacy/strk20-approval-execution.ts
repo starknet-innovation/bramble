@@ -21,7 +21,7 @@ import {
   submitStrk20Actions,
 } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import type { ActivityLog } from "@bramble/transactions/activity";
+import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { verificationContext } from "@bramble/transactions/verify";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -483,7 +483,7 @@ export const executeStrk20InvokeApproval = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: resolved.account.networkId,
-      summary: `${approval.origin} submitted a private transaction (${actionCount} action${
+      summary: `${activityOrigin(approval.origin)} submitted a private transaction (${actionCount} action${
         actionCount === 1 ? "" : "s"
       })`,
     });

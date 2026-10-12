@@ -55,50 +55,59 @@ export const requireStrk20Config = (context: Strk20AccountContext): Strk20Networ
   return context.config;
 };
 
-const readNoteTotal = (
-  tokenNotes: readonly SdkNote[],
-  initialCount: number,
-): { readonly count: number; readonly total: bigint } => {
+// Only nonzero notes count against the note cap, which applies per token. The
+// pool lets any registered account write zero-amount notes to any other, under
+// any nonzero token felt, and they can never be spent or removed, so counting
+// them would let a third party push a victim's real balance past the cap
+// (Sherlock 162).
+const readNoteTotal = (tokenNotes: readonly SdkNote[]): bigint => {
   let total = 0n;
-  let count = initialCount;
+  let count = 0;
   for (const note of tokenNotes) {
-    count += 1;
-    if (count > STRK20_LIMITS.discoveredNotes) {
-      throw new Error("too many notes");
-    }
     const amount = BigInt(note.amount);
     if (amount < 0n || amount >= STARK_FIELD_PRIME || total + amount >= STARK_FIELD_PRIME) {
       throw new Error("invalid note amount");
     }
+    if (amount === 0n) {
+      continue;
+    }
+    count += 1;
+    if (count > STRK20_LIMITS.discoveredNotes) {
+      throw new Error("too many notes");
+    }
     total += amount;
   }
-  return { count, total };
+  return total;
 };
 
-const readNoteTotals = (notes: SdkNoteMap): ReadonlyMap<bigint, bigint> => {
+// Totals only the tokens `counts` selects, and keeps only nonzero totals.
+// Notes in other tokens are checked for shape but never summed or counted: a
+// third party can open subchannels to anyone under made-up token felts, so
+// those notes must not fail a read of the tokens the caller asked for.
+const readNoteTotals = (
+  notes: SdkNoteMap,
+  counts: (token: bigint) => boolean,
+): ReadonlyMap<bigint, bigint> => {
   const totals = new Map<bigint, bigint>();
-  let discoveredNotes = 0;
   for (const [token, tokenNotes] of notes.entries()) {
-    if (
-      (!totals.has(token) && totals.size >= STRK20_LIMITS.balances) ||
-      token <= 0n ||
-      token >= STARK_FIELD_PRIME ||
-      !Array.isArray(tokenNotes)
-    ) {
+    if (token <= 0n || token >= STARK_FIELD_PRIME || !Array.isArray(tokenNotes)) {
       throw new Error("invalid token note set");
     }
-    const tokenTotal = readNoteTotal(tokenNotes, discoveredNotes);
-    discoveredNotes = tokenTotal.count;
-    const nextTotal = (totals.get(token) ?? 0n) + tokenTotal.total;
+    if (!counts(token)) {
+      continue;
+    }
+    const nextTotal = (totals.get(token) ?? 0n) + readNoteTotal(tokenNotes);
     if (nextTotal >= STARK_FIELD_PRIME) {
       throw new Error("private balance overflow");
     }
-    totals.set(token, nextTotal);
+    if (nextTotal > 0n) {
+      totals.set(token, nextTotal);
+    }
   }
   return totals;
 };
 
-const readRequestedTokens = (requested: readonly string[]): readonly string[] => {
+const readRequestedTokens = (requested: readonly string[]): ReadonlySet<bigint> => {
   if (requested.length > STRK20_LIMITS.tokens) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
@@ -108,30 +117,40 @@ const readRequestedTokens = (requested: readonly string[]): readonly string[] =>
     }
     return BigInt(token);
   });
-  if (new Set(keys).size !== keys.length) {
+  const unique = new Set(keys);
+  if (unique.size !== keys.length) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
-  return requested;
+  return unique;
 };
 
 /**
  * Sums SDK notes into canonical token balances and rejects malformed or
  * oversized SDK output before it reaches wallet state.
+ *
+ * With `requested` tokens, only those tokens are summed and the note cap
+ * applies to each one's nonzero notes, so notes other accounts place in unrelated
+ * or made-up tokens cannot fail the read. With none, every token holding a
+ * nonzero balance is listed, and more than `STRK20_LIMITS.balances` of them
+ * fails the read.
  */
 export const balancesFrom = (
   notes: SdkNoteMap,
   requested: readonly string[],
 ): readonly Strk20BalanceEntry[] => {
+  const requestedTokens = readRequestedTokens(requested);
   let totals: ReadonlyMap<bigint, bigint>;
   try {
-    totals = readNoteTotals(notes);
+    totals = readNoteTotals(
+      notes,
+      requestedTokens.size > 0 ? (token) => requestedTokens.has(token) : () => true,
+    );
   } catch {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
-  const requestedTokens = readRequestedTokens(requested);
   const tokens =
-    requestedTokens.length > 0
-      ? requestedTokens
+    requested.length > 0
+      ? requested
       : [...totals.keys()]
           .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
           .map((token) => `0x${token.toString(16)}`);

@@ -230,6 +230,7 @@ describe("mergeActivity", () => {
     const merged = mergeActivity(
       [localEntry("0xaaa", 3000, "accepted")],
       [chainEntry("0xbbb", 5000), chainEntry("0xccc", 1000)],
+      "chain-events",
     );
     expect(merged.map((entry) => entry.hash)).toEqual(["0xbbb", "0xaaa", "0xccc"]);
   });
@@ -242,6 +243,7 @@ describe("mergeActivity", () => {
     const merged = mergeActivity(
       [localEntry("0x7ab", 4000, "pending")],
       [chainEntry("0x07ab", 4000)],
+      "chain-events",
     );
     expect(merged).toHaveLength(1);
     expect(merged[0]?.summary).toBe("Send from wallet 0x7ab");
@@ -255,6 +257,7 @@ describe("mergeActivity", () => {
     const merged = mergeActivity(
       [localEntry("0x7ab", 4000, "reverted")],
       [chainEntry("0x07ab", 4000)],
+      "chain-events",
     );
     expect(merged).toHaveLength(1);
     expect(merged[0]?.status).toBe("reverted");
@@ -262,7 +265,7 @@ describe("mergeActivity", () => {
 
   test("never returns fewer rows than the local log", () => {
     const local = [localEntry("0xaaa", 1, "accepted"), localEntry("0xbbb", 2, "reverted")];
-    expect(mergeActivity(local, [])).toHaveLength(2);
+    expect(mergeActivity(local, [], "chain-events")).toHaveLength(2);
   });
 
   test("keeps every leg of a multi-transfer chain tx (swap/multicall) sharing one hash", () => {
@@ -274,6 +277,7 @@ describe("mergeActivity", () => {
         swapLeg("ETH", "1.5", "Sent 1.5 ETH to 0x7770…0abc", "0xswap", 9000),
         swapLeg("USDC", "3000", "Received 3000 USDC from 0x7770…0abc", "0xswap", 9000),
       ],
+      "chain-events",
     );
     expect(merged).toHaveLength(2);
     expect(merged.map((entry) => entry.token).sort()).toEqual(["ETH", "USDC"]);
@@ -288,6 +292,7 @@ describe("mergeActivity", () => {
         swapLeg("ETH", "1.5", "Sent 1.5 ETH to 0x7770…0abc", "0xswap", 9000),
         swapLeg("USDC", "3000", "Received 3000 USDC from 0x7770…0abc", "0xswap", 9000),
       ],
+      "chain-events",
     );
     expect(merged).toHaveLength(1);
     expect(merged[0]?.summary).toBe("Send from wallet 0xswap");

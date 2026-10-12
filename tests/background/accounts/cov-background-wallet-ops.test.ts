@@ -7,7 +7,7 @@
  * behind a locked session with no pending records.
  */
 import { describe, expect, test } from "bun:test";
-import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { DiscoveredHistory } from "@bramble/transactions/starkscan-wallet";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
@@ -214,9 +214,9 @@ describe("wallet-ops signer closure and activity feed", () => {
     let historyCalls = 0;
     const historyRpc = {
       ...rpc,
-      async getTransactionHistory(): Promise<readonly ActivityEntry[]> {
+      async getTransactionHistory(): Promise<DiscoveredHistory> {
         historyCalls += 1;
-        return [];
+        return { entries: [], lane: "chain-events" };
       },
     } as unknown as RuntimeRpc;
     const handler = makeHandler({ locked: true, runtimeRpc: historyRpc });

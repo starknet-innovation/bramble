@@ -333,6 +333,10 @@ describe("bindDeploy", () => {
       "can submit transactions",
     );
     expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(accountLabel(HASH));
+    // The hash links to the explorer of the network the account was deployed on.
+    const explorer = container.querySelector("#deploy-success-hash-link");
+    expect(explorer?.getAttribute("href")).toBe(`https://starkscan.co/tx/${HASH}`);
+    expect(explorer?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(container.querySelector('[data-outcome-mark="succeeded"]')?.hasAttribute("hidden")).toBe(
       false,
     );

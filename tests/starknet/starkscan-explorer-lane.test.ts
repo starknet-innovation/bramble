@@ -215,7 +215,9 @@ describe("explorer gateway lane is opt-in per network", () => {
         }),
     });
 
-    expect(await history(historyInput, failingRpc)).toHaveLength(1);
+    const discovered = await history(historyInput, failingRpc);
+    expect(discovered.entries).toHaveLength(1);
+    expect(discovered.lane).toBe("explorer");
     expect(explorer.urls).toHaveLength(1);
   });
 });

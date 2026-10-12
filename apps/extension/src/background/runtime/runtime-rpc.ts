@@ -89,11 +89,9 @@ import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions
 import {
   createExplorerFirstHistory,
   createRpcFirstBalances,
+  type DiscoveredHistory,
 } from "@bramble/transactions/starkscan-wallet";
-import type {
-  scanTransactionHistory,
-  TransactionHistoryScan,
-} from "@bramble/transactions/tx-history-scan";
+import type { TransactionHistoryScan } from "@bramble/transactions/tx-history-scan";
 import { canonicalFelt, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { ExplorerLanePreferences } from "@bramble/wallet-model/preferences";
 
@@ -233,9 +231,7 @@ export type RuntimeRpc = {
    * answered and is treated by the handler as "history unavailable", degrading
    * to the local log.
    */
-  readonly getTransactionHistory?: (
-    input: TransactionHistoryScan,
-  ) => ReturnType<typeof scanTransactionHistory>;
+  readonly getTransactionHistory?: (input: TransactionHistoryScan) => Promise<DiscoveredHistory>;
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;

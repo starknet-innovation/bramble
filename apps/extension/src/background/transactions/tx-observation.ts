@@ -4,7 +4,7 @@
  *
  * Starknet's pre-confirmed status lets the wallet advance the send journey in
  * hundreds of milliseconds, but a pre-confirmed transaction is provisional and
- * an L2-accepted one can still be dropped by a deep reorg. Observation
+ * an L2-accepted one can still be reported rejected or reverted. Observation
  * therefore runs until `ACCEPTED_ON_L1`, in two cadences, and every decision
  * here is a function of the stored entry, the chain report, and an injected
  * clock — no timers, storage, or ambient time.
@@ -148,9 +148,17 @@ const wasSeenOnChain = (entry: ActivityEntry): boolean =>
 // "not found" right after broadcast is as likely a lagging node as a drop, and
 // a false rejection invites a duplicate send. It stays pending and is retired
 // with an honest "could not confirm" notice once its window lapses.
+//
+// An accepted transaction is never declared gone either (Sherlock 212). Only a
+// pre-confirmed one disappears when its block proposal fails; once a node has
+// answered `ACCEPTED_ON_L2`, a later not-found comes from a node that is behind,
+// such as a failover endpoint still syncing history, and telling the user it
+// "did not happen" invites them to pay twice.
 const disappearedOutcome = (entry: ActivityEntry): ActivityOutcome => {
   const notFoundCount = (entry.notFoundCount ?? 0) + 1;
-  return notFoundCount < NOT_FOUND_FAILURE_THRESHOLD || !wasSeenOnChain(entry)
+  return notFoundCount < NOT_FOUND_FAILURE_THRESHOLD ||
+    !wasSeenOnChain(entry) ||
+    entry.status === "accepted"
     ? { notFoundCount, status: entry.status }
     : withNotice(entry, { notFoundCount, status: "rejected" });
 };
@@ -162,7 +170,8 @@ const disappearedOutcome = (entry: ActivityEntry): ActivityOutcome => {
  * intermittent misses never accumulate into a false failure. Only an answer
  * with a real finality marks the entry as seen on chain. Progress and L1
  * finality are monotonic: a lagging failover node cannot move an accepted
- * transaction back to pre-confirmed/pending or erase observed L1 finality.
+ * transaction back to pre-confirmed/pending, erase observed L1 finality, or,
+ * by not finding it, mark it rejected.
  */
 export const reconciledOutcome = (
   entry: ActivityEntry,
