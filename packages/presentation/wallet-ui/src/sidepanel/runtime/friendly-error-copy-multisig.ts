@@ -25,6 +25,13 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "argent multisig intent nonce is no longer current",
     "This transaction is out of date. Create a new one.",
   ],
+  // An earlier, stale version of these calls was found on chain (Sherlock
+  // 177): building them again would pay twice.
+  ["argent multisig intent was already sent", "This transaction was already sent."],
+  [
+    "could not check whether the earlier argent multisig intent was sent",
+    "Couldn't check whether this transaction was already sent. Try again.",
+  ],
   ["argent multisig intent not found", "That transaction is no longer saved."],
   ["conflicting argent multisig intent id", "That transaction id is already in use."],
   [

@@ -130,10 +130,18 @@ export type MultisigHarnessOptions = {
   readonly getNonce?: () => string;
   /** Replaces the default balance read, e.g. with the real reader over a fake provider. */
   readonly getTokenBalances?: RuntimeRpc["getTokenBalances"];
-  readonly getTransactionStatuses?: (
-    transactionHash: string,
-  ) => Promise<
-    Readonly<Record<string, { finalizedOnL1: boolean; found: boolean; status: "pending" }>>
+  readonly getTransactionStatuses?: (transactionHash: string) => Promise<
+    Readonly<
+      Record<
+        string,
+        {
+          finalizedOnL1: boolean;
+          found: boolean;
+          seen?: boolean;
+          status: Awaited<ReturnType<RuntimeRpc["getTransactionStatuses"]>>[string]["status"];
+        }
+      >
+    >
   >;
   readonly nonce?: string;
   readonly nostrCoordinationStore?: NostrCoordinationStore;

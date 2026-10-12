@@ -40,16 +40,24 @@ export type ArgentSubmitResolution =
   | { readonly kind: "absent" }
   | { readonly kind: "unknown" };
 
-/**
- * Recovers an unresolved submit only from a fresh chain observation of its
- * exact deterministic hash. A successful not-found response is distinct from
- * a failed read so the caller may safely retry only the same frozen payload.
- */
-export const recoverSubmittedArgentIntent = async (
+type ObservedSubmission =
+  | {
+      readonly kind: "found";
+      readonly preferences: Awaited<ReturnType<MultisigOpsDeps["preferencesStore"]["read"]>>;
+      readonly record: ArgentMultisigRecord;
+      /** The node reported a real finality status, not just an odd answer. */
+      readonly seen: boolean;
+      readonly state: "accepted" | "rejected" | "submitted";
+    }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unknown" };
+
+// Asks the chain about the intent's exact signed hash. Every signer holds the
+// same signed package, so a co-signer's broadcast has this hash too.
+const observeSignedHash = async (
   deps: MultisigOpsDeps,
   intent: ArgentMultisigSigningIntent,
-  operationId: string,
-): Promise<ArgentSubmitResolution> => {
+): Promise<ObservedSubmission> => {
   const record = (await deps.multisigStore.listMultisigs()).find(
     (candidate) => candidate.id === intent.accountId,
   );
@@ -74,28 +82,87 @@ export const recoverSubmittedArgentIntent = async (
       : report.status === "rejected" || report.status === "reverted"
         ? "rejected"
         : "submitted";
-  const recovered: ArgentMultisigSigningIntent = {
-    ...intent,
-    broadcastTransactionHash: intent.prepared.transactionHash,
-    state,
-  };
-  await deps.multisigStore
-    .setOperationHash(operationId, intent.prepared.transactionHash)
-    .catch(() => {});
-  await deps.multisigStore.upsertIntent(recovered).catch(() => "invalid" as const);
+  return { kind: "found", preferences, record, seen: report.seen, state };
+};
+
+const journalObservedSubmission = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  observed: Extract<ObservedSubmission, { readonly kind: "found" }>,
+): Promise<void> => {
   await recordApproveAllowances({
-    assets: verificationContext(record, preferences),
+    assets: verificationContext(observed.record, observed.preferences),
     calls: normalizedArgentMultisigCalls(intent.prepared.calls),
-    owner: allowanceOwner(record),
+    owner: allowanceOwner(observed.record),
     store: deps.allowanceStore,
   });
   await recordSubmittedIntentActivity(
     deps,
     intent,
-    record.networkId,
+    observed.record.networkId,
     intent.prepared.transactionHash,
   );
+};
+
+/**
+ * Recovers an unresolved submit only from a fresh chain observation of its
+ * exact deterministic hash. A successful not-found response is distinct from
+ * a failed read so the caller may safely retry only the same frozen payload.
+ */
+export const recoverSubmittedArgentIntent = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  operationId: string,
+): Promise<ArgentSubmitResolution> => {
+  const observed = await observeSignedHash(deps, intent);
+  if (observed.kind !== "found") return observed;
+  const recovered: ArgentMultisigSigningIntent = {
+    ...intent,
+    broadcastTransactionHash: intent.prepared.transactionHash,
+    state: observed.state,
+  };
+  await deps.multisigStore
+    .setOperationHash(operationId, intent.prepared.transactionHash)
+    .catch(() => {});
+  await deps.multisigStore.upsertIntent(recovered).catch(() => "invalid" as const);
+  await journalObservedSubmission(deps, intent, observed);
   return { intent: recovered, kind: "submitted" };
+};
+
+/**
+ * Recovers a fully signed stale intent that was broadcast anyway: by a
+ * co-signer holding the same signed package, or by a write endpoint that
+ * forwarded it and then answered with a fee rejection (Sherlock 177). Found on
+ * chain, it moves to `submitted` with its signed hash and joins activity, so
+ * the ordinary outcome reconciliation settles it and no screen offers to send
+ * the same calls again. Only a positive chain observation moves it; a failed
+ * read is `unknown` and leaves it stale.
+ */
+export const recoverStaleArgentIntent = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+): Promise<ArgentSubmitResolution> => {
+  if (intent.state !== "stale" || intent.signatures.length !== intent.configSnapshot.threshold) {
+    return { kind: "absent" };
+  }
+  const observed = await observeSignedHash(deps, intent);
+  if (observed.kind !== "found") return observed;
+  // `found` without `seen` is an odd answer, not a sighting: it proves nothing.
+  if (!observed.seen) return { kind: "unknown" };
+  // A stale intent may only move to `submitted`; the outcome follows from there.
+  const submitted: ArgentMultisigSigningIntent = {
+    ...intent,
+    broadcastTransactionHash: intent.prepared.transactionHash,
+    state: "submitted",
+  };
+  // Journal first: recording a hash replaces any entry with the same hash, so
+  // a retry after a failed state write repeats it harmlessly, while the other
+  // order could leave a `submitted` intent with no activity to settle it.
+  await journalObservedSubmission(deps, intent, observed);
+  if ((await deps.multisigStore.upsertIntent(submitted).catch(() => "invalid")) !== "stored") {
+    return { kind: "unknown" };
+  }
+  return { intent: submitted, kind: "submitted" };
 };
 
 /**
