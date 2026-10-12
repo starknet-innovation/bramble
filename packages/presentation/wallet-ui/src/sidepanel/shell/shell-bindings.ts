@@ -10,6 +10,7 @@ import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
 import type { RefreshReason } from "../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../runtime/runtime";
+import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import { awaitConfirmation, type ConfirmationOutcome } from "../shared/confirm-submitted";
 import {
   buttonBusy,
@@ -262,7 +263,8 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     if (reviewPanelRoot) {
       renderFragment(reviewPanelRoot, stage === "quote" ? reviewCostNote(message) : "");
     }
-    showToast(message, "error", target);
+    // A deployment whose reply was lost may be on chain: amber, not "failed".
+    showToast(message, isOutcomeUnknown(error) ? "warning" : "error", target);
     scopedStatus(target, message);
     buttonBusy(target, false);
   };

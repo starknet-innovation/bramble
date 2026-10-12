@@ -9,8 +9,12 @@
  * this, and three private copies of a two-line helper is how the fallback
  * wording, and then the narrowing, quietly drift apart.
  */
+import { INDETERMINATE_RPC_WRITE_MESSAGE } from "@bramble/starknet/provider";
 import { readPrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
-import { readSubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import {
+  readSubmissionUnknownError,
+  SubmissionUnknownError,
+} from "@bramble/wallet-protocol/submission-unknown";
 import { isErrorResponse } from "../../popup/responses/responses";
 
 /**
@@ -24,3 +28,14 @@ export const responseError = (response: unknown, fallback: string): Error =>
   readSubmissionUnknownError(response) ??
   readPrivacyBlockerError(response) ??
   new Error(isErrorResponse(response) ? response.error : fallback);
+
+/**
+ * Whether a rejected panel call is a write whose outcome is unknown rather than
+ * a failure: a typed {@link SubmissionUnknownError}, or the single-sourced
+ * indeterminate-write sentence a lane passed through as a plain error. Such a
+ * write may already be on chain, so it is shown as a warning and never styled
+ * as "failed", which would invite a blind re-send (issue 382).
+ */
+export const isOutcomeUnknown = (error: unknown): boolean =>
+  error instanceof SubmissionUnknownError ||
+  (error instanceof Error && error.message === INDETERMINATE_RPC_WRITE_MESSAGE);

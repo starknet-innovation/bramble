@@ -488,6 +488,7 @@ ${SIGN_REQUEST_STYLES}
   }
   .toast.success .toast-icon { background: var(--bramble-positive-soft); color: var(--bramble-positive); }
   .toast.error .toast-icon { background: var(--bramble-danger-soft); color: var(--bramble-danger); }
+  .toast.warning .toast-icon { background: var(--bramble-warning-soft); color: var(--bramble-warning); }
   .toast-icon .icon { height: 16px; width: 16px; }
   .toast-text {
     flex: 1;

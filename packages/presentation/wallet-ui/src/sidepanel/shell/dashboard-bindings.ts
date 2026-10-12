@@ -14,6 +14,7 @@ import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
 import type { SidepanelWallet } from "../runtime/runtime";
+import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import { buttonBusy, errorLine, errorMessage, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
@@ -322,7 +323,12 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Approval failed"), "error", button);
+          // An approved call whose reply was lost may be on chain: amber, not "failed".
+          showToast(
+            errorMessage(error, "Approval failed"),
+            isOutcomeUnknown(error) ? "warning" : "error",
+            button,
+          );
           if (result) {
             result.textContent = errorLine(error, "Approval failed");
           }

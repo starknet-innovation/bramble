@@ -67,9 +67,11 @@ export const scopedStatus = (element: Element, message: string): boolean => {
 /**
  * The visual tone a toast is shown with. Exported as the one source of truth so
  * callers that decide a toast's tone type against it rather than re-declaring
- * the literal union.
+ * the literal union. `warning` is for an outcome the wallet cannot establish,
+ * such as a write whose reply was lost: it keeps the error toast's copy control
+ * and duration but never the danger styling, which reads as "failed".
  */
-export type ToastTone = "error" | "success";
+export type ToastTone = "error" | "success" | "warning";
 
 const SUCCESS_TOAST_MS = 3200;
 const ERROR_TOAST_MS = 8000;
@@ -203,7 +205,7 @@ const TOAST_SPRING = resolveSpring("momentum");
 /**
  * Shows a transient toast in the fixed stack at the bottom of the shell.
  * Anatomy is a fixed scannable heuristic: a leading tone chip (green check /
- * red alert) the eye reads before any text, then the message, then every
+ * red alert / amber alert) the eye reads before any text, then the message, then every
  * error's copy control. It springs in with a little momentum, can be swiped
  * away, and error toasts stay longer. `details` lets a compact display line
  * retain the complete diagnostic behind its copy control.
@@ -224,18 +226,19 @@ export const showToast = (
     doc.body.append(stack);
   }
 
-  const friendly = tone === "error" ? friendlyError(message) : null;
+  const problem = tone !== "success";
+  const friendly = problem ? friendlyError(message) : null;
   const toast = doc.createElement("div");
   toast.className = `toast ${tone}`;
   const mark = doc.createElement("span");
   mark.className = "toast-icon";
-  mark.innerHTML = icon(tone === "error" ? "alert" : "check");
+  mark.innerHTML = icon(problem ? "alert" : "check");
   toast.append(mark);
   const text = doc.createElement("span");
   text.className = "toast-text";
   text.textContent = friendly ? friendly.message : message;
   toast.append(text);
-  if (tone === "error") {
+  if (problem) {
     toast.append(toastCopyButton(doc, details));
   }
   stack.append(toast);
@@ -248,7 +251,7 @@ export const showToast = (
     { duration: TOAST_SPRING.durationMs, easing: TOAST_SPRING.easing },
   );
   bindToastSwipe(toast);
-  setTimeout(() => dismissToast(toast, 0), tone === "error" ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
+  setTimeout(() => dismissToast(toast, 0), problem ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
 };
 
 // Swaps the button's copy glyph for a check while the confirmation lands,
