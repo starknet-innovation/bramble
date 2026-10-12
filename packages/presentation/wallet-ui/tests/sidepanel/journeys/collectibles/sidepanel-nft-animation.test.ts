@@ -95,6 +95,23 @@ describe("NFT detail animation", () => {
     expect(play?.hasAttribute("hidden")).toBe(true);
   });
 
+  test("promises isolation, not the absence of every network channel (Sherlock 236)", () => {
+    const app = fromHtml(nftDetailFlow(status, account, preferences, animated.id, [animated]));
+    const hint = app.querySelector("[data-nft-play]")?.previousElementSibling?.textContent ?? "";
+    // CSP does not govern WebRTC, and DNS prefetching differs by browser, so
+    // the hint must not claim the sandbox has no network access.
+    expect(hint).toContain("isolated sandbox");
+    expect(hint).toContain("nothing loads until you press play");
+    expect(hint.toLowerCase()).not.toContain("network");
+  });
+
+  test("the sandbox page opts out of DNS prefetching", async () => {
+    const page = await Bun.file(
+      new URL("../../../../../../../apps/extension/public/sandbox/render.html", import.meta.url),
+    ).text();
+    expect(page).toContain('<meta http-equiv="x-dns-prefetch-control" content="off" />');
+  });
+
   test("shows no play control for a collectible without an animation", () => {
     const app = fromHtml(nftDetailFlow(status, account, preferences, plain.id, [plain]));
     bind(app);

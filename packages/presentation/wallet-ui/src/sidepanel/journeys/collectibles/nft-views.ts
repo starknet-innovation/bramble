@@ -401,14 +401,16 @@ export const selectedNftDetail = (
 // self-contained data:text/html animation. Nothing renders until the user presses
 // play (preserving the anti-phone-home reveal boundary); on click, nft-ui points
 // the iframe at the manifest-sandboxed sandbox/render.html page (no privileged
-// extension APIs or parent-DOM access, egress-blocking CSP) which renders the
-// untrusted HTML in isolation. The URI is carried on the button's data-* and
+// extension APIs or parent-DOM access, a CSP that blocks fetches and resource
+// loads) which renders the untrusted HTML in isolation. The hint does not claim
+// "no network access": CSP does not govern WebRTC, and browsers differ on DNS
+// prefetching (Sherlock 236). The URI is carried on the button's data-* and
 // escaped into it here.
 const nftAnimationSection = (item: NftGalleryItem): string =>
   item.animationUrl
     ? `<section class="section">
         <h2>Animation</h2>
-        <span class="hint">This collectible renders its own animation on-chain. It runs isolated in a sandbox with no network access — nothing loads until you press play.</span>
+        <span class="hint">This collectible renders its own animation on-chain. It runs in an isolated sandbox, and nothing loads until you press play.</span>
         <button class="secondary small" data-nft-play="${escapeHtml(item.animationUrl)}" type="button">${icon("gamepad")}Play animation</button>
         <iframe class="nft-animation" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
       </section>`

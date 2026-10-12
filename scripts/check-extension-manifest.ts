@@ -186,12 +186,17 @@ if (import.meta.main) {
   const packageJson = await readJson("package.json");
 
   const expectedBackgroundServiceWorker = "background/index.js";
-  // Remote NFT artwork may live on any HTTPS host. The side panel enforces the
-  // privacy boundary instead: it creates no remote <img> for an unsolicited NFT
-  // until the user explicitly opens it, while watched NFTs are already solicited.
-  // Scripts and objects remain packaged-only.
+  // Deny by default (Sherlock 245): every resource type not named below is
+  // packaged-only. Remote NFT artwork may live on any HTTPS host. The side panel
+  // enforces the privacy boundary instead: it creates no remote <img> for an
+  // unsolicited NFT until the user explicitly opens it, while watched NFTs are
+  // already solicited. Scripts and objects remain packaged-only. Styles allow
+  // inline because the side panel mounts its stylesheet as a <style> element.
+  // Connections reach HTTPS services and WSS relays, plus the loopback devnet
+  // over HTTP or WS, which is the only plain-text endpoint a network accepts.
+  // No page navigates by form or rebases its URLs.
   const expectedExtensionCsp =
-    "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:; frame-src 'self';";
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none';";
   // CSP for the sandboxed animation renderer (sandbox/render.html). It runs an
   // NFT's untrusted on-chain data:text/html in an isolated security principal:
   // `allow-scripts` (no `allow-same-origin`) lets the canvas animate but grants no
@@ -361,7 +366,7 @@ if (import.meta.main) {
     : null;
   if (!contentSecurityPolicy || contentSecurityPolicy["extension_pages"] !== expectedExtensionCsp) {
     failures.push(
-      "manifest CSP must allow only packaged scripts, Krusty WASM, and self/data/HTTPS images",
+      "manifest CSP must deny by default and allow only packaged scripts, Krusty WASM, self/data/HTTPS images, inline styles, and HTTPS, WSS or loopback connections",
     );
   }
   if (!contentSecurityPolicy || contentSecurityPolicy["sandbox"] !== expectedSandboxCsp) {
