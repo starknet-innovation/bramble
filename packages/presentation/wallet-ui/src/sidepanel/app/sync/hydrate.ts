@@ -400,6 +400,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     if (selected) {
       fill(wallet.loadTokenChart(selected.address), (value) => {
         cache.chart = value;
+        cache.chartTokenId = selected.id;
       });
     }
   }
