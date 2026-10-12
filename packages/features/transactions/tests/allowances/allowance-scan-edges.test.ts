@@ -33,6 +33,9 @@ describe("collectExternalAllowances edges", () => {
         // Every spender has a non-zero live allowance.
         return ["0x64", "0x0"];
       },
+      async getLatestBlockNumber() {
+        return 100;
+      },
       async getEvents() {
         return { events: spenders.map((spender) => ozEvent(OWNER, spender)) };
       },
@@ -52,6 +55,9 @@ describe("collectExternalAllowances edges", () => {
     const rpc: AllowanceRpc = {
       async callContract() {
         return ["0x64", "0x0"];
+      },
+      async getLatestBlockNumber() {
+        return 100;
       },
       async getEvents(filter) {
         return BigInt(filter.address) === BigInt(TOKEN)
@@ -75,6 +81,9 @@ describe("collectExternalAllowances edges", () => {
       async callContract() {
         return ["0x64", "0x0"];
       },
+      async getLatestBlockNumber() {
+        return 100;
+      },
       async getEvents() {
         // No baseError code -> classified as transport-level -> must abort.
         throw new Error("fetch failed");
@@ -90,6 +99,9 @@ describe("collectExternalAllowances edges", () => {
 const rpcProvider = {
   async callContract() {
     return ["0x3e8", "0x0"];
+  },
+  async getBlockNumber() {
+    return 100;
   },
   async getEvents() {
     return { events: [ozEvent(canonical(OWNER), canonical(SPENDER))] };

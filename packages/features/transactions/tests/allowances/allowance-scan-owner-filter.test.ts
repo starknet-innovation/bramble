@@ -52,6 +52,9 @@ const node = (log: readonly AllowanceEvent[]) => {
       const spender = canonical(String((call.calldata as string[])[1]));
       return spender === canonical(DRAINER) ? [UNLIMITED_LOW, "0x0"] : ["0x0", "0x0"];
     },
+    async getLatestBlockNumber() {
+      return 100;
+    },
     async getEvents(filter) {
       filters.push(filter);
       const matching = log.filter((event) => matches(event, filter.keys));

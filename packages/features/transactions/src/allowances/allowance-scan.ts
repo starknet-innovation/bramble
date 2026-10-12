@@ -17,7 +17,9 @@
  * never reaches the account's own (Sherlock 181). Discovery therefore asks the
  * node for the account's approvals by key first, and says when it could not
  * read a log to the end, so the manager never reports "none found" for a scan
- * that stopped early.
+ * that stopped early. A legacy-layout approval names its owner only in the data
+ * payload, which no key filter reaches, so those are read from the token's
+ * recent blocks backwards, never from its first event.
  */
 
 import { isTransportRpcError, withRpcFallback } from "@bramble/starknet/provider";
@@ -43,6 +45,13 @@ const OWNER_EVENT_PAGES = 5;
 const LOG_EVENT_PAGES = 3;
 const EVENT_CHUNK_SIZE = 100;
 const MAX_SPENDERS_PER_TOKEN = 50;
+// The unfiltered read for legacy-layout approvals walks back from the head one
+// block window at a time, at most this many windows. 200,000 blocks is about
+// four days at mainnet's ~1.7 s blocks, the range the history scan found a
+// public node answers inside its per-request deadline (see
+// ../history/tx-history-scan.ts); three windows reach back about twelve days.
+const LEGACY_BLOCK_WINDOW = 200_000;
+const LEGACY_WINDOWS = 3;
 
 /**
  * Minimal Starknet event filter this scan issues.
@@ -51,7 +60,10 @@ export type AllowanceEventFilter = {
   readonly address: string;
   readonly chunk_size: number;
   readonly continuation_token?: string;
+  // Bounds the legacy read to one block window; the owner read is unbounded.
+  readonly from_block?: number;
   readonly keys: readonly string[][];
+  readonly to_block?: number;
 };
 
 /**
@@ -81,6 +93,7 @@ export type AllowanceRpc = AllowanceCallRpc & {
     readonly continuation_token?: string;
     readonly events?: readonly AllowanceEvent[];
   }>;
+  readonly getLatestBlockNumber: () => Promise<number>;
 };
 
 /**
@@ -108,6 +121,9 @@ const spendersFromEvents = (events: readonly AllowanceEvent[], owner: string): s
 };
 
 type SpenderPage = {
+  // True when an event in the Cairo 1 layout (owner and spender in the keys)
+  // was read.
+  readonly cairo1Layout: boolean;
   // True when an event in the legacy layout (owner and spender in the data
   // payload) was read, which a key filter on the owner can never match.
   readonly legacyLayout: boolean;
@@ -116,14 +132,18 @@ type SpenderPage = {
   readonly truncated: boolean;
 };
 
+type BlockRange = { readonly from_block: number; readonly to_block: number };
+
 const pageSpenders = async (
   rpc: AllowanceRpc,
   token: string,
   owner: string,
   keys: readonly string[][],
   pages: number,
+  range?: BlockRange,
 ): Promise<SpenderPage> => {
   const spenders: string[] = [];
+  let cairo1Layout = false;
   let legacyLayout = false;
   let continuationToken: string | undefined;
   for (let page = 0; page < pages; page += 1) {
@@ -131,17 +151,19 @@ const pageSpenders = async (
       address: token,
       chunk_size: EVENT_CHUNK_SIZE,
       keys,
+      ...range,
       ...(continuationToken === undefined ? {} : { continuation_token: continuationToken }),
     });
     const events = chunk.events ?? [];
+    cairo1Layout ||= events.some((event) => event.keys.length >= 3);
     legacyLayout ||= events.some((event) => event.keys.length < 3);
     spenders.push(...spendersFromEvents(events, owner));
     if (chunk.continuation_token === undefined) {
-      return { legacyLayout, spenders, truncated: false };
+      return { cairo1Layout, legacyLayout, spenders, truncated: false };
     }
     continuationToken = chunk.continuation_token;
   }
-  return { legacyLayout, spenders, truncated: true };
+  return { cairo1Layout, legacyLayout, spenders, truncated: true };
 };
 
 type DiscoveredSpenders = {
@@ -149,13 +171,62 @@ type DiscoveredSpenders = {
   readonly spenders: readonly string[];
 };
 
+// The unfiltered read for legacy-layout approvals, newest window first.
+// - A window holding Cairo 1 events and no legacy-layout one shows the token
+//   now emits the Cairo 1 layout, which the owner read covers at any age, so
+//   the walk ends there as covered. That is the mainnet ETH and STRK case,
+//   whose logs start with Cairo 0 approvals from before their upgrade.
+// - A window holding legacy events too many for the page budget leaves some
+//   unread: incomplete.
+// - An empty window, or one whose legacy events all fit, says nothing about
+//   older blocks, so the walk goes on.
+// Past the last window the rest of the log is read from its first block, as
+// the whole read used to be: a quiet token finishes there, and a busy one is
+// incomplete only if that read is cut short while showing legacy events.
+// A legacy approval from before a token's Cairo 1 upgrade is not looked for:
+// an RPC node cannot be asked for it by owner, and the pre-upgrade log of a
+// busy token does not fit any page budget.
+const legacySpenders = async (
+  rpc: AllowanceRpc,
+  token: string,
+  owner: string,
+): Promise<DiscoveredSpenders> => {
+  const spenders: string[] = [];
+  const keys = [[APPROVAL_EVENT_KEY]];
+  let toBlock = await rpc.getLatestBlockNumber();
+  for (let window = 0; window < LEGACY_WINDOWS; window += 1) {
+    const fromBlock = Math.max(0, toBlock - LEGACY_BLOCK_WINDOW + 1);
+    const read = await pageSpenders(rpc, token, owner, keys, LOG_EVENT_PAGES, {
+      from_block: fromBlock,
+      to_block: toBlock,
+    });
+    spenders.push(...read.spenders);
+    if (read.cairo1Layout && !read.legacyLayout) {
+      return { complete: true, spenders };
+    }
+    if (read.truncated) {
+      return { complete: false, spenders };
+    }
+    if (fromBlock === 0) {
+      return { complete: true, spenders };
+    }
+    toBlock = fromBlock - 1;
+  }
+  const rest = await pageSpenders(rpc, token, owner, keys, LOG_EVENT_PAGES, {
+    from_block: 0,
+    to_block: toBlock,
+  });
+  spenders.push(...rest.spenders);
+  return { complete: !rest.truncated || !rest.legacyLayout, spenders };
+};
+
 // Two reads per token. A Cairo 1 token indexes the owner as key 1, so the first
 // read asks the node for this owner's approvals only, and the page budget is
 // spent on them rather than on every holder's. A legacy token keeps owner and
 // spender in the data payload, which no key filter can match, so the second
-// read is the unfiltered log from its start, as before. Discovery is complete
-// when the owner read reached its end and the unfiltered read either reached
-// its end too or showed only Cairo 1 events, which the owner read covers.
+// read walks the unfiltered log back from the head (see legacySpenders).
+// Discovery is complete when the owner read reached its end and the legacy
+// walk covered its range.
 const discoverSpenders = async (
   rpc: AllowanceRpc,
   token: string,
@@ -168,13 +239,10 @@ const discoverSpenders = async (
     [[APPROVAL_EVENT_KEY], [owner]],
     OWNER_EVENT_PAGES,
   );
-  const log = await pageSpenders(rpc, token, owner, [[APPROVAL_EVENT_KEY]], LOG_EVENT_PAGES);
+  const log = await legacySpenders(rpc, token, owner);
   const spenders = [...new Set([...owned.spenders, ...log.spenders])];
   return {
-    complete:
-      !owned.truncated &&
-      (!log.truncated || !log.legacyLayout) &&
-      spenders.length <= MAX_SPENDERS_PER_TOKEN,
+    complete: !owned.truncated && log.complete && spenders.length <= MAX_SPENDERS_PER_TOKEN,
     spenders: spenders.slice(0, MAX_SPENDERS_PER_TOKEN),
   };
 };
@@ -263,7 +331,7 @@ const collectTokenAllowancesSafe = async (
 /**
  * The outcome of discovering one owner's external allowances. `complete` is
  * false when any token's `Approval` log could not be read to the end within the
- * page budget, held approvals in a layout no owner filter can reach beyond it,
+ * page budget, held legacy-layout approvals in recent blocks beyond what was read,
  * named more spenders than are read, or could not be read at all: an empty
  * `allowances` list then means "none found in what was read", not "none".
  */
@@ -409,10 +477,17 @@ export const scanExternalAllowances = async (
               address: filter.address,
               chunk_size: filter.chunk_size,
               keys: filter.keys.map((group) => [...group]),
+              ...(filter.from_block === undefined
+                ? {}
+                : { from_block: { block_number: filter.from_block } }),
+              ...(filter.to_block === undefined
+                ? {}
+                : { to_block: { block_number: filter.to_block } }),
               ...(filter.continuation_token === undefined
                 ? {}
                 : { continuation_token: filter.continuation_token }),
             }),
+          getLatestBlockNumber: () => provider.getBlockNumber(),
         },
         { owner, tokens },
       ),
