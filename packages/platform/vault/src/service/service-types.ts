@@ -299,6 +299,12 @@ export type WalletVaultService = {
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
   /**
+   * Drops the in-memory grant projection `getGrantedAccounts` answers from.
+   * Called when the wallet locks, beside the derived-key caches; the next
+   * read after unlock repopulates it.
+   */
+  readonly clearGrantCache: () => void;
+  /**
    * Accepts a vault whose status reports `unverified` or `rollback` after the
    * user consented to a possibly older copy: decrypts it with the passphrase,
    * removes every origin grant and retained Ledger viewing key a rollback could

@@ -199,8 +199,9 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
       // still reports "first time seen" for a new site's approval.
       await ctx.originHistory.record(input.origin);
     }
-    if (!authorized.isCurrent()) return { error: "wallet locked" };
-    if (accounts.length > 0) return { accounts, ok: true };
+    // A lock that lands during the read falls through to what a locked wallet
+    // answers, so the race is not a lock-state signal of its own (Sherlock 148).
+    if (authorized.isCurrent() && accounts.length > 0) return { accounts, ok: true };
   }
   if (input.silent) {
     return { accounts: [], ok: true };

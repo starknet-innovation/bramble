@@ -75,11 +75,18 @@ for (const boundary of [
   }
 }
 
+const LOCKED_ANSWERS = {
+  "wallet.getGrantedAccounts": { accounts: [], ok: true },
+  "wallet.getPermissions": { ok: true, permissions: [] },
+  // Sent silent: a locked wallet answers a silent request with no accounts.
+  "wallet.requestAccounts": { accounts: [], ok: true },
+} as const;
+
 for (const type of [
   "wallet.getGrantedAccounts",
   "wallet.requestAccounts",
   "wallet.getPermissions",
-]) {
+] as const) {
   test(`${type} does not return stale grants after lock`, async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
@@ -98,7 +105,11 @@ for (const type of [
       { session },
     );
     const pending = handler(
-      { type, origin: "https://example.com" },
+      {
+        type,
+        origin: "https://example.com",
+        ...(type === "wallet.requestAccounts" ? { silent: true } : {}),
+      },
       {
         id: "extension-id",
         url: "https://example.com/",
@@ -107,13 +118,86 @@ for (const type of [
     await entered.promise;
     session.lock();
     release.resolve();
-    await expect(pending).resolves.toEqual(
-      type === "wallet.getGrantedAccounts"
-        ? { accounts: [], ok: true }
-        : { error: "wallet locked" },
-    );
+    // Each answers exactly what it answers while locked, so the race is not a
+    // lock-state signal of its own (Sherlock 148).
+    await expect(pending).resolves.toEqual(LOCKED_ANSWERS[type]);
   });
 }
+
+for (const type of ["wallet.requestAccounts", "wallet.getPermissions"] as const) {
+  test(`${type} answers an unconnected site the same whether a lock lands mid-read or not`, async () => {
+    const answer = async (lockMidRead: boolean): Promise<unknown> => {
+      const session = createUnlockSession();
+      session.unlock(vaultPassphrase);
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const handler = createMessageHandler(
+        {
+          ...createWallet(),
+          async getGrantedAccounts() {
+            entered.resolve();
+            await release.promise;
+            return [];
+          },
+        },
+        testExtension,
+        { session },
+      );
+      const pending = handler(
+        {
+          type,
+          origin: "https://example.com",
+          ...(type === "wallet.requestAccounts" ? { silent: true } : {}),
+        },
+        { id: "extension-id", url: "https://example.com/" },
+      );
+      await entered.promise;
+      if (lockMidRead) session.lock();
+      release.resolve();
+      return pending;
+    };
+    expect(await answer(true)).toEqual(await answer(false));
+  });
+}
+
+test("wallet.requestAccounts queues a connection approval when a lock lands mid-read, as it does while locked", async () => {
+  const session = createUnlockSession();
+  session.unlock(vaultPassphrase);
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const queued: string[] = [];
+  const handler = createMessageHandler(
+    {
+      ...createWallet(),
+      async getGrantedAccounts() {
+        entered.resolve();
+        await release.promise;
+        return [account];
+      },
+    },
+    testExtension,
+    { session },
+  );
+  void handler(
+    { type: "wallet.requestAccounts", origin: "https://example.com" },
+    { id: "extension-id", url: "https://example.com/" },
+  );
+  await entered.promise;
+  session.lock();
+  release.resolve();
+  await Bun.sleep(0);
+  const pending = await handler(
+    { type: "wallet.pendingApprovals" },
+    {
+      id: "extension-id",
+      url: "chrome-extension://extension-id/sidepanel.html",
+    },
+  );
+  for (const approval of (pending as unknown as { pending: { origin: string }[] }).pending) {
+    queued.push(approval.origin);
+  }
+  expect(queued).toEqual(["https://example.com"]);
+});
 
 for (const replacement of [false, true]) {
   test(`deployment data cannot disclose after RPC crosses revocation (replacement: ${replacement})`, async () => {

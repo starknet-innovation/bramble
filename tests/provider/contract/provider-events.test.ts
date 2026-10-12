@@ -2,7 +2,10 @@
  * Provider event contract checks: page event parsing, the subscription hub,
  * and the privacy-gated forwarding decisions made by the content bridge.
  */
+
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { PAGE_TARGET } from "@bramble/wallet-protocol/bridge";
 import {
   accountsChangedEvent,
@@ -13,6 +16,7 @@ import {
   pageEventsFor,
   readProviderEvent,
 } from "@bramble/wallet-protocol/events";
+import { EXTENSION_SRC_DIR } from "../../support/workspace-sources";
 
 const ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 const OTHER = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
@@ -133,16 +137,34 @@ describe("isWalletEventMessage", () => {
 });
 
 describe("addressesFromPayload", () => {
+  const method = "wallet_requestAccounts";
   test("reads address lists and account results, but not errors", () => {
-    expect(addressesFromPayload({ result: [ADDRESS, OTHER] })).toEqual([ADDRESS, OTHER]);
+    expect(addressesFromPayload({ result: [ADDRESS, OTHER] }, method)).toEqual([ADDRESS, OTHER]);
     expect(
-      addressesFromPayload({ result: { accounts: [{ address: ADDRESS }], ok: true } }),
+      addressesFromPayload({ result: { accounts: [{ address: ADDRESS }], ok: true } }, method),
     ).toEqual([ADDRESS]);
     expect(
-      addressesFromPayload({ result: { accounts: [{ id: "no-address" }], ok: true } }),
+      addressesFromPayload({ result: { accounts: [{ id: "no-address" }], ok: true } }, method),
     ).toBeNull();
-    expect(addressesFromPayload({})).toBeNull();
-    expect(addressesFromPayload({ result: "0x1" })).toBeNull();
+    expect(addressesFromPayload({}, method)).toBeNull();
+    expect(addressesFromPayload({ result: "0x1" }, method)).toBeNull();
+  });
+
+  test("reads every account-returning method", () => {
+    for (const accountMethod of ["mc_accounts", "mc_requestAccounts", "wallet_requestAccounts"]) {
+      expect(addressesFromPayload({ result: [ADDRESS] }, accountMethod)).toEqual([ADDRESS]);
+    }
+  });
+
+  test("ignores a string list any other method returns (Sherlock 149)", () => {
+    for (const other of [
+      "wallet_supportedSpecs",
+      "wallet_supportedWalletApi",
+      "wallet_getPermissions",
+    ]) {
+      expect(addressesFromPayload({ result: ["0.10.0"] }, other)).toBeNull();
+      expect(addressesFromPayload({ result: [ADDRESS] }, other)).toBeNull();
+    }
   });
 });
 
@@ -194,5 +216,12 @@ describe("pageEventsFor", () => {
     expect(
       pageEventsFor({ addresses: [OTHER], lastAddresses: [ADDRESS], message: networkMessage }),
     ).toEqual([networkChangedEvent(CHAIN_ID), accountsChangedEvent([OTHER])]);
+  });
+});
+
+describe("content bridge address observation", () => {
+  test("passes each response's own method, so only account answers move what a page has seen", async () => {
+    const source = await readFile(join(EXTENSION_SRC_DIR, "content/index.ts"), "utf8");
+    expect(source).toContain("addressesFromPayload(payload, request.method)");
   });
 });

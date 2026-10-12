@@ -107,6 +107,11 @@ export type ApprovalQueue = {
     readonly typedData: unknown;
   }) => PendingApproval;
   readonly requestStrk20Disclosure: (input: {
+    /**
+     * Recipient risk flags. An `address-poisoning` flag leaves the card with
+     * Deny only; the page learns nothing until the user decides.
+     */
+    readonly flags?: readonly ApprovalRiskFlag[];
     readonly context: ApprovalContext;
     readonly kind: Strk20DisclosureApprovalKind;
     readonly origin: string;
@@ -116,6 +121,11 @@ export type ApprovalQueue = {
   }) => PendingApproval;
   readonly requestStrk20Invoke: (input: {
     readonly actions: readonly Strk20Action[];
+    /**
+     * Recipient risk flags. An `address-poisoning` flag leaves the card with
+     * Deny only; the page learns nothing until the user decides.
+     */
+    readonly flags?: readonly ApprovalRiskFlag[];
     readonly context: ApprovalContext;
     readonly origin: string;
     readonly plan: Strk20SubmissionPlan;
