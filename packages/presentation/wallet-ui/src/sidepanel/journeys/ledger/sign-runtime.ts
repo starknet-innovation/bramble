@@ -16,7 +16,7 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { bindCopyButtons, renderFragment } from "../../shared/dom";
+import { bindCopyButtons, isPopupSurface, renderFragment } from "../../shared/dom";
 import {
   createLedgerSignController,
   type LedgerConnector,
@@ -40,9 +40,12 @@ export type LedgerSignRuntimeDeps = {
 
 /**
  * The side-panel Ledger signing runtime. `poll` fetches parked device signs and
- * presents the first one; it is idempotent while a request is being fulfilled.
+ * presents the first one; it is idempotent while a request is being fulfilled,
+ * and it takes the overlay down when the presented request is no longer parked.
+ * `dismiss` takes it down without a round-trip, for a panel that is locking.
  */
 export type LedgerSignRuntime = {
+  readonly dismiss: () => void;
   readonly poll: () => Promise<void>;
 };
 
@@ -101,8 +104,22 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
   });
 
   return {
+    dismiss: () => controller.dismiss(),
     async poll() {
+      // A toolbar popup closes as soon as the device chooser's tab takes
+      // focus, orphaning the grant tab with the device still claimed (Sherlock
+      // 227). The parked request stays queued for the side panel instead.
+      if (isPopupSurface(mount)) {
+        return;
+      }
       const pending = await wallet.loadLedgerSignPending();
+      // The overlay survives repaints, so its lifetime must follow the queue's:
+      // a lock or the queue's timeout settles a parked request in the
+      // background, and the prompt must not keep showing its hash (Sherlock 228).
+      const active = controller.activeId();
+      if (active !== null && !pending.some((request) => request.id === active)) {
+        controller.dismiss();
+      }
       const first = pending[0];
       if (first) {
         controller.present(first);
