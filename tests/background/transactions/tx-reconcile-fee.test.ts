@@ -12,8 +12,10 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { TransactionFee, TransactionStatusReport } from "@bramble/starknet/rpc";
 import { type ActivityEntry, memoryActivityLog } from "@bramble/transactions/activity";
 import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import { L1_FINALITY_WINDOW_MS } from "../../../apps/extension/src/background/transactions/tx-observation";
 import {
   type ReconcileDeps,
+  reconcileObserved,
   reconcileScope,
 } from "../../../apps/extension/src/background/transactions/tx-reconcile";
 
@@ -48,11 +50,14 @@ const report = (status: TransactionStatusReport["status"]): TransactionStatusRep
   status,
 });
 
+type FeeAnswer = Readonly<Record<string, TransactionFee>> | "throws" | "absent";
+
 const harness = async (
   seeds: readonly ActivityEntry[],
   status: TransactionStatusReport["status"],
-  fees: Readonly<Record<string, TransactionFee>> | "throws" | "absent",
+  initialFees: FeeAnswer,
 ) => {
+  let fees = initialFees;
   const activity = memoryActivityLog();
   // Seeded as stored rows, so the status and provenance are what the test says.
   await activity.replaceScope?.(seeds, SCOPE);
@@ -78,7 +83,14 @@ const harness = async (
     preferencesStore: { read: async () => preferences },
     runtimeRpc,
   };
-  return { activity, deps, feeReads };
+  return {
+    activity,
+    deps,
+    feeReads,
+    setFees: (next: FeeAnswer) => {
+      fees = next;
+    },
+  };
 };
 
 const stored = async (activity: ReconcileDeps["activity"]): Promise<ActivityEntry | undefined> =>
@@ -156,5 +168,55 @@ describe("fee paid", () => {
 
   test("is wired into the worker's RPC, so production reconciliation reads it", () => {
     expect(typeof defaultRuntimeRpc.getTransactionFees).toBe("function");
+  });
+});
+
+describe("fee backfill for rows no longer observed", () => {
+  test("reads a reverted wallet row again on a later slow pass when the first read failed", async () => {
+    const { activity, deps, feeReads, setFees } = await harness([entry()], "reverted", "throws");
+    await reconcileScope(deps, SCOPE, NOW, true);
+    expect((await stored(activity))?.status).toBe("reverted");
+    expect((await stored(activity))?.feePaid).toBeUndefined();
+
+    setFees({ "0xabc": FEE });
+    await reconcileObserved(deps, "slow", NOW);
+
+    expect(feeReads).toEqual([["0xabc"], ["0xabc"]]);
+    expect((await stored(activity))?.feePaid).toEqual(FEE);
+    expect((await stored(activity))?.status).toBe("reverted");
+  });
+
+  test("reads an L1-final wallet row with no fee on a user refresh", async () => {
+    const final = entry({ finalizedOnL1: true, status: "accepted" });
+    const { activity, deps, feeReads } = await harness([final], "accepted", { "0xabc": FEE });
+    await reconcileScope(deps, SCOPE, NOW, true);
+    expect(feeReads).toEqual([["0xabc"]]);
+    expect((await stored(activity))?.feePaid).toEqual(FEE);
+  });
+
+  test("does not run on fast passes", async () => {
+    const { deps, feeReads } = await harness([entry({ status: "reverted" })], "reverted", {
+      "0xabc": FEE,
+    });
+    await reconcileObserved(deps, "fast", NOW);
+    await reconcileScope(deps, SCOPE, NOW, false);
+    expect(feeReads).toEqual([]);
+  });
+
+  test("skips rows past the observation window and rows the wallet did not submit", async () => {
+    const old = entry({ status: "reverted", submittedAt: NOW - L1_FINALITY_WINDOW_MS - 1 });
+    const { origin: _origin, ...discovered } = entry({ hash: "0xdef", status: "reverted" });
+    const { deps, feeReads } = await harness([old, discovered], "reverted", { "0xabc": FEE });
+    await reconcileObserved(deps, "slow", NOW);
+    expect(feeReads).toEqual([]);
+  });
+
+  test("reads at most eight rows per pass", async () => {
+    const rows = Array.from({ length: 12 }, (_, index) =>
+      entry({ hash: `0x${(index + 1).toString(16)}`, status: "reverted" }),
+    );
+    const { deps, feeReads } = await harness(rows, "reverted", {});
+    await reconcileObserved(deps, "slow", NOW);
+    expect(feeReads.flat()).toHaveLength(8);
   });
 });
