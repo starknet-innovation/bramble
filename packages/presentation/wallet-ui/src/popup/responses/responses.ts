@@ -451,13 +451,12 @@ export const isAllowancesResponse = (value: unknown): value is AllowancesRespons
  */
 export type AllowanceListing = {
   readonly entries: readonly AllowanceView[];
+  readonly loading?: true; // Only before the first answer: nothing is claimed yet.
   readonly notices: readonly AllowanceNotice[];
   readonly unavailable: boolean;
 };
 
-/**
- * The listing before the manager has loaded: nothing to show, nothing claimed.
- */
+/** An answered listing with nothing in it. */
 export const EMPTY_ALLOWANCE_LISTING: AllowanceListing = {
   entries: [],
   notices: [],

@@ -11,6 +11,7 @@ import {
   allowanceListingFrom,
   type WalletStatus,
 } from "../../../../src/popup/responses/responses";
+import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { allowancesFlow } from "../../../../src/sidepanel/journeys/portfolio/allowance-views";
 
 const status: WalletStatus = {
@@ -44,6 +45,14 @@ const render = (listing: Partial<AllowanceListing>): string =>
 const EMPTY = "No outstanding allowances found for this account.";
 
 describe("allowance listing notices", () => {
+  test("before the first answer it claims neither a count nor none found", () => {
+    const html = render(emptyRenderCache().allowances);
+    expect(html).toContain("Loading allowances…");
+    expect(html).not.toContain(EMPTY);
+    expect(html).not.toContain("0 outstanding");
+    expect(html).not.toContain("Not loaded");
+  });
+
   test("a failed listing says it could not be loaded instead of none found", () => {
     const html = render({ unavailable: true });
     expect(html).toContain("Allowances could not be loaded. Refresh to try again.");

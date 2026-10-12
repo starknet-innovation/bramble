@@ -7,11 +7,7 @@
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
-import {
-  EMPTY_ALLOWANCE_LISTING,
-  type SignabilityVerdict,
-  type WalletStatus,
-} from "../../../popup/responses/responses";
+import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 import type { ConnectedSitesState } from "../screens/support-flows";
@@ -109,7 +105,8 @@ export const updateRenderScope = (
  * value null. Used to prime the cache at boot and to reset it on lock.
  */
 export const emptyRenderCache = (): RenderData => ({
-  allowances: EMPTY_ALLOWANCE_LISTING,
+  // Not yet read: the screen shows no count and no "none found".
+  allowances: { entries: [], loading: true, notices: [], unavailable: false },
   multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
   multisigsNetworkId: null,

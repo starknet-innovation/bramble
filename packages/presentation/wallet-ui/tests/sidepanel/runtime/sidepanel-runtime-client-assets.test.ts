@@ -232,6 +232,11 @@ describe("allowances", () => {
     expect((await runtimeReturning(errorEnvelope).loadAllowances()).unavailable).toBe(true);
   });
 
+  test("a failed send reads as unavailable, not as a load that never ends", async () => {
+    const failing = { sendMessage: () => Promise.reject(new Error("no connection")) };
+    expect((await createSidepanelRuntime(failing).loadAllowances()).unavailable).toBe(true);
+  });
+
   test("revokeAllowance returns the tx hash and throws on failure", async () => {
     expect(await runtimeReturning(transferResponse).revokeAllowance("id-1")).toBe("0x123");
     await expect(runtimeReturning({}).revokeAllowance("id-1")).rejects.toThrow("revoke failed");
