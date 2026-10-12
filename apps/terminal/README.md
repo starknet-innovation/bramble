@@ -72,8 +72,13 @@ STRK20_PROVER_UPSTREAM=
 STRK20_PAYMASTER_UPSTREAM=https://starknet.paymaster.avnu.fi
 AVNU_PAYMASTER_API_KEY=
 BRAMBLE_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
-TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app,http://localhost:3000
+TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app
 ```
+
+The loopback origins `http://localhost:3000`, `http://localhost:5273` and their
+`127.0.0.1` forms are accepted only when `VERCEL_ENV=development`, which
+`bun run dev:full` sets. Production and preview deployments never accept them,
+even if they are listed in `TERMINAL_ALLOWED_ORIGINS`.
 
 Never prefix upstream URLs or the paymaster key with `VITE_`; Vite variables
 are browser-readable. The public gateway URL is visible by design, while the
