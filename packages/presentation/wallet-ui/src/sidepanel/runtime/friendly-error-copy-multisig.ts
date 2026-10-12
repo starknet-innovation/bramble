@@ -8,6 +8,13 @@ import { OUTCOME_UNKNOWN, SAVE_FAILED, SUBMISSION_UNKNOWN } from "./friendly-err
 const MULTISIG_DEPLOY_PREPARE = "Couldn't prepare the deployment. Try again.";
 const MULTISIG_BALANCES = "Couldn't load multisig balances. Check your connection and try again.";
 
+/**
+ * The second-press prompt before removing an undeployed multisig, whose setup
+ * this wallet alone holds (Sherlock 214).
+ */
+export const UNDEPLOYED_REMOVAL_PROMPT =
+  "This multisig isn't deployed. Removing it deletes the setup needed to deploy it. Press again to remove it.";
+
 /** Multisig and co-signer entries merged into ERROR_COPY. */
 export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   // --- Multisig ------------------------------------------------------------
@@ -146,6 +153,7 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "confirm removal of terminal argent multisig history",
     "Press again to delete this multisig's history.",
   ],
+  ["confirm removal of an undeployed argent multisig", UNDEPLOYED_REMOVAL_PROMPT],
 
   // Co-signer coordination over the relay. The fallback is always the same:
   // copy the package and send it yourself.

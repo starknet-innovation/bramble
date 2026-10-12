@@ -59,6 +59,33 @@ const checkedDeploymentRecord = async (
     : null;
 };
 
+// A recorded deployment the chain refused or reverted frees its address once
+// the chain also reports nothing deployed there. Without this the stored hash
+// answered every retry with "submitted" for a deployment that never happened
+// (Sherlock 197). A pending, accepted or unknown entry, or a failed read,
+// keeps the hash: a not-yet-visible deployment must never be sent twice.
+const hashedDeploymentFailed = async (
+  deps: MultisigOpsDeps,
+  record: DeployableArgentRecord,
+  transactionHash: string,
+): Promise<boolean> => {
+  const entry = (await deps.activity.list()).find(
+    (candidate) =>
+      candidate.accountId === record.id &&
+      candidate.networkId === record.networkId &&
+      sameFelt(candidate.hash, transactionHash),
+  );
+  if (entry?.status !== "rejected" && entry?.status !== "reverted") return false;
+  const preferences = await deps.preferencesStore.read();
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({
+      accountAddress: record.address,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+    })
+    .catch(() => null);
+  return deployed === false;
+};
+
 const claimDeployment = async (
   deps: MultisigOpsDeps,
   record: DeployableArgentRecord,
@@ -86,6 +113,9 @@ const claimDeployment = async (
   }
   const existing = await deps.multisigStore.getOperation(operationId);
   if (existing?.transactionHash) {
+    if (await hashedDeploymentFailed(deps, record, existing.transactionHash)) {
+      return reclaimDeployment(deps, record, operationId);
+    }
     return {
       address: record.address,
       multisig: storedMultisigView(record, true),
@@ -111,6 +141,11 @@ const resolveClaimedDeployment = async (
     return { error: "Argent multisig deployment outcome is unresolved" };
   }
   if (resolution.kind === "deployed") {
+    // Deployed with no hash to record: the claim guards nothing any more, and
+    // left in place it would block removing this multisig (Sherlock 197).
+    if (resolution.transactionHash === null) {
+      await deps.multisigStore.releaseOperation(operationId).catch(() => {});
+    }
     return {
       address: record.address,
       multisig: storedMultisigView(record, true),
@@ -124,8 +159,18 @@ const resolveClaimedDeployment = async (
   // the claim guards nothing: release it and take a fresh one so THIS attempt
   // broadcasts. Without it a single lost response burned the address
   // permanently, because a deploy's hash is only ever recovered from local
-  // evidence that a lost response never produced. Re-claiming keeps the guard
-  // intact for the new attempt; if it cannot be retaken, nothing is sent.
+  // evidence that a lost response never produced.
+  return reclaimDeployment(deps, record, operationId);
+};
+
+// Releases a claim that guards nothing and retakes it for this attempt.
+// Re-claiming keeps the guard intact for the new attempt; if it cannot be
+// retaken, nothing is sent.
+const reclaimDeployment = async (
+  deps: MultisigOpsDeps,
+  record: DeployableArgentRecord,
+  operationId: string,
+): Promise<RuntimeResponse | string> => {
   await deps.multisigStore.releaseOperation(operationId).catch(() => {});
   const reclaimed = await deps.multisigStore.claimOperation({
     accountId: record.id,

@@ -81,5 +81,7 @@ export const reviewArgentMultisigCalls = async (
   if (refusal) return refusal;
   const first = report.calls[0]?.summary ?? "Review Argent multisig call";
   const suffix = report.calls.length > 1 ? ` (+${report.calls.length - 1} more)` : "";
-  return { summary: `${first}${suffix}`.slice(0, MULTISIG_LIMITS.summaryLength) };
+  // Trimmed after the cut: the stored intent refuses a summary with edge
+  // whitespace, and a cut can end on a space (Sherlock 216).
+  return { summary: `${first}${suffix}`.slice(0, MULTISIG_LIMITS.summaryLength).trimEnd() };
 };
