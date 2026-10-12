@@ -34,7 +34,7 @@ export type OnboardingCompletionBrowser = {
  * opens the dedicated extension tab where security decisions have stable room.
  */
 export const onboardingLaunch = (): string => `
-  <main class="screen flow gate onboarding-gate">
+  <section class="screen flow gate onboarding-gate">
     <div class="gate-brand">${BRAMBLE_MARK}</div>
     <div class="gate-head">
       <p class="eyebrow">Wallet setup</p>
@@ -47,14 +47,14 @@ export const onboardingLaunch = (): string => `
         target: "_blank",
       })}
     </div>
-  </main>`;
+  </section>`;
 
 /**
  * Completion screen rendered when onboarding.html observes an existing vault.
  * It contains no account data or secret material.
  */
 export const onboardingComplete = (): string => `
-  <main class="screen flow gate onboarding-complete">
+  <section class="screen flow gate onboarding-complete">
     <div class="gate-brand onboarding-complete-mark">${icon("check")}</div>
     <div class="gate-head">
       <h1>You’re all set</h1>
@@ -63,7 +63,7 @@ export const onboardingComplete = (): string => `
       ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open Bramble" })}
       <p id="onboarding-complete-result" class="hint" role="status"></p>
     </div>
-  </main>`;
+  </section>`;
 
 /**
  * Closes the compact surface once its "Open full-screen setup" link has
