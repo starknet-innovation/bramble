@@ -216,6 +216,69 @@ describe("the device-sign takeover follows the parked queue", () => {
   });
 });
 
+describe("a request that arrives while a dismissed operation winds down", () => {
+  test("is presented once that operation has finished", async () => {
+    let releaseClose: (() => void) | null = null;
+    const client: LedgerDeviceClient = {
+      getAppVersion: () =>
+        Promise.resolve({
+          errorMessage: "No errors",
+          major: 2,
+          minor: 4,
+          patch: 0,
+          returnCode: 0x9000,
+        }),
+      getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
+      // A key that does not match, so the operation fails fast and then waits
+      // on its transport close, which the test holds open.
+      getPubKey: () =>
+        Promise.resolve({
+          errorMessage: "No errors",
+          publicKey: new Uint8Array(64).fill(0x01),
+          returnCode: 0x9000,
+        }),
+      signHash: () => Promise.reject(new Error("unused")),
+    };
+    let opens = 0;
+    const host = mountRuntime("side-panel", {
+      openConnected: () => {
+        opens += 1;
+        return Promise.resolve({
+          client,
+          close: () =>
+            opens === 1
+              ? new Promise<void>((resolve) => {
+                  releaseClose = resolve;
+                })
+              : Promise.resolve(),
+        });
+      },
+      request: () => Promise.reject(new Error("unused")),
+    });
+    host.setPending([FIRST]);
+    await host.runtime.poll();
+    for (let step = 0; step < 10 && releaseClose === null; step += 1) {
+      await tick();
+    }
+    expect(releaseClose).not.toBeNull();
+
+    // The first request settles in the background and a second one parks
+    // while the first operation is still closing its transport.
+    host.setPending([SECOND]);
+    await host.runtime.poll();
+    await tick();
+    expect(host.mount.textContent).not.toContain("1111aaaa");
+
+    (releaseClose as unknown as () => void)();
+    for (let step = 0; step < 10; step += 1) {
+      await tick();
+    }
+
+    expect(host.mount.hidden).toBe(false);
+    expect(host.mount.textContent).toContain("2222bbbb");
+  });
+});
+
 describe("the toolbar popup never starts a device sign", () => {
   test("a parked request is left for the side panel", async () => {
     const host = mountRuntime("popup", {
