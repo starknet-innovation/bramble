@@ -442,7 +442,6 @@ ${SIGN_REQUEST_STYLES}
     width: min(232px, 100%);
   }
   .qr { display: block; height: auto; width: 100%; }
-
   /* Toasts: pinned above the dock at the bottom of the panel; the offset is
      derived from the same dock-footprint token the bar itself uses, and the
      stack shares the shell's text column so a toast lines up with the cards
