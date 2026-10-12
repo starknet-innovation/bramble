@@ -115,6 +115,36 @@ describe("preparing a new multisig transaction", () => {
     expect(opened).toEqual([[fixture.record.id, fixture.intent.id]]);
   });
 
+  test("an edit to the form asks again before confirming", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const confirmations: boolean[] = [];
+    const client = await makeMultisigUiClient({
+      async prepareIntent(_multisigId, _calls, confirmResend = false) {
+        confirmations.push(confirmResend);
+        if (!confirmResend) throw new Error(REFUSAL);
+        return { intent: fixture.intent };
+      },
+    });
+    const app = mountMultisigUi(form(fixture.record.id), client, fixture.status);
+    const prepare = app.querySelector<HTMLFormElement>("[data-ms-prepare]");
+    const button = prepare?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const calldata = prepare?.querySelector<HTMLTextAreaElement>("textarea");
+
+    prepare?.requestSubmit();
+    await flushMultisigUi();
+    expect(button?.textContent).toContain("Send anyway");
+
+    if (calldata) calldata.value = "0x2";
+    calldata?.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(button?.textContent).toContain("Prepare");
+    expect(button?.textContent).not.toContain("Send anyway");
+
+    prepare?.requestSubmit();
+    await flushMultisigUi();
+    expect(confirmations).toEqual([false, false]);
+    expect(button?.textContent).toContain("Send anyway");
+  });
+
   test("another refusal never arms the confirmation", async () => {
     const fixture = await makeArgentMultisigFixture();
     const confirmations: boolean[] = [];
