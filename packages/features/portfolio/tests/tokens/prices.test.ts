@@ -91,6 +91,37 @@ describe("createPriceService.getPrices", () => {
     expect(calls).toHaveLength(0);
   });
 
+  test("never serves cached mainnet prices or charts on a network with no fiat feed (Sherlock 185)", async () => {
+    const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+    const { service } = makeHarness((url) =>
+      url.includes("market_chart")
+        ? jsonResponse({
+            prices: [
+              [1, 4_000],
+              [2, 4_200],
+            ],
+          })
+        : jsonResponse({ [ETH]: { eur: 3_900, gbp: 3_300, usd: 4_200, usd_24h_change: 3 } }),
+    );
+    const mainnet = await service.getPrices({
+      addresses: [ETH],
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    expect(mainnet.prices[ETH]).toBe(4_200);
+    expect(
+      (await service.getTokenChart({ address: ETH, currency: "usd", networkId: "SN_MAIN" })).points,
+    ).not.toEqual([]);
+
+    // Sepolia's ETH has the same contract address as mainnet's.
+    expect(
+      await service.getPrices({ addresses: [ETH], currency: "usd", networkId: "SN_SEPOLIA" }),
+    ).toEqual({ asOf: null, changes: {}, currency: "usd", prices: {}, stale: false });
+    expect(
+      await service.getTokenChart({ address: ETH, currency: "usd", networkId: "SN_SEPOLIA" }),
+    ).toEqual({ currency: "usd", points: [] });
+  });
+
   test("returns empty, stale-flagged prices when offline with no cache", async () => {
     const { calls, service } = makeHarness(() => {
       throw new Error("offline");
