@@ -45,6 +45,7 @@ import { executeDeclareApproval } from "../transactions/declare-ops";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { settleClaimError, validateClaimContext } from "./approval-claim-context";
 import { pendingFeeRefusal } from "./approval-fee-refusal";
+import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
 import type { SignatureWaiters } from "./signature-waiters";
@@ -450,7 +451,11 @@ const applyApproveDecision = async (
     return result.respond(() => deps.approvals.list());
   }
   deps.waiters.settle(id, result.settle);
-  return result.respond(() => deps.approvals.list());
+  const response = result.respond(() => deps.approvals.list());
+  // An executor that answered with an error also consumed the request, and an
+  // error response broadcasts nothing (Sherlock 217).
+  if ("error" in response) notifyApprovalsChanged();
+  return response;
 };
 
 const applyDenyDecision = async (
