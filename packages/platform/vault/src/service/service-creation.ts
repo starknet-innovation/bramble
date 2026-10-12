@@ -4,9 +4,11 @@
  * caller-supplied snapshot reader (which enforces the passphrase), derives via
  * Krusty KMS, and fails closed — first-run creators refuse to write over an
  * existing vault, and duplicate account ids are rejected before any write.
+ * Those refusals are `RefusedBeforeWrite`, so the network-mutation guard keeps
+ * the session unlocked for them rather than signing the user out.
  */
 
-import { WalletError } from "@bramble/core/errors";
+import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
@@ -84,7 +86,7 @@ const deriveNextFreeAccount = async (
     }
     taken.add(accountIndex);
   }
-  throw new WalletError("Account already exists");
+  throw new RefusedBeforeWrite("Account already exists");
 };
 
 /**
@@ -100,7 +102,7 @@ export const vaultCreationMethods = ({
   async addDerivedAccount(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     if (!vault.mnemonic) {
-      throw new WalletError("No recovery phrase stored for this wallet");
+      throw new RefusedBeforeWrite("No recovery phrase stored for this wallet");
     }
     const { account, privateKey } = await deriveNextFreeAccount(kms, vault, {
       accountContractType: input.accountContractType,
@@ -127,13 +129,13 @@ export const vaultCreationMethods = ({
     const displacesStoredSeed =
       vault.mnemonic === null ? vault.accounts.length > 0 : vault.mnemonic !== input.mnemonic;
     if (displacesStoredSeed) {
-      throw new WalletError("Wallet already exists");
+      throw new RefusedBeforeWrite("Wallet already exists");
     }
     const { account: derived, privateKey } = await deriveAccount(kms, input);
     const account = requireOwnLadderAccount(derived);
 
     if (vault.accounts.some((stored) => stored.id === account.id)) {
-      throw new WalletError("Account already exists");
+      throw new RefusedBeforeWrite("Account already exists");
     }
 
     await writeVault(
@@ -160,7 +162,7 @@ export const vaultCreationMethods = ({
       privateKey: input.privateKey,
     });
     if (vault.accounts.some((stored) => stored.id === account.id)) {
-      throw new WalletError("Account already exists");
+      throw new RefusedBeforeWrite("Account already exists");
     }
 
     await writeVault(
@@ -187,7 +189,7 @@ export const vaultCreationMethods = ({
       ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
     });
     if (vault.accounts.some((stored) => stored.id === account.id)) {
-      throw new WalletError("Account already exists");
+      throw new RefusedBeforeWrite("Account already exists");
     }
 
     // Ledger accounts have no matching signing-key entry.
@@ -203,7 +205,7 @@ export const vaultCreationMethods = ({
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     // A phrase-less imported-key vault can only be created over a fresh store.
     if (vault.accounts.length > 0 || vault.mnemonic !== null) {
-      throw new WalletError("Wallet already exists");
+      throw new RefusedBeforeWrite("Wallet already exists");
     }
     const { account, privateKey } = await deriveImportedAccount(kms, {
       accountContractType: input.accountContractType,
@@ -234,7 +236,7 @@ export const vaultCreationMethods = ({
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     // A mnemonic-less Ledger vault can only be created over a fresh store.
     if (vault.accounts.length > 0 || vault.mnemonic !== null) {
-      throw new WalletError("Wallet already exists");
+      throw new RefusedBeforeWrite("Wallet already exists");
     }
     const account = await deriveLedgerAccount(kms, {
       accountContractType: input.accountContractType,

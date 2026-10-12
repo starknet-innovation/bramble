@@ -203,7 +203,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       return isTransactionAlertsResponse(response) ? response.alerts : [];
     },
     async loadAllowances(): Promise<AllowanceListing> {
-      return allowanceListingFrom(await sendMessage({ type: "wallet.allowances" }));
+      const response = await sendMessage({ type: "wallet.allowances" }).catch(() => null);
+      return allowanceListingFrom(response);
     },
     async revokeAllowance(id: string, reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
       const response = await sendMessage({
