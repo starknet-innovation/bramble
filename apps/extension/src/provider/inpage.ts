@@ -12,7 +12,11 @@ import {
   readProviderResponse,
   walletRpcException,
 } from "@bramble/wallet-protocol/bridge";
-import { createProviderEventHub, readProviderEvent } from "@bramble/wallet-protocol/events";
+import {
+  createProviderEventHub,
+  isPageEventNews,
+  readProviderEvent,
+} from "@bramble/wallet-protocol/events";
 import { isHexChainId } from "@bramble/wallet-protocol/results";
 import { invalidRequestPayload } from "@bramble/wallet-protocol/rpc-errors";
 import { WALLET_ICON } from "./wallet-icon";
@@ -68,6 +72,9 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 
   const providerEvent = readProviderEvent(event.data);
   if (providerEvent) {
+    if (!isPageEventNews(providerEvent, currentChainId)) {
+      return;
+    }
     if (providerEvent.event === "accountsChanged") {
       connectedAddresses = providerEvent.data;
     }

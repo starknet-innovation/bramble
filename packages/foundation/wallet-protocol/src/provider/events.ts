@@ -82,6 +82,18 @@ export const readProviderEvent = (value: unknown): ProviderEvent | null => {
 };
 
 /**
+ * Whether a page event should reach the dapp, given the chain id the page
+ * already holds. A `networkChanged` naming that same chain is dropped: the
+ * wallet announces the active network after account switches and unlocks,
+ * which usually leave it where it was, and dapps commonly reset on the event
+ * (Sherlock 188, 215). Every other event passes.
+ */
+export const isPageEventNews = (
+  event: ProviderEvent,
+  currentChainId: string | undefined,
+): boolean => event.event !== "networkChanged" || event.data !== currentChainId;
+
+/**
  * Checks background wallet event broadcasts before reacting to them.
  */
 export const isWalletEventMessage = (value: unknown): value is WalletEventMessage => {

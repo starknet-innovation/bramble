@@ -207,6 +207,12 @@ describe("walletEventBroadcasts", () => {
       accountsChanged,
     ]);
   });
+
+  test("announces the active network on unlock, so a page reconnects on the right chain (Sherlock 188)", () => {
+    expect(
+      walletEventBroadcasts({ type: "wallet.unlock" }, { hasVault: true, networkId: "SN_MAIN" }),
+    ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
+  });
 });
 
 // The toolbar badge mirrors the queue size, and approve/deny clear entries

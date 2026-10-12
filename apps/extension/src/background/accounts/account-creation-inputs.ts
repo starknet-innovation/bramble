@@ -26,10 +26,11 @@ import {
   type RecoveryAccountSelection,
 } from "@bramble/wallet-model/recovery";
 
-// Bounded by the hardened BIP-44 ceiling the recovery scan stops at, so an
-// account created here can always be found again from the phrase (Sherlock
-// 253). Only this creation boundary narrows: stored accounts are never
-// re-validated against it.
+// Bounded by the hardened BIP-44 ceiling, the highest account index the
+// recovery flow's manual field accepts (Sherlock 253). Recovery selects by
+// account index only, so a non-zero address index is still not recoverable
+// from the phrase. Only this creation boundary narrows: stored accounts are
+// never re-validated against it.
 const readOptionalIndex = (value: unknown): number | null | undefined => {
   if (value === undefined) {
     return undefined;
