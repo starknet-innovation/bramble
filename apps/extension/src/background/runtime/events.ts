@@ -49,6 +49,14 @@ const importPreferencesBroadcast: BroadcastFactory = (response) => {
   return withNetwork(preferences ? networkChangedForId(preferences["activeNetworkId"]) : null);
 };
 
+// A backup restored while locked moves the network without any page hearing
+// it, because a locked wallet shows no addresses and the content script
+// forwards `networkChanged` only to an origin that can see one. Unlocking,
+// normally or through "Unlock anyway", announces the active network so a page
+// reconnects on the right chain (Sherlock 188).
+const unlockBroadcast: BroadcastFactory = (response) =>
+  withNetwork(networkChangedForId(response["networkId"]));
+
 const switchChainBroadcast: BroadcastFactory = (response) =>
   withNetwork(typeof response["chainId"] === "string" ? networkChanged(response["chainId"]) : null);
 
@@ -86,12 +94,8 @@ const BROADCAST_FACTORIES: Readonly<Record<string, BroadcastFactory>> = {
   "wallet.setActiveAccount": createAccountBroadcast,
   "wallet.setActiveNetwork": (response) => withNetwork(networkChangedForId(response["networkId"])),
   "wallet.switchChain": switchChainBroadcast,
-  // A backup restored while locked moves the network without any page hearing
-  // it, because a locked wallet shows no addresses and the content script
-  // forwards `networkChanged` only to an origin that can see one. Unlocking
-  // announces the active network so a page reconnects on the right chain
-  // (Sherlock 188).
-  "wallet.unlock": (response) => withNetwork(networkChangedForId(response["networkId"])),
+  "wallet.unlock": unlockBroadcast,
+  "wallet.unlockUnverified": unlockBroadcast,
 };
 
 /**

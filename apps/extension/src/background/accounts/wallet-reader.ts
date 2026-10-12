@@ -102,6 +102,11 @@ export type WalletStatusReader = {
   ) => Promise<readonly AccountRef[]>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /**
+   * Accepts a vault awaiting recovery; see `WalletVaultService.recoverUnverifiedVault`.
+   * Optional only for partial test stubs; the handler fails closed without it.
+   */
+  readonly recoverUnverifiedVault?: (vaultPassphrase: string) => Promise<void>;
   /** Removes origin grants; optional only for partial test stubs. */
   readonly revokeOrigin?: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
@@ -188,6 +193,9 @@ export const createWalletReader = (
     },
     async readVault(vaultPassphrase) {
       return (await required()).readVault(vaultPassphrase);
+    },
+    async recoverUnverifiedVault(vaultPassphrase) {
+      return (await required()).recoverUnverifiedVault(vaultPassphrase);
     },
     async revokeOrigin(input) {
       return (await required()).revokeOrigin(input);

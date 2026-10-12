@@ -96,6 +96,12 @@ describe("walletEventBroadcasts", () => {
         { account: { networkId: "SN_MAIN" }, ok: true },
       ),
     ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
+    expect(
+      walletEventBroadcasts(
+        { type: "wallet.unlockUnverified" },
+        { hasVault: true, networkId: "SN_MAIN" },
+      ),
+    ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
   });
 
   test("announces approvals and grants around origin decisions", () => {
