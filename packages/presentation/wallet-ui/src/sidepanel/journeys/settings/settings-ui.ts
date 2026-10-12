@@ -5,7 +5,7 @@
 import { exportablePreferences } from "@bramble/settings/preferences-backup";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { buildInfo } from "../../shell/build-info";
 import { bindGroupControls } from "./group-ui";
 
@@ -56,7 +56,7 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Name update failed"), "error", form);
+          showToast(errorDetails(error, "Name update failed"), "error", form);
           if (result) {
             result.textContent = errorLine(error, "Name update failed");
           }
@@ -86,7 +86,7 @@ const writeAccountVisibility = (
       await rerender(deps);
     },
     (error: unknown) => {
-      showToast(errorMessage(error, "Account update failed"), "error", control);
+      showToast(errorDetails(error, "Account update failed"), "error", control);
       const result = deps.app?.querySelector<HTMLElement>("#account-visibility-result");
       if (result) {
         result.textContent = errorLine(error, "Account update failed");
@@ -160,7 +160,7 @@ export const bindContacts = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Contact removal failed"), "error", button);
+          showToast(errorDetails(error, "Contact removal failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -196,7 +196,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Wallet request preference failed"), "error", button);
+          showToast(errorDetails(error, "Wallet request preference failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -219,7 +219,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Theme update failed"), "error", button);
+          showToast(errorDetails(error, "Theme update failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -239,7 +239,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Currency update failed"), "error", currencySelect);
+        showToast(errorDetails(error, "Currency update failed"), "error", currencySelect);
         if (result) {
           result.textContent = errorLine(error, "Currency update failed");
         }
@@ -263,7 +263,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       },
       (error: unknown) => {
         analyticsToggle.checked = !analyticsToggle.checked;
-        showToast(errorMessage(error, "Analytics preference failed"), "error", analyticsToggle);
+        showToast(errorDetails(error, "Analytics preference failed"), "error", analyticsToggle);
         analyticsToggle.disabled = false;
       },
     );
@@ -282,7 +282,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       },
       (error: unknown) => {
         diagnosticsToggle.checked = !diagnosticsToggle.checked;
-        showToast(errorMessage(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
+        showToast(errorDetails(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
         diagnosticsToggle.disabled = false;
       },
     );
@@ -306,7 +306,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         buttonBusy(diagnosticsExport, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Diagnostic export failed"), "error", diagnosticsExport);
+        showToast(errorDetails(error, "Diagnostic export failed"), "error", diagnosticsExport);
         buttonBusy(diagnosticsExport, false);
       },
     );
@@ -341,7 +341,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Backup export failed"), "error", exportButton);
+        showToast(errorDetails(error, "Backup export failed"), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );
@@ -363,7 +363,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Backup restore failed"), "error", importButton);
+          showToast(errorDetails(error, "Backup restore failed"), "error", importButton);
           if (result) {
             result.textContent = errorLine(error, "Backup restore failed");
           }

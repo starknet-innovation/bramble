@@ -15,7 +15,7 @@ import type { WalletStatus } from "../../popup/responses/responses";
 import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { isOutcomeUnknown } from "../runtime/runtime-errors";
-import { buttonBusy, errorLine, errorMessage, renderFragment, showToast } from "../shared/dom";
+import { buttonBusy, errorDetails, errorLine, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
 import {
@@ -146,7 +146,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Address save failed"), "error", form);
+          showToast(errorDetails(error, "Address save failed"), "error", form);
           if (result) {
             result.textContent = errorLine(error, "Address save failed");
           }
@@ -325,7 +325,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         (error: unknown) => {
           // An approved call whose reply was lost may be on chain: amber, not "failed".
           showToast(
-            errorMessage(error, "Approval failed"),
+            errorDetails(error, "Approval failed"),
             isOutcomeUnknown(error) ? "warning" : "error",
             button,
           );
@@ -356,7 +356,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
       void wallet.retryApprovalFee(id).then(
         async () => render(await wallet.loadStatus()),
         (error: unknown) => {
-          showToast(errorMessage(error, "Fee estimate failed"), "error", button);
+          showToast(errorDetails(error, "Fee estimate failed"), "error", button);
           buttonBusy(button, false);
         },
       );

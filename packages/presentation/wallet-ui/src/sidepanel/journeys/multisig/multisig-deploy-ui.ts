@@ -14,6 +14,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import {
   bindCopyButtons,
   buttonBusy,
+  errorDetails,
   errorMessage,
   renderFragment,
   showToast,
@@ -355,9 +356,8 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     try {
       input = deploymentSetup(form);
     } catch (error) {
-      const message = errorMessage(error, "Invalid deployment fields");
       deps.setResult("multisig-deploy-result", "Check the deployment fields and try again.");
-      showToast(message, "error", form);
+      showToast(errorDetails(error, "Invalid deployment fields"), "error", form);
       return;
     }
     const stored = reviews.get(form);

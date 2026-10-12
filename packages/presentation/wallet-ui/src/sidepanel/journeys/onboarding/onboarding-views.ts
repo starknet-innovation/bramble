@@ -215,13 +215,13 @@ const generatedStep = (): string => `
       >${recoveryWordInputs("generated")}</div>
       <div class="button-row">
         ${button({
-          attributes: { id: "phrase-toggle" },
+          attributes: { "aria-label": "Show recovery phrase", id: "phrase-toggle" },
           icon: "book",
           label: "Show",
           variant: "secondary",
         })}
         ${button({
-          attributes: { id: "generated-copy-phrase" },
+          attributes: { "aria-label": "Copy recovery phrase", id: "generated-copy-phrase" },
           disabled: true,
           icon: "copy",
           label: "Copy",

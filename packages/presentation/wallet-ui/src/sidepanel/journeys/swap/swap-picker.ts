@@ -16,7 +16,7 @@ import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferenc
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
-import { errorMessage, showToast } from "../../shared/dom";
+import { errorDetails, showToast } from "../../shared/dom";
 import {
   bindTokenDropdown,
   type TokenDropdownGroup,
@@ -180,7 +180,7 @@ const addThenSelect = (
     })
     .catch((error: unknown) => {
       pendingAdd = null;
-      showToast(errorMessage(error, "Could not add that token"), "error", root);
+      showToast(errorDetails(error, "Could not add that token"), "error", root);
     });
 };
 

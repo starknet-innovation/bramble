@@ -168,6 +168,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["explorer fallback update failed", SAVE_FAILED],
   ["privacy service configuration failed", SAVE_FAILED],
   ["token visibility update failed", SAVE_FAILED],
+  ["account visibility update failed", SAVE_FAILED],
   ["preferences unavailable", "Couldn't load your settings. Try again."],
   ["diagnostic export failed", "Couldn't export diagnostics. Try again."],
   ["backup import failed", "Couldn't read that backup file. Check the file and try again."],
@@ -191,6 +192,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // --- Accounts ------------------------------------------------------------
   ["account switch failed", "Couldn't switch accounts. Try again."],
   ["add account failed", "Couldn't add that account. Try again."],
+  ["account import failed", "Couldn't add those accounts. Try again."],
   ["import account failed", "Couldn't import that account. Check what you pasted and try again."],
   ["create key vault failed", "Couldn't create your wallet. Try again."],
   ["seed import failed", "Couldn't import that recovery phrase. Check the words and try again."],
@@ -325,6 +327,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["balances unavailable", "Couldn't load balances. Check your connection and try again."],
   ["activity scope unavailable", "Couldn't load activity for this account. Try again."],
   ["add token failed", "Couldn't add that token. Check the contract address and try again."],
+  ["remove token failed", "Couldn't remove that token. Try again."],
   ["token detection failed", "Couldn't scan for tokens. Check your connection and try again."],
   ["token list unavailable", "Couldn't load the token list. Check your connection and try again."],
   ["token unavailable", "That token isn't available on this network."],

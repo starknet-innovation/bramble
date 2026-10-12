@@ -4,7 +4,7 @@ import type { SendRouteResolution } from "@bramble/transactions/send-routes";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation } from "../../shared/confirm-submitted";
-import { errorMessage, showToast } from "../../shared/dom";
+import { errorDetails, errorMessage, showToast } from "../../shared/dom";
 import { watchDeployment } from "../../shell/shell-bindings";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
@@ -397,7 +397,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = errorMessage(error, preparationFailure(composed));
-            showToast(message, "error", form);
+            showToast(message, "error", form, errorDetails(error, preparationFailure(composed)));
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
           },

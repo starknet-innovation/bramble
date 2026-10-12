@@ -10,7 +10,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { compactAmount, tokenGlyph } from "./token-row";
 
 /**
@@ -64,7 +64,7 @@ const bindAddToken = (deps: TokensUiDeps): void => {
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Add token failed"), "error", form);
+        showToast(errorDetails(error, "Add token failed"), "error", form);
         if (result) {
           result.textContent = errorLine(error, "Add token failed");
         }
@@ -88,7 +88,7 @@ const bindDetectAdd = (deps: TokensUiDeps, container: Element | null | undefined
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Add token failed"), "error", button);
+          showToast(errorDetails(error, "Add token failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -116,7 +116,7 @@ const bindDetect = (deps: TokensUiDeps): void => {
         buttonBusy(button, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Token detection failed"), "error", button);
+        showToast(errorDetails(error, "Token detection failed"), "error", button);
         if (status) {
           status.textContent = errorLine(error, "Token detection failed");
         }
@@ -141,7 +141,7 @@ const bindToggles = (deps: TokensUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Token update failed"), "error", button);
+          showToast(errorDetails(error, "Token update failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -165,7 +165,7 @@ const bindRemove = (deps: TokensUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't remove that token"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't remove that token"), "error", deps.app);
           buttonBusy(button, false);
         },
       );

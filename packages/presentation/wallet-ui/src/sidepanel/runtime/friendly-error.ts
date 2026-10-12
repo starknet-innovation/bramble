@@ -77,17 +77,20 @@ export const friendlyError = (raw: string): FriendlyError => {
     return { message: GENERIC_VALIDATION };
   }
 
-  const networkError = friendlyNetworkError(trimmed);
-  if (networkError) {
-    return { message: networkError };
-  }
-
+  // A node's own answer is classified before the transport markers: an RPC
+  // rejection whose text mentions a timeout ("execution timed out") came back
+  // from the node, so it is not a connectivity failure (mc-wallet issue 476).
   if (RATE_LIMIT.test(trimmed)) {
     return { message: RATE_LIMITED };
   }
 
   if (RAW_RPC.test(trimmed) || RAW_RPC_RESPONSE.test(trimmed)) {
     return { message: RPC_REJECTED };
+  }
+
+  const networkError = friendlyNetworkError(trimmed);
+  if (networkError) {
+    return { message: networkError };
   }
 
   if (rawServiceDiagnostic(trimmed)) {

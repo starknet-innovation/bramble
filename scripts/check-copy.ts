@@ -10,20 +10,25 @@
  * that the habits come back as a visible warning rather than silently, which
  * matters most for copy written by agents rather than read by reviewers.
  *
- * It reads string and template literals only, after blanking comments, so a
+ * It reads string and template literals only, from the parsed source, so a
  * note to a future maintainer is never mistaken for something a user reads.
+ * The scan roots resolve from this script's own location, so it reads the same
+ * files whatever directory it is run from.
  */
 import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import {
   COPY_EXEMPT_PATHS,
   COPY_EXEMPT_STRINGS,
   COPY_PATTERNS,
   COPY_SCAN_ROOTS,
+  copyLiterals,
   isProse,
   textRuns,
 } from "./copy-policy";
+
+const REPOSITORY = join(import.meta.dir, "..");
 
 /** One flagged string, with enough context to judge it without opening the file. */
 type Finding = {
@@ -58,59 +63,15 @@ const sourceFiles = async (root: string): Promise<readonly string[]> => {
   return found;
 };
 
-/**
- * Replaces every comment with spaces, preserving length so byte offsets still
- * map to their original line. Quote characters inside a comment would
- * otherwise open a string that swallows the rest of the file.
- */
-const blankComments = (text: string): string => {
-  let output = "";
-  let index = 0;
-  while (index < text.length) {
-    const rest = text.slice(index);
-    const block = /^\/\*[\s\S]*?\*\//.exec(rest);
-    const line = /^\/\/[^\n]*/.exec(rest);
-    const quoted = /^(["'`])(?:\\.|(?!\1)[\s\S])*\1/.exec(rest);
-    if (quoted) {
-      output += quoted[0];
-      index += quoted[0].length;
-    } else if (block) {
-      output += block[0].replace(/[^\n]/g, " ");
-      index += block[0].length;
-    } else if (line) {
-      output += " ".repeat(line[0].length);
-      index += line[0].length;
-    } else {
-      output += text[index] ?? "";
-      index += 1;
-    }
-  }
-  return output;
-};
-
-/** Every quoted run and every literal chunk between `${}` holes. */
-const copyStrings = (text: string): readonly { readonly index: number; readonly value: string }[] =>
-  [...text.matchAll(/(["'`])((?:\\.|(?!\1)[\s\S])*)\1/g)].flatMap((match) => {
-    const body = match[2] ?? "";
-    const start = (match.index ?? 0) + 1;
-    if (match[1] !== "`") return [{ index: start, value: body }];
-    const chunks: { readonly index: number; readonly value: string }[] = [];
-    let offset = 0;
-    for (const chunk of body.split(/\$\{[^}]*\}/g)) {
-      chunks.push({ index: start + offset, value: chunk });
-      offset += chunk.length;
-    }
-    return chunks;
-  });
-
 const lineOf = (text: string, index: number): number => text.slice(0, index).split("\n").length;
 
 const findings: Finding[] = [];
 for (const root of COPY_SCAN_ROOTS) {
-  for (const file of await sourceFiles(root)) {
+  for (const path of await sourceFiles(join(REPOSITORY, root))) {
+    const file = relative(REPOSITORY, path).split(sep).join("/");
     if (COPY_EXEMPT_PATHS.some((exempt) => file.startsWith(exempt))) continue;
-    const source = blankComments(await readFile(file, "utf8"));
-    for (const literal of copyStrings(source)) {
+    const source = await readFile(path, "utf8");
+    for (const literal of copyLiterals(file, source)) {
       for (const { index, value } of textRuns(literal.value, literal.index)) {
         if (!isProse(value)) continue;
         if (COPY_EXEMPT_STRINGS.some((exempt) => exempt.text === value.trim())) continue;

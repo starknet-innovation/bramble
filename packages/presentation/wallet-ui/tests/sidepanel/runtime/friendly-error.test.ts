@@ -138,6 +138,19 @@ describe("friendlyError", () => {
     );
   });
 
+  test("reads a node's own rejection as the node's, even when it mentions a timeout", () => {
+    // The node answered, so this is not a connectivity failure (mc-wallet issue
+    // 476); a transport failure with the same words still reads as one.
+    expect(
+      friendlyError(
+        'RPC: starknet_estimateFee with params {"request":[]} 41: Transaction execution timed out',
+      ).message,
+    ).toBe("The RPC rejected this request. Copy the error details for the full response.");
+    expect(friendlyError("request timed out").message).toBe(
+      "Couldn't reach the network. Check your connection or RPC endpoint.",
+    );
+  });
+
   test("collapses raw RPC and API diagnostics to short recovery copy", () => {
     expect(
       friendlyError(

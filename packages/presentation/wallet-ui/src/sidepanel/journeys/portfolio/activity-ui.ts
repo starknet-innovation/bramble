@@ -7,7 +7,7 @@
 import { activityToCsv } from "@bramble/transactions/activity";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast, type ToastTone } from "../../shared/dom";
+import { buttonBusy, errorDetails, showToast, type ToastTone } from "../../shared/dom";
 
 /**
  * Dependencies used by the activity controls. All wallet reads stay behind the
@@ -81,7 +81,7 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Export failed"), "error", exportButton);
+        showToast(errorDetails(error, "Export failed"), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );

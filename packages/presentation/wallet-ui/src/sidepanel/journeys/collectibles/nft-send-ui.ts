@@ -8,7 +8,13 @@ import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TransferReviewResponse, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation, type ConfirmationOutcome } from "../../shared/confirm-submitted";
-import { buttonBusy, errorMessage, renderFragment, showToast } from "../../shared/dom";
+import {
+  buttonBusy,
+  errorDetails,
+  errorMessage,
+  renderFragment,
+  showToast,
+} from "../../shared/dom";
 import {
   bindOutcomeReceipt,
   outcomeReceiptFor,
@@ -323,7 +329,12 @@ export const bindNftSendForm = (deps: NftSendDeps): void => {
           const message = errorMessage(error, "The transfer didn't go through");
           form.dataset["stage"] = "failed";
           form.removeAttribute("aria-busy");
-          showToast(message, "error", deps.app);
+          showToast(
+            message,
+            "error",
+            deps.app,
+            errorDetails(error, "The transfer didn't go through"),
+          );
           if (result) {
             result.textContent = `${message} Nothing was submitted; review the recipient and try again.`;
           }

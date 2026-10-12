@@ -439,13 +439,22 @@ describe("bindDeploy", () => {
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
     });
 
+    // The quote the screen asked for on its own fails quietly: the reason is on
+    // the status line and in the Cost box, and nothing toasts before a press.
+    await tick();
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "The deployment was denied.",
+    );
+    expect(errorToasts()).toEqual([]);
+    expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
+
     click(container.querySelector("#deploy-button"));
     await tick();
 
     expect(container.querySelector('[role="status"]')?.textContent).toBe(
       "The deployment was denied.",
     );
-    expect(errorToasts()).toContain("The deployment was denied.");
+    expect(errorToasts()).toEqual(["The deployment was denied."]);
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });
 });

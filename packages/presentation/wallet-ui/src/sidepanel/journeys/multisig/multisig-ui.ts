@@ -9,7 +9,7 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { UNDEPLOYED_REMOVAL_PROMPT } from "../../runtime/friendly-error-copy-multisig";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
@@ -45,7 +45,7 @@ const run = (
     },
     (error: unknown) => {
       setResult(deps, resultId, errorLine(error, "That request didn't go through"));
-      showToast(errorMessage(error, "Ready multisig request failed"), "error", button ?? deps.app);
+      showToast(errorDetails(error, "Ready multisig request failed"), "error", button ?? deps.app);
       buttonBusy(button, false);
     },
   );
@@ -90,7 +90,7 @@ const bindAdd = (deps: MultisigUiDeps): void => {
         deps.openDetail(view.record.id, "multisig-home");
       })
       .catch((error: unknown) => {
-        showToast(errorMessage(error, "Sync Ready multisig failed"), "error", button ?? deps.app);
+        showToast(errorDetails(error, "Sync Ready multisig failed"), "error", button ?? deps.app);
         buttonBusy(button, false);
       });
   });
@@ -324,7 +324,7 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
           },
           (error: unknown) => {
             showToast(
-              errorMessage(error, "Prepare Ready multisig transaction failed"),
+              errorDetails(error, "Prepare Ready multisig transaction failed"),
               "error",
               button ?? deps.app,
             );

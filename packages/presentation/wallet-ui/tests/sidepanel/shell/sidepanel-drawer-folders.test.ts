@@ -409,7 +409,12 @@ describe("the drawer's network pill", () => {
       "SN_MAIN",
       "SN_SEPOLIA",
     ]);
-    expect(options[0]?.getAttribute("aria-selected")).toBe("true");
+    expect(options[0]?.getAttribute("aria-current")).toBe("true");
+    expect(options[1]?.hasAttribute("aria-current")).toBe(false);
+    // Plain buttons in a disclosure: no listbox roles it cannot honour.
+    expect(menu?.getAttribute("role")).toBe("group");
+    expect(options.some((option) => option.hasAttribute("role"))).toBe(false);
+    expect(toggle?.hasAttribute("aria-haspopup")).toBe(false);
   });
 
   test("the pill opens and closes the list", () => {

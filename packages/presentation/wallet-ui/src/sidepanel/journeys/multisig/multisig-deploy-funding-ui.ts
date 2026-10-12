@@ -1,6 +1,6 @@
 /** Local and external funding controls for a predicted Argent multisig address. */
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
-import { bindCopyButtons, errorMessage, showToast } from "../../shared/dom";
+import { bindCopyButtons, errorDetails, showToast } from "../../shared/dom";
 import type { SendIntent } from "../send/send-model";
 
 type FundingDeps = {
@@ -41,7 +41,7 @@ export const bindDeploymentFunding = (
           tokenId,
         })
         .catch((error: unknown) =>
-          showToast(errorMessage(error, "Open funding transfer failed"), "error", form),
+          showToast(errorDetails(error, "Open funding transfer failed"), "error", form),
         );
     });
   form

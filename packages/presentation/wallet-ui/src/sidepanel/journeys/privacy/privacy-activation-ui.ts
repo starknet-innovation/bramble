@@ -12,7 +12,7 @@
 
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
 import { awaitDeployment, type DeploymentPollScope } from "../../shell/shell-bindings";
 
@@ -84,7 +84,7 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
       },
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);
-        showToast(errorMessage(error, "Deployment failed"), "error", button);
+        showToast(errorDetails(error, "Deployment failed"), "error", button);
         buttonBusy(button, false);
       },
     );
