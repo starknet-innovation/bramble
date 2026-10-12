@@ -7,6 +7,22 @@ import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@bramble/
 import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { base64ToBytes, bytesToBase64, bytesToHex, hasBase64Bytes } from "./store/envelope-bytes";
 import { createFreshnessAuthority } from "./store/freshness-authority";
+import { createLegacyMarker } from "./store/legacy-marker";
+import {
+  COMMIT_STATE_MISSING,
+  type EncryptedStoreHealth,
+  healthFor,
+  INVALID_ENVELOPE,
+  ROLLBACK_DETECTED,
+  UNVERIFIED_HEALTH,
+} from "./store/store-errors";
+
+export {
+  COMMIT_STATE_MISSING,
+  type EncryptedStoreHealth,
+  INVALID_ENVELOPE,
+  ROLLBACK_DETECTED,
+} from "./store/store-errors";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -32,7 +48,6 @@ const ENVELOPE_KEYS = [
   "version",
 ] as const;
 const COMMITTED_ENVELOPE_KEYS = [...ENVELOPE_KEYS, "commit", "lineage"] as const;
-const LEGACY_STATE_KEYS = ["lineage", "version"] as const;
 
 /**
  * Versioned encrypted JSON envelope stored at rest.
@@ -192,7 +207,7 @@ export const decryptJson = async (
   resolveKey: KeyResolver = deriveKey,
 ): Promise<unknown> => {
   if (envelope.scope !== scope) {
-    throw new WalletError("Invalid encrypted store envelope");
+    throw new WalletError(INVALID_ENVELOPE);
   }
 
   const key = await resolveKey(passphrase, base64ToBytes(envelope.salt), envelope.iterations);
@@ -212,12 +227,20 @@ export const decryptJson = async (
 /**
  * Passphrase-protected JSON store over a key-value backend. `clearKeys` drops
  * the in-memory derived-key cache and must be called when the wallet locks.
+ *
+ * `readUnverified` and `replaceUnverified` exist only for a vault whose health
+ * is `unverified` or `rollback`, and throw otherwise. They skip the freshness
+ * check that makes replaying an old envelope detectable, so a caller must have
+ * the user's explicit consent to accept a possibly older copy.
  */
 export type EncryptedStore = {
   readonly clearKeys: () => void;
   readonly exists: () => Promise<boolean>;
+  readonly health: () => Promise<EncryptedStoreHealth>;
   readonly read: (passphrase: string) => Promise<unknown>;
+  readonly readUnverified: (passphrase: string) => Promise<unknown>;
   readonly remove: () => Promise<void>;
+  readonly replaceUnverified: (value: Json, passphrase: string) => Promise<void>;
   readonly upgradeLegacyEnvelope: (passphrase: string) => Promise<void>;
   readonly write: (value: Json, passphrase: string) => Promise<void>;
 };
@@ -225,15 +248,6 @@ export type EncryptedStore = {
 // Bounds the derived-key cache; salt changes each write, so a long-running
 // unlocked session with many writes must not accumulate keys without limit.
 const MAX_CACHED_KEYS = 8;
-
-type LegacyState = { readonly lineage: string; readonly version: 1 };
-
-const isLegacyState = (value: unknown): value is LegacyState =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, LEGACY_STATE_KEYS) &&
-  typeof value["lineage"] === "string" &&
-  /^[0-9a-f]{32}$/.test(value["lineage"]) &&
-  value["version"] === 1;
 
 /**
  * Creates an encrypted store for one key in the provided backend. The store
@@ -262,14 +276,8 @@ export const createEncryptedStore = (
     sessionFreshnessStore,
     mirrorFreshness && freshnessStore !== store ? store : undefined,
   );
-  // This authority is deliberately store-wide, not keyed to the one v2
-  // envelope present during migration. Once any v3 commit for this store is
-  // current, every earlier authentic v2 envelope must be rejected. It lives
-  // beside the envelope, not in `freshnessStore`: `storage.sync` is shared by
-  // every synced install of this extension, and a marker one install wrote
-  // there refused another install's own, never-migrated v2 vault. A marker
-  // left there by an earlier release is moved here by the first committed read.
-  const legacyKey = `${key}:legacy`;
+  const legacy = createLegacyMarker(key, store, freshnessStore, freshness);
+  const recoveringKey = `${key}:recovering`;
   const keyCache = new Map<string, CryptoKey>();
   let keyCacheGeneration = 0;
 
@@ -279,43 +287,9 @@ export const createEncryptedStore = (
       return undefined;
     }
     if (!isEncryptedEnvelope(envelope)) {
-      throw new WalletError("Invalid encrypted store envelope");
+      throw new WalletError(INVALID_ENVELOPE);
     }
     return envelope as EncryptedEnvelope;
-  };
-
-  const recoverLegacyEnvelope = async (
-    envelope: Extract<EncryptedEnvelope, { readonly version: 2 }>,
-  ): Promise<EncryptedEnvelope> => {
-    // A legacy envelope carries no lineage for the session shadow to check, so
-    // the shadow answers store-wide instead: once a committed lineage has been
-    // current in this session, any version-2 envelope is a downgrade — even one
-    // whose durable legacy marker was deleted along with it.
-    await freshness.requireNotPromoted();
-    const legacy = await store.get(legacyKey);
-    if (legacy === undefined) {
-      return envelope;
-    }
-    if (!isLegacyState(legacy)) {
-      throw new WalletError("Invalid encrypted store commit state");
-    }
-    const state = await freshness.read(legacy.lineage);
-    if (state === undefined) {
-      // The legacy marker is written only after the pending commit state. Its
-      // presence without that state cannot be a valid interrupted write; it is
-      // lost/corrupt freshness authority and must not reopen v2 rollback.
-      throw new WalletError("Encrypted store rollback detected");
-    }
-    if (state.current === null && state.pending !== null) {
-      // Migration crashed after both prepare records but before replacing the
-      // legacy envelope. Abort that uncommitted write and keep v2 recoverable.
-      // The marker goes first: a crash between the two then leaves the
-      // never-migrated state, not a marker naming records that are gone.
-      await store.remove(legacyKey);
-      await freshness.remove(legacy.lineage);
-      return envelope;
-    }
-    throw new WalletError("Encrypted store rollback detected");
   };
 
   const recoverCommittedEnvelope = async (
@@ -323,10 +297,10 @@ export const createEncryptedStore = (
   ): Promise<EncryptedEnvelope> => {
     const state = await freshness.read(envelope.lineage);
     if (state === undefined) {
-      throw new WalletError("Encrypted store commit state missing");
+      throw new WalletError(COMMIT_STATE_MISSING);
     }
     if (state.current !== envelope.commit && state.pending !== envelope.commit) {
-      throw new WalletError("Encrypted store rollback detected");
+      throw new WalletError(ROLLBACK_DETECTED);
     }
     // Both authorities must vouch for the envelope. `freshnessStore` is
     // `storage.sync`, which a content script can write on Firefox, so an
@@ -342,7 +316,7 @@ export const createEncryptedStore = (
         version: 1,
       });
     }
-    await claimLegacyState(envelope.lineage);
+    await legacy.claim(envelope.lineage);
     return envelope;
   };
 
@@ -355,38 +329,9 @@ export const createEncryptedStore = (
     // only until this store has committed a marked value. Replaying one over a
     // marked profile is therefore rejected.
     if (envelope.version === 2) {
-      return recoverLegacyEnvelope(envelope);
+      return legacy.recover(envelope);
     }
     return recoverCommittedEnvelope(envelope);
-  };
-
-  const prepareLegacyState = async (lineage: string): Promise<void> => {
-    const legacy = await store.get(legacyKey);
-    if (legacy !== undefined && !isLegacyState(legacy)) {
-      throw new WalletError("Invalid encrypted store commit state");
-    }
-    if (legacy === undefined) {
-      await store.set(legacyKey, { lineage, version: 1 });
-    }
-  };
-
-  // A committed envelope that has just been accepted proves this store is
-  // past version 2, so the local marker can be written without a write: an
-  // install migrated by an earlier release, whose marker went to the shared
-  // area, gets its own here. The shared marker is removed only when it names
-  // this lineage, so it stops refusing the v2 vault of another synced install
-  // still on an earlier release; a marker naming another lineage is not ours.
-  const claimLegacyState = async (lineage: string): Promise<void> => {
-    if ((await store.get(legacyKey)) === undefined) {
-      await store.set(legacyKey, { lineage, version: 1 });
-    }
-    if (freshnessStore === store) {
-      return;
-    }
-    const shared = await freshnessStore.get(legacyKey);
-    if (isLegacyState(shared) && shared.lineage === lineage) {
-      await freshnessStore.remove(legacyKey);
-    }
   };
 
   const writeEnvelope = async (
@@ -404,7 +349,7 @@ export const createEncryptedStore = (
       version: 1,
     });
     if (previous?.version !== 3) {
-      await prepareLegacyState(envelope.lineage);
+      await legacy.prepare(envelope.lineage);
     }
     await store.set(key, envelope);
     await freshness.set(envelope.lineage, {
@@ -433,6 +378,27 @@ export const createEncryptedStore = (
         ? previous.lineage
         : bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
     await writeEnvelope(await encryptJson(value, passphrase, scope, resolveKey, lineage), previous);
+  };
+
+  const currentHealth = async (): Promise<EncryptedStoreHealth> => {
+    try {
+      return (await readEnvelope()) === undefined ? "absent" : "ok";
+    } catch (error) {
+      const health = healthFor(error);
+      if (health === undefined) {
+        throw error;
+      }
+      return health;
+    }
+  };
+
+  const requireUnverified = async (): Promise<EncryptedEnvelope> => {
+    if (!UNVERIFIED_HEALTH.has(await currentHealth())) {
+      throw new WalletError("Encrypted store is not awaiting recovery");
+    }
+    const envelope = await readRawEnvelope();
+    invariant(envelope !== undefined, "Encrypted store is not awaiting recovery");
+    return envelope as EncryptedEnvelope;
   };
 
   const resolveKey: KeyResolver = async (passphrase, salt, iterations) => {
@@ -465,6 +431,7 @@ export const createEncryptedStore = (
     async exists() {
       return (await store.get(key)) !== undefined;
     },
+    health: currentHealth,
     async read(passphrase) {
       const envelope = await readEnvelope();
       if (envelope === undefined) {
@@ -472,12 +439,46 @@ export const createEncryptedStore = (
       }
       return decryptJson(envelope, passphrase, scope, resolveKey);
     },
+    async readUnverified(passphrase) {
+      return decryptJson(await requireUnverified(), passphrase, scope, resolveKey);
+    },
+    // A malformed envelope is removed too: removal is how a wallet that cannot
+    // be opened is reset, and refusing to delete what cannot be parsed would
+    // leave that wallet stuck.
     async remove() {
-      const envelope = await readRawEnvelope();
+      const raw = await store.get(key);
       await store.remove(key);
-      if (envelope?.version === 3) {
-        await freshness.remove(envelope.lineage);
+      if (isEncryptedEnvelope(raw) && raw.version === 3) {
+        await freshness.remove(raw.lineage);
       }
+    },
+    // A fresh lineage, so neither a missing record nor one naming a newer
+    // commit for the old lineage has any say over the replacement. The old
+    // lineage's records are removed only once the replacement is committed.
+    // Notes the in-flight lineage so a retry drops an interrupted attempt's
+    // records; the marker is repointed even if malformed (a reason to be here).
+    async replaceUnverified(value, passphrase) {
+      const previous = await requireUnverified();
+      const replaced = previous.version === 3 ? previous.lineage : undefined;
+      const abandoned = await store.get(recoveringKey);
+      if (
+        typeof abandoned === "string" &&
+        /^[0-9a-f]{32}$/.test(abandoned) &&
+        abandoned !== replaced
+      ) {
+        await freshness.remove(abandoned);
+      }
+      const lineage = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+      await store.set(recoveringKey, lineage);
+      await legacy.replace(lineage, replaced);
+      await writeEnvelope(
+        await encryptJson(value, passphrase, scope, resolveKey, lineage),
+        undefined,
+      );
+      if (replaced !== undefined) {
+        await freshness.remove(replaced);
+      }
+      await store.remove(recoveringKey);
     },
     async upgradeLegacyEnvelope(passphrase) {
       const envelope = await readEnvelope();

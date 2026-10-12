@@ -418,13 +418,17 @@ export const readReviewTransferInput = (message: unknown): ReturnType<typeof rea
   readTransferFields(message, "wallet.reviewTransfer");
 
 /**
- * Parses popup unlock messages carrying the vault passphrase.
+ * Parses popup unlock messages carrying the vault passphrase: `wallet.unlock`,
+ * or `wallet.unlockUnverified` for a vault awaiting recovery.
  */
-export const readUnlockInput = (message: unknown): { readonly vaultPassphrase: string } | null => {
+export const readUnlockInput = (
+  message: unknown,
+  type: "wallet.unlock" | "wallet.unlockUnverified" = "wallet.unlock",
+): { readonly vaultPassphrase: string } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["type", "vaultPassphrase"]) ||
-    message["type"] !== "wallet.unlock" ||
+    message["type"] !== type ||
     !isVaultPassphrase(message["vaultPassphrase"])
   ) {
     return null;
