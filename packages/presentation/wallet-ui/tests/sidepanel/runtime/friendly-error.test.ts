@@ -28,6 +28,12 @@ describe("friendlyError", () => {
     );
   });
 
+  test("names a full vault instead of a JSON error (Sherlock 261)", () => {
+    expect(friendlyError("Vault storage limit reached").message).toBe(
+      "This wallet is full, so this change wasn't saved.",
+    );
+  });
+
   // The raw string names neither cause nor remedy, so the mapping supplies the
   // fix — and stays network-agnostic, since the guard fires on every network.
   test("turns the write-path chain guard into an actionable endpoint hint", () => {

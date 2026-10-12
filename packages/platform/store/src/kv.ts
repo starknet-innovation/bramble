@@ -2,7 +2,7 @@
  * Minimal key-value storage boundary for browser storage and tests.
  */
 import { WalletError } from "@bramble/core/errors";
-import { isJson, type Json } from "@bramble/core/json";
+import { isJsonWithinBudget, JSON_BUDGETS, type Json } from "@bramble/core/json";
 
 const STORAGE_KEY_PATTERN = /^bramble:[a-z0-9]+(?:[-:][a-z0-9]+)*$/;
 
@@ -25,10 +25,12 @@ export function assertStorageKey(key: string): void {
 }
 
 /**
- * Throws when a storage write would serialize as lossy JSON.
+ * Throws when a storage write would serialize as lossy JSON or exceed the
+ * at-rest storage budget, which admits the encrypted envelope of any value the
+ * provider budget admits (`JSON_BUDGETS.storage`).
  */
 export function assertJsonValue(value: unknown): asserts value is Json {
-  if (!isJson(value)) {
+  if (!isJsonWithinBudget(value, JSON_BUDGETS.storage)) {
     throw new WalletError("Invalid JSON value");
   }
 }

@@ -23,10 +23,25 @@ export type JsonBudget = {
   readonly maxStringLength: number;
 };
 
+const PROVIDER_BUDGET = {
+  maxArrayLength: 4_096,
+  maxBytes: 1024 * 1024,
+  maxDepth: 32,
+  maxNodes: 50_000,
+  maxObjectKeys: 2_048,
+  maxStringLength: 512 * 1024,
+} as const satisfies JsonBudget;
+
+// The base64 length of the AES-GCM ciphertext (plus its 16-byte tag) of any
+// value within the provider budget, whose UTF-8 serialization is at most
+// `PROVIDER_BUDGET.maxBytes`.
+const PROVIDER_CIPHERTEXT_CHARACTERS = Math.ceil((PROVIDER_BUDGET.maxBytes + 16) / 3) * 4;
+
 /**
  * Single-sourced hostile-input budgets. General extension messages remain
  * small; typed data is tighter because hashing is CPU-intensive; contract
- * classes get a deliberate larger envelope without becoming unbounded.
+ * classes get a deliberate larger envelope without becoming unbounded; storage
+ * admits the ciphertext of anything the provider budget admits.
  */
 export const JSON_BUDGETS = {
   contractClass: {
@@ -37,13 +52,19 @@ export const JSON_BUDGETS = {
     maxObjectKeys: 10_000,
     maxStringLength: 2 * 1024 * 1024,
   },
-  provider: {
-    maxArrayLength: 4_096,
-    maxBytes: 1024 * 1024,
-    maxDepth: 32,
-    maxNodes: 50_000,
-    maxObjectKeys: 2_048,
-    maxStringLength: 512 * 1024,
+  provider: PROVIDER_BUDGET,
+  /**
+   * The at-rest storage boundary. Every other limit is the provider one, but a
+   * single string may be as long as the base64 ciphertext of a provider-budget
+   * value, so the encrypted envelope of anything that budget admits always fits;
+   * 16 KiB more covers the envelope's other fields. The six-byte charge is far
+   * above base64's real size, so this bounds work rather than bytes on disk
+   * (Sherlock 261).
+   */
+  storage: {
+    ...PROVIDER_BUDGET,
+    maxBytes: 2 + PROVIDER_CIPHERTEXT_CHARACTERS * 6 + 16 * 1024,
+    maxStringLength: PROVIDER_CIPHERTEXT_CHARACTERS,
   },
   strk20Proof: {
     maxArrayLength: 4_096,

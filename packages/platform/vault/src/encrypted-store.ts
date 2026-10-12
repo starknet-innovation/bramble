@@ -178,7 +178,8 @@ export type EncryptedStore = {
   readonly remove: () => Promise<void>;
   readonly replaceUnverified: (value: Json, passphrase: string) => Promise<void>;
   readonly upgradeLegacyEnvelope: (passphrase: string) => Promise<void>;
-  readonly write: (value: Json, passphrase: string) => Promise<void>;
+  /** `beforeCommit` runs after encryption, right before the first storage write. */
+  readonly write: (value: Json, passphrase: string, beforeCommit?: () => void) => Promise<void>;
 };
 
 // Bounds the derived-key cache; salt changes each write, so a long-running
@@ -277,6 +278,9 @@ export const createEncryptedStore = (
     if (envelope.version !== 3) {
       throw new WalletError("Committed encrypted envelope required");
     }
+    // Checked before the pending record: a write the storage budget refuses
+    // must leave no half-commit behind (Sherlock 261).
+    assertJsonValue(envelope);
     const commit = envelope.commit;
     const current = previous?.version === 3 ? previous.commit : null;
     await freshness.set(envelope.lineage, {
@@ -307,13 +311,19 @@ export const createEncryptedStore = (
     }
   };
 
-  const encryptAndWrite = async (value: Json, passphrase: string): Promise<void> => {
+  const encryptAndWrite = async (
+    value: Json,
+    passphrase: string,
+    beforeCommit?: () => void,
+  ): Promise<void> => {
     const previous = await previousForWrite();
     const lineage =
       previous?.version === 3
         ? previous.lineage
         : bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-    await writeEnvelope(await encryptJson(value, passphrase, scope, resolveKey, lineage), previous);
+    const envelope = await encryptJson(value, passphrase, scope, resolveKey, lineage);
+    beforeCommit?.();
+    await writeEnvelope(envelope, previous);
   };
 
   const currentHealth = async (): Promise<EncryptedStoreHealth> => {
@@ -428,8 +438,8 @@ export const createEncryptedStore = (
       assertJsonValue(decrypted);
       await encryptAndWrite(decrypted, passphrase);
     },
-    async write(value, passphrase) {
-      await encryptAndWrite(value, passphrase);
+    async write(value, passphrase, beforeCommit) {
+      await encryptAndWrite(value, passphrase, beforeCommit);
     },
   };
 };

@@ -1,7 +1,8 @@
 /**
  * Persistence for the live phishing feed (audit #184). Every production store
- * write passes the shared provider JSON budget (4,096 array entries, 1 MiB with
- * strings charged at six bytes per code unit), so a public list of tens of
+ * write passes the shared storage JSON budget (4,096 array entries, strings
+ * charged at six bytes per code unit; chunks stay under the provider's 1 MiB,
+ * well inside it), so a public list of tens of
  * thousands of domains can never be written as one array. The cache is
  * therefore split into chunks sized by an estimated byte budget, not a fixed
  * count, so one long entry cannot push a chunk over the limit.

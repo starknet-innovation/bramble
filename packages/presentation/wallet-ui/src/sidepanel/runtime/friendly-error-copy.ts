@@ -205,6 +205,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "encrypted store is not awaiting recovery",
     "This wallet no longer needs Unlock anyway. Close and reopen Bramble.",
   ],
+  ["vault storage limit reached", "This wallet is full, so this change wasn't saved."],
   [
     "account discovery unavailable",
     "Couldn't search for accounts. Check your connection and try again.",
