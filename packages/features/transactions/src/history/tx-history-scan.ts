@@ -117,6 +117,33 @@ const transferKeyFilters = (account: string): readonly (readonly string[][])[] =
   [[TRANSFER_EVENT_KEY], [], [account]],
 ];
 
+// A legacy (Cairo 0) ERC20 indexes only the selector and carries `from` and
+// `to` in `data`, so the key filters above can never match its events. Such a
+// token is read with the selector alone and filtered client-side by
+// `decodeTransferEvent`, within the same page budget (Sherlock 223).
+const LEGACY_TRANSFER_FILTERS: readonly (readonly string[][])[] = [[[TRANSFER_EVENT_KEY]]];
+
+// Reads one Transfer event of the token in the window to learn which layout it
+// emits, rather than keeping a list of legacy tokens that would go stale as
+// contracts are upgraded. A token with no Transfer in the window has nothing
+// to find either way and keeps the key filters.
+const emitsLegacyTransfers = async (
+  rpc: HistoryRpc,
+  token: TokenConfig,
+  fromBlock: number,
+  toBlock: number,
+): Promise<boolean> => {
+  const probe = await rpc.getEvents({
+    address: token.address,
+    chunk_size: 1,
+    from_block: fromBlock,
+    keys: [[TRANSFER_EVENT_KEY]],
+    to_block: toBlock,
+  });
+  const [event] = probe.events ?? [];
+  return event !== undefined && event.keys.length < 3;
+};
+
 type EventPage = {
   readonly transfers: readonly TokenTransfer[];
   // True when the page budget ran out with more (newer) events still unread, so
@@ -182,6 +209,27 @@ const collectTokenTransfers = async (
   return recent.transfers;
 };
 
+// Reads one token's transfers touching the account, through the filters that
+// match the token's Transfer layout.
+const readTokenTransfers = async (
+  rpc: HistoryRpc,
+  token: TokenConfig,
+  account: string,
+  fromBlock: number,
+  latestBlock: number,
+): Promise<readonly TokenTransfer[]> => {
+  const filters = (await emitsLegacyTransfers(rpc, token, fromBlock, latestBlock))
+    ? LEGACY_TRANSFER_FILTERS
+    : transferKeyFilters(account);
+  const transfers: TokenTransfer[] = [];
+  for (const keys of filters) {
+    transfers.push(
+      ...(await collectTokenTransfers(rpc, token, account, fromBlock, latestBlock, keys)),
+    );
+  }
+  return transfers;
+};
+
 // Pages every tracked token over the window, keeping the transfers that touch
 // the account. A per-token semantic failure is skipped so one odd token cannot
 // blank the feed; a transport failure propagates so the caller degrades rather
@@ -200,11 +248,7 @@ const gatherTokenTransfers = async (
       continue;
     }
     try {
-      for (const keys of transferKeyFilters(account)) {
-        transfers.push(
-          ...(await collectTokenTransfers(rpc, token, account, fromBlock, latestBlock, keys)),
-        );
-      }
+      transfers.push(...(await readTokenTransfers(rpc, token, account, fromBlock, latestBlock)));
     } catch (error) {
       if (isTransportRpcError(error)) {
         throw error;

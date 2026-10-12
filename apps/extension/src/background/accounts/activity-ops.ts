@@ -1,5 +1,6 @@
 /** Durable-first account activity loading and background history refresh. */
 import type { MultisigStore } from "@bramble/multisig/repository";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   type ActivityEntry,
@@ -9,7 +10,7 @@ import {
   activityForScope,
   systemClock,
 } from "@bramble/transactions/activity";
-import type { HistoryLane } from "@bramble/transactions/tx-history";
+import { asUntrackedToken, type HistoryLane } from "@bramble/transactions/tx-history";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { readActivityInput } from "../routing/message-inputs";
@@ -116,7 +117,11 @@ const accountHistory = async (
   const scan = deps.runtimeRpc.getTransactionHistory;
   if (!scan) return NO_HISTORY;
   const preferences = await deps.preferencesStore.read();
-  const tokens = preferences.tokens.filter((token) => token.networkId === target.networkId);
+  // A likely-spam token is scanned under the untracked identity, so a spoofed
+  // "USDC" contract never appears in Activity as USDC (Sherlock 249).
+  const tokens = preferences.tokens
+    .filter((token) => token.networkId === target.networkId)
+    .map((token) => (isLikelySpam(token) ? asUntrackedToken(token) : token));
   if (tokens.length === 0) return NO_HISTORY;
   try {
     const discovered = await scan({

@@ -119,9 +119,11 @@ describe("scanTransactionHistory against real mainnet payloads", () => {
         token: "STRK",
       },
     ]);
-    // One height read, one outgoing and one incoming filter, one header read.
+    // One height read, the layout probe, one outgoing and one incoming filter,
+    // one header read.
     expect(calls).toEqual([
       "starknet_blockNumber",
+      "starknet_getEvents",
       "starknet_getEvents",
       "starknet_getEvents",
       "starknet_getBlockWithTxHashes",

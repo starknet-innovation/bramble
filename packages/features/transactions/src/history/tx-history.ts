@@ -233,6 +233,20 @@ const legKey = (entry: ActivityEntry): string =>
 // The symbol the explorer lane gives a token the wallet does not track.
 const UNTRACKED_TOKEN_SYMBOL = "TOKEN";
 
+/**
+ * A tracked token re-labelled with the identity Activity gives a token it does
+ * not track. Used for a token the wallet flags as likely spam: its stored
+ * symbol may spoof a real one ("USDC"), and Activity must not repeat it, nor
+ * price it or show its logo by that symbol (Sherlock 249). Rows for such a
+ * token then fall under the untracked-token rules of
+ * {@link withoutPlantedRows}.
+ */
+export const asUntrackedToken = (token: TokenConfig): TokenConfig => ({
+  ...token,
+  name: "Untracked token",
+  symbol: UNTRACKED_TOKEN_SYMBOL,
+});
+
 const isZeroAmountLabel = (amount: string | undefined): boolean =>
   amount !== undefined && /^0(?:\.0*)?$/.test(amount);
 
