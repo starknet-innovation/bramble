@@ -178,6 +178,14 @@ export const buildQuoteCalldata = (
   });
 
 /**
+ * Compiles calldata for Core `get_pool_price(pool_key)`: the `PoolKey` struct
+ * alone (five felts). Core rejects any longer input, so the RouterV3 quote
+ * calldata must never be reused here (Sherlock 133).
+ */
+export const buildPoolPriceCalldata = (poolKey: EkuboPoolKey): string[] =>
+  CallData.compile({ pool_key: poolKeyStruct(poolKey) });
+
+/**
  * Parses a RouterV3 `quote_swap` / `swap` `Delta { amount0: i129, amount1: i129 }`
  * response into the buy-side output magnitude (the pool-negative leg).
  */
