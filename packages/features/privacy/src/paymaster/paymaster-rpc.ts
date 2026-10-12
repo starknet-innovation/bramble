@@ -31,7 +31,7 @@ export type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Pr
 /**
  * This client's deadline on one relay request. It must end before the STRK20
  * gateway's own paymaster deadline (`PAYMASTER_UPSTREAM_TIMEOUT_MS` in
- * `apps/terminal/api/_lib/security.ts`, pinned by a conformance test): when
+ * `apps/terminal/api/_lib/upstream-deadlines.ts`, pinned by a conformance test): when
  * the gateway gives up first, the wallet learns of a lost answer only as an
  * HTTP status, and when this client gives up first it learns of it as its own
  * deadline expiry. Both are read as a lost answer, but the order keeps the

@@ -6,13 +6,12 @@ import {
   isRecord,
   hasOnlyKeys,
   isFelt,
-  PAYMASTER_UPSTREAM_TIMEOUT_MS,
   PRIVATE_SWAP_FEE_TOKEN,
   PRIVACY_POOL_ADDRESS,
-  PROVER_UPSTREAM_TIMEOUT_MS,
   reject,
   serviceUrl,
 } from "../_lib/security.js";
+import { PAYMASTER_UPSTREAM_TIMEOUT_MS, PROVER_UPSTREAM_TIMEOUT_MS } from "../_lib/upstream-deadlines.js";
 
 export const config = {
   api: { bodyParser: false },

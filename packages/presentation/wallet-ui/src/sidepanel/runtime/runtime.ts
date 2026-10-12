@@ -261,9 +261,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async detectTokens(): Promise<readonly TokenBalance[]> {
       const response = await sendMessage({ type: "wallet.detectTokens" });
       const suggestions = readDetectedTokens(response);
-      if (suggestions) {
-        return suggestions;
-      }
+      if (suggestions) return suggestions;
       throw responseError(response, "token detection failed");
     },
     async loadPrices(cached = false): Promise<{
