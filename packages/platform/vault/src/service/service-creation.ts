@@ -7,7 +7,6 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import { isJson, isJsonWithinBudget, JSON_BUDGETS } from "@bramble/core/json";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
@@ -22,14 +21,7 @@ import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { CURRENT_SCHEMA_VERSION, isVaultV11, type Vault } from "../schema/schema";
 import type { WalletVaultService } from "./service-types";
-
-/**
- * Refusal when a vault no longer fits the JSON budget its validators apply on
- * read as on write. That budget, not an account count, is the vault's capacity:
- * it is shared by accounts, signing keys, imported phrases, retained secrets
- * and connected sites (Sherlock 261, sized in `docs/WALLET_STORE.md`).
- */
-export const VAULT_FULL = "Vault storage limit reached";
+import { requireVaultCapacity } from "./vault-capacity";
 
 /**
  * Validates and persists a vault snapshot. Refuses to write anything that is
@@ -46,9 +38,7 @@ export const writeVault = async (
   vaultPassphrase: string,
   beforeCommit?: () => void,
 ): Promise<void> => {
-  if (isJsonWithinBudget(vault, JSON_BUDGETS.storage) && !isJson(vault)) {
-    throw new WalletError(VAULT_FULL);
-  }
+  requireVaultCapacity(vault);
   if (!isVaultV11(vault)) {
     throw new WalletError("Invalid vault");
   }
