@@ -297,7 +297,9 @@ export const sortedArgentMultisigSignatures = (
 /**
  * Merges a re-import of the same frozen hash without regressing local state.
  * Terminal local outcomes remain authoritative; open intents gain only new,
- * already-validated signer fragments.
+ * already-validated signer fragments. The stored summary is kept: it is local
+ * display text that a token or contact added since would word differently,
+ * and the frozen hash already pins what is signed (Sherlock 178).
  */
 export const mergeImportedArgentMultisigIntent = (
   current: ArgentMultisigSigningIntent,
@@ -315,6 +317,7 @@ export const mergeImportedArgentMultisigIntent = (
     ...incoming,
     signatures: sorted,
     state: sorted.length === incoming.configSnapshot.threshold ? "ready" : "collecting",
+    summary: current.summary,
   };
 };
 

@@ -172,7 +172,7 @@ const amountStage = (
         <span class="send-amount-shortcuts">
           <button id="send-half" type="button">Half</button>
           <button id="send-max" type="button">Max</button>
-          <button id="send-unit-toggle" type="button" aria-label="Enter an amount in ${currency.toUpperCase()}">${icon("swap")}<span id="send-unit-label">${currency.toUpperCase()}</span></button>
+          <button id="send-unit-toggle" type="button" data-currency="${currency}" aria-label="Enter an amount in ${currency.toUpperCase()}">${icon("swap")}<span id="send-unit-label">${currency.toUpperCase()}</span></button>
         </span>
       </div>
       <p class="send-fiat-estimate" id="send-fiat-estimate">Estimated value —</p>

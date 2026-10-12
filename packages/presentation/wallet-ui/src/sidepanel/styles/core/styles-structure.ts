@@ -13,6 +13,15 @@
 import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
+ * Stacking layers of the two repaint-surviving Ledger takeovers. The device-sign
+ * prompt sits above the onboarding overlay: when a parked device sign presents
+ * itself during Ledger onboarding, the hash the user compares on the device and
+ * its Cancel control must be the surface on top, whatever order the two mounts
+ * were created in (Sherlock 259).
+ */
+export const LEDGER_OVERLAY_LAYERS = { onboard: 40, sign: 41 } as const;
+
+/**
  * Structured-content stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on one soft surface, split by inset
@@ -301,7 +310,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-y: auto;
     padding: ${SPACE.lg};
     position: fixed;
-    z-index: 40;
+    z-index: ${LEDGER_OVERLAY_LAYERS.sign};
   }
   .ledger-sign-overlay[hidden] { display: none; }
 
@@ -318,7 +327,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-y: auto;
     padding: ${SPACE.lg};
     position: fixed;
-    z-index: 40;
+    z-index: ${LEDGER_OVERLAY_LAYERS.onboard};
   }
   .ledger-onboard-overlay[hidden] { display: none; }
   .onboard-hero {

@@ -4,9 +4,15 @@
  * descriptor is rejected identically on both sides of the wire.
  */
 
-import { hasOnlyKnownKeys, isNetworkLabel, isRecord, type Json } from "@bramble/core/json";
+import {
+  hasOnlyKnownKeys,
+  isNetworkLabel,
+  isPrintableName,
+  isRecord,
+  type Json,
+} from "@bramble/core/json";
 import { isBoundedServiceUrlList } from "@bramble/core/service-url";
-import { isCanonicalChainId } from "@bramble/wallet-model/networks";
+import { isCanonicalChainId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { isOptionalApiVersion } from "../provider/versions";
 
 /**
@@ -46,6 +52,23 @@ const readUrlList = (value: unknown): readonly string[] | null | undefined => {
   return isChainUrlList(value) ? [...value] : null;
 };
 
+const foldNetworkName = (name: string): string => name.trim().replace(/\s+/g, " ").toLowerCase();
+
+const BUILT_IN_NETWORK_NAMES = new Set(
+  Object.values(STARKNET_NETWORKS).map((network) => foldNetworkName(network.name)),
+);
+
+// A site names the network it asks the wallet to add, and the card and the
+// stored record show that name. It must be printable ASCII, so control,
+// bidi-override and homoglyph characters cannot dress it up, and it must not
+// be a built-in network's name, or an attacker's RPC could be added as
+// "Starknet Mainnet" (Sherlock 130). The stored-network rule stays the wider
+// `isNetworkLabel`, so a record saved before this check still loads.
+const isSiteNetworkName = (value: unknown): value is string =>
+  isNetworkLabel(value) &&
+  isPrintableName(value) &&
+  !BUILT_IN_NETWORK_NAMES.has(foldNetworkName(value));
+
 /**
  * Parses a `{ id, chain_id, chain_name, rpc_urls?, ... }` STARKNET_CHAIN object,
  * accepting only the spec-required fields plus optional URI lists. Returns the
@@ -67,9 +90,9 @@ export const readProviderChain = (params: Json | undefined): ProviderChain | nul
       "rpc_urls",
     ]) ||
     !isOptionalApiVersion(params["api_version"]) ||
-    !isNetworkLabel(params["id"]) ||
+    !isSiteNetworkName(params["id"]) ||
     !isCanonicalChainId(params["chain_id"]) ||
-    !isNetworkLabel(params["chain_name"]) ||
+    !isSiteNetworkName(params["chain_name"]) ||
     (params["native_currency"] !== undefined && !isRecord(params["native_currency"]))
   ) {
     return null;
@@ -105,8 +128,8 @@ export const isProviderChain = (value: unknown): value is ProviderChain =>
     "rpcUrls",
   ]) &&
   isCanonicalChainId(value["chainId"]) &&
-  isNetworkLabel(value["chainName"]) &&
-  isNetworkLabel(value["id"]) &&
+  isSiteNetworkName(value["chainName"]) &&
+  isSiteNetworkName(value["id"]) &&
   isOptionalChainUrlList(value["rpcUrls"]) &&
   isOptionalChainUrlList(value["blockExplorerUrls"]) &&
   isOptionalChainUrlList(value["iconUrls"]);

@@ -92,9 +92,26 @@ export const restoreTransferCompose = (form: HTMLFormElement, fields: TransferFi
   }
 };
 
+// The display currency rides on the toggle itself. The label beside it is not
+// a source: in fiat mode it names the token, so reading the currency back from
+// it turned EUR and GBP into USD after one round trip.
 const currencyFor = (form: HTMLFormElement): Currency => {
-  const value = form.querySelector("#send-unit-label")?.textContent?.toLowerCase();
+  const value = form.querySelector<HTMLElement>("#send-unit-toggle")?.dataset["currency"];
   return value === "eur" || value === "gbp" ? value : "usd";
+};
+
+// The toggle names the unit it switches to: the currency while entering a
+// token amount, the selected token while entering a fiat one. Repainted
+// whenever the mode or the token changes, so it never names a token the user
+// has since replaced.
+const syncUnitToggle = (form: HTMLFormElement): void => {
+  const unit =
+    form.dataset["amountMode"] === "fiat"
+      ? sendFormInput(form, "tokenSymbol")?.value || "Token"
+      : currencyFor(form).toUpperCase();
+  const label = form.querySelector("#send-unit-label");
+  if (label) label.textContent = unit;
+  form.querySelector("#send-unit-toggle")?.setAttribute("aria-label", `Enter an amount in ${unit}`);
 };
 
 const updateAmountPresentation = (
@@ -153,6 +170,7 @@ const applySelectedAsset = (form: HTMLFormElement, row: HTMLElement): void => {
     balanceNode.textContent = sendBalanceLine("public", fields["tokenFormatted"] ?? "0", symbol);
   }
   copySelectedGlyph(form, row.querySelector(".send-asset-glyph"));
+  syncUnitToggle(form);
   const visible = form.querySelector<HTMLInputElement>("#send-amount-input");
   if (visible) visible.value = "";
   setSendFormValue(form, "amount", "");
@@ -350,13 +368,7 @@ const bindAmountControls = (
     const prefix = form.querySelector<HTMLElement>("#send-amount-prefix");
     prefix?.toggleAttribute("hidden", next !== "fiat");
     if (prefix) prefix.textContent = sendCurrencySymbol(currency);
-    const unit = form.querySelector("#send-unit-label");
-    if (unit) {
-      unit.textContent =
-        next === "fiat"
-          ? (sendFormInput(form, "tokenSymbol")?.value ?? "Token")
-          : currency.toUpperCase();
-    }
+    syncUnitToggle(form);
     updateAmountPresentation(form, onFields);
     visible.focus();
   });

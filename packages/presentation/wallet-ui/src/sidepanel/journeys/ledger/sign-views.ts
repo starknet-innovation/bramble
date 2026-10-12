@@ -233,7 +233,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
     </div>
     ${pill(status.network, { dot: true })}
   </header>
-  <main class="screen flow ledger-sign-screen" id="wallet-screen-ledger-sign" tabindex="-1">
+  <section class="screen flow ledger-sign-screen" id="wallet-screen-ledger-sign" tabindex="-1">
     <section class="ledger-progress-card" data-phase="${escapeHtml(view.phase.kind)}">
       <div class="ledger-progress-hero">
         <span class="ledger-device-mark" aria-hidden="true">${icon("shield")}</span>
@@ -250,4 +250,4 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
       </p>
     </section>
     <p id="ledger-sign-result" role="status" aria-live="polite"></p>
-  </main>`;
+  </section>`;

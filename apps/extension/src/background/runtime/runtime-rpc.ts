@@ -61,6 +61,7 @@ import {
   getNftTokenUri,
   type getTokenBalances,
   getTokenMetadata,
+  getTransactionFees,
   getTransactionStatuses,
   type InvokeInput,
   type NftOwnerInput,
@@ -232,6 +233,14 @@ export type RuntimeRpc = {
    * to the local log.
    */
   readonly getTransactionHistory?: (input: TransactionHistoryScan) => Promise<DiscoveredHistory>;
+  /**
+   * Reads the fee each transaction's receipt reports it paid, for the activity
+   * log. Optional so existing RPC stubs stay valid; when absent no fee is
+   * recorded. A hash with no usable receipt fee is absent from the answer.
+   */
+  readonly getTransactionFees?: (
+    input: TransactionStatusInput,
+  ) => ReturnType<typeof getTransactionFees>;
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;
@@ -352,6 +361,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     clientFor: configuredStarkscanClient,
     readPreferences,
   }),
+  getTransactionFees,
   getTransactionStatuses,
   multisig: {
     getConfig: getArgentMultisigConfig,

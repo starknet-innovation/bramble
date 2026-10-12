@@ -45,3 +45,31 @@ it("refuses direct server plan requests before any upstream operation", async ()
   expect(json).toHaveBeenCalledWith({ error: "private_swap_executor_not_verified" });
   expect(fetch).not.toHaveBeenCalled();
 });
+
+// Sherlock 195: `fee` and `submit` spend the operator's paymaster credential
+// too, so they are refused while private swaps are off, before any upstream.
+it.each(["fee", "submit"])(
+  "refuses direct %s requests before any upstream operation",
+  async (action) => {
+    vi.stubEnv("TERMINAL_ALLOWED_ORIGINS", "https://terminal.example");
+    vi.stubEnv("AVNU_PAYMASTER_API_KEY", "operator-key");
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const status = vi.fn();
+    const json = vi.fn();
+    const response = { setHeader: vi.fn(), status, json };
+    status.mockReturnValue(response);
+    await handler(
+      {
+        body: JSON.stringify({ feeMode: { poolFeeToken: "0x1" } }),
+        method: "POST",
+        headers: { origin: "https://terminal.example" },
+        query: { action },
+      } as unknown as ApiRequest,
+      response as unknown as ApiResponse,
+    );
+    expect(status).toHaveBeenCalledWith(503);
+    expect(json).toHaveBeenCalledWith({ error: "private_swap_executor_not_verified" });
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);

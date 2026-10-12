@@ -442,7 +442,6 @@ ${SIGN_REQUEST_STYLES}
     width: min(232px, 100%);
   }
   .qr { display: block; height: auto; width: 100%; }
-
   /* Toasts: pinned above the dock at the bottom of the panel; the offset is
      derived from the same dock-footprint token the bar itself uses, and the
      stack shares the shell's text column so a toast lines up with the cards
@@ -488,6 +487,7 @@ ${SIGN_REQUEST_STYLES}
   }
   .toast.success .toast-icon { background: var(--bramble-positive-soft); color: var(--bramble-positive); }
   .toast.error .toast-icon { background: var(--bramble-danger-soft); color: var(--bramble-danger); }
+  .toast.warning .toast-icon { background: var(--bramble-warning-soft); color: var(--bramble-warning); }
   .toast-icon .icon { height: 16px; width: 16px; }
   .toast-text {
     flex: 1;

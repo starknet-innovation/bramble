@@ -64,7 +64,9 @@ const canonicalSigned = (signed: Strk20SignedSubmission): Strk20SignedSubmission
     : null;
 };
 
-type SignedOutcome = "dropped" | "landed" | "rejected" | "unknown";
+// `inFlight` is a pending or pre-confirmed write: it reached the network but
+// can still vanish, so its signed identity must outlive the lookup.
+type SignedOutcome = "dropped" | "inFlight" | "landed" | "rejected" | "unknown";
 
 // A nonce answer is an untrusted RPC value. Only a string that canonicalizes
 // to a field element can prove the sender's nonce moved; a decimal or an
@@ -102,10 +104,11 @@ const resolveSigned = async (
         case "rejected":
           return "rejected";
         case "accepted":
-        case "pending":
-        case "preconfirmed":
         case "reverted":
           return "landed";
+        case "pending":
+        case "preconfirmed":
+          return "inFlight";
         default: {
           const unreachable: never = status;
           return unreachable;
@@ -182,7 +185,7 @@ const priorWaitFailure = async (
 };
 
 const settledRecord = (
-  outcome: Exclude<SignedOutcome, "unknown">,
+  outcome: Exclude<SignedOutcome, "inFlight" | "unknown">,
   transactionHash: string,
 ): SubmittedRecord | null => {
   switch (outcome) {
@@ -202,6 +205,12 @@ const settledRecord = (
 // once the write provably cannot land, or STATUS_UNKNOWN while it stays
 // closed. A marker without a signed identity (a relay send, or one that failed
 // before signing) names nothing the chain can be asked about.
+//
+// A pending or pre-confirmed write is followed without rewriting its marker.
+// It can still vanish, and only the signed marker carries the sender and nonce
+// the spent-nonce proof needs; the receipt wait replaces the marker once the
+// write is accepted, so a write that vanishes first leaves the marker for the
+// next action to resolve (mc-wallet 474 item 2).
 const settleSubmitting = async (
   store: Strk20MaturityStore,
   provider: RpcProvider,
@@ -214,6 +223,9 @@ const settleSubmitting = async (
   const outcome = await resolveSigned(provider, marker);
   if (outcome === "unknown") {
     throw new WalletError(STATUS_UNKNOWN);
+  }
+  if (outcome === "inFlight") {
+    return { state: "submitted", transactionHash: marker.transactionHash };
   }
   const next = settledRecord(outcome, marker.transactionHash);
   await replaceStuck(store, scope, marker.transactionHash, next);

@@ -38,7 +38,8 @@ export const HARNESS_KEYS = [HARNESS_PUBLIC_A, HARNESS_PUBLIC_B].sort((left, rig
   BigInt(argentSignerGuid(left)) < BigInt(argentSignerGuid(right)) ? -1 : 1,
 );
 const HARNESS_CONFIG = { signerPublicKeys: HARNESS_KEYS, threshold: 2 } as const;
-const HARNESS_MULTISIG = argentMultisigAddress(HARNESS_CONFIG, "0x0");
+/** The harness multisig account address. */
+export const HARNESS_MULTISIG = argentMultisigAddress(HARNESS_CONFIG, "0x0");
 export const HARNESS_MULTISIG_ID = `SN_MAIN:${HARNESS_MULTISIG}`;
 export const HARNESS_TARGET = "0x222";
 const HARNESS_SUBMIT_HASH = "0x7cd";

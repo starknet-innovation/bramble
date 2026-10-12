@@ -11,6 +11,7 @@ import {
   reject,
   serviceUrl,
 } from "../_lib/security.js";
+import { PAYMASTER_UPSTREAM_TIMEOUT_MS, PROVER_UPSTREAM_TIMEOUT_MS } from "../_lib/upstream-deadlines.js";
 
 export const config = {
   api: { bodyParser: false },
@@ -162,9 +163,19 @@ const upstreamFor = (service: Service): string | null => {
   return serviceUrl("STRK20_PAYMASTER_UPSTREAM", AVNU_PAYMASTER_URL);
 };
 
-const copyResponse = async (upstream: Response, response: ApiResponse): Promise<ApiResponse> => {
+// The wallet reads a 5xx on a relay broadcast as a lost answer and a 4xx as a
+// refusal (Sherlock 159). A relay's own 4xx says it refused the request, so it
+// stays a 4xx here instead of becoming a 502 the wallet cannot tell apart from
+// a reply that was cut off.
+const copyResponse = async (
+  service: Service,
+  upstream: Response,
+  response: ApiResponse,
+): Promise<ApiResponse> => {
   if (!upstream.ok) {
-    return reject(response, 502, "upstream_unavailable");
+    return service === "paymaster" && upstream.status >= 400 && upstream.status < 500
+      ? reject(response, upstream.status, "upstream_rejected")
+      : reject(response, 502, "upstream_unavailable");
   }
   const type = upstream.headers.get("content-type")?.split(";", 1)[0]?.trim();
   if (
@@ -260,10 +271,14 @@ export default async function handler(
       headers,
       method: request.method,
       redirect: "error",
-      signal: AbortSignal.timeout(route.service === "prover" ? 110_000 : 25_000),
+      signal: AbortSignal.timeout(
+        route.service === "prover" ? PROVER_UPSTREAM_TIMEOUT_MS : PAYMASTER_UPSTREAM_TIMEOUT_MS,
+      ),
     });
-  } catch {
-    return reject(response, 502, "upstream_unavailable");
+  } catch (error) {
+    return error instanceof DOMException && error.name === "TimeoutError"
+      ? reject(response, 504, "upstream_timeout")
+      : reject(response, 502, "upstream_unavailable");
   }
-  return copyResponse(upstream, response);
+  return copyResponse(route.service, upstream, response);
 }

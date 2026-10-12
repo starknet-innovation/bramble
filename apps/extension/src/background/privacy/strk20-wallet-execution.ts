@@ -84,9 +84,25 @@ const preparationStillMatches = async (
   );
 };
 
-// What the activity log records for a settled privacy operation. A deposit
-// crediting someone else names them, because "Shield 5 STRK" in a history beside
-// a payment to a friend is the same ambiguity that once hid a misdirected send.
+const counterpartyOf = (payee: string | undefined): { readonly counterparty?: string } =>
+  payee === undefined ? {} : { counterparty: payee };
+
+// The other party a privacy operation pays, or undefined when it stays within
+// the account. Recorded as the activity counterparty, so a payee joins the
+// paid-recipient trust set like any other wallet-submitted payment.
+const otherParty = (
+  preparation: Strk20WalletPreparation,
+  context: ActivePrivacyContext,
+): string | undefined =>
+  preparation.kind === "register" ||
+  sameFelt(preparation.recipient, context.accountContext.account.address)
+    ? undefined
+    : preparation.recipient;
+
+// What the activity log records for a settled privacy operation. A shield or
+// unshield crediting someone else names them, because "Unshield 5 STRK" in a
+// history beside a payment to a friend reads as a move between the owner's own
+// balances: the same ambiguity that once hid a misdirected send (Sherlock 201).
 const activitySummary = (
   preparation: Strk20WalletPreparation,
   context: ActivePrivacyContext,
@@ -98,12 +114,9 @@ const activitySummary = (
   if (preparation.kind === "transfer") {
     return `Send ${value} privately`;
   }
-  if (preparation.kind === "withdraw") {
-    return `Unshield ${value}`;
-  }
-  return sameFelt(preparation.recipient, context.accountContext.account.address)
-    ? `Shield ${value}`
-    : `Shield ${value} to ${preparation.recipient}`;
+  const verb = preparation.kind === "withdraw" ? "Unshield" : "Shield";
+  const payee = otherParty(preparation, context);
+  return payee === undefined ? `${verb} ${value}` : `${verb} ${value} to ${payee}`;
 };
 
 // A third-party private credit can only be encoded for a recipient whose
@@ -289,6 +302,7 @@ const executionWork = async (
     await recordSubmittedActivity(deps.activity, {
       accountId: context.accountContext.account.id,
       ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
+      ...counterpartyOf(otherParty(preparation, context)),
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.accountContext.account.networkId,

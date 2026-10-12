@@ -59,7 +59,7 @@ export const sceneContent = (cache: RenderData, state: SceneContentState): strin
     cache.transactions,
     cache.connectedSites,
     cache.prices,
-    cache.chart,
+    cache.chartTokenId === state.selectedTokenId ? cache.chart : [],
     state.selectedTokenId,
     cache.allowances,
     state.selectedNftId,

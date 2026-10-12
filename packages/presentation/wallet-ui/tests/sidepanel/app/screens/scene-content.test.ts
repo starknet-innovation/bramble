@@ -4,6 +4,7 @@
  * dashboard every cached field in its positional slot.
  */
 import { describe, expect, test } from "bun:test";
+import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
@@ -131,5 +132,28 @@ describe("sceneContent", () => {
     expect(foreign.actual).toBe(foreign.expected(null));
     // The receive screen shows the badge, so the two answers really differ.
     expect(own.actual).not.toBe(foreign.actual);
+  });
+
+  test("draws the cached chart only for the token it was read for (Sherlock 210)", () => {
+    const [eth, usdc] = knownTokensForNetwork("SN_MAIN").filter((token) =>
+      ["ETH", "USDC"].includes(token.symbol),
+    );
+    if (!eth || !usdc) throw new Error("registry fixture missing");
+    const cache = {
+      ...cacheWith(unlocked),
+      chart: [4_000, 4_200],
+      chartTokenId: eth.id,
+      preferences: { ...preferences, tokens: [eth, usdc] },
+      prices: { [usdc.address]: 1 },
+    };
+    const noChart = { ...cache, chart: [], chartTokenId: null };
+    const view = { ...state, activeView: "token-detail" as const };
+    const scene = (data: typeof cache | typeof noChart, tokenId: string) =>
+      sceneContent(data, { ...view, selectedTokenId: tokenId });
+
+    // ETH's chart is never drawn, or used as the price, on USDC's screen.
+    expect(scene(cache, usdc.id)).toBe(scene(noChart, usdc.id));
+    // The chart still draws for the token it was read for.
+    expect(scene(cache, eth.id)).not.toBe(scene(noChart, eth.id));
   });
 });

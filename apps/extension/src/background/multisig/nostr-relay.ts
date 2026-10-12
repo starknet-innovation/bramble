@@ -13,6 +13,8 @@ import {
 } from "./nostr-relay-socket";
 
 const RELAY_IDLE_MS = 20_000;
+// Pages read from one relay per sync when its answers keep coming back full.
+const MAX_SYNC_PAGES = 4;
 
 /** Reviewed defaults used unless the user explicitly replaces them in settings. */
 export const MULTISIG_NOSTR_RELAYS = ["wss://relay.primal.net", "wss://nos.lol"] as const;
@@ -37,10 +39,16 @@ export type NostrRelayTransport = {
     giftWraps: readonly NostrGiftWrapDelivery[],
     relayUrls: readonly string[],
   ) => Promise<readonly number[]>;
+  /**
+   * Reads up to `MAX_NOSTR_BATCH_ITEMS` gift wraps for the recipient. Wraps in
+   * `seenEventIds` are skipped before that bound is applied, so wraps the
+   * wallet already finished with never crowd out ones it has not opened.
+   */
   readonly sync: (
     recipientPublicKey: string,
     since: number,
     relayUrls: readonly string[],
+    seenEventIds?: ReadonlySet<string>,
   ) => Promise<readonly NostrEvent[]>;
 };
 
@@ -142,26 +150,78 @@ const boundedRelayCandidates = (
   return candidates;
 };
 
+const addUnseen = (
+  unseen: Map<string, NostrEvent>,
+  events: readonly NostrEvent[],
+  seenEventIds: ReadonlySet<string>,
+): void => {
+  for (const event of events) {
+    if (!seenEventIds.has(event.id) && !unseen.has(event.id)) unseen.set(event.id, event);
+  }
+};
+
+// The `until` for the next page, or null when no older page can be read. A
+// full page from one second would repeat forever, so it steps below it.
+const nextPageUntil = (
+  events: readonly NostrEvent[],
+  until: number | undefined,
+  since: number,
+): number | null => {
+  const oldest = Math.min(...events.map((event) => event.created_at));
+  const next = until !== undefined && oldest >= until ? until - 1 : oldest;
+  return next < since ? null : next;
+};
+
+// A relay answers with the newest `MAX_NOSTR_BATCH_ITEMS` wraps. While an
+// answer comes back full, older wraps may be hidden behind newer ones, such as
+// a burst published to push them out of the window, so the relay is asked
+// again below the oldest wrap it returned, up to `MAX_SYNC_PAGES` times, until
+// enough unseen wraps are found (Sherlock 129).
+const unseenRelayEvents = async (
+  pool: ReturnType<typeof createNostrRelayPool>,
+  relay: string,
+  recipientPublicKey: string,
+  since: number,
+  seenEventIds: ReadonlySet<string>,
+): Promise<readonly NostrEvent[]> => {
+  const unseen = new Map<string, NostrEvent>();
+  let until: number | undefined;
+  for (let page = 0; page < MAX_SYNC_PAGES; page += 1) {
+    const events = await pool.sync(relay, recipientPublicKey, since, until);
+    addUnseen(unseen, events, seenEventIds);
+    if (events.length < MAX_NOSTR_BATCH_ITEMS || unseen.size >= MAX_NOSTR_BATCH_ITEMS) break;
+    const next = nextPageUntil(events, until, since);
+    if (next === null) break;
+    until = next;
+  }
+  return [...unseen.values()];
+};
+
 const syncWithPool = async (
   pool: ReturnType<typeof createNostrRelayPool>,
   recipientPublicKey: string,
   since: number,
   relayUrls: readonly string[],
+  seenEventIds: ReadonlySet<string> = new Set(),
 ): Promise<readonly NostrEvent[]> => {
   if (!isNostrPublicKey(recipientPublicKey) || !Number.isSafeInteger(since) || since < 0) {
     throw new Error("Invalid Nostr sync request");
   }
   const results = await Promise.allSettled(
-    validRelayUrls(relayUrls).map((relay) => pool.sync(relay, recipientPublicKey, since)),
+    validRelayUrls(relayUrls).map((relay) =>
+      unseenRelayEvents(pool, relay, recipientPublicKey, since, seenEventIds),
+    ),
   );
   const successful = results.filter(
     (result): result is PromiseFulfilledResult<readonly NostrEvent[]> =>
       result.status === "fulfilled",
   );
   if (successful.length === 0) throw new Error("Nostr relays are unavailable");
-  // Relay-provided ids are untrusted until Krusty authenticates each wrap.
-  // Round-robin the bounded relay results so one hostile relay cannot fill the
-  // authentication batch or suppress a same-id candidate from another relay.
+  // Relay-provided ids are never authenticated: Krusty opens a wrap's content
+  // but returns no event id, so ids only save repeated work and never decide
+  // whether an intent may be imported. Round-robin the bounded relay results so
+  // one hostile relay cannot fill the authentication batch or suppress a
+  // same-id candidate from another relay.
   return [...boundedRelayCandidates(successful.map((result) => result.value))].sort(
     (left, right) => right.created_at - left.created_at || left.id.localeCompare(right.id),
   );
@@ -188,8 +248,8 @@ export const createNostrRelayTransport = (
       return published[0] ?? 0;
     },
     publishMany: (giftWraps, relayUrls) => publishWithPool(pool, giftWraps, relayUrls, true),
-    sync: (recipientPublicKey, since, relayUrls) =>
-      syncWithPool(pool, recipientPublicKey, since, relayUrls),
+    sync: (recipientPublicKey, since, relayUrls, seenEventIds) =>
+      syncWithPool(pool, recipientPublicKey, since, relayUrls, seenEventIds),
   };
 };
 

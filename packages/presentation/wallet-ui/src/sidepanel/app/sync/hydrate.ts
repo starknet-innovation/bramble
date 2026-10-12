@@ -119,6 +119,22 @@ const shouldRefreshSelectedMultisig = (
   multisigsNetworkId === networkId &&
   SELECTED_MULTISIG_VIEWS.has(activeView);
 
+// A paint that throws on the data it was given must not stop hydration: the
+// live jobs that follow are what replace bad cached data, so aborting before
+// they start would leave the panel stuck on the value that broke it
+// (Sherlock 239). The failed paint leaves the previous screen in place, and
+// the next successful paint replaces it.
+const paintIfCurrent = (isCurrent: () => boolean, paint: () => void): void => {
+  if (!isCurrent()) {
+    return;
+  }
+  try {
+    paint();
+  } catch {
+    // Kept on the previous screen; the next paint retries with fresh data.
+  }
+};
+
 const hydrateCachedView = async (
   deps: HydrateDeps,
   walletBalanceView: boolean,
@@ -195,7 +211,7 @@ const hydrateCachedView = async (
   }
   if (jobs.length > 0) {
     await Promise.all(jobs);
-    if (isCurrent()) paint();
+    paintIfCurrent(isCurrent, paint);
   }
 };
 
@@ -400,15 +416,14 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     if (selected) {
       fill(wallet.loadTokenChart(selected.address), (value) => {
         cache.chart = value;
+        cache.chartTokenId = selected.id;
       });
     }
   }
   const flush = async (jobs: readonly Promise<unknown>[]): Promise<void> => {
     if (jobs.length > 0) {
       await Promise.all(jobs);
-      if (isCurrent()) {
-        paint();
-      }
+      paintIfCurrent(isCurrent, paint);
     }
   };
   await flush(primaryJobs);

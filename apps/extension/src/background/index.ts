@@ -68,6 +68,7 @@ import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-prep
 import { createMessageHandler } from "./routing/messages";
 import type { BackgroundBrowser } from "./runtime/background-browser";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
+import { schedulePhishingFeedRefresh } from "./runtime/phishing-feed-alarm";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
 import {
   createActiveStateCoordinator,
@@ -278,8 +279,8 @@ const swapService = (() => {
 const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
 const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
 // Live phishing feed: fetched from the configured source under an explicit host
-// permission, cached in local storage, and refreshed on the first worker wake
-// after its TTL. The guard reads the feed's in-memory snapshot on every check,
+// permission, cached in local storage, and refreshed on worker start and on a
+// recurring alarm, each time only once its TTL has lapsed. The guard reads the feed's in-memory snapshot on every check,
 // so a refresh takes effect with no re-wiring; the bundled seed list in
 // blocklist.ts is always enforced, so protection never drops below baseline
 // even before the first fetch or when the source is unreachable.
@@ -291,7 +292,11 @@ const phishingFeed = (() => {
   }
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
-void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
+void storageReady
+  .then(() => {
+    if (phishingFeed) schedulePhishingFeedRefresh(extensionApi?.alarms, phishingFeed.refresh);
+  })
+  .catch(() => undefined);
 // Fails closed to the stub service when session storage is unavailable, which
 // is the only thing that can throw here (`createStrk20MaturityStore` itself is
 // pure construction). The reason cannot be logged — the standards check bars

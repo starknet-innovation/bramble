@@ -125,6 +125,13 @@ export const reviewedFeeCeiling = (
  *   would put a public deposit and a public withdrawal of one token in a single
  *   transaction, which is the linkage `assertNoPrivacyLeak` exists to prevent.
  *
+ * `fallback` can itself be a deposited token: a batch that deposits and spends
+ * STRK, with STRK configured, has no fee token that avoids the linkage. This
+ * function still returns `fallback` there; the service refuses the resulting
+ * plan on the combined action set, before review, rather than pay the fee in
+ * the deposited token (Sherlock 189). `OPEN` transfers are receipts, not
+ * spends, and never make their token the preference (Sherlock 232).
+ *
  * Note this is a preference, not a decision: the relay may still refuse the
  * token, and the caller falls back on {@link Strk20FeeTokenUnsupportedError}.
  * Choosing the sent token also makes the public fee withdrawal name the asset

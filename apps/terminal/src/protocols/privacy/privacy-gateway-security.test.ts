@@ -314,4 +314,63 @@ describe("paymaster gateway capability", () => {
     expect(target.statusCode()).toBe(200);
     expect(fetch).toHaveBeenCalledOnce();
   });
+  describe("upstream failures (Sherlock 159)", () => {
+    const origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+    const answer = async (fetch: () => Promise<Response>) => {
+      process.env.BRAMBLE_EXTENSION_ORIGINS = origin;
+      vi.stubGlobal("fetch", vi.fn(fetch));
+      const target = response();
+      await gatewayHandler(requestFor(transaction()), target.value);
+      return { body: target.body(), status: target.statusCode() };
+    };
+
+    it("answers 504 when the upstream deadline expires", async () => {
+      await expect(
+        answer(async () => {
+          throw new DOMException("The operation timed out.", "TimeoutError");
+        }),
+      ).resolves.toEqual({ body: { error: "upstream_timeout" }, status: 504 });
+    });
+
+    it("answers 502 when the upstream cannot be reached", async () => {
+      await expect(
+        answer(async () => {
+          throw new TypeError("fetch failed");
+        }),
+      ).resolves.toEqual({ body: { error: "upstream_unavailable" }, status: 502 });
+    });
+
+    it.each([
+      [400, 400, "upstream_rejected"],
+      [429, 429, "upstream_rejected"],
+      [500, 502, "upstream_unavailable"],
+    ] as const)("answers a relay %i with %i", async (upstream, status, error) => {
+      await expect(answer(async () => new Response("{}", { status: upstream }))).resolves.toEqual(
+        { body: { error }, status },
+      );
+    });
+  });
+});
+
+describe("other services' upstream failures", () => {
+  it("keeps a 4xx a 502 (Sherlock 159)", async () => {
+    const origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+    process.env.BRAMBLE_EXTENSION_ORIGINS = origin;
+    process.env.STRK20_DISCOVERY_UPSTREAM = "https://private.example";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 400 })),
+    );
+    const target = response();
+    await gatewayHandler(
+      {
+        headers: { origin },
+        method: "GET",
+        query: { path: "health", service: "discovery" },
+      } as unknown as ApiRequest,
+      target.value,
+    );
+    expect(target.statusCode()).toBe(502);
+    expect(target.body()).toEqual({ error: "upstream_unavailable" });
+  });
 });

@@ -118,7 +118,7 @@ describe("sidepanel home", () => {
 
     const portfolio = html.slice(
       html.indexOf('<section class="home-tabs"'),
-      html.indexOf("</main>"),
+      html.indexOf('<nav class="wallet-dock"'),
     );
     expect(portfolio).toContain("<h2>Tokens</h2>");
     // The wallet dock is the only tablist left; the portfolio section is a heading

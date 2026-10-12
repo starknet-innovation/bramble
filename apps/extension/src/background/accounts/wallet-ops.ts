@@ -390,6 +390,12 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
  * Drains the failure notices background reconciliation recorded while the side
  * panel was closed. Each notice is returned exactly once; the activity entry
  * keeps its terminal status whether or not the notice was ever displayed.
+ *
+ * Multisig transactions and deployments are journaled under the multisig's own
+ * id, not the signing account's, so every stored multisig on the active network
+ * is drained too; otherwise their late failures were never shown (Sherlock
+ * 221). A scope whose drain fails is skipped, so one bad read never hides the
+ * others.
  */
 const handleTransactionAlerts: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.transactionAlerts")) {
@@ -399,10 +405,21 @@ const handleTransactionAlerts: WalletOpsHandler = async (deps, message) => {
   if (context.error !== undefined) {
     return { alerts: [], ok: true };
   }
-  const entries = await deps.activity
-    .takeFailureNotices({ accountId: context.account.id, networkId: context.networkId })
-    .catch(() => []);
-  return { alerts: entries.map(failureNoticeMessage), ok: true };
+  const multisigs = (await deps.multisigStore?.listMultisigs().catch(() => [])) ?? [];
+  const accountIds = [
+    context.account.id,
+    ...multisigs
+      .filter((record) => record.networkId === context.networkId)
+      .map((record) => record.id),
+  ];
+  const alerts: string[] = [];
+  for (const accountId of accountIds) {
+    const entries = await deps.activity
+      .takeFailureNotices({ accountId, networkId: context.networkId })
+      .catch(() => []);
+    alerts.push(...entries.map(failureNoticeMessage));
+  }
+  return { alerts, ok: true };
 };
 
 const handleLock: WalletOpsHandler = async (deps, message) => {

@@ -42,11 +42,17 @@ export const readProviderWatchAsset = (params: Json | undefined): ProviderWatchA
     !hasOnlyKnownKeys(params, ["api_version", "options", "type"]) ||
     !isOptionalApiVersion(params["api_version"]) ||
     params["type"] !== "ERC20" ||
-    !isProviderWatchAsset(params["options"])
+    !isRecord(params["options"])
   ) {
     return null;
   }
-  const options = params["options"];
+  // The wallet API's `Asset` may carry an `image` URL. It is accepted when it
+  // is a string and then dropped: the wallet never fetches a site's image
+  // (Sherlock 252).
+  const { image, ...options } = params["options"];
+  if ((image !== undefined && typeof image !== "string") || !isProviderWatchAsset(options)) {
+    return null;
+  }
   return {
     address: options["address"],
     ...(options["decimals"] === undefined ? {} : { decimals: options["decimals"] }),

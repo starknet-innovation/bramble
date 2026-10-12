@@ -157,10 +157,19 @@ export const canQueueProviderRequest = (pendingCount: number): boolean =>
   pendingCount >= 0 &&
   pendingCount < MAX_PENDING_PROVIDER_REQUESTS;
 
+// `{ method, params: undefined }` is how a dapp spells "no params" when it
+// forwards an optional argument; it means the same as leaving `params` out,
+// and refusing it broke spec-following callers (Sherlock 254).
+const withoutUndefinedParams = (raw: unknown): unknown =>
+  isRecord(raw) && Object.hasOwn(raw, "params") && raw["params"] === undefined
+    ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "params"))
+    : raw;
+
 /**
  * Parses direct dapp calls to the injected provider request function.
  */
-export const readProviderRequestArguments = (value: unknown): ProviderRequestArguments | null => {
+export const readProviderRequestArguments = (raw: unknown): ProviderRequestArguments | null => {
+  const value = withoutUndefinedParams(raw);
   if (
     isRecord(value) &&
     hasOnlyKnownKeys(value, ["method", "params"]) &&

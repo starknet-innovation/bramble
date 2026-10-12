@@ -48,7 +48,7 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
   }
   const request = pending[0];
   return `
-  <main class="screen flow gate">
+  <section class="screen flow gate">
     ${gateBrand()}
     <div class="gate-head">
       <h1>Welcome back</h1>
@@ -84,5 +84,5 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
         })}
       </div>
     </form>
-  </main>`;
+  </section>`;
 };

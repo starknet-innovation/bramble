@@ -37,6 +37,10 @@ export type RenderData = {
   multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
   balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
   chart: readonly number[];
+  // The token id the chart belongs to. The chart is one slot shared by every
+  // token detail screen, so it is drawn only for the token it was read for
+  // (Sherlock 210).
+  chartTokenId: string | null;
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
   deployment: boolean | null;
@@ -109,6 +113,7 @@ export const emptyRenderCache = (): RenderData => ({
   multisigBalances: { error: "multisig balances unavailable" },
   balances: { error: "wallet locked" },
   chart: [],
+  chartTokenId: null,
   classHashVerification: null,
   connectedSites: [],
   deployment: null,
