@@ -191,14 +191,16 @@ describe("truncated identifiers are copyable in full", () => {
         summary: "Send 1 STRK",
       }),
     );
-    // The counterparty now sits in the row's expansion as a <code> with its
-    // control beside it, which is the shared affordance.
-    expect(root.querySelector(".disclosure-body code")?.textContent).toBe(
+    // The counterparty sits in the row's expansion as a <code> with its
+    // control beside it, which is the shared affordance; the transaction hash
+    // and its own control open there too, above it.
+    expect(root.querySelector(`.disclosure-body code[title="${COUNTERPARTY}"]`)?.textContent).toBe(
       accountLabel(COUNTERPARTY),
     );
-    expect(root.querySelector<HTMLElement>(".disclosure-body [data-copy]")?.dataset["copy"]).toBe(
-      COUNTERPARTY,
+    const copies = [...root.querySelectorAll<HTMLElement>(".disclosure-body [data-copy]")].map(
+      (control) => control.dataset["copy"],
     );
+    expect(copies).toEqual(["0x123", COUNTERPARTY]);
     expectEveryTruncatedIdentifierCopyable(root, 1);
   });
 
