@@ -2,10 +2,10 @@
  * A page hears `networkChanged` only when its chain actually changes
  * (Sherlock 188, 215). The wallet announces the active network after account
  * switches and unlocks, which usually leave it where it was, and dapps
- * commonly reset on the event, so the in-page provider drops a repeat.
+ * commonly reset on the event, so the in-page provider drops a repeat. The
+ * wiring is exercised in tests/conformance/inpage-chain-events.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
 import {
   accountsChangedEvent,
   isPageEventNews,
@@ -28,16 +28,5 @@ describe("isPageEventNews", () => {
   test("passes every accountsChanged", () => {
     expect(isPageEventNews(accountsChangedEvent([]), MAINNET)).toBe(true);
     expect(isPageEventNews(accountsChangedEvent(["0x1"]), MAINNET)).toBe(true);
-  });
-
-  test("the in-page provider checks it before emitting any event", async () => {
-    const source = await readFile(
-      new URL("../../../apps/extension/src/provider/inpage.ts", import.meta.url),
-      "utf8",
-    );
-    const guard = source.indexOf("if (!isPageEventNews(providerEvent, currentChainId))");
-    expect(guard).toBeGreaterThan(-1);
-    expect(guard).toBeLessThan(source.indexOf("currentChainId = providerEvent.data;"));
-    expect(guard).toBeLessThan(source.indexOf("events.emit(providerEvent);"));
   });
 });

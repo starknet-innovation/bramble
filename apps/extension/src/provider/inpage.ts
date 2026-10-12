@@ -116,7 +116,17 @@ const request = (args: unknown): Promise<unknown> => {
 
   return new Promise((resolve, reject) => {
     const id = crypto.randomUUID();
-    pending.set(id, { reject, resolve });
+    pending.set(id, {
+      reject,
+      // Every chain-id answer is the chain the page now holds, so the repeat
+      // filter below never compares against a value the dapp has moved past.
+      resolve: (value) => {
+        if (input.method === "wallet_requestChainId" && isHexChainId(value)) {
+          currentChainId = value;
+        }
+        resolve(value);
+      },
+    });
     window.postMessage(
       {
         id,
