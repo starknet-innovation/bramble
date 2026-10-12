@@ -178,7 +178,7 @@ export type EncryptedStore = {
   readonly remove: () => Promise<void>;
   readonly replaceUnverified: (value: Json, passphrase: string) => Promise<void>;
   readonly upgradeLegacyEnvelope: (passphrase: string) => Promise<void>;
-  /** `beforeCommit` runs after encryption, right before the first storage write. */
+  /** `beforeCommit` runs after encryption, right before the envelope's commit starts. */
   readonly write: (value: Json, passphrase: string, beforeCommit?: () => void) => Promise<void>;
 };
 

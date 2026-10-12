@@ -5,7 +5,7 @@ import { WalletError } from "@bramble/core/errors";
 
 /**
  * Requires that the unlock capability which authorized a grant is current.
- * Run before the vault is read and again right before its first storage write,
+ * Run before the vault is read and again right before the grant's commit starts,
  * so a capability that lapses before the commit starts leaves nothing stored.
  */
 export const requireGrantAuthorization = (isAuthorized: () => boolean): void => {

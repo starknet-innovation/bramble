@@ -34,8 +34,9 @@ export const VAULT_FULL = "Vault storage limit reached";
  * not a well-formed current-schema vault, so a buggy caller can never persist
  * a partial or downgraded shape, and names a vault past its capacity before
  * any storage is touched. `beforeCommit` runs after encryption, immediately
- * before the first storage write; throwing there abandons the write with
- * nothing stored.
+ * before the envelope's commit starts; throwing there abandons the write with
+ * none of it stored. (Reading the previous envelope first may repair its
+ * commit records, as any read does.)
  */
 export const writeVault = async (
   encryptedStore: EncryptedStore,
