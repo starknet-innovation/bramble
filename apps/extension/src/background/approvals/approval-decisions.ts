@@ -469,9 +469,8 @@ const applyDenyDecision = async (
     return { error: "invalid approval request" };
   }
   const denied = deps.approvals.claim(input.id)?.approval ?? null;
-  // Nothing to deny: another surface already approved or denied it, or it
-  // expired. Reporting success here showed "Request denied" while an approval
-  // from another window was being broadcast (Sherlock 220).
+  // Nothing to deny: it was answered elsewhere or expired. Reporting success
+  // showed "Request denied" over another window's broadcast (Sherlock 220).
   if (!denied) {
     return NO_LONGER_PENDING;
   }
