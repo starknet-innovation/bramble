@@ -54,6 +54,14 @@ export type ApprovalQueue = {
    * there is room. A probe; dapp surfaces apply `requireApprovalAdmission`.
    */
   readonly canAdmit: (origin: string) => string | null;
+  /**
+   * Admits one request from `origin` to expensive work ahead of its enqueue,
+   * or throws the refusal {@link canAdmit} would report. Until the returned
+   * release runs, the reservation counts against the caps as one more prompt
+   * for that origin, so concurrent requests cannot all pass admission before
+   * any of them queues. Release in a `finally`; releasing twice is a no-op.
+   */
+  readonly reserve: (origin: string) => () => void;
   readonly claim: (id: string) => ApprovalClaim | null;
   readonly get: (id: string) => PendingApproval | null;
   readonly list: () => readonly PendingApproval[];

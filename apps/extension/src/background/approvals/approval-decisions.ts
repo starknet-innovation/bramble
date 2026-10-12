@@ -69,6 +69,7 @@ export type ApprovalDecisionDeps = {
 };
 
 const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
+const NO_LONGER_PENDING: RuntimeResponse = { error: "approval no longer pending" };
 // What a connection whose active account moved between paint and click is refused with.
 const ACCOUNT_CHANGED_REFUSAL = "the account changed since this request was reviewed";
 /**
@@ -461,12 +462,16 @@ const applyDenyDecision = async (
     return { error: "invalid approval request" };
   }
   const denied = deps.approvals.claim(input.id)?.approval ?? null;
-  if (denied) {
-    await deps.originHistory.record(denied.origin).catch(() => undefined);
-    deps.waiters.settle(input.id, {
-      error: denied.kind === "connect" ? "connection rejected" : "request rejected",
-    });
+  // Nothing to deny: another surface already approved or denied it, or it
+  // expired. Reporting success here showed "Request denied" while an approval
+  // from another window was being broadcast (Sherlock 220).
+  if (!denied) {
+    return NO_LONGER_PENDING;
   }
+  await deps.originHistory.record(denied.origin).catch(() => undefined);
+  deps.waiters.settle(input.id, {
+    error: denied.kind === "connect" ? "connection rejected" : "request rejected",
+  });
   return { ok: true, pending: deps.approvals.list() };
 };
 
