@@ -7,7 +7,9 @@ import type { OnboardingUiDeps } from "./onboarding-ui";
 
 /**
  * Binds the unlock form on the locked gate screen: submits the passphrase,
- * lands on Home on success, and surfaces failures inline plus as a toast.
+ * lands on Home on success, and surfaces failures inline plus as a toast. On
+ * the recovery gate (`data-unlock="unverified"`) the same form sends "Unlock
+ * anyway", which the background refuses for a vault that verifies.
  */
 export const bindUnlock = (
   deps: OnboardingUiDeps,
@@ -21,7 +23,11 @@ export const bindUnlock = (
     event.preventDefault();
     const vaultPassphrase = String(new FormData(form).get("vaultPassphrase") ?? "");
     buttonBusy(submitButton, true);
-    void deps.wallet.unlockVault(vaultPassphrase).then(
+    const unlock =
+      form.dataset["unlock"] === "unverified"
+        ? deps.wallet.unlockUnverifiedVault(vaultPassphrase)
+        : deps.wallet.unlockVault(vaultPassphrase);
+    void unlock.then(
       async (status) => {
         onUnlocked();
         showToast("Vault unlocked", "success", form);

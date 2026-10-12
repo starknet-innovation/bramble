@@ -1,5 +1,5 @@
 /** Wallet vault service: privileged account metadata persistence behind encryption. */
-import { WalletError } from "@bramble/core/errors";
+import { invariant, WalletError } from "@bramble/core/errors";
 import { isWalletOrigin } from "@bramble/core/origin";
 import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
 import { isAccountId, isKeylessAccount } from "@bramble/wallet-model/accounts";
@@ -26,7 +26,8 @@ import { deriveVaultStrk20ViewingKey } from "../accounts/strk20-viewing-key";
 import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import type { Vault } from "../schema/schema";
+import { migrateVault } from "../schema/migrations";
+import { isVaultV11, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { createGrantCache } from "./grant-cache";
@@ -34,7 +35,7 @@ import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
 import { vaultCreationMethods, writeVault } from "./service-creation";
-import type { WalletVaultService } from "./service-types";
+import type { VaultRecovery, WalletVaultService } from "./service-types";
 
 export { activeAccountSecrets } from "./reveal";
 /** Re-exports the documented type surface from its size-budget split. */
@@ -58,6 +59,7 @@ export type {
   SetActiveAccountInput,
   SignHashInput,
   StoreLedgerStrk20ViewingKeyInput,
+  VaultRecovery,
   WalletStatus,
   WalletVaultService,
   WrapNostrApplicationDataBatchInput,
@@ -83,12 +85,15 @@ export const createWalletVaultService = ({
   assertStoreAccess("vault", actor);
   const grants = createGrantCache();
   const encryptedStore = grants.watch(primaryStore);
-  const readVaultSnapshot = async (vaultPassphrase: string): Promise<Vault> => {
+  const requirePassphrase = (vaultPassphrase: string): void => {
     if (!isVaultPassphrase(vaultPassphrase)) {
       throw new WalletError(
         `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
       );
     }
+  };
+  const readVaultSnapshot = async (vaultPassphrase: string): Promise<Vault> => {
+    requirePassphrase(vaultPassphrase);
     return readMigratedVault({ primary: encryptedStore, staging: migrationStore }, vaultPassphrase);
   };
 
@@ -109,6 +114,25 @@ export const createWalletVaultService = ({
       await encryptedStore.upgradeLegacyEnvelope(vaultPassphrase).catch(() => undefined);
       grants.remember(vaultPassphrase, vault, startedAt);
       return vault;
+    });
+
+  // Health reads may write (a session shadow, a mirror, the v2 marker), so they
+  // queue behind mutations like any other vault access. An interrupted schema
+  // migration can leave a staged copy that verifies, which a normal unlock
+  // recovers from, so recovery is not offered while one exists. A storage
+  // failure is not a recovery reason: status still answers, and the unlock
+  // reports the failure.
+  const vaultRecovery = (): Promise<VaultRecovery | undefined> =>
+    serialized(async () => {
+      try {
+        const health = await encryptedStore.health();
+        if (health === "absent" || health === "ok" || (await migrationStore.health()) === "ok") {
+          return undefined;
+        }
+        return health;
+      } catch {
+        return undefined;
+      }
     });
 
   const service: WalletVaultService = {
@@ -301,14 +325,28 @@ export const createWalletVaultService = ({
 
       return kms.signStarkHash(signingKey.privateKey, input.messageHash);
     },
+    recoverUnverifiedVault: (vaultPassphrase) =>
+      serialized(async () => {
+        requirePassphrase(vaultPassphrase);
+        const vault = migrateVault(await encryptedStore.readUnverified(vaultPassphrase));
+        invariant(isVaultV11(vault), "Unsupported vault schema");
+        // A rollback can restore a revoked site connection or a removed Ledger
+        // viewing key; the user cannot tell which, so recovery drops them all.
+        await encryptedStore.replaceUnverified(
+          { ...vault, accountSecrets: [], originGrants: [] },
+          vaultPassphrase,
+        );
+      }),
     async status() {
       const hasVault = await encryptedStore.exists();
+      const recovery = hasVault ? await vaultRecovery() : undefined;
       return {
         accountCount: 0,
         activeAccountId: null,
         hasVault,
         locked: hasVault,
         ready: true,
+        ...(recovery ? { recovery } : {}),
       };
     },
     async storeLedgerStrk20ViewingKey(input) {

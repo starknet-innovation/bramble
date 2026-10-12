@@ -19,6 +19,7 @@ import type {
 import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
+import type { VaultRecovery } from "@bramble/wallet-model/vault-recovery";
 import type { AccountDerivationInput } from "../accounts/accounts";
 import type { NostrApplicationData } from "../kms-port";
 import type { Vault } from "../schema/schema";
@@ -27,8 +28,12 @@ import type { RecoverVaultAccountsInput } from "./recovery";
 /** Atomic recovery input re-exported for privileged runtime boundaries. */
 export type { RecoverVaultAccountsInput } from "./recovery";
 
+/** Why a stored vault cannot be unlocked normally; see `@bramble/wallet-model/vault-recovery`. */
+export type { VaultRecovery };
+
 /**
- * Public wallet status shown to popup and provider callers.
+ * Public wallet status shown to popup and provider callers. `recovery` is
+ * present only when a stored vault cannot be unlocked normally.
  */
 export type WalletStatus = {
   readonly accountCount: number;
@@ -36,6 +41,7 @@ export type WalletStatus = {
   readonly hasVault: boolean;
   readonly locked: boolean;
   readonly ready: boolean;
+  readonly recovery?: VaultRecovery;
 };
 
 /**
@@ -298,6 +304,14 @@ export type WalletVaultService = {
    * read after unlock repopulates it.
    */
   readonly clearGrantCache: () => void;
+  /**
+   * Accepts a vault whose status reports `unverified` or `rollback` after the
+   * user consented to a possibly older copy: decrypts it with the passphrase,
+   * removes every origin grant and retained Ledger viewing key a rollback could
+   * have restored, and writes it back under fresh freshness records. Throws for
+   * any other vault, and for a wrong passphrase.
+   */
+  readonly recoverUnverifiedVault: (vaultPassphrase: string) => Promise<void>;
   /** Restores a confirmed bounded set in one encrypted-vault commit. */
   /**
    * Imports selected accounts from another recovery phrase into the unlocked

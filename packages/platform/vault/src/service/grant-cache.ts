@@ -89,8 +89,16 @@ export const createGrantCache = (): GrantCache => {
         store.clearKeys();
       },
       exists: () => store.exists(),
+      // Can repair commit records, never the vault's content or its grants.
+      health: () => store.health(),
       read: (password) => store.read(password),
+      readUnverified: (password) => store.readUnverified(password),
       remove: invalidating(() => store.remove()),
+      // Rewrites the vault with its grants removed.
+      replaceUnverified: invalidating(
+        (value: Parameters<EncryptedStore["replaceUnverified"]>[0], password: string) =>
+          store.replaceUnverified(value, password),
+      ),
       // Re-encrypts the same plaintext in the current envelope format, so the
       // vault's content, and with it the grants, does not change.
       upgradeLegacyEnvelope: (password) => store.upgradeLegacyEnvelope(password),

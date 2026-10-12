@@ -191,6 +191,20 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["mnemonic validation unavailable", "Couldn't check that recovery phrase. Try again."],
   ["reveal failed", "Couldn't reveal that. Re-enter your passphrase and try again."],
   ["incorrect passphrase", "That passphrase is wrong."],
+  // A vault the background cannot verify shows the recovery gate; these reach
+  // the user only if its state changed between the status read and the submit.
+  [
+    "encrypted store commit state missing",
+    "Bramble cannot verify this wallet. Close and reopen Bramble.",
+  ],
+  [
+    "encrypted store rollback detected",
+    "Bramble cannot verify this wallet. Close and reopen Bramble.",
+  ],
+  [
+    "encrypted store is not awaiting recovery",
+    "This wallet no longer needs Unlock anyway. Close and reopen Bramble.",
+  ],
   [
     "account discovery unavailable",
     "Couldn't search for accounts. Check your connection and try again.",

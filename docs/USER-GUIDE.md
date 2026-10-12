@@ -68,6 +68,18 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
 When a wallet already exists, opening the panel shows the **"Welcome back"**
 unlock screen. Enter your vault passphrase to reach the dashboard.
 
+If Bramble cannot confirm that the stored wallet is the latest copy, it shows
+**"Check this wallet"** or, when it has a newer copy on record, **"This wallet is
+out of date"** instead. Restoring a browser or computer backup causes this; if you
+did not, someone may have changed this browser's data. **Unlock anyway** opens the
+stored copy with your password and disconnects every site, so a connection you had
+removed cannot come back. Accounts you added after that copy was saved are missing
+and can be added again. If the stored wallet is damaged (**"This wallet cannot be
+opened"**), or you would rather start over, reinstall Bramble and restore from your
+recovery phrase: accounts imported from a private key must be imported again, and a
+multisig must be re-added by its address, where any pending transactions and
+co-signer wallet cards are lost.
+
 ### Set up with a Ledger
 
 Choose **Add an existing wallet**, then **Ledger hardware wallet**. Ledger
@@ -209,8 +221,8 @@ periodically limits how much a compromised dApp contract can move.
 - Bramble never asks for your recovery phrase to "verify" or "sync" anything
   after setup. Any site or message that does is a scam.
 - The **vault passphrase** unlocks the wallet on one device only. Losing it means
-  re-restoring from the recovery phrase; losing the recovery phrase means the
-  funds are unrecoverable.
+  reinstalling Bramble and restoring from the recovery phrase; losing the recovery
+  phrase means the funds are unrecoverable.
 
 ### Recognising phishing
 

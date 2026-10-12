@@ -154,6 +154,13 @@ export const walletStub = {
     }
     return vault;
   },
+  // Accepts like a vault awaiting recovery, so the scan reads the unlocked
+  // status that "Unlock anyway" returns rather than a refusal.
+  async recoverUnverifiedVault(passphrase: string) {
+    if (passphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
+  },
   async revokeOrigin() {
     return [];
   },
