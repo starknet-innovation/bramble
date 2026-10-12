@@ -109,6 +109,7 @@ describe("scanTransactionHistory against real mainnet payloads", () => {
         accountId: `SN_MAIN:${ACCOUNT}`,
         amount: "0.311133446749725792",
         counterparty: SEQUENCER,
+        direction: "out",
         hash: "0x7241fdec0a3dba34a765ee1713788762c436422a5e18b24300142a9a3a8a363",
         kind: "transfer",
         networkId: "SN_MAIN",

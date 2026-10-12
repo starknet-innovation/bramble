@@ -309,9 +309,12 @@ describe("background reconciliation", () => {
     const alarm = reconcileObserved(deps, "fast", 1_000);
     await rpcStarted.promise;
     await activity.record(entry({ hash: "0xdef", summary: "New local row" }));
-    const history = mergeReconciledHistory(deps, scope, [
-      entry({ hash: "0x123", status: "accepted", summary: "Discovered history" }),
-    ]);
+    const history = mergeReconciledHistory(
+      deps,
+      scope,
+      [entry({ hash: "0x123", status: "accepted", summary: "Discovered history" })],
+      "chain-events",
+    );
     releaseRpc.resolve();
     await Promise.all([alarm, history]);
 
@@ -344,7 +347,7 @@ describe("background reconciliation", () => {
     const { deps } = makeDeps([planted, spam], {});
     const scope = { accountId: ACCOUNT, networkId: "SN_MAIN" } as const;
 
-    const merged = await mergeReconciledHistory(deps, scope, []);
+    const merged = await mergeReconciledHistory(deps, scope, [], "chain-events");
 
     expect(merged.map((row) => row.hash)).toEqual(["0x502"]);
     const stored = await deps.activity.list();

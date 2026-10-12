@@ -9,6 +9,7 @@ import {
   activityForScope,
   systemClock,
 } from "@bramble/transactions/activity";
+import type { HistoryLane } from "@bramble/transactions/tx-history";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { readActivityInput } from "../routing/message-inputs";
@@ -98,28 +99,36 @@ const activityTarget = async (
     : null;
 };
 
+// Rows from the lane that answered; an empty or unavailable read names the
+// event lane, which is harmless because it brings no rows to settle anything.
+type AccountHistory = {
+  readonly lane: HistoryLane;
+  readonly onChain: readonly ActivityEntry[];
+  readonly unavailable: boolean;
+};
+
+const NO_HISTORY: AccountHistory = { lane: "chain-events", onChain: [], unavailable: false };
+
 const accountHistory = async (
   deps: ActivityOpsDeps,
   target: ActivityTarget,
-): Promise<{ readonly onChain: readonly ActivityEntry[]; readonly unavailable: boolean }> => {
+): Promise<AccountHistory> => {
   const scan = deps.runtimeRpc.getTransactionHistory;
-  if (!scan) return { onChain: [], unavailable: false };
+  if (!scan) return NO_HISTORY;
   const preferences = await deps.preferencesStore.read();
   const tokens = preferences.tokens.filter((token) => token.networkId === target.networkId);
-  if (tokens.length === 0) return { onChain: [], unavailable: false };
+  if (tokens.length === 0) return NO_HISTORY;
   try {
-    return {
-      onChain: await scan({
-        account: target.address,
-        accountId: target.accountId,
-        networkId: target.networkId,
-        rpcUrls: networkRpcUrls(STARKNET_NETWORKS[target.networkId], preferences),
-        tokens,
-      }),
-      unavailable: false,
-    };
+    const discovered = await scan({
+      account: target.address,
+      accountId: target.accountId,
+      networkId: target.networkId,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[target.networkId], preferences),
+      tokens,
+    });
+    return { lane: discovered.lane, onChain: discovered.entries, unavailable: false };
   } catch {
-    return { onChain: [], unavailable: true };
+    return { ...NO_HISTORY, unavailable: true };
   }
 };
 
@@ -151,10 +160,10 @@ export const handleActivity = async (
   const scanHistory = shouldScanHistory(input, previousSync ?? null, now, local);
   const history = scanHistory
     ? await accountHistory(deps, target)
-    : { onChain: [], unavailable: previousSync?.unavailable ?? false };
+    : { ...NO_HISTORY, unavailable: previousSync?.unavailable ?? false };
   const merged =
     scanHistory && !history.unavailable
-      ? await mergeReconciledHistory(deps, target.scope, history.onChain)
+      ? await mergeReconciledHistory(deps, target.scope, history.onChain, history.lane)
       : local;
   if (scanHistory) {
     await deps.activity

@@ -6,7 +6,7 @@ import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
-import type { ActivityLog } from "@bramble/transactions/activity";
+import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import {
@@ -453,7 +453,7 @@ export const executeInvokeApproval = async (
       networkId: account.networkId,
       summary:
         approval.payload.activitySummary ??
-        `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
+        `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {

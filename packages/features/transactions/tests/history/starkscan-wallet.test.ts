@@ -266,7 +266,7 @@ describe("Starkscan wallet adapters", () => {
     } as const;
     expect(
       await createExplorerFirstHistory({ client: unavailable, readPreferences })(historyInput),
-    ).toEqual([]);
+    ).toEqual({ entries: [], lane: "chain-events" });
   });
 
   test("uses the configured explorer API only after an RPC transport outage", async () => {

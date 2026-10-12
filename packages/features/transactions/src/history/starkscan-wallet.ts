@@ -35,7 +35,12 @@ import {
 
 import type { StarkscanClient } from "./starkscan";
 import type { StarkscanTransfer } from "./starkscan-types";
-import { MAX_HISTORY_ENTRIES, onChainActivityEntry, type TransferDirection } from "./tx-history";
+import {
+  type HistoryLane,
+  MAX_HISTORY_ENTRIES,
+  onChainActivityEntry,
+  type TransferDirection,
+} from "./tx-history";
 import { scanTransactionHistory, type TransactionHistoryScan } from "./tx-history-scan";
 
 // The token a transfer moved, and whether the user tracks it. An untracked
@@ -291,6 +296,16 @@ export const createRpcFirstBalances =
   };
 
 /**
+ * Discovered history rows and the lane that produced them. The lane travels
+ * with the rows because only the wallet's own event scan may settle the status
+ * of a transaction it is still observing (see `mergeActivity`).
+ */
+export type DiscoveredHistory = {
+  readonly entries: readonly ActivityEntry[];
+  readonly lane: HistoryLane;
+};
+
+/**
  * Serves activity from the explorer gateway first and falls back to the RPC
  * transfer scan when the gateway cannot be used or does not answer.
  *
@@ -313,24 +328,31 @@ export const createRpcFirstBalances =
  * rate limit or its cooldown, malformed body — is silently replaced by the RPC
  * scan, whose own failure propagates so the caller degrades to the local log
  * with an honest "history unavailable" indicator. The feed is therefore marked
- * unavailable only when no permitted lane answered.
+ * unavailable only when no permitted lane answered. The result names the lane
+ * that answered.
  */
 export const createExplorerFirstHistory =
-  (options: ExplorerLaneReadOptions): typeof scanTransactionHistory =>
+  (
+    options: ExplorerLaneReadOptions,
+  ): ((
+    input: TransactionHistoryScan,
+    makeProvider?: Parameters<typeof scanTransactionHistory>[1],
+  ) => Promise<DiscoveredHistory>) =>
   async (input, makeProvider) => {
     if (input.networkId !== "SN_DEVNET") {
       const preferences = await gatewayPreferencesFor(options.readPreferences, input.networkId);
       if (preferences !== null) {
         try {
-          return await getStarkscanTransactionHistory(
+          const entries = await getStarkscanTransactionHistory(
             gatewayClientFor(options, input.networkId, preferences),
             input,
           );
+          return { entries, lane: "explorer" };
         } catch {
           // The gateway's failure is not the user's endpoint's failure: fall
           // through to the RPC scan and let its outcome speak.
         }
       }
     }
-    return scanTransactionHistory(input, makeProvider);
+    return { entries: await scanTransactionHistory(input, makeProvider), lane: "chain-events" };
   };
