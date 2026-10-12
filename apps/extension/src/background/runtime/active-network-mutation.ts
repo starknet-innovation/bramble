@@ -9,7 +9,8 @@ import { heldSessionAuthorization, type UnlockSession } from "./session";
  * session generation. Browser-storage failures are ambiguous, so any failure
  * locks that exact generation and forces reconciliation on the next unlock.
  * The exception is a refusal the vault raises before writing anything, such as
- * a full vault (Sherlock 261): the session stays unlocked and the earlier
+ * a full vault (Sherlock 261) or an account that already exists: the session
+ * stays unlocked and the earlier
  * network write is undone, so a routine add that cannot fit neither signs the
  * user out nor switches their network. Undoing it fails closed like any other
  * storage failure.
