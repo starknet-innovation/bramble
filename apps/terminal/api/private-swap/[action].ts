@@ -186,7 +186,11 @@ export default async function handler(
   if (action !== "fee" && action !== "plan" && action !== "submit") {
     return reject(response, 404, "route_not_allowed");
   }
-  if (action === "plan" && PRIVATE_SWAP_EXECUTOR === null) {
+  // Private swaps stay off until an executor is reviewed, and every action
+  // spends the operator's paymaster credential, so all three are refused while
+  // it is off, not only `plan` (Sherlock 195). The origin check above is a
+  // browser control that any HTTP client can satisfy.
+  if (PRIVATE_SWAP_EXECUTOR === null) {
     return reject(response, 503, "private_swap_executor_not_verified");
   }
   const body = readJsonBody<Record<string, unknown>>(request, MAX_BODY_BYTES);
