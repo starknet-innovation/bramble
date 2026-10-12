@@ -66,12 +66,12 @@ Storybook section.
 
 ## Journey coverage
 
-The lab has 209 deterministic checkpoints across 15 scenario families:
+The lab has 212 deterministic checkpoints across 15 scenario families:
 
 | Family | Review surface |
 | --- | --- |
 | Full-screen onboarding | Welcome, import method, phrase entry, local passphrase, account selection, generated-backup verification, Ledger protection, and completion. |
-| Returning unlock | Locked, request-waiting, and failed-authentication side-panel states. |
+| Returning unlock | Locked, request-waiting, failed-authentication, and recovery (wallet cannot be verified, out of date, or cannot be opened) side-panel states. |
 | Home and portfolio | Ready, tabs, account drawer, undeployed (including a Braavos account that must deploy first), deployment receipt and failure, offline, error, and empty-network states. |
 | Send lifecycle | Details, review latency, fee failure, signing, broadcast, and receipt. |
 | Swap lifecycle | Picker, quote latency, route sanity, frozen review, failure, and submission. |
