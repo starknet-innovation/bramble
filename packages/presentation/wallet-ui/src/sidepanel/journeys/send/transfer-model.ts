@@ -58,6 +58,15 @@ export type TransferStage =
   | "submitted";
 
 /**
+ * Whether a send is past the confirm and its result has not landed yet. Such a
+ * send is already signing or on its way to the network, so a screen that takes
+ * over the panel (a dapp approval) must keep its state rather than discard the
+ * hash it is about to return (Sherlock 164).
+ */
+export const isTransferInFlight = (stage: TransferStage): boolean =>
+  stage === "authorizing" || stage === "broadcasting" || stage === "confirming";
+
+/**
  * User-visible transaction fields frozen at review.
  */
 export type TransferFields = {

@@ -15,6 +15,7 @@ import type { TransferExitView, TransferState } from "./transfer-model";
 import {
   friendlyReviewError,
   initialTransferState,
+  isTransferInFlight,
   recipientFieldError,
   type TransferStage,
   transferFields,
@@ -100,8 +101,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const { app, back, navigate, render, wallet } = deps;
   const form = app?.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
+    if (!isTransferInFlight(transferState.stage)) {
+      transferEpoch += 1;
+      transferState = initialTransferState();
+    }
     repaintActiveTransfer = null;
     transferApp = app;
     return;
@@ -173,11 +176,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       complete();
       return;
     }
-    if (back) {
-      back();
-      return;
-    }
-    navigate?.("home");
+    if (back) back();
+    else navigate?.("home");
   };
   form.ownerDocument.querySelector("#send-close")?.addEventListener("click", exit);
   form.ownerDocument.querySelector("#send-header-back")?.addEventListener("click", () => {
