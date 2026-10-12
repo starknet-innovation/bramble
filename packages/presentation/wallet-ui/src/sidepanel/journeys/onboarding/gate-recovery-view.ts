@@ -50,10 +50,10 @@ export const recoveryGate = (
       <p class="lede">${copy.lede}</p>
     </div>`;
   if (recovery === "invalid") {
-    return `<main class="screen flow gate" data-recovery="${recovery}">${head}</main>`;
+    return `<section class="screen flow gate" data-recovery="${recovery}">${head}</section>`;
   }
   return `
-  <main class="screen flow gate" data-recovery="${recovery}">
+  <section class="screen flow gate" data-recovery="${recovery}">
     ${head}
     <form id="unlock-form" class="gate-form" data-unlock="unverified">
       ${passwordField}
@@ -70,5 +70,5 @@ export const recoveryGate = (
     <div class="gate-alt">
       <p class="hint">Or reinstall Bramble and restore your wallet from its recovery phrase.</p>
     </div>
-  </main>`;
+  </section>`;
 };
