@@ -47,7 +47,7 @@ export const runGuardedNetworkMutation = async <T>(
   } catch (error) {
     if (session.generation() === generation) {
       if (error instanceof RefusedBeforeWrite && previousNetworkId !== null) {
-        await restoreNetwork(preferencesStore, previousNetworkId, networkId, session);
+        await restoreNetwork(preferencesStore, previousNetworkId, networkId, session, generation);
       } else {
         session.lock();
       }
@@ -56,18 +56,22 @@ export const runGuardedNetworkMutation = async <T>(
   }
 };
 
-// Undoes the network write of a mutation the vault refused before writing.
+// Undoes the network write of a mutation the vault refused before writing. A
+// failed undo locks only the session the mutation ran under: the user may have
+// locked and unlocked again while the write was in flight, and that newer
+// session has nothing to do with this mutation.
 const restoreNetwork = async (
   preferencesStore: WalletPreferencesStore,
   previousNetworkId: StarknetNetworkId,
   networkId: StarknetNetworkId,
   session: UnlockSession,
+  generation: number,
 ): Promise<void> => {
   if (previousNetworkId === networkId) return;
   try {
     await preferencesStore.setActiveNetwork(previousNetworkId);
   } catch {
-    session.lock();
+    if (session.generation() === generation) session.lock();
   }
 };
 
