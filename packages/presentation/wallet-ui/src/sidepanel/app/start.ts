@@ -403,6 +403,7 @@ export const startWalletUi = async (
     cache.preferences = nextPreferences;
     if (!status.hasVault || status.locked) {
       privacy.reset();
+      ledgerSign.dismiss();
       Object.assign(cache, emptyRenderCache(), {
         pending: cache.pending,
         preferences: cache.preferences,

@@ -96,8 +96,10 @@ export type LedgerSignController = {
   readonly cancel: () => Promise<void>;
   readonly chooseDevice: (deviceId: string) => void;
   readonly connect: () => void;
+  readonly dismiss: () => void;
   readonly present: (request: LedgerSignRequestSummary) => void;
   readonly retry: () => void;
+  readonly whenIdle: () => Promise<void>;
 };
 
 const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
@@ -114,7 +116,10 @@ const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
  * silent reconnect. `connect` runs the gesture-gated grant flow for the connect
  * state; `retry` repeats discovery after a recoverable error (unlock, enable
  * blind signing) against the SAME parked request; `cancel` reports a clean
- * rejection.
+ * rejection; `dismiss` drops a request the background no longer holds (a lock
+ * or the queue's timeout settled it) without reporting anything. `present`
+ * ignores a request while an earlier device operation is still winding down;
+ * `whenIdle` resolves once it has, so the caller can offer the request again.
  */
 export const createLedgerSignController = (
   deps: LedgerSignControllerDeps,
@@ -123,6 +128,16 @@ export const createLedgerSignController = (
   let devices: readonly LedgerDeviceChoice[] = [];
   let busy = false;
   let operationEpoch = 0;
+  let idleWaiters: Array<() => void> = [];
+
+  const settle = (): void => {
+    busy = false;
+    const waiters = idleWaiters;
+    idleWaiters = [];
+    for (const resolve of waiters) {
+      resolve();
+    }
+  };
 
   const show = (phase: LedgerSignPhase): void => {
     if (current) {
@@ -197,7 +212,7 @@ export const createLedgerSignController = (
       if (session) {
         await closeLedgerSessionQuietly(session);
       }
-      busy = false;
+      settle();
     }
   };
 
@@ -231,7 +246,7 @@ export const createLedgerSignController = (
       show(errorPhase(asLedgerRejection(error).code));
       return;
     } finally {
-      busy = false;
+      settle();
     }
     await drive(() => deps.connector.openConnected(devices[0]?.id));
   };
@@ -263,6 +278,17 @@ export const createLedgerSignController = (
       show({ kind: "connecting" });
       void drive(deps.connector.request);
     },
+    dismiss() {
+      if (!current) {
+        return;
+      }
+      // The epoch bump stops an in-flight device operation from reporting or
+      // repainting; its session is still closed by `drive`'s finally.
+      current = null;
+      devices = [];
+      operationEpoch += 1;
+      deps.render(null);
+    },
     present(request) {
       if (current || busy) {
         return;
@@ -274,5 +300,7 @@ export const createLedgerSignController = (
     retry() {
       void discover();
     },
+    whenIdle: () =>
+      busy ? new Promise<void>((resolve) => idleWaiters.push(resolve)) : Promise.resolve(),
   };
 };

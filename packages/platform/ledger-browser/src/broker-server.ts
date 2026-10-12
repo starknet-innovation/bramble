@@ -28,6 +28,33 @@ export type LedgerBrokerChannel = {
   ) => void;
 };
 
+/**
+ * Idle bound on a served session: when no command arrives for `ms`, the
+ * session closes through the same `onClose` path as an explicit release.
+ * Production uses `setTimeout`; tests inject a deterministic scheduler.
+ */
+export type LedgerBrokerIdleExpiry = {
+  readonly ms: number;
+  readonly schedule: (onElapsed: () => void, ms: number) => () => void;
+};
+
+/**
+ * How long a grant tab keeps the device claimed with no command from the panel.
+ * The panel normally sends `close` when it is done; this bound covers an owner
+ * that died without sending it, such as a toolbar popup that closed when the
+ * grant tab took focus (Sherlock 227). Device confirmation runs inside one
+ * command, so a user reading the device screen never trips it.
+ */
+export const LEDGER_BROKER_IDLE_MS = 5 * 60_000;
+
+const LEDGER_BROKER_IDLE_EXPIRY: LedgerBrokerIdleExpiry = {
+  ms: LEDGER_BROKER_IDLE_MS,
+  schedule: (onElapsed, ms) => {
+    const handle = setTimeout(onElapsed, ms);
+    return () => clearTimeout(handle);
+  },
+};
+
 const executeLedgerCommand = (
   client: LedgerDeviceClient,
   command: Exclude<LedgerBrokerCommand, { readonly kind: "close" }>,
@@ -46,7 +73,8 @@ const executeLedgerCommand = (
 
 /**
  * Starts serving validated device commands over one per-session channel. Calls
- * `onClose` exactly once when the panel releases the session; transport teardown
+ * `onClose` exactly once when the panel releases the session or the session
+ * sits idle past `idle.ms` with no command in flight; transport teardown
  * remains the grant page's responsibility so UI cancellation and idle expiry
  * share the same close path. The returned function detaches the listener.
  */
@@ -54,9 +82,28 @@ export const serveLedgerBroker = (
   channel: LedgerBrokerChannel,
   client: LedgerDeviceClient,
   onClose: () => void,
+  idle: LedgerBrokerIdleExpiry = LEDGER_BROKER_IDLE_EXPIRY,
 ): (() => void) => {
   let busy = false;
   let closed = false;
+  let cancelIdle: () => void = () => undefined;
+
+  const close = (): void => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    cancelIdle();
+    channel.removeEventListener("message", listener);
+    onClose();
+  };
+
+  const armIdle = (): void => {
+    cancelIdle();
+    // Disarmed while a command runs (see `run`), so expiry never cuts off a
+    // device confirmation in progress.
+    cancelIdle = idle.schedule(close, idle.ms);
+  };
 
   const respond = (response: LedgerBrokerResponse): void => {
     if (!closed) {
@@ -77,6 +124,7 @@ export const serveLedgerBroker = (
       return;
     }
     busy = true;
+    cancelIdle();
     try {
       const value = await executeLedgerCommand(client, command);
       respond({ id: command.id, kind: "response", ok: true, value });
@@ -89,6 +137,9 @@ export const serveLedgerBroker = (
       });
     } finally {
       busy = false;
+      if (!closed) {
+        armIdle();
+      }
     }
   };
 
@@ -97,11 +148,7 @@ export const serveLedgerBroker = (
       return;
     }
     if (event.data.kind === "close") {
-      if (!closed) {
-        closed = true;
-        channel.removeEventListener("message", listener);
-        onClose();
-      }
+      close();
       return;
     }
     void run(event.data);
@@ -109,8 +156,10 @@ export const serveLedgerBroker = (
 
   channel.addEventListener("message", listener);
   channel.postMessage({ kind: "ready" });
+  armIdle();
   return () => {
     closed = true;
+    cancelIdle();
     channel.removeEventListener("message", listener);
   };
 };

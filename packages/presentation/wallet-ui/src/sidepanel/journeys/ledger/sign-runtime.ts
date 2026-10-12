@@ -16,7 +16,7 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { bindCopyButtons, renderFragment } from "../../shared/dom";
+import { bindCopyButtons, isPopupSurface, renderFragment } from "../../shared/dom";
 import {
   createLedgerSignController,
   type LedgerConnector,
@@ -40,9 +40,12 @@ export type LedgerSignRuntimeDeps = {
 
 /**
  * The side-panel Ledger signing runtime. `poll` fetches parked device signs and
- * presents the first one; it is idempotent while a request is being fulfilled.
+ * presents the first one; it is idempotent while a request is being fulfilled,
+ * and it takes the overlay down when the presented request is no longer parked.
+ * `dismiss` takes it down without a round-trip, for a panel that is locking.
  */
 export type LedgerSignRuntime = {
+  readonly dismiss: () => void;
   readonly poll: () => Promise<void>;
 };
 
@@ -100,13 +103,46 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
     },
   });
 
-  return {
-    async poll() {
-      const pending = await wallet.loadLedgerSignPending();
-      const first = pending[0];
-      if (first) {
-        controller.present(first);
+  let repollArmed = false;
+
+  const poll = async (): Promise<void> => {
+    // A toolbar popup closes as soon as the device chooser's tab takes
+    // focus, orphaning the grant tab with the device still claimed (Sherlock
+    // 227). The parked request stays queued for the side panel instead.
+    if (isPopupSurface(mount)) {
+      return;
+    }
+    const pending = await wallet.loadLedgerSignPending();
+    // The overlay survives repaints, so its lifetime must follow the queue's:
+    // a lock or the queue's timeout settles a parked request in the
+    // background, and the prompt must not keep showing its hash (Sherlock 228).
+    const active = controller.activeId();
+    if (active !== null && !pending.some((request) => request.id === active)) {
+      controller.dismiss();
+    }
+    const first = pending[0];
+    if (first) {
+      controller.present(first);
+      // A dismissed request's device operation may still be closing its
+      // transport, so the controller skipped this one. Nothing else re-polls
+      // when it finishes, so offer the queue again once it has.
+      if (controller.activeId() === null && !repollArmed) {
+        repollArmed = true;
+        void controller
+          .whenIdle()
+          .then(() => {
+            repollArmed = false;
+            return poll();
+          })
+          // Best effort, like the render cycle's own poll: the next wallet
+          // event polls again.
+          .catch(() => undefined);
       }
-    },
+    }
+  };
+
+  return {
+    dismiss: () => controller.dismiss(),
+    poll,
   };
 };
