@@ -78,7 +78,7 @@ export const Fields: CatalogStory = {
         "Normal, supporting, disabled, and security-sensitive field states.",
         `<div class="catalog-grid wide">
           ${catalogSample("Text", textField({ hint: "A friendly label shown only in this wallet.", label: "Account name", name: "accountName", placeholder: "Daily account" }))}
-          ${catalogSample("Password", textField({ autocomplete: "current-password", label: "Vault passphrase", minlength: 12, name: "vaultUnlock", placeholder: "Enter your passphrase", type: "password" }))}
+          ${catalogSample("Password", textField({ autocomplete: "current-password", label: "Password", minlength: 12, name: "vaultUnlock", placeholder: "Enter your password", type: "password" }))}
           ${catalogSample("Textarea", textareaField({ hint: "Store recovery words offline.", label: "Recovery phrase", name: "recoveryWords", placeholder: "12 or 24 words", spellcheck: false }))}
           ${catalogSample(
             "Select",

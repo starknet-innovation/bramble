@@ -81,6 +81,7 @@ import { isWalletPreferences, type WalletPreferences } from "@bramble/settings/p
 import { type AllowanceView, isAllowanceView } from "@bramble/transactions/allowance-discovery";
 import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-model/accounts";
 import { isReadOnlyReason, type ReadOnlyReason } from "@bramble/wallet-model/recovery";
+import { isVaultRecovery } from "@bramble/wallet-model/vault-recovery";
 import type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
 import { isRecoveryState, type RecoveryState } from "./responses-recovery";
@@ -207,7 +208,9 @@ export const isWalletStatus = (value: unknown): value is WalletStatus =>
     "networkId",
     "networks",
     "ready",
+    "recovery",
   ]) &&
+  (value["recovery"] === undefined || isVaultRecovery(value["recovery"])) &&
   typeof value["accountCount"] === "number" &&
   Number.isSafeInteger(value["accountCount"]) &&
   value["accountCount"] >= 0 &&
