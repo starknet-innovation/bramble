@@ -36,7 +36,11 @@ import {
 import { bindDeploymentFunding } from "./multisig-deploy-funding-ui";
 import { bindDeploymentSignerPicker } from "./multisig-deploy-signer-ui";
 import { deploymentFundingStage, type MULTISIG_CREATION_STEPS } from "./multisig-deploy-view";
-import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
+import {
+  bindMultisigParticipantPicker,
+  type MultisigParticipant,
+  participantContactSaver,
+} from "./multisig-participant";
 import type { ArgentMultisigDeploymentSetup, MultisigClient } from "./multisig-runtime";
 
 type MultisigDeployUiDeps = {
@@ -291,16 +295,11 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     bindMultisigParticipantPicker(form, {
       multisig: deps.multisig,
       onSelect: addParticipant,
-      saveContact: (participant) =>
-        deps.wallet.saveAddress(
-          participant.label,
-          participant.address,
-          form.querySelector<HTMLElement>("[data-participant-network]")?.dataset[
-            "participantNetwork"
-          ] ?? "",
-          participant.publicKeyX,
-          participant.nostrPublicKey,
-        ),
+      onUnselect: (participant) =>
+        rowForKey(normalizeFeltInput(participant.publicKeyX))
+          ?.querySelector<HTMLButtonElement>("[data-remove-signer-public-key]")
+          ?.click(),
+      saveContact: participantContactSaver(deps.wallet, form),
     });
   syncSignerSet(false);
   const returnToPreviousStage = (event?: Event): boolean => {
