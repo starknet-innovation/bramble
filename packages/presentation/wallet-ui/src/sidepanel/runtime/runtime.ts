@@ -151,9 +151,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     async connectedSites(): Promise<ConnectedSitesResponse["sites"]> {
       const response = await sendMessage({ type: "wallet.connectedSites" });
-      if (isConnectedSitesResponse(response)) {
-        return response.sites;
-      }
+      if (isConnectedSitesResponse(response)) return response.sites;
       throw responseError(response, "connected sites unavailable");
     },
     async revokeOrigin(origin: string): Promise<ConnectedSitesResponse["sites"]> {

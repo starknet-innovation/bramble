@@ -329,6 +329,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["add token failed", "Couldn't add that token. Check the contract address and try again."],
   ["remove token failed", "Couldn't remove that token. Try again."],
   ["token detection failed", "Couldn't scan for tokens. Check your connection and try again."],
+  ["connected sites unavailable", "Couldn't load connected sites."],
   ["token list unavailable", "Couldn't load the token list. Check your connection and try again."],
   ["token unavailable", "That token isn't available on this network."],
   ["token unavailable on this network", "That token isn't available on this network."],
