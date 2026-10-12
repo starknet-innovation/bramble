@@ -8,6 +8,7 @@
  * from a string this repository actually shipped — see `docs/COPY_STYLE.md`
  * for the rule each one enforces and the before/after it was derived from.
  */
+import ts from "typescript";
 
 /** One wording habit worth a second look, and the rule it belongs to. */
 export type CopyPattern = {
@@ -164,3 +165,32 @@ export const COPY_PATTERNS: readonly CopyPattern[] = [
     rule: "state the consequence, do not collect a tick",
   },
 ];
+
+/**
+ * Every string literal and every literal chunk of a template in a TypeScript
+ * source, with the offset its text starts at. It parses the file rather than
+ * matching quotes, so a regular-expression literal holding a quote character
+ * (`/["\\]/g`) no longer opens a string that swallows the rest of the file,
+ * and comments are never read as copy (mc-wallet issue 476).
+ */
+export const copyLiterals = (
+  path: string,
+  text: string,
+): readonly { readonly index: number; readonly value: string }[] => {
+  const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+  const found: { readonly index: number; readonly value: string }[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isStringLiteral(node) ||
+      ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateHead(node) ||
+      ts.isTemplateMiddle(node) ||
+      ts.isTemplateTail(node)
+    ) {
+      found.push({ index: node.getStart(file) + 1, value: node.text });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return found;
+};
