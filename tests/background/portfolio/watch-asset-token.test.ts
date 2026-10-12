@@ -11,7 +11,11 @@ import { watchAssetToken } from "../../../apps/extension/src/background/provider
 const ADDRESS = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 
 const nameToken = (name: string) =>
-  watchAssetToken({ address: ADDRESS, decimals: 6, name, symbol: "USDC" }, null, "SN_MAIN");
+  watchAssetToken(
+    { address: ADDRESS, decimals: 6, name, symbol: "USDC" },
+    { decimals: 6, name, symbol: "USDC" },
+    "SN_MAIN",
+  );
 
 describe("watch-asset token name charset (A-M3)", () => {
   test("accepts an ordinary printable name", () => {

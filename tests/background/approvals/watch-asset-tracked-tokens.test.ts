@@ -30,11 +30,15 @@ const dapp = (origin: string) => ({
   sender: { id: "extension-id", url: `${origin}/app` } satisfies RuntimeSender,
 });
 
-// No contract answers at the address, so each card carries the symbol its
-// dapp supplied.
+// The chain answers each read, in order, with the symbol its card was queued
+// with, so two cards for one address can carry different tickers, as they
+// could if the token's metadata changed between reads. Decimals and symbol
+// come from the chain only (Sherlock 125).
+const chainSymbols: string[] = [];
 const runtimeRpc = {
   async getTokenMetadata() {
-    throw new Error("Contract not found");
+    const symbol = chainSymbols.shift() ?? "AAA";
+    return { decimals: 18, name: symbol, symbol };
   },
 } as unknown as RuntimeRpc;
 
@@ -48,6 +52,7 @@ const setup = () => {
   });
   const queue = async (origin: string, address: string, symbol: string) => {
     const { sender } = dapp(origin);
+    chainSymbols.push(symbol);
     const held = handler(
       {
         asset: { address, decimals: 18, symbol },

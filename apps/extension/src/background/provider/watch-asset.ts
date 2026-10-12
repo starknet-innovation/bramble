@@ -174,6 +174,8 @@ export type WatchAssetMetadata = {
 /**
  * Builds a validated watch-asset token from on-chain metadata and dapp options,
  * or returns null when the token cannot satisfy the wallet token contract.
+ * Without on-chain metadata there is no token, because the site's options
+ * cannot be trusted for the decimals.
  *
  * The address is canonicalized through the shared {@link canonicalAddress} so a
  * dapp cannot register a second record for a token the wallet already tracks by
@@ -188,12 +190,15 @@ export const watchAssetToken = (
   if (address === null) {
     return null;
   }
-  const rawSymbol = metadata?.symbol ?? request.symbol;
-  const decimals = metadata?.decimals ?? request.decimals;
-  if (typeof rawSymbol !== "string" || decimals === undefined) {
+  // Decimals set the scale of every amount later shown for this token, so they
+  // come from the chain or not at all: a site's own `decimals` could make a
+  // large transfer read as a negligible one (Sherlock 125). With no on-chain
+  // read there is no token.
+  if (metadata === null) {
     return null;
   }
-  const symbol = rawSymbol.trim().toUpperCase();
+  const { decimals } = metadata;
+  const symbol = metadata.symbol.trim().toUpperCase();
   const name = (metadata?.name ?? request.name ?? symbol).trim();
   if (!isTokenSymbol(symbol) || !isTokenName(name) || !isSafeDecimals(decimals)) {
     return null;
