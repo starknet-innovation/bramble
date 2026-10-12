@@ -73,21 +73,24 @@ export const harnessContentSender: RuntimeSender = {
 const provider = new RpcProvider({ nodeUrl: "http://127.0.0.1:5050/rpc" });
 provider.getChainId = async () => "0x534e5f4d41494e";
 provider.getNonceForAddress = async () => "0x7";
-provider.getEstimateFeeBulk = (async () => [
-  {
-    data_gas_consumed: 0n,
-    data_gas_price: 0n,
-    gas_consumed: 0n,
-    gas_price: 0n,
-    overall_fee: 44n,
-    resourceBounds: {
-      l1_data_gas: { max_amount: 1n, max_price_per_unit: 2n },
-      l1_gas: { max_amount: 3n, max_price_per_unit: 4n },
-      l2_gas: { max_amount: 5n, max_price_per_unit: 6n },
+// The fee quote, with the L2 gas price a test may raise between preparations.
+const estimateWith = (l2GasPrice: bigint) =>
+  (async () => [
+    {
+      data_gas_consumed: 0n,
+      data_gas_price: 0n,
+      gas_consumed: 0n,
+      gas_price: 0n,
+      overall_fee: 44n,
+      resourceBounds: {
+        l1_data_gas: { max_amount: 1n, max_price_per_unit: 2n },
+        l1_gas: { max_amount: 3n, max_price_per_unit: 4n },
+        l2_gas: { max_amount: 5n, max_price_per_unit: l2GasPrice },
+      },
+      unit: "FRI" as const,
     },
-    unit: "FRI" as const,
-  },
-]) as RpcProvider["getEstimateFeeBulk"];
+  ]) as RpcProvider["getEstimateFeeBulk"];
+provider.getEstimateFeeBulk = estimateWith(6n);
 
 /**
  * Harness controls for fresh-chain and response-loss branches.
@@ -127,6 +130,8 @@ export type MultisigHarnessOptions = {
   readonly resolveSignerAccount?: () => MultisigSignerAccount;
   readonly multisigStore?: MultisigStore;
   readonly getNonce?: () => string;
+  /** The L2 gas price each preparation is quoted at; 6 when absent. */
+  readonly l2GasPrice?: () => bigint;
   /** Replaces the default balance read, e.g. with the real reader over a fake provider. */
   readonly getTokenBalances?: RuntimeRpc["getTokenBalances"];
   readonly getTransactionStatuses?: (transactionHash: string) => Promise<
@@ -351,6 +356,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
         },
         async prepareInvoke(input) {
           provider.getNonceForAddress = async () => options.getNonce?.() ?? options.nonce ?? "0x7";
+          provider.getEstimateFeeBulk = estimateWith(options.l2GasPrice?.() ?? 6n);
           return prepareArgentMultisigInvokeV3WithProvider(
             provider,
             input.account,

@@ -8,6 +8,12 @@
  * the wallet builds the same calls again, it asks the chain about the stale
  * intent's exact signed hash, so an executed transfer is never re-created at
  * the next nonce and paid twice.
+ *
+ * The hash alone cannot rule a payment out: co-signers may have sent their own
+ * fee-updated version at the stale nonce, with a hash this wallet never saw.
+ * So the same calls at a different nonce need the user's explicit say-so
+ * unless the stale version is found on chain, which refuses them outright. A
+ * stale version at the same nonce needs no say-so: only one can execute.
  */
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import type { ArgentMultisigCall } from "@bramble/starknet/multisig-invoke";
@@ -18,9 +24,17 @@ import { recoverStaleArgentIntent } from "./multisig-operation-recovery";
 /** Refusal when the calls being prepared already went out in a stale version. */
 export const ARGENT_INTENT_ALREADY_SENT = "Argent multisig intent was already sent";
 
-/** Refusal when the chain could not say whether a stale version went out. */
-export const ARGENT_INTENT_SEND_UNKNOWN =
-  "could not check whether the earlier Argent multisig intent was sent";
+/**
+ * Refusal until the user confirms preparing calls that a stale version at
+ * another nonce may already have sent, through a version this wallet never saw.
+ */
+export const ARGENT_INTENT_RESEND_UNCONFIRMED =
+  "confirm resending calls an earlier Argent multisig intent may have sent";
+
+type PreparedCalls = {
+  readonly calls: readonly ArgentMultisigCall[];
+  readonly nonce: string;
+};
 
 const sameCalls = (
   left: readonly ArgentMultisigCall[],
@@ -49,25 +63,57 @@ const staleSignedIntents = async (
       intent.signatures.length === intent.configSnapshot.threshold,
   );
 
-/**
- * Refuses to prepare calls identical to a fully signed stale intent unless the
- * chain positively reports that intent's signed hash as never sent. A found
- * hash moves the stale intent to `submitted` before refusing; a failed read
- * refuses too, because "cannot tell" must not become a second payment.
- */
-export const refuseResendOfStaleIntent = async (
+// What the stale versions of these calls say about sending them at this nonce:
+// "sent" when one is on chain, "maybe" when one at another nonce is not.
+const staleResend = async (
   deps: MultisigOpsDeps,
   accountId: string,
-  calls: readonly ArgentMultisigCall[],
-): Promise<{ readonly error: string } | null> => {
+  prepared: PreparedCalls,
+): Promise<"maybe" | "sent" | null> => {
+  let maybe = false;
   for (const intent of await staleSignedIntents(deps, accountId)) {
-    if (!sameCalls(intent.prepared.calls, calls)) continue;
+    if (!sameCalls(intent.prepared.calls, prepared.calls)) continue;
     const resolution = await recoverStaleArgentIntent(deps, intent);
-    if (resolution.kind === "submitted") return { error: ARGENT_INTENT_ALREADY_SENT };
-    if (resolution.kind === "unknown") return { error: ARGENT_INTENT_SEND_UNKNOWN };
+    if (resolution.kind === "submitted") return "sent";
+    // At the same nonce only one of the two can execute, so a stale version
+    // that isn't found is no reason to stop. At another nonce, not found (once
+    // or for good) and a failed read alike leave a payment possible: the nonce
+    // went to something, and only the user can say it wasn't these calls.
+    if (!sameFelt(intent.prepared.nonce, prepared.nonce)) maybe = true;
   }
+  return maybe ? "maybe" : null;
+};
+
+/**
+ * Refuses to prepare calls a stale version has sent, and, until `confirmed`,
+ * calls a stale version at another nonce may have sent. A found hash moves the
+ * stale intent to `submitted` before refusing.
+ */
+export const refuseResend = async (
+  deps: MultisigOpsDeps,
+  accountId: string,
+  prepared: PreparedCalls,
+  confirmed: boolean,
+): Promise<{ readonly error: string } | null> => {
+  const resend = await staleResend(deps, accountId, prepared);
+  if (resend === "sent") return { error: ARGENT_INTENT_ALREADY_SENT };
+  if (resend === "maybe" && !confirmed) return { error: ARGENT_INTENT_RESEND_UNCONFIRMED };
   return null;
 };
+
+/**
+ * Refuses to sign or send calls a stale version is known to have sent. The
+ * user confirmed any doubt when the calls were prepared, and a read that fails
+ * now must not block the fee-updated version that replaces a stale one.
+ */
+export const refuseSigningResend = async (
+  deps: MultisigOpsDeps,
+  accountId: string,
+  prepared: PreparedCalls,
+): Promise<{ readonly error: string } | null> =>
+  (await staleResend(deps, accountId, prepared)) === "sent"
+    ? { error: ARGENT_INTENT_ALREADY_SENT }
+    : null;
 
 /**
  * Looks up every fully signed stale intent of one account during a refresh, so

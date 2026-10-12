@@ -7,6 +7,10 @@
  * up the signed hash before it treats the intent as unsent: an executed intent
  * moves to `submitted`, and preparing the same calls again is refused, so the
  * recipient is never paid twice.
+ *
+ * Co-signers can also send their own fee-updated version at the stale nonce,
+ * whose hash this wallet never saw. So the same calls at a later nonce wait
+ * for the user's confirmation unless the stale version is found on chain.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -14,7 +18,7 @@ import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { ArgentMultisigFeeExpiredError } from "@bramble/starknet/multisig-invoke";
 import {
   ARGENT_INTENT_ALREADY_SENT,
-  ARGENT_INTENT_SEND_UNKNOWN,
+  ARGENT_INTENT_RESEND_UNCONFIRMED,
 } from "../../../apps/extension/src/background/multisig/multisig-stale-intents";
 import {
   HARNESS_MULTISIG_ID,
@@ -53,10 +57,11 @@ const intentFrom = (response: unknown): ArgentMultisigSigningIntent =>
   (response as { readonly intent: ArgentMultisigSigningIntent }).intent;
 
 const setup = async (options: { readonly feeExpiredOnce?: boolean } = {}) => {
-  const chain = { lookups: 0, nonce: 7n, sighting: "absent" as Sighting };
+  const chain = { l2GasPrice: 6n, lookups: 0, nonce: 7n, sighting: "absent" as Sighting };
   let submits = 0;
   const harness = await makeMultisigHarness({
     getNonce: () => `0x${chain.nonce.toString(16)}`,
+    l2GasPrice: () => chain.l2GasPrice,
     async getTransactionStatuses(hash) {
       chain.lookups += 1;
       return statusFor(chain.sighting, hash);
@@ -69,9 +74,19 @@ const setup = async (options: { readonly feeExpiredOnce?: boolean } = {}) => {
       return hash;
     },
   });
-  const prepare = (calls = CALLS) =>
+  const prepare = (calls = CALLS, confirmResend?: unknown) =>
     harness.handler(
-      { calls, multisigId: HARNESS_MULTISIG_ID, type: "wallet.prepareArgentMultisigIntent" },
+      {
+        calls,
+        ...(confirmResend === undefined ? {} : { confirmResend }),
+        multisigId: HARNESS_MULTISIG_ID,
+        type: "wallet.prepareArgentMultisigIntent",
+      },
+      sender,
+    ) as Promise<Record<string, unknown>>;
+  const sign = (intentId: string, signerAccountId = harnessAccountA.id) =>
+    harness.handler(
+      { intentId, signerAccountId, type: "wallet.signArgentMultisigIntent" },
       sender,
     ) as Promise<Record<string, unknown>>;
   const prepareAndSign = async () => {
@@ -92,7 +107,18 @@ const setup = async (options: { readonly feeExpiredOnce?: boolean } = {}) => {
     >;
   const stored = async (id: string) => harness.multisigStore.getIntent(id);
   const intentCount = async () => (await harness.multisigStore.listIntents()).length;
-  return { chain, harness, intentCount, prepare, prepareAndSign, stored, submit };
+  return { chain, harness, intentCount, prepare, prepareAndSign, sign, stored, submit };
+};
+
+// Co-signers sent their own version at nonce 7, with a hash this wallet never
+// saw: on chain the nonce moved, and this wallet's copy is now stale.
+const staleAfterUnseenReplacement = async () => {
+  const t = await setup();
+  const first = await t.prepareAndSign();
+  t.chain.nonce = 8n;
+  await expect(t.submit(first.id)).resolves.toEqual({ error: NONCE_USED });
+  expect((await t.stored(first.id))?.state).toBe("stale");
+  return { first, t };
 };
 
 // The endpoint forwarded the signed transaction, then refused it on fee.
@@ -157,24 +183,59 @@ describe("preparing the same calls as a stale signed intent", () => {
     expect(stored?.broadcastTransactionHash).toBe(first.prepared.transactionHash);
   });
 
-  test("is refused when the chain cannot be asked, and the intent stays stale", async () => {
+  test("at the same nonce goes ahead even when the chain cannot be asked", async () => {
     const { first, t } = await staleAfterFeeRejection();
     t.chain.sighting = "fails";
 
-    await expect(t.prepare()).resolves.toEqual({ error: ARGENT_INTENT_SEND_UNKNOWN });
+    // Both versions use nonce 7, so at most one of them can ever execute.
+    t.chain.l2GasPrice = 7n;
+    const replacement = intentFrom(await t.prepare());
+
+    expect(replacement.prepared.nonce).toBe("0x7");
     expect((await t.stored(first.id))?.state).toBe("stale");
   });
 
-  test("goes ahead when the chain reports the stale intent's hash as never sent", async () => {
-    const { first, t } = await staleAfterFeeRejection();
-    // Another transaction used nonce 7; this intent can never execute now.
-    t.chain.nonce = 8n;
+  test("at a later nonce waits for the user when the stale hash isn't found", async () => {
+    const { first, t } = await staleAfterUnseenReplacement();
+    const before = await t.intentCount();
 
-    const replacement = intentFrom(await t.prepare());
+    await expect(t.prepare()).resolves.toEqual({ error: ARGENT_INTENT_RESEND_UNCONFIRMED });
+
+    expect(await t.intentCount()).toBe(before);
+    expect((await t.stored(first.id))?.state).toBe("stale");
+  });
+
+  test("at a later nonce waits for the user when the chain cannot be asked", async () => {
+    const { t } = await staleAfterUnseenReplacement();
+    t.chain.sighting = "fails";
+
+    await expect(t.prepare()).resolves.toEqual({ error: ARGENT_INTENT_RESEND_UNCONFIRMED });
+  });
+
+  test("at a later nonce goes ahead once the user confirms", async () => {
+    const { first, t } = await staleAfterUnseenReplacement();
+
+    const replacement = intentFrom(await t.prepare(CALLS, true));
 
     expect(replacement.prepared.nonce).toBe("0x8");
     expect(replacement.prepared.calls).toEqual(first.prepared.calls);
     expect((await t.stored(first.id))?.state).toBe("stale");
+  });
+
+  test("a confirmation never overrides a stale version found on chain", async () => {
+    const { first, t } = await staleAfterUnseenReplacement();
+    t.chain.sighting = "accepted";
+
+    await expect(t.prepare(CALLS, true)).resolves.toEqual({ error: ARGENT_INTENT_ALREADY_SENT });
+    expect((await t.stored(first.id))?.state).toBe("submitted");
+  });
+
+  test("a confirmation must be exactly true", async () => {
+    const { t } = await staleAfterUnseenReplacement();
+    const invalid = { error: "invalid Argent multisig intent preparation request" };
+
+    await expect(t.prepare(CALLS, false)).resolves.toEqual(invalid);
+    await expect(t.prepare(CALLS, "yes")).resolves.toEqual(invalid);
   });
 
   test("different calls never ask the chain", async () => {
@@ -189,24 +250,33 @@ describe("preparing the same calls as a stale signed intent", () => {
 
 describe("a version prepared while the stale one looked unsent", () => {
   test("cannot be signed once the stale version is found on chain", async () => {
-    const { first, t } = await staleAfterFeeRejection();
-    t.chain.nonce = 8n;
-    const replacement = intentFrom(await t.prepare());
+    const { first, t } = await staleAfterUnseenReplacement();
+    const replacement = intentFrom(await t.prepare(CALLS, true));
     t.chain.sighting = "accepted";
 
-    await expect(
-      t.harness.handler(
-        {
-          intentId: replacement.id,
-          signerAccountId: harnessAccountA.id,
-          type: "wallet.signArgentMultisigIntent",
-        },
-        sender,
-      ),
-    ).resolves.toEqual({ error: ARGENT_INTENT_ALREADY_SENT });
+    await expect(t.sign(replacement.id)).resolves.toEqual({ error: ARGENT_INTENT_ALREADY_SENT });
 
     expect((await t.stored(replacement.id))?.signatures).toEqual([]);
     expect((await t.stored(first.id))?.state).toBe("submitted");
+  });
+
+  test("is signed without asking again while the stale hash is still not found", async () => {
+    const { t } = await staleAfterUnseenReplacement();
+    const replacement = intentFrom(await t.prepare(CALLS, true));
+    t.chain.sighting = "fails";
+
+    expect(intentFrom(await t.sign(replacement.id)).signatures).toHaveLength(1);
+  });
+
+  test("at the same nonce is signed and sent while the chain cannot be asked", async () => {
+    const { t } = await staleAfterFeeRejection();
+    t.chain.l2GasPrice = 7n;
+    const replacement = intentFrom(await t.prepare());
+    t.chain.sighting = "fails";
+
+    await t.sign(replacement.id);
+    expect(intentFrom(await t.sign(replacement.id, harnessAccountB.id)).state).toBe("ready");
+    expect(await t.submit(replacement.id)).toMatchObject({ ok: true });
   });
 });
 

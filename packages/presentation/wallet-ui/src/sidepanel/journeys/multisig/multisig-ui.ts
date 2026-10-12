@@ -14,6 +14,7 @@ import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
 import { bindMultisigIntentCards } from "./multisig-intent-ui";
 import { parseArgentMultisigIntentPackage } from "./multisig-model";
+import { armResendConfirmation, resendConfirmed } from "./multisig-resend-confirm";
 import { bindMultisigSignerManagement } from "./multisig-signer-management-ui";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
@@ -298,7 +299,9 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
       if (!multisigId) return;
       setPreparing(true);
       void Promise.resolve()
-        .then(() => deps.multisig.prepareIntent(multisigId, [preparedCall(form)]))
+        .then(() =>
+          deps.multisig.prepareIntent(multisigId, [preparedCall(form)], resendConfirmed(button)),
+        )
         .then(
           (result) => {
             showToast("Transaction ready for multisig review", "success", button ?? deps.app);
@@ -311,6 +314,7 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
               button ?? deps.app,
             );
             setPreparing(false);
+            armResendConfirmation(button, error);
           },
         );
     });
