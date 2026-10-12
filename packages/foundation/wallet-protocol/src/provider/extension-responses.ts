@@ -6,6 +6,7 @@
 
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { VaultRecovery } from "@bramble/wallet-model/vault-recovery";
 import type { Strk20Action, Strk20WithdrawAction } from "../privacy/strk20";
 import type { FeeEstimate } from "../transactions/fee-estimate";
 import type { ProviderInvokeCall } from "../transactions/invoke";
@@ -147,4 +148,6 @@ export type WalletStatus = {
   readonly networkId: StarknetNetworkId;
   readonly networks: readonly NetworkOption[];
   readonly ready: boolean;
+  /** Present only when a stored vault cannot be unlocked normally. */
+  readonly recovery?: VaultRecovery;
 };

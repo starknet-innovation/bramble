@@ -59,7 +59,15 @@ const recoverStagedVault = async (
   if (!isVaultV11(staged)) {
     return null;
   }
-  await stores.primary.write(staged, vaultPassphrase);
+  // The staged copy verified against its own records, so it is the current
+  // vault even when the primary cannot be verified; a plain write would refuse
+  // to replace that primary, and the user would be stuck with neither.
+  const primaryHealth = await stores.primary.health();
+  if (primaryHealth === "rollback" || primaryHealth === "unverified") {
+    await stores.primary.replaceUnverified(staged, vaultPassphrase);
+  } else {
+    await stores.primary.write(staged, vaultPassphrase);
+  }
   await readVerified(stores.primary, vaultPassphrase, staged);
   await removeVerified(stores.staging);
   return staged;

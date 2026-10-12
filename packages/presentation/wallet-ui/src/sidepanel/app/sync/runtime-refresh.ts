@@ -52,6 +52,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.transfer",
   "wallet.transferNft",
   "wallet.unlock",
+  "wallet.unlockUnverified",
   "wallet.prepareArgentMultisigIntent",
   "wallet.signArgentMultisigIntent",
   "wallet.submitArgentMultisigIntent",

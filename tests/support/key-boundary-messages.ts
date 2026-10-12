@@ -100,6 +100,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { type: "wallet.unlock", vaultPassphrase: SECRET_PASSPHRASE },
     sender: extensionSender,
   },
+  {
+    message: { type: "wallet.unlockUnverified", vaultPassphrase: SECRET_PASSPHRASE },
+    sender: extensionSender,
+  },
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
   { message: { type: "wallet.accountSignability" }, sender: extensionSender },
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
