@@ -269,6 +269,101 @@ describe("deploy screen across repaints", () => {
     expect(calls.quotes).toBe(2);
   });
 
+  test("a takeover during the receipt wait keeps the receipt for when the screen returns", async () => {
+    const { app, paint } = panel();
+    const { calls, wallet } = deployingWallet();
+    bindDeploy(depsFor(app, wallet));
+    await settle();
+    press(app);
+    await tick();
+
+    paint("<section>Connection request</section>");
+    bindDeploy(depsFor(app, wallet));
+    paint();
+    bindDeploy(depsFor(app, wallet));
+    await tick();
+
+    expect(app.querySelector("#deploy-review-stage")?.hasAttribute("hidden")).toBe(true);
+    expect(app.querySelector("#deploy-success-title")?.textContent).toBe("Deployment submitted");
+    expect(calls.deploys).toBe(1);
+    expect(calls.quotes).toBe(1);
+  });
+
+  test("leaving while Deploy is in flight keeps the hash for when the screen returns", async () => {
+    const { app, paint } = panel();
+    let release: (hash: string) => void = () => undefined;
+    const calls = { deploys: 0, quotes: 0 };
+    const wallet = {
+      deployAccount: async (fee?: typeof FEE) => {
+        if (!fee) {
+          calls.quotes += 1;
+          return FEE;
+        }
+        calls.deploys += 1;
+        return new Promise<string>((resolve) => {
+          release = resolve;
+        });
+      },
+      loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+      loadStatus: async () => status,
+    } as unknown as ShellBindingDeps["wallet"];
+    bindDeploy(depsFor(app, wallet));
+    await settle();
+    press(app);
+    await tick();
+
+    paint("<section>Activity</section>");
+    bindDeploy(depsFor(app, wallet));
+    release(HASH);
+    await settle();
+    paint();
+    bindDeploy(depsFor(app, wallet));
+    await tick();
+
+    expect(app.querySelector("#deploy-success-title")?.textContent).toBe("Deployment submitted");
+    expect(calls.deploys).toBe(1);
+    expect(calls.quotes).toBe(1);
+  });
+
+  test("a quote that fails after a repaint says why on the rebuilt screen", async () => {
+    const { app, paint } = panel();
+    let fail: (error: unknown) => void = () => undefined;
+    const wallet = {
+      deployAccount: async () =>
+        new Promise<never>((_, reject) => {
+          fail = reject;
+        }),
+    } as unknown as ShellBindingDeps["wallet"];
+    bindDeploy(depsFor(app, wallet));
+    paint();
+    bindDeploy(depsFor(app, wallet));
+
+    fail(new Error("The node did not answer."));
+    await settle();
+    expect(app.querySelector("#deploy-review")?.textContent).toContain("The node did not answer.");
+    // A repaint after that keeps the reason rather than an empty Cost box.
+    paint();
+    bindDeploy(depsFor(app, wallet));
+    expect(app.querySelector("#deploy-review")?.textContent).toContain("The node did not answer.");
+  });
+
+  test("a quote that lands after a repaint binds the screen once, so Try again quotes once", async () => {
+    const { app, paint } = panel();
+    const { calls, land, wallet } = deployingWallet();
+    bindDeploy(depsFor(app, wallet));
+    paint();
+    bindDeploy(depsFor(app, wallet));
+    await settle();
+    press(app);
+    land("rejected");
+    await settle();
+    expect(calls.deploys).toBe(1);
+
+    app.querySelector<HTMLButtonElement>('[data-outcome-action="retry"]')?.click();
+    await settle();
+    expect(calls.quotes).toBe(2);
+  });
+
   test("another account's screen quotes its own fee", async () => {
     const { app, paint } = panel();
     const { calls, wallet } = deployingWallet();
