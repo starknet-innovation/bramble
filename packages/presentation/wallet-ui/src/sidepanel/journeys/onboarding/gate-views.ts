@@ -48,11 +48,11 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
     <form id="unlock-form" class="gate-form">
       ${textField({
         autocomplete: "current-password",
-        label: "Vault passphrase",
+        label: "Password",
         labelHidden: true,
         minlength: MIN_VAULT_PASSPHRASE_LENGTH,
         name: "vaultPassphrase",
-        placeholder: "Enter your passphrase",
+        placeholder: "Enter your password",
         required: true,
         type: "password",
       })}
