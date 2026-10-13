@@ -150,7 +150,7 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.md};
     justify-content: space-between;
   }
-  .multisig-funding-head h2 { margin: 2px 0 0; }
+  .multisig-funding-head h2 { margin: ${SPACE.xxs} 0 0; }
   .multisig-funding-token {
     align-items: center;
     background: var(--bramble-elevated);
@@ -476,7 +476,7 @@ export const MULTISIG_STYLES = `
   .multisig-intent-row { position: relative; }
   .multisig-intent-row.has-assets .menu-icon { visibility: hidden; }
   .multisig-intent-assets { display: inline-flex; inset-inline-start: calc(${SPACE.lg} - 4px); pointer-events: none; position: absolute; top: 50%; transform: translateY(-50%); }
-  .multisig-intent-assets > * + * { margin-left: -6px; }
+  .multisig-intent-assets > * + * { margin-left: calc(-1 * ${SPACE.sm}); }
   .multisig-intent-assets .token-logo, .multisig-intent-assets .token-mark { height: 28px; width: 28px; }
   .multisig-intent-assets .token-mark { font-size: 8px; }
   [data-ms-exact-identity] .receipt-row { align-items: flex-start; }

@@ -199,7 +199,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     font-size: 10px;
     font-weight: ${WEIGHT.bold};
     letter-spacing: 0.03em;
-    padding: 3px 8px;
+    padding: ${SPACE.xs} ${SPACE.sm};
     text-transform: uppercase;
   }
   .token-detail-price { color: var(--bramble-text); font-size: ${TYPE.amount.size}; font-weight: ${WEIGHT.heavy}; letter-spacing: -0.02em; }
@@ -310,7 +310,7 @@ ${SIGN_REQUEST_STYLES}
   .nft-play-tile .icon { height: 18px; width: 18px; }
   .nft-card:hover .nft-play-tile, .nft-card:focus-within .nft-play-tile { opacity: 1; pointer-events: auto; }
   button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--bramble-shadow-sm); }
-  .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; }
+  .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 ${SPACE.xxs}; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .nft-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   /* Compact two-up ghost actions; the danger Remove stays borderless like Hide
@@ -358,7 +358,7 @@ ${SIGN_REQUEST_STYLES}
     max-width: 100%;
     min-height: 28px;
     overflow: hidden;
-    padding: 3px ${SPACE.md};
+    padding: ${SPACE.xs} ${SPACE.md};
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
@@ -368,9 +368,9 @@ ${SIGN_REQUEST_STYLES}
   .pill-hardware {
     background: var(--bramble-accent-soft);
     color: var(--bramble-accent);
-    margin-left: 6px;
+    margin-left: ${SPACE.sm};
     min-height: 20px;
-    padding: 1px ${SPACE.sm};
+    padding: ${SPACE.xxs} ${SPACE.sm};
     vertical-align: middle;
   }
   .pill-hardware .icon { height: 12px; width: 12px; }
@@ -387,7 +387,7 @@ ${SIGN_REQUEST_STYLES}
     font-weight: ${WEIGHT.bold};
     line-height: 1;
     min-width: 16px;
-    padding: 3px 5px;
+    padding: ${SPACE.xs};
     text-align: center;
   }
   /* Empty states are plain centered copy — an empty list is an absence, not a
@@ -405,7 +405,7 @@ ${SIGN_REQUEST_STYLES}
   /* The warning glyph leads its sentence like every other flagged line: a
      fixed gap, pinned to the first line so a wrapped warning stays aligned. */
   .reveal-danger { align-items: flex-start; color: var(--bramble-danger); display: flex; font-weight: ${WEIGHT.semibold}; gap: ${SPACE.sm}; }
-  .reveal-danger .icon { flex: none; margin-top: 1px; }
+  .reveal-danger .icon { flex: none; margin-top: ${SPACE.xxs}; }
   .reveal-output { display: grid; gap: ${SPACE.sm}; }
   .reveal-value {
     background: var(--bramble-panel);
@@ -471,8 +471,8 @@ ${SIGN_REQUEST_STYLES}
     display: flex;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
-    gap: 10px;
-    padding: 10px ${SPACE.md} 10px 10px;
+    gap: ${SPACE.sm};
+    padding: ${SPACE.md};
     pointer-events: auto;
     touch-action: pan-y;
   }

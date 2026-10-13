@@ -86,7 +86,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     font-weight: ${WEIGHT.semibold};
     gap: 6px;
     min-height: ${CONTROL.hit};
-    padding: 0 10px 0 6px;
+    padding: 0 ${SPACE.md} 0 ${SPACE.sm};
   }
   button.swap-token .token-mark, button.swap-token .token-logo { height: 24px; width: 24px; }
   button.swap-token .token-mark { font-size: 9px; }

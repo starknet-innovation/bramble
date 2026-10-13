@@ -183,7 +183,7 @@ export const BASE_STYLES = `
     display: flex;
     gap: ${SPACE.sm};
     justify-content: space-between;
-    padding: 2px 0 ${SPACE.xs};
+    padding: ${SPACE.xxs} 0 ${SPACE.xs};
   }
   button.account-trigger {
     align-items: center;
@@ -196,7 +196,7 @@ export const BASE_STYLES = `
     justify-content: flex-start;
     min-height: 0;
     min-width: 0;
-    padding: 4px 12px 4px 4px;
+    padding: ${SPACE.xs} ${SPACE.md} ${SPACE.xs} ${SPACE.xs};
     text-align: left;
   }
   @media (hover: hover) and (pointer: fine) {
@@ -312,7 +312,7 @@ export const BASE_STYLES = `
   .read-only-notice .read-only-detail {
     color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; max-width: 32ch; text-align: center;
   }
-  .read-only-notice #recover-account { margin-top: 2px; }
+  .read-only-notice #recover-account { margin-top: ${SPACE.xxs}; }
 
   /* The 24h figures are price moves, not changes in balance; one quiet caption
      under either hero says so, and each row carries its own window label. */

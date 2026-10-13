@@ -80,7 +80,10 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      identifier on a text line at the receipt action's compact size. The
      negative vertical margin keeps a caption or mono line at its own height,
      so a row gains a copy affordance without gaining height. */
-  .icon-button.copy-inline { flex: none; margin: -6px 0; }
+  .icon-button.copy-inline {
+    flex: none;
+    margin: calc((${TYPE.caption.size} * ${TYPE.caption.line} - ${SIZE.pill}) / 2) 0;
+  }
   /* A shortened identifier and its inline copy control on one line, for a
      surface whose own layout stacks its children (a name over its address). */
   .copy-line { align-items: center; display: flex; gap: 2px; max-width: 100%; min-width: 0; }
@@ -155,7 +158,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     gap: 3px;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
-    padding: 3px;
+    padding: ${SPACE.xxs};
   }
   button.seg-option {
     background: transparent;

@@ -29,7 +29,7 @@ export const HOME_STYLES = `
     font-size: ${TYPE.caption.size};
     gap: 6px;
     line-height: ${TYPE.caption.line};
-    margin-top: 6px;
+    margin-top: ${SPACE.sm};
   }
   .verify-status .icon { flex: none; }
   .verify-status.verified { color: var(--bramble-positive); font-weight: 600; }
@@ -270,7 +270,9 @@ export const HOME_STYLES = `
     box-shadow: var(--bramble-elev-lg);
     display: grid;
     opacity: 1;
-    padding: 6px;
+    /* Concentric corners: the inset is the gap between the menu's radius and
+       its rows', so a row's hover fill follows the menu's curve. */
+    padding: calc(${RADIUS.lg} - ${RADIUS.md});
     position: absolute;
     right: 0;
     top: calc(100% + 6px);
