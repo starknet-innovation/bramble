@@ -18,6 +18,7 @@ import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
+import { createStagePacer, type StagePacer, type StageTimers } from "../shared/stage-pacer";
 import {
   addressBookDraft,
   clearAddressBookDraft,
@@ -34,6 +35,8 @@ export type BindingContext = {
   readonly app: Element | null;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly snoozeApproval?: (id: string) => void;
+  /** Timer seam for the approval takeover's stage pacing; platform timers when absent. */
+  readonly stageTimers?: StageTimers;
   readonly wallet: SidepanelWallet;
 };
 
@@ -262,12 +265,42 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
  * and the Activity list share one decision path) plus the takeover's "Not now"
  * snooze control.
  */
-export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingContext): void => {
+export const bindApprovals = ({
+  app,
+  render,
+  snoozeApproval,
+  stageTimers,
+  wallet,
+}: BindingContext): void => {
   const result = app?.querySelector<HTMLElement>("#approval-result");
   const live = app?.querySelector<HTMLElement>("#approval-live");
   const liveTitle = app?.querySelector<HTMLElement>("#approval-live-title");
   const liveCopy = app?.querySelector<HTMLElement>("#approval-live-copy");
   const deciding = new Set<string>();
+  // A software approval can settle in a few milliseconds, which tore the
+  // "Authorizing request" line down before it could be read (issue 436). The
+  // decision itself and the status read behind it start at once; only the
+  // outcome's paint waits for the line's minimum time on screen.
+  const pacedOutcome = (): StagePacer<() => void> => {
+    const paced = createStagePacer<() => void>({
+      render: (paint) => paint(),
+      sameStage: () => false,
+      ...(stageTimers ? { timers: stageTimers } : {}),
+    });
+    paced.stage(() => undefined);
+    return paced;
+  };
+  const showFailure = (error: unknown, button: HTMLButtonElement): void => {
+    // An approved call whose reply was lost may be on chain: amber, not "failed".
+    showToast(
+      errorDetails(error, "Approval failed"),
+      isOutcomeUnknown(error) ? "warning" : "error",
+      button,
+    );
+    if (result) {
+      result.textContent = errorLine(error, "Approval failed");
+    }
+  };
   app?.querySelectorAll<HTMLButtonElement>("[data-approval-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["approvalId"];
@@ -276,6 +309,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         return;
       }
       deciding.add(id);
+      const paced = pacedOutcome();
       const approvalCard = button.closest<HTMLElement>(".request-card");
       if (approvalCard) {
         approvalCard.dataset["state"] = "working";
@@ -314,29 +348,27 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
       // control, so the account the user saw is the one the decision reports.
       const reviewedAccountId = button.dataset["approvalAccount"];
       void wallet.decideApproval(id, action === "approve", reviewedFee, reviewedAccountId).then(
-        async () => {
-          showToast(
-            action === "approve" ? "Request approved" : "Request denied",
-            "success",
-            button,
-          );
-          await render(await wallet.loadStatus());
+        () => {
+          const next = wallet.loadStatus();
+          paced.settle(() => {
+            showToast(
+              action === "approve" ? "Request approved" : "Request denied",
+              "success",
+              button,
+            );
+            void next.then(render);
+          });
         },
         (error: unknown) => {
-          // An approved call whose reply was lost may be on chain: amber, not "failed".
-          showToast(
-            errorDetails(error, "Approval failed"),
-            isOutcomeUnknown(error) ? "warning" : "error",
-            button,
-          );
-          if (result) {
-            result.textContent = errorLine(error, "Approval failed");
-          }
           // The background atomically consumes an approval before execution.
           // Repaint after any executor error so stale controls cannot decide the
           // already-removed id and surface a misleading "approval not found".
-          void wallet.loadStatus().then(render, () => {
-            deciding.delete(id);
+          const next = wallet.loadStatus();
+          paced.settle(() => {
+            showFailure(error, button);
+            void next.then(render, () => {
+              deciding.delete(id);
+            });
           });
         },
       );

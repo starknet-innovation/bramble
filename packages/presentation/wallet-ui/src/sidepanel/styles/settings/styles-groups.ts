@@ -16,7 +16,7 @@ export const GROUP_STYLES = `
   /* Account groups (folders): filter chips, per-account assignment panel, the
      icon picker grid, and the manage-accounts group list. Calm, hairline,
      skin-token only — matching the drawer aesthetic. */
-  .group-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 2px; }
+  .group-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: ${SPACE.xxs}; }
   button.group-chip {
     align-items: center;
     background: var(--bramble-soft);
@@ -138,8 +138,8 @@ export const GROUP_STYLES = `
     right: ${SPACE.sm};
     top: 0;
   }
-  .account-name-row > .option-avatar { margin-top: 4px; }
-  .account-name-actions { align-self: start; display: flex; gap: 4px; margin-top: 4px; }
+  .account-name-row > .option-avatar { margin-top: ${SPACE.xs}; }
+  .account-name-actions { align-self: start; display: flex; gap: ${SPACE.xs}; margin-top: ${SPACE.xs}; }
   .account-name-copy { display: grid; gap: 4px; min-width: 0; }
   .account-name-copy label { display: grid; }
   .account-name-copy input {
@@ -221,7 +221,7 @@ export const GROUP_STYLES = `
   }
   .group-members-head { align-items: center; display: flex; gap: ${SPACE.sm}; }
   .group-members-head .eyebrow { flex: 1; margin: 0; }
-  .account-check-list { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; }
+  .account-check-list { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; scrollbar-gutter: stable; }
   button.account-check {
     align-items: center;
     background: transparent;
@@ -262,7 +262,7 @@ export const GROUP_STYLES = `
     font-weight: 650;
     max-width: 92px;
     overflow: hidden;
-    padding: 2px ${SPACE.sm};
+    padding: ${SPACE.xxs} ${SPACE.sm};
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }

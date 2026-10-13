@@ -20,7 +20,7 @@ export const LIST_STYLES = `  /* Flow screens: back control + goal title */
     display: flex;
     gap: ${SPACE.sm};
     min-width: 0;
-    padding: 2px 0 ${SPACE.xs};
+    padding: ${SPACE.xxs} 0 ${SPACE.xs};
   }
   .flow-header > .pill { flex: none; }
   .flow-title { display: grid; flex: 1; gap: 1px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
