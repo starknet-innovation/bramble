@@ -49,12 +49,13 @@ vi.mock("lightweight-charts", () => ({
 import Perps from "./Perps";
 import { fmtSize } from "./perps-data";
 
-const respond = (body: unknown, status = 200) => ({
-  ok: status >= 200 && status < 300,
-  status,
-  json: async () => body,
-  text: async () => JSON.stringify(body),
-});
+// Returns a real `Response` so the production bounded network boundary can read
+// its status, headers and streamed body exactly as it would a live upstream.
+const respond = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status,
+  });
 
 const ok = (data: unknown): unknown => ({ status: "OK", data, error: null });
 

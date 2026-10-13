@@ -5,6 +5,7 @@ import { sameAddress } from "../support/networks";
 import type { Strk20Action } from "../support/strk20-schemas";
 
 import { checkPrivateSwapCalldata } from "./private-swap-intent";
+import { boundedFetch } from "../support/bounded-network";
 
 const FELT = /^0x[0-9a-fA-F]{1,64}$/;
 const STARK_FIELD_PRIME = 0x800000000000011000000000000000000000000000000000000000000000001n;
@@ -43,14 +44,18 @@ const isNonZeroFelt = (value: unknown): value is string =>
   BigInt(value) > 0n &&
   BigInt(value) < STARK_FIELD_PRIME;
 
+/** Private-swap proving and submission can legitimately take minutes. */
+const PRIVATE_SWAP_DEADLINE_MS = 120_000;
+
 const post = async (action: "fee" | "plan" | "submit", body: unknown): Promise<unknown> => {
-  const response = await fetch(`/api/private-swap/${action}`, {
+  const response = await boundedFetch(`/api/private-swap/${action}`, {
     body: JSON.stringify(body),
+    deadlineMs: PRIVATE_SWAP_DEADLINE_MS,
     headers: { "content-type": "application/json" },
     method: "POST",
-    signal: AbortSignal.timeout(120_000),
   });
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new Error("Private swap service is unavailable.");
   }
   return response.json();
