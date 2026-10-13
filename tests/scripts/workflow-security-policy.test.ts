@@ -267,13 +267,6 @@ describe("workflow security policy", () => {
       failure: "self-hosted nightly execution must not pass configured refs to checkout",
     },
     {
-      name: "rejects pull-request execution with the roadmap token",
-      workflow: "roadmap-project-sync.yml",
-      search: "pull_request_target:",
-      replacement: "pull_request:",
-      failure: "roadmap token verification must execute the trusted base workflow",
-    },
-    {
       name: "rejects self-hosted release integration on a pull request",
       workflow: "release-integration.yml",
       search: 'push:\n    branches: ["release/**"]',

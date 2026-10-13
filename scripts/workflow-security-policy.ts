@@ -382,30 +382,6 @@ const releaseIntegrationFailures = (source: string): string[] => {
   return failures;
 };
 
-const roadmapFailures = (source: string): string[] => {
-  const failures: string[] = [];
-  const verify = jobBody(source, "verify");
-  requireText(
-    failures,
-    source,
-    "pull_request_target:",
-    "roadmap token verification must execute the trusted base workflow",
-  );
-  forbidText(
-    failures,
-    source,
-    "\n  pull_request:\n",
-    "roadmap token verification must not execute a pull-request workflow revision",
-  );
-  forbidText(
-    failures,
-    verify,
-    "actions/checkout@",
-    "roadmap token verification must never check out pull-request code",
-  );
-  return failures;
-};
-
 // Per-workflow policies, keyed by file name. Membership here means "this
 // workflow's privileged behaviour has been reviewed and is pinned below", which
 // is also what lets it hold a self-hosted runner or a privileged trigger.
@@ -415,7 +391,6 @@ const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
   "release-build.yml": releaseBuildFailures,
   "release-integration.yml": releaseIntegrationFailures,
   "release.yml": releaseFailures,
-  "roadmap-project-sync.yml": roadmapFailures,
 };
 
 /**
