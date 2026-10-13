@@ -1,0 +1,22 @@
+{
+  "control/bramble-axis-1": {
+    "id": "control/bramble-axis-1",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 1,
+    "address": "0x42717863866f4883cbbfcf9edf97a417be76ec65969d916c7e499a66487ef94",
+    "pubkey": "0x53b1ed2ed54c8b1db68c1ed56c9ae827ea2a8e3d4c55a539071d3ac218a621e",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "control: on Bramble's current ladder, so today's scan MUST find it",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x7f3f5d05dca4d61c93af16d7778e328baac924185df91ebde52c0d2430614c3",
+      "deployed 0x8a9821dc721ba7799294a69ef8288e41a8ec81f7f18a094e93e5c0bfbcbce0"
+    ]
+  }
+}

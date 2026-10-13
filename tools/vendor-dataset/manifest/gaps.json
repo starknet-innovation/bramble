@@ -1,0 +1,42 @@
+{
+  "gaps/7": {
+    "id": "gaps/7",
+    "seed": "BRAMBLE_DATASET_SEED_GAPS",
+    "vendorDerivation": "ready-double",
+    "index": 7,
+    "address": "0x30513445d23be034a409eefa3eb60ab720795d0c3279a93102fe3b28b3ca2ac",
+    "pubkey": "0x108a62c8d360b17eca43c99895df6fe6a5cc948dfe1b91de6bdc2110591db1f",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found after a 7-index gap (#504 + #505)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x4a63029eebbe8efb3a23bc75769dfa1aafaa74017dafe8800198083378a01e1",
+      "deployed 0xa74b067f866bf7c1bc1ec1c51d8afd4754c649c6dd817f1a38e437ff02c4a2"
+    ]
+  },
+  "gaps/25": {
+    "id": "gaps/25",
+    "seed": "BRAMBLE_DATASET_SEED_GAPS",
+    "vendorDerivation": "ready-double",
+    "index": 25,
+    "address": "0x1ee0027e8f786ded98848a069b3cbc10d6853c9698aae06f24b2c29213a5a10",
+    "pubkey": "0x6b321569d09c7c47cd9c61965eb8b071e894df6b6c751dc9790b52cf8b9e736",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "found past the old 0-19 window only via #504's extension",
+    "detectability": "D3",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "fee float 0x51fde99f0831c9bc6e5686ba49691bfd5d8eb60cf5fa35864ec4a57919846f0",
+      "deployed 0x5285ebfbc6ef2ff4650217b45e3ae1285630fefab5ae711504b6333ff70d0dc"
+    ]
+  }
+}

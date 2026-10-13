@@ -355,9 +355,12 @@ if (
     "packages/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",
+    "tools/**/*.ts",
   ])
 ) {
-  failures.push("tsconfig.json include must cover the extension, packages, scripts, and tests");
+  failures.push(
+    "tsconfig.json include must cover the extension, packages, scripts, tests, and tools",
+  );
 }
 
 const gitignoreLines = gitignore.split("\n").map((line) => line.trim());

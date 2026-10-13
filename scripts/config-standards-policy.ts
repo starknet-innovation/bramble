@@ -17,6 +17,13 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/testkit": "workspace:*",
   "@biomejs/biome": "2.5.14",
   "@playwright/test": "1.63.0",
+  // BIP-32/BIP-39 for the vendor-import dataset tooling in tools/vendor-dataset,
+  // which reimplements the vendors' own derivation so the dataset stays
+  // independent of the Krusty code it measures. Development scripts only: the
+  // workspace-architecture gate keeps every shipped workspace from importing a
+  // root devDependency. Both versions are the ones bun.lock already resolved.
+  "@scure/bip32": "1.7.0",
+  "@scure/bip39": "1.6.0",
   "@types/bun": "1.4.2",
   "@types/node": "26.6.2",
   "fast-check": "4.10.2",

@@ -1,0 +1,144 @@
+{
+  "braavos-matrix/0": {
+    "id": "braavos-matrix/0",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 0,
+    "address": "0x6b462b2d9f8f5963df4fae4ad1991bdc66144f8a3d6e225b28e2ea8c7c0f753",
+    "pubkey": "0x7d981172697e8400870b49a551dd5497ef8fa1c75effc3198e5598bbb7e3368",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "found today at index 0 (the single overlapping coordinate), view-only",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": [
+      "fee float 0x70b3f61719dc1c188e68208321e1d264b75dbcd74c4fe79745a5e3980a0db62",
+      "ERROR: RpcError: RPC: starknet_estimateFee with params {\n  \"request\": [\n    {\n      \"type\": \"DEPLOY_ACCOUNT\",\n      \"constructor_calldata\": [\n        \"0x7d981172697e8400870b49a551dd5497ef8fa1c75effc3198e5598",
+      "ERROR: RpcError: RPC: starknet_estimateFee with params {\n  \"request\": [\n    {\n      \"type\": \"DEPLOY_ACCOUNT\",\n      \"constructor_calldata\": [\n        \"0x7d981172697e8400870b49a551dd5497ef8fa1c75effc3198e5598",
+      "deployed 0x372cc86630788d8bf0de2c4bb16ac9b4467e199354a978f79f94fcc229890dc"
+    ]
+  },
+  "braavos-matrix/1": {
+    "id": "braavos-matrix/1",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 1,
+    "address": "0x73a2dbc7d1534ce1c616cba3adf86188a5e014feb11339943b60e8b1d214c94",
+    "pubkey": "0x3f23e9db62c4962cf2d9b73f1c12e42b06110608a368c170ac3ee6439cfe0a5",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "missed today (address axis); found once the scan walks the vendor axis",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": [
+      "fee float 0x63f4e668aa700dee00bcbb8df8339e3f4829f22265ec4f6ded903980a494f1",
+      "ERROR: RpcError: RPC: starknet_estimateFee with params {\n  \"request\": [\n    {\n      \"type\": \"DEPLOY_ACCOUNT\",\n      \"constructor_calldata\": [\n        \"0x3f23e9db62c4962cf2d9b73f1c12e42b06110608a368c170ac3ee6",
+      "ERROR: RpcError: RPC: starknet_estimateFee with params {\n  \"request\": [\n    {\n      \"type\": \"DEPLOY_ACCOUNT\",\n      \"constructor_calldata\": [\n        \"0x3f23e9db62c4962cf2d9b73f1c12e42b06110608a368c170ac3ee6",
+      "deployed 0x5c502a9fe8eb8b68201bfb36af6ac15d3e2aa2ebb50dc941e3cd80a4f5daed3"
+    ]
+  },
+  "braavos-matrix/2": {
+    "id": "braavos-matrix/2",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 2,
+    "address": "0x47db2e5476d619b25d3cbc73e7f9cece3ea3da159d4c631d6da84d7baacf5a2",
+    "pubkey": "0x1c1c2789dd8b51d246ded6a5c4811d1dd4121fffbe454361c6042bfcb883095",
+    "classAtDeploy": null,
+    "expected": "undeployed, STRK-funded on the vendor axis",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "STRK"
+    },
+    "log": ["funded STRK 0xcace1fc603ccf3d95ac761b065e39c9e79d72c909537e359df2fa2e269b8b5"]
+  },
+  "braavos-matrix/3": {
+    "id": "braavos-matrix/3",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 3,
+    "address": "0x4bff176c9426c57519057513c1635cebc905ffeb334b9b5515f55414329a58c",
+    "pubkey": "0x51af56241a90565cda7d72927cc5729804d974d61492636438720d09dbcd5f0",
+    "classAtDeploy": null,
+    "expected": "found once the native-USDC probe lands; undeployed, holds USDC only on the vendor axis",
+    "detectability": "D3",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "USDC-native"
+    },
+    "log": ["funded USDC 0x748740765e495dc3c783d0841b38a078f32bc7695eed21fe760afc5cafb55a1"]
+  },
+  "braavos-matrix/4": {
+    "id": "braavos-matrix/4",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 4,
+    "address": "0x3dcd701c6b50d114e6d2263110ef5db2148d44edda7a3173dc3ee15c5eb2ed7",
+    "pubkey": "0x3fd6ad9407cada6e68c683aae0260a3a35d77cfa61cacc3d0691cc3cf7ca923",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "found by address; stark-key signing must be refused while the strong signer is active",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+      "secp256r1": {
+        "x": "0xae55311fe954f6e206ed49ce1375ea4b146c7cf70cd0260b8bbf58d494fa6370",
+        "y": "0x5d906e0689ca1ca6e36da79e36dd0a3ebdcc6b654ac4a086a36facf2662b75ef"
+      },
+      "recoveryRequested": true,
+      "recoveryTx": "0x1706142958afa1a978e291cfa159aa22e12e5c72e13834644830fc0aff73564",
+      "usableAfterUnix": 1791552532,
+      "note": "2FA removal requested through the wallet's own recovery path (phrase-only); pending ~4 days, then signable. No real device to cancel."
+    },
+    "log": [
+      "fee float 0x45511bc50fbae9994936b59a3a2796d40b06ce46b7e2d981f1cf4ef754aed2",
+      "deployed-with-2fa 0x454467046c7b45d72bd143b0fa55a0648c37ad5a04767ca3240bdb11112206f"
+    ]
+  },
+  "braavos-matrix/5": {
+    "id": "braavos-matrix/5",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 5,
+    "address": "0x7213c526cf231182e66785de225fc5d16f9882c69838539404d0b814ec59e87",
+    "pubkey": "",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "wallet-deployed Braavos account, stark-only, fully signable",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "deployedBy": "bramble-platform-code",
+      "note": "deployed BY THE WALLET's platform path (first run; exposed and fixed the signed-hash ordering)"
+    },
+    "log": ["deployed (first-run proof)"]
+  },
+  "braavos-matrix/6": {
+    "id": "braavos-matrix/6",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 6,
+    "address": "0x645dd757fd08588daee39cf2120eb884c88a4c828ce005cd70d51982f7161d8",
+    "pubkey": "",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "wallet-deployed Braavos account, stark-only, fully signable",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "deployedBy": "bramble-platform-code",
+      "note": "deployed BY THE WALLET's platform path, clean end-to-end (estimate with validation + submit + hash check)"
+    },
+    "log": ["deployed 0x3fcf7128daa3c676f91f173bace93ca43706c60ed5ac2f7f982d404a01f7fdb"]
+  }
+}
