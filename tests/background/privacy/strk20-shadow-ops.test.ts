@@ -51,6 +51,7 @@ const scope = (overrides: Partial<ShadowAccountScopeRef>): ShadowAccountScopeRef
 const handlerWith = (
   scopes: readonly ShadowAccountScopeRef[],
   store: { value: readonly ShadowAccountScopeRef[] } = { value: scopes },
+  strk20 = makeStrk20Service(),
 ) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
@@ -73,7 +74,7 @@ const handlerWith = (
         async getTokenBalances({ tokens }) {
           return tokens.map((token) => ({ ...token, balance: "5", formatted: "" }));
         },
-        strk20: makeStrk20Service(),
+        strk20,
       }),
       session,
     },
@@ -338,5 +339,25 @@ describe("shadow accounts view messages", () => {
     );
     expect(executed).toEqual({ error: "Privacy preparation changed" });
     expect(submitted).toEqual([]);
+  });
+
+  // Audit F11: the relay fee comes from the private balance in the fee token.
+  // Without enough of it the Sweep tap is refused with the existing
+  // "insufficient private balance" code (panel copy "Insufficient private
+  // balance"), before any review or Confirm exists.
+  test("a sweep without the private fee balance is refused before any review", async () => {
+    const store = { value: [scope({ nonces: ["0x1"] })] as readonly ShadowAccountScopeRef[] };
+    const handler = handlerWith(store.value, store, makeStrk20Service({ balance: "0x0" }));
+    expect(
+      await handler(
+        {
+          label: "Market",
+          nonce: "0x1",
+          origin: "https://example.com",
+          type: "wallet.strk20PrepareShadowSweep",
+        },
+        panel,
+      ),
+    ).toEqual({ error: "insufficient private balance" });
   });
 });

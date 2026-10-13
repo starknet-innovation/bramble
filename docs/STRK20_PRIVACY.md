@@ -231,10 +231,25 @@ reachable.
 
 A sweep is one `OPEN` transfer to this account per tracked token the shadow account holds, then a
 `shadow_account_invoke` with `collect_policy: all` and no calls (the anonymizer accepts this). It is
-always relayed, so the relay fee comes from the private balance; an account with no private balance
-for the fee cannot sweep. The collected amount is the balance at execution, not the one shown at
-review. Untracked tokens are not swept. Activity records a settled sweep as "Sweep shadow account",
-with no site, label, or nonce, since activity is plain browser storage and part of the CSV export. The settled open notes are screened against the shadow
+always relayed, so the relay fee comes from the private balance. The collected amount is the balance
+at execution, not the one shown at review. Activity records a settled sweep as "Sweep shadow
+account", with no site, label, or nonce, since activity is plain browser storage and part of the CSV
+export.
+
+Limits of the sweep:
+
+- **Tracked tokens only.** Balances are read, and `OPEN` transfers built, only for tokens in the
+  wallet's token list for the network. A token the shadow account holds that is not tracked is not
+  shown and not swept; a listed shadow account holding only untracked tokens shows "No tracked tokens" and
+  has no Sweep control. Track the token first. What the anonymizer does with an untracked token's
+  balance under `collect_policy: all` is not yet confirmed on a live network.
+- **The relay fee needs a private balance in the fee token.** The fee is a private withdrawal in the
+  token the relay quotes, checked against the private balance before the review is built. Funds in
+  the shadow account do not count, so a user whose only funds of that token are in the shadow
+  account cannot sweep until they hold some privately. The Sweep tap is then refused with the
+  existing "Insufficient private balance" error, before any review or Confirm appears.
+
+The settled open notes are screened against the shadow
 account's own address (`Delegated`); whether the prover behind mc-backend performs that screening is
 not yet confirmed (issue 443).
 
