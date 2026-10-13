@@ -39,6 +39,8 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
   "no account for selected network",
   "token unavailable",
   "no calls to submit",
+  "switch to the nft's network first",
+  "this account does not own that nft",
   // The reviewed preparation is one-time and was not executed.
   "swap preparation not found",
   "swap preparation changed",
@@ -141,9 +143,11 @@ const ALREADY_UNKNOWN =
  */
 export const outcomeUnknownReason = (error: unknown, subject: string): string => {
   const unknown = SUBMISSION_UNKNOWN(subject);
-  if (error instanceof SubmissionUnknownError) return error.message;
-  const detail = friendlyError(errorDetails(error, "")).message;
+  // A typed unknown outcome carries a curated sentence; it is shown as is
+  // unless it is the generic one, which this subject can say better.
+  const typed = error instanceof SubmissionUnknownError;
+  const detail = typed ? error.message : friendlyError(errorDetails(error, "")).message;
   if (NO_DETAIL.has(detail)) return unknown;
-  if (ALREADY_UNKNOWN.test(detail)) return detail;
+  if (typed || ALREADY_UNKNOWN.test(detail)) return detail;
   return `${detail} ${unknown}`;
 };

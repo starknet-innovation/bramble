@@ -20,6 +20,7 @@ import {
   bindTransfer,
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import { createSidepanelRuntime } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x5eed";
@@ -342,6 +343,17 @@ describe("the rendered Send receipt for each rejection", () => {
       expect(visible(app, "#send-failure-activity")).toBe(title === "Status unknown");
     });
   }
+
+  test("a reply the browser lost (worker stopped) through the real client", async () => {
+    const runtime = createSidepanelRuntime({
+      sendMessage: () =>
+        Promise.reject(new Error("The message port closed before a response was received.")),
+    });
+    const { app, form } = mount(() => runtime.submitTransfer("a", "t", "0x1", "1"), "pending");
+    await reviewAndConfirm(form);
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Status unknown");
+    expect(app.querySelector("#send-failure-copy")?.textContent).toBe(UNKNOWN);
+  });
 
   test("a pool route names the private transaction", () => {
     const rejection = submitRejection(

@@ -5,6 +5,7 @@
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
 
@@ -75,12 +76,14 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
         },
         (error: unknown) => {
           REVIEWED_FEES.delete(button);
-          showToast(errorDetails(error, "Revoke failed"), "error", button);
+          // A revoke whose reply was lost may be on chain: amber, and the
+          // button stays down until the list repaints (errors audit F3).
+          showToast(errorDetails(error, "Revoke failed"), failureTone(error), button);
           if (result) {
             result.textContent = errorLine(error, "Revoke failed");
           }
           if (review) review.textContent = errorLine(error, "Revoke failed");
-          buttonBusy(button, false);
+          if (!isOutcomeUnknown(error)) buttonBusy(button, false);
         },
       );
     });

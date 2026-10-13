@@ -35,7 +35,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ["sender origin mismatch", "The wallet refused that request."],
   ["origin blocked", "That site is blocked."],
   ["origin not connected", "That site isn't connected to this wallet."],
-  ["approval failed", "That request didn't go through. Try again."],
+  [
+    "approval failed",
+    "That didn't complete. If it was a transaction, check Activity before trying again.",
+  ],
   [
     "approval execution failed",
     "That didn't complete. If it was a transaction, check Activity before trying again.",

@@ -88,6 +88,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["network error", NETWORK_UNREACHABLE],
   ["load failed", NETWORK_UNREACHABLE],
   ["wallet lock incomplete", "Couldn't lock the wallet. Try again."],
+  // The browser's own words when a read got no reply. A write that loses its
+  // reply never reaches here: the client types it as outcome unknown
+  // (runtime-errors.ts `lostReplySend`).
+  ["the message port closed before a response was received.", REQUEST_FAILED],
+  ["could not establish connection. receiving end does not exist.", REQUEST_FAILED],
 
   // --- Accounts this wallet can watch but not sign for ----------------------
   // The recovery scan labels these rows view-only up front (issue 542); this
@@ -149,7 +154,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["origin not connected", "That site isn't connected to this wallet."],
   ["request rejected", "That request was rejected."],
   ["dapps cannot call the wallet account contract itself", "A site can't call your own account."],
-  ["approval failed", REQUEST_FAILED],
+  // The panel's fallback for an unrecognised reply to an approval decision,
+  // which may have signed and submitted (errors audit F3).
+  ["approval failed", REQUEST_UNKNOWN],
   ["approval execution failed", REQUEST_UNKNOWN],
   ["wallet request failed", REQUEST_UNKNOWN],
   ["approval not found", "That request has expired. Ask the site to send it again."],
@@ -367,7 +374,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Allowances ----------------------------------------------------------
   ["allowance not found", "That allowance is no longer on-chain. Refresh the list."],
-  ["revoke failed", "The revoke didn't go through. Try again."],
+  // An unrecognised reply to a revoke (a site's access, or an on-chain
+  // allowance revoke) may have run (errors audit F3).
+  ["revoke failed", REQUEST_UNKNOWN],
   [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",

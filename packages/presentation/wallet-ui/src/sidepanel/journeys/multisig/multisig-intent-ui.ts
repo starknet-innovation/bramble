@@ -4,6 +4,7 @@ import {
   ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE,
   isArgentMultisigFeeExpiredMessage,
 } from "@bramble/starknet/multisig-invoke";
+import { failureTone } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
 import { feeReplacementIntentFor, parseArgentMultisigSignature } from "./multisig-model";
 import { armResendConfirmation, resendConfirmed } from "./multisig-resend-confirm";
@@ -70,7 +71,7 @@ const run = (
       const message = isArgentMultisigFeeExpiredMessage(details)
         ? ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE
         : details;
-      showToast(message, "error", button ?? deps.app, details);
+      showToast(message, failureTone(error), button ?? deps.app, details);
       buttonBusy(button, false);
     },
   );

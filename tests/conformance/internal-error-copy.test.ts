@@ -237,6 +237,8 @@ const SCANNED_SENTENCES = new Set([
   "The transaction was not sent. x",
   "Enter an amount greater than zero.",
   "Review this send first",
+  // A write whose reply was lost (runtime-errors.ts `lostReplySend`).
+  "That didn't complete. If it was a transaction, check Activity before trying again.",
 ]);
 
 const REVIEWED_AS_WRITTEN = [
