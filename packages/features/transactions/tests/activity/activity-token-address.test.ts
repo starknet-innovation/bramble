@@ -127,7 +127,7 @@ describe("activity token address: writers", () => {
   test("two same-symbol legs of one transaction stay two rows", () => {
     const leg = (tokenAddress: string): ActivityEntry =>
       row({ counterparty: "0x777", hash: "0xabc", tokenAddress }) as ActivityEntry;
-    const merged = mergeActivity([], [leg(USDC_A), leg(USDC_B)], "chain-events");
+    const merged = mergeActivity([], [leg(USDC_A), leg(USDC_B)]);
     expect(merged.map((entry) => entry.tokenAddress).sort()).toEqual([USDC_A, USDC_B]);
   });
 });
