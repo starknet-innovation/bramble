@@ -75,7 +75,7 @@ and its tests drive.
 
 ## Journey coverage
 
-The lab has 214 deterministic checkpoints across 15 scenario families:
+The lab has 224 deterministic checkpoints across 15 scenario families:
 
 | Family | Review surface |
 | --- | --- |

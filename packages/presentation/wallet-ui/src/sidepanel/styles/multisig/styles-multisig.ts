@@ -97,7 +97,8 @@ export const MULTISIG_STYLES = `
   .multisig-deploy-step-pane { display: grid; gap: ${SPACE.md}; min-width: 0; }
   #multisig-deploy-form[data-deployment-stage="participants"] .multisig-deploy-approval-step,
   #multisig-deploy-form[data-deployment-stage="approval"] .multisig-deploy-signers-step,
-  #multisig-deploy-form:not([data-deployment-stage="participants"]):not([data-deployment-stage="approval"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
+  #multisig-deploy-form[data-deployment-stage="deploy"] .multisig-deploy-signers-step,
+  #multisig-deploy-form:not([data-deployment-stage="participants"]):not([data-deployment-stage="approval"]):not([data-deployment-stage="deploy"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
     display: none;
   }
   .multisig-deploy-actions {
