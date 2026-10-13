@@ -75,7 +75,7 @@ describe("Vesu Multiply swap cap anchor (#646)", () => {
 
   it("refuses a quoter that inflates the input past the premium", async () => {
     quoterReturns(LARGEST_ALLOWED_INPUT + 1_000_000_000n);
-    await expect(increase(prices(2_000))).rejects.toThrow("Ekubo Multiply route amount mismatch");
+    await expect(increase(prices(2_000))).rejects.toThrow("The swap price is too far from the market price. Try again later.");
     // Twice the fair input is refused in the close direction too.
     quoterReturns(MID_INPUT * 2n);
     await expect(
@@ -84,7 +84,7 @@ describe("Vesu Multiply swap cap anchor (#646)", () => {
         debtDecimals: 6,
         priceUsd: prices(2_000),
       }),
-    ).rejects.toThrow("Ekubo Multiply route amount mismatch");
+    ).rejects.toThrow("The swap price is too far from the market price. Try again later.");
   });
 
   it("refuses the route when no independent price is available", async () => {
@@ -100,7 +100,7 @@ describe("Vesu Multiply swap cap anchor (#646)", () => {
         throw new Error("feed down");
       },
     ]) {
-      await expect(increase(priceUsd)).rejects.toThrow("Could not quote Vesu wind route");
+      await expect(increase(priceUsd)).rejects.toThrow("Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.");
     }
     await expect(
       quoteVesuMultiplyClose(USDC, ETH, 1_000_000n, {
@@ -108,14 +108,14 @@ describe("Vesu Multiply swap cap anchor (#646)", () => {
         debtDecimals: 6,
         priceUsd: prices(null),
       }),
-    ).rejects.toThrow("Could not quote Vesu unwind route");
+    ).rejects.toThrow("Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.");
     await expect(
       quoteVesuMultiplyIncrease(USDC, ETH, 1_000_000n, {
         collateralDecimals: 6.5,
         debtDecimals: 18,
         priceUsd: prices(2_000),
       }),
-    ).rejects.toThrow("Could not quote Vesu wind route");
+    ).rejects.toThrow("Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.");
   });
 
   it("re-checks the quoted cap against a fresh price at handoff", async () => {
@@ -124,10 +124,26 @@ describe("Vesu Multiply swap cap anchor (#646)", () => {
     await expect(recheckVesuMultiplyQuote(quote, prices(2_000))).resolves.toBeUndefined();
     // ETH rose 20%: the output now needs less ETH, so the same cap is too high.
     await expect(recheckVesuMultiplyQuote(quote, prices(2_400))).rejects.toThrow(
-      "Ekubo Multiply route amount mismatch",
+      "The swap price is too far from the market price. Try again later.",
     );
     await expect(recheckVesuMultiplyQuote(quote, prices(null))).rejects.toThrow(
-      "Could not quote Vesu wind route",
+      "Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.",
+    );
+  });
+
+  it("shows each refusal as its reviewed sentence, exactly", async () => {
+    quoterReturns(MID_INPUT);
+    const quote = await increase(prices(2_000));
+    const message = (work: Promise<unknown>) =>
+      work.then(
+        () => null,
+        (error: unknown) => (error instanceof Error ? error.message : null),
+      );
+    await expect(message(recheckVesuMultiplyQuote(quote, prices(2_400)))).resolves.toBe(
+      "The swap price is too far from the market price. Try again later.",
+    );
+    await expect(message(recheckVesuMultiplyQuote(quote, prices(null)))).resolves.toBe(
+      "Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.",
     );
   });
 

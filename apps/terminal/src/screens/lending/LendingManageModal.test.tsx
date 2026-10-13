@@ -229,6 +229,45 @@ describe("LendingManageModal", () => {
     );
   });
 
+  // A price-anchor refusal while quoting (#646) must leave nothing to sign and
+  // no stale quote behind: the next attempt quotes again from scratch.
+  it("sends nothing on a price refusal, shows its sentence, and re-quotes on retry", async () => {
+    mocks.quoteClose.mockRejectedValueOnce(new Error("Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market."));
+    render(
+      <LendingManageModal
+        markets={[market]}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+        position={{
+          ...earn,
+          debtAddress: "0x4718",
+          debtDecimals: 18,
+          debtRaw: "1",
+          debtSymbol: "STRK",
+          type: "multiply",
+        }}
+      />,
+    );
+    const review = screen.getByRole("button", { name: /Review in wallet/ });
+    fireEvent.click(review);
+
+    expect(await screen.findByText("Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.")).toBeTruthy();
+    expect(mocks.buildClose).not.toHaveBeenCalled();
+    expect(mocks.requestTransaction).not.toHaveBeenCalled();
+
+    await waitFor(() => expect((review as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(review);
+    await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalledTimes(1));
+    expect(mocks.quoteClose).toHaveBeenCalledTimes(2);
+    expect(mocks.buildClose).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      await mocks.quoteClose.mock.results[1]?.value,
+    );
+  });
+
   it("builds no Multiply calls for a pool the registry does not list (Sherlock 169)", async () => {
     mocks.verifyMultiplyPool.mockRejectedValueOnce(
       new Error("This Vesu pool or asset is not registered on chain"),

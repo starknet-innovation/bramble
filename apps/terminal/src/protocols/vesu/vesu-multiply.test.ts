@@ -45,7 +45,6 @@ const anchored = (quote: ReturnType<typeof parseVesuMultiplyExactOutQuote>) =>
       calculated: { address: MAINNET_TOKEN_ADDRESSES.ETH, decimals: 18 },
       specified: { address: MAINNET_TOKEN_ADDRESSES.USDC, decimals: 6 },
     },
-    "Could not quote Vesu wind route",
     async (asset) => (asset === MAINNET_TOKEN_ADDRESSES.USDC ? 1 : 2_000),
   );
 

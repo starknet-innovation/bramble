@@ -149,4 +149,37 @@ describe("LendingTicket wallet handoff", () => {
       freshReferenceUsdPrice,
     );
   });
+
+  // A price-anchor refusal while quoting (#646) must leave nothing to sign and
+  // no stale quote behind: the next attempt quotes again from scratch.
+  it("sends nothing on a price refusal, shows its sentence, and re-quotes on retry", async () => {
+    mocks.quoteIncrease.mockRejectedValueOnce(new Error("The swap price is too far from the market price. Try again later."));
+    render(
+      <LendingTicket
+        collateralPairs={[{ market: collateral, pair }]}
+        market={debt}
+        requestedAction="multiply"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "1" } });
+    const review = screen.getByRole("button", { name: "Review Multiply" });
+    fireEvent.click(review);
+
+    expect(await screen.findByText("The swap price is too far from the market price. Try again later.")).toBeTruthy();
+    expect(mocks.buildIncrease).not.toHaveBeenCalled();
+    expect(mocks.requestTransaction).not.toHaveBeenCalled();
+
+    await waitFor(() => expect((review as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(review);
+    await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalledTimes(1));
+    expect(mocks.quoteIncrease).toHaveBeenCalledTimes(2);
+    expect(mocks.buildIncrease).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      await mocks.quoteIncrease.mock.results[1]?.value,
+    );
+  });
 });

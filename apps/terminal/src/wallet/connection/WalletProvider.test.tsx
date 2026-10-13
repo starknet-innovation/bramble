@@ -389,6 +389,33 @@ describe("WalletProvider", () => {
     expect(wallet.invoke).toHaveBeenCalledTimes(1);
   });
 
+  // The Multiply price anchor's refusals (#646) reach the dialog as their
+  // reviewed sentences, not mistaken for a wallet decline, and nothing is sent.
+  for (const sentence of [
+    "The swap price is too far from the market price. Try again later.",
+    "Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.",
+  ]) {
+    test(`shows a handoff price refusal as written: ${sentence.slice(0, 24)}…`, async () => {
+      const wallet = makeWallet();
+      const handoffCheck = vi.fn<() => Promise<void>>().mockRejectedValue(new Error(sentence));
+      mocks.waitForInjectedBramble.mockResolvedValue(wallet);
+      render(
+        <WalletProvider>
+          <TransactionProbe handoffCheck={handoffCheck} />
+        </WalletProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-address").textContent).toBe("0x1234"),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Continue in wallet" }));
+      expect(await screen.findByText(sentence)).toBeTruthy();
+      expect(screen.getByText("Not submitted")).toBeTruthy();
+      expect(wallet.invoke).not.toHaveBeenCalled();
+    });
+  }
+
   describe("a wallet account or network change (Sherlock 222)", () => {
     const CHANGED = "rejected: Wallet account or network changed before approval.";
 

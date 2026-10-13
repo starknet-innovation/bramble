@@ -257,7 +257,6 @@ export const quoteVesuMultiplyIncrease = async (
       calculated: { address: debtAsset, decimals: anchor.debtDecimals },
       specified: { address: collateralAsset, decimals: anchor.collateralDecimals },
     },
-    "Could not quote Vesu wind route",
     anchor.priceUsd,
   );
 };
@@ -299,7 +298,6 @@ export const quoteVesuMultiplyClose = async (
       calculated: { address: collateralAsset, decimals: anchor.collateralDecimals },
       specified: { address: debtAsset, decimals: anchor.debtDecimals },
     },
-    "Could not quote Vesu unwind route",
     anchor.priceUsd,
   );
 };

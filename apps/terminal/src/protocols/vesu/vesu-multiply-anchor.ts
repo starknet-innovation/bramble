@@ -22,15 +22,23 @@ import type { VesuMultiplyExactOutQuote } from "./vesu-multiply";
  */
 type VesuMultiplyAnchorRefusal = "price_premium_exceeded" | "price_unavailable";
 
+// Reviewed copy for the two refusals (approved 2026-10-13). Both screens and
+// the wallet request dialog show an error's message as written.
+const REFUSAL_COPY: Readonly<Record<VesuMultiplyAnchorRefusal, string>> = {
+  price_premium_exceeded: "The swap price is too far from the market price. Try again later.",
+  price_unavailable:
+    "Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.",
+};
+
 /**
- * A price-anchor refusal. The message stays the quote path's existing refusal
- * text; `code` is what distinguishes the two cases.
+ * A price-anchor refusal, carrying its reviewed sentence as the message and
+ * the stable `code` that distinguishes the two cases.
  */
 export class VesuMultiplyAnchorError extends WalletError {
   public readonly code: VesuMultiplyAnchorRefusal;
 
-  public constructor(code: VesuMultiplyAnchorRefusal, message: string) {
-    super(message);
+  public constructor(code: VesuMultiplyAnchorRefusal) {
+    super(REFUSAL_COPY[code]);
     this.name = "VesuMultiplyAnchorError";
     this.code = code;
   }
@@ -55,15 +63,13 @@ export type VesuMultiplyAnchor = {
 type AnchorLeg = { readonly address: string; readonly decimals: number };
 
 /**
- * A Multiply quote that passed the price anchor, carrying what the handoff
- * re-check needs: both legs and the refusal its quote function uses when no
- * price is available.
+ * A Multiply quote that passed the price anchor, carrying both legs, which the
+ * handoff re-check needs.
  */
 export type VesuMultiplyAnchoredQuote = VesuMultiplyExactOutQuote & {
   readonly anchor: {
     readonly calculated: AnchorLeg;
     readonly specified: AnchorLeg;
-    readonly unpricedMessage: string;
   };
 };
 
@@ -93,23 +99,23 @@ const validDecimals = (value: number): boolean =>
 /**
  * Re-checks an anchored quote's swap cap against the prices `priceUsd` reads
  * (at handoff, pass an uncached reader). Throws a {@link VesuMultiplyAnchorError}:
- * `price_unavailable` (with the quote's unpriced message) when no price is
- * available, `price_premium_exceeded` when the cap exceeds the premium.
+ * `price_unavailable` when no price is available, `price_premium_exceeded`
+ * when the cap exceeds the premium.
  */
 export const recheckVesuMultiplyQuote = async (
   quote: VesuMultiplyAnchoredQuote,
   priceUsd: VesuReferenceUsdPrice,
 ): Promise<void> => {
-  const { calculated, specified, unpricedMessage } = quote.anchor;
+  const { calculated, specified } = quote.anchor;
   if (!validDecimals(calculated.decimals) || !validDecimals(specified.decimals)) {
-    throw new VesuMultiplyAnchorError("price_unavailable", unpricedMessage);
+    throw new VesuMultiplyAnchorError("price_unavailable");
   }
   const [specifiedPrice, calculatedPrice] = await Promise.all([
     priceUsd(specified.address).then(scaledPrice, () => null),
     priceUsd(calculated.address).then(scaledPrice, () => null),
   ]);
   if (specifiedPrice === null || calculatedPrice === null) {
-    throw new VesuMultiplyAnchorError("price_unavailable", unpricedMessage);
+    throw new VesuMultiplyAnchorError("price_unavailable");
   }
   const allowedBps = BigInt(10_000 + VESU_MULTIPLY_MAX_PREMIUM_BPS + quote.slippageBps);
   // Mid-price input for the exact output, raised by the premium and slippage:
@@ -118,10 +124,7 @@ export const recheckVesuMultiplyQuote = async (
     (quote.outputAmount * specifiedPrice * 10n ** BigInt(calculated.decimals) * allowedBps) /
     (calculatedPrice * 10n ** BigInt(specified.decimals) * 10_000n);
   if (quote.maxInputAmount > allowedInput) {
-    throw new VesuMultiplyAnchorError(
-      "price_premium_exceeded",
-      "Ekubo Multiply route amount mismatch",
-    );
+    throw new VesuMultiplyAnchorError("price_premium_exceeded");
   }
 };
 
@@ -132,10 +135,9 @@ export const recheckVesuMultiplyQuote = async (
 export const anchorVesuMultiplyQuote = async (
   quote: VesuMultiplyExactOutQuote,
   legs: { readonly calculated: AnchorLeg; readonly specified: AnchorLeg },
-  unpricedMessage: string,
   priceUsd: VesuReferenceUsdPrice,
 ): Promise<VesuMultiplyAnchoredQuote> => {
-  const anchored = { ...quote, anchor: { ...legs, unpricedMessage } };
+  const anchored = { ...quote, anchor: legs };
   await recheckVesuMultiplyQuote(anchored, priceUsd);
   anchoredQuotes.add(anchored);
   return anchored;
