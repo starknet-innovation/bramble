@@ -18,7 +18,6 @@ import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
   isNonZeroStarkFieldElement,
   STRK_TOKEN_ADDRESS,
-  STRK_TOKEN_DECIMALS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
 
@@ -72,6 +71,11 @@ export type SendRouteInput = {
   readonly destination: ValueBucket;
   /** The token the pool fee is charged in, as the relay route selects it. */
   readonly feeTokenAddress: string;
+  /**
+   * Decimal scale of `feeTokenAddress`, for stating a fee minimum. `null` when
+   * the wallet does not know it, in which case no figure is stated.
+   */
+  readonly feeTokenDecimals: number | null;
   /** Display symbol of `feeTokenAddress`, for gate wording. */
   readonly feeTokenSymbol: string;
   readonly poolFeeFri: bigint | null;
@@ -266,13 +270,13 @@ const feeBlocker = (input: SendRouteInput, feeAmount: bigint): SendRouteBlocker 
     return null;
   }
   const shortOfFee = `Not enough ${feeAssetLabel(input)} to cover the pool fee`;
-  // A figure is only stated where its scale is known: STRK here. A fee charged
-  // in the sent token is checked, and stated, with the amount in `amountBlocker`.
-  return sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)
-    ? refuse(
-        `${shortOfFee}. You need at least ${formatTokenAmount(feeAmount, STRK_TOKEN_DECIMALS)} STRK.`,
-      )
-    : refuse(shortOfFee);
+  // The figure is the fee in its own token, the same charge the review states,
+  // and is only given where that token's scale is known.
+  return input.feeTokenDecimals === null
+    ? refuse(shortOfFee)
+    : refuse(
+        `${shortOfFee}. You need at least ${formatTokenAmount(feeAmount, input.feeTokenDecimals)} ${input.feeTokenSymbol}.`,
+      );
 };
 
 const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocker | null => {
@@ -309,17 +313,15 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
 
 // A refusal names the figure the user has to reach: the amount plus the pool fee
 // when that fee leaves the same balance, otherwise the amount alone. Stating the
-// minimum is what turns "not enough" into something the user can act on. A fee
-// charged in a token other than STRK is a converted ceiling, an upper bound on
-// what the relay may take, so a sum that includes it is not stated as a minimum.
+// minimum is what turns "not enough" into something the user can act on. The fee
+// is the one the gate reserves in the token it is charged in, so the figure is
+// exactly what the gate needs, whatever token pays the fee.
 const shortfall = (input: SendRouteInput, route: SendRoute, needed: bigint): string => {
   const asset = input.source === "private" ? `private ${input.tokenSymbol}` : input.tokenSymbol;
   const minimum = `You need at least ${formatTokenAmount(needed, input.tokenDecimals)} ${input.tokenSymbol}.`;
-  if (!(route.poolFeeRequired && feeInSentToken(input))) {
-    return `Not enough ${asset}. ${minimum}`;
-  }
-  const short = `Not enough ${asset} for this amount plus the pool fee`;
-  return sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS) ? `${short}. ${minimum}` : short;
+  return route.poolFeeRequired && feeInSentToken(input)
+    ? `Not enough ${asset} for this amount plus the pool fee. ${minimum}`
+    : `Not enough ${asset}. ${minimum}`;
 };
 
 /**

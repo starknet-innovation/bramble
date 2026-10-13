@@ -30,6 +30,7 @@ const privateUsdcSend = (overrides: Partial<SendRouteInput> = {}): SendRouteInpu
   convertedFeeCeilingRaw: USDC_FEE_CEILING,
   destination: "private",
   feeTokenAddress: USDC,
+  feeTokenDecimals: 6,
   feeTokenSymbol: "USDC",
   poolFeeFri: SIX_STRK,
   recipient: RECIPIENT,
@@ -56,7 +57,9 @@ describe("#356 converted-fee affordability", () => {
   test("the amount plus the converted fee must fit the sent-token balance", () => {
     expect(
       resolveSendRoute(privateUsdcSend({ amountRaw: 1_000n * SIX_USDC })).blocked?.reason,
-    ).toBe("Not enough private USDC for this amount plus the pool fee");
+    ).toBe(
+      "Not enough private USDC for this amount plus the pool fee. You need at least 6006 USDC.",
+    );
     // Exactly balance-minus-fee is sendable.
     expect(
       resolveSendRoute(privateUsdcSend({ amountRaw: 1_000n * SIX_USDC - USDC_FEE_CEILING }))
@@ -78,6 +81,7 @@ describe("#356 converted-fee affordability", () => {
         privateUsdcSend({
           convertedFeeCeilingRaw: null,
           feeTokenAddress: STRK_TOKEN_ADDRESS,
+          feeTokenDecimals: 18,
           feeTokenSymbol: "STRK",
           sourceFeeBalanceRaw: 0n,
         }),
@@ -119,26 +123,27 @@ describe("#356 converted-fee affordability", () => {
     });
     expect(resolveSendRoute(otherSend).blocked).toBeUndefined();
     expect(resolveSendRoute({ ...otherSend, sourceFeeBalanceRaw: 0n }).blocked?.reason).toBe(
-      "Not enough private USDC to cover the pool fee",
+      "Not enough private USDC to cover the pool fee. You need at least 6 USDC.",
     );
   });
 
-  test("a converted fee ceiling is never stated as a minimum", () => {
-    // The converted fee is an upper bound on what the relay may take, so a
-    // refusal that includes it names no figure; a STRK fee is exact and does.
-    const converted = resolveSendRoute(privateUsdcSend({ amountRaw: 1_000n * SIX_USDC }));
-    expect(converted.blocked?.reason).not.toContain("You need at least");
-    const strk = resolveSendRoute(
-      privateUsdcSend({
-        amountRaw: 1_000n * SIX_USDC,
-        convertedFeeCeilingRaw: null,
-        feeTokenAddress: STRK_TOKEN_ADDRESS,
-        feeTokenSymbol: "STRK",
-        sourceFeeBalanceRaw: 0n,
-      }),
+  test("a non-STRK fee is stated in its own token and scale, or not at all", () => {
+    // The figure is the fee the gate reserves, in the token that pays it: a
+    // USDC fee charged alongside a USDT send is named in USDC at USDC's scale.
+    const otherSend = privateUsdcSend({
+      amountRaw: 5n,
+      sourceFeeBalanceRaw: 0n,
+      sourceTokenBalanceRaw: 50n,
+      tokenAddress: "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8",
+      tokenDecimals: 6,
+      tokenSymbol: "USDT",
+    });
+    expect(resolveSendRoute(otherSend).blocked?.reason).toBe(
+      "Not enough private USDC to cover the pool fee. You need at least 6 USDC.",
     );
-    expect(strk.blocked?.reason).toBe(
-      "Not enough private STRK to cover the pool fee. You need at least 6 STRK.",
+    // A fee token whose scale the wallet does not know names no figure.
+    expect(resolveSendRoute({ ...otherSend, feeTokenDecimals: null }).blocked?.reason).toBe(
+      "Not enough private USDC to cover the pool fee",
     );
   });
 });

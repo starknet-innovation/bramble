@@ -26,6 +26,7 @@ const ready = (overrides: Partial<SendRouteInput> = {}): SendRouteInput => ({
   convertedFeeCeilingRaw: null,
   destination: "private",
   feeTokenAddress: STRK_TOKEN_ADDRESS,
+  feeTokenDecimals: 18,
   feeTokenSymbol: "STRK",
   poolFeeFri: SIX_STRK,
   recipient: RECIPIENT,

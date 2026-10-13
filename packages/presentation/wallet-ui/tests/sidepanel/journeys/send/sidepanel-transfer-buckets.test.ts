@@ -490,3 +490,69 @@ describe("private send fee lines", () => {
     expect(html).not.toContain("Estimated fee:");
   });
 });
+
+describe("pool fee minimum", () => {
+  // A private ETH send whose relay fee falls back to a configured USDC fee
+  // token: the refusal names the USDC fee at USDC's scale, read from the
+  // public token list, never STRK's.
+  const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+  const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+
+  test("states a non-STRK fee in its own token and decimals", () => {
+    const form = mountForm();
+    const set = (name: string, value: string): void => {
+      const input = form.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+      if (input) input.value = value;
+    };
+    set("source", "private");
+    set("destination", "private");
+    set("tokenAddress", ETH);
+    set("tokenId", "SN_MAIN:ETH");
+    set("tokenSymbol", "ETH");
+    const privacy: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: {
+        accountId: "SN_MAIN:0x1",
+        balances: [
+          {
+            balance: "5000000000000000000",
+            formatted: "5",
+            symbol: "ETH",
+            token: ETH,
+            tokenId: "SN_MAIN:ETH",
+          },
+          {
+            balance: "0",
+            feeCeiling: "6000000",
+            formatted: "0",
+            symbol: "USDC",
+            token: USDC,
+            tokenId: "SN_MAIN:USDC",
+          },
+        ],
+        feeToken: USDC,
+        networkId: "SN_MAIN",
+        poolFeeFri: SIX_STRK,
+        relayConfigured: true,
+        registration: "registered",
+      },
+    };
+    const usdc: TokenBalance = {
+      address: USDC,
+      balance: "0",
+      decimals: 6,
+      formatted: "0",
+      id: "SN_MAIN:USDC",
+      name: "USD Coin",
+      networkId: "SN_MAIN",
+      symbol: "USDC",
+    };
+    const resolution = resolveTransferRoute(
+      context(form, privacy, "registered", [...publicBalances, usdc]),
+    );
+    expect(resolution.blocked?.reason).toBe(
+      "Not enough private USDC to cover the pool fee. You need at least 6 USDC.",
+    );
+  });
+});
