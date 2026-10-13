@@ -1,0 +1,124 @@
+/**
+ * How a revoke enters and leaves the allowance log. Split from
+ * ./allowance-store so that module stays a store; everything here is a pure
+ * function of the stored entries, the chain readings and the revoke
+ * transactions' outcomes.
+ */
+import { canonicalFelt, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
+import type { AllowanceRecord } from "./allowance-record";
+
+/**
+ * A transaction hash as a record stores it: one canonical non-zero felt, so a
+ * hash compares by string equality wherever it is read back.
+ */
+export const isCanonicalHash = (value: unknown): value is string =>
+  typeof value === "string" && isNonZeroStarkFieldElement(value) && canonicalFelt(value) === value;
+
+// An exact zero does not remove the pair (Sherlock 192). Every writer records a
+// call once it is submitted, not once it executes, and a revoke that then
+// reverts or is rejected leaves the earlier approval standing; deleting the
+// record would hide a live grant the user just tried to revoke. The grant is
+// kept at its last known amount and marked `revoking` until a chain reading
+// of zero confirms the revoke (see `settleRevocations`). Keeping the amount
+// also keeps its rank: a pending revoke of an unlimited grant is not the first
+// record a full scope evicts. An exact zero for a pair the log never held
+// writes nothing: there is no grant here to keep visible.
+//
+// The revoke's own transaction hash is kept with the mark so its outcome can
+// settle it. A newer revoke replaces an older one's hash, and a revoke whose
+// hash is unknown drops it: the outcome of a superseded revoke says nothing
+// about the one now pending.
+/**
+ * The record an upsert writes, or null for "write nothing". See the comment
+ * above for why an exact zero marks a tracked grant rather than removing it.
+ */
+export const recordedEntry = (
+  entries: readonly AllowanceRecord[],
+  next: AllowanceRecord,
+  transactionHash: string | undefined,
+): AllowanceRecord | null => {
+  if (next.amount !== "0" || next.lowerBound) {
+    return next;
+  }
+  const tracked = entries.find((stored) => stored.id === next.id);
+  if (!tracked) {
+    return null;
+  }
+  const { revokeHash: _superseded, ...grant } = tracked;
+  const hash = transactionHash === undefined ? null : canonicalFelt(transactionHash);
+  return {
+    ...grant,
+    ...(hash !== null && isCanonicalHash(hash) ? { revokeHash: hash } : {}),
+    revoking: true as const,
+  };
+};
+
+/**
+ * The settled outcome of one revoke transaction, by its canonical hash, as
+ * the wallet's own activity reconciliation observed it: `accepted` once the
+ * chain accepted it, `failed` once it was rejected or reverted. A transaction
+ * still pending or only pre-confirmed has no outcome yet and is not reported.
+ */
+export type RevokeOutcome = {
+  readonly hash: string;
+  readonly status: "accepted" | "failed";
+};
+
+// Drops the records a chain reading of zero confirms are gone: a pending
+// revoke, and a zero lower bound left by a decrease. A non-zero reading never
+// rewrites a record: it cannot tell a revoke the network has not mined yet
+// from one that reverted, and a record holding a figure may be ahead of the
+// chain (a grant not mined yet), so the display takes the larger of the two
+// instead (../allowance-discovery's `withOnChainAmount`).
+//
+// The revoke's own outcome is what tells those two apart (issue 647). A
+// revoke that failed leaves the grant standing at its recorded amount, so the
+// mark is cleared and the row stops saying a revoke is on its way. A revoke
+// the chain accepted set the allowance to zero, so the record goes — unless
+// this round read a non-zero amount for the pair, in which case the record is
+// left exactly as it is for the next zero reading to settle: something after
+// the revoke may have granted again, and a cleared mark would let the larger
+// recorded figure stand over the chain's.
+const settledEntry = (
+  stored: AllowanceRecord,
+  zeroed: ReadonlySet<string>,
+  nonZero: ReadonlySet<string>,
+  outcomes: ReadonlyMap<string, RevokeOutcome["status"]>,
+): AllowanceRecord | null => {
+  const pending = stored.revoking === true;
+  if (zeroed.has(stored.id) && (pending || (stored.amount === "0" && stored.lowerBound === true))) {
+    return null;
+  }
+  const outcome = pending && stored.revokeHash ? outcomes.get(stored.revokeHash) : undefined;
+  if (outcome === "failed") {
+    const { revokeHash: _failed, revoking: _cleared, ...grant } = stored;
+    return grant;
+  }
+  return outcome === "accepted" && !nonZero.has(stored.id) ? null : stored;
+};
+
+/**
+ * The log after one settling round, or null when nothing changed. Readings
+ * are untrusted and only an exact "0" acts on them; outcomes are matched by
+ * the hash each pending revoke recorded, so a record with no hash settles on
+ * readings alone.
+ */
+export const entriesAfterSettle = (
+  entries: readonly AllowanceRecord[],
+  readings: readonly { readonly amount: string; readonly id: string }[],
+  outcomes: readonly RevokeOutcome[],
+): readonly AllowanceRecord[] | null => {
+  const zeroed = new Set(readings.filter((r) => r.amount === "0").map((r) => r.id));
+  const nonZero = new Set(readings.filter((r) => r.amount !== "0").map((r) => r.id));
+  const byHash = new Map(outcomes.map((outcome) => [outcome.hash, outcome.status]));
+  let changed = false;
+  const settled: AllowanceRecord[] = [];
+  for (const stored of entries) {
+    const next = settledEntry(stored, zeroed, nonZero, byHash);
+    changed ||= next !== stored;
+    if (next) {
+      settled.push(next);
+    }
+  }
+  return changed ? settled : null;
+};

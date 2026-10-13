@@ -62,7 +62,7 @@ export type AllowanceSource = "external" | "multisig" | "wallet";
  * value as an allowance nor offer the ERC20 revoke for such a row — on an
  * ERC721, `approve(spender, 0)` approves item #0 instead of revoking.
  */
-export type AllowanceView = AllowanceRecord & {
+export type AllowanceView = Omit<AllowanceRecord, "revokeHash"> & {
   readonly source: AllowanceSource;
   readonly unconfirmedToken?: true;
 };
@@ -306,9 +306,15 @@ export const mergeAllowanceViews = (input: {
   for (const reading of input.readings ?? []) {
     onChainAmounts.set(reading.id, reading.amount);
   }
+  // A revoke's transaction hash is bookkeeping for settling the record, not
+  // something the manager shows, so it never reaches a view.
+  const viewOf = (
+    { revokeHash: _bookkeeping, ...record }: AllowanceRecord,
+    source: AllowanceView["source"],
+  ): AllowanceView => ({ ...record, source });
   const trackedViews: AllowanceView[] = [
-    ...inWallet.map((record): AllowanceView => ({ ...record, source: "wallet" })),
-    ...(input.multisig ?? []).map((record): AllowanceView => ({ ...record, source: "multisig" })),
+    ...inWallet.map((record) => viewOf(record, "wallet")),
+    ...(input.multisig ?? []).map((record) => viewOf(record, "multisig")),
   ].map((view) => withOnChainAmount(view, onChainAmounts.get(view.id)));
   const seen = new Set(trackedViews.map((view) => view.id));
   const externalViews: AllowanceView[] = [];

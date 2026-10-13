@@ -362,6 +362,7 @@ const recordPoolAllowances = (
     calls: result.allowanceGrants ?? [],
     owner: allowanceOwner(resolved.account),
     store: deps.allowanceStore,
+    transactionHash: result.transactionHash,
   });
 
 const assertCurrentRecipientPolicy = async (

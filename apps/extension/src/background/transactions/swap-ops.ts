@@ -331,6 +331,7 @@ const swapExecuteResponse = async (
         calls: preparation.calls,
         owner: allowanceOwner(context.account),
         store: deps.allowanceStore,
+        transactionHash: hash,
       });
       await recordSubmittedActivity(deps.activity, {
         accountId: context.account.id,

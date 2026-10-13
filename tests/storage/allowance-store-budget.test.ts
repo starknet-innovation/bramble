@@ -14,6 +14,7 @@ import {
   type AllowanceRecord,
   allowanceId,
   createAllowanceStore,
+  isAllowanceRecord,
   memoryAllowanceStore,
 } from "@bramble/transactions/allowance-store";
 
@@ -42,11 +43,21 @@ const asRecord = (entry: AllowanceInput): AllowanceRecord => {
   return { ...entry, id };
 };
 
+// The widest record the log can hold: a lower bound with a revoke pending,
+// carrying its full-width revoke transaction hash (issue 647).
+const widestRecord = (entry: AllowanceInput, index: number): AllowanceRecord => ({
+  ...asRecord(entry),
+  lowerBound: true,
+  revokeHash: wideFelt(900_000 + index),
+  revoking: true,
+});
+
 describe("allowance log total bound", () => {
   test("a full log stays inside the storage boundary's JSON budget", () => {
     const full = Array.from({ length: ALLOWANCE_LIMITS.entriesTotal }, (_, index) =>
-      asRecord(input(index % 8, index)),
+      widestRecord(input(index % 8, index), index),
     );
+    expect(full.every(isAllowanceRecord)).toBe(true);
 
     expect(isJson(full)).toBe(true);
   });

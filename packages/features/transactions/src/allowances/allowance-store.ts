@@ -27,9 +27,17 @@ import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
-  type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
 import { keepLargest, trimToTotal } from "./allowance-retention";
+import {
+  entriesAfterSettle,
+  isCanonicalHash,
+  type RevokeOutcome,
+  recordedEntry,
+} from "./allowance-revoke";
+
+/** The revoke outcome type, re-exported from its split module. */
+export type { RevokeOutcome } from "./allowance-revoke";
 
 /**
  * Browser storage key for the allowance log.
@@ -45,8 +53,9 @@ export const ALLOWANCE_STORE_KEY = "bramble:allowances";
  * goes through `assertJsonValue` in `kv.ts` and a value over that bounded-JSON
  * budget is rejected — the caller in `allowance-ops` swallows the rejection, so
  * an unbounded log would silently stop tracking newly granted allowances. A log
- * of maximum-size records saturates the budget at 300 entries; both bounds are
- * set below that with margin and pinned by `allowance-store-budget.test.ts`.
+ * of maximum-size records (a lower bound with a pending revoke's hash) saturates
+ * the budget at about 250 entries; both bounds are set below that with margin
+ * and pinned by `allowance-store-budget.test.ts`.
  * Consume these instead of re-deriving either literal.
  *
  * The total bound is spent fairly rather than by global age: see
@@ -70,70 +79,26 @@ const MAX_AMOUNT_DIGITS = 78;
 // MAX_AMOUNT_DIGITS, so a saturated total still validates as a stored amount.
 const UINT_256_MAX = (1n << 256n) - 1n;
 
-/**
- * Fields describing one allowance the user granted through this wallet.
- *
- * `lowerBound` marks an amount the wallet knows is AT LEAST this large but
- * cannot state exactly: an `increase_allowance` applied on top of a base this
- * wallet never saw (granted on the dapp's own site, or evicted by the retention
- * cap) is the increment plus an unknown base. Absent means the amount is the
- * exact standing allowance. Only `true` is representable, so "exact" has one
- * spelling; the manager renders a lower bound as "at least N" rather than
- * claiming a spender's reach is smaller than it is.
- *
- * A lower bound of ZERO is therefore the weakest honest statement the log can
- * make — "this pair is approved for an amount this wallet cannot bound" — and
- * is deliberately NOT a removal: a decrease applied to an unseen base leaves an
- * allowance the user must still be able to see and revoke.
- */
-export type AllowanceInput = {
-  readonly accountId: string;
-  readonly amount: string;
-  readonly lowerBound?: true;
-  readonly networkId: StarknetNetworkId;
-  readonly spender: string;
-  readonly token: string;
-};
+/** The record types, re-exported from their split module. */
+export type {
+  AllowanceDelta,
+  AllowanceInput,
+  AllowanceOwner,
+  AllowanceRecord,
+} from "./allowance-record";
 
-/**
- * A relative allowance change: ERC20's `increase_allowance` adds to the standing
- * allowance and `decrease_allowance` subtracts from it, so neither can be stored
- * without the current total. Applied by {@link AllowanceStore.applyDelta}.
- */
-export type AllowanceDelta = {
-  readonly direction: "add" | "subtract";
-  readonly input: AllowanceInput;
-};
-
-/**
- * The account an allowance belongs to: the scope every id, retention bound, and
- * manager query is keyed by. Named separately from `AllowanceInput` because the
- * owner is not always a vault account — a multisig execution grants from the
- * multisig contract's own scope (`ArgentMultisigRecord.id`, which shares the
- * `<networkId>:<address>` shape), not from the signer that broadcast it.
- */
-export type AllowanceOwner = Pick<AllowanceInput, "accountId" | "networkId">;
-
-/**
- * One tracked allowance with a deterministic id derived from its account,
- * token, and spender.
- *
- * `revoking` marks a grant whose revocation (an `approve(spender, 0)`, or a
- * decrease to zero from an exact base) this wallet has submitted but the chain
- * has not yet confirmed. The record keeps the grant's last known amount, which
- * is still the spender's reach until the revoke executes and stays its reach
- * if the revoke reverts (Sherlock 192). Only `true` is representable.
- */
-export type AllowanceRecord = AllowanceInput & {
-  readonly id: string;
-  readonly revoking?: true;
-};
+import type {
+  AllowanceDelta,
+  AllowanceInput,
+  AllowanceOwner,
+  AllowanceRecord,
+} from "./allowance-record";
 
 /**
  * Allowance log surface used by background message handling. `record` upserts by
  * id and keeps a grant an exact zero would revoke, marked `revoking`, because
  * a revoke is recorded when submitted and may still revert; `settleRevocations`
- * drops it once the chain reads the pair as zero. `applyDelta` upserts RELATIVE to the tracked total in one serialized
+ * settles it on a zero reading or on its own transaction's outcome. `applyDelta` upserts RELATIVE to the tracked total in one serialized
  * read-modify-write, which is the only concurrency-safe way to apply an
  * `increase_allowance` (composing `list` + `record` at a caller loses one of two
  * concurrent grants, because `list` is a concurrent read by design).
@@ -148,15 +113,23 @@ export type AllowanceRecord = AllowanceInput & {
 export type AllowanceStore = {
   readonly applyDelta: (delta: AllowanceDelta) => Promise<void>;
   readonly list: () => Promise<readonly AllowanceRecord[]>;
-  readonly record: (entry: AllowanceInput) => Promise<void>;
+  /**
+   * Upserts one allowance. `transactionHash` is the transaction that carried
+   * it, retained only when the entry marks a tracked grant `revoking`.
+   */
+  readonly record: (entry: AllowanceInput, transactionHash?: string) => Promise<void>;
   readonly remove: (id: string) => Promise<void>;
   /**
    * Drops pending revokes and zero lower bounds that a live chain reading
-   * states are zero. Any other reading, and any other record, is left alone.
-   * Readings are untrusted; only an exact "0" acts.
+   * states are zero, and settles a pending revoke on its own transaction's
+   * outcome: a failed one clears the mark, an accepted one drops the record
+   * unless this round's reading for it is non-zero. Any other reading, and
+   * any other record, is left alone. Readings are untrusted; only an exact "0"
+   * acts. Outcomes come from the wallet's own activity reconciliation.
    */
   readonly settleRevocations: (
     readings: readonly { readonly amount: string; readonly id: string }[],
+    outcomes?: readonly RevokeOutcome[],
   ) => Promise<void>;
 };
 
@@ -222,11 +195,14 @@ export const isAllowanceRecord = (value: unknown): value is AllowanceRecord =>
     "id",
     "lowerBound",
     "networkId",
+    "revokeHash",
     "revoking",
     "spender",
     "token",
   ]) &&
-  hasValidAllowanceFields(value);
+  hasValidAllowanceFields(value) &&
+  (value["revokeHash"] === undefined ||
+    (value["revoking"] === true && isCanonicalHash(value["revokeHash"])));
 
 /**
  * Recovers the token and spender an allowance id targets, scoped to a specific
@@ -299,31 +275,12 @@ const sameScope = (stored: AllowanceRecord, next: AllowanceRecord): boolean =>
 // incoming entry competes like any other: an approval smaller than every one a
 // full scope already holds is the one not kept.
 //
-// An exact zero does not remove the pair (Sherlock 192). Every writer records a
-// call once it is submitted, not once it executes, and a revoke that then
-// reverts or is rejected leaves the earlier approval standing; deleting the
-// record would hide a live grant the user just tried to revoke. The grant is
-// kept at its last known amount and marked `revoking` until a chain reading
-// of zero confirms the revoke (see `settleRevocations`). Keeping the amount
-// also keeps its rank: a pending revoke of an unlimited grant is not the first
-// record a full scope evicts. An exact zero for a pair the log never held
-// writes nothing: there is no grant here to keep visible.
-const recordedEntry = (
-  entries: readonly AllowanceRecord[],
-  next: AllowanceRecord,
-): AllowanceRecord | null => {
-  if (next.amount !== "0" || next.lowerBound) {
-    return next;
-  }
-  const tracked = entries.find((stored) => stored.id === next.id);
-  return tracked ? { ...tracked, revoking: true as const } : null;
-};
-
 const entriesAfterRecord = (
   entries: readonly AllowanceRecord[],
   next: AllowanceRecord,
+  transactionHash?: string,
 ): readonly AllowanceRecord[] => {
-  const recorded = recordedEntry(entries, next);
+  const recorded = recordedEntry(entries, next, transactionHash);
   if (!recorded) {
     return entries;
   }
@@ -339,28 +296,6 @@ const entriesAfterRecord = (
     MAX_ENTRIES_TOTAL,
     allowanceScope,
   );
-};
-
-// Drops the records a chain reading of zero confirms are gone: a pending
-// revoke, and a zero lower bound left by a decrease. Nothing else is touched,
-// and no other reading rewrites a record. A non-zero reading cannot tell a
-// revoke the network has not mined yet from one that reverted, and a record
-// holding a figure may be ahead of the chain (a grant not mined yet), so the
-// display takes the larger of the two instead (../allowance-discovery's
-// `withOnChainAmount`).
-const entriesAfterSettle = (
-  entries: readonly AllowanceRecord[],
-  readings: readonly { readonly amount: string; readonly id: string }[],
-): readonly AllowanceRecord[] | null => {
-  const zeroed = new Set(
-    readings.filter((reading) => reading.amount === "0").map((reading) => reading.id),
-  );
-  const settled = entries.filter(
-    (stored) =>
-      !zeroed.has(stored.id) ||
-      !(stored.revoking === true || (stored.amount === "0" && stored.lowerBound === true)),
-  );
-  return settled.length === entries.length ? null : settled;
 };
 
 // Applies one relative change to what the log already tracks for the same
@@ -413,7 +348,7 @@ const entriesAfterDelta = (
   const tracked = id === null ? undefined : entries.find((stored) => stored.id === id);
   const applied = appliedDeltaInput(tracked, delta);
   const next = applied ? toRecord(applied) : null;
-  return next ? entriesAfterRecord(entries, next) : null;
+  return next ? entriesAfterRecord(entries, next, delta.transactionHash) : null;
 };
 
 /**
@@ -435,20 +370,20 @@ export const createAllowanceStore = ({
       async list() {
         return [...(await readEntries(store))].reverse();
       },
-      async record(entry) {
+      async record(entry, transactionHash) {
         const next = toRecord(entry);
         if (!next) {
           return;
         }
-        const entries = entriesAfterRecord(await readEntries(store), next);
+        const entries = entriesAfterRecord(await readEntries(store), next, transactionHash);
         await store.set(ALLOWANCE_STORE_KEY, [...entries]);
       },
       async remove(id) {
         const kept = (await readEntries(store)).filter((stored) => stored.id !== id);
         await store.set(ALLOWANCE_STORE_KEY, [...kept]);
       },
-      async settleRevocations(readings) {
-        const settled = entriesAfterSettle(await readEntries(store), readings);
+      async settleRevocations(readings, outcomes = []) {
+        const settled = entriesAfterSettle(await readEntries(store), readings, outcomes);
         if (settled) {
           await store.set(ALLOWANCE_STORE_KEY, [...settled]);
         }
@@ -472,18 +407,18 @@ export const memoryAllowanceStore = (): AllowanceStore => {
     async list() {
       return [...entries].reverse();
     },
-    async record(entry) {
+    async record(entry, transactionHash) {
       const next = toRecord(entry);
       if (!next) {
         return;
       }
-      entries = [...entriesAfterRecord(entries, next)];
+      entries = [...entriesAfterRecord(entries, next, transactionHash)];
     },
     async remove(id) {
       entries = entries.filter((stored) => stored.id !== id);
     },
-    async settleRevocations(readings) {
-      entries = [...(entriesAfterSettle(entries, readings) ?? entries)];
+    async settleRevocations(readings, outcomes = []) {
+      entries = [...(entriesAfterSettle(entries, readings, outcomes) ?? entries)];
     },
   };
 };

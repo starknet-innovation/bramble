@@ -299,6 +299,7 @@ const executionWork = async (
       calls: result.allowanceGrants ?? [],
       owner: allowanceOwner(context.accountContext.account),
       store: deps.allowanceStore,
+      transactionHash: result.transactionHash,
     });
     await recordSubmittedActivity(deps.activity, {
       accountId: context.accountContext.account.id,
