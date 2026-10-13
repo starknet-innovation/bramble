@@ -36,9 +36,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     display: grid;
     padding: 0 ${SPACE.lg};
   }
+  /* Label on the first line of its value, row centred in its height: see the
+     send receipt facts, which share this grammar. */
   .receipt-row {
-    align-items: center;
+    align-content: center;
+    align-items: baseline;
     display: flex;
+    flex-wrap: wrap;
     gap: ${SPACE.md};
     justify-content: space-between;
     min-height: 44px;
@@ -63,9 +67,11 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     align-items: center;
     color: var(--bramble-text);
     display: flex;
+    flex: 1 1 0;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
     gap: 6px;
+    justify-content: flex-end;
     margin: 0;
     min-width: 0;
     text-align: right;
@@ -98,8 +104,9 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow: hidden;
     padding: 0 ${SPACE.md};
   }
+  /* Caption label and body value share a first baseline, not a top edge. */
   .request-detail > div {
-    align-items: start;
+    align-items: baseline;
     display: grid;
     gap: ${SPACE.md};
     grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
