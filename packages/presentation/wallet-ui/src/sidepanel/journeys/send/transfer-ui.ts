@@ -82,6 +82,9 @@ export type TransferUiDeps = {
 let transferState: TransferState<Review> = initialTransferState();
 let transferEpoch = 0;
 let repaintActiveTransfer: (() => void) | null = null;
+// A failed review returns the form mounted now, not the one that started it: a
+// re-render while preparing replaces it, and the live one stayed "reviewing".
+let returnActiveTransferToDetails: (() => void) | null = null;
 let transferApp: Element | null = null;
 
 /**
@@ -109,6 +112,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       transferState = initialTransferState();
     }
     repaintActiveTransfer = null;
+    returnActiveTransferToDetails = null;
     transferApp = app;
     return;
   }
@@ -222,6 +226,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     stage: () => transferState.stage,
     wallet,
   });
+  returnActiveTransferToDetails = (): void => {
+    repaint();
+    composeFee.refresh();
+  };
   // A bucket flip or an asset pick changes the route, so the cached review goes
   // and the screen is repainted: the header and actions name the operation the
   // buckets now describe (a shield flipped back to public reads as a send).
@@ -390,7 +398,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             const message = errorMessage(error, preparationFailure(composed));
             showToast(message, "error", form, errorDetails(error, preparationFailure(composed)));
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
-            goTo("details");
+            returnActiveTransferToDetails?.();
           },
         );
         return;
@@ -414,7 +422,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             const message = friendlyReviewError(error);
             showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
-            goTo("details");
+            returnActiveTransferToDetails?.();
           },
         );
       return;
