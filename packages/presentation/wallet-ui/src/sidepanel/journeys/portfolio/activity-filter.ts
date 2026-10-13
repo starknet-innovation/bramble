@@ -339,6 +339,8 @@ export type ActivitySummaryRow = {
   readonly decimals: number | null;
   readonly direction: string;
   readonly label: string;
+  /** The row's status; only a settled transfer adds to the totals. */
+  readonly status: string;
   readonly submittedAt: number | null;
   readonly token: string;
   /** The token's identity ({@link activityTokenKey}); totals are keyed by it. */
@@ -378,7 +380,9 @@ const parseAmountSafe = (amount: string, decimals: number): bigint | null => {
  * Summarises the visible rows when they share exactly one counterparty: how
  * many transactions, the total sent and received per token, and the first and
  * last dates. Returns null when the rows name no counterparty or more than one,
- * which is the caller's signal to show no summary. A row whose amount cannot be
+ * which is the caller's signal to show no summary. Every visible row is counted,
+ * but only an accepted or pre-confirmed one adds to the totals: a reverted,
+ * rejected or still pending send moved nothing. A row whose amount cannot be
  * parsed against its token's decimals is counted but contributes no total, and
  * a token with no resolvable decimals is omitted from the totals.
  */
@@ -404,7 +408,8 @@ export const activityPartySummary = (
       lastAt = lastAt === null ? row.submittedAt : Math.max(lastAt, row.submittedAt);
     }
     const movable = row.direction === "in" || row.direction === "out";
-    if (!row.tokenKey || row.decimals === null || !movable) continue;
+    const settled = row.status === "accepted" || row.status === "preconfirmed";
+    if (!settled || !row.tokenKey || row.decimals === null || !movable) continue;
     const raw = parseAmountSafe(row.amount, row.decimals);
     if (raw === null) continue;
     const key = row.tokenKey;
@@ -441,6 +446,7 @@ export const activitySummaryRow = (
     decimals: decimals === undefined || decimals === "" ? null : Number(decimals),
     direction: dataset["activityDirection"] ?? "",
     label: dataset["activityCounterpartyLabel"] ?? "",
+    status: dataset["activityStatus"] ?? "",
     submittedAt: ts === undefined || ts === "" ? null : Number(ts),
     token: dataset["activityToken"] ?? "",
     tokenKey: dataset["activityTokenKey"] ?? "",

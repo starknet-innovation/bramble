@@ -30,6 +30,7 @@ import {
   activityRowFacts,
   activityRowMatches,
   activitySearchIndex,
+  activitySummaryRow,
   activityTokenKey,
   compareActivityByAmount,
   EMPTY_ACTIVITY_FILTER,
@@ -100,6 +101,7 @@ const summaryRow = (patch: Partial<ActivitySummaryRow> = {}): ActivitySummaryRow
   decimals: 18,
   direction: "out",
   label: "",
+  status: "accepted",
   submittedAt: 1752501900000,
   token: "STRK",
   tokenKey: "symbol:strk",
@@ -354,6 +356,28 @@ describe("activityPartySummary", () => {
     expect(summary?.totals).toEqual([{ received: "2", sent: "1.5", symbol: "STRK" }]);
     expect(summary?.firstAt).toBe(1752501900000);
     expect(summary?.lastAt).toBe(1752501960000);
+  });
+
+  test("totals only what settled, while counting every visible row", () => {
+    const summary = activityPartySummary([
+      summaryRow({ amount: "1", status: "accepted" }),
+      summaryRow({ amount: "5", status: "reverted" }),
+      summaryRow({ amount: "7", status: "rejected" }),
+      summaryRow({ amount: "11", status: "pending" }),
+      summaryRow({ amount: "2", direction: "in", status: "preconfirmed" }),
+    ]);
+    if (!summary) throw new Error("summary missing");
+    expect(summary.count).toBe(5);
+    expect(summary.totals).toEqual([{ received: "2", sent: "1", symbol: "STRK" }]);
+    const failed = activityPartySummary([
+      summaryRow({ amount: "1", status: "accepted" }),
+      summaryRow({ amount: "5", status: "reverted" }),
+      summaryRow({ amount: "7", status: "rejected" }),
+    ]);
+    if (!failed) throw new Error("summary missing");
+    expect(activityPartySummaryParts(failed).body).toStartWith("3 transactions · Sent 1 STRK");
+    // The live feed reads the status off each row's dataset.
+    expect(activitySummaryRow({ activityStatus: "reverted" }).status).toBe("reverted");
   });
 
   test("returns null unless the visible rows name exactly one counterparty", () => {
