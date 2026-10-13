@@ -1,4 +1,5 @@
 import { PRIVATE_SWAP_EXECUTOR } from "../../../shared/privacy";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -105,7 +106,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
         setStatus("Activate this account before requesting private balances.");
         return;
       }
-      setStatus(cause instanceof Error ? cause.message : "Private balances are unavailable.");
+      setStatus(userErrorMessage(cause, "Private balances are unavailable."));
     } finally {
       setBusy(false);
     }
@@ -120,7 +121,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       setMode("balances");
       setStatus(`Registration accepted on Starknet · ${short(transactionHash)}`);
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Private activation failed.");
+      setStatus(userErrorMessage(cause, "Private activation failed."));
     } finally {
       setBusy(false);
     }
@@ -142,7 +143,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       setAmount("");
       await refreshBalances();
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Private transaction failed.");
+      setStatus(userErrorMessage(cause, "Private transaction failed."));
     } finally {
       setBusy(false);
     }
@@ -179,7 +180,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       });
       setStatus("Route ready. Review every value before asking the wallet to prove it.");
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Private route preparation failed.");
+      setStatus(userErrorMessage(cause, "Private route preparation failed."));
     } finally {
       setBusy(false);
     }
@@ -198,7 +199,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       setAmount("");
       await refreshBalances();
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Private swap failed.");
+      setStatus(userErrorMessage(cause, "Private swap failed."));
     } finally {
       setBusy(false);
     }

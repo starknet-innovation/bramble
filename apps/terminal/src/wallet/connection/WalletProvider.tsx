@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import type { AccountInterface, InvokeFunctionResponse } from "starknet";
 import {
   INJECTION_TIMEOUT_MS,
@@ -159,7 +160,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       applyConnected(target, nextAccount, nextAddress, nextChainId);
     } catch (cause) {
       clear();
-      setError(cause instanceof Error ? cause.message : "Failed to connect wallet.");
+      setError(userErrorMessage(cause, "Failed to connect wallet."));
     } finally {
       setIsConnecting(false);
     }

@@ -38,6 +38,7 @@ vi.mock("../../wallet/connection/WalletProvider", () => ({
   }),
 }));
 
+import { WalletError } from "../../protocols/support/errors";
 import { LendingTicket } from "./LendingTicket";
 
 const market = (assetAddress: string, symbol: string): VesuMarket => ({
@@ -181,5 +182,28 @@ describe("LendingTicket wallet handoff", () => {
       expect.anything(),
       await mocks.quoteIncrease.mock.results[1]?.value,
     );
+  });
+
+  // Issue 652: a quoting diagnostic is the terminal's plumbing and reads as the
+  // screen's own failure sentence; a route mismatch is a security fact and is
+  // shown with its fact.
+  it.each([
+    ["Could not quote Vesu wind route", "Vesu request failed."],
+    ["Ekubo Multiply route amount mismatch", "Ekubo Multiply route amount mismatch"],
+  ])("shows %s as %s", async (thrown, shown) => {
+    mocks.quoteIncrease.mockRejectedValueOnce(new WalletError(thrown));
+    render(
+      <LendingTicket
+        collateralPairs={[{ market: collateral, pair }]}
+        market={debt}
+        requestedAction="multiply"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Review Multiply" }));
+
+    expect(await screen.findByText(shown)).toBeTruthy();
+    if (thrown !== shown) expect(screen.queryByText(thrown)).toBeNull();
+    expect(mocks.requestTransaction).not.toHaveBeenCalled();
   });
 });

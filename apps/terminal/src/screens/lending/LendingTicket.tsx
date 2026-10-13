@@ -3,6 +3,7 @@ import {
   Calculator,
   TriangleAlert,
 } from "lucide-react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { avnuTokenArtwork } from "../../assets/avnu-token-assets";
 import { TokenIcon } from "../../components/index";
@@ -244,7 +245,7 @@ export const LendingTicket = ({
           await watchAsset({ address: quote.vTokenAddress });
           setMessage(`Supply broadcast. ${market.symbol} receipt token added to your wallet.`);
         } catch (cause) {
-          const detail = cause instanceof Error ? cause.message : "token request stopped";
+          const detail = userErrorMessage(cause, "token request stopped");
           setMessage(`Supply broadcast. Receipt token was not added: ${detail}`);
         }
       } else {
@@ -253,7 +254,7 @@ export const LendingTicket = ({
       setAmount("");
       if (action === "borrow") setCollateralAmount("");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Vesu request failed.");
+      setMessage(userErrorMessage(cause, "Vesu request failed."));
     } finally {
       setIsPreparing(false);
     }

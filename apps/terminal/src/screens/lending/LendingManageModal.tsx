@@ -1,4 +1,5 @@
 import { ArrowRight, LoaderCircle, Radio, X } from "lucide-react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   freshReferenceUsdPrice,
@@ -331,7 +332,7 @@ export const LendingManageModal = ({
       setMessage("Broadcast accepted. Position confirmation is updating.");
       onSubmitted();
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Position request failed.");
+      setMessage(userErrorMessage(cause, "Position request failed."));
     } finally {
       setIsSubmitting(false);
     }
@@ -347,7 +348,7 @@ export const LendingManageModal = ({
       await watchAsset({ address: vToken });
       setMessage(`${receiptSymbol} is now tracked in the wallet.`);
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Receipt token was not added.");
+      setMessage(userErrorMessage(cause, "Receipt token was not added."));
     } finally {
       setIsTracking(false);
     }
