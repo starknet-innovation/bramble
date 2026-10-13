@@ -42,7 +42,7 @@ describe("activityToCsv formula-injection neutralization", () => {
   for (const [lead, summary] of leads) {
     test(`neutralizes a summary opening with ${lead}`, () => {
       const cells = dataCells([entry({ summary })]);
-      expect(cells[9]).toBe(`"'${summary}"`);
+      expect(cells[10]).toBe(`"'${summary}"`);
     });
   }
 
@@ -69,7 +69,7 @@ describe("activityToCsv formula-injection neutralization", () => {
 
   test("does not prefix ordinary text that merely starts with padding", () => {
     const cells = dataCells([entry({ summary: " Send 1.5 ETH" })]);
-    expect(cells[9]).toBe('" Send 1.5 ETH"');
+    expect(cells[10]).toBe('" Send 1.5 ETH"');
   });
 
   test("neutralizes attacker text reaching the token and counterparty columns", () => {
@@ -83,14 +83,14 @@ describe("activityToCsv formula-injection neutralization", () => {
   test("leaves ordinary text untouched apart from the surrounding quotes", () => {
     const cells = dataCells([entry({ summary: "Send 1.5 ETH", token: "ETH" })]);
     expect(cells[6]).toBe('"ETH"');
-    expect(cells[9]).toBe('"Send 1.5 ETH"');
+    expect(cells[10]).toBe('"Send 1.5 ETH"');
   });
 
   test("quotes every column so a delimiter or quote cannot break the row", () => {
     const csv = activityToCsv([entry({ summary: 'Calls "swap", then transfer' })]);
     const rows = csv.split("\n");
     expect(rows).toHaveLength(2);
-    expect(rows[1]?.startsWith('"2023-11-14T22:13:20.000Z","SN_MAIN",')).toBe(true);
+    expect(rows[1]?.startsWith('"2023-11-14 22:13:20","SN_MAIN",')).toBe(true);
     expect(rows[1]?.endsWith('"Calls ""swap"", then transfer"')).toBe(true);
   });
 
