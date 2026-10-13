@@ -17,6 +17,7 @@
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { bindCopyButtons, isPopupSurface, renderFragment } from "../../shared/dom";
+import { createStagePacer, type StageTimers } from "../../shared/stage-pacer";
 import {
   createLedgerSignController,
   type LedgerConnector,
@@ -35,8 +36,23 @@ export type LedgerSignRuntimeDeps = {
   readonly mount: HTMLElement;
   readonly onSignatureReported?: () => void;
   readonly status: () => WalletStatus;
+  /** Timer seam for the takeover's stage pacing; platform timers when absent. */
+  readonly timers?: StageTimers;
   readonly wallet: Pick<SidepanelWallet, "completeLedgerSign" | "loadLedgerSignPending">;
 };
+
+// Phases that wait on the reader rather than the device: painted as soon as the
+// steps queued ahead of them have been read, and not held themselves.
+const READER_PHASES: ReadonlySet<LedgerSignView["phase"]["kind"]> = new Set([
+  "connect",
+  "devices",
+  "error",
+]);
+
+const sameLedgerStage = (a: LedgerSignView | null, b: LedgerSignView | null): boolean =>
+  a === null || b === null
+    ? a === b
+    : a.request.id === b.request.id && a.phase.kind === b.phase.kind;
 
 /**
  * The side-panel Ledger signing runtime. `poll` fetches parked device signs and
@@ -92,9 +108,32 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
     bindControls();
   };
 
+  // The controller reports each device phase the moment it starts; on a granted,
+  // unlocked device the first three are over in milliseconds. The pacer holds
+  // each painted step long enough to read without holding the device work, and
+  // takes the overlay down at once on a cancel or dismissal. Only the close
+  // after a reported signature waits, behind the "Finish" step it follows.
+  const pacer = createStagePacer<LedgerSignView | null>({
+    render: renderOverlay,
+    sameStage: sameLedgerStage,
+    ...(deps.timers ? { timers: deps.timers } : {}),
+  });
+  let offered: LedgerSignView | null = null;
+  const pacedRender = (view: LedgerSignView | null): void => {
+    const previous = offered;
+    offered = view;
+    if (view === null) {
+      if (previous?.phase.kind === "submitting") pacer.settle(null);
+      else pacer.cut(null);
+      return;
+    }
+    if (READER_PHASES.has(view.phase.kind)) pacer.settle(view);
+    else pacer.stage(view);
+  };
+
   controller = createLedgerSignController({
     connector,
-    render: renderOverlay,
+    render: pacedRender,
     report: async (outcome) => {
       await wallet.completeLedgerSign(outcome);
       if ("r" in outcome) {

@@ -82,6 +82,10 @@ export const MOTION = {
   enterMs: 200,
   liftMs: 160,
   pressMs: 90,
+  // The least time one step of a progress list stays on screen, so a step the
+  // work finished in a few milliseconds is still read rather than flashed.
+  // Display-only: the stage pacer holds what is painted, never the work.
+  stageMinMs: 500,
   tabMs: 220,
   toastMs: 220,
   waitLoopMs: 2000,
