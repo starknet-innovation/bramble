@@ -12,6 +12,7 @@ import { transitionSendStage } from "./send-transition";
 import { bindTransferBuckets } from "./transfer-buckets-ui";
 import { createComposeFee } from "./transfer-compose-fee";
 import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transfer-compose-ui";
+import { bindTransferExits } from "./transfer-exits-ui";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
   friendlyReviewError,
@@ -32,6 +33,7 @@ import {
   transferSpendable,
 } from "./transfer-route";
 import {
+  confirmedState,
   preparationFailure,
   preparationFor,
   preparedState,
@@ -261,18 +263,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   });
 
   form.querySelector("#send-failure-edit")?.addEventListener("click", editDetails);
-  const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
-  if (homeButton) {
-    homeButton.textContent =
-      completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back";
-    homeButton.addEventListener("click", complete);
-  }
-  form
-    .querySelector("#send-view-activity")
-    ?.addEventListener("click", () => navigate?.("activity"));
-  for (const id of ["#send-pending-activity", "#send-failure-activity"]) {
-    form.querySelector(id)?.addEventListener("click", () => navigate?.("activity"));
-  }
+  bindTransferExits(form, { complete, completionTarget, navigate });
 
   // Polls to the last checkpoint, then hands over to "Check again".
   const confirmSubmitted = async (epoch: number): Promise<void> => {
@@ -291,19 +282,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       repaintActiveTransfer?.();
       return;
     }
-    // A failed outcome drops the review, so Try again reviews afresh rather
-    // than re-signing the old one (audit 247).
-    transferState =
-      outcome.kind === "succeeded"
-        ? { ...transferState, error: "", stage: "submitted" }
-        : {
-            ...transferState,
-            error: outcome.message,
-            review: null,
-            reviewedKey: null,
-            stage: "failed",
-            submissionUnknown: false,
-          };
+    transferState = confirmedState(transferState, outcome);
     repaintActiveTransfer?.();
     // Only a confirmed private route moved a balance the indexer must catch up on.
     const settledRoute = transferState.fields ? transferRoute(transferState.fields).id : null;
