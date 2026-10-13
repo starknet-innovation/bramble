@@ -50,7 +50,7 @@ const GUARD_LITERAL = /"((?:Unlock session|Krusty KMS) [^"]+)"/g;
 // Refusals a policy returns rather than throws (`return "…"`, or a ternary
 // branch), read only from the modules that mint them: everywhere else a
 // returned string is ordinary data.
-export const REFUSAL_SOURCES = [
+const REFUSAL_SOURCES = [
   "apps/extension/src/background/transactions/swap-build-policy.ts",
   "apps/extension/src/background/approvals/approval-limits.ts",
   "packages/foundation/wallet-model/src/swap/avnu-route.ts",
