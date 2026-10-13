@@ -68,8 +68,8 @@ export type {
 export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
 /** Custom-network count bound, re-exported with the store that applies it. */
 export { MAX_CUSTOM_NETWORKS } from "./preferences-custom-networks";
-/** Added-token count bound, re-exported with the store that applies it. */
-export { MAX_ADDED_TOKENS_PER_NETWORK } from "./preferences-tokens";
+/** Added-token count bound and the recovery-scan probe set, re-exported with the store they belong to. */
+export { MAX_ADDED_TOKENS_PER_NETWORK, recoveryProbeTokens } from "./preferences-tokens";
 /** Re-exported store schema and capability types. */
 export type {
   TokenSource,

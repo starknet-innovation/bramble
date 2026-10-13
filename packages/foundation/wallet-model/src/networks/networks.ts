@@ -155,6 +155,33 @@ export const DEFAULT_TOKENS: readonly DefaultToken[] = [
 ];
 
 /**
+ * Circle-native USDC on Starknet mainnet (what users hold since the
+ * bridged→native migration), 6 decimals. Not a display default; probed only
+ * during recovery discovery (see {@link RECOVERY_PROBE_TOKENS}).
+ */
+export const USDC_TOKEN_ADDRESS =
+  "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+
+/**
+ * Tokens the first-run recovery scan probes to decide an undeployed account has
+ * been used. A superset of {@link DEFAULT_TOKENS}: the display defaults plus the
+ * high-value ERC20s an account can hold with no ETH or STRK (native USDC on
+ * mainnet), which the ETH/STRK-only probe would otherwise read as empty and
+ * skip. Discovery-only — never the user's displayed token set, so adding a token
+ * here widens detection without changing what every wallet shows by default.
+ */
+export const RECOVERY_PROBE_TOKENS: readonly DefaultToken[] = [
+  ...DEFAULT_TOKENS,
+  {
+    address: USDC_TOKEN_ADDRESS,
+    decimals: 6,
+    name: "USD Coin",
+    networkId: "SN_MAIN",
+    symbol: "USDC",
+  },
+];
+
+/**
  * Checks whether an untrusted value is one of the supported Starknet network ids.
  */
 export const isStarknetNetworkId = (value: unknown): value is StarknetNetworkId =>
