@@ -132,11 +132,11 @@ export const strk20ReadMethods = ({
           ),
         pauseForServiceRetry,
       );
-      const subaccount = transfers.build().subaccounts(input.dappName);
+      const shadowAccount = transfers.build().shadowAccounts(input.dappName);
       const commitment =
         input.nonce === undefined
-          ? await subaccount.partialCommitment()
-          : await subaccount.commitment(input.nonce);
+          ? await shadowAccount.partialCommitment()
+          : await shadowAccount.commitment(input.nonce);
       return num.toHex(commitment);
     } catch (error) {
       return mapStrk20ProtocolError(error);

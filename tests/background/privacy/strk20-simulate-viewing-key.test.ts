@@ -81,8 +81,8 @@ describe("dapp STRK20 simulation with an RPC override", () => {
     const builder = {
       createProofInvocation: async () => ({ warnings: [] }),
       invoke: () => builder,
-      async simulate(options: { readonly provider: RpcProvider }) {
-        await options.provider.callContract({
+      async simulate(options: { readonly node: RpcProvider }) {
+        await options.node.callContract({
           calldata: ["0xabc", "0x55"],
           contractAddress: "0xabc",
           entrypoint: VIEWING_KEY_MARKER,

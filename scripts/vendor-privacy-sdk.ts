@@ -24,7 +24,7 @@ const repo = "https://github.com/starkware-libs/starknet-privacy.git";
 const target = "vendor/starknet-privacy";
 const sdk = `${target}/sdk`;
 const lockPath = `${sdk}/package-lock.json`;
-const PRIVACY_SDK_REVISION = "722d1cfbddfc0e7d65f45084cfced08f092d2f3c";
+const PRIVACY_SDK_REVISION = "b40bf109c8e5b97d9d6e8ec6db48b16b9d10a106";
 // The pinned upstream build source. Its contents are covered by the commit pin
 // above; the only thing this file supplies is a locked runtime for it.
 const BUILD_SOURCE = "scripts/build-browser.ts";

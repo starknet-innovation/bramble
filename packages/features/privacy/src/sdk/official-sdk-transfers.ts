@@ -70,7 +70,7 @@ export const transfersFor = (
       url: config.proverUrl,
     },
     ...(config.subaccountAnonymizerAddress
-      ? { subAccountAnonymizerAddress: config.subaccountAnonymizerAddress }
+      ? { shadowAccountAnonymizerAddress: config.subaccountAnonymizerAddress }
       : {}),
     viewingKeyProvider: {
       async getViewingKey() {

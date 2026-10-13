@@ -10,7 +10,7 @@
  * already verified against the message sender, keeping the site's own label
  * only as a scope selector within that origin.
  *
- * `subaccounts(dappName)` is one identity for both the commitment the user is
+ * `shadowAccounts(dappName)` is one identity for both the commitment the user is
  * shown and the `subaccount_invoke` that later acts through it, so the
  * disclosure path and the action path derive from here alike. Deriving in only
  * one of them would hand a site a commitment it could never name in an action.
@@ -26,7 +26,7 @@ import { strk20ServiceForRuntime } from "./strk20-account-context";
 const SCOPE_DOMAIN = "bramble/strk20-subaccount/v1";
 
 // The pinned SDK short-string-encodes every `string` dapp name (`encodeDappName`
-// in vendor/starknet-privacy/sdk/src/internal/sub-accounts.ts), and starknet.js
+// in vendor/starknet-privacy/sdk/src/internal/shadow-accounts.ts), and starknet.js
 // rejects a Cairo short string longer than 31 bytes. The separator is therefore
 // the digest's first 15 bytes rendered as 30 lowercase hex characters:
 // printable ASCII, inside that limit, and still 120 bits — far past any

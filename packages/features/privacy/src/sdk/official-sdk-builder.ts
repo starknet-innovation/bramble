@@ -73,7 +73,7 @@ const addAction = (builder: SdkBuilder, action: Strk20Action, open: symbol): Sdk
       .done();
   }
   if (action.type === "subaccount_invoke") {
-    return builder.subaccounts(action.dapp_name).invoke(action.nonce, {
+    return builder.shadowAccounts(action.dapp_name).invoke(action.nonce, {
       calls: action.calls.map((call) => ({
         calldata: [...call.calldata],
         contractAddress: call.contract_address,

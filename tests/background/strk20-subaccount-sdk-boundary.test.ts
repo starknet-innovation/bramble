@@ -3,7 +3,7 @@
  * derives must be a value the *pinned* privacy SDK can actually use.
  *
  * The SDK's `encodeDappName` short-string-encodes every `string` dapp name
- * (vendor/starknet-privacy/sdk/src/internal/sub-accounts.ts), and starknet.js
+ * (vendor/starknet-privacy/sdk/src/internal/shadow-accounts.ts), and starknet.js
  * throws for a short string over 31 bytes. A suite that only inspects a stubbed
  * `Strk20Service` cannot see that: it pins which string the wallet passes, not
  * whether the SDK accepts it. These tests therefore drive the real adapter
@@ -60,7 +60,7 @@ const derivedSeparator = async (origin: string, label: string): Promise<string> 
   return bound.dapp_name;
 };
 
-// SDK double whose `subaccounts()` encodes exactly like the pinned SDK and
+// SDK double whose `shadowAccounts()` encodes exactly like the pinned SDK and
 // records the felt the sub-account identity is actually built from. Both
 // `commitment`/`partialCommitment` and `invoke` come from that one felt, which
 // is what makes a disclosure/action divergence observable here.
@@ -70,7 +70,7 @@ const sdkFor = (seen: bigint[]): PrivacySdkRuntime => ({
     const self = {
       createProofInvocation: async () => ({ warnings: [] }),
       invoke: () => self,
-      subaccounts(dappName: string) {
+      shadowAccounts(dappName: string) {
         const encoded = encodeDappName(dappName);
         seen.push(encoded);
         return {
