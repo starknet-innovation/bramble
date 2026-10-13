@@ -1,5 +1,5 @@
 /**
- * STRK20 schema checks prove strict, spec-0.10.4-rc.0 action validation and envelope
+ * STRK20 schema checks prove strict, spec-0.10.4 action validation and envelope
  * shape guards. These exercise the request/response conformance surface (the
  * `type`-discriminated action union, required recipient, "OPEN" transfer, flat
  * invoke with placeholder calldata) and result shapes — not a live

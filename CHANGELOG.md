@@ -27,6 +27,8 @@ See DEVELOPMENT.md and RELEASING.md.
 - **Breaking for dapps:** STRK20 sub-accounts use the Wallet API 0.10.4 shadow-account names:
   `wallet_strk20ShadowAccountCommitment` and the `shadow_account_invoke` action. The old names are
   refused with no alias.
+- `wallet_supportedWalletApi` reports `0.10.4`, the stable Wallet API release with these names,
+  instead of `0.10.4-rc.0`, which still used the old ones.
 - Every shadow-account identity changes: the scope domain is now
   `bramble/strk20-shadow-account/v1`. Shadow accounts derived under the old domain are not
   reachable from this build.

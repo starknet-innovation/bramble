@@ -378,7 +378,7 @@ and reputation signals before a connection is approved:
 
 ## STRK20 privacy
 
-Bramble implements Wallet API `0.10.4-rc.0` STRK20 through the pinned official Privacy SDK. Viewing
+Bramble implements Wallet API `0.10.4` STRK20 through the pinned official Privacy SDK. Viewing
 keys stay inside the encrypted vault; actions, relay fees, account, network, pool, and payload digest
 are frozen before dedicated approval. No fallback prover or signer exists. Registration and
 deposit-only batches may use the public account; other private actions require a relayer. Writes are

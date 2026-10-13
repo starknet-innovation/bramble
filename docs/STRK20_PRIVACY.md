@@ -6,7 +6,7 @@ permalink: /strk20-privacy/
 
 # STRK20 privacy integration
 
-Bramble implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
+Bramble implements the Wallet API `0.10.4` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. It supports shielded balance discovery, action preparation, private
 submission, dapp-scoped shadow-account commitments, explicit account registration, and reviewed
 public-to-private token deposits.
