@@ -36,6 +36,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Classifies diagnostics the background threw ("Invalid mnemonic", "…signature
   // key mismatch") by their words; matched here, never read, logged, or persisted.
   "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal.ts",
+  // Decides whether a rejected send is known not sent; it names the Ledger
+  // catalog code "signature-verify-failed" as a lookup key and reads no secret.
+  "packages/presentation/wallet-ui/src/sidepanel/shared/submit-outcome.ts",
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Privileged first-run boundary: the phrase is validated through Krusty and

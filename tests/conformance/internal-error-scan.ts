@@ -45,6 +45,13 @@ const REPLY = /\berror:\s*(["`])((?:(?!\1)[^\\]|\\.){3,400})\1/g;
 const REPLY_CONSTANT = /\berror:\s*([A-Z][A-Z0-9_]+)\b/g;
 // `invariant(condition, "…")`.
 const INVARIANT = /\binvariant\(\s*[^,]+,\s*(["`])((?:(?!\1)[^\\]|\\.)*)\1/g;
+// The fallback a panel helper shows when a reply or rejection carries no
+// message of its own: the second argument of `responseError`, `errorText`,
+// `errorDetails`, `errorLine`, or `errorMessage` (errors audit F6).
+const FALLBACK =
+  /\b(?:responseError|errorText|errorDetails|errorLine|errorMessage)\(\s*[^,()]+(?:\([^()]*\))?\s*,\s*(["`])((?:(?!\1)[^\\]|\\.)*)\1/g;
+// A curated privacy prerequisite's sentence: `new PrivacyBlockerError(kind, "…")`.
+const BLOCKER = /new\s+PrivacyBlockerError\(\s*[^,]+,\s*(["`])((?:(?!\1)[^\\]|\\.)*)\1/g;
 // Literals that open with a guard prefix passed through a helper.
 const GUARD_LITERAL = /"((?:Unlock session|Krusty KMS) [^"]+)"/g;
 // Refusals a policy returns rather than throws (`return "…"`, or a ternary
@@ -58,6 +65,15 @@ const REFUSAL_SOURCES = [
 const RETURNED = /(?:\breturn|[?:])\s*(["`])((?:(?!\1)[^\\]|\\.){3,400})\1/g;
 // `const NAME = "…"` / `` const NAME = `…` `` string constants.
 const STRING_CONSTANT = /\bconst\s+([A-Z][A-Z0-9_]+)\s*=\s*(["`])((?:(?!\2)[^\\]|\\.)*)\2/g;
+
+// Patterns whose capture group `group` is the message literal itself.
+const LITERAL_PATTERNS: readonly (readonly [RegExp, number])[] = [
+  [REPLY, 2],
+  [INVARIANT, 2],
+  [FALLBACK, 2],
+  [BLOCKER, 2],
+  [GUARD_LITERAL, 1],
+];
 
 /** A thrown message and the file it is minted in. */
 export interface ThrownMessage {
@@ -113,18 +129,18 @@ export const thrownMessages = (dirs: readonly string[]): readonly ThrownMessage[
       if (match[1] && /Error|Refused/.test(match[1]) && match[2])
         add(constants.get(match[2]), file);
     }
-    for (const match of src.matchAll(REPLY)) add(match[2], file);
+    for (const [pattern, group] of LITERAL_PATTERNS) {
+      for (const match of src.matchAll(pattern)) add(match[group], file);
+    }
     for (const match of src.matchAll(REPLY_CONSTANT)) {
       if (match[1]) add(constants.get(match[1]), file);
     }
-    for (const match of src.matchAll(INVARIANT)) add(match[2], file);
     if (REFUSAL_SOURCES.includes(file)) {
       // A refusal is a sentence; a one-word branch here is data ("route").
       for (const match of src.matchAll(RETURNED)) {
         if (match[2] && /\s/.test(match[2])) add(match[2], file);
       }
     }
-    for (const match of src.matchAll(GUARD_LITERAL)) add(match[1], file);
   }
   return [...found].map(([raw, file]) => ({ file, raw }));
 };

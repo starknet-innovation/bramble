@@ -6,15 +6,10 @@
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TransferReviewResponse, WalletStatus } from "../../../popup/responses/responses";
+import { friendlyError } from "../../runtime/friendly-error";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation, type ConfirmationOutcome } from "../../shared/confirm-submitted";
-import {
-  buttonBusy,
-  errorDetails,
-  errorMessage,
-  renderFragment,
-  showToast,
-} from "../../shared/dom";
+import { buttonBusy, errorDetails, renderFragment, showToast } from "../../shared/dom";
 import {
   bindOutcomeReceipt,
   outcomeReceiptFor,
@@ -22,6 +17,7 @@ import {
   paintOutcomeReceipt,
 } from "../../shared/outcome-receipt";
 import { reviewFeeBlocked } from "../../shared/review-render";
+import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import { watchDeployment } from "../../shell/shell-bindings";
 import { friendlyReviewError, recipientFieldError, reviewPanelHtml } from "../send/transfer-ui";
 
@@ -326,17 +322,29 @@ export const bindNftSendForm = (deps: NftSendDeps): void => {
           }
         },
         (error: unknown) => {
-          const message = errorMessage(error, "The transfer didn't go through");
           form.dataset["stage"] = "failed";
           form.removeAttribute("aria-busy");
-          showToast(
-            message,
-            "error",
-            deps.app,
-            errorDetails(error, "The transfer didn't go through"),
-          );
+          const details = errorDetails(error, "The transfer didn't go through");
+          // "Nothing was submitted" only for a refusal made before signing. A
+          // lost or unrecognised reply may be on chain: amber, Activity first,
+          // and Confirm stays down so nothing invites a second transfer
+          // (errors audit F1, F3).
+          if (!knownNotSent(error)) {
+            // The review is dropped too, so no later press can confirm it again.
+            forgetReview("failed");
+            const line = outcomeUnknownReason(error, "The transfer");
+            showToast(line, "warning", deps.app, details);
+            if (result) result.textContent = line;
+            return;
+          }
+          // Classified like every other sink, so a Ledger code reads as the
+          // device catalog's sentence rather than the code itself.
+          const message = friendlyError(details).message;
+          showToast(message, "error", deps.app, details);
           if (result) {
-            result.textContent = `${message} Nothing was submitted; review the recipient and try again.`;
+            result.textContent = /nothing was (?:submitted|signed)/i.test(message)
+              ? message
+              : `${message} Nothing was submitted; review the recipient and try again.`;
           }
           buttonBusy(submitButton, false);
         },

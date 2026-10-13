@@ -5,6 +5,7 @@
  * value is written through `textContent`; nothing here is an HTML sink.
  */
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { isOutcomeUnknown } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import {
   SHADOW_ACCOUNTS_CHECK,
@@ -75,6 +76,15 @@ const bindSweep = (
               showToast(SHADOW_ACCOUNTS_SWEEP_SENT, "success", row);
             },
             (error: unknown) => {
+              // Possibly on chain: amber, and Confirm gives way to the
+              // outcome line rather than re-arming (errors audit F4).
+              if (isOutcomeUnknown(error)) {
+                confirm.replaceWith(
+                  element("p", errorLine(error, "Private transaction failed"), "hint"),
+                );
+                showToast(errorDetails(error, "Private transaction failed"), "warning", row);
+                return;
+              }
               buttonBusy(confirm, false);
               showToast(errorDetails(error, "Private transaction failed"), "error", confirm);
             },

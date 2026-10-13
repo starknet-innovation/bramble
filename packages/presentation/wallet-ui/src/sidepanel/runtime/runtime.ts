@@ -55,7 +55,7 @@ export type {
 } from "./runtime-types";
 
 import { createAccountRuntimeClient } from "./runtime-accounts";
-import { responseError } from "./runtime-errors";
+import { lostReplySend, responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
@@ -70,7 +70,7 @@ export type SidepanelWallet = ReturnType<typeof createSidepanelRuntime>;
  * Creates side panel actions over chrome.runtime messaging.
  */
 export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
-  const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  const sendMessage = lostReplySend(runtime);
 
   return {
     ...createLedgerRuntimeClient(sendMessage),

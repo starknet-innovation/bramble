@@ -23,6 +23,7 @@ import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { setFlowStep } from "../../shared/parts";
+import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import { compactAmount, tokenGlyph } from "../portfolio/token-row";
 import { setText } from "../send/transfer-progress-ui";
 import {
@@ -463,15 +464,18 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     deps.swap.execute(claimedPreparation.id).then(follow, (error: unknown) => {
       // A lost reply may already be on chain: follow its signed hash, or say
       // the status is unknown — never re-quote into a second swap (audit 173).
-      if (error instanceof SubmissionUnknownError) {
-        if (error.transactionHash) {
-          void follow(error.transactionHash);
-          return;
-        }
+      // Only a refusal made before signing re-quotes; any other rejection
+      // (an unrecognised reply, the router's catch-all) may be on chain too
+      // (errors audit F2).
+      if (error instanceof SubmissionUnknownError && error.transactionHash) {
+        void follow(error.transactionHash);
+        return;
+      }
+      if (!knownNotSent(error)) {
         [submitting, quote, preparation, amountText] = [false, null, null, ""];
         confirmButton.innerHTML = restingContent;
         buttonBusy(confirmButton, false);
-        receipt = swapUnknownReceipt(error.message, summary);
+        receipt = swapUnknownReceipt(outcomeUnknownReason(error, "The swap"), summary);
         transitionSwapStage(root.ownerDocument, stage, "success", () => {
           stage = "success";
           applySwapUi(deps, root);

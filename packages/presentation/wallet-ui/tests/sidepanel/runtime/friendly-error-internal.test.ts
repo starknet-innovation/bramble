@@ -106,17 +106,23 @@ describe("STRK20 (review F1, F2)", () => {
   });
 
   test("a revert, rejected proof, failed validation, or nonce stays visible", () => {
+    // The fact stays; the shared "services unavailable" head, which would say
+    // the services were down when the transaction was refused, does not
+    // (errors audit F5).
     for (const category of [
       "execution-reverted",
       "proof-rejected",
       "validation-failed",
       "invalid-nonce",
-      "service-unavailable",
-      "transport",
+      "insufficient-fee",
     ]) {
       const raw = `strk20 services unavailable (submission/${category}): reason`;
-      expect(friendlyError(raw).message).toBe(raw);
+      expect(friendlyError(raw).message).toBe(`strk20 submission/${category}: reason`);
+      expect(friendlyError(raw).message).not.toContain("unavailable");
     }
+    // The SDK's catch-all names no outage and keeps its words.
+    const unclassified = "strk20 services unavailable (submission/service-unavailable): reason";
+    expect(friendlyError(unclassified).message).toBe(unclassified);
     // Every budgeted phase (discovery, maturity, proof request, proving) runs
     // before anything is sent, so outcome-unknown copy would misstate it (R2-4).
     for (const phase of [
@@ -204,4 +210,64 @@ describe("status lines (errorLine)", () => {
     // The fallback is still translated when nothing was thrown.
     expect(errorLine(null, "Private transaction failed")).toContain("may not have gone through");
   });
+});
+
+// Errors audit F5: the STRK20 branch ran before the rate-limit and network
+// classifiers, so those categories reached the reader raw.
+describe("STRK20 categories with a reviewed sentence", () => {
+  test("a rate limit and a transport failure read as their sentence, detail kept", () => {
+    expect(
+      friendlyError("strk20 services unavailable (submission/rate-limited): -32005 slow down")
+        .message,
+    ).toBe(
+      "This service is rate limiting requests. Wait a moment and try again. (-32005 slow down)",
+    );
+    expect(
+      friendlyError("strk20 services unavailable (submission/transport): Failed to fetch").message,
+    ).toBe("Couldn't reach the network. Check your connection or RPC endpoint. (Failed to fetch)");
+    expect(friendlyError("strk20 services unavailable (proving/transport)").message).toBe(
+      "Couldn't reach the network. Check your connection or RPC endpoint.",
+    );
+    expect(friendlyError("strk20 services unavailable: HTTP 429 too many requests").message).toBe(
+      "This service is rate limiting requests. Wait a moment and try again. (HTTP 429 too many requests)",
+    );
+    expect(friendlyError("strk20 services unavailable: fetch failed").message).toBe(
+      "Couldn't reach the network. Check your connection or RPC endpoint. (fetch failed)",
+    );
+  });
+
+  test("a revert reads as a revert, with its reason", () => {
+    const raw =
+      "strk20 services unavailable (submission/execution-reverted): Error in the called contract (0x1): ENTRYPOINT_FAILED";
+    expect(friendlyError(raw).message).toBe(
+      "strk20 submission/execution-reverted: Error in the called contract (0x1): ENTRYPOINT_FAILED",
+    );
+  });
+
+  test("an unknown submission status and a privacy-leak refusal keep their words", () => {
+    const unknown =
+      "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover";
+    expect(friendlyError(unknown).message).toBe(unknown);
+    expect(
+      friendlyError("strk20 privacy leak (proving/service-unavailable): USER_LINKAGE").message,
+    ).toBe("The operation would leak private information");
+  });
+});
+
+// Errors audit F7: the panel says what a site's private request already says.
+test("a network without a shadow-account anonymizer reads as the approved notice", () => {
+  expect(
+    friendlyError(
+      "strk20 services unavailable: no shadow account anonymizer is configured for this network",
+    ).message,
+  ).toBe("Private services aren't set up for this network.");
+});
+
+// Errors audit F10: unreadable stored settings persist across retries, so the
+// reader is never told to try again.
+test("unreadable stored settings are not told to try again", () => {
+  expect(friendlyError("Invalid stored preferences").message).toBe("Invalid stored preferences");
+  expect(
+    friendlyError("Invalid stored preferences", "Couldn't add that account. Try again.").message,
+  ).toBe("Invalid stored preferences");
 });

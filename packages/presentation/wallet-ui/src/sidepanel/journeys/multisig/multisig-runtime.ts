@@ -21,7 +21,7 @@ import {
 } from "../../../popup/responses/multisig-responses";
 import { isBalancesResponse, isErrorResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
-import { responseError } from "../../runtime/runtime-errors";
+import { lostReplySend, responseError } from "../../runtime/runtime-errors";
 
 /**
  * Address and active network required to sync an existing Argent multisig.
@@ -64,7 +64,7 @@ export type MultisigClient = ReturnType<typeof createMultisigClient>;
  * Creates a runtime client that rejects every malformed background response.
  */
 export const createMultisigClient = (runtime?: RuntimeApi) => {
-  const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  const sendMessage = lostReplySend(runtime);
   type RefreshResult =
     | {
         readonly intents: readonly ArgentMultisigSigningIntent[];

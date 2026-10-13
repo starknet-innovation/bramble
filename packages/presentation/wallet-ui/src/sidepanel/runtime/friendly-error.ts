@@ -13,7 +13,7 @@
  * control, so nothing translated here is lost to a bug report.
  */
 
-import { friendlyNetworkError } from "@bramble/core/network-error";
+import { friendlyNetworkError, NETWORK_ERROR_MESSAGE } from "@bramble/core/network-error";
 import { isLedgerRejectionCode, ledgerMessage } from "@bramble/ledger-protocol/errors";
 import {
   ERROR_COPY,
@@ -56,6 +56,50 @@ const STRK20_RATE_LIMITED = "strk20 services unavailable (rate limited; retry sh
 const STRK20_PRIVACY_LEAK = /^strk20 privacy leak\b/;
 const STRK20 = /^strk20\b/;
 
+// `mapStrk20StageError`'s shape: the reviewed head, the stage and category it
+// classified, and the sanitised detail (official-sdk-errors.ts).
+const STRK20_STAGE = /^strk20 services unavailable \(([a-z-]+)\/([a-z-]+)\)(?:: ([\s\S]+))?$/i;
+// `mapStrk20ProtocolError`'s shape: the reviewed head and the sanitised cause.
+const STRK20_PROTOCOL = /^strk20 services unavailable: ([\s\S]+)$/i;
+const STRK20_SERVICES_DOWN = "strk20 services unavailable";
+
+// A reviewed sentence with the sanitised detail kept beside it, so the cause
+// stays visible on a status line that has no copy control.
+const withDetail = (sentence: string, detail: string | undefined): string =>
+  detail ? `${sentence} (${detail})` : sentence;
+
+/**
+ * STRK20 messages share one head, "strk20 services unavailable", whatever
+ * actually happened. Only a category that means rate limiting or an
+ * unreachable network earns the matching reviewed sentence; the SDK's
+ * catch-all category is shown as written; a revert, a
+ * rejected proof, a failed validation, a nonce or a fee is a fact with no
+ * reviewed sentence yet, so it is shown as written without the head, which
+ * would say the services were down when the transaction was refused (errors
+ * audit F5). An unknown submission status, a privacy-leak refusal, and every
+ * other STRK20 message keep their own words.
+ */
+const strk20Message = (trimmed: string, normalized: string): string => {
+  if (STRK20_PRIVACY_LEAK.test(normalized)) return PRIVACY_LEAK;
+  if (normalized === STRK20_RATE_LIMITED) return RATE_LIMITED;
+  const servicesDown = ERROR_COPY.get(STRK20_SERVICES_DOWN) ?? trimmed;
+  if (STRK20_SERVICE_DOWN.test(normalized)) return servicesDown;
+  const staged = STRK20_STAGE.exec(trimmed);
+  if (staged) {
+    const [, stage, category, detail] = staged;
+    if (category === "rate-limited") return withDetail(RATE_LIMITED, detail);
+    if (category === "transport") return withDetail(NETWORK_ERROR_MESSAGE, detail);
+    // The SDK's catch-all category: it names no outage, so the reader keeps
+    // the message as written (issue 652 review, F1).
+    if (category === "service-unavailable") return trimmed;
+    return `strk20 ${stage}/${category}${detail ? `: ${detail}` : ""}`;
+  }
+  const cause = STRK20_PROTOCOL.exec(trimmed)?.[1];
+  if (cause && RATE_LIMIT.test(cause)) return withDetail(RATE_LIMITED, cause);
+  if (cause && friendlyNetworkError(cause)) return withDetail(NETWORK_ERROR_MESSAGE, cause);
+  return trimmed;
+};
+
 const rawServiceDiagnostic = (value: string): boolean =>
   value.length > 240 ||
   /[\r\n]/.test(value) ||
@@ -73,9 +117,10 @@ const rawServiceDiagnostic = (value: string): boolean =>
  * sentence for its own failure (the Ledger picker passes "Couldn't add that
  * account. Try again."), or the generic fallback.
  *
- * STRK20 messages are shown as written unless they say the private services
- * are down or not configured; an unknown submission status, a revert, a
- * rejected proof, or a privacy-leak refusal is a fact the reader must keep.
+ * STRK20 messages are classified by `strk20Message`: services down, rate
+ * limited, or unreachable read as the reviewed sentence with the detail kept;
+ * an unknown submission status, a revert, a rejected proof, or a privacy-leak
+ * refusal is a fact the reader must keep, never framed as an outage.
  *
  * The pre-existing lowercase backstop stays, narrowed: a lowercase diagnostic
  * reads as the fallback unless it names a security, privacy, or funds fact.
@@ -101,13 +146,14 @@ export const friendlyError = (raw: string, context?: string): FriendlyError => {
     return { message: GENERIC_VALIDATION };
   }
 
+  // Before the STRK20 branch, which would otherwise answer the listed
+  // unreachable "strk20 …" guards first and leave them shown (errors audit F6).
+  if (isReviewedPlumbing(trimmed)) {
+    return { message: fallback };
+  }
+
   if (STRK20.test(normalized)) {
-    if (STRK20_PRIVACY_LEAK.test(normalized)) return { message: PRIVACY_LEAK };
-    if (normalized === STRK20_RATE_LIMITED) return { message: RATE_LIMITED };
-    if (STRK20_SERVICE_DOWN.test(normalized)) {
-      return { message: ERROR_COPY.get("strk20 services unavailable") ?? trimmed };
-    }
-    return { message: trimmed };
+    return { message: strk20Message(trimmed, normalized) };
   }
 
   // A node's own answer is classified before the transport markers: an RPC
@@ -130,9 +176,6 @@ export const friendlyError = (raw: string, context?: string): FriendlyError => {
     return { message: SERVICE_REJECTED };
   }
 
-  if (isReviewedPlumbing(trimmed)) {
-    return { message: fallback };
-  }
   // The pre-existing lowercase backstop, narrowed: a lowercase diagnostic that
   // names a security, privacy, or funds fact keeps its words.
   if (DEVELOPER_VOICE.test(trimmed) && !FACT_TERMS.test(trimmed)) {

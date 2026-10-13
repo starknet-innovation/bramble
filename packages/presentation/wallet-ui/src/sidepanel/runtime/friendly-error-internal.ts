@@ -113,7 +113,6 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
   ["invalid nostr relay configuration", "configuration built by the wallet"],
   ["invalid nostr relay idle timeout", "timeout is a constant"],
   ["invalid preferences", "preferences record built by the wallet"],
-  ["invalid stored preferences", "storage parse of the wallet's own record"],
   ["invalid wallet contact card", "card built by the wallet"],
   ["invalid token", "token record built by the wallet"],
   ["invalid token address", "address is pre-validated in the UI"],
@@ -214,6 +213,17 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
   ["strk20 signer does not expose public keys", "unreachable: as above"],
   ["strk20 signer does not declare classes", "unreachable: as above"],
   ["strk20 signer does not deploy accounts", "unreachable: as above"],
+  ["unreachable strk20 retry state", "unreachable: the retry loop's exhaustive guard"],
+  // --- Fallback codes and UI wiring -----------------------------------------
+  // A shadow-accounts screen fallback for a rejection that carried no message
+  // of its own; it names nothing the reader can act on.
+  ["shadow_account_balances_unavailable", "fallback code for a message-less rejection"],
+  ["shadow_account_sweep_unavailable", "fallback code for a message-less rejection"],
+  ["shadow_accounts_unavailable", "fallback code for a message-less rejection"],
+  ["shadow accounts screen is not bound", "UI wiring guard: no document to render into"],
+  // The cache write is best effort: the fetched list stays live and the
+  // failure is caught where it is raised (phishing-feed.ts).
+  ["phishing feed cache exceeds the chunk budget", "cache storage budget"],
   // --- Plumbing that names a fact word (see PLUMBING_DESPITE_FACT_WORD) --------
   // (also "invalid swap build response" above: avnu's JSON did not parse; every
   // safety refusal of a parsed build is its own "swap build …" message)
@@ -245,6 +255,11 @@ export const PLUMBING_DESPITE_FACT_WORD: ReadonlySet<string> = new Set([
   "strk20 signer does not expose public keys",
   "strk20 signer does not declare classes",
   "strk20 signer does not deploy accounts",
+  "unreachable strk20 retry state",
+  // A screen-wiring guard and a cache budget; neither is a check on an
+  // account, a key, or the phishing list itself.
+  "shadow accounts screen is not bound",
+  "phishing feed cache exceeds the chunk budget",
   "invalid swap build response",
   // Signer-list and signer-event response parses: "signer" names whose data
   // failed to parse, not a check on a key or a signature.
@@ -261,11 +276,13 @@ export const PLUMBING_DESPITE_FACT_WORD: ReadonlySet<string> = new Set([
 ]);
 
 // Templated plumbing: a missing KMS module export, the KMS's static class
-// table, and the account-family exhaustiveness guard, which no input reaches.
+// table, the account-family exhaustiveness guard, which no input reaches, and
+// the QR encoder's self-check on its own layout (its "mismatch" is between two
+// numbers the encoder computed, not a check on an address).
 // The KMS result-field checks are not here: their field can be a public key or
 // a signature, so they stay visible. The anchored grammar admits nothing else.
 const KMS_TEMPLATE_PLUMBING =
-  /^krusty kms export missing: [a-z0-9_]+$|^krusty kms class hashes are missing sn_(?:main|sepolia|devnet)$|^unknown account constructor shape: [^\s]+$/;
+  /^krusty kms export missing: [a-z0-9_]+$|^krusty kms class hashes are missing sn_(?:main|sepolia|devnet)$|^unknown account constructor shape: [^\s]+$|^qr layout mismatch: [^\s]+ cells for [^\s]+ bits$/;
 
 /**
  * Whether a raw string is reviewed plumbing that must not be shown as written.

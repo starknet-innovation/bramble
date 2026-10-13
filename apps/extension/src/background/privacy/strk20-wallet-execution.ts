@@ -37,7 +37,7 @@ import { approvalPayloadMatchesContext } from "../approvals/approval-context";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import type { Strk20WalletExecuteResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
@@ -293,9 +293,21 @@ const executionWork = async (
   report: Strk20PhaseSink,
 ): Promise<RuntimeResponse> => {
   const context = reportingPrivacyContext(resolved, report);
+  let result: Strk20SubmissionResult;
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
-    const result = await submitPreparation(deps, service, preparation, context);
+    result = await submitPreparation(deps, service, preparation, context);
+  } catch (error) {
+    // A lost relay or RPC reply may still land: say so instead of "failed",
+    // so the panel does not report it as not sent (audit #173).
+    if (error instanceof IndeterminateRpcWriteError) {
+      return submissionUnknownResponse(errorText(error, "Private transaction failed"));
+    }
+    return { error: errorText(error, "Private transaction failed") };
+  }
+  // The hash exists from here on, so the reply carries it whatever the
+  // bookkeeping does (errors audit F1).
+  await afterBroadcast(async () => {
     // Entering the pool approves it to pull the deposit and its fee from the
     // account's PUBLIC balance, so those grants are tracked exactly like any
     // other approval this wallet submits — see `Strk20SubmissionResult`. Filed
@@ -322,15 +334,8 @@ const executionWork = async (
         ? {}
         : activityToken(preparation.token)),
     });
-    return { ok: true, transactionHash: result.transactionHash };
-  } catch (error) {
-    // A lost relay or RPC reply may still land: say so instead of "failed",
-    // so the panel does not report it as not sent (audit #173).
-    if (error instanceof IndeterminateRpcWriteError) {
-      return submissionUnknownResponse(errorText(error, "Private transaction failed"));
-    }
-    return { error: errorText(error, "Private transaction failed") };
-  }
+  });
+  return { ok: true, transactionHash: result.transactionHash };
 };
 
 /**

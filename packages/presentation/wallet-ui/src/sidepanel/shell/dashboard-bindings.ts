@@ -279,8 +279,8 @@ export const bindApprovals = ({
   const deciding = new Set<string>();
   // A software approval can settle in a few milliseconds, which tore the
   // "Authorizing request" line down before it could be read (issue 436). The
-  // decision itself and the status read behind it start at once; only the
-  // outcome's paint waits for the line's minimum time on screen.
+  // decision itself starts at once; the outcome's paint, and the status read
+  // it repaints from, wait for the line's minimum time on screen.
   const pacedOutcome = (): StagePacer<() => void> => {
     const paced = createStagePacer<() => void>({
       render: (paint) => paint(),
@@ -349,26 +349,33 @@ export const bindApprovals = ({
       const reviewedAccountId = button.dataset["approvalAccount"];
       void wallet.decideApproval(id, action === "approve", reviewedFee, reviewedAccountId).then(
         () => {
-          const next = wallet.loadStatus();
+          // The status is read when the outcome paints, not when the decision
+          // resolved: a snapshot taken up to the pacer's hold earlier could
+          // repaint over a newer refresh (a request queued in the meantime).
           paced.settle(() => {
             showToast(
               action === "approve" ? "Request approved" : "Request denied",
               "success",
               button,
             );
-            void next.then(render);
+            void wallet
+              .loadStatus()
+              .then(render)
+              .catch(() => undefined);
           });
         },
         (error: unknown) => {
           // The background atomically consumes an approval before execution.
           // Repaint after any executor error so stale controls cannot decide the
           // already-removed id and surface a misleading "approval not found".
-          const next = wallet.loadStatus();
           paced.settle(() => {
             showFailure(error, button);
-            void next.then(render, () => {
-              deciding.delete(id);
-            });
+            void wallet
+              .loadStatus()
+              .then(render, () => {
+                deciding.delete(id);
+              })
+              .catch(() => undefined);
           });
         },
       );

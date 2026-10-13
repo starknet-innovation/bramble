@@ -331,10 +331,10 @@ describe("bindApprovals paces the authorizing line (#436)", () => {
 
   const toasts = (): number => document.querySelectorAll(".toast").length;
 
-  test("the outcome waits for the minimum; the decision and status read do not", async () => {
+  test("the outcome waits for the minimum; the decision does not", async () => {
     const h = await run("approved");
-    // The work has finished at t=0 …
-    expect(h.calls).toEqual(["decide", "status"]);
+    // The decision has finished at t=0 …
+    expect(h.calls).toEqual(["decide"]);
     // … but the authorizing line is still the thing on screen.
     expect(h.host.querySelector("#approval-live-title")?.textContent).toBe("Authorizing request");
     expect(h.renders()).toBe(0);
@@ -344,13 +344,15 @@ describe("bindApprovals paces the authorizing line (#436)", () => {
     expect(h.renders()).toBe(0);
     h.stageTimers.advance(1);
     await flush();
+    // … and the status it repaints from is read when it paints (rest L3).
+    expect(h.calls).toEqual(["decide", "status"]);
     expect(h.renders()).toBe(1);
     expect(toasts()).toBe(1);
   });
 
   test("a failure is shown as soon as the minimum has passed, and only once", async () => {
     const h = await run("failed");
-    expect(h.calls).toEqual(["decide", "status"]);
+    expect(h.calls).toEqual(["decide"]);
     expect(h.host.querySelector("#approval-result")?.textContent).toBe(
       "Approved. Signing and broadcasting…",
     );
@@ -361,5 +363,61 @@ describe("bindApprovals paces the authorizing line (#436)", () => {
     );
     expect(h.renders()).toBe(1);
     expect(h.stageTimers.pending()).toBe(0);
+  });
+
+  // Rest audit L3: a refresh that lands while the outcome is held (a new
+  // request queued) must not be painted over by a snapshot from before it.
+  test("the paced repaint uses the status current when it paints", async () => {
+    const id = "5f0f3f8e-0d55-4d0b-9a55-6ad0d8e4c1a2";
+    const host = mount(id);
+    const stageTimers = manualTimers();
+    let generation = 0;
+    const painted: number[] = [];
+    bindApprovals({
+      app: host,
+      render: async (status) => {
+        painted.push((status as unknown as { generation: number }).generation);
+      },
+      stageTimers,
+      wallet: {
+        decideApproval: async () => undefined,
+        loadStatus: async () => ({ ...STATUS, generation }),
+      } as unknown as SidepanelWallet,
+    });
+    host.querySelector<HTMLButtonElement>("[data-approval-id]")?.click();
+    await flush();
+    // A background event refreshes the wallet while the line is held.
+    generation = 1;
+    stageTimers.advance(MOTION.stageMinMs);
+    await flush();
+    await flush();
+    expect(painted).toEqual([1]);
+  });
+
+  test("a status read that fails after the outcome paints is handled", async () => {
+    const id = "5f0f3f8e-0d55-4d0b-9a55-6ad0d8e4c1a2";
+    const host = mount(id);
+    const stageTimers = manualTimers();
+    let reads = 0;
+    bindApprovals({
+      app: host,
+      render: async () => undefined,
+      stageTimers,
+      wallet: {
+        decideApproval: async () => undefined,
+        loadStatus: () => {
+          reads += 1;
+          return Promise.reject(new Error("worker gone"));
+        },
+      } as unknown as SidepanelWallet,
+    });
+    host.querySelector<HTMLButtonElement>("[data-approval-id]")?.click();
+    await flush();
+    stageTimers.advance(MOTION.stageMinMs);
+    await flush();
+    await flush();
+    // The outcome still painted, and the rejected read did not escape.
+    expect(reads).toBe(1);
+    expect(toasts()).toBe(1);
   });
 });

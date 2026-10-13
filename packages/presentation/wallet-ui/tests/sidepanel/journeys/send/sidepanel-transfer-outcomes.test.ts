@@ -286,7 +286,9 @@ describe("Send confirmation outcomes", () => {
 
   test("a failure before anything was submitted still says it was not sent", async () => {
     const { app, form } = mountOutcome("accepted", preferences, async () => {
-      throw new Error("The network fee could not be estimated");
+      throw new Error(
+        "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.",
+      );
     });
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("failed");

@@ -26,6 +26,12 @@ import {
   PLUMBING_DESPITE_FACT_WORD,
   REVIEWED_PLUMBING,
 } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal";
+import {
+  PRIVATE_FACTS,
+  SECURITY_FACTS,
+  SHADOW_PENDING_COPY,
+  UI_FALLBACKS,
+} from "./internal-error-decisions";
 import { REVIEWED_PLUMBING_SNAPSHOT, SENSITIVE_COPY_REVIEWED } from "./internal-error-reviewed";
 import { PANEL_ERROR_SOURCES, thrownMessages } from "./internal-error-scan";
 
@@ -202,6 +208,10 @@ const KEPT_VISIBLE = new Set([
   "RPC returned a non-felt Starknet name address",
   "Storage access denied",
   "Encrypted store scope is required",
+  // Persistent: corrupt settings storage, or a downgrade past a renamed key.
+  // "Try again" cannot fix it, so the generic fallback would mislead and no
+  // reviewed sentence fits yet (errors audit F10).
+  "Invalid stored preferences",
   // A field the reader types (multisig deploy form); shown so it names itself.
   "Invalid Argent multisig salt",
   // The KMS result-field checks: the field can be a public key or a signature.
@@ -237,6 +247,26 @@ const SCANNED_SENTENCES = new Set([
   "The transaction was not sent. x",
   "Enter an amount greater than zero.",
   "Review this send first",
+  "Account deployment was broadcast as x, but confirmation is unknown. The following transaction was not submitted; check the deployment on-chain before retrying.",
+  "Reached x of x co-signers. Share again to retry the remaining delivery.",
+  "The private operation was interrupted because the wallet's background worker stopped. Try again.",
+  "The transaction has not been signed or broadcast.",
+  "The wallet's background worker stopped before the private operation finished. Try again.",
+  "The wallet's background worker stopped while sending this private transaction, so its status is unknown. Check Activity before trying again.",
+  "Transaction could not be prepared. Check your connection or RPC endpoint.",
+  "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+  // Privacy prerequisites (PrivacyBlockerError's sentence) and send refusals.
+  "Not enough STRK for the amount and pool fee",
+  "Not enough STRK for the pool fee",
+  "Not enough private x",
+  // Panel status lines.
+  "Account search paused. Check the network and retry.",
+  "Could not prepare a safe swap route.",
+  "No route available right now.",
+  "Couldn't review the recovery. Try again.",
+  "Couldn't start recovery. Try again.",
+  // A write whose reply was lost (runtime-errors.ts `lostReplySend`).
+  "That didn't complete. If it was a transaction, check Activity before trying again.",
 ]);
 
 const REVIEWED_AS_WRITTEN = [
@@ -245,6 +275,11 @@ const REVIEWED_AS_WRITTEN = [
   PENDING_COPY,
   KEPT_VISIBLE,
   SCANNED_SENTENCES,
+  SECURITY_FACTS,
+  PRIVATE_FACTS,
+  SHADOW_PENDING_COPY,
+  UI_FALLBACKS,
+  new Set(SWAP_SAFETY_REFUSALS),
 ];
 
 // The strings issue 652 named, which must stay collapsed.
@@ -283,7 +318,7 @@ describe("internal error copy (issue 652)", () => {
   });
 
   test("every scanned message without a space is a Ledger code read as its catalog sentence", () => {
-    const words = [...raws].filter((raw) => !/\s/.test(raw));
+    const words = [...raws].filter((raw) => !/\s/.test(raw) && !isReviewedPlumbing(raw));
     expect(words.length).toBeGreaterThan(0);
     for (const raw of words) {
       expect(isLedgerRejectionCode(raw), raw).toBe(true);
@@ -345,15 +380,39 @@ describe("internal error copy (issue 652)", () => {
     expect(hidden).toEqual([]);
   });
 
+  // Every one, lowercase and sensitive included: an unlisted message is one
+  // nobody decided on (errors audit F6). A copy-table line that maps a message
+  // to itself is a recorded decision too.
   test("every message shown as written was decided on", () => {
     const unreviewed = thrown
-      .filter(({ raw }) => /^[A-Z]/.test(raw))
+      .filter(({ raw }) => !NOT_MESSAGES.has(raw))
       .filter(({ raw }) => friendlyError(raw).message === raw.trim())
       .filter(({ raw }) => !REVIEWED_AS_WRITTEN.some((set) => set.has(raw)))
-      .filter(({ raw }) => !SENSITIVE.test(raw))
+      .filter(({ raw }) => !ERROR_COPY.has(raw.trim().toLowerCase()))
       .map(({ file, raw }) => `${file}: ${raw}`)
       .sort();
     expect(unreviewed).toEqual([]);
+  });
+
+  test("every listed plumbing entry is actually replaced", () => {
+    // A listed entry another branch answers first is dead: it reads as
+    // written although the list says it is hidden (errors audit F6).
+    const dead = [...REVIEWED_PLUMBING.keys()]
+      .filter((raw) => friendlyError(raw, CONTEXT).message !== CONTEXT)
+      .sort();
+    expect(dead).toEqual([]);
+    expect(friendlyError("QR layout mismatch: 441 cells for 432 bits", CONTEXT).message).toBe(
+      CONTEXT,
+    );
+  });
+
+  test("fallback literals and privacy-blocker sentences are scanned", () => {
+    // `responseError(response, "…")` and friends, and the sentence of a
+    // `new PrivacyBlockerError(kind, "…")`, reach the reader too.
+    expect(raws.has("approval failed")).toBe(true);
+    expect(raws.has("Private transaction failed")).toBe(true);
+    expect(raws.has("Not enough STRK for the pool fee")).toBe(true);
+    expect(raws.has("Ready multisig request failed")).toBe(true);
   });
 
   test("every reviewed-as-written entry is still minted and still shown as written", () => {

@@ -410,7 +410,7 @@ describe("bindTransfer", () => {
     expect(resultText(app)).toBe("Enter a valid Starknet address.");
   });
 
-  test("reports a submit failure after a successful review", async () => {
+  test("reports an unrecognised submit failure as outcome unknown, never as not sent", async () => {
     let submitCount = 0;
     const { app, deps } = mount({
       async submitTransfer() {
@@ -428,9 +428,12 @@ describe("bindTransfer", () => {
     await flush();
     expect(submitCount).toBe(1);
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("failed");
+    // "network exploded" is no refusal the background makes before signing, so
+    // the transfer may be on chain (errors audit F1).
     expect(app.querySelector("#send-failure-copy")?.textContent).toBe(
-      "The transaction was not sent. Something went wrong. Please try again.",
+      "The transfer may not have gone through. Check Activity before trying again.",
     );
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Status unknown");
     expect(app.querySelector("#send-failure")?.hasAttribute("hidden")).toBe(false);
   });
 

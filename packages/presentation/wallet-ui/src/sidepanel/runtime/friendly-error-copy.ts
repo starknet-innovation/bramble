@@ -26,6 +26,7 @@ import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
+import { PRIVACY_ERROR_COPY } from "./friendly-error-copy-privacy";
 import { INTERNAL_ERROR_COPY } from "./friendly-error-internal";
 import {
   ADD_ACCOUNT_FAILED,
@@ -59,18 +60,21 @@ export const RATE_LIMITED = "This service is rate limiting requests. Wait a mome
 
 // Shared endings. A failure the reader cannot diagnose gets the same sentence
 // wherever it comes from, so the wallet sounds like one writer.
-const REQUEST_FAILED = "That request didn't go through. Try again.";
+/** A request that certainly did not complete, where trying again is safe. */
+export const REQUEST_FAILED = "That request didn't go through. Try again.";
 const FEE_MOVED = "The fee changed while you were reviewing. Check it and submit again.";
 const REFUSED = "The wallet refused that request.";
 // Catch-alls around a submission. The wallet doesn't know whether the
 // transaction left the device, so the copy must not claim it failed or invite
 // a retry that could send it twice.
 // The router's own catch-all can wrap a submission, so it says the same.
-const REQUEST_UNKNOWN =
+/** The catch-all that may wrap a submission; never claims failure. */
+export const REQUEST_UNKNOWN =
   "That didn't complete. If it was a transaction, check Activity before trying again.";
+/** The device signed but the wallet's half of the signing did not finish. */
+export const LEDGER_SIGN_UNFINISHED =
+  "Signing on your Ledger didn't finish. Check Activity before trying again.";
 const LEDGER_RETRY = "Couldn't reach your Ledger. Reconnect the device and try again.";
-const ACTIVATE_FIRST = "Activate private balances first.";
-const DEPLOY_FIRST = "Deploy this account first.";
 
 /**
  * Raw diagnostic (lowercased) to the sentence a reader sees.
@@ -86,6 +90,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["network error", NETWORK_UNREACHABLE],
   ["load failed", NETWORK_UNREACHABLE],
   ["wallet lock incomplete", "Couldn't lock the wallet. Try again."],
+  // The browser's own words when a read got no reply. A write that loses its
+  // reply never reaches here: the client types it as outcome unknown
+  // (runtime-errors.ts `lostReplySend`).
+  ["the message port closed before a response was received.", REQUEST_FAILED],
+  ["could not establish connection. receiving end does not exist.", REQUEST_FAILED],
 
   // --- Accounts this wallet can watch but not sign for ----------------------
   // The recovery scan labels these rows view-only up front (issue 542); this
@@ -147,7 +156,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["origin not connected", "That site isn't connected to this wallet."],
   ["request rejected", "That request was rejected."],
   ["dapps cannot call the wallet account contract itself", "A site can't call your own account."],
-  ["approval failed", REQUEST_FAILED],
+  // The panel's fallback for an unrecognised reply to an approval decision,
+  // which may have signed and submitted (errors audit F3).
+  ["approval failed", REQUEST_UNKNOWN],
   ["approval execution failed", REQUEST_UNKNOWN],
   ["wallet request failed", REQUEST_UNKNOWN],
   ["approval not found", "That request has expired. Ask the site to send it again."],
@@ -365,7 +376,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Allowances ----------------------------------------------------------
   ["allowance not found", "That allowance is no longer on-chain. Refresh the list."],
-  ["revoke failed", "The revoke didn't go through. Try again."],
+  // An unrecognised reply to a revoke (a site's access, or an on-chain
+  // allowance revoke) may have run (errors audit F3).
+  ["revoke failed", REQUEST_UNKNOWN],
   [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",
@@ -433,61 +446,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // use (issue 644): no account to retry, or a chain read to retry.
   ["braavos ledger account not found", "No Braavos account found for this key."],
   ["braavos ledger account status unavailable", NETWORK_RETRY_MESSAGE],
-  [
-    "complete ledger sign failed",
-    "Signing on your Ledger didn't finish. Check Activity before trying again.",
-  ],
+  ["complete ledger sign failed", LEDGER_SIGN_UNFINISHED],
 
-  // --- Private balances ----------------------------------------------------
-  ["private balances unavailable", "Couldn't load private balances. Try again."],
-  ["strk20 services unavailable", "Private balances are unavailable right now. Try again shortly."],
-  ["private balances are already active", "Private balances are already active."],
-  [
-    "private balances are not available for ledger accounts",
-    "Private balances aren't available for Ledger accounts.",
-  ],
-  [
-    "private balances are not configured for this network",
-    "Private balances aren't set up on this network.",
-  ],
-  ["activate private balances before sending privately", ACTIVATE_FIRST],
-  ["activate private balances before unshielding", ACTIVATE_FIRST],
-  ["deploy this account before activating private balances", DEPLOY_FIRST],
-  ["deploy this account before submitting a public private deposit", DEPLOY_FIRST],
-  ["track a token before activating private balances", "Track a token first."],
-  [
-    "registration requires a network-fee approval",
-    "Approve the network fee to finish going private.",
-  ],
-  [
-    "a registration is already on its way for this account",
-    "A registration is already on its way for this account.",
-  ],
-  ["privacy activation preparation failed", "Couldn't prepare activation. Try again."],
-  [
-    "private pool fee is unavailable. retry the registration.",
-    "Couldn't read the pool fee. Try again.",
-  ],
-  ["shielding preparation failed", "Couldn't prepare shielding. Try again."],
-  ["shielding route unavailable", "No shielding route right now. Try again shortly."],
-  ["unshielding preparation failed", "Couldn't prepare unshielding. Try again."],
-  ["private send preparation failed", "Couldn't prepare this private send. Try again."],
-  ["private transaction failed", SUBMISSION_UNKNOWN("The private transaction")],
-  [
-    "private sends to the sending account are not supported",
-    "You can't send privately to the same account.",
-  ],
-  [
-    "the recipient has not activated private balances",
-    "That recipient hasn't activated private balances.",
-  ],
-  ["enter an amount to shield", "Enter an amount to shield."],
-  ["enter an amount to unshield", "Enter an amount to unshield."],
-  [
-    "the previous submission did not reach starknet. try again.",
-    "The last submission didn't reach Starknet. Try again.",
-  ],
-
+  ...PRIVACY_ERROR_COPY,
   ...MULTISIG_ERROR_COPY,
   ...INTERNAL_ERROR_COPY,
 ]);

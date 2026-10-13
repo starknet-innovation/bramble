@@ -1,6 +1,7 @@
 /** Terminal and blocked multisig outcomes use familiar wallet feedback. */
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
@@ -181,4 +182,37 @@ test("opens the deployed account from the final deployment stage", async () => {
   expect(action?.textContent).toContain("Go to deployed account");
   action?.click();
   expect(opened).toEqual([fixture.record.id]);
+});
+
+// Errors audit F4: a deployment whose reply was lost may be on chain. It is
+// not a failure, and Deploy is not offered again.
+test("shows a lost deployment reply as outcome unknown and keeps Deploy down", async () => {
+  const fixture = await makeArgentMultisigFixture();
+  const signer = fixture.status.accounts[0];
+  if (!signer) throw new Error("signer fixture unavailable");
+  const unknown = new SubmissionUnknownError(
+    "That didn't complete. If it was a transaction, check Activity before trying again.",
+    null,
+  );
+  const app = mountMultisigUi(
+    multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+    await makeMultisigUiClient({
+      deployMultisig: async () => {
+        throw unknown;
+      },
+    }),
+    fixture.status,
+  );
+  const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+  form?.requestSubmit();
+  await flushMultisigUi();
+  form?.requestSubmit();
+  await flushMultisigUi();
+
+  expect(app.querySelector("#multisig-deploy-result")?.textContent).toBe(unknown.message);
+  expect(app.textContent).not.toContain("Deployment failed");
+  expect(document.querySelector(".toast.warning .toast-text")?.textContent).toBe(unknown.message);
+  expect(document.querySelector(".toast.error")).toBeNull();
+  const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  expect(submit?.disabled).toBe(true);
 });
