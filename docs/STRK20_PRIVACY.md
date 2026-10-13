@@ -227,7 +227,8 @@ A sweep is one `OPEN` transfer to this account per tracked token the shadow acco
 `shadow_account_invoke` with `collect_policy: all` and no calls (the anonymizer accepts this). It is
 always relayed, so the relay fee comes from the private balance; an account with no private balance
 for the fee cannot sweep. The collected amount is the balance at execution, not the one shown at
-review. Untracked tokens are not swept. The settled open notes are screened against the shadow
+review. Untracked tokens are not swept. Activity records a settled sweep as "Sweep shadow account",
+with no site, label, or nonce, since activity is plain browser storage and part of the CSV export. The settled open notes are screened against the shadow
 account's own address (`Delegated`); whether the prover behind mc-backend performs that screening is
 not yet confirmed (issue 443).
 

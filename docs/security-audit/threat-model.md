@@ -77,7 +77,11 @@ the v4 `accountSecrets` collection only. The v12 `shadowAccountScopes` collectio
 sensitive the same way: it names the sites someone used privately, lives only in the encrypted
 vault (never preferences, activity, logs, or session storage), crosses only to the privileged
 Shadow accounts screen, and is recorded before a shadow-account request runs so that a failed
-write stops the request instead of leaving an account the wallet cannot find again. Reading a
+write stops the request instead of leaving an account the wallet cannot find again. Plaintext
+activity never holds a scope's label or nonce: a sweep is recorded as the generic "Sweep shadow
+account", and a site's own private transaction keeps the line every site-submitted transaction
+has always recorded, "<site> submitted a private transaction (N actions)", which names the site
+but not the scope. Reading a
 scope's shadow accounts or balances sends its partial commitment and addresses to the RPC
 provider, which can link them, so it runs only on the user's request. A dapp's shadow-account
 request on a network with no anonymizer is held on a close-only notice and answered only when the

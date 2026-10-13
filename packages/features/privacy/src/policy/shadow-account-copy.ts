@@ -47,8 +47,10 @@ export const SHADOW_SWEEP_SUMMARY = (nonce: string, origin: string): string =>
   `Sweep your shadow account #${nonce} for ${origin}`;
 
 /**
- * The activity line a settled sweep records. PROPOSED. Activity summaries are
- * data (dedup guards match on them), so this is fixed before it first ships.
+ * The activity line a settled sweep records. PROPOSED. Activity is plain data
+ * outside the encrypted vault and goes out in the CSV export, so it names no
+ * site, label, or nonce: those are scope-record facts, which stay in the vault
+ * (audit F2). Activity summaries are data (dedup guards match on them), so this
+ * is fixed before it first ships.
  */
-export const SHADOW_SWEEP_ACTIVITY = (nonce: string, origin: string): string =>
-  `Sweep shadow account #${nonce} for ${origin}`;
+export const SHADOW_SWEEP_ACTIVITY = "Sweep shadow account";

@@ -21,7 +21,6 @@ import {
 import {
   SHADOW_INVOKE_ANONYMIZER,
   SHADOW_INVOKE_SETTLES,
-  SHADOW_SWEEP_ACTIVITY,
   SHADOW_SWEEP_SUMMARY,
 } from "@bramble/privacy/shadow-account-copy";
 import type { TokenConfig } from "@bramble/settings/preferences";
@@ -173,7 +172,3 @@ export const submitShadowSweep = async (
     plan: preparation.plan,
   });
 };
-
-/** The activity line for a settled sweep. */
-export const shadowSweepActivity = (preparation: Strk20ShadowSweepPreparation): string =>
-  SHADOW_SWEEP_ACTIVITY(displayNonce(preparation.nonce), activityOrigin(preparation.origin));
