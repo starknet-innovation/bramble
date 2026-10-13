@@ -324,6 +324,15 @@ export const SEND_COMPOSE_STYLES = `
     margin: -${SPACE.sm} 0 0;
     text-align: right;
   }
+  /* The Amount screen's fee preview sits under the value it is a cost beside:
+     the same muted caption voice, so neither figure reads as an action. */
+  .send-fee-lines { display: grid; gap: ${SPACE.xs}; }
+  .send-fee-line {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    margin: 0;
+    text-align: right;
+  }
   .send-context-receipt {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};

@@ -17,6 +17,32 @@ export default meta;
 
 export const SendRecipient = checkpointStory("Send · recipient", "send", "recipient");
 export const SendDetails = checkpointStory("Send · amount", "send", "details");
+export const SendAmountFee: LabStory = {
+  args: { checkpointId: "details-fee", scenarioId: "send" },
+  name: "Send · amount and estimated fee",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // The figure the review would bind, on the screen before it.
+    await expect(body?.querySelector("#send-fee-lines")).toHaveTextContent(
+      "Estimated fee: 0.0024 STRK",
+    );
+  },
+};
+export const SendShieldFee: LabStory = {
+  args: { checkpointId: "shield-fee", scenarioId: "send" },
+  name: "Send · shield pool fee",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // A pool route states the pool's charge and no network fee it cannot know.
+    await expect(body?.querySelector("#send-fee-lines")).toHaveTextContent(
+      "Pool fee: 6 STRK from your public balance",
+    );
+  },
+};
 export const SendAsset = checkpointStory("Send · asset picker", "send", "asset");
 export const SendReview = checkpointStory("Send · review", "send", "review");
 export const SendFeeFailure = checkpointStory("Send · fee failure", "send", "fee-failure");

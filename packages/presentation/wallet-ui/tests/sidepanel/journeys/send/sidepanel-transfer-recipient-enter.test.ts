@@ -5,6 +5,12 @@
  * clears that hidden recipient, so no review can be built from an address the
  * current step no longer shows. The shared token dropdown's Enter handling is
  * pinned in ../swap/swap-token-dropdown.test.ts (the same binding Send uses).
+ *
+ * The amount step asks for an estimate now (the fee preview), so arriving there
+ * with an amount is one review request rather than none; the guard is that this
+ * request, like any other, carries the address on screen and never the poison,
+ * and that it is the amount step's debounced preview rather than an implicit
+ * form submit falling through from Enter.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { sameFelt } from "@bramble/wallet-model/networks";
@@ -73,13 +79,31 @@ describe("recipient search Enter (audit #248)", () => {
     const form = app.querySelector<HTMLFormElement>("#transfer-form");
     expect(form?.dataset["stage"]).toBe("recipient");
 
+    // The fee preview estimates on the injected schedule, so holding it back
+    // shows whether the single review request is that debounced preview or a
+    // submit-driven review, which would already have fired synchronously.
+    const scheduled: Array<() => void> = [];
+    (globalThis as { setTimeout: unknown }).setTimeout = ((fn: () => void) => {
+      scheduled.push(fn);
+      return scheduled.length;
+    }) as unknown as typeof setTimeout;
+
     const event = pressEnter(typeRecipient(app, GENUINE));
     await flush();
 
     expect(event.defaultPrevented).toBe(true);
     expect(sameFelt(hidden(app, "recipient"), GENUINE)).toBe(true);
     expect(form?.dataset["stage"]).toBe("details");
+    // Nothing reviewed yet: entering the amount step only scheduled the preview.
     expect(calls.reviewTransfer).toHaveLength(0);
+
+    for (const run of scheduled.splice(0)) run();
+    await flush();
+    // The amount step's fee estimate is the one request expected here, and it
+    // must name the address on screen, never the previous choice.
+    expect(calls.reviewTransfer).toHaveLength(1);
+    expect(sameFelt(String(calls.reviewTransfer[0]?.[2]), GENUINE)).toBe(true);
+    expect(sameFelt(String(calls.reviewTransfer[0]?.[2]), POISON)).toBe(false);
   });
 
   test("Back clears the hidden recipient so a stray submit reviews nothing", async () => {
@@ -103,6 +127,7 @@ describe("recipient search Enter (audit #248)", () => {
     expect(app.querySelector<HTMLFormElement>("#transfer-form")?.dataset["stage"]).not.toBe(
       "details",
     );
+    // Still on the recipient step, so nothing is composed and nothing is estimated.
     expect(calls.reviewTransfer).toHaveLength(0);
   });
 });

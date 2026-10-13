@@ -1,5 +1,5 @@
 import { ledgerMessage } from "@bramble/ledger-protocol/errors";
-import type { LedgerSignView } from "@bramble/wallet-ui/lab";
+import type { LedgerSignView, PrivacyDisclosureState, SendIntent } from "@bramble/wallet-ui/lab";
 import {
   bindTransfer,
   createSidepanelRuntime,
@@ -9,10 +9,12 @@ import {
 } from "@bramble/wallet-ui/lab";
 import { ledgerAccount, RECIPIENT_ADDRESS, statusFor } from "../fixtures/fixtures";
 import {
+  ETH_TOKEN,
   journeyBalances,
   journeyChanges,
   journeyPreferences,
   journeyPrices,
+  STRK_TOKEN,
 } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "../runtime/types";
@@ -30,13 +32,68 @@ type SendMode =
   | "broadcasting"
   | "confirming"
   | "details"
+  | "details-fee"
   | "failed"
   | "fee-failure"
   | "pending"
   | "recipient"
   | "review"
   | "reviewing"
+  | "shield-fee"
   | "submitted";
+
+// The pool's per-batch STRK charge and this account's private-balance
+// disclosure, fixture-only, so the lab can render a pool route's fee without a
+// background worker.
+const POOL_FEE_FRI = "6000000000000000000";
+
+const fixturePrivacy: PrivacyDisclosureState = {
+  error: null,
+  loading: false,
+  value: {
+    accountId: ledgerAccount.id,
+    balances: [
+      {
+        balance: "1250000000000000000",
+        formatted: "1.25",
+        symbol: "ETH",
+        token: ETH_TOKEN.address,
+        tokenId: ETH_TOKEN.id,
+      },
+      {
+        balance: "2845000000000000000000",
+        formatted: "2845",
+        symbol: "STRK",
+        token: STRK_TOKEN.address,
+        tokenId: STRK_TOKEN.id,
+      },
+    ],
+    networkId: "SN_MAIN",
+    poolFeeFri: POOL_FEE_FRI,
+    relayConfigured: true,
+    registration: "registered",
+  },
+};
+
+const waitForFeeLine = async (app: HTMLElement): Promise<void> => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if ((app.querySelector("#send-fee-lines")?.textContent ?? "").trim() !== "") return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("Send fixture never showed a fee line");
+};
+
+// A shield shortcut: the account pays itself, so the destination bucket is the
+// private side and the recipient is the account's own address.
+const shieldIntent: SendIntent = {
+  accountId: ledgerAccount.id,
+  destination: "private",
+  networkId: "SN_MAIN",
+  recipient: ledgerAccount.address,
+  recipientLabel: "Ledger vault",
+  source: "public",
+  tokenId: ETH_TOKEN.id,
+};
 
 const waitForSendStage = async (
   form: HTMLFormElement,
@@ -133,6 +190,7 @@ const prepareSend =
     bindTransfer({
       app: context.app,
       confirmationDelaysMs: [0],
+      privacy: () => fixturePrivacy,
       publicBalances: () => journeyBalances,
       render: async () => undefined,
       senderAddress: () => ledgerAccount.address,
@@ -142,14 +200,22 @@ const prepareSend =
     if (mode === "recipient") {
       return;
     }
-    context.app.querySelector<HTMLElement>(`[data-send-recipient="${RECIPIENT_ADDRESS}"]`)?.click();
-    await nextTurn();
+    if (mode !== "shield-fee") {
+      context.app
+        .querySelector<HTMLElement>(`[data-send-recipient="${RECIPIENT_ADDRESS}"]`)
+        ?.click();
+      await nextTurn();
+    }
     if (mode === "details") return;
     if (mode === "asset") {
       context.app.querySelector<HTMLButtonElement>("#send-token-trigger")?.click();
       return;
     }
     updateForm(context, "#send-amount-input", "0.24");
+    if (mode === "details-fee" || mode === "shield-fee") {
+      await waitForFeeLine(context.app);
+      return;
+    }
     const form = context.app.querySelector<HTMLFormElement>("#transfer-form");
     if (!form) {
       throw new Error("Missing production Send form");
@@ -172,7 +238,12 @@ const prepareSend =
     await waitForSendStage(form, mode);
   };
 
-const sendCheckpoint = (mode: SendMode, label: string, narrative: string): ScenarioCheckpoint => ({
+const sendCheckpoint = (
+  mode: SendMode,
+  label: string,
+  narrative: string,
+  intent?: SendIntent,
+): ScenarioCheckpoint => ({
   content: () =>
     sendFlow(
       statusFor(ledgerAccount),
@@ -181,6 +252,9 @@ const sendCheckpoint = (mode: SendMode, label: string, narrative: string): Scena
       journeyBalances,
       journeyPrices,
       journeyChanges,
+      "usd",
+      [],
+      intent,
     ),
   id: mode,
   label,
@@ -205,6 +279,17 @@ export const sendScenario: WalletScenario = {
       "details",
       "Enter amount",
       "The chosen recipient and network remain visible while token or fiat value is entered.",
+    ),
+    sendCheckpoint(
+      "details-fee",
+      "Amount and estimated fee",
+      "The estimated network fee is quoted on the amount screen, before the send is reviewed.",
+    ),
+    sendCheckpoint(
+      "shield-fee",
+      "Pool fee on a shield",
+      "A shielded send states the pool's per-batch charge and invents no network fee for it.",
+      shieldIntent,
     ),
     sendCheckpoint(
       "asset",
