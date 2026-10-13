@@ -322,8 +322,8 @@ const required = <Method>(method: Method | undefined, name: string): Method => {
  * its transfers client with a `viewingKeyProvider` (see
  * @bramble/privacy's official-sdk-transfers), and `prepare`,
  * `privateBalances`, `registrationStatus`, `register`, `shadowAccountCommitment`
- * `prepareRegistration`, `prepareAccountActions`, `shadowAccountCommitment` and
- * `submitActions` all go through that client. `poolFee`, `quoteActions` and
+ * `prepareRegistration`, `prepareAccountActions`, `shadowAccountCommitment`,
+ * `shadowAccounts` and `submitActions` all go through that client. `poolFee`, `quoteActions` and
  * `submitPrepared` do not, so they are left unwrapped rather than over-claiming.
  */
 const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
@@ -357,6 +357,11 @@ const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
     async shadowAccountCommitment(input) {
       await input.viewingKey();
       return base.shadowAccountCommitment(input);
+    },
+    // The real listing derives the partial commitment from the viewing key.
+    async shadowAccounts(input) {
+      await input.viewingKey();
+      return required(base.shadowAccounts, "shadowAccounts")(input);
     },
     async submitActions(input) {
       await input.viewingKey();

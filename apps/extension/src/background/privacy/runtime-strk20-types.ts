@@ -122,3 +122,52 @@ export type Strk20RecipientStatusResponse = {
   readonly ok: true;
   readonly strk20RecipientRegistration: "registered" | "unregistered";
 };
+
+/**
+ * The recorded shadow-account scopes of the active account (#443), read only
+ * from the encrypted vault and returned only to an extension-controlled page.
+ * `current` is false for a scope recorded under an anonymizer the network no
+ * longer routes through, which the wallet can list but not reach.
+ */
+export type Strk20ShadowAccountsResponse = {
+  readonly ok: true;
+  readonly strk20ShadowAccounts: {
+    readonly scopes: readonly {
+      readonly anonymizer: string;
+      readonly current: boolean;
+      readonly label: string;
+      readonly nonces: readonly string[];
+      readonly origin: string;
+    }[];
+  };
+};
+
+/**
+ * One scope's shadow accounts and their tracked-token balances, read from the
+ * network on the user's request. `unlisted` holds recorded nonces the
+ * anonymizer's view cannot address.
+ */
+export type Strk20ShadowAccountBalancesResponse = {
+  readonly ok: true;
+  readonly strk20ShadowAccountBalances: {
+    readonly accounts: readonly ShadowAccountEntry[];
+    readonly unlisted: readonly string[];
+  };
+};
+
+/** One token a shadow account holds, in the wallet's own display terms. */
+export type ShadowAccountBalance = {
+  readonly balance: string;
+  readonly formatted: string;
+  readonly symbol: string;
+  readonly tokenId: string;
+};
+
+/** One shadow account of a scope, as the view shows it. */
+export type ShadowAccountEntry = {
+  readonly address: string;
+  readonly balances: readonly ShadowAccountBalance[];
+  readonly deployed: boolean;
+  readonly nonce: string;
+  readonly recorded: boolean;
+};

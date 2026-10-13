@@ -36,7 +36,12 @@ const SCOPE_DOMAIN = "bramble/strk20-shadow-account/v1";
 // label cannot impersonate one.
 const SCOPE_HEX_CHARS = 30;
 
-const originScope = async (origin: string, label: string): Promise<string> => {
+/**
+ * The origin-bound separator for one (origin, label) scope: the `dapp_name`
+ * the SDK derives the shadow account from. `origin` must be a verified or
+ * vault-recorded origin, never one read from an untrusted message body.
+ */
+export const strk20ShadowAccountScope = async (origin: string, label: string): Promise<string> => {
   const bytes = new TextEncoder().encode(`${SCOPE_DOMAIN}|${origin}|${label}`);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
   return bytesToHex(digest).slice(0, SCOPE_HEX_CHARS);
@@ -60,7 +65,7 @@ export const strk20ShadowAccountCommitment = async (
 ): Promise<Strk20ShadowAccountCommitmentResponse> => {
   const commitment = await strk20ServiceForRuntime(runtimeRpc).shadowAccountCommitment({
     ...context,
-    dappName: await originScope(approval.origin, approval.request.dappName),
+    dappName: await strk20ShadowAccountScope(approval.origin, approval.request.dappName),
     ...(approval.request.nonce === undefined ? {} : { nonce: approval.request.nonce }),
   });
   return { commitment, ok: true };
@@ -83,7 +88,7 @@ export const bindStrk20ActionsToOrigin = async (
   Promise.all(
     actions.map(async (action) =>
       action.type === "shadow_account_invoke"
-        ? { ...action, dapp_name: await originScope(origin, action.dapp_name) }
+        ? { ...action, dapp_name: await strk20ShadowAccountScope(origin, action.dapp_name) }
         : action,
     ),
   );

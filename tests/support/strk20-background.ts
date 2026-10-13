@@ -155,6 +155,15 @@ export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Ser
     async registrationStatus() {
       return options.registered === false ? "unregistered" : "registered";
     },
+    // Lists one address per nonce, nonce 0 deployed; each holds the token
+    // balance the RPC double reports for it.
+    async shadowAccounts({ nonces }) {
+      return nonces.map((nonce) => ({
+        address: `0x5ad0${nonce.toString(16)}`,
+        deployed: nonce === 0n,
+        nonce: `0x${nonce.toString(16)}`,
+      }));
+    },
     async shadowAccountCommitment() {
       if (shadowAccountCalls) {
         shadowAccountCalls.value += 1;

@@ -26,3 +26,14 @@ export const SHADOW_INVOKE_SETTLES_NOTHING = "Nothing settles back into private 
 /** Who can move what the calls leave behind. Issue wording. */
 export const SHADOW_INVOKE_CONTROL =
   "Whatever the calls leave in the shadow account can only be moved by this wallet on this site";
+
+/** The sweep review's first line (#443, PR 5). PROPOSED; mirrors SHADOW_INVOKE_RUNS. */
+export const SHADOW_SWEEP_SUMMARY = (nonce: string, origin: string): string =>
+  `Sweep your shadow account #${nonce} for ${origin}`;
+
+/**
+ * The activity line a settled sweep records. PROPOSED. Activity summaries are
+ * data (dedup guards match on them), so this is fixed before it first ships.
+ */
+export const SHADOW_SWEEP_ACTIVITY = (nonce: string, origin: string): string =>
+  `Sweep shadow account #${nonce} for ${origin}`;

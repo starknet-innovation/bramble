@@ -70,6 +70,23 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: contentSender,
   },
   { message: { type: "wallet.strk20State" }, sender: extensionSender },
+  // The Shadow accounts view (#443). The commitment entry above records the
+  // scope these name, so each reaches the vault's records and, for the last
+  // two, the viewing-key-derived listing.
+  { message: { type: "wallet.strk20ShadowAccounts" }, sender: extensionSender },
+  {
+    message: { label: "bramble-terminal", origin, type: "wallet.strk20ShadowAccountBalances" },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      label: "bramble-terminal",
+      nonce: "0x0",
+      origin,
+      type: "wallet.strk20PrepareShadowSweep",
+    },
+    sender: extensionSender,
+  },
   {
     live: async (ids) => ({ tokenId: ids.tokenId }),
     message: {

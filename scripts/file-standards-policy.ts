@@ -80,6 +80,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Records used shadow-account scopes (#443): hands the unlocked vault
   // credential straight to the vault's record method. Never logged or returned.
   "apps/extension/src/background/privacy/strk20-shadow-scopes.ts",
+  // Shadow accounts view (#443): reads the account's scope records with the
+  // unlocked vault credential, like the other privileged privacy journeys.
+  "apps/extension/src/background/privacy/strk20-shadow-ops.ts",
   // Queues approvals only. Since the execution half moved out, its sole match
   // is the `./signature-waiters` import path; no secret material transits here.
   "apps/extension/src/background/privacy/strk20-ops.ts",
