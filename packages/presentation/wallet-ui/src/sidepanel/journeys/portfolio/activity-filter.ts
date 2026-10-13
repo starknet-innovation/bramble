@@ -8,6 +8,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activity";
+import { shortAddress } from "@bramble/transactions/verify-decode";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { canonicalAddress, canonicalFelt } from "@bramble/wallet-model/networks";
 import { formatUtcDate } from "../../shared/timestamp";
@@ -118,12 +119,22 @@ export const activityFilterOptions = (
     const label = entry.token?.trim();
     if (key && label && !tokens.has(key)) tokens.set(key, label);
   }
+  // Two contracts can share a ticker (issue 643). Where labels collide, each
+  // option keyed by an address names it ("USDC · 0x053c…68a8"); unique labels
+  // and older symbol-keyed rows read as before.
+  const labelCounts = new Map<string, number>();
+  for (const label of tokens.values()) labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+  const optionLabel = (key: string, label: string): string => {
+    if ((labelCounts.get(label) ?? 0) < 2 || key.startsWith("symbol:")) return label;
+    return `${label} · ${shortAddress(canonicalAddress(key) ?? key)}`;
+  };
   return {
     actions: [...actions].sort(byText),
     statuses: STATUS_ORDER.filter((status) => statuses.has(status)),
     tokens: [...tokens]
       .map(([key, label]) => ({ key, label }))
-      .sort((left, right) => byText(left.label, right.label) || byText(left.key, right.key)),
+      .sort((left, right) => byText(left.label, right.label) || byText(left.key, right.key))
+      .map(({ key, label }) => ({ key, label: optionLabel(key, label) })),
   };
 };
 

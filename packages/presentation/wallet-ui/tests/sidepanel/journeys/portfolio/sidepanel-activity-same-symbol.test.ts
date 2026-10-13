@@ -117,6 +117,13 @@ describe("same-symbol tokens in the Activity feed", () => {
     expect(tokenOptions(mount())).toEqual(["all", USDC_A, USDC_B]);
   });
 
+  test("the shared ticker is labelled with each token's short address", () => {
+    const labels = [...mount().querySelectorAll<HTMLOptionElement>("#activity-token option")]
+      .slice(1)
+      .map((option) => option.textContent);
+    expect(labels).toEqual(["USDC · 0x0000…11ce", "USDC · 0x0000…0b0b"]);
+  });
+
   test("filtering on one token shows only that token's rows", () => {
     const app = mount();
     choose(app, USDC_B);
