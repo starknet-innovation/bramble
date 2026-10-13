@@ -50,6 +50,13 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
   // the deployed-account checks already tell the reader.
   ["invalid argent account class hash", UNRECOGNIZED_RELEASE.ready],
   ["invalid braavos account class hash", UNRECOGNIZED_RELEASE.braavos],
+  // Already the sentence a reader needs; listed so the coverage check can tell
+  // "reviewed and kept" from "never looked at" (it was past the scan's old
+  // length limit).
+  [
+    "couldn't estimate the network fee for this swap, so nothing was prepared. the quote may have moved, or the account may not hold enough to cover the swap and its fee. try again, or reduce the amount.",
+    "Couldn't estimate the network fee for this swap, so nothing was prepared. The quote may have moved, or the account may not hold enough to cover the swap and its fee. Try again, or reduce the amount.",
+  ],
   // A security refusal: the revoke was not sent because the contract could not
   // be confirmed as a token. Shown as written until reviewed copy replaces it
   // (proposal: "Couldn't confirm that contract is a token, so the revoke wasn't
