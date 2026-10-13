@@ -6,6 +6,7 @@ type ActivityCsvEntry = {
   readonly accountId: string;
   readonly amount?: string;
   readonly counterparty?: string;
+  readonly direction?: "in" | "out";
   readonly hash: string;
   readonly kind: string;
   readonly networkId: string;
@@ -79,14 +80,15 @@ const accountAddress = (accountId: string): string => {
   return separator === -1 ? accountId : accountId.slice(separator + 1);
 };
 
-const RECEIVED_SUMMARY = /\b(receive|received)\b/i;
-
 // A transfer's stored summary shortens the counterparty and words its verb by
 // where the row came from ("Send" for a local record, "Sent" or "Received" for
 // a chain read). The export rebuilds it from the structured fields so every
 // transfer names its counterparty in full and reads with one verb, while a row
 // that is not a plain transfer, or that is missing a detail, keeps whatever was
-// recorded. The stored verb is the direction signal, the same one the feed uses.
+// recorded. The direction comes only from the recorded \`direction\` field, which
+// the feed also reads first: the summary embeds a token symbol a third party can
+// choose (Sherlock 196), so its wording is never parsed. A row without a
+// recorded direction keeps its summary as recorded.
 const csvSummary = (entry: ActivityCsvEntry): string => {
   if (entry.kind !== "transfer") {
     return entry.summary;
@@ -94,10 +96,10 @@ const csvSummary = (entry: ActivityCsvEntry): string => {
   const amount = entry.amount?.trim();
   const token = entry.token?.trim();
   const counterparty = entry.counterparty?.trim();
-  if (!amount || !token || !counterparty) {
+  if (!amount || !token || !counterparty || entry.direction === undefined) {
     return entry.summary;
   }
-  const inbound = RECEIVED_SUMMARY.test(entry.summary);
+  const inbound = entry.direction === "in";
   return `${inbound ? "Received" : "Sent"} ${amount} ${token} ${inbound ? "from" : "to"} ${counterparty}`;
 };
 

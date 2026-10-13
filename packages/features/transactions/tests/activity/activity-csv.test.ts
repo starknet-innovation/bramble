@@ -46,6 +46,7 @@ describe("activityToCsv", () => {
       accountId: ACCOUNT_ID,
       amount: "1.5",
       counterparty: "0x777abbcc",
+      direction: "out",
       hash: "0xdef",
       kind: "transfer",
       networkId: "SN_MAIN",
@@ -79,8 +80,8 @@ describe("activityToCsv", () => {
       token: "STRK",
     };
     const [outgoing, incoming] = activityToCsv([
-      { ...base, summary: "Send 2 STRK to 0x1176…f3d8" },
-      { ...base, summary: "Received 2 STRK from 0x1176…f3d8" },
+      { ...base, direction: "out" as const, summary: "Send 2 STRK to 0x1176…f3d8" },
+      { ...base, direction: "in" as const, summary: "Received 2 STRK from 0x1176…f3d8" },
     ])
       .split("\n")
       .slice(1);
@@ -94,6 +95,36 @@ describe("activityToCsv", () => {
         '"Received 2 STRK from 0x1176a1bd84444c89232ec27754698e5d2e7e1a7f1539f12027f28b23ec9f3d8"',
       ),
     ).toBe(true);
+  });
+
+  test("takes a transfer's direction from the record, never from its summary", () => {
+    const base = {
+      accountId: ACCOUNT_ID,
+      amount: "2",
+      counterparty: "0x1176a1bd84444c89232ec27754698e5d2e7e1a7f1539f12027f28b23ec9f3d8",
+      hash: "0x2",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      status: "accepted",
+      submittedAt: 1_700_000_000_000,
+      // A third party chooses a token's symbol, so a summary can read "Received"
+      // for value that left the account (Sherlock 196).
+      summary: "Send 2 Received to 0x1176…f3d8",
+      token: "Received",
+    };
+    const [spoofed, legacy] = activityToCsv([
+      { ...base, direction: "out" as const },
+      // A legacy row with no recorded direction keeps its summary as recorded.
+      base,
+    ])
+      .split("\n")
+      .slice(1);
+    expect(
+      spoofed?.endsWith(
+        '"Sent 2 Received to 0x1176a1bd84444c89232ec27754698e5d2e7e1a7f1539f12027f28b23ec9f3d8"',
+      ),
+    ).toBe(true);
+    expect(legacy?.endsWith('"Send 2 Received to 0x1176…f3d8"')).toBe(true);
   });
 
   test("exports blank detail cells for entries lacking the optional fields", async () => {
