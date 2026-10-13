@@ -95,6 +95,15 @@ const actionsMatchPlan = (
   );
 };
 
+// Private swaps stay off until a reviewed executor is pinned in
+// `PRIVATE_SWAP_EXECUTOR` (#269); every client entry refuses before any request.
+const reviewedExecutor = (): string => {
+  if (PRIVATE_SWAP_EXECUTOR === null) {
+    throw new Error("Private swaps are unavailable while executor verification is pending.");
+  }
+  return PRIVATE_SWAP_EXECUTOR;
+};
+
 /**
  * Builds an AVNU private route on the server, where the pinned SDK and
  * paymaster credential stay out of the browser bundle. Every returned action is
@@ -106,9 +115,7 @@ export const fetchPrivateSwapPlan = async (input: {
   readonly sellToken: string;
   readonly takerAddress: string;
 }): Promise<PrivateSwapPlan> => {
-  if (PRIVATE_SWAP_EXECUTOR === null) {
-    throw new Error("Private swaps are unavailable while executor verification is pending.");
-  }
+  const executor = reviewedExecutor();
   const value = await post("plan", {
     ...input,
     feeMode: { poolFeeToken: PRIVATE_SWAP_FEE_TOKEN, tip: "normal" },
@@ -119,7 +126,7 @@ export const fetchPrivateSwapPlan = async (input: {
     !Array.isArray(value["actions"]) ||
     !isNonZeroFelt(value["buyAmount"]) ||
     !isNonZeroFelt(value["executor"]) ||
-    !sameAddress(value["executor"], PRIVATE_SWAP_EXECUTOR) ||
+    !sameAddress(value["executor"], executor) ||
     !isRecord(value["fee"]) ||
     !hasOnlyKeys(value["fee"], ["amount", "recipient", "token"]) ||
     !isNonZeroFelt(value["fee"]["amount"]) ||
@@ -170,6 +177,7 @@ export const submitPrivateSwapProof = async (
   callAndProof: PrivateCallAndProof,
   feeMode: PrivateFeeMode,
 ): Promise<string> => {
+  reviewedExecutor();
   const value = await post("submit", {
     callAndProof: {
       call: {
