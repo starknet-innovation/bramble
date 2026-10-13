@@ -156,6 +156,17 @@ export type Strk20SubmissionResult = {
 };
 
 /**
+ * One shadow account as the anonymizer reports it: the nonce, its address (the
+ * deployed one, or the address the primer deploy would derive), and whether it
+ * is deployed yet.
+ */
+export type Strk20ShadowAccountInfo = {
+  readonly address: string;
+  readonly deployed: boolean;
+  readonly nonce: string;
+};
+
+/**
  * Injectable official-SDK adapter. Implementations must validate every SDK and
  * service response, target the configured pool, and fail closed.
  */
@@ -188,6 +199,20 @@ export type Strk20Service = {
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
+  /**
+   * Lists the shadow accounts of one origin-bound scope at the requested
+   * nonces through the configured anonymizer's `get_shadow_accounts` view,
+   * including undeployed ones (which may already hold funds). Derives the
+   * partial commitment from the viewing key, then sends it to the RPC node:
+   * the read links these addresses at the provider, so callers run it only on
+   * the user's request. Absent implementations fail closed at the caller.
+   */
+  readonly shadowAccounts?: (
+    input: Strk20AccountContext & {
+      readonly dappName: string;
+      readonly nonces: readonly bigint[];
+    },
+  ) => Promise<readonly Strk20ShadowAccountInfo[]>;
   readonly shadowAccountCommitment: (
     input: Strk20AccountContext & { readonly dappName: string; readonly nonce?: string },
   ) => Promise<string>;
