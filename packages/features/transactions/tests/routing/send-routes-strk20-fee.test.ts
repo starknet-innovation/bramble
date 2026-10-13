@@ -56,9 +56,7 @@ describe("#356 converted-fee affordability", () => {
   test("the amount plus the converted fee must fit the sent-token balance", () => {
     expect(
       resolveSendRoute(privateUsdcSend({ amountRaw: 1_000n * SIX_USDC })).blocked?.reason,
-    ).toBe(
-      "Not enough private USDC for this amount plus the pool fee. You need at least 6006 USDC.",
-    );
+    ).toBe("Not enough private USDC for this amount plus the pool fee");
     // Exactly balance-minus-fee is sendable.
     expect(
       resolveSendRoute(privateUsdcSend({ amountRaw: 1_000n * SIX_USDC - USDC_FEE_CEILING }))
@@ -122,6 +120,25 @@ describe("#356 converted-fee affordability", () => {
     expect(resolveSendRoute(otherSend).blocked).toBeUndefined();
     expect(resolveSendRoute({ ...otherSend, sourceFeeBalanceRaw: 0n }).blocked?.reason).toBe(
       "Not enough private USDC to cover the pool fee",
+    );
+  });
+
+  test("a converted fee ceiling is never stated as a minimum", () => {
+    // The converted fee is an upper bound on what the relay may take, so a
+    // refusal that includes it names no figure; a STRK fee is exact and does.
+    const converted = resolveSendRoute(privateUsdcSend({ amountRaw: 1_000n * SIX_USDC }));
+    expect(converted.blocked?.reason).not.toContain("You need at least");
+    const strk = resolveSendRoute(
+      privateUsdcSend({
+        amountRaw: 1_000n * SIX_USDC,
+        convertedFeeCeilingRaw: null,
+        feeTokenAddress: STRK_TOKEN_ADDRESS,
+        feeTokenSymbol: "STRK",
+        sourceFeeBalanceRaw: 0n,
+      }),
+    );
+    expect(strk.blocked?.reason).toBe(
+      "Not enough private STRK to cover the pool fee. You need at least 6 STRK.",
     );
   });
 });

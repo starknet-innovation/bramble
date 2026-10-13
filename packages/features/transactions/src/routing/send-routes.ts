@@ -309,13 +309,17 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
 
 // A refusal names the figure the user has to reach: the amount plus the pool fee
 // when that fee leaves the same balance, otherwise the amount alone. Stating the
-// minimum is what turns "not enough" into something the user can act on.
+// minimum is what turns "not enough" into something the user can act on. A fee
+// charged in a token other than STRK is a converted ceiling, an upper bound on
+// what the relay may take, so a sum that includes it is not stated as a minimum.
 const shortfall = (input: SendRouteInput, route: SendRoute, needed: bigint): string => {
   const asset = input.source === "private" ? `private ${input.tokenSymbol}` : input.tokenSymbol;
   const minimum = `You need at least ${formatTokenAmount(needed, input.tokenDecimals)} ${input.tokenSymbol}.`;
-  return route.poolFeeRequired && feeInSentToken(input)
-    ? `Not enough ${asset} for this amount plus the pool fee. ${minimum}`
-    : `Not enough ${asset}. ${minimum}`;
+  if (!(route.poolFeeRequired && feeInSentToken(input))) {
+    return `Not enough ${asset}. ${minimum}`;
+  }
+  const short = `Not enough ${asset} for this amount plus the pool fee`;
+  return sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS) ? `${short}. ${minimum}` : short;
 };
 
 /**
