@@ -26,7 +26,6 @@ import {
   buildRouterSwapCall,
   buildRouterTransferCall,
   computeSqrtRatioLimit,
-  DEFAULT_SLIPPAGE_BPS,
   EKUBO_FEE_TIERS,
   EKUBO_SKIP_AHEAD,
   type EkuboPoolKey,
@@ -36,6 +35,7 @@ import {
   parsePoolSqrtRatio,
   parseQuoteOutput,
 } from "./ekubo-swap";
+import { DEFAULT_SLIPPAGE_BPS } from "../support/slippage";
 import type { SwapParams, SwapQuote, SwapQuoteParams } from "../types";
 
 /**

@@ -31,13 +31,6 @@ import { AVNU_ADDRESSES } from "../constants";
 const BPS_DENOMINATOR = 10_000n;
 
 /**
- * Default swap slippage tolerance (0.1%) applied when a caller omits one, matching
- * the AVNU SDK `SLIPPAGE_PERCENTAGE` default. ⚠️ Product default — confirm against
- * the terminal's chosen tolerance.
- */
-export const DEFAULT_SLIPPAGE_BPS = 10;
-
-/**
  * Number of quotes to request from the aggregator; the terminal only consumes the
  * best route (`quotes[0]`).
  */

@@ -11,6 +11,7 @@ import { usePortfolio, type TokenRow } from "../../data/index";
 import {
   buildAvnuSwapCalls,
   buildEkuboSwapCalls,
+  DEFAULT_SLIPPAGE_BPS,
   MAINNET_TOKEN_ADDRESSES,
   MAINNET_TOKEN_DECIMALS,
   quoteAvnuSwap,
@@ -54,7 +55,7 @@ export const SwapPanel = ({
   const portfolio = usePortfolio(address);
   const [amount, setAmount] = useState("");
   const [venue, setVenue] = useState<SwapVenue>("avnu");
-  const [slippageBps, setSlippageBps] = useState(50);
+  const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
   const [pickerTarget, setPickerTarget] = useState<PickerTarget | null>(null);
   const [search, setSearch] = useState("");
   const [quoteVersion, setQuoteVersion] = useState(0);

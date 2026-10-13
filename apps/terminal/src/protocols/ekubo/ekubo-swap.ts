@@ -24,12 +24,6 @@ import { EKUBO_ADDRESSES } from "../constants";
 const BPS_DENOMINATOR = 10_000n;
 
 /**
- * Default swap slippage tolerance (0.5%) applied when a caller omits one.
- * ⚠️ Product default — confirm against the terminal's chosen tolerance.
- */
-export const DEFAULT_SLIPPAGE_BPS = 50;
-
-/**
  * `skip_ahead` gas hint for the router; 0 disables the optimization.
  */
 export const EKUBO_SKIP_AHEAD = "0";
