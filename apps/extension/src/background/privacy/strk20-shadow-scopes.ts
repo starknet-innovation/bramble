@@ -12,14 +12,12 @@
  * requests are.
  */
 import { WalletError } from "@bramble/core/errors";
+import { SHADOW_ACCOUNT_RECORDS_UNAVAILABLE } from "@bramble/privacy/shadow-account-refusals";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-
-// Refusal when the vault cannot record a scope at all. Stable error code.
-const SHADOW_ACCOUNT_RECORDS_UNAVAILABLE = "shadow account records unavailable";
 
 /** One site label and the exact nonces a request uses under it. */
 export type ShadowScopeUse = { readonly label: string; readonly nonces: readonly string[] };

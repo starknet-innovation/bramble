@@ -8,6 +8,7 @@
 import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isWalletOrigin } from "@bramble/core/origin";
+import { SHADOW_ACCOUNT_RECORDS_UNAVAILABLE } from "@bramble/privacy/shadow-account-refusals";
 import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { isStrk20DappName, isStrk20Felt } from "@bramble/wallet-protocol/strk20";
@@ -73,7 +74,7 @@ const recordedShadowScopes = async (
 ): Promise<readonly ShadowAccountScopeRef[]> => {
   const config = context.accountContext.config;
   if (!deps.wallet.listShadowAccountScopes || !config) {
-    throw new WalletError("shadow account records unavailable");
+    throw new WalletError(SHADOW_ACCOUNT_RECORDS_UNAVAILABLE);
   }
   const account = context.accountContext.account;
   return deps.wallet.listShadowAccountScopes({

@@ -21,6 +21,16 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 
+/**
+ * Stable error code: a scope or nonce bound refuses a new record (never an
+ * eviction). A code, not copy; pinned by a test so the panel's curated error
+ * copy can map it with one entry.
+ */
+export const SHADOW_ACCOUNT_RECORD_LIMIT = "shadow account record limit reached";
+
+/** Stable error code: a malformed scope, or one on another account's chain. */
+export const SHADOW_ACCOUNT_RECORD_INVALID = "invalid shadow account record";
+
 /** Most scope records one vault keeps; a further scope is refused, never evicted. */
 export const MAX_SHADOW_ACCOUNT_SCOPES = 128;
 

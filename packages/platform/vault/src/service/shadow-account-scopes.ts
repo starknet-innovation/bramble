@@ -8,6 +8,8 @@ import { WalletError } from "@bramble/core/errors";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import {
   canonicalShadowAccountScope,
+  SHADOW_ACCOUNT_RECORD_INVALID,
+  SHADOW_ACCOUNT_RECORD_LIMIT,
   shadowAccountScopesFor,
   withShadowAccountScope,
 } from "../accounts/shadow-account-scopes";
@@ -16,12 +18,6 @@ import type { EncryptedStore } from "../encrypted-store";
 import type { Vault } from "../schema/schema";
 import { writeVault } from "./service-creation";
 import type { WalletVaultService } from "./service-types";
-
-// Refusal when a record would pass a scope or nonce bound. Stable error code.
-const SHADOW_ACCOUNT_RECORD_LIMIT = "shadow account record limit reached";
-
-// Refusal for a malformed scope. Stable error code.
-const SHADOW_ACCOUNT_RECORD_INVALID = "invalid shadow account record";
 
 /**
  * Builds the record and list methods over the vault's own read and write. The

@@ -10,6 +10,11 @@
  */
 import { WalletError } from "@bramble/core/errors";
 import { STRK20_SHADOW_VIEW_NONCE_LIMIT } from "@bramble/privacy/service";
+import {
+  SHADOW_ACCOUNT_ANONYMIZER_CHANGED,
+  SHADOW_ACCOUNT_RECORDS_UNAVAILABLE,
+  SHADOW_ACCOUNT_SCOPE_NOT_RECORDED,
+} from "@bramble/privacy/shadow-account-refusals";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
 import { sameFelt } from "@bramble/wallet-model/networks";
@@ -20,15 +25,6 @@ import { strk20ShadowAccountScope } from "./strk20-shadow-account";
 
 // Nonces every scope is read at, recorded or not: a site may fund one first.
 const SHADOW_SCAN_NONCES = 16n;
-
-
-// Refusal for a scope the vault has no record of. Stable error code.
-const SHADOW_ACCOUNT_SCOPE_UNKNOWN = "shadow account scope not recorded";
-
-// Refusal for a scope recorded under an anonymizer the network no longer
-// routes through. Its identity derives from that anonymizer, so the configured
-// one cannot reach it. Stable error code.
-const SHADOW_ACCOUNT_ANONYMIZER_CHANGED = "shadow account anonymizer changed";
 
 /** The site and label that name one recorded scope. */
 export type ShadowScopeTarget = { readonly label: string; readonly origin: string };
@@ -104,17 +100,23 @@ export const readShadowAccounts = async (
     const named = records.some(
       (candidate) => candidate.origin === target.origin && candidate.label === target.label,
     );
-    throw new WalletError(named ? SHADOW_ACCOUNT_ANONYMIZER_CHANGED : SHADOW_ACCOUNT_SCOPE_UNKNOWN);
+    // Recorded only under an anonymizer the network no longer routes through:
+    // its identity derives from that anonymizer, so the configured one cannot
+    // reach it.
+    if (named) {
+      throw new WalletError(SHADOW_ACCOUNT_ANONYMIZER_CHANGED);
+    }
+    throw new WalletError(SHADOW_ACCOUNT_SCOPE_NOT_RECORDED);
   }
   const recorded = scope.nonces.map((nonce) => BigInt(nonce));
   const scan = Array.from({ length: Number(SHADOW_SCAN_NONCES) }, (_, index) => BigInt(index));
   const wanted = nonces ?? [...recorded, ...scan];
   if (nonces?.some((nonce) => !recorded.includes(nonce) && nonce >= SHADOW_SCAN_NONCES)) {
-    throw new WalletError(SHADOW_ACCOUNT_SCOPE_UNKNOWN);
+    throw new WalletError(SHADOW_ACCOUNT_SCOPE_NOT_RECORDED);
   }
   const service = strk20ServiceForRuntime(deps.runtimeRpc);
   if (!service.shadowAccounts) {
-    throw new WalletError("shadow account records unavailable");
+    throw new WalletError(SHADOW_ACCOUNT_RECORDS_UNAVAILABLE);
   }
   const infos = await service.shadowAccounts({
     ...context.accountContext,
