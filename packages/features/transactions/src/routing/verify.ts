@@ -43,6 +43,7 @@ export type {
  */
 export {
   isWatchedNftContract,
+  trustedTokens,
   verificationContext,
 } from "./verify-decode";
 

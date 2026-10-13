@@ -70,6 +70,9 @@ describe("unshield activity", () => {
     expect(entry?.summary).toBe(`Unshield 0.25 ${token.symbol} to ${payee}`);
     expect(entry?.counterparty).toBe(payee);
     expect(entry?.origin).toBe("wallet");
+    // The pool token is recorded by address as well as symbol (issue 643).
+    expect(entry?.token).toBe(token.symbol);
+    expect(entry?.tokenAddress).toBe(canonicalFelt(token.address) ?? "");
   });
 
   test("stays an internal move when the destination is the account itself", async () => {

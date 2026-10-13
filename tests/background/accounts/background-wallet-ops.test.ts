@@ -175,6 +175,11 @@ describe("wallet operations", () => {
     const stored = await activityLog.list();
     expect(stored.find((entry) => entry.hash === "0x8ab")?.status).toBe("pending");
     expect(stored.find((entry) => entry.hash === "0x9ab")?.status).toBe("pending");
+    // The sent token's address is recorded with its symbol (issue 643), so two
+    // tracked tokens that share a symbol stay apart in the feed.
+    expect(stored.find((entry) => entry.hash === "0x7ab")?.tokenAddress).toBe(
+      `0x${BigInt(tokenId.split(":")[2] ?? "").toString(16)}`,
+    );
   });
 
   test("surfaces a pre-confirmed transaction as provisional in the feed", async () => {

@@ -28,6 +28,7 @@ export {
   type ActivityStatus,
   activityForScope,
   activityOrigin,
+  activityToken,
   clampActivitySummary,
   isActivityEntry,
   isUnresolvedActivityStatus,

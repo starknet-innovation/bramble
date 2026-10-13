@@ -4,7 +4,7 @@ import type { MultisigStore } from "@bramble/multisig/repository";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@bramble/starknet/rpc";
-import { type ActivityLog, systemClock } from "@bramble/transactions/activity";
+import { type ActivityLog, activityToken, systemClock } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import {
@@ -344,7 +344,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     kind: "transfer" as const,
     networkId: account.networkId,
     summary: report.calls[0]?.summary ?? `Send ${token.symbol}`,
-    token: token.symbol,
+    ...activityToken(token),
   });
   // The hash of the invoke as signed, captured before it is sent. Only used when
   // the reply is lost, so the transfer stays traceable (audit #173).

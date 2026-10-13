@@ -18,6 +18,7 @@ import type { PriceService } from "@bramble/portfolio/prices";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
+import { activityToken } from "@bramble/transactions/activity";
 import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
 import { reviewedMinBuyAmount } from "@bramble/transactions/avnu-route";
 import {
@@ -247,6 +248,7 @@ const swapPrepareResponse = async (
       minBuyAmount: minBuyText,
       reviewedFee,
       sellSymbol: sellToken.symbol,
+      sellTokenAddress: sellToken.address,
       summaries: report.calls.map((call, index) =>
         index === routeIndex
           ? `Swap ${input.amount} ${sellToken.symbol} for at least ${minBuyText} ${buyToken.symbol}, paid to ${shortAddress(canonical(account.address))}`
@@ -329,6 +331,7 @@ const swapExecuteResponse = async (
         calls: preparation.calls,
         owner: allowanceOwner(context.account),
         store: deps.allowanceStore,
+        transactionHash: hash,
       });
       await recordSubmittedActivity(deps.activity, {
         accountId: context.account.id,
@@ -337,7 +340,7 @@ const swapExecuteResponse = async (
         kind: "invoke",
         networkId: context.networkId,
         summary: `Swap ${preparation.amount} ${preparation.sellSymbol} for ~${preparation.buyAmount} ${preparation.buySymbol} via avnu`,
-        token: preparation.sellSymbol,
+        ...activityToken({ address: preparation.sellTokenAddress, symbol: preparation.sellSymbol }),
       });
     };
     // The hash of the invoke as signed, captured before it is sent. Only used

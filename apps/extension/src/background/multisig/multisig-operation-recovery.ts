@@ -95,6 +95,7 @@ const journalObservedSubmission = async (
     calls: normalizedArgentMultisigCalls(intent.prepared.calls),
     owner: allowanceOwner(observed.record),
     store: deps.allowanceStore,
+    transactionHash: intent.prepared.transactionHash,
   });
   await recordSubmittedIntentActivity(
     deps,

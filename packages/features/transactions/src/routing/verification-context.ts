@@ -92,12 +92,19 @@ export const verificationContext = (
     .map((nft) => nft.contract),
   ownAccounts: addressesOn(preferences.ownAccounts, account.networkId),
   recentRecipients: addressesOn(preferences.paidRecipients, account.networkId),
-  tokens: preferences.tokens.filter(
-    (token) =>
-      token.networkId === account.networkId &&
-      isTrustedToken(token, preferences.dappTokenIds ?? []),
-  ),
+  tokens: trustedTokens(preferences).filter((token) => token.networkId === account.networkId),
 });
+
+/**
+ * Every tracked token the wallet trusts, on every network — the same rule
+ * {@link verificationContext} applies per account (see `isTrustedToken`).
+ * Read by allowance eviction, which ranks the whole log across networks.
+ */
+export const trustedTokens = (preferences: {
+  readonly dappTokenIds?: readonly string[];
+  readonly tokens: readonly TokenConfig[];
+}): readonly TokenConfig[] =>
+  preferences.tokens.filter((token) => isTrustedToken(token, preferences.dappTokenIds ?? []));
 
 // A tracked token that trips the spam heuristic (a ticker borrowed from a
 // different contract, malformed metadata) is not trusted, and neither is one a

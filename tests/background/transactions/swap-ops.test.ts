@@ -383,6 +383,7 @@ describe("swap operations", () => {
       kind: "invoke",
       summary: "Swap 0.01 ETH for ~12.5 STRK via avnu",
       token: "ETH",
+      tokenAddress: `0x${BigInt(ETH_TOKEN_ADDRESS).toString(16)}`,
     });
     expect(await handler({ preparationId, type: "wallet.swapExecute" }, extensionSender)).toEqual({
       error: "swap preparation not found",

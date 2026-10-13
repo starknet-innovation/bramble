@@ -67,6 +67,7 @@ const record = (
     })),
     owner,
     store,
+    transactionHash: "0x7ab",
   });
 
 const grant = (entrypoint: string, low: string, high = "0", spender = SPENDER) => ({

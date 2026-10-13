@@ -16,6 +16,7 @@
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
   type ActivityEntry,
+  activityToken,
   clampActivitySummary,
   isUnresolvedActivityStatus,
 } from "@bramble/transactions/activity";
@@ -207,7 +208,7 @@ export const onChainActivityEntry = (input: {
     status: "accepted",
     submittedAt: timestampMs,
     summary: clampActivitySummary(summary),
-    token: token.symbol,
+    ...activityToken(token),
   };
 };
 
@@ -228,7 +229,7 @@ const txKey = (entry: ActivityEntry): string =>
 // source) so the separator can never appear inside a felt-derived value or a
 // free-form token symbol and make two distinct legs alias.
 const legKey = (entry: ActivityEntry): string =>
-  `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
+  `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.tokenAddress ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
 
 // The symbol the explorer lane gives a token the wallet does not track.
 const UNTRACKED_TOKEN_SYMBOL = "TOKEN";

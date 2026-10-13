@@ -21,8 +21,10 @@ import type { Call } from "starknet";
 
 /**
  * One bookkeeping request: the log to write, the submitted calls, the scope
- * that owns whatever they granted, and the registries that say which of those
- * contracts are tokens at all.
+ * that owns whatever they granted, the registries that say which of those
+ * contracts are tokens at all, and the hash of the transaction that carried
+ * the calls. The hash is required so no submitting path can file a revoke the
+ * log could never settle on its outcome (issue 647).
  *
  * `assets` is required, not optional, so a new submitting path cannot file an
  * NFT collection approval as a spending allowance simply by forgetting to pass
@@ -34,6 +36,7 @@ export type AllowanceRecording = {
   readonly calls: readonly Call[];
   readonly owner: AllowanceOwner;
   readonly store: AllowanceStore;
+  readonly transactionHash: string;
 };
 
 /**
@@ -57,13 +60,18 @@ export const recordApproveAllowances = async ({
   calls,
   owner,
   store,
+  transactionHash,
 }: AllowanceRecording): Promise<void> => {
   for (const { input, kind } of allowanceChangesFromCalls(calls, owner, assets)) {
     try {
       if (kind === "set") {
-        await store.record(input);
+        await store.record(input, transactionHash);
       } else {
-        await store.applyDelta({ direction: kind === "increase" ? "add" : "subtract", input });
+        await store.applyDelta({
+          direction: kind === "increase" ? "add" : "subtract",
+          input,
+          transactionHash,
+        });
       }
     } catch {
       // Nothing to report: the transaction is already on its way.
