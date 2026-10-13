@@ -21,6 +21,7 @@ import {
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { readShadowAccounts, type ShadowScopeTarget } from "./strk20-shadow-reads";
+import { recordShadowScopeUses } from "./strk20-shadow-scopes";
 import { prepareShadowSweep } from "./strk20-shadow-sweep";
 
 const readTarget = (
@@ -136,17 +137,37 @@ const SHADOW_OPS: ReadonlyMap<string, ShadowOp> = new Map<string, ShadowOp>([
       return target && isStrk20Felt(nonce)
         ? withContext(
             deps,
-            async (context, passphrase) =>
-              prepareShadowSweep(
-                deps,
-                context,
-                await recordedShadowScopes(deps, context, passphrase),
-                {
-                  label: target.label,
-                  nonce,
-                  origin: target.origin,
-                },
-              ),
+            async (context, passphrase) => {
+              const records = await recordedShadowScopes(deps, context, passphrase);
+              const sweepTarget = { label: target.label, nonce, origin: target.origin };
+              const prepared = await prepareShadowSweep(deps, context, records, sweepTarget);
+              // A sweep of a scan-window nonce acts through a shadow account
+              // the scope never recorded; record it before the review is
+              // returned, so the record stays the complete list of used nonces.
+              const scope = records.find(
+                (record) => record.origin === target.origin && record.label === target.label,
+              );
+              if (
+                "strk20Preparation" in prepared &&
+                scope &&
+                !scope.nonces.some((recorded) => BigInt(recorded) === BigInt(nonce))
+              ) {
+                await recordShadowScopeUses(
+                  deps.wallet,
+                  {
+                    account: context.accountContext.account,
+                    passphrase,
+                    preferences: context.preferences,
+                  },
+                  {
+                    anonymizer: scope.anonymizer,
+                    origin: scope.origin,
+                    uses: [{ label: scope.label, nonces: [nonce] }],
+                  },
+                );
+              }
+              return prepared;
+            },
             "Shadow account sweep preparation failed",
           )
         : { error: "Invalid shadow account sweep request" };

@@ -46,12 +46,15 @@ const scope = (overrides: Partial<ShadowAccountScopeRef>): ShadowAccountScopeRef
   ...overrides,
 });
 
-const handlerWith = (scopes: readonly ShadowAccountScopeRef[]) => {
+const handlerWith = (
+  scopes: readonly ShadowAccountScopeRef[],
+  store: { value: readonly ShadowAccountScopeRef[] } = { value: scopes },
+) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   return createMessageHandler(
     {
-      ...createWallet({ shadowAccountScopes: { value: scopes } }),
+      ...createWallet({ shadowAccountScopes: store }),
       async deriveStrk20ViewingKey() {
         return "0x55";
       },
@@ -64,7 +67,12 @@ const handlerWith = (scopes: readonly ShadowAccountScopeRef[]) => {
           return preferences;
         },
       },
-      runtimeRpc: makeRuntimeRpc({ strk20: makeStrk20Service() }),
+      runtimeRpc: makeRuntimeRpc({
+        async getTokenBalances({ tokens }) {
+          return tokens.map((token) => ({ ...token, balance: "5", formatted: "" }));
+        },
+        strk20: makeStrk20Service(),
+      }),
       session,
     },
   );
@@ -139,5 +147,21 @@ describe("shadow accounts view messages", () => {
     const handler = handlerWith([scope({})]);
     await handler({ type: "wallet.lock" }, panel);
     expect(await handler({ type: "wallet.strk20ShadowAccounts" }, panel)).toHaveProperty("error");
+  });
+
+  test("a sweep of a scan-window nonce records that nonce before the review returns", async () => {
+    const store = { value: [scope({ nonces: ["0x1"] })] as readonly ShadowAccountScopeRef[] };
+    const handler = handlerWith(store.value, store);
+    const prepared = await handler(
+      {
+        label: "Market",
+        nonce: "0x2",
+        origin: "https://example.com",
+        type: "wallet.strk20PrepareShadowSweep",
+      },
+      panel,
+    );
+    expect(prepared).toMatchObject({ ok: true, strk20Preparation: { kind: "shadow-sweep" } });
+    expect(store.value[0]?.nonces).toEqual(["0x1", "0x2"]);
   });
 });
