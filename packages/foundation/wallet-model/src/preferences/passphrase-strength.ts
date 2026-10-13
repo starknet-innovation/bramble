@@ -1,0 +1,76 @@
+/**
+ * The setup meter's strength estimate for a vault passphrase. Feedback only:
+ * acceptance stays with `isVaultPassphrase` in `passphrase.ts`. Kept apart from
+ * those bounds so only the onboarding UI bundles the common-password list.
+ */
+import { isGuessable } from "./guessable";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "./passphrase";
+
+/**
+ * Coarse strength band for the passphrase meter shown while a vault
+ * passphrase is typed. `"weak"` also covers anything under
+ * {@link MIN_VAULT_PASSPHRASE_LENGTH}, so the meter never reads as acceptable
+ * before the validator does. Above that floor the band follows the entropy
+ * estimate alone — a short varied passphrase is reported as what it is, rather
+ * than being forced to read weak on length.
+ */
+export type PassphraseStrengthLevel = "empty" | "weak" | "fair" | "strong";
+
+/**
+ * Meter reading for a passphrase in progress: the band, the share of the bar
+ * to fill (0–1, monotonic in the estimate), and one short line of guidance.
+ */
+export type PassphraseStrength = {
+  readonly level: PassphraseStrengthLevel;
+  readonly ratio: number;
+  readonly hint: string;
+};
+
+const STRONG_BITS = 72;
+const FAIR_BITS = 48;
+
+// Alphabet sizes behind each character class the estimate credits.
+const classSize = (value: string): number => {
+  let size = 0;
+  if (/[a-z]/.test(value)) size += 26;
+  if (/[A-Z]/.test(value)) size += 26;
+  if (/[0-9]/.test(value)) size += 10;
+  if (/[^a-zA-Z0-9]/.test(value)) size += 33;
+  return size;
+};
+
+/**
+ * Estimates how hard a vault passphrase is to guess, for the setup meter only.
+ * It is feedback, never a gate: acceptance stays with {@link isVaultPassphrase}.
+ *
+ * The estimate is length times the entropy per character of the classes
+ * used, damped by how repetitive the text is (a run of one character earns
+ * almost nothing), banded as weak / fair / strong. It has no clock, network,
+ * or secret handling, and never keeps the value.
+ */
+export const estimatePassphraseStrength = (value: string): PassphraseStrength => {
+  const tooShortHint = `Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`;
+  if (value.length === 0) {
+    return { hint: tooShortHint, level: "empty", ratio: 0 };
+  }
+  const unique = new Set(value).size;
+  const repetition = Math.min(1, (unique + 4) / Math.min(value.length, 16));
+  const bits = value.length * Math.log2(Math.max(classSize(value), 2)) * repetition;
+  const ratio = Math.min(1, Math.max(0.08, bits / STRONG_BITS));
+  if (!isVaultPassphrase(value)) {
+    return { hint: tooShortHint, level: "weak", ratio: Math.min(ratio, 0.4) };
+  }
+  if (isGuessable(value)) {
+    return { hint: "Weak", level: "weak", ratio: Math.min(ratio, 0.4) };
+  }
+  // The meter names the band it reached. The bar beside it already shows how far
+  // that is from the next one, so the advice it used to carry was the third
+  // thing on screen saying the same.
+  if (bits >= STRONG_BITS) {
+    return { hint: "Strong", level: "strong", ratio: 1 };
+  }
+  if (bits >= FAIR_BITS) {
+    return { hint: "Fair", level: "fair", ratio };
+  }
+  return { hint: "Weak", level: "weak", ratio };
+};

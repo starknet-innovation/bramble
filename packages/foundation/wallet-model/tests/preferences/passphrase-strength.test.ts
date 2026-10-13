@@ -6,11 +6,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
-  estimatePassphraseStrength,
   isVaultPassphrase,
   MIN_VAULT_PASSPHRASE_LENGTH,
   RECOMMENDED_VAULT_PASSPHRASE_LENGTH,
 } from "@bramble/wallet-model/passphrase";
+import { estimatePassphraseStrength } from "@bramble/wallet-model/passphrase-strength";
 
 describe("estimatePassphraseStrength", () => {
   test("is empty for no input and weak below the minimum length", () => {
