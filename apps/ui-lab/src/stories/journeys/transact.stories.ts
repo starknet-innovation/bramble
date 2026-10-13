@@ -71,7 +71,7 @@ export const SendInsufficientPrivateBalance: LabStory = {
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     const needed =
-      "Not enough private STRK for this amount plus the pool fee. You need at least 7 STRK.";
+      "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.";
     await expect(body?.querySelector("#send-route-reason")).toHaveTextContent(needed);
     await expect(body?.querySelector("#transfer-result")).toHaveTextContent(needed);
   },

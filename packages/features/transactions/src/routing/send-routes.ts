@@ -314,17 +314,18 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
   return samePot ? null : feeBlocker(input, feeAmount);
 };
 
-// A refusal names the figure the user has to reach: the amount plus the pool fee
-// when that fee leaves the same balance, otherwise the amount alone. Stating the
-// minimum is what turns "not enough" into something the user can act on. The fee
-// is the one the gate reserves in the token it is charged in, so the figure is
-// exactly what the gate needs, whatever token pays the fee.
+// A refusal names the figure the user has to act on. When the pool fee leaves
+// the same balance, that is the fee to keep back: the gate reserves it in the
+// token it is charged in, and a converted fee is a bounded ceiling rather than
+// an exact charge, so the line says what to keep, not a precise minimum.
+// Otherwise it is the amount alone.
 const shortfall = (input: SendRouteInput, route: SendRoute, needed: bigint): string => {
   const asset = input.source === "private" ? `private ${input.tokenSymbol}` : input.tokenSymbol;
-  const minimum = `You need at least ${formatTokenAmount(needed, input.tokenDecimals)} ${input.tokenSymbol}.`;
-  return route.poolFeeRequired && feeInSentToken(input)
-    ? `Not enough ${asset} for this amount plus the pool fee. ${minimum}`
-    : `Not enough ${asset}. ${minimum}`;
+  if (route.poolFeeRequired && feeInSentToken(input)) {
+    const fee = formatTokenAmount(needed - input.amountRaw, input.tokenDecimals);
+    return `Not enough ${asset} for this amount plus the pool fee. Keep ${fee} ${input.tokenSymbol} for the fee.`;
+  }
+  return `Not enough ${asset}. You need at least ${formatTokenAmount(needed, input.tokenDecimals)} ${input.tokenSymbol}.`;
 };
 
 /**

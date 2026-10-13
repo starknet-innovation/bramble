@@ -57,9 +57,7 @@ describe("#356 converted-fee affordability", () => {
   test("the amount plus the converted fee must fit the sent-token balance", () => {
     expect(
       resolveSendRoute(privateUsdcSend({ amountRaw: 1_000n * SIX_USDC })).blocked?.reason,
-    ).toBe(
-      "Not enough private USDC for this amount plus the pool fee. You need at least 6006 USDC.",
-    );
+    ).toBe("Not enough private USDC for this amount plus the pool fee. Keep 6 USDC for the fee.");
     // Exactly balance-minus-fee is sendable.
     expect(
       resolveSendRoute(privateUsdcSend({ amountRaw: 1_000n * SIX_USDC - USDC_FEE_CEILING }))

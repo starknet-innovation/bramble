@@ -211,8 +211,7 @@ describe("gates", () => {
     // the amount is not enough.
     expect(blockerFor({ amountRaw: 100n * SIX_STRK })).toEqual({
       pending: false,
-      reason:
-        "Not enough private STRK for this amount plus the pool fee. You need at least 606 STRK.",
+      reason: "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.",
     });
     // Exactly balance-minus-fee is sendable.
     expect(resolveSendRoute(ready({ amountRaw: 99n * SIX_STRK })).route?.id).toBe(
@@ -236,7 +235,7 @@ describe("gates", () => {
 
   test("names a private shortfall as private", () => {
     expect(blockerFor({ amountRaw: 200n * SIX_STRK, destination: "public" }).reason).toBe(
-      "Not enough private STRK for this amount plus the pool fee. You need at least 1206 STRK.",
+      "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.",
     );
     expect(
       blockerFor({
