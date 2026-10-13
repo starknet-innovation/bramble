@@ -127,9 +127,9 @@ describe("pool fee in its own token", () => {
 
   test("the Amount screen names the same fee the gate reserves, not STRK", () => {
     const target = composeFeeTarget(ethSend("100000000"));
-    expect(target?.poolFee).toBe("6 USDC");
+    expect(target?.poolFee).toBe("up to 6 USDC");
     expect(target ? composeFeeLines(target, { failed: false, review: null }) : []).toEqual([
-      "Pool fee: 6 USDC from your private balance",
+      "Pool fee: up to 6 USDC from your private balance",
     ]);
   });
 });

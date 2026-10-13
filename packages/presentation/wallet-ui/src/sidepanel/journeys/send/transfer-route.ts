@@ -194,7 +194,8 @@ export const resolveTransferRoute = (context: TransferRouteContext): SendRouteRe
 /**
  * The pool fee a composed send will reserve, formatted in the token that pays
  * it: STRK's exact charge exactly as the review prints it, or a converted fee's
- * bounded ceiling in its own token. `null` when the amount or the fee token's
+ * bounded ceiling in its own token, read as "up to" because the relay's quote,
+ * known only at review, may be lower. `null` when the amount or the fee token's
  * scale is not known yet, so no figure is ever guessed or shown as STRK.
  */
 export const transferPoolFeeAmount = (context: TransferRouteContext): string | null => {
@@ -204,7 +205,7 @@ export const transferPoolFeeAmount = (context: TransferRouteContext): string | n
   if (sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)) return formatFri(amount.toString());
   return input.feeTokenDecimals === null
     ? null
-    : `${formatTokenAmount(amount, input.feeTokenDecimals)} ${input.feeTokenSymbol}`;
+    : `up to ${formatTokenAmount(amount, input.feeTokenDecimals)} ${input.feeTokenSymbol}`;
 };
 
 /**
