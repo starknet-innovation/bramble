@@ -143,6 +143,30 @@ describe("deriveLedgerAccount", () => {
     ).rejects.toThrow("Invalid Ledger path application");
   });
 
+  test("refuses a Braavos account at any scheme but Ready's argentx path", async () => {
+    // Issue 644: the vault repeats the message-boundary rule, so a caller that
+    // skips the parsers still cannot store a Braavos address no device has.
+    for (const eip2645application of [undefined, "LedgerW"] as const) {
+      await expect(
+        deriveLedgerAccount(fakeKms(), {
+          accountContractType: "braavos",
+          accountIndex: 0,
+          ...(eip2645application ? { eip2645application } : {}),
+          networkId: "SN_MAIN",
+          publicKeyX: PUBLIC_KEY_X,
+        }),
+      ).rejects.toThrow("Invalid Ledger path application");
+    }
+    await expect(
+      deriveLedgerAccountRefs(fakeKms(), {
+        accountContractType: "braavos",
+        eip2645application: "LedgerW",
+        entries: [{ accountIndex: 0, publicKeyX: PUBLIC_KEY_X }],
+        networkId: "SN_MAIN",
+      }),
+    ).rejects.toThrow("Invalid Ledger path application");
+  });
+
   test("rejects an invalid index, public key, or network", async () => {
     await expect(
       deriveLedgerAccount(fakeKms(), {
