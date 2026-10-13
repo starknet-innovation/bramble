@@ -108,7 +108,7 @@ const changeBadge = (change: number | undefined): string => {
   }
   const direction = change >= 0 ? "up" : "down";
   const arrow = change >= 0 ? "↑" : "↓";
-  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%</span>`;
+  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%<span class="token-change-win"> · 24h price</span></span>`;
 };
 
 /**
