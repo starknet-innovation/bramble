@@ -27,6 +27,12 @@ export const ActivityAccountARestored = checkpointStory(
   "activity",
   "account-a-restored",
 );
+export const ActivityFilters = checkpointStory("Activity · feed filters", "activity", "filters");
+export const ActivityFiltersSearch = checkpointStory(
+  "Activity · search one counterparty",
+  "activity",
+  "filters-search",
+);
 
 /**
  * The feed is long enough to scroll. The title bar holds its place at the top

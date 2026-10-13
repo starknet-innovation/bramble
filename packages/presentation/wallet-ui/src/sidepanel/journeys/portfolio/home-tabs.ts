@@ -30,6 +30,7 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
+import { type ActivityContact, activityRowAttributes } from "./activity-filter";
 import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import {
@@ -152,7 +153,11 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * buttons inside it may never reach assistive tech (mc-wallet issue 476).
  * Without `pricing` the fiat delta is simply absent.
  */
-export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing): string => {
+export const transactionRow = (
+  entry: ActivityEntry,
+  pricing?: ActivityPricing,
+  contacts: readonly ActivityContact[] = [],
+): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
   const label = STATUS_LABEL[entry.status] ?? entry.status;
   const row = activityRowModel(entry, pricing);
@@ -178,8 +183,9 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
   const figure = row.amount ?? (row.counterparty ? null : row.detail);
   const heading = figure === null ? row.title : `${row.title} ${figure}`;
   const when = [formatUtcDate(entry.submittedAt), clock].filter((part) => part !== null).join(", ");
+  const attributes = activityRowAttributes(entry, pricing, contacts);
   return `
-  <li class="tx-row" data-live-group title="${escapeHtml(timing)}">
+  <li class="tx-row" data-live-group title="${escapeHtml(timing)}"${attributes.length > 0 ? ` ${attributes}` : ""}>
     <details class="disclosure tx-disclosure" data-disclosure="tx:${escapeHtml(entry.hash)}">
       <summary aria-label="${escapeHtml(heading)}. ${escapeHtml(spoken)}">
         <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-hidden="true" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
@@ -233,6 +239,7 @@ export const transactionGroups = (
   entries: readonly ActivityEntry[],
   pricing?: ActivityPricing,
   todayKey: number | null = null,
+  contacts: readonly ActivityContact[] = [],
 ): string => {
   const groups: Array<{ readonly key: number | null; readonly label: string; rows: string[] }> = [];
   for (const entry of entries) {
@@ -240,10 +247,10 @@ export const transactionGroups = (
     const key = date === null ? null : utcDayKey(entry.submittedAt);
     const current = groups.at(-1);
     if (current && current.key === key) {
-      current.rows.push(transactionRow(entry, pricing));
+      current.rows.push(transactionRow(entry, pricing, contacts));
     } else {
       const label = key === null || date === null ? "Undated" : dayLabel(key, date, todayKey);
-      groups.push({ key, label, rows: [transactionRow(entry, pricing)] });
+      groups.push({ key, label, rows: [transactionRow(entry, pricing, contacts)] });
     }
   }
   return groups
@@ -253,6 +260,20 @@ export const transactionGroups = (
     )
     .join("");
 };
+
+/**
+ * Renders the feed as one ungrouped list, for the amount sort where a per-day
+ * heading would fight the ordering the user asked for. The caller supplies the
+ * rows already ordered.
+ */
+export const transactionList = (
+  entries: readonly ActivityEntry[],
+  pricing?: ActivityPricing,
+  contacts: readonly ActivityContact[] = [],
+): string =>
+  `<ul class="tx-list tx-list-flat">${entries
+    .map((entry) => transactionRow(entry, pricing, contacts))
+    .join("")}</ul>`;
 
 // Renders the failed-load state with a friendly, actionable line and an
 // in-panel retry that re-runs the balance load (wired in ./index.ts).

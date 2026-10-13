@@ -1,9 +1,11 @@
 import {
+  bindActivity,
   bindNfts,
   createSidepanelRuntime,
   nftDetailFlow,
   nftGalleryFlow,
   nftSendFlow,
+  type SidepanelWallet,
 } from "@bramble/wallet-ui/lab";
 import {
   discoveredNft,
@@ -96,6 +98,46 @@ const dappScenario: WalletScenario = {
   views: ["requests"],
 };
 
+// The feed's filter, search and sort controls are production bindings. The lab
+// cannot repaint a dock screen by itself, so the fixture hands the binding the
+// same local repaint the shell passes in production; the sort control then
+// reshapes the feed exactly as it does in the app. The fixture runtime still
+// answers the status read the refresh control asks for.
+const activityFrameContent = (): string =>
+  walletDashboard({
+    activity: softwareActivity,
+    status: statusFor(softwareAccount),
+    view: "activity",
+  });
+
+const bindActivityControls = (context: FrameContext): void => {
+  const app = context.app;
+  const repaint = (): void => {
+    app.innerHTML = activityFrameContent();
+    bindActivityControls(context);
+  };
+  bindActivity({
+    app,
+    render: async () => repaint(),
+    repaint,
+    wallet: {
+      loadStatus: async () => statusFor(softwareAccount),
+    } as unknown as SidepanelWallet,
+  });
+};
+
+// A stored recipient address typed into the search box, which is how a saved
+// name or an address collapses the feed onto one counterparty.
+const searchActivityAddress = (context: FrameContext): void => {
+  bindActivityControls(context);
+  const input = context.app.querySelector<HTMLInputElement>("#activity-search");
+  if (!input) {
+    throw new Error("Missing production activity search");
+  }
+  input.value = RECIPIENT_ADDRESS;
+  input.dispatchEvent(new Event("input"));
+};
+
 const activityScenario: WalletScenario = {
   checkpoints: [
     {
@@ -153,6 +195,24 @@ const activityScenario: WalletScenario = {
       label: "Long feed",
       narrative: "The title bar keeps its place while only the feed scrolls beneath it.",
       state: { accountId: softwareAccount.id, entries: 12, scope: "SN_MAIN" },
+    },
+    {
+      content: activityFrameContent,
+      id: "filters",
+      label: "Feed filters",
+      narrative:
+        "Type, status, token, sort and search controls sit above the feed, offering only the values the account's own records carry.",
+      prepare: bindActivityControls,
+      state: { controls: 5, sort: "date" },
+    },
+    {
+      content: activityFrameContent,
+      id: "filters-search",
+      label: "Search one counterparty",
+      narrative:
+        "An address or saved name in the search box collapses the feed onto that counterparty and totals what was sent and received.",
+      prepare: searchActivityAddress,
+      state: { counterparty: "Research treasury", query: "recipient address" },
     },
   ],
   description:

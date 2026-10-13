@@ -75,7 +75,7 @@ and its tests drive.
 
 ## Journey coverage
 
-The lab has 224 deterministic checkpoints across 15 scenario families:
+The lab has 226 deterministic checkpoints across 15 scenario families:
 
 | Family | Review surface |
 | --- | --- |
@@ -89,7 +89,7 @@ The lab has 224 deterministic checkpoints across 15 scenario families:
 | Ledger account onboarding | Setup method, device grants, enumeration, multi-select, partial add, and errors. |
 | dApp approvals | Every provider approval kind, a nested typed-data message, blocked origin, queue visibility, and live authorization handoff. |
 | dApp request takeover | Foreground takeover, receipt-token watch, explicit review-later behavior, and a dedicated parked-request list. |
-| Account-isolated Activity | Account switching, immediate clearing, refresh, restoration, and separation from dApp decisions. |
+| Account-isolated Activity | Account switching, immediate clearing, refresh, restoration, separation from dApp decisions, and the feed's own type, status, token, sort, and search controls. |
 | Assets and permissions | Receive, focused add/detect token journeys, token detail, address book, and ERC20 allowances. |
 | NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, submission, and a reverted transfer. |
 | Argent multisig | Empty/setup, deployment availability, shared portfolio, collecting/ready/stale intents, signer-authority drift, exact review, and sync recovery. |

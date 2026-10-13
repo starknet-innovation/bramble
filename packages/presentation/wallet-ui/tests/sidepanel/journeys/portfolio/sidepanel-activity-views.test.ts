@@ -147,9 +147,15 @@ describe("activity journey boundaries", () => {
     // A settled row is verb and detail alone; its status and time live on the
     // row's tooltip, so the feed reads like the kit without losing the record.
     expect(html.match(/<span class="tx-meta/g)?.length).toBe(2);
-    expect(html).toContain('<li class="tx-row" data-live-group title="Accepted · 14:05 UTC">');
+    // The row's own filter attributes ride the same tag, so the assertion pins
+    // the tooltip and the dataset without depending on their order.
+    expect(html).toMatch(
+      /<li class="tx-row" data-live-group title="Accepted · 14:05 UTC"[^>]*data-activity-status="accepted"[^>]*>/,
+    );
     expect(html).toContain('<span class="tx-meta preconfirmed">Pre-confirmed</span>');
-    expect(html).toContain('<li class="tx-row" data-live-group title="Pre-confirmed · 14:06 UTC">');
+    expect(html).toMatch(
+      /<li class="tx-row" data-live-group title="Pre-confirmed · 14:06 UTC"[^>]*data-activity-status="preconfirmed"[^>]*>/,
+    );
     expect(html).toContain('<span class="tx-meta pending">Pending</span>');
     // The status and time still reach assistive tech through the summary's own label.
     expect(html).toContain('aria-label="Sent 1 STRK. accepted, 14:05 UTC"');

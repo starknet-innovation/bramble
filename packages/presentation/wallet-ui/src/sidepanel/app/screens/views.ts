@@ -47,6 +47,7 @@ import {
   multisigProposeFlow,
   multisigsFlow,
 } from "../../journeys/multisig/multisig-views";
+import { activityContacts } from "../../journeys/portfolio/activity-filter";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
 import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
 import { tokenCatalogFlow } from "../../journeys/portfolio/token-catalog-view";
@@ -444,6 +445,7 @@ export const dashboard = (
               tokens: preferences?.tokens ?? [],
             },
             todayKey,
+            activityContacts(preferences, status.networkId, status.accounts),
           )
         : activeView === "settings"
           ? settingsScreen(status, preferences)
