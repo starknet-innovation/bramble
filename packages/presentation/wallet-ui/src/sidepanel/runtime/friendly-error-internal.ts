@@ -247,11 +247,12 @@ export const PLUMBING_DESPITE_FACT_WORD: ReadonlySet<string> = new Set([
   "strk20 signer does not deploy accounts",
 ]);
 
-// Templated plumbing: the KMS adapter's shape checks (the field name is an
-// identifier) and the account-family exhaustiveness guard, which no input
-// reaches. The anchored grammar admits nothing else.
+// Templated plumbing: a missing KMS module export, the KMS's static class
+// table, and the account-family exhaustiveness guard, which no input reaches.
+// The KMS result-field checks are not here: their field can be a public key or
+// a signature, so they stay visible. The anchored grammar admits nothing else.
 const KMS_TEMPLATE_PLUMBING =
-  /^krusty kms (?:export missing|result missing (?:string field|field element|non-zero private key|non-zero field element)): [a-z0-9_]+$|^krusty kms class hashes are missing sn_(?:main|sepolia|devnet)$|^unknown account constructor shape: [^\s]+$/;
+  /^krusty kms export missing: [a-z0-9_]+$|^krusty kms class hashes are missing sn_(?:main|sepolia|devnet)$|^unknown account constructor shape: [^\s]+$/;
 
 /**
  * Whether a raw string is reviewed plumbing that must not be shown as written.

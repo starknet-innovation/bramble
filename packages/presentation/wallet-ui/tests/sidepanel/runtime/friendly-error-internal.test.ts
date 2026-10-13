@@ -56,6 +56,8 @@ describe("reviewed plumbing", () => {
       "Krusty KMS signature verification failed",
       "Starkscan flagged a scam token",
       "RPC returned a replayed transaction",
+      "Krusty KMS result missing non-zero private key: account",
+      "Krusty KMS result missing field element: public_key_x",
     ]) {
       expect(friendlyError(raw).message).toBe(raw);
       expect(friendlyError(raw, ADD_ACCOUNT).message).toBe(raw);

@@ -170,6 +170,10 @@ const KEPT_VISIBLE = new Set([
   "RPC returned a non-felt Starknet name address",
   "Storage access denied",
   "Encrypted store scope is required",
+  // The KMS result-field checks: the field can be a public key or a signature.
+  "Krusty KMS result missing field element: x",
+  "Krusty KMS result missing non-zero field element: x",
+  "Krusty KMS result missing string field: x",
   "Response exceeded its size limit",
   "Nostr relay connection closed",
   "Nostr relay connection failed",
