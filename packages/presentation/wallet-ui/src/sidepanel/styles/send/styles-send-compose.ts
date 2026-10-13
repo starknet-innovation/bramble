@@ -126,6 +126,18 @@ export const SEND_COMPOSE_STYLES = `
     .send-amount-field input:not(:disabled):hover { background: transparent; }
   }
   .send-recipient-list, .send-asset-list { display: grid; gap: ${SPACE.sm}; }
+  /* The name-resolution readout sits directly under the field that caused it:
+     the resolving line while the read runs, and the reason it did not commit
+     when it fails. Muted, because it annotates the field rather than warning. */
+  .send-recipient-note {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.label.size};
+    line-height: ${TYPE.label.line};
+    margin: 0;
+    /* A name can be a single long token; without this it sets the stage's
+       min-content width and widens the whole panel past the viewport. */
+    overflow-wrap: anywhere;
+  }
   .send-list-heading {
     align-items: center;
     color: var(--bramble-muted);
@@ -426,6 +438,11 @@ export const SEND_COMPOSE_STYLES = `
     text-align: right;
     word-break: break-all;
   }
+  /* A name-resolved recipient shows the whole address, because the address is
+     what the reader is asked to check; it wraps rather than clipping. The
+     provenance line sits under it, muted like the other annotation copy. */
+  .send-review-address-full code { overflow-wrap: anywhere; text-wrap: wrap; }
+  .send-review-source { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
   #send-review-button { margin-top: auto; width: 100%; }
   /* The busy review button swaps its send glyph for the shared Liquid Dots
      mark, so a running preparation reads as work rather than as a dimmed

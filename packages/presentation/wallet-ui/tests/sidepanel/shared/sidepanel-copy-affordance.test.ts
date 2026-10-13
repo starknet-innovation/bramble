@@ -71,6 +71,7 @@ const transferFields: TransferFields = {
   fiatEstimate: "$1.00",
   recipient: COUNTERPARTY,
   recipientLabel: "",
+  recipientResolvedFrom: "",
   signer: "software",
   source: "public",
   speed: "standard",

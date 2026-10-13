@@ -330,6 +330,7 @@ export const sendFlow = (
           <input name="fiatEstimate" type="hidden" value="" />
           <input name="recipient" type="hidden" value="${escapeHtml(scopedIntent?.recipient ?? "")}" />
           <input name="recipientLabel" type="hidden" value="${escapeHtml(scopedIntent?.recipientLabel ?? "")}" />
+          <input name="recipientResolvedFrom" type="hidden" value="" />
           <input name="source" type="hidden" value="${scopedIntent?.source ?? "public"}" />
           <input name="destination" type="hidden" value="${scopedIntent?.destination ?? "public"}" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />

@@ -242,6 +242,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       composeFee.refresh();
     },
     navigate: (view) => deps.navigate?.(view),
+    resolveName: (name, networkId) => wallet.resolveStarkName(name, networkId),
     spendable: () => transferSpendable(routeContext()),
   });
   bindTransferBuckets({

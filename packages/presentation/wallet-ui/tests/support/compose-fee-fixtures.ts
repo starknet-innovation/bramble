@@ -36,6 +36,7 @@ export const FIELDS: TransferFields = {
   fiatEstimate: "",
   recipient: TRANSFER_RECIPIENT,
   recipientLabel: "",
+  recipientResolvedFrom: "",
   signer: "software",
   source: "public",
   speed: "standard",

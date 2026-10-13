@@ -22,6 +22,12 @@ import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "../runtim
 const TRANSFER_HASH = `0x01${"a".repeat(62)}`;
 const MOTION_BEAT_MS = 240;
 
+// A name the fixture resolves to an address no row on the recipient screen
+// lists, so the confirm face can show a name-resolved recipient that is new and
+// therefore carries the wallet's warning along with its full address.
+const STRANGER_NAME = "stranger.braavos.stark";
+const STRANGER_ADDRESS = `0x0badc0de${"0".repeat(54)}`;
+
 const settleMotionBeat = async (): Promise<void> => {
   await new Promise<void>((resolve) => setTimeout(resolve, MOTION_BEAT_MS));
 };
@@ -38,6 +44,10 @@ type SendMode =
   | "pending"
   | "private-shortfall"
   | "recipient"
+  | "recipient-name"
+  | "recipient-name-long"
+  | "recipient-name-missing"
+  | "recipient-name-review"
   | "review"
   | "reviewing"
   | "shield-fee"
@@ -209,6 +219,28 @@ const prepareSend =
         if (type === "wallet.activity") {
           return fixtureActivity(mode, context, unresolved);
         }
+        if (type === "wallet.resolveStarkName") {
+          context.emit({ detail: "fixture Starknet name resolution", kind: "response" });
+          // Two names are registered in the fixture (one a saved contact, one
+          // listed nowhere); anything else is the naming contract's own zero
+          // answer, so the not-found state is reachable too. Every reply names
+          // the network it was read on, so the panel can tie it to its own.
+          const name = (message as { readonly name?: unknown }).name;
+          if (name === STRANGER_NAME) {
+            return {
+              networkId: "SN_MAIN",
+              ok: true,
+              resolution: { address: STRANGER_ADDRESS, status: "resolved" },
+            };
+          }
+          return name === "altaga.braavos.stark"
+            ? {
+                networkId: "SN_MAIN",
+                ok: true,
+                resolution: { address: RECIPIENT_ADDRESS, status: "resolved" },
+              }
+            : { networkId: "SN_MAIN", ok: true, resolution: { status: "not-found" } };
+        }
         return { error: "UI Lab blocks non-fixture runtime requests" };
       },
     });
@@ -226,7 +258,41 @@ const prepareSend =
     if (mode === "recipient") {
       return;
     }
-    if (mode !== "shield-fee") {
+    const nameMode =
+      mode === "recipient-name" ||
+      mode === "recipient-name-missing" ||
+      mode === "recipient-name-long" ||
+      mode === "recipient-name-review";
+    if (nameMode) {
+      // A typed Starknet name is resolved by the fixture before the checkpoint
+      // settles: the resolved address becomes the recipient and the resolved
+      // name is its visible label, the same state the real wallet reaches once
+      // the background answers. The missing and long variants type names that
+      // do not resolve, so the field's own note is the state on screen (the
+      // long one exercises the note's wrapping against the input bound). The
+      // review variant resolves a name no row lists and carries it through
+      // amount entry, so the confirm face shows the full address, its
+      // provenance line, and the new-recipient warning.
+      const search = context.app.querySelector<HTMLInputElement>("#send-recipient-search");
+      if (!search) {
+        throw new Error("Missing production Send recipient field");
+      }
+      const typed =
+        mode === "recipient-name-long"
+          ? `${"a".repeat(40)}.${"b".repeat(40)}.stark`
+          : mode === "recipient-name-missing"
+            ? "nobody.braavos.stark"
+            : mode === "recipient-name-review"
+              ? STRANGER_NAME
+              : "altaga.braavos.stark";
+      search.value = typed;
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      context.app.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
+      await nextTurn();
+      if (mode !== "recipient-name-review") {
+        return;
+      }
+    } else if (mode !== "shield-fee") {
       context.app
         .querySelector<HTMLElement>(`[data-send-recipient="${RECIPIENT_ADDRESS}"]`)
         ?.click();
@@ -265,7 +331,7 @@ const prepareSend =
       return;
     }
     await waitForSendStage(form, "review");
-    if (mode === "review" || mode === "fee-failure") {
+    if (mode === "review" || mode === "fee-failure" || mode === "recipient-name-review") {
       return;
     }
     form.requestSubmit();
@@ -314,6 +380,26 @@ export const sendScenario: WalletScenario = {
       "recipient",
       "Choose recipient",
       "Accounts and saved contacts establish who will receive funds before amount entry.",
+    ),
+    sendCheckpoint(
+      "recipient-name",
+      "Recipient by name",
+      "A typed Starknet name resolves to an address, which becomes the recipient while the resolved name stays as its label.",
+    ),
+    sendCheckpoint(
+      "recipient-name-review",
+      "Review a name recipient",
+      "A name that matches no saved contact reaches the confirm face with its full address, its provenance line, and the new-recipient warning.",
+    ),
+    sendCheckpoint(
+      "recipient-name-missing",
+      "Name not found",
+      "An unregistered name commits no recipient and says so in the field's own note.",
+    ),
+    sendCheckpoint(
+      "recipient-name-long",
+      "Long name wraps",
+      "The longest accepted name keeps its note and field inside the panel width.",
     ),
     sendCheckpoint(
       "details",

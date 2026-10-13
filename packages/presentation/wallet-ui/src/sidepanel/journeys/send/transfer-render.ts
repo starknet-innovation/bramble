@@ -8,6 +8,7 @@
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { applyOutcomeHash } from "../../shared/outcome-hash";
 import { reviewFeeBlocked } from "../../shared/review-render";
+import { knownRecipientLabel } from "./recipient-rows";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
   TRANSFER_FAILURE_TITLE,
@@ -43,6 +44,7 @@ const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | n
     recipient: fields.recipient,
     source: fields.source,
     recipientLabel: fields.recipientLabel,
+    recipientResolvedFrom: fields.recipientResolvedFrom,
     speed: fields.speed,
     tokenAddress: fields.tokenAddress,
     tokenBalance: fields.tokenBalance,
@@ -66,6 +68,15 @@ const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | n
 // those fields plus that one address, so this stays a pure paint.
 const modeOf = (form: HTMLFormElement, fields: TransferFields | null): TransferMode =>
   fields ? transferModeFor(fields, form.dataset["sender"] ?? "") : "send";
+
+// True when the reviewed recipient came from a Starknet name that matches no
+// listed contact or account, so the review warns before the send. The recipient
+// rows survive a stage switch (stages are toggled, never re-rendered), which is
+// what lets the review ask the same question the recipient step asked.
+const isNewResolvedRecipient = (form: HTMLFormElement, fields: TransferFields | null): boolean =>
+  fields !== null &&
+  fields.recipientResolvedFrom === "stark-name" &&
+  knownRecipientLabel(form, fields.recipient) === undefined;
 
 const WORKING_STAGES: ReadonlySet<TransferStage> = new Set([
   "authorizing",
@@ -270,7 +281,9 @@ export const applyTransferUi = (
   // here, and a flagged one can no longer hide behind a collapsed disclosure.
   const reviewRisks = form.querySelector<HTMLElement>("#send-review-risks");
   if (reviewRisks) {
-    const risks = state.review ? reviewRisksHtml(state.review) : "";
+    const risks = state.review
+      ? reviewRisksHtml(state.review, isNewResolvedRecipient(form, state.fields))
+      : "";
     reviewRisks.innerHTML = risks;
     reviewRisks.toggleAttribute("hidden", risks === "");
   }
