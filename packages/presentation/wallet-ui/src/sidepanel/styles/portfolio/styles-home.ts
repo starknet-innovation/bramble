@@ -139,7 +139,7 @@ export const HOME_STYLES = `
   .drawer-list { align-content: start; display: grid; gap: 6px; }
   /* The folders are the drawer's one scroll region, so the head stays put and
      "Add account" stays reachable however many folders there are. */
-  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; }
+  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; scrollbar-gutter: stable; }
   /* Folders: a heading that collapses its own list, and a section that is the
      drop target — an account can be dropped onto an empty folder, not only
      between rows. */

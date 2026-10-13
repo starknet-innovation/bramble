@@ -395,6 +395,7 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.md};
     max-height: 280px;
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
   .multisig-recipient-picker .send-recipient-row,
   .multisig-asset-picker .send-asset-row { background: var(--bramble-elevated); }

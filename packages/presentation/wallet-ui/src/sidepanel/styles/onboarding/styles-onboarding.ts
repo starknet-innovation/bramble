@@ -74,6 +74,7 @@ export const ONBOARDING_STYLES = `
     overflow-y: auto;
     padding: 38px clamp(24px, 7vw, 42px) 30px;
     position: relative;
+    scrollbar-gutter: stable;
   }
   .onboarding-wizard > .onboarding-step {
     inset: 0;

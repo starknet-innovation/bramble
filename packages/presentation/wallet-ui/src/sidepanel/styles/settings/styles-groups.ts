@@ -221,7 +221,7 @@ export const GROUP_STYLES = `
   }
   .group-members-head { align-items: center; display: flex; gap: ${SPACE.sm}; }
   .group-members-head .eyebrow { flex: 1; margin: 0; }
-  .account-check-list { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; }
+  .account-check-list { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; scrollbar-gutter: stable; }
   button.account-check {
     align-items: center;
     background: transparent;

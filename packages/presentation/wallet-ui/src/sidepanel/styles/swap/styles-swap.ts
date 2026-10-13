@@ -152,6 +152,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     display: grid;
     max-height: 320px;
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
   .swap-picker:not([hidden]) { animation: panel-enter ${MOTION.enterMs}ms var(--ease-out) both; }
   .swap-picker > * + * { position: relative; }

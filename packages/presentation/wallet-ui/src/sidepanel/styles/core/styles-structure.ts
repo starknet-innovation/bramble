@@ -249,7 +249,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     text-wrap: nowrap;
   }
   .approval-takeover { gap: ${SPACE.md}; grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
-  .approval-takeover .request-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .approval-takeover .request-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
   .approval-takeover .request-card {
     background: transparent;
     border-radius: 0;
@@ -313,6 +313,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-y: auto;
     padding: ${SPACE.lg};
     position: fixed;
+    scrollbar-gutter: stable;
     z-index: ${LEDGER_OVERLAY_LAYERS.sign};
   }
   .ledger-sign-overlay[hidden] { display: none; }
@@ -330,6 +331,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-y: auto;
     padding: ${SPACE.lg};
     position: fixed;
+    scrollbar-gutter: stable;
     z-index: ${LEDGER_OVERLAY_LAYERS.onboard};
   }
   .ledger-onboard-overlay[hidden] { display: none; }

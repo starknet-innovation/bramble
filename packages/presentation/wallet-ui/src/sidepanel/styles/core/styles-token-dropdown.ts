@@ -27,6 +27,7 @@ export const TOKEN_DROPDOWN_STYLES = `
     overflow-y: auto;
     padding: ${SPACE.xs};
     position: absolute;
+    scrollbar-gutter: stable;
     top: 100%;
     z-index: 20;
   }
