@@ -101,6 +101,13 @@ export type LedgerSignController = {
   readonly activeId: () => string | null;
   readonly cancel: () => Promise<void>;
   readonly chooseDevice: (deviceId: string) => void;
+  /**
+   * Takes down a request whose signature the device already gave but the
+   * wallet could not finish, reporting nothing; it is not offered again here.
+   */
+  readonly close: () => void;
+  /** Whether `id` was closed with {@link LedgerSignController.close}. */
+  readonly closed: (id: string) => boolean;
   readonly connect: () => void;
   readonly dismiss: () => void;
   readonly present: (request: LedgerSignRequestSummary) => void;
@@ -143,6 +150,10 @@ export const createLedgerSignController = (
   let busy = false;
   let operationEpoch = 0;
   let idleWaiters: Array<() => void> = [];
+  // Requests closed after an unfinished signature. The background still holds
+  // each until it settles or times out; re-presenting it would start a second
+  // device prompt for a hash that may already be on its way.
+  const closedIds = new Set<string>();
 
   const settle = (): void => {
     busy = false;
@@ -273,6 +284,18 @@ export const createLedgerSignController = (
     await drive(() => deps.connector.openConnected(devices[0]?.id));
   };
 
+  const dismiss = (): void => {
+    if (!current) {
+      return;
+    }
+    // The epoch bump stops an in-flight device operation from reporting or
+    // repainting; its session is still closed by `drive`'s finally.
+    current = null;
+    devices = [];
+    operationEpoch += 1;
+    deps.render(null);
+  };
+
   return {
     activeId: () => current?.id ?? null,
     async cancel() {
@@ -300,19 +323,16 @@ export const createLedgerSignController = (
       show({ kind: "connecting" });
       void drive(deps.connector.request);
     },
-    dismiss() {
-      if (!current) {
-        return;
+    close() {
+      if (current) {
+        closedIds.add(current.id);
       }
-      // The epoch bump stops an in-flight device operation from reporting or
-      // repainting; its session is still closed by `drive`'s finally.
-      current = null;
-      devices = [];
-      operationEpoch += 1;
-      deps.render(null);
+      dismiss();
     },
+    closed: (id) => closedIds.has(id),
+    dismiss,
     present(request) {
-      if (current || busy) {
+      if (current || busy || closedIds.has(request.id)) {
         return;
       }
       current = request;

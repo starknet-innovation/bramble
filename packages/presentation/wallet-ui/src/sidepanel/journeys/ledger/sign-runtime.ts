@@ -87,6 +87,9 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-cancel]")
       ?.addEventListener("click", () => void controller.cancel());
+    mount
+      .querySelector<HTMLButtonElement>("[data-ledger-close]")
+      ?.addEventListener("click", () => controller.close());
     for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-ledger-device]")) {
       button.addEventListener("click", () => {
         const deviceId = button.dataset["ledgerDevice"];
@@ -159,7 +162,8 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
     if (active !== null && !pending.some((request) => request.id === active)) {
       controller.dismiss();
     }
-    const first = pending[0];
+    // A request closed after an unfinished signature is not offered again.
+    const first = pending.find((request) => !controller.closed(request.id));
     if (first) {
       controller.present(first);
       // A dismissed request's device operation may still be closing its

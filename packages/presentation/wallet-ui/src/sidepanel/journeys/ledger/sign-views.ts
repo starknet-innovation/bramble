@@ -134,6 +134,19 @@ const phaseBody = (view: LedgerSignView): string => {
       </div>
       ${cancelButton()}`;
   }
+  // After the device signed (`code: null`) the request may already be on its
+  // way, so neither a re-sign nor a refusal is offered: only Close (audit N4).
+  if (phase.code === null) {
+    return `<p class="review-flag" role="alert">${escapeHtml(phase.message)}</p>
+    <div class="ledger-phase-actions">
+      ${button({
+        attributes: { "data-ledger-close": true },
+        label: "Close",
+        size: "small",
+        variant: "ghost",
+      })}
+    </div>`;
+  }
   return `<p class="review-flag" role="alert">${escapeHtml(phase.message)}</p>
     <div class="ledger-phase-actions">
       ${button({
