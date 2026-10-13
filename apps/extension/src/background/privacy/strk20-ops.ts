@@ -8,17 +8,11 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
-  type Strk20AssetLookup,
-  type Strk20ShadowAccountReview,
-  summarizeStrk20Batch,
   summarizeStrk20Plan,
 } from "@bramble/privacy/service";
 import { SHADOW_INVOKE_ANONYMIZER } from "@bramble/privacy/shadow-account-copy";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
-import { verificationContext } from "@bramble/transactions/verify";
-import { sameFelt } from "@bramble/wallet-model/networks";
-import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-responses";
+import type { ActivityLog } from "@bramble/transactions/activity";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { strk20BatchRefusalError } from "@bramble/wallet-protocol/strk20-batch";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -41,13 +35,18 @@ import {
   resolveAccount,
   strk20ErrorMessage,
 } from "./strk20-approval-execution";
-import type {
-  Strk20DisclosureApprovalKind,
-  Strk20DisclosureRequest,
-} from "./strk20-approval-types";
 import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import { holdStrk20Notice, MISSING_ANONYMIZER_REFUSAL } from "./strk20-notice";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
+import {
+  actionTokenAddresses,
+  batchReview,
+  configuredAnonymizer,
+  needsAnonymizer,
+  queueStrk20Disclosure,
+  reviewAssetsFor,
+  strk20BatchSummaryRefusal,
+} from "./strk20-ops-review";
 import {
   readStrk20BalancesMessage,
   readStrk20InvokeMessage,
@@ -56,11 +55,7 @@ import {
   readStrk20ShadowAccountMessage,
 } from "./strk20-provider-inputs";
 import { poisonedStrk20ActionFlags } from "./strk20-recipient-policy";
-import {
-  disclosureScopeRecording,
-  invokeScopeRecording,
-  shadowRecordRefusal,
-} from "./strk20-shadow-scopes";
+import { invokeScopeRecording, shadowRecordRefusal } from "./strk20-shadow-scopes";
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.
@@ -96,73 +91,6 @@ type Strk20OpsHandler = (
   message: unknown,
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
-
-const actionTokenAddresses = (actions: readonly Strk20Action[]): readonly string[] =>
-  actions.flatMap((action) => ("token" in action ? [action.token] : []));
-
-// Card labels come from the same network-scoped, spam- and source-filtered
-// trusted set the call reviewer uses, never raw preferences: a dapp-watched or
-// spoof token must not lend its ticker to a card (audit 171).
-const reviewAssetsFor = (
-  resolved: ResolvedAccount,
-  addresses: readonly string[],
-): readonly { readonly address: string; readonly symbol: string }[] =>
-  verificationContext(resolved.account, resolved.preferences)
-    .tokens.filter((token) => addresses.some((address) => sameFelt(address, token.address)))
-    .map((token) => ({ address: token.address, symbol: token.symbol }));
-
-// Action amounts on a card read in the token's own units only for a token in
-// that same trusted set (Sherlock 154); any other token keeps its exact felt.
-const trustedAssetLookup = (resolved: ResolvedAccount): Strk20AssetLookup => {
-  const tokens = verificationContext(resolved.account, resolved.preferences).tokens;
-  return (address) => {
-    const token = tokens.find((candidate) => sameFelt(candidate.address, address));
-    return token ? { decimals: token.decimals, symbol: token.symbol } : undefined;
-  };
-};
-
-const queueDisclosure = async (
-  deps: Strk20OpsDeps,
-  resolved: ResolvedAccount,
-  input: {
-    readonly flags?: readonly ApprovalRiskFlag[];
-    readonly kind: Strk20DisclosureApprovalKind;
-    readonly origin: string;
-    readonly request: Strk20DisclosureRequest;
-    readonly summaries: readonly string[];
-  },
-): Promise<RuntimeResponse> => {
-  const recording = disclosureScopeRecording(input.request);
-  const unrecordable = await shadowRecordRefusal(deps.wallet, resolved, input.origin, recording);
-  if (unrecordable) {
-    return holdStrk20Notice(deps, input.origin, unrecordable.error, "record-limit");
-  }
-  try {
-    const payload = { strk20Request: input.request };
-    const approval = deps.approvals.requestStrk20Disclosure({
-      context: await createApprovalContext(resolved.account, payload),
-      ...(input.flags === undefined ? {} : { flags: input.flags }),
-      kind: input.kind,
-      origin: input.origin,
-      request: input.request,
-      reviewAssets: reviewAssetsFor(
-        resolved,
-        input.request.type === "register"
-          ? [input.request.token]
-          : input.request.type === "balances"
-            ? input.request.tokens
-            : input.request.type === "prepare"
-              ? actionTokenAddresses(input.request.actions)
-              : [],
-      ),
-      summaries: input.summaries,
-    });
-    notifyApprovalsChanged();
-    return deps.waiters.register(approval.id);
-  } catch (error) {
-    return { error: strk20ErrorMessage(error) };
-  }
-};
 
 const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => {
   const input = readStrk20RegisterMessage(message);
@@ -203,7 +131,8 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
       { accountContext, preferences: resolved.preferences, token },
       poolFeeFri,
     );
-    return queueDisclosure(deps, resolved, {
+    return queueStrk20Disclosure(deps, resolved, {
+      holdFailures: false,
       kind: "strk20-register",
       origin: input.origin,
       request: {
@@ -243,7 +172,8 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
   if ("error" in resolved) {
     return resolved;
   }
-  return queueDisclosure(deps, resolved, {
+  return queueStrk20Disclosure(deps, resolved, {
+    holdFailures: false,
     kind: "strk20-balances",
     origin: input.origin,
     request: { tokens: input.tokens, type: "balances" },
@@ -257,32 +187,24 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
   });
 };
 
-const configuredAnonymizer = (resolved: ResolvedAccount): string | undefined =>
-  resolved.preferences.strk20Networks?.[resolved.account.networkId]?.shadowAccountAnonymizerAddress;
-
-const needsAnonymizer = (actions: readonly Strk20Action[]): boolean =>
-  actions.some((action) => action.type === "shadow_account_invoke");
-
-// What the card states for a batch, and the anonymizer it named. The
-// anonymizer is bound into the approval so execution can refuse if the
-// network's configuration moved after review: the calls the user reviewed
-// would otherwise run through a different anonymizer than the card showed.
-const batchReview = (
+// The answer a batch gets before its card, or null to go on. The summary
+// bound is decided from the site's input before anything that depends on what
+// this user has set up, so it is the same for every user (audit N1); a batch
+// that needs the missing anonymizer is held on the notice.
+const batchPrecheck = (
+  deps: Strk20OpsDeps,
   resolved: ResolvedAccount,
   origin: string,
   actions: readonly Strk20Action[],
-): { readonly anonymizer?: string; readonly summaries: readonly string[] } => {
-  const anonymizer = needsAnonymizer(actions) ? configuredAnonymizer(resolved) : undefined;
-  const shadow: Strk20ShadowAccountReview | undefined =
-    anonymizer === undefined ? undefined : { anonymizer, origin: activityOrigin(origin) };
-  return {
-    ...(anonymizer === undefined ? {} : { anonymizer }),
-    summaries: summarizeStrk20Batch(actions, {
-      assetFor: trustedAssetLookup(resolved),
-      depositor: resolved.account.address,
-      ...(shadow ? { shadow } : {}),
-    }),
-  };
+): Promise<RuntimeResponse> | RuntimeResponse | null => {
+  const unrenderable = strk20BatchSummaryRefusal(actions, origin, resolved.account.address);
+  if (unrenderable) {
+    return { error: unrenderable };
+  }
+  if (needsAnonymizer(actions) && configuredAnonymizer(resolved) === undefined) {
+    return holdStrk20Notice(deps, origin, MISSING_ANONYMIZER_REFUSAL);
+  }
+  return null;
 };
 
 const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender) => {
@@ -308,8 +230,9 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   if ("error" in resolved) {
     return resolved;
   }
-  if (needsAnonymizer(input.actions) && configuredAnonymizer(resolved) === undefined) {
-    return holdStrk20Notice(deps, input.origin, MISSING_ANONYMIZER_REFUSAL);
+  const early = batchPrecheck(deps, resolved, input.origin, input.actions);
+  if (early) {
+    return early;
   }
   // The same recipient policy the wallet's own pool routes apply. A poisoned
   // payment is queued with the flag, which leaves the card with Deny only,
@@ -317,8 +240,9 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   // addresses the user has saved or paid (Sherlock 140).
   const flags = poisonedStrk20ActionFlags(resolved.account, resolved.preferences, input.actions);
   const review = batchReview(resolved, input.origin, input.actions);
-  return queueDisclosure(deps, resolved, {
+  return queueStrk20Disclosure(deps, resolved, {
     flags,
+    holdFailures: needsAnonymizer(input.actions),
     kind: "strk20-prepare",
     origin: input.origin,
     request: {
@@ -357,8 +281,9 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   if ("error" in resolved) {
     return resolved;
   }
-  if (needsAnonymizer(input.actions) && configuredAnonymizer(resolved) === undefined) {
-    return holdStrk20Notice(deps, input.origin, MISSING_ANONYMIZER_REFUSAL);
+  const early = batchPrecheck(deps, resolved, input.origin, input.actions);
+  if (early) {
+    return early;
   }
   // A private transfer or withdrawal to an address that mimics a saved contact
   // is the same attack whether the wallet composed it or the site did. It is
@@ -427,7 +352,8 @@ const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, messa
   if (anonymizer === undefined) {
     return holdStrk20Notice(deps, input.origin, MISSING_ANONYMIZER_REFUSAL);
   }
-  return queueDisclosure(deps, resolved, {
+  return queueStrk20Disclosure(deps, resolved, {
+    holdFailures: true,
     kind: "strk20-shadow-account",
     origin: input.origin,
     request: {
