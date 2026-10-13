@@ -29,7 +29,9 @@ import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
 import { INTERNAL_ERROR_COPY } from "./friendly-error-internal";
 import {
   ADD_ACCOUNT_FAILED,
+  BACKUP_UNREADABLE,
   KEY_IMPORT_FAILED,
+  REVIEW_MOVED,
   SAVE_FAILED,
   SEED_IMPORT_FAILED,
   SUBMISSION_UNKNOWN,
@@ -58,7 +60,6 @@ export const RATE_LIMITED = "This service is rate limiting requests. Wait a mome
 // Shared endings. A failure the reader cannot diagnose gets the same sentence
 // wherever it comes from, so the wallet sounds like one writer.
 const REQUEST_FAILED = "That request didn't go through. Try again.";
-const REVIEW_MOVED = "This changed while you were reviewing it. Review it again.";
 const FEE_MOVED = "The fee changed while you were reviewing. Check it and submit again.";
 const REFUSED = "The wallet refused that request.";
 // Catch-alls around a submission. The wallet doesn't know whether the
@@ -180,7 +181,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["account visibility update failed", SAVE_FAILED],
   ["preferences unavailable", "Couldn't load your settings. Try again."],
   ["diagnostic export failed", "Couldn't export diagnostics. Try again."],
-  ["backup import failed", "Couldn't read that backup file. Check the file and try again."],
+  ["backup import failed", BACKUP_UNREADABLE],
 
   // --- Folders (the UI word; the code still says group) --------------------
   ["group create failed", "Couldn't create that folder. Try again."],

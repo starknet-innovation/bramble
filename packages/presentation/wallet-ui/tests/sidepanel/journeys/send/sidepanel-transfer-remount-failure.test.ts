@@ -122,7 +122,7 @@ describe("a review that fails after a re-render", () => {
     pending.reject(new Error("boom"));
     await flush();
     expect(stage(app)).toBe("details");
-    expect(text(app, "#transfer-result")).toContain("Couldn't prepare this transfer. Try again.");
+    expect(text(app, "#transfer-result")).toContain("Something went wrong. Please try again.");
     expect(reviewLocked(app)).toBe(false);
   });
 

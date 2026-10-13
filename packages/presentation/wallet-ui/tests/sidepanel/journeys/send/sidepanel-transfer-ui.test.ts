@@ -70,9 +70,7 @@ describe("recipientFieldError / friendlyReviewError helpers", () => {
     expect(friendlyReviewError(new Error("invalid transfer review request"))).toBe(
       "Enter a valid Starknet address.",
     );
-    expect(friendlyReviewError(new Error("boom"))).toBe(
-      "Couldn't prepare this transfer. Try again.",
-    );
+    expect(friendlyReviewError(new Error("boom"))).toBe("Something went wrong. Please try again.");
   });
 });
 

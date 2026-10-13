@@ -1,24 +1,20 @@
 /**
- * Which raw errors are the wallet's own plumbing, and which carry a fact the
- * reader must still be told (mc-wallet issue 652).
+ * Which of the wallet's own error messages are plumbing a reader must not see
+ * as written (mc-wallet issue 652).
  *
- * `friendlyError` shows an unmapped capitalised string as written, because
- * curated copy starts with a capital. The background's own diagnostics often
- * do too ("Invalid Ledger account index", "Krusty KMS returned invalid class
- * hash JSON", "Unlock session changed during vault creation"), and those were
- * reaching readers verbatim. This module draws the line in three parts:
+ * The default is to show a message as written. A message is replaced with the
+ * caller's context sentence or the generic fallback ONLY when it is listed in
+ * `REVIEWED_PLUMBING` — reviewed one by one, matched exactly, and justified as
+ * stating no fact a reader needs: an input guard on a value our own code
+ * derived, an adapter's output or storage plumbing, or a guard no reader action
+ * reaches. When in doubt a message stays visible. There are no prefix families:
+ * an "Invalid …" a reviewer has not listed is shown, because a family rule hid
+ * security and funds facts it was never meant to cover.
  *
- * 1. `FACT_KEPT` — diagnostics reviewed as security or cryptographic facts (a
- *    key, signature, hash, proof, chain id, or check that failed). They are
- *    never collapsed: the reader is told what failed, in these words until a
- *    reviewed sentence replaces them in the copy table.
- * 2. `INTERNAL_DIAGNOSTICS` — diagnostics reviewed as plumbing even though they
- *    mention a fact word ("class hash JSON" is a parse failure, not a failed
- *    check). They take the caller's context sentence or the generic fallback.
- * 3. `INTERNAL_FAMILIES` — the shapes our plumbing errors take, for strings not
- *    reviewed one by one (templates, new throws). A match is collapsed ONLY when
- *    `FACT_TERMS` finds no fact in it, so an unreviewed failed check still
- *    reaches the reader as written rather than as "Something went wrong".
+ * Security, cryptographic, privacy, and funds messages — a failed signature,
+ * key, hash, proof, chain id, origin, approval, or a private-balance refusal —
+ * are never listed. They are shown as written, or mapped to a reviewed
+ * sentence that keeps the fact.
  *
  * Ledger device rejections are not here: they arrive as catalog codes and are
  * shown with the catalog's own sentence (see ./friendly-error).
@@ -27,7 +23,9 @@
  */
 
 import {
+  BACKUP_UNREADABLE,
   KEY_IMPORT_FAILED,
+  REVIEW_MOVED,
   SEED_IMPORT_FAILED,
   SWAP_ROUTE_UNSAFE,
   UNRECOGNIZED_RELEASE,
@@ -44,6 +42,19 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
   ["invalid mnemonic", SEED_IMPORT_FAILED],
   ["invalid mnemonic word count", SEED_IMPORT_FAILED],
   ["invalid private key", KEY_IMPORT_FAILED],
+  // The recovery-phrase toast and the backup restore: the reader's own input.
+  ["invalid recovery phrase", SEED_IMPORT_FAILED],
+  ["invalid preferences backup", BACKUP_UNREADABLE],
+  // A request the reader was reviewing changed underneath it.
+  ["the account changed since this request was reviewed", REVIEW_MOVED],
+  // A private-balance refusal, in the words the wallet already gives sites.
+  ["insufficient private balance", "Insufficient private balance"],
+  // The STRK20 write's outcome is unknown and the recovery instruction is the
+  // fact the reader needs: shown as written until reviewed copy keeps both.
+  [
+    "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
+    "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
+  ],
   // avnu's quote answered a different pair: the swap was refused for safety.
   ["swap quote does not match the requested pair", SWAP_ROUTE_UNSAFE],
   // The account's deploy class is not one this wallet derives: the same fact
@@ -68,145 +79,186 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
 ];
 
 /**
- * Words that mark a security or cryptographic fact. A family match containing
- * one is never collapsed, because hiding a failed signature, key, hash, proof,
- * chain-id, or verification check is worse than showing a developer's words.
+ * Words that mark a security, cryptographic, privacy, or funds fact. The
+ * lowercase backstop in ./friendly-error never collapses a message containing
+ * one, and no `REVIEWED_PLUMBING` entry may contain one unless it is listed in
+ * `PLUMBING_DESPITE_FACT_WORD` with its reason (checked by the tests).
  */
 export const FACT_TERMS =
-  /\b(?:signatures?|signing key|public[- ]?keys?|private keys?|viewing[- ]keys?|hash(?:es|ed)?|proofs?|chain(?: id)?|verif(?:y|ied|ication)|mismatch|does not match|do not match|not from|pinned|commitment)\b/i;
+  /\b(?:signatures?|signed|signing|public[- ]?keys?|private keys?|key material|viewing[- ]keys?|hash(?:es|ed)?|proofs?|chain(?: ?id)?|chainid|verif\w*|mismatch|does not match|do not match|not from|pinned|commitment|origins?|phishing|spoof\w*|scam|poison\w*|mimic\w*|leak\w*|linkage|anonymi[sz]er|executor|nonce|replay\w*|expired|tamper\w*|forged|allowances?|approv\w*|fee cap|ceiling|unknown contract|sanction\w*|screen\w*|blocked|integrity|schema|strk20|private|privacy|notes?|shield\w*|recovered vault|imported-seed vault|prepared|envelope|commit state)\b/i;
 
 /**
- * The shapes the wallet's own plumbing errors take. Matched on the trimmed raw
- * string. Each is a prefix the background or a platform adapter uses for input
- * validation, adapter output checks, session guards, or storage state — never a
- * sentence written for a reader.
+ * Plumbing messages, lowercased, each with the reason it states nothing a
+ * reader needs. Exact match only. Adding a line here hides a message: it needs
+ * the same review the list had.
  */
-const INTERNAL_FAMILIES: readonly (readonly [family: string, pattern: RegExp])[] = [
-  ["kms", /^Krusty KMS\b/],
-  ["validation", /^Invalid\b/],
-  ["session-guard", /^Unlock session\b/],
-  ["unsupported", /^Unsupported\b/],
-  [
-    "vault-store",
-    /^(?:Vault migration|Committed encrypted envelope|Storage (?:key|access)|Imported seed unavailable)/,
-  ],
-  ["indexer", /^Starkscan\b/],
-  ["nostr", /^Nostr relays?\b/],
-  ["phishing-feed", /^Phishing feed\b/],
-  ["rpc-plumbing", /^(?:RPC returned\b|No RPC endpoints? |RPC endpoints are\b)/],
-  ["http", /^(?:Response was not JSON|Request failed)$/],
-  ["strk20-signer", /^STRK20 signer\b/],
-  ["argent-plumbing", /^Argent multisig (?:operations|public signer configuration) unavailable/],
-];
+export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
+  // --- Input guards on values our own code derived or the UI pre-validated ---
+  ["invalid ledger account index", "picker supplies a range-checked index"],
+  ["invalid ledger path application", "picker supplies a known application"],
+  ["invalid starknet network", "network id comes from the wallet's own list"],
+  ["invalid account deployment salt", "salt is derived, not entered"],
+  ["invalid account contract type", "contract type comes from a fixed choice"],
+  ["invalid account id", "id is the wallet's own"],
+  ["invalid account address", "address is derived or pre-validated"],
+  ["invalid account", "account record built by the wallet"],
+  ["invalid account label", "label is pre-validated in the UI"],
+  ["invalid address book entry", "entry is pre-validated in the UI"],
+  ["invalid custom network", "network form is pre-validated in the UI"],
+  ["invalid derivation index", "index is derived"],
+  ["invalid display preference", "choice comes from a fixed control"],
+  ["invalid explorer api endpoint", "endpoint is pre-validated in the UI"],
+  ["invalid group icon", "icon comes from a fixed choice"],
+  ["invalid group name", "name is pre-validated in the UI"],
+  ["invalid indexer endpoint", "endpoint is pre-validated in the UI"],
+  ["invalid rpc endpoint", "endpoint is pre-validated in the UI"],
+  ["invalid nostr relay endpoint", "endpoint is pre-validated in the UI"],
+  ["invalid nostr relay configuration", "configuration built by the wallet"],
+  ["invalid nostr relay idle timeout", "timeout is a constant"],
+  ["invalid preferences", "preferences record built by the wallet"],
+  ["invalid stored preferences", "storage parse of the wallet's own record"],
+  ["invalid wallet contact card", "card built by the wallet"],
+  ["invalid token", "token record built by the wallet"],
+  ["invalid token address", "address is pre-validated in the UI"],
+  ["invalid token decimals", "decimals come from a contract read"],
+  ["invalid nft", "record built by the wallet"],
+  ["invalid nft contract address", "address is pre-validated in the UI"],
+  ["invalid nft ownership address", "address is the wallet's own account"],
+  ["invalid nft transfer address", "recipient is pre-validated in the UI"],
+  ["invalid transfer address", "recipient is pre-validated in the UI"],
+  ["invalid transfer amount", "amount is pre-validated in the UI"],
+  ["invalid starknet name", "name is pre-validated in the UI"],
+  ["invalid mnemonic derivation input", "derivation input built by the wallet"],
+  ["invalid stark derivation input", "derivation input built by the wallet"],
+  ["invalid stark address derivation input", "derivation input built by the wallet"],
+  ["invalid nostr derivation input", "derivation input built by the wallet"],
+  ["invalid nostr application-data input", "input built by the wallet"],
+  ["invalid nostr application-data batch", "batch built by the wallet"],
+  ["invalid recovery account selection", "selection comes from the scan's own list"],
+  ["invalid unlock session passphrase", "session guard after the vault decrypted"],
+  ["invalid unlock session ttl", "ttl is a constant"],
+  ["invalid vault", "vault built by the wallet before writing it"],
+  ["invalid json value", "storage serialisation guard"],
+  ["a braavos account must name the class it was deployed with", "panel passes the class"],
+  ["account creation uses this wallet's own derivation only", "layer guard"],
+  ["account is not a ledger account", "layer guard"],
+  ["openzeppelin accounts do not accept a deployment salt", "layer guard"],
+  ["ready derivation does not take a passphrase", "layer guard"],
+  ["ready derivation is only valid for argent accounts", "layer guard"],
+  ["query signer is only available for argent accounts", "layer guard"],
+  ["duplicate recovery account selection", "layer guard"],
+  ["recovery accounts resolve to a duplicate address", "layer guard"],
+  ["history account id does not belong to the network", "layer guard"],
+  ["no calls to estimate", "layer guard"],
+  ["no calls to submit", "layer guard"],
+  ["unsupported signer-management action", "action comes from a fixed control"],
+  // --- Krusty KMS adapter output and module checks ---------------------------
+  ["krusty kms module did not load as an object", "module load"],
+  ["krusty kms returned an invalid account address", "adapter output shape"],
+  ["krusty kms returned invalid account address", "adapter output shape"],
+  ["krusty kms returned an invalid mnemonic", "adapter output shape"],
+  ["krusty kms returned an invalid mnemonic validation result", "adapter output shape"],
+  ["krusty kms returned an invalid nostr gift wrap", "adapter output shape"],
+  ["krusty kms returned invalid nostr application data", "adapter output shape"],
+  // --- Session and storage plumbing -----------------------------------------
+  ["unlock session changed during vault creation", "concurrency guard; nothing was written"],
+  ["unlock session changed during network switch", "concurrency guard"],
+  ["unlock session changed during account selection", "concurrency guard"],
+  ["unlock session changed during account reconciliation", "concurrency guard"],
+  ["unlock session changed during account mutation", "concurrency guard"],
+  ["unlock session mirror not cleared", "session storage cleanup"],
+  ["unlock session mirror not revoked", "session storage cleanup"],
+  ["storage key must be namespaced", "storage guard"],
+  ["imported seed unavailable", "storage read guard"],
+  ["vault migration cleanup failed", "cleanup after a verified migration"],
+  ["browser storage.local is unavailable", "browser API missing"],
+  ["browser storage.session is unavailable", "browser API missing"],
+  ["browser storage.sync is unavailable", "browser API missing"],
+  ["trusted browser storage access is unavailable", "browser API missing"],
+  // --- Transport and response parsing --------------------------------------
+  ["request failed", "HTTP helper; status is behind the copy control"],
+  ["response was not json", "HTTP helper"],
+  ["starkscan request failed", "indexer transport"],
+  ["invalid starkscan response", "indexer parse"],
+  ["invalid starkscan address", "indexer request guard"],
+  ["invalid starkscan block tag", "indexer request guard"],
+  ["invalid starkscan cursor", "indexer request guard"],
+  ["invalid starkscan page limit", "indexer request guard"],
+  ["starkscan balance input must contain one indexed network", "indexer request guard"],
+  ["invalid token balance response", "balance read parse"],
+  ["invalid nostr gift wrap", "relay event parse"],
+  ["invalid nostr gift wrap batch", "relay event parse"],
+  ["invalid argent multisig address", "response parse"],
+  ["invalid argent multisig class response", "response parse"],
+  ["invalid argent multisig configuration", "configuration parse"],
+  ["invalid argent multisig salt", "deployment field parse"],
+  ["invalid argent multisig signer event", "event parse"],
+  ["invalid argent multisig signer membership response", "response parse"],
+  ["invalid argent multisig signers response", "response parse"],
+  ["invalid argent multisig threshold or signer count", "configuration parse"],
+  ["invalid argent multisig threshold response", "response parse"],
+  ["invalid argent signer guid", "response parse"],
+  ["invalid argent signer guids", "response parse"],
+  ["invalid signer guid", "response parse"],
+  ["invalid signer account class response", "response parse"],
+  ["argent multisig operations unavailable", "collaborator not wired"],
+  // avnu answers that fail to parse; the swap screen's own route sentence covers them.
+  ["invalid slippage", "slippage comes from a fixed control"],
+  ["invalid swap quote", "avnu response parse"],
+  ["invalid swap call", "avnu response parse"],
+  ["invalid swap build response", "avnu response parse"],
+  ["invalid token list response", "avnu response parse"],
+  ["token list failed", "avnu transport"],
+  ["swap service unavailable", "avnu transport"],
+  ["invalid provider response", "page bridge parse"],
+  ["invalid response", "relay JSON-RPC envelope parse"],
+  ["deployment fee estimation unavailable", "fee lane not wired"],
+  // --- Unreachable ------------------------------------------------------------
+  ["strk20 signer does not sign messages", "unreachable: the call-set signer is never asked"],
+  ["strk20 signer does not expose public keys", "unreachable: as above"],
+  ["strk20 signer does not declare classes", "unreachable: as above"],
+  ["strk20 signer does not deploy accounts", "unreachable: as above"],
+  // --- Plumbing that names a fact word (see PLUMBING_DESPITE_FACT_WORD) --------
+  ["krusty kms returned invalid class hash json", "KMS's static class table parse"],
+  ["krusty kms returned an invalid class hash", "KMS's static class table parse"],
+  ["krusty kms returned invalid class hashes", "KMS's static class table parse"],
+  ["krusty kms class hashes are missing oz accounts", "KMS's static class table parse"],
+  ["devnet account class hash is invalid", "constant class table parse"],
+  ["invalid account class hash", "class resolved from the wallet's own table"],
+  ["account class hash does not belong to its account family", "our two inputs disagreed"],
+]);
 
 /**
- * Plumbing diagnostics that mention a fact word but report no failed check:
- * an adapter returned malformed output, or our own inputs disagreed. Lowercased.
- * They take the context sentence, never their own words.
+ * `REVIEWED_PLUMBING` entries that contain a `FACT_TERMS` word, and why each is
+ * still plumbing. Every one reads the KMS's or wallet's own static class table;
+ * none reports a check on chain data, a key, or a signature.
  */
-export const INTERNAL_DIAGNOSTICS: ReadonlySet<string> = new Set([
-  // Krusty KMS output and module checks (issue 652, item 2).
+export const PLUMBING_DESPITE_FACT_WORD: ReadonlySet<string> = new Set([
   "krusty kms returned invalid class hash json",
   "krusty kms returned an invalid class hash",
   "krusty kms returned invalid class hashes",
   "krusty kms class hashes are missing oz accounts",
-  "krusty kms class hashes are missing sn_main",
-  "krusty kms class hashes are missing sn_sepolia",
-  "krusty kms class hashes are missing sn_devnet",
-  "krusty kms returned invalid public key",
-  "krusty kms returned an invalid nostr public key",
-  "krusty kms returned an invalid strk20 viewing key",
   "devnet account class hash is invalid",
-  // Vault input checks on values our own code derived (issue 652, item 1).
   "invalid account class hash",
   "account class hash does not belong to its account family",
-  "invalid stark signing input",
-  "invalid strk20 viewing-key input",
-  "invalid ledger strk20 viewing-key scope",
-  "invalid starknet contract class hash",
-  "braavos deployment chain id unavailable",
-  // Guards between our own layers; no reader action reaches them.
-  "a braavos account must name the class it was deployed with",
-  "account creation uses this wallet's own derivation only",
-  "account is not a ledger account",
-  "openzeppelin accounts do not accept a deployment salt",
-  "ready derivation does not take a passphrase",
-  "ready derivation is only valid for argent accounts",
-  "query signer is only available for argent accounts",
-  "duplicate recovery account selection",
-  "recovery accounts resolve to a duplicate address",
-  "history account id does not belong to the network",
-  "no calls to estimate",
-  "no calls to submit",
   "strk20 signer does not sign messages",
   "strk20 signer does not expose public keys",
   "strk20 signer does not declare classes",
   "strk20 signer does not deploy accounts",
 ]);
 
-/**
- * Diagnostics reviewed as facts the reader must be told. Shown as written until
- * a reviewed sentence lands in the copy table; the conformance test asserts each
- * still names what failed. Lowercased.
- */
-export const FACT_KEPT: ReadonlySet<string> = new Set([
-  // Keys and signatures.
-  "invalid ledger public key",
-  "invalid account public key",
-  "invalid argent multisig signer public key",
-  "invalid ledger strk20 viewing key",
-  "krusty kms signature key mismatch",
-  "krusty kms public-key probe did not verify",
-  "signature public key does not match the account",
-  "ledger signature verification failed",
-  "argent multisig signature is not from a configured signer",
-  "argent multisig signatures must use distinct signers",
-  // Hashes and commitments.
-  "invalid message hash",
-  "invalid transaction hash",
-  "invalid argent multisig transaction hash",
-  "typed data produced an invalid hash",
-  "typed data cannot be hashed",
-  "supplied class hash does not match the starknet contract class",
-  "invalid swap preparation commitment",
-  "invalid privacy preparation commitment",
-  // Chain identity.
-  "typed data chain does not match the active network",
-  "rpc endpoint chain id does not match the account network",
-  "rpc reported another chain for a starknet name lookup",
-  // Pinned contract classes.
-  "argent account class hash does not match the pinned release",
-  "argent multisig class hash does not match the pinned release",
-  "deployed argent multisig class does not match the pinned release",
-  "declared argent multisig class does not match the stable pin",
-  "account is not the pinned argent multisig 0.2 class",
-  "account is not the pinned argent multisig class",
-  "account deployment parameters do not match the stored address",
-  "declared argent multisig class is malformed",
-  // Malformed chain data where a hash belongs: the reader is told the RPC
-  // answered wrongly rather than that something vague went wrong.
-  "rpc returned a non-felt class hash",
-  "rpc returned an invalid accepted starknet block hash",
-  // Integrity of the stored wallet.
-  "vault migration verification failed",
-]);
-
-/** Which family, if any, an unreviewed raw string belongs to. */
-const internalFamily = (trimmed: string): string | null => {
-  for (const [family, pattern] of INTERNAL_FAMILIES) {
-    if (pattern.test(trimmed)) return family;
-  }
-  return null;
-};
+// Templated plumbing: the KMS adapter's shape checks (the field name is an
+// identifier) and the account-family exhaustiveness guard, which no input
+// reaches. The anchored grammar admits nothing else.
+const KMS_TEMPLATE_PLUMBING =
+  /^krusty kms (?:export missing|result missing (?:string field|field element|non-zero private key|non-zero field element)): [a-z0-9_]+$|^krusty kms class hashes are missing sn_(?:main|sepolia|devnet)$|^unknown account constructor shape: [^\s]+$/;
 
 /**
- * Whether a raw string is the wallet's own plumbing and must not be shown as
- * written. Fails toward showing: a reviewed fact, or an unreviewed family match
- * that names a fact, is never treated as plumbing.
+ * Whether a raw string is reviewed plumbing that must not be shown as written.
+ * Exact match against `REVIEWED_PLUMBING`, or the KMS adapter's anchored
+ * template shapes. Everything else is shown.
  */
-export const isInternalDiagnostic = (trimmed: string): boolean => {
+export const isReviewedPlumbing = (trimmed: string): boolean => {
   const normalized = trimmed.toLowerCase();
-  if (FACT_KEPT.has(normalized)) return false;
-  if (INTERNAL_DIAGNOSTICS.has(normalized)) return true;
-  return internalFamily(trimmed) !== null && !FACT_TERMS.test(trimmed);
+  return REVIEWED_PLUMBING.has(normalized) || KMS_TEMPLATE_PLUMBING.test(normalized);
 };

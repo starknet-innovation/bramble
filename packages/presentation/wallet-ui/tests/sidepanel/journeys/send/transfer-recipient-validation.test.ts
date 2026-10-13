@@ -45,7 +45,7 @@ test("maps the background review error onto the friendly recipient message", () 
 
 test("translates other review errors, never passing a raw diagnostic through", () => {
   expect(friendlyReviewError(new Error("network unreachable"))).toBe(
-    "Couldn't prepare this transfer. Try again.",
+    "Something went wrong. Please try again.",
   );
   expect(friendlyReviewError("boom")).toBe("Couldn't prepare this transfer. Try again.");
 });

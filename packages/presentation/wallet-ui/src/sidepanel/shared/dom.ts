@@ -30,12 +30,12 @@ export const errorDetails = (error: unknown, fallback: string): string =>
  * has no copy control and no second chance, so it takes the reader-facing
  * sentence directly — without this it printed "add token failed" in the page.
  * It classifies the raw diagnostic, as the toast does, so both name the same
- * cause. A diagnostic that is the wallet's own plumbing reads as the caller's
- * fallback (translated), which names the action that failed, rather than as
- * the generic "Something went wrong" (issue 652).
+ * cause. It passes no context sentence: a fallback such as "Private transaction
+ * failed" translates to "may not have gone through", which would be false for
+ * a refusal raised before anything was sent (issue 652 review, F2).
  */
 export const errorLine = (error: unknown, fallback: string): string =>
-  friendlyError(errorDetails(error, fallback), friendlyError(fallback).message).message;
+  friendlyError(errorDetails(error, fallback)).message;
 
 /**
  * Marks a button busy so repeated submits are impossible while work runs.

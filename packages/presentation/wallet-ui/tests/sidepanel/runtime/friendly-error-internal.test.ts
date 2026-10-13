@@ -1,25 +1,24 @@
 /**
- * The line between the wallet's own plumbing errors and the facts a reader
- * must still be told (mc-wallet issue 652). Plumbing never reaches a reader in
- * its own words; a Ledger rejection reads as the device catalog says; a failed
- * key, signature, hash, chain-id, or pinned-class check keeps saying what
- * failed.
+ * What the side panel shows for the wallet's own error messages (mc-wallet
+ * issue 652 and its review). The default is to show a message as written; only
+ * reviewed plumbing, listed exactly, is replaced. A Ledger rejection reads as the
+ * device catalog says, and a security, privacy, or funds fact keeps its words.
  */
 import { describe, expect, test } from "bun:test";
 import { ledgerMessage } from "@bramble/ledger-protocol/errors";
 
 import { friendlyError } from "../../../src/sidepanel/runtime/friendly-error";
 import {
-  FACT_KEPT,
-  INTERNAL_DIAGNOSTICS,
-  isInternalDiagnostic,
+  FACT_TERMS,
+  PLUMBING_DESPITE_FACT_WORD,
+  REVIEWED_PLUMBING,
 } from "../../../src/sidepanel/runtime/friendly-error-internal";
 
 const GENERIC = "Something went wrong. Please try again.";
 const ADD_ACCOUNT = "Couldn't add that account. Try again.";
+const STRK20_DOWN = "Private balances are unavailable right now. Try again shortly.";
 
-describe("friendlyError — the wallet's own plumbing", () => {
-  // The strings issue 652 names, as the background throws them.
+describe("reviewed plumbing", () => {
   const named = [
     "Invalid Ledger account index",
     "Invalid Ledger path application",
@@ -38,56 +37,57 @@ describe("friendlyError — the wallet's own plumbing", () => {
     "Unlock session mirror not revoked",
   ];
 
-  test("is never shown as written", () => {
+  test("the issue's named diagnostics are replaced, with the caller's sentence when given", () => {
     for (const raw of named) {
       expect(friendlyError(raw).message).toBe(GENERIC);
-    }
-  });
-
-  test("takes the calling screen's sentence when it gives one", () => {
-    for (const raw of named) {
       expect(friendlyError(raw, ADD_ACCOUNT).message).toBe(ADD_ACCOUNT);
     }
   });
 
-  test("an unreviewed string of an internal family is collapsed too", () => {
-    expect(friendlyError("Krusty KMS export missing: derive_account").message).toBe(GENERIC);
-    expect(friendlyError("Invalid Starkscan page limit").message).toBe(GENERIC);
-    expect(friendlyError("Unlock session changed during something new").message).toBe(GENERIC);
-  });
-
-  test("keeps a reader's own sentence and an actionable state as written", () => {
+  test("an unlisted message of a familiar shape is shown as written", () => {
     for (const raw of [
-      "Account already exists",
-      "Wallet already exists",
-      "Enter a secure HTTPS service URL",
-      "Nostr coordination requires a recovery-phrase wallet",
+      "Invalid origin",
+      "Invalid nonce",
+      "Invalid chainId",
+      "Invalid prepared Argent multisig transaction",
+      "Unsupported vault schema",
+      "Unlock session expired",
+      "Krusty KMS returned invalid public key",
+      "Krusty KMS signature verification failed",
+      "Starkscan flagged a scam token",
+      "RPC returned a replayed transaction",
     ]) {
       expect(friendlyError(raw).message).toBe(raw);
+      expect(friendlyError(raw, ADD_ACCOUNT).message).toBe(raw);
     }
   });
 
-  test("maps a pasted phrase or key the reader can fix to the import sentences", () => {
+  test("no listed entry names a fact unless its reason is recorded", () => {
+    const unexplained = [...REVIEWED_PLUMBING.keys()].filter(
+      (raw) => FACT_TERMS.test(raw) && !PLUMBING_DESPITE_FACT_WORD.has(raw),
+    );
+    expect(unexplained).toEqual([]);
+    for (const raw of PLUMBING_DESPITE_FACT_WORD) expect(REVIEWED_PLUMBING.has(raw)).toBe(true);
+  });
+
+  test("the reader's own input maps to the sentences the wallet already uses", () => {
+    expect(friendlyError("Invalid recovery phrase").message).toBe(
+      "Couldn't import that recovery phrase. Check the words and try again.",
+    );
     expect(friendlyError("Invalid mnemonic").message).toBe(
       "Couldn't import that recovery phrase. Check the words and try again.",
     );
     expect(friendlyError("Invalid private key").message).toBe(
       "Couldn't import that account. Check what you pasted and try again.",
     );
-  });
-
-  test("keeps the unrecognised-class fact for a Ledger Braavos or Argent account", () => {
-    expect(friendlyError("Invalid Braavos account class hash").message).toContain(
-      "release this wallet doesn't recognize",
-    );
-    expect(friendlyError("Invalid Argent account class hash").message).toContain(
-      "release this wallet doesn't recognize",
+    expect(friendlyError("Invalid preferences backup").message).toBe(
+      "Couldn't read that backup file. Check the file and try again.",
     );
   });
 });
 
-describe("friendlyError — Ledger device rejections", () => {
-  test("a rejection code reads as the device catalog's own sentence", () => {
+describe("Ledger device rejections", () => {
+  test("a rejection code reads as the device catalog's own sentence, whatever the context", () => {
     for (const code of ["rejected-on-device", "device-locked", "blind-signing-disabled"] as const) {
       expect(friendlyError(code).message).toBe(ledgerMessage(code));
       expect(friendlyError(code, ADD_ACCOUNT).message).toBe(ledgerMessage(code));
@@ -95,47 +95,95 @@ describe("friendlyError — Ledger device rejections", () => {
   });
 });
 
-describe("friendlyError — security and cryptographic facts", () => {
-  test("every reviewed fact is shown with its words, even with a context sentence", () => {
-    for (const fact of FACT_KEPT) {
-      const message = friendlyError(fact).message;
-      expect(message.toLowerCase()).toBe(fact);
-      expect(friendlyError(fact, ADD_ACCOUNT).message.toLowerCase()).toBe(fact);
+describe("STRK20 (review F1, F2)", () => {
+  test("an unknown submission status keeps its recovery instruction", () => {
+    const raw =
+      "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover";
+    expect(friendlyError(raw).message).toBe(raw);
+    expect(friendlyError(raw, ADD_ACCOUNT).message).toBe(raw);
+  });
+
+  test("a revert, rejected proof, failed validation, or nonce stays visible", () => {
+    for (const category of [
+      "execution-reverted",
+      "proof-rejected",
+      "validation-failed",
+      "invalid-nonce",
+      "service-unavailable",
+      "transport",
+    ]) {
+      const raw = `strk20 services unavailable (submission/${category}): reason`;
+      expect(friendlyError(raw).message).toBe(raw);
+    }
+    const timedOut = "strk20 services unavailable: submission did not finish within 60 s";
+    expect(friendlyError(timedOut).message).toBe(timedOut);
+  });
+
+  test("only the services-down reasons read as unavailable", () => {
+    for (const raw of [
+      "strk20 services unavailable",
+      "strk20 services unavailable: no RPC endpoint is configured",
+      "strk20 services unavailable: no privacy routing is configured for this network",
+      "strk20 services unavailable: could not read the pool fee (timeout)",
+    ]) {
+      expect(friendlyError(raw).message).toBe(STRK20_DOWN);
+    }
+    expect(friendlyError("strk20 services unavailable (rate limited; retry shortly)").message).toBe(
+      "This service is rate limiting requests. Wait a moment and try again.",
+    );
+  });
+
+  test("a privacy-leak refusal says so, in every form, never 'may not have gone through'", () => {
+    for (const raw of [
+      "strk20 privacy leak",
+      "strk20 privacy leak: USER_LINKAGE",
+      "strk20 privacy leak (proving/service-unavailable): USER_LINKAGE",
+    ]) {
+      expect(friendlyError(raw).message).toBe("The operation would leak private information");
+      expect(friendlyError(raw, "Private transaction failed").message).toBe(
+        "The operation would leak private information",
+      );
     }
   });
 
-  test("an unreviewed family string naming a failed check is not collapsed", () => {
+  test("other STRK20 and private-balance refusals keep their words", () => {
     for (const raw of [
-      "Invalid signature from the account",
-      "Krusty KMS signature verification failed",
-      "Unlock session chain id does not match",
+      "strk20 relay fee exceeds the reviewed ceiling",
+      "strk20 private submission unavailable",
+      "strk20 converted fee could not be verified independently",
+      "private balance overflow",
     ]) {
       expect(friendlyError(raw).message).toBe(raw);
     }
   });
+});
 
-  test("a lowercase diagnostic naming a failed check keeps its words", () => {
+describe("the lowercase backstop", () => {
+  test("still replaces noise, but never a lowercase fact", () => {
+    expect(friendlyError("boom").message).toBe(GENERIC);
     expect(friendlyError("signature verification failed").message).toBe(
       "signature verification failed",
     );
-    expect(friendlyError("boom").message).toBe(GENERIC);
+    expect(friendlyError("approval summary too long to review").message).toBe(
+      "approval summary too long to review",
+    );
   });
 
-  test("keeps the revoke safety refusal's fact rather than a generic sentence", () => {
+  test("keeps the revoke safety refusal's fact", () => {
     const raw =
       "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an NFT instead; revoke it from the dapp";
-    expect(friendlyError(raw).message).toContain("could not confirm that contract is a token");
+    expect(friendlyError(raw).message).toBe(raw);
   });
 });
 
-describe("the reviewed lists", () => {
-  test("do not overlap", () => {
-    expect([...FACT_KEPT].filter((raw) => INTERNAL_DIAGNOSTICS.has(raw))).toEqual([]);
-  });
-
-  test("an explicitly internal diagnostic is collapsed despite naming a fact word", () => {
-    for (const raw of INTERNAL_DIAGNOSTICS) {
-      expect(isInternalDiagnostic(raw)).toBe(true);
-    }
+describe("status lines (errorLine)", () => {
+  test("never borrow a 'may not have gone through' fallback for a refusal or noise", async () => {
+    const { errorLine } = await import("../../../src/sidepanel/shared/dom");
+    expect(errorLine(new Error("strk20 privacy leak"), "Private transaction failed")).toBe(
+      "The operation would leak private information",
+    );
+    expect(errorLine(new Error("boom"), "Private transaction failed")).toBe(GENERIC);
+    // The fallback is still translated when nothing was thrown.
+    expect(errorLine(null, "Private transaction failed")).toContain("may not have gone through");
   });
 });

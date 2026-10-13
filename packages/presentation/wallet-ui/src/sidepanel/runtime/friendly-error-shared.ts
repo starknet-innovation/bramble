@@ -33,3 +33,15 @@ export const UNRECOGNIZED_RELEASE = {
 
 /** Shared ending for a swap the wallet refused to build because a safety check failed. */
 export const SWAP_ROUTE_UNSAFE = "Couldn't prepare a safe route for this swap. Get a fresh quote.";
+
+/** Shared ending for a review whose subject changed while the reader read it. */
+export const REVIEW_MOVED = "This changed while you were reviewing it. Review it again.";
+
+/** Shared ending for a backup file the wallet could not read. */
+export const BACKUP_UNREADABLE = "Couldn't read that backup file. Check the file and try again.";
+
+/**
+ * A private action refused because it would link the reader's identity. The
+ * wallet's own words for this refusal to sites (rpc-errors PRIVACY_LEAK).
+ */
+export const PRIVACY_LEAK = "The operation would leak private information";
