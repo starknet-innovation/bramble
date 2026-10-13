@@ -67,6 +67,19 @@ export type VesuMultiplyAnchoredQuote = VesuMultiplyExactOutQuote & {
   };
 };
 
+// Quotes this module anchored, so a builder can refuse one that never passed
+// the check (a parsed quote spread into the anchored shape is not in it).
+const anchoredQuotes = new WeakSet<object>();
+
+/**
+ * Whether `quote` came out of {@link anchorVesuMultiplyQuote}. The Multiply call
+ * builders refuse any other quote, so no path reaches the wallet with a swap
+ * cap the anchor never checked.
+ */
+export const isAnchoredVesuMultiplyQuote = (
+  quote: VesuMultiplyExactOutQuote,
+): quote is VesuMultiplyAnchoredQuote => anchoredQuotes.has(quote);
+
 const scaledPrice = (value: number | null): bigint | null => {
   if (value === null || !Number.isFinite(value) || value <= 0) return null;
   // Both prices share the 1e18 scale, so it cancels in the ratio below.
@@ -124,5 +137,6 @@ export const anchorVesuMultiplyQuote = async (
 ): Promise<VesuMultiplyAnchoredQuote> => {
   const anchored = { ...quote, anchor: { ...legs, unpricedMessage } };
   await recheckVesuMultiplyQuote(anchored, priceUsd);
+  anchoredQuotes.add(anchored);
   return anchored;
 };

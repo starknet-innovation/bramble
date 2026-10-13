@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAINNET_TOKEN_ADDRESSES, VESU_ADDRESSES } from "../constants";
+import { anchorVesuMultiplyQuote } from "./vesu-multiply-anchor";
 import {
   quoteVesuMultiplyClose,
   quoteVesuMultiplyIncrease,
@@ -35,6 +36,19 @@ const response = {
   total_calculated: "500000000000000",
 };
 
+// Anchors a parsed fixture quote (exact USDC out, priced in ETH) at $1 USDC and
+// $2,000 ETH, which its 0.000505 ETH cap sits within.
+const anchored = (quote: ReturnType<typeof parseVesuMultiplyExactOutQuote>) =>
+  anchorVesuMultiplyQuote(
+    quote,
+    {
+      calculated: { address: MAINNET_TOKEN_ADDRESSES.ETH, decimals: 18 },
+      specified: { address: MAINNET_TOKEN_ADDRESSES.USDC, decimals: 6 },
+    },
+    "Could not quote Vesu wind route",
+    async (asset) => (asset === MAINNET_TOKEN_ADDRESSES.USDC ? 1 : 2_000),
+  );
+
 describe("Vesu Multiply boundary", () => {
   it("validates exact-output totals and applies the slippage ceiling", () => {
     const quote = parseVesuMultiplyExactOutQuote(
@@ -63,8 +77,8 @@ describe("Vesu Multiply boundary", () => {
     ).toThrow("route amount mismatch");
   });
 
-  it("wraps Multiply with temporary approval and delegation", () => {
-    const quote = parseVesuMultiplyExactOutQuote(
+  it("wraps Multiply with temporary approval and delegation", async () => {
+    const parsed = parseVesuMultiplyExactOutQuote(
       {
         ...response,
         splits: [{
@@ -78,6 +92,7 @@ describe("Vesu Multiply boundary", () => {
       100,
       USDC_FOR_ETH,
     );
+    const quote = await anchored(parsed);
     const calls = buildVesuMultiplyIncreaseCalls(
       POOL,
       MAINNET_TOKEN_ADDRESSES.ETH,
@@ -96,8 +111,8 @@ describe("Vesu Multiply boundary", () => {
     expect(calls[2]?.contractAddress).toBe(VESU_ADDRESSES.multiply);
   });
 
-  it("atomically closes a position and revokes delegation", () => {
-    const closeQuote = parseVesuMultiplyExactOutQuote(
+  it("atomically closes a position and revokes delegation", async () => {
+    const parsedClose = parseVesuMultiplyExactOutQuote(
       {
         ...response,
         splits: [{
@@ -111,6 +126,7 @@ describe("Vesu Multiply boundary", () => {
       100,
       USDC_FOR_ETH,
     );
+    const closeQuote = await anchored(parsedClose);
     expect(closeQuote.maxInputAmount).toBe(505_000_000_000_000n);
     expect(closeQuote.weights).toEqual([1_000_000_000_000_000_000n]);
     const calls = buildVesuMultiplyCloseCalls(
@@ -125,6 +141,46 @@ describe("Vesu Multiply boundary", () => {
       "modify_lever",
       "modify_delegation",
     ]);
+  });
+
+  it("builds no calls from a quote the price anchor never passed (#646)", async () => {
+    const parsed = parseVesuMultiplyExactOutQuote(
+      {
+        ...response,
+        splits: [{
+          ...response.splits[0],
+          amount_calculated: "-500000000000000",
+          amount_specified: "-1000000",
+        }],
+        total_calculated: "-500000000000000",
+      },
+      1_000_000n,
+      100,
+      USDC_FOR_ETH,
+    );
+    // The anchored shape alone is not enough: only the anchor's own result passes.
+    const lookalike = { ...(await anchored(parsed)) };
+    for (const quote of [parsed, lookalike] as never[]) {
+      expect(() =>
+        buildVesuMultiplyIncreaseCalls(
+          POOL,
+          MAINNET_TOKEN_ADDRESSES.ETH,
+          MAINNET_TOKEN_ADDRESSES.USDC,
+          "0x123",
+          1_000_000_000_000_000_000n,
+          quote,
+        ),
+      ).toThrow("Invalid Multiply route");
+      expect(() =>
+        buildVesuMultiplyCloseCalls(
+          POOL,
+          MAINNET_TOKEN_ADDRESSES.ETH,
+          MAINNET_TOKEN_ADDRESSES.USDC,
+          "0x123",
+          quote,
+        ),
+      ).toThrow("Invalid unwind route");
+    }
   });
 
   it("refuses a route that does not connect the Multiply assets (Sherlock 147)", () => {

@@ -23,6 +23,7 @@ import {
 import { buildErc20ApproveCall } from "../support/rpc-assets";
 import {
   anchorVesuMultiplyQuote,
+  isAnchoredVesuMultiplyQuote,
   type VesuMultiplyAnchor,
   type VesuMultiplyAnchoredQuote,
 } from "./vesu-multiply-anchor";
@@ -316,8 +317,10 @@ export const buildVesuMultiplyIncreaseCalls = (
   debtAsset: string,
   accountAddress: string,
   marginAmountRaw: bigint,
-  quote: VesuMultiplyExactOutQuote,
+  quote: VesuMultiplyAnchoredQuote,
 ): readonly Call[] => {
+  // Only a quote the price anchor passed may become calls (#646).
+  if (!isAnchoredVesuMultiplyQuote(quote)) throw new WalletError("Invalid Multiply route");
   for (const [label, value] of [
     ["pool", poolAddress],
     ["collateral", collateralAsset],
@@ -387,8 +390,10 @@ export const buildVesuMultiplyCloseCalls = (
   collateralAsset: string,
   debtAsset: string,
   accountAddress: string,
-  quote: VesuMultiplyExactOutQuote,
+  quote: VesuMultiplyAnchoredQuote,
 ): readonly Call[] => {
+  // Only a quote the price anchor passed may become calls (#646).
+  if (!isAnchoredVesuMultiplyQuote(quote)) throw new WalletError("Invalid unwind route");
   for (const [label, value] of [
     ["pool", poolAddress],
     ["collateral", collateralAsset],
