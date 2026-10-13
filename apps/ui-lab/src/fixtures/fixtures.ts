@@ -18,6 +18,7 @@ import type {
   TokenBalance,
   WalletStatus,
 } from "@bramble/wallet-ui/lab";
+import nftFixtureImage from "./nft-fixture.svg?inline";
 
 export const SOFTWARE_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
 export const LEDGER_ADDRESS = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
@@ -205,7 +206,7 @@ export const discoveredNft: DiscoveredNft = {
   contract: NFT_CONTRACT,
   description: "A deterministic collectible used only inside the Bramble UI Lab.",
   id: nftId,
-  image: "/nft-fixture.svg",
+  image: nftFixtureImage,
   name: "Proof of Participation #342",
   networkId: "SN_MAIN",
   tokenId: "342",
