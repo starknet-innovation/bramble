@@ -165,7 +165,14 @@ export const entriesAfterSettle = (
       .filter((r) => r.amount !== "0" && isStoredAmount(r.amount))
       .map((r) => [r.id, r.amount]),
   );
-  const byHash = new Map(outcomes.map((outcome) => [outcome.hash, outcome.status]));
+  // Conflicting reports for one hash resolve to `failed`: the safe direction
+  // only clears a mark, while `accepted` rewrites the amount.
+  const byHash = new Map<string, RevokeOutcome["status"]>();
+  for (const outcome of outcomes) {
+    if (byHash.get(outcome.hash) !== "failed") {
+      byHash.set(outcome.hash, outcome.status);
+    }
+  }
   let changed = false;
   const settled: AllowanceRecord[] = [];
   for (const stored of entries) {

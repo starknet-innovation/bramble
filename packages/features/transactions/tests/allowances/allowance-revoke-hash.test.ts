@@ -202,6 +202,20 @@ describe("revoke hash: settling on the outcome", () => {
     expect(await store.list()).toEqual([adopted("400")]);
   });
 
+  test("conflicting outcomes for one hash resolve to failed", async () => {
+    for (const order of [
+      ["accepted", "failed"],
+      ["failed", "accepted"],
+    ] as const) {
+      const store = await pending();
+      await store.settleRevocations(
+        [{ amount: "5", id: ID }],
+        order.map((status) => ({ hash: REVOKE, status })),
+      );
+      expect(await store.list()).toEqual([{ ...input("1000"), id: ID }]);
+    }
+  });
+
   test("a malformed non-zero reading is never adopted", async () => {
     const store = await pending();
     const before = await store.list();

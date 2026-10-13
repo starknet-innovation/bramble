@@ -81,6 +81,7 @@ const walletStub = {
   },
 };
 
+const OTHER_ACCOUNT_ID = `SN_MAIN:${account.address.slice(0, -1)}f`;
 const APPROVE_HASH = "0x1001";
 const REVOKE_HASH = "0x1002";
 
@@ -195,6 +196,40 @@ describe("issue 647: a revoke settles on its own transaction's outcome", () => {
       expect((await harness.list()).allowances).toMatchObject([{ id, revoking: true }]);
     },
   );
+
+  test("a chain-discovered row with the revoke's hash is not an outcome", async () => {
+    const harness = makeHarness();
+    const id = await grantThenRevoke(harness);
+    const scope = { accountId: account.id, networkId: "SN_MAIN" as const };
+    // The same hash as a row this wallet did not record (no `origin`), reverted.
+    const rows = (await harness.activity.list()).map((entry) => {
+      if (entry.hash !== REVOKE_HASH) return entry;
+      const { origin: _wallet, ...discovered } = entry;
+      return { ...discovered, status: "reverted" as const };
+    });
+    await harness.activity.replaceScope?.(rows, scope);
+
+    expect((await harness.list()).allowances).toMatchObject([{ id, revoking: true }]);
+  });
+
+  test("a wallet row for the hash in another scope is not an outcome", async () => {
+    const harness = makeHarness();
+    const id = await grantThenRevoke(harness);
+    await harness.activity.record({
+      accountId: OTHER_ACCOUNT_ID,
+      hash: REVOKE_HASH,
+      kind: "invoke",
+      networkId: "SN_MAIN",
+      origin: "wallet",
+      summary: "Other scope",
+    });
+    await harness.activity.updateStatuses(
+      { [REVOKE_HASH]: { status: "reverted" } },
+      { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" },
+    );
+
+    expect((await harness.list()).allowances).toMatchObject([{ id, revoking: true }]);
+  });
 
   test("outcomes are read before the allowance readings", async () => {
     const harness = makeHarness();

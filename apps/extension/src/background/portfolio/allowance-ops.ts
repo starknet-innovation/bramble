@@ -115,23 +115,34 @@ const readTrackedAmounts = async (
 
 // The settled outcome of each pending revoke in `records`, read from the
 // wallet's own activity reconciliation, which keeps checking a submitted hash
-// after the panel closes (issue 647). Matched by network and hash alone: the
-// hash names one transaction whichever scope recorded its activity line. A
-// revoke still pending or pre-confirmed, or whose activity line was never
-// written, has no outcome and keeps settling on readings alone.
+// after the panel closes (issue 647). Only the row this wallet recorded for the
+// transaction it submitted (`origin: "wallet"`) in the revoking record's own
+// scope counts: a chain-discovered or other-scope row with the same hash is
+// not this wallet's observation. A revoke still pending or pre-confirmed, or
+// whose activity line was never written, has no outcome and keeps settling on
+// readings alone. Conflicting rows resolve in the store, failed over accepted.
 const revokeOutcomes = async (
   deps: WalletOpsDeps,
   records: readonly AllowanceRecord[],
   networkId: StarknetNetworkId,
 ): Promise<readonly RevokeOutcome[]> => {
-  const pending = new Set(records.flatMap((record) => record.revokeHash ?? []));
+  const pending = new Set(
+    records.flatMap((record) =>
+      record.revokeHash ? [`${record.accountId}|${record.revokeHash}`] : [],
+    ),
+  );
   if (pending.size === 0) {
     return [];
   }
   const entries = await deps.activity.list().catch(() => []);
   return entries.flatMap((entry): readonly RevokeOutcome[] => {
     const hash = canonicalFelt(entry.hash);
-    if (entry.networkId !== networkId || hash === null || !pending.has(hash)) {
+    if (
+      entry.origin !== "wallet" ||
+      entry.networkId !== networkId ||
+      hash === null ||
+      !pending.has(`${entry.accountId}|${hash}`)
+    ) {
       return [];
     }
     if (entry.status === "accepted") {
