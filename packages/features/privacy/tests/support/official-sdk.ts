@@ -106,7 +106,7 @@ export const officialBuilder = (proofInvocation: unknown = { warnings: [] }): Of
     createProofInvocation: async () => proofInvocation,
     invoke: () => self,
     register: () => self,
-    subaccounts: () => ({
+    shadowAccounts: () => ({
       commitment: async () => 0x123n,
       invoke: () => self,
       partialCommitment: async () => 0x456n,

@@ -36,9 +36,13 @@ vi.mock("../support/provider", async (importActual) => {
 });
 
 const { quoteLending, buildLendingCalls } = await import("./vesu");
-const { registeredVesuVToken, verifyVesuMultiplyPool, VESU_REGISTRY_UNAVAILABLE, VESU_UNREGISTERED } = await import(
-  "./vesu-anchors"
-);
+const {
+  recheckVesuLendingQuote,
+  registeredVesuVToken,
+  verifyVesuMultiplyPool,
+  VESU_REGISTRY_UNAVAILABLE,
+  VESU_UNREGISTERED,
+} = await import("./vesu-anchors");
 
 const POOL = VESU_ADDRESSES.primePoolId;
 const USDC = MAINNET_TOKEN_ADDRESSES.USDC;
@@ -147,5 +151,54 @@ describe("Vesu registry anchor", () => {
     await expect(verifyVesuMultiplyPool(POOL, ETH, USDC)).rejects.toThrow(
       VESU_REGISTRY_UNAVAILABLE,
     );
+  });
+
+  describe("re-check at wallet handoff (#270)", () => {
+    const borrowQuote = async () => {
+      answerApi(apiPool(VTOKEN));
+      return quoteLending({
+        accountAddress: ACCOUNT,
+        action: "borrow",
+        amount: "1",
+        asset: USDC,
+        collateralAmount: "1",
+        collateralAsset: ETH,
+        poolId: POOL,
+      });
+    };
+
+    it("passes while the registry still lists the quoted pool, asset, vToken and collateral", async () => {
+      const quote = await borrowQuote();
+      reads.length = 0;
+      await expect(recheckVesuLendingQuote(quote)).resolves.toBeUndefined();
+      expect(reads.map((read) => read.contractAddress)).toEqual([
+        VESU_ADDRESSES.poolFactory,
+        VESU_ADDRESSES.poolFactory,
+      ]);
+    });
+
+    it("refuses when the registry now names a different vToken than the quote", async () => {
+      const quote = await borrowQuote();
+      registry = { ...registry, [key(POOL, USDC)]: "0xa77ac4e7" };
+      await expect(recheckVesuLendingQuote(quote)).rejects.toThrow(VESU_REGISTRY_UNAVAILABLE);
+    });
+
+    it("refuses when the asset or the collateral asset is no longer registered", async () => {
+      const quote = await borrowQuote();
+      registry = { [key(POOL, ETH)]: "0xe7" };
+      await expect(recheckVesuLendingQuote(quote)).rejects.toThrow(VESU_UNREGISTERED);
+      registry = { [key(POOL, USDC)]: VTOKEN };
+      await expect(recheckVesuLendingQuote(quote)).rejects.toThrow(VESU_UNREGISTERED);
+    });
+
+    it("refuses when the registry is unreadable at handoff, or the quote has no vToken", async () => {
+      const quote = await borrowQuote();
+      registryFails = true;
+      await expect(recheckVesuLendingQuote(quote)).rejects.toThrow(VESU_REGISTRY_UNAVAILABLE);
+      registryFails = false;
+      await expect(
+        recheckVesuLendingQuote({ ...quote, vTokenAddress: null }),
+      ).rejects.toThrow(VESU_REGISTRY_UNAVAILABLE);
+    });
   });
 });

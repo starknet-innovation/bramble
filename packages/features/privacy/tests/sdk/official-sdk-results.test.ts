@@ -69,6 +69,13 @@ describe("STRK20 detail sanitizer", () => {
     expect(sanitizeStrk20Detail(`proof ${"A".repeat(64)} attached`)).toBe("proof [value] attached");
   });
 
+  test("keeps a known screening reason that is as long as an opaque token", () => {
+    expect(sanitizeStrk20Detail("Transaction rejected: screening_policy_unavailable")).toBe(
+      "Transaction rejected: screening_policy_unavailable",
+    );
+    expect(sanitizeStrk20Detail(`reason ${"a".repeat(28)}`)).toBe("reason [value]");
+  });
+
   test("keeps a short revert reason intact and bounds the result", () => {
     expect(sanitizeStrk20Detail("Error message: pool/not-registered")).toBe(
       "Error message: pool/not-registered",

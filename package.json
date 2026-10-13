@@ -48,6 +48,8 @@
     "@biomejs/biome": "2.5.14",
     "@bramble/testkit": "workspace:*",
     "@playwright/test": "1.63.0",
+    "@scure/bip32": "1.7.0",
+    "@scure/bip39": "1.6.0",
     "@types/bun": "1.4.2",
     "@types/node": "26.6.2",
     "fast-check": "4.10.2",
@@ -77,6 +79,7 @@
     "starknet": "10.8.0"
   },
   "overrides": {
+    "moment": "2.31.0",
     "qs": "6.16.0",
     "sharp": "0.35.5",
     "shell-quote": "1.11.0",
