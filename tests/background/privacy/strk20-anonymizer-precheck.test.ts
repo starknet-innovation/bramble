@@ -11,6 +11,10 @@
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
+import {
+  APPROVAL_TTL_MS,
+  createApprovalQueue,
+} from "../../../apps/extension/src/background/approvals/approvals";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
 import {
   buildStrk20Handler,
@@ -82,6 +86,34 @@ const pendingCount = async (handler: ReturnType<typeof buildStrk20Handler>): Pro
 };
 
 describe("shadow account requests without an anonymizer", () => {
+  // Audit F5: the site gets nothing until the user closes the notice. If the
+  // notice expires instead, the site gets what any expired approval gives
+  // (113 "request rejected"), not the notice's own 163 refusal.
+  for (const request of REQUESTS) {
+    test(`${request.method} expires like any approval, never with the notice's refusal`, async () => {
+      const clock = { now: 1_700_000_000_000 };
+      const handler = buildStrk20Handler({
+        approvals: createApprovalQueue({ now: () => clock.now }),
+        preferences: withoutAnonymizer,
+      });
+      let settled: unknown = "unsettled";
+      const held = handler(request.message, STRK20_CONTENT_SENDER).then((result) => {
+        settled = result;
+        return result;
+      });
+      await waitForPendingApprovals(handler, STRK20_EXTENSION_SENDER);
+      await flushHeld();
+      expect(settled).toBe("unsettled");
+
+      clock.now += APPROVAL_TTL_MS + 1;
+      expect(await pendingCount(handler)).toBe(0);
+      const result = await held;
+      expect(result).toEqual({ error: "request rejected" });
+      expect(JSON.stringify(result)).not.toContain("anonymizer");
+      expect(toProviderPayload(result, request.method).error).toMatchObject({ code: 113 });
+    });
+  }
+
   for (const request of REQUESTS) {
     for (const close of ["wallet.denyOrigin", "wallet.approveOrigin"] as const) {
       test(`${request.method} is held on a notice and refused only on ${close}`, async () => {

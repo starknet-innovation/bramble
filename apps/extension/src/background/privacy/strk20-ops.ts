@@ -256,8 +256,10 @@ const MISSING_ANONYMIZER = {
 
 // An instant refusal would let any site probe, silently, whether this user has
 // private services set up. Instead the request is held on the wallet's own
-// surface as a notice the user can only close, and the site receives the same
-// refusal only once it is closed or expires. Nothing is signed, prepared, or
+// surface as a notice the user can only close, and the site receives the
+// refusal only once the user closes it. Unanswered, it expires exactly like any
+// other approval ("request rejected", 113), so waiting out the TTL tells the
+// site nothing a real approval card would not. Nothing is signed, prepared, or
 // disclosed on this path.
 const holdUnavailable = async (deps: Strk20OpsDeps, origin: string): Promise<RuntimeResponse> => {
   try {
@@ -266,7 +268,7 @@ const holdUnavailable = async (deps: Strk20OpsDeps, origin: string): Promise<Run
       refusal: MISSING_ANONYMIZER.error,
     });
     notifyApprovalsChanged();
-    return await deps.waiters.register(notice.id, MISSING_ANONYMIZER);
+    return await deps.waiters.register(notice.id);
   } catch (error) {
     return { error: strk20ErrorMessage(error) };
   }

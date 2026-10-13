@@ -12,6 +12,7 @@ import {
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import type { InvokeInput } from "@bramble/starknet/rpc";
 import type { ActivityLog } from "@bramble/transactions/activity";
+import type { ApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
 import type { Strk20JobRegistry } from "../../apps/extension/src/background/privacy/strk20-preparation-jobs";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
@@ -50,6 +51,8 @@ export const STRK20_CALL_AND_PROOF = {
 export type Strk20HarnessOptions = {
   /** Seeded activity log, for pending-registration derivation. */
   readonly activity?: ActivityLog;
+  /** An approval queue of the suite's own, e.g. one on a test clock for expiry. */
+  readonly approvals?: ApprovalQueue;
   readonly deployed?: boolean;
   readonly balance?: string;
   readonly balanceCalls?: { value: number };
@@ -211,6 +214,7 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
   const strk20: Strk20Service = options.strk20 ?? makeStrk20Service(options);
   return createMessageHandler(createWallet(), testExtension, {
     ...(options.activity ? { activity: options.activity } : {}),
+    ...(options.approvals ? { approvals: options.approvals } : {}),
     ...(options.now ? { now: options.now } : {}),
     ...(options.strk20Jobs ? { strk20Jobs: options.strk20Jobs } : {}),
     preferencesStore: {

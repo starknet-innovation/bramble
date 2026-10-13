@@ -35,7 +35,8 @@ See DEVELOPMENT.md and RELEASING.md.
   current anonymizer.
 - A site's shadow-account request on a network with no anonymizer is no longer refused at once:
   the wallet shows "Private services aren't set up for this network." with a Close control, and the
-  site receives the same refusal only after the user closes it.
+  site receives the same refusal only after the user closes it. Left to expire, the notice
+  answers the site as any expired approval does ("request rejected").
 - The pinned official Starknet privacy SDK moved from `0.14.3-rc.4` to
   `0.14.3-rc.8`. Upstream renamed its sub-account surface to shadow accounts, so
   the adapter follows the new `shadowAccounts(...)` builder and

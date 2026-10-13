@@ -84,8 +84,11 @@ has always recorded, "<site> submitted a private transaction (N actions)", which
 but not the scope. Reading a
 scope's shadow accounts or balances sends its partial commitment and addresses to the RPC
 provider, which can link them, so it runs only on the user's request. A dapp's shadow-account
-request on a network with no anonymizer is held on a close-only notice and answered only when the
-user closes it, so a site cannot silently probe whether private services are set up.
+request on a network with no anonymizer is held on a close-only notice and given its refusal only
+when the user closes it; a notice left to expire answers as any expired approval does ("request
+rejected"), so a site cannot silently probe whether private services are set up. (A configured
+anonymizer still costs a pool quote before an invoke's card is queued, so a fast quote failure is
+a timing signal that one is configured.)
 
 ## Primary review questions
 
