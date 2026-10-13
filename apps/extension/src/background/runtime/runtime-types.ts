@@ -11,9 +11,7 @@ import type {
 import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
-import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
-import type { StarkNameResolution } from "@bramble/starknet/stark-name";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { AllowanceNotice, AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { SwapCatalogToken } from "@bramble/transactions/avnu";
@@ -46,6 +44,10 @@ import type {
   RecoverAccountResponse,
   RecoveryReviewResponse,
 } from "./recovery-types";
+import type {
+  ClassHashVerificationResponse,
+  StarkNameResolutionResponse,
+} from "./runtime-lookup-types";
 import type {
   FeeReviewResponse,
   TransferResponse,
@@ -296,29 +298,6 @@ type AccountSignabilityResponse = {
   readonly readOnly: boolean;
   readonly reason?: ReadOnlyReason;
   readonly recovery?: AccountRecoveryState;
-};
-
-/**
- * On-chain class-hash verification: the discriminated
- * {@link ClassHashVerification} outcome, so the UI need not re-read the chain.
- */
-type ClassHashVerificationResponse = {
-  readonly accountId: string;
-  readonly ok: true;
-  readonly verification: ClassHashVerification;
-};
-
-/**
- * A typed Starknet ID name resolved on the active network. `resolution` carries
- * the discriminated {@link StarkNameResolution} outcome so the UI can
- * distinguish resolved / not-found / unsupported-network / unreachable without
- * re-reading the chain. `networkId` names the network the read was made on, so
- * a panel that changed network mid-read never commits an address from another.
- */
-type StarkNameResolutionResponse = {
-  readonly networkId: StarknetNetworkId;
-  readonly ok: true;
-  readonly resolution: StarkNameResolution;
 };
 
 /**

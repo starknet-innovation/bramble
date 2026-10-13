@@ -24,7 +24,6 @@ import {
   readBalancesInput,
   readFeeReviewInput,
   readReviewTransferInput,
-  readStarkNameInput,
   readTransferInput,
   readTypeOnlyInput,
 } from "../routing/message-inputs";
@@ -55,6 +54,7 @@ import {
 import { handleSetAccountHidden } from "./account-visibility-ops";
 import { handleActivity } from "./activity-ops";
 import { submitReviewedAccountDeployment } from "./deployment-ops";
+import { handleResolveStarkName } from "./stark-name-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**
@@ -252,36 +252,6 @@ const handleVerifyClassHash: WalletOpsHandler = async (deps, message) => {
     ),
   });
   return { accountId: context.account.id, ok: true, verification };
-};
-
-const handleResolveStarkName: WalletOpsHandler = async (deps, message) => {
-  const input = readStarkNameInput(message);
-  if (!input) {
-    return { error: "invalid stark name request" };
-  }
-  if (!deps.runtimeRpc.resolveStarkName) {
-    return { error: "name resolution unavailable" };
-  }
-  const context = await passiveAccountContext(deps);
-  if (context.error !== undefined) {
-    return { error: context.error };
-  }
-  // The panel names the network it is showing. The read must happen on that
-  // same network, or an address resolved elsewhere could be committed as if it
-  // belonged here, so a mismatch fails closed instead of resolving anyway.
-  if (input.networkId !== context.networkId) {
-    return { error: "name resolution network changed" };
-  }
-  const resolution = await deps.runtimeRpc.resolveStarkName({
-    name: input.name,
-    rpcUrls: networkRpcUrls(
-      STARKNET_NETWORKS[context.networkId],
-      await deps.preferencesStore.read(),
-    ),
-  });
-  // The answer carries the network its address belongs to, so the panel can
-  // drop a resolution whose network changed while the read was in flight.
-  return { networkId: context.networkId, ok: true, resolution };
 };
 
 const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {

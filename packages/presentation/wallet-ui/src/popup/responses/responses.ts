@@ -3,14 +3,11 @@
  */
 
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
-import type { StarkNameResolution } from "@bramble/starknet/stark-name";
 import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
 import {
   isHexChainId,
-  isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
-  type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
 
 /**
@@ -60,6 +57,22 @@ export {
   type DiscoverNftsResponse,
   isDiscoverNftsResponse,
 } from "./responses-nft";
+/**
+ * Re-exported fiat price and token chart validators for one import path.
+ */
+export {
+  isPricesResponse,
+  isTokenChartResponse,
+  type PricesResponse,
+  type TokenChartResponse,
+} from "./responses-prices";
+/**
+ * Re-exported Starknet name resolution validator for one import path.
+ */
+export {
+  isStarkNameResolutionResponse,
+  type StarkNameResolutionResponse,
+} from "./responses-stark-name";
 export {
   isTransactionAlertsResponse,
   type TransactionAlertsResponse,
@@ -311,64 +324,6 @@ export const isPreferencesResponse = (value: unknown): value is PreferencesRespo
 export { isSupportDiagnosticsResponse, type SupportDiagnostics } from "./responses-diagnostics";
 
 /**
- * Fiat prices keyed by contract address accepted from the background boundary.
- */
-export type PricesResponse = {
-  readonly asOf?: number | null;
-  readonly changes?: Readonly<Record<string, number>>;
-  readonly currency: "eur" | "gbp" | "usd";
-  readonly ok: true;
-  readonly prices: Readonly<Record<string, number>>;
-  readonly stale?: boolean;
-};
-
-/**
- * Token price series accepted from the background boundary.
- */
-export type TokenChartResponse = {
-  readonly currency: "eur" | "gbp" | "usd";
-  readonly ok: true;
-  readonly points: readonly number[];
-};
-
-const isDisplayCurrencyValue = (value: unknown): value is "eur" | "gbp" | "usd" =>
-  value === "eur" || value === "gbp" || value === "usd";
-
-const isFiniteNumberValue = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const isPriceMap = (value: unknown): value is Readonly<Record<string, number>> =>
-  isRecord(value) && Object.values(value).every(isFiniteNumberValue);
-
-const isNumberArray = (value: unknown): value is readonly number[] =>
-  Array.isArray(value) && value.every(isFiniteNumberValue);
-
-/**
- * Checks fiat price responses before applying values to balances.
- */
-export const isPricesResponse = (value: unknown): value is PricesResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["asOf", "changes", "currency", "ok", "prices", "stale"]) &&
-  value["ok"] === true &&
-  isDisplayCurrencyValue(value["currency"]) &&
-  isPriceMap(value["prices"]) &&
-  (value["changes"] === undefined || isPriceMap(value["changes"])) &&
-  (value["asOf"] === undefined || value["asOf"] === null || isFiniteNumberValue(value["asOf"])) &&
-  (value["stale"] === undefined || typeof value["stale"] === "boolean");
-
-/**
- * Checks token chart responses before drawing a sparkline.
- */
-export const isTokenChartResponse = (value: unknown): value is TokenChartResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["currency", "ok", "points"]) &&
-  value["ok"] === true &&
-  isDisplayCurrencyValue(value["currency"]) &&
-  isNumberArray(value["points"]);
-
-/**
  * Checks transfer submission responses before rendering.
  */
 export const isTransferResponse = (value: unknown): value is TransferResponse =>
@@ -498,50 +453,3 @@ export const isAccountSignabilityResponse = (value: unknown): value is AccountSi
     ? isReadOnlyReason(value["reason"])
     : value["reason"] === undefined) &&
   (value["recovery"] === undefined || isRecoveryState(value["recovery"]));
-
-/**
- * A typed Starknet name resolved by the background. `networkId` names the
- * network the read was made on. `resolution` is a discriminated outcome: only
- * `resolved` carries an address, and that address must be a nonzero felt, so a
- * malformed envelope can never be read as a recipient.
- */
-export type StarkNameResolutionResponse = {
-  readonly networkId: StarknetNetworkId;
-  readonly ok: true;
-  readonly resolution: StarkNameResolution;
-};
-
-const isStarkNameResolution = (value: unknown): value is StarkNameResolution => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  switch (value["status"]) {
-    case "resolved":
-      return (
-        hasOnlyKnownKeys(value, ["address", "status"]) &&
-        typeof value["address"] === "string" &&
-        isNonZeroStarkFieldElement(value["address"])
-      );
-    case "not-found":
-    case "unreachable":
-    case "unsupported-network":
-      return hasOnlyKnownKeys(value, ["status"]);
-    default:
-      return false;
-  }
-};
-
-/**
- * Checks a name-resolution response before the recipient step trusts it. The
- * network is required: a reply that does not name the network it was read on
- * cannot be bound to the network the panel is showing, so it fails closed.
- */
-export const isStarkNameResolutionResponse = (
-  value: unknown,
-): value is StarkNameResolutionResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["networkId", "ok", "resolution"]) &&
-  value["ok"] === true &&
-  isStarknetNetworkId(value["networkId"]) &&
-  isStarkNameResolution(value["resolution"]);
