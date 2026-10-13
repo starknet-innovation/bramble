@@ -119,7 +119,7 @@ describe("the fee lines", () => {
     const privateFields = { ...FIELDS, destination: "private" as const };
     expect(
       composeFeeLines(
-        { fields: privateFields, poolFeeFri: undefined, route: transferRoute(privateFields) },
+        { fields: privateFields, poolFee: null, route: transferRoute(privateFields) },
         { failed: false, review: review() },
       ),
     ).toEqual([]);

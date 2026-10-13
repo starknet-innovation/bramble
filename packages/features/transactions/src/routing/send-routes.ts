@@ -231,10 +231,13 @@ const recipientBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlo
 const shortOf = (balance: bigint | null, needed: bigint): boolean =>
   balance !== null && needed > balance;
 
-// The pool fee's amount in the token it is charged in. STRK is the exact
-// on-chain charge; any other token is the bounded ceiling derived from an
-// independent price, so reserving it never understates what the relay may take.
-const poolFeeAmountIn = (input: SendRouteInput): bigint | null =>
+/**
+ * The pool fee's amount in the token it is charged in, as the gate reserves it.
+ * STRK is the exact on-chain charge; any other token is the bounded ceiling
+ * derived from an independent price, so reserving it never understates what the
+ * relay may take. `null` while the figure is unknown.
+ */
+export const poolFeeAmountIn = (input: SendRouteInput): bigint | null =>
   sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)
     ? input.poolFeeFri
     : input.convertedFeeCeilingRaw;

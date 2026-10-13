@@ -4,8 +4,8 @@
  *
  * The figures come from the same sources the review's Cost box uses, so the two
  * screens cannot disagree: a public transfer's network fee is the review's own
- * estimate, and a pool route's charge is the same sentence, from the same
- * formatter, the review prints. A pool route's NETWORK fee is deliberately
+ * estimate, and a pool route's charge is the same sentence the review prints,
+ * naming the fee in the token that pays it rather than assuming STRK. A pool route's NETWORK fee is deliberately
  * absent here: its calldata (and so its estimate) does not exist until the
  * preparation, so any figure would be a guess, and a guess is worse than a blank.
  */
@@ -17,7 +17,12 @@ import { estimatedFeeText } from "../../shared/review-render";
 import { finitePositive } from "./send-model";
 import type { TransferFields, TransferStage } from "./transfer-model";
 import { poolFeeText } from "./transfer-review-routes";
-import { resolveTransferRoute, type TransferRouteContext, transferRoute } from "./transfer-route";
+import {
+  resolveTransferRoute,
+  type TransferRouteContext,
+  transferPoolFeeAmount,
+  transferRoute,
+} from "./transfer-route";
 import type { TransferReview } from "./transfer-submit";
 
 /** How long typing settles before a network fee is requested. */
@@ -29,7 +34,8 @@ const FEE_UNAVAILABLE = "Estimated fee unavailable";
 /** The composed send an Amount-screen estimate applies to. */
 export type ComposeFeeTarget = {
   readonly fields: TransferFields;
-  readonly poolFeeFri: string | undefined;
+  /** The pool fee in the token that pays it, as the route gate reserves it. */
+  readonly poolFee: string | null;
   readonly route: SendRoute;
 };
 
@@ -54,7 +60,7 @@ export const composeFeeTarget = (context: TransferRouteContext): ComposeFeeTarge
   }
   return {
     fields,
-    poolFeeFri: context.privacy.value?.poolFeeFri,
+    poolFee: transferPoolFeeAmount(context),
     route: transferRoute(fields),
   };
 };
@@ -91,9 +97,9 @@ export const composeFeeLines = (
   if (
     target.route.poolFeeRequired &&
     target.route.feeBucket !== "none" &&
-    target.poolFeeFri !== undefined
+    target.poolFee !== null
   ) {
-    lines.push(poolFeeText(target.route.feeBucket, target.poolFeeFri));
+    lines.push(poolFeeText(target.route.feeBucket, target.poolFee));
   }
   // Only a plain public transfer's network fee can be estimated before the route
   // prepares; every other route's gas is sponsored or priced at review.
