@@ -14,6 +14,7 @@
  */
 
 import { friendlyNetworkError } from "@bramble/core/network-error";
+import { isLedgerRejectionCode, ledgerMessage } from "@bramble/ledger-protocol/errors";
 import {
   ERROR_COPY,
   GENERIC_VALIDATION,
@@ -22,6 +23,7 @@ import {
   SERVICE_REJECTED,
   UNEXPECTED_FALLBACK,
 } from "./friendly-error-copy";
+import { FACT_KEPT, FACT_TERMS, isInternalDiagnostic } from "./friendly-error-internal";
 
 /**
  * The result of classifying a raw error string for display.
@@ -41,6 +43,10 @@ const RAW_HTTP = /(?:\bHTTP\s+[45]\d\d\b|\bresponse body\b|\brequest rejected\s*
 // A diagnostic no reader was meant to see. Curated copy starts with a capital
 // or a digit; the raw strings the background throws start lowercase.
 const DEVELOPER_VOICE = /^[a-z]/;
+// The STRK20 lanes suffix their reason to one shared head ("strk20 services
+// unavailable: no RPC endpoint is configured"); the head is what the reader
+// can act on, the suffix is for the copy control.
+const STRK20_UNAVAILABLE = /^strk20 services unavailable\b/;
 
 const rawServiceDiagnostic = (value: string): boolean =>
   value.length > 240 ||
@@ -51,20 +57,27 @@ const rawServiceDiagnostic = (value: string): boolean =>
 /**
  * Classifies a raw error string into user-facing copy.
  *
- * An unmapped string is shown as-is only when it already reads as a sentence.
- * A lowercase diagnostic is replaced with the generic fallback instead, so a
- * string nobody wrote for a reader cannot reach one — the failure this module
- * exists to prevent, closed now that every diagnostic in the repository is
- * translated and a conformance check keeps it that way.
+ * An unmapped string is shown as-is only when it already reads as a sentence
+ * and is not the wallet's own plumbing. A lowercase diagnostic, or a
+ * capitalised one from an internal family (./friendly-error-internal), is
+ * replaced with `context` — the sentence the calling screen uses for its own
+ * failure, such as "Couldn't add that account. Try again." — or the generic
+ * fallback, so a string nobody wrote for a reader cannot reach one.
+ *
+ * Two kinds of message are let through on purpose. A Ledger rejection code is
+ * shown with the device catalog's own sentence. A security or cryptographic
+ * fact (a failed signing, key, hash, proof, chain-id, or pinned-class check)
+ * is never collapsed: the reader is told what failed.
  *
  * This is a backstop, not a substitute for the table: it makes a new
  * diagnostic read as "Something went wrong" rather than as source code, which
  * is better but still not an answer.
  */
-export const friendlyError = (raw: string): FriendlyError => {
+export const friendlyError = (raw: string, context?: string): FriendlyError => {
+  const fallback = context ?? UNEXPECTED_FALLBACK;
   const trimmed = raw.trim();
   if (trimmed === "") {
-    return { message: UNEXPECTED_FALLBACK };
+    return { message: fallback };
   }
 
   const normalized = trimmed.toLowerCase();
@@ -73,8 +86,16 @@ export const friendlyError = (raw: string): FriendlyError => {
     return { message: mapped };
   }
 
+  if (isLedgerRejectionCode(trimmed)) {
+    return { message: ledgerMessage(trimmed) };
+  }
+
   if (VALIDATION_REQUEST.test(normalized)) {
     return { message: GENERIC_VALIDATION };
+  }
+
+  if (STRK20_UNAVAILABLE.test(normalized)) {
+    return { message: ERROR_COPY.get("strk20 services unavailable") ?? fallback };
   }
 
   // A node's own answer is classified before the transport markers: an RPC
@@ -97,5 +118,12 @@ export const friendlyError = (raw: string): FriendlyError => {
     return { message: SERVICE_REJECTED };
   }
 
-  return { message: DEVELOPER_VOICE.test(trimmed) ? UNEXPECTED_FALLBACK : trimmed };
+  // A lowercase diagnostic that names a failed check keeps its words: the
+  // fact outranks the voice.
+  const lowercaseNoise =
+    DEVELOPER_VOICE.test(trimmed) && !FACT_TERMS.test(trimmed) && !FACT_KEPT.has(normalized);
+  if (lowercaseNoise || isInternalDiagnostic(trimmed)) {
+    return { message: fallback };
+  }
+  return { message: trimmed };
 };

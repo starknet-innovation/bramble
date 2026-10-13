@@ -33,6 +33,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Split from friendly-error-copy.ts by the size budget: same contract — its
   // lookup keys quote diagnostics that name secret-material fields verbatim.
   "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy-multisig.ts",
+  // Classifies diagnostics the background threw ("Invalid mnemonic", "…signature
+  // key mismatch") by their words; matched here, never read, logged, or persisted.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal.ts",
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Privileged first-run boundary: the phrase is validated through Krusty and
