@@ -82,7 +82,7 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
  * `PLUMBING_DESPITE_FACT_WORD` with its reason (checked by the tests).
  */
 export const FACT_TERMS =
-  /\b(?:signatures?|signed|signing|public[- ]?keys?|private keys?|key material|viewing[- ]keys?|hash(?:es|ed)?|proofs?|chain(?: ?id)?|chainid|verif\w*|mismatch|does not match|do not match|not from|pinned|commitment|origins?|phishing|spoof\w*|scam|poison\w*|mimic\w*|leak\w*|linkage|anonymi[sz]er|executor|nonce|replay\w*|expired|tamper\w*|forged|allowances?|approv\w*|fee cap|ceiling|unknown contract|sanction\w*|screen\w*|blocked|integrity|schema|strk20|private|privacy|notes?|shield\w*|recovered vault|imported-seed vault|prepared|envelope|commit state|swap build|proceeds|minimum|beneficiary|lookalike|router|entrypoint|spender)\b/i;
+  /\b(?:signatures?|signed|signing|public[- ]?keys?|private keys?|key material|viewing[- ]keys?|hash(?:es|ed)?|proofs?|chain(?: ?id)?|chainid|verif\w*|mismatch|does not match|do not match|not from|pinned|commitment|origins?|phishing|spoof\w*|scam|poison\w*|mimic\w*|leak\w*|linkage|anonymi[sz]er|executor|nonce|replay\w*|expired|tamper\w*|forged|allowances?|approv\w*|fee cap|ceiling|unknown contract|sanction\w*|screen\w*|blocked|integrity|schema|strk20|shadow (?:account|sweep)s?|sweep\w*|private|privacy|notes?|shield\w*|recovered vault|imported-seed vault|prepared|envelope|commit state|swap build|proceeds|minimum|beneficiary|lookalike|router|entrypoint|spender)\b/i;
 
 /**
  * Plumbing messages, lowercased, each with the reason it states nothing a
