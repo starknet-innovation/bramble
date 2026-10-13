@@ -87,6 +87,10 @@ const NOTICE_COPY: Readonly<Record<AllowanceNotice, string>> = {
 
 const UNAVAILABLE_COPY = "Allowances could not be loaded. Refresh to try again.";
 
+// Before the first answer, a count of zero or "none found" would be a claim
+// the wallet has not checked.
+const LOADING_COPY = "Loading allowances…";
+
 const noticeLines = (notices: readonly AllowanceNotice[]): string =>
   notices
     .map((notice) => `<p class="hint allowance-notice">${escapeHtml(NOTICE_COPY[notice])}</p>`)
@@ -156,7 +160,11 @@ export const allowancesFlow = (
     flowHeader(
       "Allowances",
       status,
-      listing.unavailable ? "Not loaded" : `${scoped.length} outstanding`,
+      listing.loading
+        ? undefined
+        : listing.unavailable
+          ? "Not loaded"
+          : `${scoped.length} outstanding`,
     ) +
     flowScreen(
       "allowances",
@@ -174,13 +182,15 @@ export const allowancesFlow = (
         ${
           account === null
             ? emptyState("Unlock an account on this network to manage allowances.")
-            : listing.unavailable
-              ? emptyState(UNAVAILABLE_COPY, "alert")
-              : scoped.length === 0
-                ? emptyState(
-                    "No outstanding allowances found for this account. Approvals on tokens you don't track are not scanned.",
-                  )
-                : `<ul class="allowance-list">${scoped.map((allowance) => allowanceRow(allowance, tokenFor(allowance, preferences))).join("")}</ul>`
+            : listing.loading
+              ? emptyState(LOADING_COPY)
+              : listing.unavailable
+                ? emptyState(UNAVAILABLE_COPY, "alert")
+                : scoped.length === 0
+                  ? emptyState(
+                      "No outstanding allowances found for this account. Approvals on tokens you don't track are not scanned.",
+                    )
+                  : `<ul class="allowance-list">${scoped.map((allowance) => allowanceRow(allowance, tokenFor(allowance, preferences))).join("")}</ul>`
         }
         <p id="allowance-result" role="status"></p>
       </section>`,

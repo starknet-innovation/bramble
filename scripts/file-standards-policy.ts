@@ -96,6 +96,8 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/foundation/wallet-model/src/accounts/signing.ts",
   // Pure length policy only; carries no passphrase value across a boundary.
   "packages/foundation/wallet-model/src/preferences/passphrase.ts",
+  // Setup meter only: scores the typed value in the UI and keeps nothing.
+  "packages/foundation/wallet-model/src/preferences/passphrase-strength.ts",
   "packages/testing/testkit/src/fake-kms.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses-ledger.ts",

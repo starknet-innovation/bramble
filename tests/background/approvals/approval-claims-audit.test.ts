@@ -1,8 +1,8 @@
 /**
  * Decisions on a request the queue no longer holds, Sherlock 217 and 220.
  *
- * - 217: a refusal after a claim announces the queue change, so the toolbar
- *   badge stops counting a request that is gone.
+ * - 217: a refusal after a claim, or an executor's error answer, announces the
+ *   queue change, so the toolbar badge stops counting a request that is gone.
  * - 220: denying a request another surface already decided reports that,
  *   instead of "Request denied".
  */
@@ -76,6 +76,39 @@ describe("a refusal after the claim (Sherlock 217)", () => {
 
     expect(queue.list()).toEqual([]);
     expect(settled).toEqual([{ id: approval.id, response: { error: "origin blocked" } }]);
+    expect(notified).toBe(1);
+  });
+
+  test("announces the queue change when the executor answers with an error", async () => {
+    const queue = createApprovalQueue();
+    const approval = queue.requestSwitchChain({
+      chainId: "0x534e5f5345504f4c4941",
+      networkId: "SN_SEPOLIA",
+      origin: VICTIM,
+      summary: "Switch network",
+    });
+    let notified = 0;
+    setApprovalNotifier(() => {
+      notified += 1;
+    });
+    const session = createUnlockSession();
+    session.unlock("correct horse battery staple");
+    const { settled, waiters } = recordingWaiters();
+    const deps = decisionDeps(queue, {
+      session,
+      waiters,
+      wallet: { getGrantedAccounts: async () => [] },
+    });
+
+    await expect(
+      handleApprovalDecision(deps, "wallet.approveOrigin", {
+        id: approval.id,
+        type: "wallet.approveOrigin",
+      }),
+    ).resolves.toEqual({ error: "origin not connected" });
+
+    expect(queue.list()).toEqual([]);
+    expect(settled).toEqual([{ id: approval.id, response: { error: "origin not connected" } }]);
     expect(notified).toBe(1);
   });
 

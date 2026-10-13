@@ -12,6 +12,7 @@
     "./networks": "./src/networks/networks.ts",
     "./nostr": "./src/nostr/nostr.ts",
     "./passphrase": "./src/preferences/passphrase.ts",
+    "./passphrase-strength": "./src/preferences/passphrase-strength.ts",
     "./preferences": "./src/preferences/preferences.ts",
     "./recovery": "./src/accounts/recovery.ts",
     "./vault-recovery": "./src/preferences/vault-recovery.ts",

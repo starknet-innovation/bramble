@@ -55,6 +55,16 @@ describe("terminal gateway loopback origins", () => {
     expect(decide("https://mc-wallet-terminal.vercel.app")).toEqual({ allowed: true });
   });
 
+  it("trusts nothing, not the production origin, when a deployed list names only loopback", () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("TERMINAL_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:5273");
+    expect(decide("http://localhost:3000")).toEqual({ allowed: false, status: 403 });
+    expect(decide("https://mc-wallet-terminal.vercel.app")).toEqual({
+      allowed: false,
+      status: 403,
+    });
+  });
+
   it("accepts loopback origins under vercel dev", () => {
     vi.stubEnv("VERCEL_ENV", "development");
     vi.stubEnv("TERMINAL_ALLOWED_ORIGINS", "");

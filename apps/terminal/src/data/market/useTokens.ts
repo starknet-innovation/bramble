@@ -23,10 +23,10 @@ const CACHE_MS = 115_000;
 const num = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
 
-// A missing precision keeps the ERC-20 default; a present but unusable one
-// drops the row, since rendering it would throw (Sherlock 155).
-const rowDecimals = (value: unknown): number | null =>
-  value === undefined ? 18 : isTokenDecimals(value) ? value : null;
+// A row without a usable precision is dropped: an unusable one throws while
+// the swap panel renders, and a missing one assumed as 18 would scale a
+// six-decimal token's swap amount by 10^12 (Sherlock 155).
+const rowDecimals = (value: unknown): number | null => (isTokenDecimals(value) ? value : null);
 
 const str = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;

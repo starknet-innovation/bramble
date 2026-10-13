@@ -233,6 +233,7 @@ describe("useTokens", () => {
     const [ausd] = toAvnuRows([
       {
         address: "0xa0",
+        decimals: 6,
         name: "AUSD",
         symbol: "AUSD0",
         global: { usd: 1, usdMarketCapChangePercentage24h: 4.3 },

@@ -119,7 +119,12 @@ describe("emptyRenderCache (lock-reset single source)", () => {
   });
 
   test("clears the remaining view-scoped lists and price fields", () => {
-    expect(empty.allowances).toEqual({ entries: [], notices: [], unavailable: false });
+    expect(empty.allowances).toEqual({
+      entries: [],
+      loading: true,
+      notices: [],
+      unavailable: false,
+    });
     // Not yet read, so the screen cannot claim no site is connected.
     expect(empty.connectedSites).toBe("loading");
     expect(empty.chart).toEqual([]);

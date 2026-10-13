@@ -28,40 +28,13 @@ import {
 } from "../shared/outcome-receipt";
 import { formatFeeEstimate, reviewCostNote } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
-
-// The deploy screen's state across repaints. Every paint rebuilds the screen's
-// markup, so state keyed on its controls was lost on each one: the quote ran
-// again, a quoted fee was dropped, and a repaint during the receipt wait
-// re-offered Deploy over a transaction already sent (mc-wallet issue 476). It
-// lives on the mount instead, for one account and network, and is dropped when
-// the screen is left.
-type DeployJourney = {
-  readonly accountId: string | null;
-  readonly stillCurrent: () => boolean;
-  fee?: FeeEstimate;
-  /** A Deploy press is in flight; a rebuilt screen keeps its control busy. */
-  pressed: boolean;
-  quoted: boolean;
-  receipt?: { readonly hash: string; outcome: ConfirmationOutcome | null; settled: boolean };
-};
-const DEPLOY_JOURNEYS = new WeakMap<Element, DeployJourney>();
-
-const deployJourney = (deps: ShellBindingDeps, app: Element): DeployJourney => {
-  const scope = deps.deploymentScope?.() ?? null;
-  const accountId = scope?.accountId ?? null;
-  const current = DEPLOY_JOURNEYS.get(app);
-  if (current && current.accountId === accountId && current.stillCurrent()) {
-    return current;
-  }
-  const fresh: DeployJourney = {
-    accountId,
-    pressed: false,
-    quoted: false,
-    stillCurrent: scope?.stillCurrent ?? (() => true),
-  };
-  DEPLOY_JOURNEYS.set(app, fresh);
-  return fresh;
-};
+import {
+  type DeployJourney,
+  deployJourney,
+  firstDeployBinding,
+  isCurrentDeployJourney,
+  leaveDeployScreen,
+} from "./deploy-journey";
 
 /**
  * Services and state setters the shell bindings close over. State lives in the
@@ -307,11 +280,16 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   const reviewStage = deps.app?.querySelector<HTMLElement>("#deploy-review-stage");
   const successStage = deps.app?.querySelector<HTMLElement>("#deploy-success");
   if (!button || !deps.app) {
-    if (deps.app) DEPLOY_JOURNEYS.delete(deps.app);
+    if (deps.app) leaveDeployScreen(deps.app);
     return;
   }
   const target = button;
-  const journey = deployJourney(deps, deps.app);
+  const app = deps.app;
+  const journey = deployJourney(app, deps.deploymentScope?.() ?? null);
+  // Binds the live screen again when an answer lands after a repaint rebuilt it.
+  const rebind = (): void => {
+    if (isCurrentDeployJourney(app, journey)) bindDeploy(deps);
+  };
 
   const showFee = (estimate: FeeEstimate): void => {
     journey.fee = estimate;
@@ -337,17 +315,23 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   ): void => {
     delete journey.fee;
     const message = errorMessage(error, fallback);
-    if (reviewPanelRoot) {
-      renderFragment(reviewPanelRoot, stage === "quote" ? reviewCostNote(message) : "");
-    }
+    if (stage === "quote") journey.quoteNote = message;
     // A deployment whose reply was lost may be on chain: amber, not "failed".
     if (toast) {
       showToast(
         message,
         isOutcomeUnknown(error) ? "warning" : "error",
-        target,
+        target.isConnected ? target : app,
         errorDetails(error, fallback),
       );
+    }
+    // A quote that fails after a repaint is shown on the screen it rebuilt.
+    if (stage === "quote" && !target.isConnected) {
+      rebind();
+      return;
+    }
+    if (reviewPanelRoot) {
+      renderFragment(reviewPanelRoot, stage === "quote" ? reviewCostNote(message) : "");
     }
     scopedStatus(target, message);
     buttonBusy(target, false);
@@ -356,13 +340,14 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   // Without a fee, the background quotes rather than deploys. The answer is
   // applied to the live screen, which a repaint while it was in flight rebuilt.
   const quote = (toast: boolean): void => {
+    delete journey.quoteNote;
     buttonBusy(target, true);
     scopedStatus(target, "Estimating fee…");
     void deps.wallet.deployAccount().then(
       (response) => {
         if (typeof response !== "string") journey.fee = response;
         if (!target.isConnected) {
-          if (deps.app && DEPLOY_JOURNEYS.get(deps.app) === journey) bindDeploy(deps);
+          rebind();
           return;
         }
         if (typeof response !== "string") showFee(response);
@@ -382,11 +367,15 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     scopedStatus(target, "Submitting deployment…");
   } else if (journey.fee) {
     showFee(journey.fee);
+  } else if (journey.quoteNote !== undefined && reviewPanelRoot) {
+    renderFragment(reviewPanelRoot, reviewCostNote(journey.quoteNote));
   } else if (!journey.quoted && !target.disabled) {
     journey.quoted = true;
     quote(false);
   }
 
+  // A rebind paints the state above on a screen the repaint already bound.
+  if (!firstDeployBinding(target)) return;
   if (deps.app) {
     bindOutcomeReceipt(deps.app, "deploy-success", {
       activity: () => deps.setActiveView("activity"),
@@ -412,7 +401,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     // applied there by binding the live screen again.
     const rebound = (): boolean => {
       if (target.isConnected) return false;
-      if (deps.app && DEPLOY_JOURNEYS.get(deps.app) === journey) bindDeploy(deps);
+      rebind();
       return true;
     };
     void deps.wallet.deployAccount(reviewedFee).then(

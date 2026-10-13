@@ -1,5 +1,5 @@
 /** Atomic multi-account restoration inside the encrypted vault boundary. */
-import { WalletError } from "@bramble/core/errors";
+import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
   isRecoveryAccountSelection,
@@ -47,10 +47,10 @@ const deriveSeedSelections = async (
   }
   const ids = derived.map(({ account }) => account.id);
   if (new Set(ids).size !== ids.length) {
-    throw new WalletError("Recovery accounts resolve to a duplicate address");
+    throw new RefusedBeforeWrite("Recovery accounts resolve to a duplicate address");
   }
   if (vault.accounts.some((stored) => ids.includes(stored.id))) {
-    throw new WalletError("Account already exists");
+    throw new RefusedBeforeWrite("Account already exists");
   }
   return derived;
 };
@@ -63,11 +63,11 @@ const requireRecoverySelections = (selections: RecoverVaultAccountsInput["select
     selections.length > RECOVERY_SCAN_LIMITS.maxSelections ||
     !selections.every(isRecoveryAccountSelection)
   ) {
-    throw new WalletError("Invalid recovery account selection");
+    throw new RefusedBeforeWrite("Invalid recovery account selection");
   }
   const coordinates = selections.map(recoverySelectionKey);
   if (new Set(coordinates).size !== coordinates.length) {
-    throw new WalletError("Duplicate recovery account selection");
+    throw new RefusedBeforeWrite("Duplicate recovery account selection");
   }
 };
 
@@ -86,7 +86,7 @@ export const recoverVaultAccounts = async (
 
   const vault = await readVaultSnapshot(input.vaultPassphrase);
   if (vault.accounts.length > 0 || vault.mnemonic !== null) {
-    throw new WalletError("Wallet already exists");
+    throw new RefusedBeforeWrite("Wallet already exists");
   }
   const derived = [];
   for (const selection of input.selections) {
@@ -100,7 +100,7 @@ export const recoverVaultAccounts = async (
     );
   }
   if (new Set(derived.map(({ account }) => account.id)).size !== derived.length) {
-    throw new WalletError("Recovery accounts resolve to a duplicate address");
+    throw new RefusedBeforeWrite("Recovery accounts resolve to a duplicate address");
   }
   const next = {
     ...vault,
@@ -132,7 +132,7 @@ export const importSeedVaultAccounts = async (
 ) => {
   requireRecoverySelections(input.selections);
   if (!(await kms.validateMnemonic(input.mnemonic))) {
-    throw new WalletError("Invalid mnemonic");
+    throw new RefusedBeforeWrite("Invalid mnemonic");
   }
 
   const vault = await readVaultSnapshot(input.vaultPassphrase);

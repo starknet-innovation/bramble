@@ -20,15 +20,14 @@ describe("market token decimals", () => {
         symbol: `BAD${index}`,
       })),
     ] as never);
-    expect(rows.map((row) => [row.symbol, row.decimals])).toEqual([
-      ["GOOD", 6],
-      ["DEFAULT", 18],
-    ]);
+    // A row with no precision is dropped rather than assumed to be 18.
+    expect(rows.map((row) => [row.symbol, row.decimals])).toEqual([["GOOD", 6]]);
   });
 
   it("drops Ekubo rows whose decimals are unusable and keeps the rest", () => {
     const rows = toEkuboRows([
       { address: "0x1", decimals: 8, symbol: "GOOD" },
+      { address: "0x2", symbol: "MISSING" },
       ...UNUSABLE.map((decimals, index) => ({
         address: `0x${(index + 10).toString(16)}`,
         decimals,

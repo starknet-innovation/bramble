@@ -156,4 +156,33 @@ describe("the network mutation guard", () => {
 
     expect(session.peekPassphrase()).toBeNull();
   });
+
+  test("a failed undo does not lock a session started after the mutation", async () => {
+    const store = createMemoryStore();
+    const preferencesStore = await preferencesOn(store);
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    let writes = 0;
+    const failingUndo = {
+      ...preferencesStore,
+      async setActiveNetwork(networkId: Parameters<typeof preferencesStore.setActiveNetwork>[0]) {
+        writes += 1;
+        if (writes > 1) {
+          // The user locks and unlocks again while the undo is in flight.
+          session.lock();
+          session.unlock(vaultPassphrase);
+          throw new Error("storage unavailable");
+        }
+        return preferencesStore.setActiveNetwork(networkId);
+      },
+    };
+
+    await expect(
+      runUnlockedNetworkMutation(session, failingUndo, "SN_SEPOLIA", async () => {
+        throw new RefusedBeforeWrite(VAULT_FULL);
+      }),
+    ).rejects.toThrow(VAULT_FULL);
+
+    expect(session.peekPassphrase()).toBe(vaultPassphrase);
+  });
 });

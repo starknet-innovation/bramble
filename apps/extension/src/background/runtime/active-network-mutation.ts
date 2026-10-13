@@ -9,7 +9,8 @@ import { heldSessionAuthorization, type UnlockSession } from "./session";
  * session generation. Browser-storage failures are ambiguous, so any failure
  * locks that exact generation and forces reconciliation on the next unlock.
  * The exception is a refusal the vault raises before writing anything, such as
- * a full vault (Sherlock 261): the session stays unlocked and the earlier
+ * a full vault (Sherlock 261) or an account that already exists: the session
+ * stays unlocked and the earlier
  * network write is undone, so a routine add that cannot fit neither signs the
  * user out nor switches their network. Undoing it fails closed like any other
  * storage failure.
@@ -46,7 +47,7 @@ export const runGuardedNetworkMutation = async <T>(
   } catch (error) {
     if (session.generation() === generation) {
       if (error instanceof RefusedBeforeWrite && previousNetworkId !== null) {
-        await restoreNetwork(preferencesStore, previousNetworkId, networkId, session);
+        await restoreNetwork(preferencesStore, previousNetworkId, networkId, session, generation);
       } else {
         session.lock();
       }
@@ -55,18 +56,22 @@ export const runGuardedNetworkMutation = async <T>(
   }
 };
 
-// Undoes the network write of a mutation the vault refused before writing.
+// Undoes the network write of a mutation the vault refused before writing. A
+// failed undo locks only the session the mutation ran under: the user may have
+// locked and unlocked again while the write was in flight, and that newer
+// session has nothing to do with this mutation.
 const restoreNetwork = async (
   preferencesStore: WalletPreferencesStore,
   previousNetworkId: StarknetNetworkId,
   networkId: StarknetNetworkId,
   session: UnlockSession,
+  generation: number,
 ): Promise<void> => {
   if (previousNetworkId === networkId) return;
   try {
     await preferencesStore.setActiveNetwork(previousNetworkId);
   } catch {
-    session.lock();
+    if (session.generation() === generation) session.lock();
   }
 };
 
