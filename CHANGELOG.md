@@ -11,6 +11,13 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+### Changed
+- The pinned official Starknet privacy SDK moved from `0.14.3-rc.4` to
+  `0.14.3-rc.8`. Upstream renamed its sub-account surface to shadow accounts, so
+  the adapter follows the new `shadowAccounts(...)` builder and
+  `shadowAccountAnonymizerAddress` factory key internally. There is no change to
+  dapp-visible behaviour, stored data, settings, or the Wallet API names.
+
 ## [0.10.3] - 2026-09-16
 
 A patch release that lets a single-asset shielded balance pay its own relay

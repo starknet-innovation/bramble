@@ -145,18 +145,24 @@ const failureText = (error: unknown): string => {
   return [code, message, revertText(baseError["data"])].filter((part) => part !== "").join(" ");
 };
 
+// Screening reasons the proving service names in a rejection. They are fixed
+// words, not data, and one is long enough to read as an opaque token.
+const SCREENING_REASONS: ReadonlySet<string> = new Set(["screening_policy_unavailable"]);
+
 /**
  * Reduces failure text to something safe to display: service endpoints, felt
  * and hex blobs (note ids, proof facts, commitments, keys) and long opaque
- * tokens (base64 proof data) are replaced. Input is bounded before scanning and
- * output is bounded again before display.
+ * tokens (base64 proof data) are replaced, except a known screening reason.
+ * Input is bounded before scanning and output is bounded again before display.
  */
 export const sanitizeStrk20Detail = (text: string): string =>
   text
     .slice(0, DETAIL_SCAN_LIMIT)
     .replace(/(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[endpoint]")
     .replace(/0x[0-9a-f]{8,}/gi, "[value]")
-    .replace(/(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{28,}/g, "[value]")
+    .replace(/(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{28,}/g, (token) =>
+      SCREENING_REASONS.has(token) ? token : "[value]",
+    )
     .replace(/[^ -~]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()

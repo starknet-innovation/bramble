@@ -88,7 +88,7 @@ describe("official STRK20 SDK adapter", () => {
             seen.push(["surplusTo", recipient, withdraw]);
             return self;
           },
-          subaccounts(dappName: string) {
+          shadowAccounts(dappName: string) {
             return {
               commitment: async () => 0x123n,
               invoke(nonce: string, options: unknown) {
@@ -256,10 +256,16 @@ describe("official STRK20 SDK adapter", () => {
     await expect(service.privateBalances({ ...privateContext, tokens: [] })).resolves.toEqual([]);
     expect(sdkInput?.["discoveryProvider"]).toBeInstanceOf(DiscoveryProvider);
     expect(sdkInput?.["provingProvider"]).toMatchObject({ ohttp: true });
-    expect(sdkInput).not.toHaveProperty("subAccountAnonymizerAddress");
+    expect(sdkInput).not.toHaveProperty("shadowAccountAnonymizerAddress");
     await expect(
       service.subaccountCommitment({ ...privateContext, dappName: "vesu" }),
     ).rejects.toThrow("strk20 services unavailable");
+    const withAnonymizer = {
+      ...privateContext,
+      config: { ...privateContext.config, subaccountAnonymizerAddress: "0x789" },
+    };
+    await expect(service.privateBalances({ ...withAnonymizer, tokens: [] })).resolves.toEqual([]);
+    expect(sdkInput).toHaveProperty("shadowAccountAnonymizerAddress", "0x789");
     await expect(
       service.prepare({
         ...privateContext,
