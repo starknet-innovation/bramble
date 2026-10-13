@@ -41,6 +41,7 @@ import {
 } from "@bramble/ledger-protocol/session";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { LedgerSignRequestSummary } from "../../../popup/responses/responses";
+import { LEDGER_SIGN_UNFINISHED } from "../../runtime/friendly-error-copy";
 import type { LedgerSignOutcome } from "./runtime-client";
 
 /**
@@ -62,7 +63,12 @@ export type LedgerSignPhase =
   | { readonly kind: "confirming" }
   | { readonly kind: "discovering" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
-  | { readonly kind: "error"; readonly code: LedgerRejectionCode; readonly message: string }
+  | {
+      readonly kind: "error";
+      /** The device catalog code, or `null` when the wallet failed after the device signed. */
+      readonly code: LedgerRejectionCode | null;
+      readonly message: string;
+    }
   | { readonly kind: "submitting" }
   | { readonly kind: "verifying" };
 
@@ -100,6 +106,14 @@ export type LedgerSignController = {
   readonly present: (request: LedgerSignRequestSummary) => void;
   readonly retry: () => void;
   readonly whenIdle: () => Promise<void>;
+};
+
+// A wallet-side failure after the device signed (`completeLedgerSign`): the
+// reviewed sentence for it, never a device rejection.
+const UNFINISHED_PHASE: LedgerSignPhase = {
+  code: null,
+  kind: "error",
+  message: LEDGER_SIGN_UNFINISHED,
 };
 
 const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
@@ -179,7 +193,15 @@ export const createLedgerSignController = (
       return;
     }
     show({ kind: "submitting" });
-    await deps.report({ id: request.id, r: signature.r, s: signature.s });
+    try {
+      await deps.report({ id: request.id, r: signature.r, s: signature.s });
+    } catch {
+      // The device signed; the wallet's half did not finish. That is not a
+      // device fault, and the transaction may already be on its way (errors
+      // audit F9), so it reads as the reviewed outcome-unknown line.
+      if (isActive()) show(UNFINISHED_PHASE);
+      return;
+    }
     current = null;
     devices = [];
     operationEpoch += 1;

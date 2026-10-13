@@ -187,6 +187,12 @@ const phaseLiveness: Readonly<Record<LedgerSignView["phase"]["kind"], string>> =
   verifying: "Comparing the device key with this account…",
 };
 
+// "Not signed or broadcast" is false once the device has signed, so a
+// wallet-side failure after the signature (`code: null`) says nothing here; its
+// message carries the outcome (errors audit F9).
+const livenessText = (view: LedgerSignView): string =>
+  view.phase.kind === "error" && view.phase.code === null ? "" : phaseLiveness[view.phase.kind];
+
 const livenessMark = (view: LedgerSignView): string => {
   if (view.phase.kind === "error") {
     return icon("alert");
@@ -246,7 +252,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
       <div class="ledger-phase-body">${phaseBody(view)}</div>
       <p class="ledger-liveness" role="status">
         <span class="ledger-liveness-mark">${livenessMark(view)}</span>
-        ${escapeHtml(phaseLiveness[view.phase.kind])}
+        ${escapeHtml(livenessText(view))}
       </p>
     </section>
     <p id="ledger-sign-result" role="status" aria-live="polite"></p>

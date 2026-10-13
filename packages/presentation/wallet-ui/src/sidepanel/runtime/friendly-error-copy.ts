@@ -70,6 +70,9 @@ const REFUSED = "The wallet refused that request.";
 /** The catch-all that may wrap a submission; never claims failure. */
 export const REQUEST_UNKNOWN =
   "That didn't complete. If it was a transaction, check Activity before trying again.";
+/** The device signed but the wallet's half of the signing did not finish. */
+export const LEDGER_SIGN_UNFINISHED =
+  "Signing on your Ledger didn't finish. Check Activity before trying again.";
 const LEDGER_RETRY = "Couldn't reach your Ledger. Reconnect the device and try again.";
 const ACTIVATE_FIRST = "Activate private balances first.";
 const DEPLOY_FIRST = "Deploy this account first.";
@@ -444,10 +447,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // use (issue 644): no account to retry, or a chain read to retry.
   ["braavos ledger account not found", "No Braavos account found for this key."],
   ["braavos ledger account status unavailable", NETWORK_RETRY_MESSAGE],
-  [
-    "complete ledger sign failed",
-    "Signing on your Ledger didn't finish. Check Activity before trying again.",
-  ],
+  ["complete ledger sign failed", LEDGER_SIGN_UNFINISHED],
 
   // --- Private balances ----------------------------------------------------
   ["private balances unavailable", "Couldn't load private balances. Try again."],
