@@ -31,7 +31,7 @@ export const STRK20_TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1
 export const STRK20_RECIPIENT =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 export const STRK20_ORIGIN = "https://example.com";
-// The opt-in SDK sub-account anonymizer the default harness configures.
+// The opt-in SDK shadow account anonymizer the default harness configures.
 const STRK20_TEST_ANONYMIZER = "0x04f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
 
 export const STRK20_EXTENSION_SENDER: RuntimeSender = extensionSender;
@@ -70,7 +70,7 @@ export type Strk20HarnessOptions = {
   readonly strk20?: Strk20Service;
   /** A registry of the suite's own, e.g. one with a diagnostics recorder. */
   readonly strk20Jobs?: Strk20JobRegistry;
-  readonly subaccountCalls?: { value: number };
+  readonly shadowAccountCalls?: { value: number };
 };
 
 /**
@@ -83,7 +83,7 @@ export type Strk20HarnessOptions = {
  * disagreeing about what a live privacy response looks like.
  */
 export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Service => {
-  const { balanceCalls, proveCalls, registerCalls, subaccountCalls } = options;
+  const { balanceCalls, proveCalls, registerCalls, shadowAccountCalls } = options;
   return {
     async prepare() {
       if (proveCalls) {
@@ -154,9 +154,9 @@ export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Ser
     async registrationStatus() {
       return options.registered === false ? "unregistered" : "registered";
     },
-    async subaccountCommitment() {
-      if (subaccountCalls) {
-        subaccountCalls.value += 1;
+    async shadowAccountCommitment() {
+      if (shadowAccountCalls) {
+        shadowAccountCalls.value += 1;
       }
       return "0x123";
     },
@@ -188,7 +188,7 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
   if (!mainnetStrk20) {
     throw new Error("missing default STRK20 test config");
   }
-  // The opt-in SDK sub-account module is set, so sub-account requests reach
+  // The opt-in SDK shadow account module is set, so shadow account requests reach
   // their approval; a test of the unset case passes its own preferences.
   const preferences = options.preferences ?? {
     ...defaults,

@@ -149,7 +149,7 @@ const strk20Service: Strk20Service = {
       feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" },
     };
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x123";
   },
   async submitActions(input) {

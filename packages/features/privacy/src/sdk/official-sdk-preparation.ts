@@ -168,7 +168,7 @@ export const prepareWith = async (
 ): Promise<Strk20CallAndProof> => {
   const config = requireStrk20Config(input);
   if (
-    input.actions.some((action) => action.type === "subaccount_invoke") &&
+    input.actions.some((action) => action.type === "shadow_account_invoke") &&
     !config.subaccountAnonymizerAddress
   ) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);

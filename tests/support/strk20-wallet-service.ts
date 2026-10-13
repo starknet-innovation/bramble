@@ -59,7 +59,7 @@ export const makeStrk20WalletService = (capture: Capture): Strk20Service => {
       }
       return registered.value ? "registered" : "unregistered";
     },
-    async subaccountCommitment() {
+    async shadowAccountCommitment() {
       return STRK20_RECIPIENT;
     },
     async submitActions({ actions, beforeProof, plan }) {

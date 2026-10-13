@@ -51,7 +51,7 @@ import {
   readStrk20InvokeMessage,
   readStrk20PrepareMessage,
   readStrk20RegisterMessage,
-  readStrk20SubaccountMessage,
+  readStrk20ShadowAccountMessage,
 } from "./strk20-provider-inputs";
 import { poisonedStrk20ActionFlags } from "./strk20-recipient-policy";
 
@@ -245,18 +245,18 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
   });
 };
 
-// The SDK sub-account module is opt-in per network. A request that needs it
+// The SDK shadow account module is opt-in per network. A request that needs it
 // is refused before its approval is queued, not after the user approves into
 // a certain failure (#443); the error is the same one the SDK adapter raises.
 const MISSING_ANONYMIZER = {
-  error: `${STRK20_SERVICE_UNAVAILABLE}: no sub-account anonymizer is configured for this network`,
+  error: `${STRK20_SERVICE_UNAVAILABLE}: no shadow account anonymizer is configured for this network`,
 } as const;
 
 const lacksAnonymizer = (resolved: ResolvedAccount): boolean =>
   !resolved.preferences.strk20Networks?.[resolved.account.networkId]?.subaccountAnonymizerAddress;
 
 const needsAnonymizer = (actions: readonly Strk20Action[]): boolean =>
-  actions.some((action) => action.type === "subaccount_invoke");
+  actions.some((action) => action.type === "shadow_account_invoke");
 
 const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender) => {
   const input = readStrk20PrepareMessage(message);
@@ -364,10 +364,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   }
 };
 
-const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readStrk20SubaccountMessage(message);
+const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readStrk20ShadowAccountMessage(message);
   if (!input) {
-    return { error: "invalid strk20 subaccount request" };
+    return { error: "invalid strk20 shadow account request" };
   }
   const gate = gateOrigin(deps, input.origin, sender);
   if (gate) {
@@ -385,15 +385,15 @@ const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message,
     return MISSING_ANONYMIZER;
   }
   return queueDisclosure(deps, resolved, {
-    kind: "strk20-subaccount",
+    kind: "strk20-shadow-account",
     origin: input.origin,
     request: {
       dappName: input.dappName,
       ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
-      type: "subaccount",
+      type: "shadowAccount",
     },
     summaries: [
-      `Share a private sub-account commitment for ${input.origin}`,
+      `Share a private shadow account commitment for ${input.origin}`,
       `Site-chosen scope label ${input.dappName}`,
       ...(input.nonce === undefined ? [] : [`Nonce ${input.nonce}`]),
     ],
@@ -406,7 +406,7 @@ const STRK20_OPS_HANDLERS: Readonly<Record<string, Strk20OpsHandler>> = {
   "wallet.strk20InvokeTransaction": handleStrk20InvokeTransaction,
   "wallet.strk20PrepareInvoke": handleStrk20PrepareInvoke,
   "wallet.strk20Register": handleStrk20Register,
-  "wallet.strk20SubaccountCommitment": handleStrk20SubaccountCommitment,
+  "wallet.strk20ShadowAccountCommitment": handleStrk20ShadowAccountCommitment,
 };
 
 /**

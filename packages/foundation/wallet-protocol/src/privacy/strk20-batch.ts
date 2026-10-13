@@ -7,15 +7,15 @@
  *
  * Evidence, at the pinned privacy revision (`b40bf10`):
  * - the SDK allows one invoke-phase action per transaction (`compiler.ts`);
- * - the SDK turns a sub-account call's `entry_point` into a selector with
+ * - the SDK turns a shadow account call's `entry_point` into a selector with
  *   `getSelectorFromName`, so a `0x…` value is hashed as if it were a name
  *   (`shadow-accounts.ts`);
  * - the pool rejects a transaction that leaves an open note undeposited
  *   (`UNDEPOSITED_OPEN_NOTES`) and applies actions in order, so a deposit into
  *   an open note created later fails;
  * - the anonymizer takes at most one open note per token;
- * - a public deposit screens the depositor while a `Delegated` sub-account
- *   deposit into open notes screens the sub-account, and one transaction may
+ * - a public deposit screens the depositor while a `Delegated` shadow account
+ *   deposit into open notes screens the shadow account, and one transaction may
  *   have only one screening subject (`MULTIPLE_SCREENING_SUBJECTS`).
  */
 import { canonicalFelt } from "@bramble/wallet-model/networks";
@@ -31,20 +31,21 @@ export const STRK20_BATCH_REFUSAL_PREFIX = "invalid strk20 action batch: ";
 /** Why a STRK20 batch is refused before approval. Dapp-facing protocol text. */
 export const STRK20_BATCH_REFUSALS = {
   entryPointSelector:
-    "subaccount_invoke call entry_point must be a function name; a 0x selector would be hashed as a name and call a different function",
-  multipleInvokes: "a batch may contain at most one invoke or subaccount_invoke action",
+    "shadow_account_invoke call entry_point must be a function name; a 0x selector would be hashed as a name and call a different function",
+  multipleInvokes: "a batch may contain at most one invoke or shadow_account_invoke action",
   multipleScreeningSubjects:
-    "a public deposit cannot share a batch with a subaccount_invoke that settles OPEN transfers (MULTIPLE_SCREENING_SUBJECTS)",
-  openAfterInvoke: "every OPEN transfer must come before the invoke or subaccount_invoke action",
-  openPerToken: "a subaccount_invoke settles at most one OPEN transfer per token",
+    "a public deposit cannot share a batch with a shadow_account_invoke that settles OPEN transfers (MULTIPLE_SCREENING_SUBJECTS)",
+  openAfterInvoke:
+    "every OPEN transfer must come before the invoke or shadow_account_invoke action",
+  openPerToken: "a shadow_account_invoke settles at most one OPEN transfer per token",
   openWithoutInvoke:
-    "an OPEN transfer needs an invoke or subaccount_invoke action in the same batch to fill it",
+    "an OPEN transfer needs an invoke or shadow_account_invoke action in the same batch to fill it",
 } as const;
 
 const SELECTOR_PATTERN = /^0x/i;
 
 const isInvokeType = (action: Strk20Action): boolean =>
-  action.type === "invoke" || action.type === "subaccount_invoke";
+  action.type === "invoke" || action.type === "shadow_account_invoke";
 
 const isOpenTransfer = (action: Strk20Action): boolean =>
   action.type === "transfer" && action.amount === OPEN_AMOUNT;
@@ -70,7 +71,7 @@ export const strk20BatchRefusal = (
   const invokeIndex = invokeIndexes[0];
   const invoke = invokeIndex === undefined ? undefined : actions[invokeIndex];
   if (
-    invoke?.type === "subaccount_invoke" &&
+    invoke?.type === "shadow_account_invoke" &&
     invoke.calls.some((call) => SELECTOR_PATTERN.test(call.entry_point))
   ) {
     return "entryPointSelector";
@@ -79,7 +80,7 @@ export const strk20BatchRefusal = (
   if (openIndexes.length === 0) return null;
   if (invokeIndex === undefined) return "openWithoutInvoke";
   if (openIndexes.some((index) => index > invokeIndex)) return "openAfterInvoke";
-  if (invoke?.type !== "subaccount_invoke") return null;
+  if (invoke?.type !== "shadow_account_invoke") return null;
   if (hasRepeatedToken(actions.filter(isOpenTransfer))) return "openPerToken";
   return actions.some((action) => action.type === "deposit") ? "multipleScreeningSubjects" : null;
 };

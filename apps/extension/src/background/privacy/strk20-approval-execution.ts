@@ -52,7 +52,7 @@ import {
   refusePoisonedStrk20Actions,
   type Strk20TrustedPreferences,
 } from "./strk20-recipient-policy";
-import { bindStrk20ActionsToOrigin, strk20SubaccountCommitment } from "./strk20-subaccount";
+import { bindStrk20ActionsToOrigin, strk20ShadowAccountCommitment } from "./strk20-shadow-account";
 
 /**
  * Dependencies needed to execute a held STRK20 invoke once the user approves.
@@ -432,7 +432,7 @@ export const executeStrk20DisclosureApproval = async (
       );
       return { callAndProof, ok: true };
     }
-    return strk20SubaccountCommitment(deps.runtimeRpc, context, {
+    return strk20ShadowAccountCommitment(deps.runtimeRpc, context, {
       origin: approval.origin,
       request: approval.request,
     });

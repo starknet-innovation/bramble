@@ -24,7 +24,7 @@ const shadow = (entry_point: string) => ({
   collect_policy: { type: "all" },
   dapp_name: "Example",
   nonce: "0x1",
-  type: "subaccount_invoke",
+  type: "shadow_account_invoke",
 });
 const open = { amount: "OPEN", recipient: STRK20_RECIPIENT, token: STRK20_TOKEN, type: "transfer" };
 const invoke = { calldata: ["0x1"], contract: STRK20_TOKEN, type: "invoke" };

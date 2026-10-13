@@ -1,5 +1,5 @@
 /**
- * The SDK sub-account module is opt-in per network. A sub-account request on a
+ * The SDK shadow account module is opt-in per network. A shadow account request on a
  * network without it is refused before its approval is queued (#443, PR 3),
  * instead of reaching the card and failing after the user approves. Requests
  * that do not need the module are unaffected.
@@ -18,7 +18,7 @@ import {
 } from "../../support/strk20-background";
 
 const MISSING =
-  "strk20 services unavailable: no sub-account anonymizer is configured for this network";
+  "strk20 services unavailable: no shadow account anonymizer is configured for this network";
 
 const defaults = defaultWalletPreferences();
 const mainnet = defaults.strk20Networks?.SN_MAIN;
@@ -30,12 +30,12 @@ const withoutAnonymizer = {
   strk20Networks: { ...defaults.strk20Networks, SN_SEPOLIA: mainnet },
 };
 
-const subaccountInvoke = {
+const shadowAccountInvoke = {
   calls: [{ calldata: [], contract_address: STRK20_RECIPIENT, entry_point: "swap" }],
   collect_policy: { type: "all" },
   dapp_name: "Example",
   nonce: "0x1",
-  type: "subaccount_invoke",
+  type: "shadow_account_invoke",
 };
 
 const REQUESTS = [
@@ -43,13 +43,13 @@ const REQUESTS = [
     message: {
       dappName: "Example",
       origin: STRK20_ORIGIN,
-      type: "wallet.strk20SubaccountCommitment",
+      type: "wallet.strk20ShadowAccountCommitment",
     },
-    method: "wallet_strk20SubaccountCommitment",
+    method: "wallet_strk20ShadowAccountCommitment",
   },
   {
     message: {
-      actions: [subaccountInvoke],
+      actions: [shadowAccountInvoke],
       origin: STRK20_ORIGIN,
       simulate: false,
       type: "wallet.strk20PrepareInvoke",
@@ -58,7 +58,7 @@ const REQUESTS = [
   },
   {
     message: {
-      actions: [subaccountInvoke],
+      actions: [shadowAccountInvoke],
       origin: STRK20_ORIGIN,
       type: "wallet.strk20InvokeTransaction",
     },
@@ -77,16 +77,16 @@ const pendingCount = async (handler: ReturnType<typeof buildStrk20Handler>): Pro
   return response.pending.length;
 };
 
-describe("sub-account requests without an anonymizer", () => {
+describe("shadow account requests without an anonymizer", () => {
   for (const request of REQUESTS) {
     test(`${request.method} is refused before approval`, async () => {
-      const subaccountCalls = { value: 0 };
-      const handler = buildStrk20Handler({ preferences: withoutAnonymizer, subaccountCalls });
+      const shadowAccountCalls = { value: 0 };
+      const handler = buildStrk20Handler({ preferences: withoutAnonymizer, shadowAccountCalls });
       const result = await handler(request.message, STRK20_CONTENT_SENDER);
 
       expect(result).toEqual({ error: MISSING });
       expect(await pendingCount(handler)).toBe(0);
-      expect(subaccountCalls.value).toBe(0);
+      expect(shadowAccountCalls.value).toBe(0);
       expect(toProviderPayload(result, request.method).error).toEqual({
         code: 163,
         data: MISSING,
@@ -102,7 +102,7 @@ describe("sub-account requests without an anonymizer", () => {
     });
   }
 
-  test("a batch without a sub-account invoke does not need one", async () => {
+  test("a batch without a shadow account invoke does not need one", async () => {
     const handler = buildStrk20Handler({ preferences: withoutAnonymizer });
     void handler(
       {

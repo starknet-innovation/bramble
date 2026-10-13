@@ -91,7 +91,7 @@ const service = (capture: {
     }
     return "registered";
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return STRK20_RECIPIENT;
   },
   async submitActions({ actions, beforeProof, plan }) {

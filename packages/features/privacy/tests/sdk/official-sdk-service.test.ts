@@ -92,7 +92,7 @@ describe("official STRK20 SDK adapter", () => {
             return {
               commitment: async () => 0x123n,
               invoke(nonce: string, options: unknown) {
-                seen.push(["subaccount", dappName, nonce, options]);
+                seen.push(["shadowAccount", dappName, nonce, options]);
                 return self;
               },
               partialCommitment: async () => 0x456n,
@@ -134,7 +134,7 @@ describe("official STRK20 SDK adapter", () => {
         collect_policy: { amount: "0x4", type: "exact" },
         dapp_name: "vesu",
         nonce: "0x5",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       },
       {
         calldata: [`${"$"}{poolAddress}`, `${"$"}{openNoteIds[0]}`, "literal"],
@@ -157,7 +157,7 @@ describe("official STRK20 SDK adapter", () => {
       ["withdraw", token, [{ amount: 3n, recipient: "0x999" }]],
       ["transfer", token, [{ amount: open, recipient: "0x998" }]],
       [
-        "subaccount",
+        "shadowAccount",
         "vesu",
         "0x5",
         {
@@ -258,7 +258,7 @@ describe("official STRK20 SDK adapter", () => {
     expect(sdkInput?.["provingProvider"]).toMatchObject({ ohttp: true });
     expect(sdkInput).not.toHaveProperty("shadowAccountAnonymizerAddress");
     await expect(
-      service.subaccountCommitment({ ...privateContext, dappName: "vesu" }),
+      service.shadowAccountCommitment({ ...privateContext, dappName: "vesu" }),
     ).rejects.toThrow("strk20 services unavailable");
     const withAnonymizer = {
       ...privateContext,
@@ -275,7 +275,7 @@ describe("official STRK20 SDK adapter", () => {
             collect_policy: { type: "all" },
             dapp_name: "vesu",
             nonce: "0x1",
-            type: "subaccount_invoke",
+            type: "shadow_account_invoke",
           },
         ],
         simulate: true,
@@ -283,7 +283,7 @@ describe("official STRK20 SDK adapter", () => {
     ).rejects.toThrow("strk20 services unavailable");
   });
 
-  test("prepares a proof and derives both forms of subaccount commitment", async () => {
+  test("prepares a proof and derives both forms of shadow account commitment", async () => {
     const sdk = runtime(() => ({
       build: () => builder(),
       async discoverNotes() {
@@ -303,11 +303,11 @@ describe("official STRK20 SDK adapter", () => {
       call: { calldata: ["0x1"], contract_address: poolAddress, entry_point: "apply_actions" },
       proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
     });
-    await expect(service.subaccountCommitment({ ...context, dappName: "vesu" })).resolves.toBe(
+    await expect(service.shadowAccountCommitment({ ...context, dappName: "vesu" })).resolves.toBe(
       "0x456",
     );
     await expect(
-      service.subaccountCommitment({ ...context, dappName: "vesu", nonce: "0x1" }),
+      service.shadowAccountCommitment({ ...context, dappName: "vesu", nonce: "0x1" }),
     ).resolves.toBe("0x123");
   });
 

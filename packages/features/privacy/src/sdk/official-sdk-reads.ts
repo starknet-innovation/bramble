@@ -1,6 +1,6 @@
 /**
  * Read-only official-SDK operations: private balances, registration status,
- * and the dapp sub-account commitment. Split from ./official-sdk-service so
+ * and the dapp shadow account commitment. Split from ./official-sdk-service so
  * the submission half stays within the size budget. Every read that reaches
  * the discovery indexer runs under the discovery wait budget, because the
  * indexer's pagination has no transport deadline of its own.
@@ -55,7 +55,7 @@ export const strk20ReadMethods = ({
   waits,
 }: Strk20ReadDeps): Pick<
   Strk20Service,
-  "privateBalances" | "registrationStatus" | "subaccountCommitment"
+  "privateBalances" | "registrationStatus" | "shadowAccountCommitment"
 > => ({
   async privateBalances(input) {
     try {
@@ -114,7 +114,7 @@ export const strk20ReadMethods = ({
       return mapStrk20ProtocolError(error);
     }
   },
-  async subaccountCommitment(input) {
+  async shadowAccountCommitment(input) {
     const config = requireStrk20Config(input);
     if (!config.subaccountAnonymizerAddress) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);

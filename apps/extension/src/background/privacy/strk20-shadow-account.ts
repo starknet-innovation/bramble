@@ -1,7 +1,7 @@
 /**
- * Origin-bound STRK20 sub-account domain separation.
+ * Origin-bound STRK20 shadow account domain separation.
  *
- * The pinned privacy SDK derives a sub-account as
+ * The pinned privacy SDK derives a shadow account as
  * `hash(identity_key, encodeDappName(dappName))`, so `dappName` carries the
  * whole cross-site unlinkability guarantee the approval card promises the user.
  * A label chosen by the requesting page cannot carry it: two unrelated sites
@@ -11,7 +11,7 @@
  * only as a scope selector within that origin.
  *
  * `shadowAccounts(dappName)` is one identity for both the commitment the user is
- * shown and the `subaccount_invoke` that later acts through it, so the
+ * shown and the `shadow_account_invoke` that later acts through it, so the
  * disclosure path and the action path derive from here alike. Deriving in only
  * one of them would hand a site a commitment it could never name in an action.
  */
@@ -20,7 +20,7 @@ import { bytesToHex } from "@bramble/core/hex";
 import type { Strk20AccountContext } from "@bramble/privacy/service";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import type { Strk20SubaccountCommitmentResponse } from "./runtime-strk20-types";
+import type { Strk20ShadowAccountCommitmentResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 
 const SCOPE_DOMAIN = "bramble/strk20-subaccount/v1";
@@ -43,22 +43,22 @@ const originScope = async (origin: string, label: string): Promise<string> => {
 };
 
 /**
- * Derives the commitment for an approved sub-account request. `approval.origin`
+ * Derives the commitment for an approved shadow account request. `approval.origin`
  * must be the origin the request was gated on, never one read back out of an
  * untrusted message body: it is the only input that keeps one site's commitment
  * unreachable from another. The result is deterministic in (origin, label), so
  * a site sees a stable identity across sessions and distinct labels stay
  * distinct scopes. An unavailable or failing SDK rejects; nothing is persisted.
  */
-export const strk20SubaccountCommitment = async (
+export const strk20ShadowAccountCommitment = async (
   runtimeRpc: RuntimeRpc,
   context: Strk20AccountContext,
   approval: {
     readonly origin: string;
     readonly request: { readonly dappName: string; readonly nonce?: string };
   },
-): Promise<Strk20SubaccountCommitmentResponse> => {
-  const commitment = await strk20ServiceForRuntime(runtimeRpc).subaccountCommitment({
+): Promise<Strk20ShadowAccountCommitmentResponse> => {
+  const commitment = await strk20ServiceForRuntime(runtimeRpc).shadowAccountCommitment({
     ...context,
     dappName: await originScope(approval.origin, approval.request.dappName),
     ...(approval.request.nonce === undefined ? {} : { nonce: approval.request.nonce }),
@@ -67,9 +67,9 @@ export const strk20SubaccountCommitment = async (
 };
 
 /**
- * Rewrites every `subaccount_invoke` action's `dapp_name` to the same
+ * Rewrites every `shadow_account_invoke` action's `dapp_name` to the same
  * origin-bound separator the disclosure path derives, so an approved action
- * acts through exactly the sub-account whose commitment the site was shown.
+ * acts through exactly the shadow account whose commitment the site was shown.
  * `origin` must be the verified request origin, and callers must apply this
  * once, immediately before the SDK call, so the reviewed batch keeps the site's
  * own label on the approval card. Other action variants pass through unchanged
@@ -82,7 +82,7 @@ export const bindStrk20ActionsToOrigin = async (
 ): Promise<readonly Strk20Action[]> =>
   Promise.all(
     actions.map(async (action) =>
-      action.type === "subaccount_invoke"
+      action.type === "shadow_account_invoke"
         ? { ...action, dapp_name: await originScope(origin, action.dapp_name) }
         : action,
     ),

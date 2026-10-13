@@ -370,7 +370,7 @@ const seedStores = async (stores: {
     tokenId: "1",
   });
   const withGroup = await stores.preferencesStore.createGroup({ icon: "folder", name: "Trading" });
-  // The opt-in SDK sub-account module, so the commitment entry reaches the
+  // The opt-in SDK shadow account module, so the commitment entry reaches the
   // viewing key instead of stopping at the pre-approval anonymizer check.
   const mainnet = DEFAULT_STRK20_NETWORKS.SN_MAIN;
   if (!mainnet) throw new Error("key-boundary harness needs the bundled Mainnet STRK20 config");

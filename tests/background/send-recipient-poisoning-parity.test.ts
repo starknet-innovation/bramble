@@ -348,7 +348,7 @@ const poolService = (): Strk20Service => ({
   async registrationStatus() {
     return "registered" as const;
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x1";
   },
   async submitActions() {

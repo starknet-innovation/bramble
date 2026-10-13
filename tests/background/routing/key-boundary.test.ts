@@ -168,8 +168,8 @@ describe("key boundary", () => {
       "wallet.strk20PrepareWithdraw",
       "wallet.strk20RecipientStatus",
       "wallet.strk20Register",
+      "wallet.strk20ShadowAccountCommitment",
       "wallet.strk20State",
-      "wallet.strk20SubaccountCommitment",
     ]);
   });
 

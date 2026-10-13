@@ -350,7 +350,7 @@ export const privacyScenario: WalletScenario = {
     ...privacyDappCheckpoints,
   ],
   description:
-    "Balance disclosure, pool registration, dapp approvals, dapp anonymizers, AVNU private swap, sub-accounts, and fail-closed recovery. Shielding, unshielding, and private sends are composed in Send, so they are checkpointed with the other send routes rather than here.",
+    "Balance disclosure, pool registration, dapp approvals, dapp anonymizers, AVNU private swap, shadow accounts, and fail-closed recovery. Shielding, unshielding, and private sends are composed in Send, so they are checkpointed with the other send routes rather than here.",
   id: "privacy",
   surface: "sidepanel",
   title: "Private balances and actions",

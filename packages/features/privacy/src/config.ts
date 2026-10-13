@@ -43,7 +43,7 @@ export type Strk20NetworkConfig = {
   readonly poolAddress: string;
   readonly proverUrl: string;
   /**
-   * Optional SDK sub-account module used only by `subaccount_invoke`. Dapp
+   * Optional SDK shadow account module used only by `shadow_account_invoke`. Dapp
    * anonymizers/executors are separate reviewed invoke targets.
    */
   readonly subaccountAnonymizerAddress?: string;

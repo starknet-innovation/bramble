@@ -191,7 +191,7 @@ const isStrk20DisclosureKind = (kind: ApprovalKind): kind is Strk20DisclosureApp
   kind === "strk20-balances" ||
   kind === "strk20-prepare" ||
   kind === "strk20-register" ||
-  kind === "strk20-subaccount";
+  kind === "strk20-shadow-account";
 
 const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }) => {
   if (
@@ -367,7 +367,7 @@ const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
   "strk20-invoke": applyStrk20Invoke,
   "strk20-prepare": applyStrk20Disclosure,
   "strk20-register": applyStrk20Disclosure,
-  "strk20-subaccount": applyStrk20Disclosure,
+  "strk20-shadow-account": applyStrk20Disclosure,
   "switch-chain": applySwitchChain,
   "watch-asset": applyWatchAsset,
 };

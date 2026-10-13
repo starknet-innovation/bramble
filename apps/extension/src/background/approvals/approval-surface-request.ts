@@ -7,7 +7,7 @@ import {
   readStrk20InvokeMessage,
   readStrk20PrepareMessage,
   readStrk20RegisterMessage,
-  readStrk20SubaccountMessage,
+  readStrk20ShadowAccountMessage,
 } from "../privacy/strk20-provider-inputs";
 import { readAddStarknetChainInput } from "../provider/add-chain-ops";
 import { readWatchAssetInput } from "../provider/provider-inputs";
@@ -43,6 +43,6 @@ export const readApprovalSurfaceRequest = (message: unknown): ApprovalSurfaceReq
     readStrk20BalancesMessage(message) ??
     readStrk20PrepareMessage(message) ??
     readStrk20InvokeMessage(message) ??
-    readStrk20SubaccountMessage(message);
+    readStrk20ShadowAccountMessage(message);
   return parsed ? { origin: parsed.origin, silent: false } : null;
 };

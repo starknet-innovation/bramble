@@ -12,7 +12,7 @@ import {
   readStrk20BalancesParams,
   readStrk20InvokeParams,
   readStrk20PrepareParams,
-  readStrk20SubaccountCommitmentParams,
+  readStrk20ShadowAccountCommitmentParams,
   type Strk20BalanceEntry,
   type Strk20CallAndProof,
 } from "../privacy/strk20-bridge";
@@ -365,14 +365,14 @@ const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
     const actions = readStrk20InvokeParams(params);
     return actions ? { actions, origin, type: "wallet.strk20InvokeTransaction" } : null;
   },
-  wallet_strk20SubaccountCommitment: (params, origin) => {
-    const input = readStrk20SubaccountCommitmentParams(params);
+  wallet_strk20ShadowAccountCommitment: (params, origin) => {
+    const input = readStrk20ShadowAccountCommitmentParams(params);
     return input
       ? {
           dappName: input.dappName,
           ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
           origin,
-          type: "wallet.strk20SubaccountCommitment",
+          type: "wallet.strk20ShadowAccountCommitment",
         }
       : null;
   },
@@ -416,8 +416,8 @@ const runtimeBuilderFor = (method: ProviderMethod): RuntimeBuilder => {
       return RUNTIME_BUILDERS.wallet_strk20InvokeTransaction;
     case "wallet_strk20PrepareInvoke":
       return RUNTIME_BUILDERS.wallet_strk20PrepareInvoke;
-    case "wallet_strk20SubaccountCommitment":
-      return RUNTIME_BUILDERS.wallet_strk20SubaccountCommitment;
+    case "wallet_strk20ShadowAccountCommitment":
+      return RUNTIME_BUILDERS.wallet_strk20ShadowAccountCommitment;
     case "wallet_switchStarknetChain":
       return RUNTIME_BUILDERS.wallet_switchStarknetChain;
     case "wallet_watchAsset":

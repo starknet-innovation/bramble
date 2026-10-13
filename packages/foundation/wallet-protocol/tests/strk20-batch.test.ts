@@ -1,7 +1,7 @@
 /**
  * Pre-approval STRK20 batch rules (#443, PR 3): each refused shape is one the
  * pinned SDK or the pool rejects only after the user approved, or where the
- * reviewed sub-account call is not the call that runs. The accepted shapes
+ * reviewed shadow account call is not the call that runs. The accepted shapes
  * beside each rule pin that the rule is no wider than its evidence.
  */
 import { describe, expect, test } from "bun:test";
@@ -30,7 +30,7 @@ const shadow = (entry_point = "swap"): Strk20Action => ({
   collect_policy: { type: "all" },
   dapp_name: "Example",
   nonce: "0x1",
-  type: "subaccount_invoke",
+  type: "shadow_account_invoke",
 });
 const deposit: Strk20Action = { amount: "0x0a", token: STRK, type: "deposit" };
 const withdraw: Strk20Action = {
@@ -41,7 +41,7 @@ const withdraw: Strk20Action = {
 };
 
 describe("strk20 batch refusals", () => {
-  test("refuse a sub-account call whose entry_point is a 0x selector", () => {
+  test("refuse a shadow account call whose entry_point is a 0x selector", () => {
     expect(
       strk20BatchRefusal([
         shadow("0x15d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad"),
@@ -68,7 +68,7 @@ describe("strk20 batch refusals", () => {
     expect(strk20BatchRefusal([open(STRK), open(USDC), shadow()])).toBeNull();
   });
 
-  test("a sub-account invoke settles at most one OPEN transfer per token", () => {
+  test("a shadow account invoke settles at most one OPEN transfer per token", () => {
     expect(strk20BatchRefusal([open(STRK), open(STRK), shadow()])).toBe("openPerToken");
     // The same token spelled with and without leading zeros is still one token.
     expect(strk20BatchRefusal([open(STRK), open(`0x${STRK.slice(3)}`), shadow()])).toBe(
@@ -78,7 +78,7 @@ describe("strk20 batch refusals", () => {
     expect(strk20BatchRefusal([open(STRK), open(STRK), invoke])).toBeNull();
   });
 
-  test("a public deposit cannot share a batch with a settling sub-account invoke", () => {
+  test("a public deposit cannot share a batch with a settling shadow account invoke", () => {
     expect(strk20BatchRefusal([deposit, open(STRK), shadow()])).toBe("multipleScreeningSubjects");
     // Without an open note nothing settles, so there is only one subject.
     expect(strk20BatchRefusal([deposit, shadow()])).toBeNull();

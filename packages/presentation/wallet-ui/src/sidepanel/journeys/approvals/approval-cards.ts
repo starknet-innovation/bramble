@@ -453,7 +453,7 @@ export const approvalCard = (
         lockedHint: "Unlock the wallet to review this private-balance activation.",
         title: "Activate private balances",
       });
-    case "strk20-subaccount":
+    case "strk20-shadow-account":
       return strk20DisclosureCard(approval, status, {
         action: "Share commitment",
         hint: "This reveals a deterministic, site-scoped private identity commitment that may link sessions for this site.",
