@@ -15,7 +15,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import type { TokenConfig } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { canonicalFelt, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import {
   type ActivityContact,
@@ -61,6 +61,8 @@ const strk: TokenConfig = {
 };
 
 const pricing: ActivityPricing = { currency: "usd", prices: {}, tokens: [strk] };
+// The token filter's value is the tracked token's canonical address.
+const STRK_KEY = canonicalFelt(STRK_TOKEN_ADDRESS) ?? "";
 
 const contacts = activityContacts(
   {
@@ -252,7 +254,7 @@ describe("activity feed axis controls", () => {
   test("the token and status axes each cut the feed", () => {
     const { app } = mountActivity();
 
-    choose(app, "#activity-token", "STRK");
+    choose(app, "#activity-token", STRK_KEY);
     expect(visible(app)).toHaveLength(4);
 
     choose(app, "#activity-status", "accepted");
@@ -395,14 +397,14 @@ describe("activity feed sort control", () => {
       query: "ada",
       sort: "date",
       status: "accepted",
-      token: "STRK",
+      token: STRK_KEY,
     });
     expect(control<HTMLInputElement>(app, "#activity-search").value).toBe("ada");
     // Asserted on the rendered string, since happy-dom misparses a selection.
     const html = activityScreen([], walletStatus, entries, false, null, pricing, null, contacts);
     expect(html).toContain('value="Sent" selected');
     expect(html).toContain('value="accepted" selected');
-    expect(html).toContain('value="STRK" selected');
+    expect(html).toContain(`value="${STRK_KEY}" selected`);
     expect(visible(app)).toHaveLength(1);
   });
 });

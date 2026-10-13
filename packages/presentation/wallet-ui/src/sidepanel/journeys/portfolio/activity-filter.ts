@@ -11,7 +11,12 @@ import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activi
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { canonicalAddress, canonicalFelt } from "@bramble/wallet-model/networks";
 import { formatUtcDate } from "../../shared/timestamp";
-import { type ActivityPricing, activityAppearance, activityRowModel } from "./activity-format";
+import {
+  type ActivityPricing,
+  activityAppearance,
+  activityRowModel,
+  activityTrackedToken,
+} from "./activity-format";
 
 /** Sort orders the Activity feed offers. */
 type ActivitySortOrder = "amount" | "date";
@@ -47,11 +52,39 @@ export type ActivityContact = {
   readonly label: string;
 };
 
+/**
+ * One token the feed's token control offers. `key` identifies the token (see
+ * {@link activityTokenKey}); `label` is the symbol the reader sees.
+ */
+export type ActivityTokenOption = {
+  readonly key: string;
+  readonly label: string;
+};
+
 /** The filter axes that are actually present in the feed, for the controls. */
 export type ActivityFilterOptions = {
   readonly actions: readonly string[];
   readonly statuses: readonly ActivityStatus[];
-  readonly tokens: readonly string[];
+  readonly tokens: readonly ActivityTokenOption[];
+};
+
+/**
+ * The identity a row's token is grouped, filtered, sorted and totalled by. An
+ * entry records only a symbol, so the tracked token it resolves to (exactly one
+ * tracked token on the network with that symbol) is keyed by its canonical
+ * address: two tokens that share a symbol are never one token. A symbol that
+ * resolves to no single tracked token keeps a `symbol:` key of its own, which
+ * can never equal an address key. `""` when the row names no token.
+ */
+export const activityTokenKey = (
+  entry: Pick<ActivityEntry, "networkId" | "token">,
+  pricing?: ActivityPricing,
+): string => {
+  const symbol = entry.token?.trim();
+  if (!symbol) return "";
+  const address = activityTrackedToken(entry, pricing)?.address;
+  const canonical = address ? canonicalFelt(address) : null;
+  return canonical ?? `symbol:${symbol.toLowerCase()}`;
 };
 
 // Status order the filter offers, so the list reads by lifecycle rather than
@@ -71,20 +104,26 @@ const byText = (left: string, right: string): number => (left < right ? -1 : lef
  * The distinct filter values present in a feed. Derived from the entries so a
  * control never offers a value that would match nothing.
  */
-export const activityFilterOptions = (entries: readonly ActivityEntry[]): ActivityFilterOptions => {
+export const activityFilterOptions = (
+  entries: readonly ActivityEntry[],
+  pricing?: ActivityPricing,
+): ActivityFilterOptions => {
   const actions = new Set<string>();
   const statuses = new Set<ActivityStatus>();
-  const tokens = new Set<string>();
+  const tokens = new Map<string, string>();
   for (const entry of entries) {
     actions.add(activityAppearance(entry).title);
     statuses.add(entry.status);
-    const token = entry.token?.trim();
-    if (token) tokens.add(token);
+    const key = activityTokenKey(entry, pricing);
+    const label = entry.token?.trim();
+    if (key && label && !tokens.has(key)) tokens.set(key, label);
   }
   return {
     actions: [...actions].sort(byText),
     statuses: STATUS_ORDER.filter((status) => statuses.has(status)),
-    tokens: [...tokens].sort(byText),
+    tokens: [...tokens]
+      .map(([key, label]) => ({ key, label }))
+      .sort((left, right) => byText(left.label, right.label) || byText(left.key, right.key)),
   };
 };
 
@@ -179,6 +218,7 @@ export const activityRowAttributes = (
     "data-activity-search": activitySearchIndex(entry.counterparty, contact?.label ?? null),
     "data-activity-status": entry.status,
     "data-activity-token": entry.token?.trim() ?? "",
+    "data-activity-token-key": activityTokenKey(entry, pricing),
     "data-activity-ts": String(entry.submittedAt),
   };
   return Object.entries(attributes)
@@ -205,9 +245,9 @@ export const activityRowFacts = (
   action: dataset["activityAction"] ?? "",
   search: dataset["activitySearch"] ?? "",
   status: dataset["activityStatus"] ?? "",
-  // The row carries the token in its recorded spelling, which is what the
-  // summary must display; the axis compares case-insensitively.
-  token: (dataset["activityToken"] ?? "").toLowerCase(),
+  // The axis compares the token's identity, never its symbol: two tokens that
+  // share a symbol are filtered apart.
+  token: dataset["activityTokenKey"] ?? "",
 });
 
 /**
@@ -217,7 +257,7 @@ export const activityRowFacts = (
 export const activityRowMatches = (facts: ActivityRowFacts, filter: ActivityFilter): boolean => {
   if (filter.action !== "all" && facts.action !== filter.action) return false;
   if (filter.status !== "all" && facts.status !== filter.status) return false;
-  if (filter.token !== "all" && facts.token !== filter.token.toLowerCase()) return false;
+  if (filter.token !== "all" && facts.token !== filter.token) return false;
   const query = filter.query.trim().toLowerCase();
   return query.length === 0 || facts.search.includes(query);
 };
@@ -231,30 +271,41 @@ const numericAmount = (amount: string | undefined): number | null => {
 
 /**
  * Comparator for the amount sort. A recorded amount is only comparable within
- * its own token (1 ETH is not less than 2 USDC), so rows group by token symbol
- * and each token's rows order by recorded amount descending, then most recent
- * first. A token-less row sorts last, and an entry with no numeric amount sorts
- * last within its token rather than being dropped.
+ * its own token (1 ETH is not less than 2 USDC), so rows group by token
+ * identity ({@link activityTokenKey}, ordered by symbol) and each token's rows
+ * order by recorded amount descending, then most recent first. A token-less row
+ * sorts last, and an entry with no numeric amount sorts last within its token
+ * rather than being dropped. Without `pricing`, tokens are told apart by symbol
+ * alone.
  */
-export const compareActivityByAmount = (
-  left: Pick<ActivityEntry, "amount" | "submittedAt" | "token">,
-  right: Pick<ActivityEntry, "amount" | "submittedAt" | "token">,
-): number => {
-  const leftToken = left.token?.trim().toLowerCase() ?? "";
-  const rightToken = right.token?.trim().toLowerCase() ?? "";
-  if (leftToken !== rightToken) {
-    if (leftToken.length === 0) return 1;
-    if (rightToken.length === 0) return -1;
-    return byText(leftToken, rightToken);
-  }
-  const leftAmount = numericAmount(left.amount);
-  const rightAmount = numericAmount(right.amount);
-  if (leftAmount === null && rightAmount === null) return right.submittedAt - left.submittedAt;
-  if (leftAmount === null) return 1;
-  if (rightAmount === null) return -1;
-  if (leftAmount !== rightAmount) return rightAmount - leftAmount;
-  return right.submittedAt - left.submittedAt;
-};
+export const activityAmountComparator =
+  (pricing?: ActivityPricing) =>
+  (
+    left: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token">,
+    right: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token">,
+  ): number => {
+    const leftKey = activityTokenKey(left, pricing);
+    const rightKey = activityTokenKey(right, pricing);
+    if (leftKey !== rightKey) {
+      if (leftKey.length === 0) return 1;
+      if (rightKey.length === 0) return -1;
+      const bySymbol = byText(
+        left.token?.trim().toLowerCase() ?? "",
+        right.token?.trim().toLowerCase() ?? "",
+      );
+      return bySymbol || byText(leftKey, rightKey);
+    }
+    const leftAmount = numericAmount(left.amount);
+    const rightAmount = numericAmount(right.amount);
+    if (leftAmount === null && rightAmount === null) return right.submittedAt - left.submittedAt;
+    if (leftAmount === null) return 1;
+    if (rightAmount === null) return -1;
+    if (leftAmount !== rightAmount) return rightAmount - leftAmount;
+    return right.submittedAt - left.submittedAt;
+  };
+
+/** The amount sort with tokens told apart by symbol, for callers without pricing. */
+export const compareActivityByAmount = activityAmountComparator();
 
 /**
  * Reconciles a stored filter against the options the current feed offers: an
@@ -274,8 +325,7 @@ export const reconcileActivityFilter = (
   const status =
     filter.status === "all" || options.statuses.includes(filter.status) ? filter.status : "all";
   const token =
-    filter.token === "all" ||
-    options.tokens.some((candidate) => candidate.toLowerCase() === filter.token.toLowerCase())
+    filter.token === "all" || options.tokens.some((candidate) => candidate.key === filter.token)
       ? filter.token
       : "all";
   if (action === filter.action && status === filter.status && token === filter.token) return filter;
@@ -291,6 +341,8 @@ export type ActivitySummaryRow = {
   readonly label: string;
   readonly submittedAt: number | null;
   readonly token: string;
+  /** The token's identity ({@link activityTokenKey}); totals are keyed by it. */
+  readonly tokenKey: string;
 };
 
 /** A per-token subtotal of one counterparty's activity. */
@@ -333,9 +385,15 @@ const parseAmountSafe = (amount: string, decimals: number): bigint | null => {
 export const activityPartySummary = (
   rows: readonly ActivitySummaryRow[],
 ): ActivityPartySummary | null => {
-  const counterparties = new Set(rows.map((row) => row.counterparty).filter((value) => value));
+  // One counterparty written two ways (with or without leading zeros) is still
+  // one counterparty, so the set is keyed by the canonical felt.
+  const counterpartyKey = (value: string): string =>
+    value ? (canonicalFelt(value) ?? value.toLowerCase()) : "";
+  const counterparties = new Set(
+    rows.map((row) => counterpartyKey(row.counterparty)).filter(Boolean),
+  );
   if (counterparties.size !== 1) return null;
-  const first = [...counterparties][0] ?? "";
+  const first = rows.find((row) => row.counterparty)?.counterparty ?? "";
   const label = rows.find((row) => row.label)?.label ?? first;
   const totals = new Map<string, { readonly key: string; received: bigint; sent: bigint }>();
   let firstAt: number | null = null;
@@ -346,19 +404,18 @@ export const activityPartySummary = (
       lastAt = lastAt === null ? row.submittedAt : Math.max(lastAt, row.submittedAt);
     }
     const movable = row.direction === "in" || row.direction === "out";
-    if (!row.token || row.decimals === null || !movable) continue;
+    if (!row.tokenKey || row.decimals === null || !movable) continue;
     const raw = parseAmountSafe(row.amount, row.decimals);
     if (raw === null) continue;
-    const key = row.token.toLowerCase();
+    const key = row.tokenKey;
     const entry = totals.get(key) ?? { key, received: 0n, sent: 0n };
     if (row.direction === "in") entry.received += raw;
     else entry.sent += raw;
     totals.set(key, entry);
   }
   const decimalsFor = (key: string): number =>
-    rows.find((row) => row.token.toLowerCase() === key && row.decimals !== null)?.decimals ?? 0;
-  const symbolFor = (key: string): string =>
-    rows.find((row) => row.token.toLowerCase() === key)?.token ?? key;
+    rows.find((row) => row.tokenKey === key && row.decimals !== null)?.decimals ?? 0;
+  const symbolFor = (key: string): string => rows.find((row) => row.tokenKey === key)?.token ?? key;
   return {
     count: rows.length,
     firstAt,
@@ -386,6 +443,7 @@ export const activitySummaryRow = (
     label: dataset["activityCounterpartyLabel"] ?? "",
     submittedAt: ts === undefined || ts === "" ? null : Number(ts),
     token: dataset["activityToken"] ?? "",
+    tokenKey: dataset["activityTokenKey"] ?? "",
   };
 };
 

@@ -23,8 +23,8 @@ import {
   type ActivityContact,
   type ActivityFilter,
   type ActivityFilterOptions,
+  activityAmountComparator,
   activityFilterOptions,
-  compareActivityByAmount,
   reconcileActivityFilter,
 } from "./activity-filter";
 import type { ActivityPricing } from "./activity-format";
@@ -85,7 +85,7 @@ const activityToolbar = (filter: ActivityFilter, options: ActivityFilterOptions)
       name: "activity-token",
       options: [
         { label: "All tokens", value: "all" },
-        ...options.tokens.map((token) => ({ label: token, value: token })),
+        ...options.tokens.map((token) => ({ label: token.label, value: token.key })),
       ],
       selected: filter.token,
     })}
@@ -114,7 +114,7 @@ const activityFeed = (
   filter: ActivityFilter,
 ): string =>
   filter.sort === "amount"
-    ? transactionList([...entries].sort(compareActivityByAmount), pricing, contacts)
+    ? transactionList([...entries].sort(activityAmountComparator(pricing)), pricing, contacts)
     : transactionGroups(entries, pricing, todayKey, contacts);
 
 /**
@@ -137,7 +137,7 @@ export const activityScreen = (
   todayKey: number | null = null,
   contacts: readonly ActivityContact[] = [],
 ): string => {
-  const options = activityFilterOptions(transactions);
+  const options = activityFilterOptions(transactions, pricing);
   const stored = activityViewState();
   const filter = reconcileActivityFilter(stored, options);
   // A repaint can outlive the value a filter axis was set to (a pending

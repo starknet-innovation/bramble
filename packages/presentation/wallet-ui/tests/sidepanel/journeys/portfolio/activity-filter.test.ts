@@ -8,7 +8,11 @@ import { describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import { canonicalAddress, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import {
+  canonicalAddress,
+  canonicalFelt,
+  STRK_TOKEN_ADDRESS,
+} from "@bramble/wallet-model/networks";
 import {
   isAddressBookEntry,
   isTokenConfig,
@@ -17,6 +21,7 @@ import {
 import {
   type ActivityFilter,
   type ActivitySummaryRow,
+  activityAmountComparator,
   activityContacts,
   activityFilterOptions,
   activityPartySummary,
@@ -25,6 +30,7 @@ import {
   activityRowFacts,
   activityRowMatches,
   activitySearchIndex,
+  activityTokenKey,
   compareActivityByAmount,
   EMPTY_ACTIVITY_FILTER,
   reconcileActivityFilter,
@@ -96,6 +102,7 @@ const summaryRow = (patch: Partial<ActivitySummaryRow> = {}): ActivitySummaryRow
   label: "",
   submittedAt: 1752501900000,
   token: "STRK",
+  tokenKey: "symbol:strk",
   ...patch,
 });
 
@@ -120,7 +127,7 @@ describe("activityFilterOptions", () => {
     const options = activityFilterOptions([swapped, sent, received]);
     expect(options.actions).toEqual(["Received", "Sent", "Swapped"]);
     expect(options.statuses).toEqual(["accepted", "pending", "preconfirmed"]);
-    expect(options.tokens).toEqual(["STRK"]);
+    expect(options.tokens).toEqual([{ key: "symbol:strk", label: "STRK" }]);
   });
 
   test("omits a token axis the feed never records", () => {
@@ -220,6 +227,7 @@ describe("activityRowMatches", () => {
     activitySearch: "ada 0xabc",
     activityStatus: "accepted",
     activityToken: "STRK",
+    activityTokenKey: "symbol:strk",
   });
 
   test("passes the unfiltered feed", () => {
@@ -230,9 +238,11 @@ describe("activityRowMatches", () => {
     expect(activityRowMatches(facts, filter({ action: "Received" }))).toBe(false);
     expect(activityRowMatches(facts, filter({ status: "accepted" }))).toBe(true);
     expect(activityRowMatches(facts, filter({ status: "pending" }))).toBe(false);
-    expect(activityRowMatches(facts, filter({ token: "STRK" }))).toBe(true);
-    expect(activityRowMatches(facts, filter({ token: "eth" }))).toBe(false);
-    expect(activityRowMatches(facts, filter({ action: "Sent", token: "STRK" }))).toBe(true);
+    expect(activityRowMatches(facts, filter({ token: "symbol:strk" }))).toBe(true);
+    expect(activityRowMatches(facts, filter({ token: "symbol:eth" }))).toBe(false);
+    // The axis compares the token's identity, never its symbol.
+    expect(activityRowMatches(facts, filter({ token: "STRK" }))).toBe(false);
+    expect(activityRowMatches(facts, filter({ action: "Sent", token: "symbol:strk" }))).toBe(true);
     expect(activityRowMatches(facts, filter({ action: "Sent", status: "pending" }))).toBe(false);
   });
 
@@ -301,8 +311,7 @@ describe("reconcileActivityFilter", () => {
   const options = activityFilterOptions([swapped, sent, received]);
 
   test("passes a filter whose values the feed still offers", () => {
-    const kept = filter({ action: "Sent", status: "accepted", token: "strk" });
-    // The token axis compares case-insensitively, so "strk" still matches STRK.
+    const kept = filter({ action: "Sent", status: "accepted", token: "symbol:strk" });
     expect(reconcileActivityFilter(kept, options)).toBe(kept);
   });
 
@@ -312,7 +321,7 @@ describe("reconcileActivityFilter", () => {
       query: "ada",
       sort: "amount",
       status: "reverted",
-      token: "eth",
+      token: "symbol:eth",
     });
     expect(reconcileActivityFilter(stale, options)).toEqual({
       action: "all",
@@ -357,7 +366,7 @@ describe("activityPartySummary", () => {
   test("keeps one counterparty's totals per token, in arrival order", () => {
     const summary = activityPartySummary([
       summaryRow({ amount: "1", token: "STRK" }),
-      summaryRow({ amount: "2", token: "ETH" }),
+      summaryRow({ amount: "2", token: "ETH", tokenKey: "symbol:eth" }),
     ]);
     expect(summary?.totals.map((total) => total.symbol)).toEqual(["STRK", "ETH"]);
   });
@@ -369,7 +378,7 @@ describe("activityPartySummary", () => {
     );
     expect(activityPartySummary([summaryRow({ decimals: null })])?.totals).toEqual([]);
     expect(activityPartySummary([summaryRow({ direction: "internal" })])?.totals).toEqual([]);
-    expect(activityPartySummary([summaryRow({ token: "" })])?.totals).toEqual([]);
+    expect(activityPartySummary([summaryRow({ token: "", tokenKey: "" })])?.totals).toEqual([]);
   });
 });
 
@@ -396,5 +405,43 @@ describe("activityPartySummaryParts", () => {
     const hostile = activityPartySummary([summaryRow({ label: "<img src=x>" })]);
     const parts = hostile === null ? null : activityPartySummaryParts(hostile);
     expect(parts?.label).toBe("<img src=x>");
+  });
+});
+
+describe("token and counterparty identity", () => {
+  const pricing = { currency: "usd" as const, prices: {}, tokens: [strk] };
+
+  test("a tracked token is keyed, offered and sorted by its address, never its symbol", () => {
+    const key = activityTokenKey(sent, pricing);
+    expect(key).toBe(canonicalFelt(STRK_TOKEN_ADDRESS) ?? "");
+    expect(activityFilterOptions([sent, received], pricing).tokens).toEqual([
+      { key, label: "STRK" },
+    ]);
+    // A symbol no single tracked token answers to keeps a key of its own, which
+    // can never equal an address key.
+    expect(activityTokenKey({ ...sent, token: "USDC" }, pricing)).toBe("symbol:usdc");
+    const fake = { ...sent, amount: "1000", token: "USDC" };
+    const ordered = [fake, sent].sort(activityAmountComparator(pricing));
+    expect(ordered.map((entry) => entry.token)).toEqual(["STRK", "USDC"]);
+  });
+
+  test("one counterparty written with and without leading zeros is one counterparty", () => {
+    const summary = activityPartySummary([
+      summaryRow({ amount: "1", counterparty: CONTACT_SHORT }),
+      summaryRow({ amount: "2", counterparty: CONTACT, direction: "in" }),
+    ]);
+    expect(summary?.count).toBe(2);
+    expect(summary?.totals).toEqual([{ received: "2", sent: "1", symbol: "STRK" }]);
+  });
+
+  test("totals are kept apart per token key even when the symbol is shared", () => {
+    const summary = activityPartySummary([
+      summaryRow({ amount: "1", token: "USDC", tokenKey: "0x1" }),
+      summaryRow({ amount: "2", token: "USDC", tokenKey: "0x2" }),
+    ]);
+    expect(summary?.totals).toEqual([
+      { received: "0", sent: "1", symbol: "USDC" },
+      { received: "0", sent: "2", symbol: "USDC" },
+    ]);
   });
 });
