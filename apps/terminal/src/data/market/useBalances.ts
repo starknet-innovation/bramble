@@ -6,6 +6,11 @@
  * token's decimals. Calls run in parallel through the shared RPC failover; a
  * token whose read fails is reported with a zero balance rather than aborting
  * the whole set. With no address the hook returns an empty list (not an error).
+ *
+ * Latest-state RPC is the only source (#650): Starkscan retired its indexed
+ * token-holdings snapshot (HTTP 410), and its successor wallet-state route
+ * reads the same contracts over RPC, so a third party adds disclosure without
+ * adding a balance the tracked-token read cannot see.
  */
 import { useCallback } from "react";
 import { CallData } from "starknet";
@@ -13,7 +18,6 @@ import type { RpcProvider } from "starknet";
 import { withRpc } from "../core/client";
 import { formatTokenAmount } from "../core/format";
 import { KNOWN_TOKENS, type KnownToken } from "./knownTokens";
-import { fetchStarkscanBalances } from "../activity/starkscan";
 import type { Resource, TokenBalance } from "../core/types";
 import { useAsyncResource } from "../core/useAsyncResource";
 
@@ -67,31 +71,17 @@ const fetchRpcBalances = async (address: string): Promise<readonly TokenBalance[
     ),
   );
 
-const fetchBalances = async (
-  address: string,
-  signal: AbortSignal,
-): Promise<readonly TokenBalance[]> => {
-  try {
-    return await fetchStarkscanBalances(address, signal);
-  } catch {
-    if (signal.aborted) {
-      throw signal.reason;
-    }
-    return fetchRpcBalances(address);
-  }
-};
-
 /**
  * On-chain balances for `address`. Returns an empty list (no error, no loading)
  * when disconnected.
  */
 export const useBalances = (address: string | null): Resource<readonly TokenBalance[]> => {
   const fetcher = useCallback(
-    async (signal: AbortSignal): Promise<readonly TokenBalance[]> => {
+    async (): Promise<readonly TokenBalance[]> => {
       if (address === null) {
         return [];
       }
-      return fetchBalances(address, signal);
+      return fetchRpcBalances(address);
     },
     [address],
   );

@@ -115,58 +115,6 @@ const routeFetch = (avnuStatus = 200): void => {
         ],
       });
     }
-    if (url.includes("starkscan.co") && url.includes("/token-holdings")) {
-      return respond({
-        chainId: "SN_MAIN",
-        ownerAddress: ETH,
-        items: [
-          {
-            tokenAddress: ETH,
-            normalizedTokenAddress: unpadded(ETH),
-            indexedBalanceRaw: String(rpc.balances.get(ETH.toLowerCase()) ?? 0n),
-            symbol: "ETH",
-            name: "Ether",
-            decimals: 18,
-          },
-          {
-            tokenAddress: USDC,
-            normalizedTokenAddress: unpadded(USDC),
-            indexedBalanceRaw: String(rpc.balances.get(USDC.toLowerCase()) ?? 0n),
-            symbol: "USDC",
-            name: "USD Coin",
-            decimals: 6,
-          },
-          {
-            tokenAddress: STRK,
-            normalizedTokenAddress: unpadded(STRK),
-            indexedBalanceRaw: String(rpc.balances.get(STRK.toLowerCase()) ?? 0n),
-            symbol: "STRK",
-            name: "Starknet Token",
-            decimals: 18,
-          },
-          {
-            tokenAddress: SPOOF,
-            normalizedTokenAddress: SPOOF,
-            indexedBalanceRaw: String(rpc.balances.get(SPOOF) ?? 0n),
-            symbol: "ETH",
-            name: "Ether",
-            decimals: 18,
-          },
-        ],
-        exact: true,
-        truncated: false,
-        completeness: {
-          exact: true,
-          truncated: false,
-          complete: true,
-          reasonCode: "complete",
-          reason: "Complete snapshot.",
-          lagBlocks: 0,
-          capped: false,
-          cap: null,
-        },
-      });
-    }
     if (url.includes("/prices/line")) {
       return respond(AVNU_CANDLES);
     }
@@ -264,6 +212,13 @@ describe("useBalances", () => {
     expect(usdc?.amount).toBe(500);
   });
 
+  it("reads the tracked tokens over RPC without asking Starkscan (#650)", async () => {
+    const { result } = renderHook(() => useBalances(ETH));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.filter((url) => url.includes("starkscan"))).toEqual([]);
+  });
+
   it("returns an empty list with no address", async () => {
     const { result } = renderHook(() => useBalances(null));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -283,13 +238,12 @@ describe("usePortfolio", () => {
     expect(eth?.usdValue).toBeCloseTo(3000, 5);
   });
 
-  it("never prices or pictures a token by a symbol it chose for itself", async () => {
+  it("never lists a token outside the tracked set, whatever it calls itself", async () => {
     rpc.balances.set(SPOOF, 2_000_000_000_000_000_000n);
     const { result } = renderHook(() => usePortfolio(ETH));
-    await waitFor(() => expect(result.current.data.holdings.length).toBe(3));
+    await waitFor(() => expect(result.current.data.holdings.length).toBe(2));
     const { holdings, totalValueUsd } = result.current.data;
-    const spoof = holdings.find((h) => h.address === SPOOF);
-    expect(spoof).toMatchObject({ logoUri: null, priceUsd: null, symbol: "ETH", usdValue: 0 });
+    expect(holdings.find((h) => h.address === SPOOF)).toBeUndefined();
     expect(totalValueUsd).toBeCloseTo(3500, 5);
   });
 });
