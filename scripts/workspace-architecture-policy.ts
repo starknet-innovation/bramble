@@ -83,5 +83,4 @@ export const EXCLUDED_DIRECTORIES = new Set([
   "target",
   "test-results",
   "vendor",
-  "vendor-dataset",
 ]);
