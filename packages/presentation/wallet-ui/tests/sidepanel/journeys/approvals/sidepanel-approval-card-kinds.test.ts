@@ -178,7 +178,7 @@ describe("approvalCard renders each approval kind", () => {
           collect_policy: { amount: "0xa", type: "exact" },
           dapp_name: "Example",
           nonce: "0x7",
-          type: "subaccount_invoke",
+          type: "shadow_account_invoke",
         },
       ],
       id: ID,
@@ -233,7 +233,7 @@ describe("approvalCard renders each approval kind", () => {
     {
       action: "Share commitment",
       hint: "may link sessions for this site",
-      kind: "strk20-subaccount",
+      kind: "strk20-shadow-account",
       title: "Private identity request",
     },
   ] as const) {

@@ -24,7 +24,7 @@ export type ApprovalKind =
   | "strk20-invoke"
   | "strk20-prepare"
   | "strk20-register"
-  | "strk20-subaccount"
+  | "strk20-shadow-account"
   | "switch-chain"
   | "watch-asset";
 

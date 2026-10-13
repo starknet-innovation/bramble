@@ -161,7 +161,7 @@ if (
   !runtime["SetupRequirement"] ||
   typeof runtime["IndexerDiscoveryProvider"] !== "function" ||
   typeof runtime["ProvingService"] !== "function" ||
-  // rc.5 renamed the sub-account surface to shadow accounts, and rc.6 made the
+  // rc.5 renamed the shadow-account surface to shadow accounts, and rc.6 made the
   // identity helpers standalone exports. The adapter consumes the builder
   // methods, but pinning the module-level helpers too means a rename that a
   // factory-only check would miss fails here instead.

@@ -197,16 +197,16 @@ const privateSwap: PendingApproval = {
   ],
 };
 
-const subaccountIdentity: PendingApproval = {
+const shadowAccountIdentity: PendingApproval = {
   context: context("8"),
   id: approvalId("208"),
   insights: ["The commitment is deterministic for this site and may link future sessions here."],
-  kind: "strk20-subaccount",
+  kind: "strk20-shadow-account",
   origin: DAPP_ORIGIN,
   summaries: ["Share a site-scoped private identity commitment with Private Market"],
 };
 
-const subaccountInvoke: PendingApproval = {
+const shadowAccountInvoke: PendingApproval = {
   actionReviews: [
     {
       calls: [
@@ -219,19 +219,19 @@ const subaccountInvoke: PendingApproval = {
       collect_policy: { type: "diff" },
       dapp_name: "Private Market",
       nonce: "0x9",
-      type: "subaccount_invoke",
+      type: "shadow_account_invoke",
     },
   ],
   context: context("9"),
   id: approvalId("209"),
   insights: [
-    "This route uses the separately configured SDK sub-account module, not a generic pool anonymizer.",
+    "This route uses the separately configured SDK shadow-account module, not a generic pool anonymizer.",
   ],
   kind: "strk20-prepare",
   origin: DAPP_ORIGIN,
   reviewAssets: [USDC_REVIEW_ASSET],
   summaries: [
-    "Open one Private Market position through the scoped sub-account",
+    "Open one Private Market position through the scoped shadow-account",
     "Collect only the resulting balance difference into private notes",
   ],
 };
@@ -376,22 +376,22 @@ export const privacyDappCheckpoints: WalletScenario["checkpoints"] = [
     { processing: true },
   ),
   privacyRequest(
-    "subaccount-identity",
+    "shadow-account-identity",
     "Share scoped identity",
     "The site-scoped commitment is reviewed as linkable identity disclosure rather than as a transaction.",
-    subaccountIdentity,
+    shadowAccountIdentity,
   ),
   privacyRequest(
-    "subaccount-invoke",
-    "Review sub-account action",
+    "shadow-account-invoke",
+    "Review shadow-account action",
     "The separately configured SDK module shows its dapp, nonce, calls, and collection policy before proof creation.",
-    subaccountInvoke,
+    shadowAccountInvoke,
   ),
   privacyRequest(
-    "subaccount-parameters",
-    "Inspect sub-account parameters",
+    "shadow-account-parameters",
+    "Inspect shadow-account parameters",
     "The expanded state exposes every scoped call, nonce, dapp name, and note-collection policy.",
-    subaccountInvoke,
+    shadowAccountInvoke,
     { expanded: true },
   ),
 ];

@@ -103,13 +103,13 @@ describe("strk20 bridge params", () => {
       ).toEqual({ actions, origin, type: "wallet.strk20InvokeTransaction" });
       expect(
         toRuntimeMessage(
-          request("wallet_strk20SubaccountCommitment", { api_version, dapp_name: "Terminal" }),
+          request("wallet_strk20ShadowAccountCommitment", { api_version, dapp_name: "Terminal" }),
           origin,
         ),
-      ).toEqual({ dappName: "Terminal", origin, type: "wallet.strk20SubaccountCommitment" });
+      ).toEqual({ dappName: "Terminal", origin, type: "wallet.strk20ShadowAccountCommitment" });
       expect(
         toRuntimeMessage(
-          request("wallet_strk20SubaccountCommitment", {
+          request("wallet_strk20ShadowAccountCommitment", {
             api_version,
             dapp_name: "Terminal",
             nonce: "0x1",
@@ -120,7 +120,7 @@ describe("strk20 bridge params", () => {
         dappName: "Terminal",
         nonce: "0x1",
         origin,
-        type: "wallet.strk20SubaccountCommitment",
+        type: "wallet.strk20ShadowAccountCommitment",
       });
     }
   });
@@ -132,7 +132,7 @@ describe("strk20 bridge params", () => {
         ["wallet_strk20PrepareInvoke", { actions, api_version }],
         ["wallet_strk20PrepareInvoke", { actions, api_version, simulate: true }],
         ["wallet_strk20InvokeTransaction", { actions, api_version }],
-        ["wallet_strk20SubaccountCommitment", { api_version, dapp_name: "Terminal" }],
+        ["wallet_strk20ShadowAccountCommitment", { api_version, dapp_name: "Terminal" }],
       ] as const) {
         expect(toRuntimeMessage(request(method, params), origin)).toBeNull();
       }

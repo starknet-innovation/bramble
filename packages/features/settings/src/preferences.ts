@@ -152,7 +152,7 @@ const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined)
   config.paymaster.url === `${RETIRED_STRK20_GATEWAY_BASE}/paymaster` &&
   config.poolAddress === STRK20_MAINNET_POOL &&
   config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
-  config.subaccountAnonymizerAddress === undefined;
+  config.shadowAccountAnonymizerAddress === undefined;
 
 const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => {
   const current = { ...preferences, productAnalytics: preferences.productAnalytics ?? true };

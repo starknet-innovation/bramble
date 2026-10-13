@@ -24,9 +24,9 @@ export type Strk20PrepareResponse = {
 };
 
 /**
- * Locally derived dapp-scoped STRK20 sub-account commitment.
+ * Locally derived dapp-scoped STRK20 shadow-account commitment.
  */
-export type Strk20SubaccountCommitmentResponse = {
+export type Strk20ShadowAccountCommitmentResponse = {
   readonly commitment: string;
   readonly ok: true;
 };

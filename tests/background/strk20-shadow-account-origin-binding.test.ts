@@ -1,5 +1,5 @@
 /**
- * MCW-V09-118: a STRK20 sub-account is domain-separated by the origin the
+ * MCW-V09-118: a STRK20 shadow-account is domain-separated by the origin the
  * background verified against the sender, not by the label the calling page
  * picked. Two sites that ask for the same label must never be handed the same
  * commitment — that unlinkability is what the approval card promises the user —
@@ -7,7 +7,7 @@
  * across its own labels.
  *
  * `shadowAccounts(dappName)` is one identity for both the disclosed commitment and
- * the `subaccount_invoke` that acts through it, so this suite also pins that
+ * the `shadow_account_invoke` that acts through it, so this suite also pins that
  * the action path derives the identical separator. If it did not, a site could
  * be shown a commitment it could never name in an action.
  */
@@ -38,19 +38,21 @@ import {
 } from "../support/strk20-background";
 
 // Pinned separator for (https://example.com, "Example"). The value is a wallet
-// identity: silently changing the derivation would strand every sub-account a
+// identity: silently changing the derivation would strand every shadow-account a
 // site has already been shown, so it is asserted literally rather than
 // recomputed from the implementation.
 //
-// It moved once, when SCOPE_DOMAIN was rebranded from `mc-wallet/...` to
-// `bramble/strk20-subaccount/v1`. That is a deliberate pre-release break: every
-// (origin, label) pair derives a new separator, so nothing derived under the old
+// It moved twice: first when SCOPE_DOMAIN was rebranded from `mc-wallet/...` to
+// `bramble/strk20-subaccount/v1`, then again to
+// `bramble/strk20-shadow-account/v1` when the feature was renamed to shadow
+// accounts. Each is a deliberate pre-release break: every
+// (origin, label) pair derives a new separator, so nothing derived under an old
 // domain is reachable. Re-derived independently as
 // sha256("<domain>|<origin>|<label>")[:30], not copied from the failing run. It is 30 hex characters, not a 0x felt,
 // because the pinned SDK short-string-encodes every string dapp name and
 // starknet.js rejects a short string over 31 bytes — see
-// strk20-subaccount-sdk-boundary.test.ts, which drives the real encoder.
-const EXAMPLE_COM_SCOPE = "49889a0d8866de58dafba23c59d93e";
+// strk20-shadow-account-sdk-boundary.test.ts, which drives the real encoder.
+const EXAMPLE_COM_SCOPE = "3460122ba58b82b90d76344fb5edd4";
 
 const preferences = {
   ...defaultWalletPreferences(),
@@ -60,13 +62,13 @@ const preferences = {
       discoveryUrl: "https://discovery.example",
       poolAddress: STRK20_TOKEN,
       proverUrl: "https://prover.example",
-      subaccountAnonymizerAddress: STRK20_RECIPIENT,
+      shadowAccountAnonymizerAddress: STRK20_RECIPIENT,
     },
   },
 };
 
 // Everything the wallet handed the SDK on the three paths that name a
-// sub-account. Recording all three in one place is what makes a disclosure /
+// shadow-account. Recording all three in one place is what makes a disclosure /
 // action divergence visible in a single assertion.
 type Recorded = {
   readonly commitments: string[];
@@ -87,7 +89,7 @@ const recordingService = (seen: Recorded): Strk20Service => ({
   async privateBalances({ tokens }) {
     return tokens.map((token) => ({ balance: "0x64", token }));
   },
-  async subaccountCommitment(input) {
+  async shadowAccountCommitment(input) {
     seen.commitments.push(input.dappName);
     return "0x123";
   },
@@ -131,22 +133,22 @@ const commitmentFor = async (
 ): Promise<unknown> =>
   executeStrk20DisclosureApproval(executeDeps(seen), {
     origin,
-    request: { dappName, ...(nonce === undefined ? {} : { nonce }), type: "subaccount" },
+    request: { dappName, ...(nonce === undefined ? {} : { nonce }), type: "shadow-account" },
   });
 
-type Strk20SubaccountInvoke = Extract<Strk20Action, { readonly type: "subaccount_invoke" }>;
+type Strk20ShadowAccountInvoke = Extract<Strk20Action, { readonly type: "shadow_account_invoke" }>;
 
-const subaccountAction = (dappName: string): Strk20SubaccountInvoke => ({
+const shadowAccountAction = (dappName: string): Strk20ShadowAccountInvoke => ({
   calls: [{ calldata: ["0x1"], contract_address: STRK20_TOKEN, entry_point: "transfer" }],
   collect_policy: { type: "all" },
   dapp_name: dappName,
   nonce: "0x5",
-  type: "subaccount_invoke",
+  type: "shadow_account_invoke",
 });
 
 const deposit: Strk20Action = { amount: "0x2", token: STRK20_TOKEN, type: "deposit" };
 
-describe("STRK20 sub-account origin binding", () => {
+describe("STRK20 shadow-account origin binding", () => {
   test("gives two origins different separators for one requested label", async () => {
     const seen = recorded();
 
@@ -194,8 +196,8 @@ describe("STRK20 sub-account origin binding", () => {
 
     const result = await approveHeldStrk20(
       handler,
-      { dappName: "Example", origin: STRK20_ORIGIN, type: "wallet.strk20SubaccountCommitment" },
-      "strk20-subaccount",
+      { dappName: "Example", origin: STRK20_ORIGIN, type: "wallet.strk20ShadowAccountCommitment" },
+      "strk20-shadow-account",
       () => expect(seen.commitments).toEqual([]),
     );
 
@@ -207,7 +209,7 @@ describe("STRK20 sub-account origin binding", () => {
     const seen = recorded();
     const handler = buildStrk20Handler({ strk20: recordingService(seen) });
     const held = handler(
-      { dappName: "Trust Me", origin: STRK20_ORIGIN, type: "wallet.strk20SubaccountCommitment" },
+      { dappName: "Trust Me", origin: STRK20_ORIGIN, type: "wallet.strk20ShadowAccountCommitment" },
       STRK20_CONTENT_SENDER,
     );
     await flushHeld();
@@ -217,7 +219,7 @@ describe("STRK20 sub-account origin binding", () => {
       readonly summaries?: readonly string[];
     }>(handler, STRK20_EXTENSION_SENDER);
     expect(listed.at(-1)?.summaries).toEqual([
-      `Share a private sub-account commitment for ${STRK20_ORIGIN}`,
+      `Share a private shadow-account commitment for ${STRK20_ORIGIN}`,
       "Site-chosen scope label Trust Me",
     ]);
 
@@ -227,35 +229,35 @@ describe("STRK20 sub-account origin binding", () => {
     expect(seen.commitments).toEqual([]);
   });
 
-  test("proves a subaccount_invoke through the disclosed sub-account, not the raw label", async () => {
+  test("proves a shadow_account_invoke through the disclosed shadow-account, not the raw label", async () => {
     const seen = recorded();
 
     await expect(
       executeStrk20DisclosureApproval(executeDeps(seen), {
         origin: "https://example.com",
         request: {
-          actions: [deposit, subaccountAction("Example")],
+          actions: [deposit, shadowAccountAction("Example")],
           simulate: true,
           type: "prepare",
         },
       }),
     ).resolves.toEqual({ callAndProof: STRK20_CALL_AND_PROOF, ok: true });
 
-    // Order and every non-sub-account action survive untouched; only the
-    // sub-account identity is rebound to the verified origin.
+    // Order and every non-shadow-account action survive untouched; only the
+    // shadow-account identity is rebound to the verified origin.
     expect(seen.prepared[0]).toEqual([
       deposit,
-      { ...subaccountAction("Example"), dapp_name: EXAMPLE_COM_SCOPE },
+      { ...shadowAccountAction("Example"), dapp_name: EXAMPLE_COM_SCOPE },
     ]);
   });
 
-  test("submits a subaccount_invoke through the same identity the commitment disclosed", async () => {
+  test("submits a shadow_account_invoke through the same identity the commitment disclosed", async () => {
     const seen = recorded();
 
     await commitmentFor(seen, "https://example.com", "Example");
     await expect(
       executeStrk20InvokeApproval(executeDeps(seen), {
-        actions: [subaccountAction("Example")],
+        actions: [shadowAccountAction("Example")],
         origin: "https://example.com",
         plan: {
           feeAction: {
@@ -269,20 +271,20 @@ describe("STRK20 sub-account origin binding", () => {
     ).resolves.toEqual({ ok: true, transactionHash: "0x123" });
 
     const submittedName = seen.submitted[0]?.[0];
-    expect(submittedName?.type === "subaccount_invoke" && submittedName.dapp_name).toBe(
+    expect(submittedName?.type === "shadow_account_invoke" && submittedName.dapp_name).toBe(
       EXAMPLE_COM_SCOPE,
     );
-    // The disclosure and the action name one sub-account, so value routed to
+    // The disclosure and the action name one shadow-account, so value routed to
     // the disclosed commitment stays reachable.
     expect(seen.commitments[0]).toBe(EXAMPLE_COM_SCOPE);
   });
 
-  test("keeps two origins' subaccount_invoke actions on different sub-accounts", async () => {
+  test("keeps two origins' shadow_account_invoke actions on different shadow-accounts", async () => {
     const seen = recorded();
 
     for (const origin of ["https://example.com", "https://evil.example"]) {
       await executeStrk20InvokeApproval(executeDeps(seen), {
-        actions: [subaccountAction("Example")],
+        actions: [shadowAccountAction("Example")],
         origin,
         plan: {
           feeAction: {

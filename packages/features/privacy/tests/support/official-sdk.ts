@@ -28,7 +28,7 @@ export const STRK20_SDK_CONTEXT: Strk20AccountContext = {
     discoveryUrl: "https://discovery.example",
     poolAddress: STRK20_POOL_ADDRESS,
     proverUrl: "https://prover.example",
-    subaccountAnonymizerAddress: "0x789",
+    shadowAccountAnonymizerAddress: "0x789",
   },
   isAuthorized: () => true,
   rpcUrls: ["https://rpc.example"],

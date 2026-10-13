@@ -89,7 +89,7 @@ describe("strk20 action schemas", () => {
     });
   });
 
-  test("parses all sub-account collection policies and bounds their calls", () => {
+  test("parses all shadow-account collection policies and bounds their calls", () => {
     const call = { calldata: ["0x1"], contract_address: token, entry_point: "swap" };
     for (const collect_policy of [
       { type: "all" },
@@ -102,9 +102,13 @@ describe("strk20 action schemas", () => {
           collect_policy,
           dapp_name: "Bramble Terminal",
           nonce: "0x1",
-          type: "subaccount_invoke",
+          type: "shadow_account_invoke",
         }),
-      ).toMatchObject({ collect_policy, dapp_name: "Bramble Terminal", type: "subaccount_invoke" });
+      ).toMatchObject({
+        collect_policy,
+        dapp_name: "Bramble Terminal",
+        type: "shadow_account_invoke",
+      });
     }
     expect(
       readStrk20Action({
@@ -112,7 +116,7 @@ describe("strk20 action schemas", () => {
         collect_policy: { type: "all" },
         dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
     expect(
@@ -121,7 +125,7 @@ describe("strk20 action schemas", () => {
         collect_policy: { amount: "not-a-felt", type: "exact" },
         dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
     expect(
@@ -130,7 +134,7 @@ describe("strk20 action schemas", () => {
         collect_policy: { type: "all" },
         dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
   });

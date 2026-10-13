@@ -49,7 +49,7 @@ import {
   readStrk20InvokeMessage,
   readStrk20PrepareMessage,
   readStrk20RegisterMessage,
-  readStrk20SubaccountMessage,
+  readStrk20ShadowAccountMessage,
 } from "./strk20-provider-inputs";
 import { poisonedStrk20ActionFlags } from "./strk20-recipient-policy";
 
@@ -333,10 +333,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   }
 };
 
-const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readStrk20SubaccountMessage(message);
+const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readStrk20ShadowAccountMessage(message);
   if (!input) {
-    return { error: "invalid strk20 subaccount request" };
+    return { error: "invalid strk20 shadowAccount request" };
   }
   const gate = gateOrigin(deps, input.origin, sender);
   if (gate) {
@@ -351,15 +351,15 @@ const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message,
     return resolved;
   }
   return queueDisclosure(deps, resolved, {
-    kind: "strk20-subaccount",
+    kind: "strk20-shadow-account",
     origin: input.origin,
     request: {
       dappName: input.dappName,
       ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
-      type: "subaccount",
+      type: "shadow-account",
     },
     summaries: [
-      `Share a private sub-account commitment for ${input.origin}`,
+      `Share a private shadow-account commitment for ${input.origin}`,
       `Site-chosen scope label ${input.dappName}`,
       ...(input.nonce === undefined ? [] : [`Nonce ${input.nonce}`]),
     ],
@@ -372,7 +372,7 @@ const STRK20_OPS_HANDLERS: Readonly<Record<string, Strk20OpsHandler>> = {
   "wallet.strk20InvokeTransaction": handleStrk20InvokeTransaction,
   "wallet.strk20PrepareInvoke": handleStrk20PrepareInvoke,
   "wallet.strk20Register": handleStrk20Register,
-  "wallet.strk20SubaccountCommitment": handleStrk20SubaccountCommitment,
+  "wallet.strk20ShadowAccountCommitment": handleStrk20ShadowAccountCommitment,
 };
 
 /**

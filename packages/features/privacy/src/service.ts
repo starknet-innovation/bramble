@@ -186,7 +186,7 @@ export type Strk20Service = {
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
-  readonly subaccountCommitment: (
+  readonly shadowAccountCommitment: (
     input: Strk20AccountContext & { readonly dappName: string; readonly nonce?: string },
   ) => Promise<string>;
   readonly submitActions: (
@@ -237,7 +237,7 @@ export const unavailableStrk20Service: Strk20Service = {
   async registrationStatus() {
     return unavailable();
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return unavailable();
   },
   async submitActions() {

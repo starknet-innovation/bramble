@@ -291,7 +291,7 @@ object is frozen and installed as a non-configurable global.
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
-`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and sub-account-commitment
+`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and shadow-account-commitment
 methods behind the same origin and phishing gates. Private-state requests additionally require a
 held approval bound to the account, network, and payload digest; connection alone is insufficient.
 

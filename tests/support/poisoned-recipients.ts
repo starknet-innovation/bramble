@@ -124,13 +124,13 @@ export const poolPreferences = (): WalletPreferences => {
 };
 
 /**
- * {@link poolPreferences} plus the sub-account anonymizer address, which is what
- * makes a `subaccount_invoke` reachable at all: without it the SDK refuses the
+ * {@link poolPreferences} plus the shadow-account anonymizer address, which is what
+ * makes a `shadow_account_invoke` reachable at all: without it the SDK refuses the
  * action, but only after consent. Kept a separate fixture so the sibling suites
  * keep exercising the shipped default (no anonymizer configured) and this one
  * documents exactly which user-editable setting opens the route.
  */
-export const subaccountPoolPreferences = (): WalletPreferences => {
+export const shadowAccountPoolPreferences = (): WalletPreferences => {
   const base = poolPreferences();
   const sepolia = base.strk20Networks?.SN_SEPOLIA;
   if (!sepolia) {
@@ -140,7 +140,7 @@ export const subaccountPoolPreferences = (): WalletPreferences => {
     ...base,
     strk20Networks: {
       ...base.strk20Networks,
-      SN_SEPOLIA: { ...sepolia, subaccountAnonymizerAddress: "0x456" },
+      SN_SEPOLIA: { ...sepolia, shadowAccountAnonymizerAddress: "0x456" },
     },
   };
 };

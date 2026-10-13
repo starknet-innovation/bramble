@@ -65,7 +65,7 @@ const recipientProbeCall = (target: Strk20RecipientTarget): Call => ({
  */
 const strk20PolicyCalls = (actions: readonly Strk20Action[]): readonly Call[] =>
   actions.flatMap((action) => {
-    if (action.type === "subaccount_invoke") {
+    if (action.type === "shadow_account_invoke") {
       // Judged on its real calls rather than a probe: each is a spec
       // INVOKE_CALL with a contract, an entry point, and felt calldata —
       // exactly what `wallet.addInvokeTransaction` accepts and what the shared

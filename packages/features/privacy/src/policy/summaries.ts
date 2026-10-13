@@ -81,7 +81,7 @@ export const summarizeStrk20Action = (
         : actionAmount(action.amount, action.token, assetFor);
     return `Transfer ${amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
   }
-  if (action.type === "subaccount_invoke") {
+  if (action.type === "shadow_account_invoke") {
     return `Private ${action.dapp_name} sub-account invoke (${action.calls.length} calls)`;
   }
   return `Private invoke on ${shortAddress(action.contract)}`;

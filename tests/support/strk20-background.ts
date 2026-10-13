@@ -68,7 +68,7 @@ export type Strk20HarnessOptions = {
   readonly strk20?: Strk20Service;
   /** A registry of the suite's own, e.g. one with a diagnostics recorder. */
   readonly strk20Jobs?: Strk20JobRegistry;
-  readonly subaccountCalls?: { value: number };
+  readonly shadowAccountCalls?: { value: number };
 };
 
 /**
@@ -81,7 +81,7 @@ export type Strk20HarnessOptions = {
  * disagreeing about what a live privacy response looks like.
  */
 export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Service => {
-  const { balanceCalls, proveCalls, registerCalls, subaccountCalls } = options;
+  const { balanceCalls, proveCalls, registerCalls, shadowAccountCalls } = options;
   return {
     async prepare() {
       if (proveCalls) {
@@ -152,9 +152,9 @@ export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Ser
     async registrationStatus() {
       return options.registered === false ? "unregistered" : "registered";
     },
-    async subaccountCommitment() {
-      if (subaccountCalls) {
-        subaccountCalls.value += 1;
+    async shadowAccountCommitment() {
+      if (shadowAccountCalls) {
+        shadowAccountCalls.value += 1;
       }
       return "0x123";
     },

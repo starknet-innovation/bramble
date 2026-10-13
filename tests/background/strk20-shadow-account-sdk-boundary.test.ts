@@ -8,7 +8,7 @@
  * `Strk20Service` cannot see that: it pins which string the wallet passes, not
  * whether the SDK accepts it. These tests therefore drive the real adapter
  * (`createOfficialStrk20Service`) against an SDK double that runs the pinned
- * encoder verbatim, and assert one sub-account identity across the disclosure
+ * encoder verbatim, and assert one shadow-account identity across the disclosure
  * and action paths.
  */
 import { describe, expect, test } from "bun:test";
@@ -20,7 +20,7 @@ import { STRK20_SERVICE_UNAVAILABLE } from "@bramble/privacy/service";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { BigNumberish } from "starknet";
 import { num, shortString } from "starknet";
-import { bindStrk20ActionsToOrigin } from "../../apps/extension/src/background/privacy/strk20-subaccount";
+import { bindStrk20ActionsToOrigin } from "../../apps/extension/src/background/privacy/strk20-shadow-account";
 import {
   STRK20_SDK_CONTEXT as context,
   executeResult,
@@ -42,26 +42,26 @@ const REJECTED_FELT_SEPARATOR = "0xd4b5ddb6229476c950b321c359fdf7fc3abad70ee3c16
 const encodeDappName = (dappName: string): bigint =>
   BigInt(shortString.encodeShortString(dappName));
 
-const subaccountAction = (dappName: string): Strk20Action => ({
+const shadowAccountAction = (dappName: string): Strk20Action => ({
   calls: [{ calldata: ["0x1"], contract_address: token, entry_point: "transfer" }],
   collect_policy: { type: "all" },
   dapp_name: dappName,
   nonce: "0x5",
-  type: "subaccount_invoke",
+  type: "shadow_account_invoke",
 });
 
 // Reads the separator out of the production derivation rather than recomputing
 // it, so this suite can never drift from the code it is pinning.
 const derivedSeparator = async (origin: string, label: string): Promise<string> => {
-  const [bound] = await bindStrk20ActionsToOrigin(origin, [subaccountAction(label)]);
-  if (bound?.type !== "subaccount_invoke") {
-    throw new Error("expected a bound subaccount action");
+  const [bound] = await bindStrk20ActionsToOrigin(origin, [shadowAccountAction(label)]);
+  if (bound?.type !== "shadow_account_invoke") {
+    throw new Error("expected a bound shadowAccount action");
   }
   return bound.dapp_name;
 };
 
 // SDK double whose `shadowAccounts()` encodes exactly like the pinned SDK and
-// records the felt the sub-account identity is actually built from. Both
+// records the felt the shadow-account identity is actually built from. Both
 // `commitment`/`partialCommitment` and `invoke` come from that one felt, which
 // is what makes a disclosure/action divergence observable here.
 const sdkFor = (seen: bigint[]): PrivacySdkRuntime => ({
@@ -98,15 +98,15 @@ const sdkFor = (seen: bigint[]): PrivacySdkRuntime => ({
   },
 });
 
-describe("STRK20 sub-account separator against the pinned SDK", () => {
+describe("STRK20 shadow-account separator against the pinned SDK", () => {
   test("the derived separator is a dapp name the pinned SDK encodes", async () => {
     const separator = await derivedSeparator(ORIGIN, "Example");
     const seen: bigint[] = [];
     const service = createOfficialStrk20Service({ providerFor, sdk: sdkFor(seen) });
 
-    await expect(service.subaccountCommitment({ ...context, dappName: separator })).resolves.toBe(
-      num.toHex(encodeDappName(separator)),
-    );
+    await expect(
+      service.shadowAccountCommitment({ ...context, dappName: separator }),
+    ).resolves.toBe(num.toHex(encodeDappName(separator)));
     expect(seen).toEqual([encodeDappName(separator)]);
   });
 
@@ -118,34 +118,34 @@ describe("STRK20 sub-account separator against the pinned SDK", () => {
     // into a generic unavailable error the user cannot act on.
     expect(REJECTED_FELT_SEPARATOR.length).toBeGreaterThan(31);
     await expect(
-      service.subaccountCommitment({ ...context, dappName: REJECTED_FELT_SEPARATOR }),
+      service.shadowAccountCommitment({ ...context, dappName: REJECTED_FELT_SEPARATOR }),
     ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
     expect(await derivedSeparator(ORIGIN, "Example")).not.toBe(REJECTED_FELT_SEPARATOR);
   });
 
-  test("the disclosed commitment and the approved action name one sub-account", async () => {
+  test("the disclosed commitment and the approved action name one shadow-account", async () => {
     const separator = await derivedSeparator(ORIGIN, "Example");
     const seen: bigint[] = [];
     const service = createOfficialStrk20Service({ providerFor, sdk: sdkFor(seen) });
 
-    await service.subaccountCommitment({ ...context, dappName: separator, nonce: "0x5" });
+    await service.shadowAccountCommitment({ ...context, dappName: separator, nonce: "0x5" });
     await service.prepare({
       ...context,
-      actions: await bindStrk20ActionsToOrigin(ORIGIN, [subaccountAction("Example")]),
+      actions: await bindStrk20ActionsToOrigin(ORIGIN, [shadowAccountAction("Example")]),
       simulate: true,
     });
 
     expect(seen).toEqual([encodeDappName(separator), encodeDappName(separator)]);
   });
 
-  test("two origins reach different sub-accounts for one requested label", async () => {
+  test("two origins reach different shadow-accounts for one requested label", async () => {
     const seen: bigint[] = [];
     const service = createOfficialStrk20Service({ providerFor, sdk: sdkFor(seen) });
 
     for (const origin of [ORIGIN, "https://evil.example"]) {
       await service.prepare({
         ...context,
-        actions: await bindStrk20ActionsToOrigin(origin, [subaccountAction("Example")]),
+        actions: await bindStrk20ActionsToOrigin(origin, [shadowAccountAction("Example")]),
         simulate: true,
       });
     }

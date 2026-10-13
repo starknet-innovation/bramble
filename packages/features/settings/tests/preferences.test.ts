@@ -176,7 +176,7 @@ describe("createPreferencesStore", () => {
       },
       poolAddress: "0x1",
       proverUrl: "https://prover.example/strk20",
-      subaccountAnonymizerAddress: "0x2",
+      shadowAccountAnonymizerAddress: "0x2",
     };
     await preferences.setStrk20NetworkConfig({ config, networkId: "SN_MAIN" });
     await expect(preferences.read()).resolves.toMatchObject({
@@ -196,7 +196,7 @@ describe("createPreferencesStore", () => {
           discoveryUrl: "https://discovery.example",
           poolAddress: "0x1",
           proverUrl: "http://prover.example",
-          subaccountAnonymizerAddress: "0x2",
+          shadowAccountAnonymizerAddress: "0x2",
         },
         networkId: "SN_MAIN",
       }),
@@ -211,6 +211,30 @@ describe("createPreferencesStore", () => {
 
     const preferences = await createPreferencesStore({ store }).read();
     expect(preferences.strk20ProverUrl).toBeUndefined();
+  });
+
+  const storedStrk20With = (extra: Record<string, string>) => {
+    const record: Record<string, unknown> = JSON.parse(JSON.stringify(defaultWalletPreferences()));
+    const networks = record["strk20Networks"] as Record<string, Record<string, string>>;
+    networks["SN_MAIN"] = { ...networks["SN_MAIN"], ...extra };
+    return JSON.parse(JSON.stringify(record));
+  };
+
+  test("drops the retired sub-account anonymizer key without widening STRK20 validation", async () => {
+    const store = createMemoryStore();
+    await store.set(
+      PREFERENCES_STORE_KEY,
+      storedStrk20With({ subaccountAnonymizerAddress: "0x2" }),
+    );
+    const config = (await createPreferencesStore({ store }).read()).strk20Networks?.["SN_MAIN"];
+    expect(config).toBeDefined();
+    expect(Object.keys(config ?? {})).not.toContain("subaccountAnonymizerAddress");
+    expect(Object.keys(config ?? {})).not.toContain("shadowAccountAnonymizerAddress");
+    // A key the migration does not own still fails the strict entry guard.
+    await store.set(PREFERENCES_STORE_KEY, storedStrk20With({ notARealField: "0x2" }));
+    await expect(createPreferencesStore({ store }).read()).rejects.toThrow(
+      "Invalid stored preferences",
+    );
   });
 
   test("adds the bundled privacy gateway to legacy preferences exactly once", async () => {

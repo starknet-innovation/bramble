@@ -87,11 +87,11 @@ export const readStrk20InvokeParams = (params: Json | undefined): readonly Strk2
     : null;
 
 /**
- * Parses the dapp-scoped sub-account commitment request (`{ dapp_name, nonce?,
+ * Parses the dapp-scoped shadow-account commitment request (`{ dapp_name, nonce?,
  * api_version? }`), or null when malformed. A well-formed `api_version` is
  * dropped.
  */
-export const readStrk20SubaccountCommitmentParams = (
+export const readStrk20ShadowAccountCommitmentParams = (
   params: Json | undefined,
 ): { readonly dappName: string; readonly nonce?: string } | null => {
   if (
@@ -124,7 +124,7 @@ export const providerStrk20CallAndProof = (result: unknown): Strk20CallAndProof 
     : null;
 
 /**
- * Narrows a sub-account commitment result to one felt.
+ * Narrows a shadow-account commitment result to one felt.
  */
 export const providerStrk20Commitment = (result: unknown): string | null =>
   isStrk20Felt(result) ? result : null;

@@ -294,8 +294,8 @@ const required = <Method>(method: Method | undefined, name: string): Method => {
  * method whose real implementation reaches the key: the official adapter builds
  * its transfers client with a `viewingKeyProvider` (see
  * @bramble/privacy's official-sdk-transfers), and `prepare`,
- * `privateBalances`, `registrationStatus`, `register`, `subaccountCommitment`
- * `prepareRegistration`, `prepareAccountActions`, `subaccountCommitment` and
+ * `privateBalances`, `registrationStatus`, `register`, `shadowAccountCommitment`
+ * `prepareRegistration`, `prepareAccountActions`, `shadowAccountCommitment` and
  * `submitActions` all go through that client. `poolFee`, `quoteActions` and
  * `submitPrepared` do not, so they are left unwrapped rather than over-claiming.
  */
@@ -327,9 +327,9 @@ const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
       await input.viewingKey();
       return state.strk20Registered ? ("registered" as const) : ("unregistered" as const);
     },
-    async subaccountCommitment(input) {
+    async shadowAccountCommitment(input) {
       await input.viewingKey();
-      return base.subaccountCommitment(input);
+      return base.shadowAccountCommitment(input);
     },
     async submitActions(input) {
       await input.viewingKey();

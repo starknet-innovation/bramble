@@ -238,8 +238,8 @@ describe("createApprovalQueue payload discrimination", () => {
       },
     },
     {
-      kind: "strk20-subaccount",
-      request: { dappName: "Example", nonce: "0x1", type: "subaccount" },
+      kind: "strk20-shadow-account",
+      request: { dappName: "Example", nonce: "0x1", type: "shadow-account" },
     },
   ] as const) {
     test(`reconstructs a deep-cloned ${input.kind} request`, () => {
@@ -399,7 +399,7 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
         context: CONTEXT,
         kind: "strk20-balances",
         origin: ORIGIN,
-        request: { dappName: "Example", type: "subaccount" },
+        request: { dappName: "Example", type: "shadow-account" },
         summaries: ["Share"],
       }),
     ).toThrow("Invalid STRK20 approval");

@@ -23,7 +23,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Multisig** — create or import true Argent M-of-N account contracts, collect exact-hash signatures from local owners, and submit from the shared account.
 - **STRK20 privacy** — explicitly activate private balances, shield tracked ERC-20 assets through a
   reviewed public deposit, read private note totals on demand, submit private action batches, and
-  derive chain/pool-scoped viewing identities and dapp-scoped sub-account commitments through the
+  derive chain/pool-scoped viewing identities and dapp-scoped shadow-account commitments through the
   pinned official Privacy SDK.
 - **Anti-phishing** — domain blocklist plus lookalike / punycode detection and per-origin connection history.
 - **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap. An

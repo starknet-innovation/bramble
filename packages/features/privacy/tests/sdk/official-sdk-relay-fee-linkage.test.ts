@@ -136,7 +136,7 @@ const quotingIn = (feeToken: string) => {
     async quoteActions() {
       return { feeAction: { amount: "0x1", recipient: "0x2", token: feeToken, type: "withdraw" } };
     },
-    async subaccountCommitment() {
+    async shadowAccountCommitment() {
       return "0x7";
     },
     async submitActions(input) {

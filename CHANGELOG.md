@@ -17,6 +17,14 @@ See DEVELOPMENT.md and RELEASING.md.
   the adapter follows the new `shadowAccounts(...)` builder and
   `shadowAccountAnonymizerAddress` factory key internally. There is no change to
   dapp-visible behaviour, stored data, settings, or the Wallet API names.
+- The STRK20 sub-account surface is renamed to shadow accounts to match the Wallet
+  API 0.10.4 names. This is a pre-release break with no aliases: the
+  `wallet_strk20SubaccountCommitment` method, the `subaccount_invoke` action
+  discriminator, and the `strk20-subaccount` approval kind are gone. Every origin's
+  shadow-account identity is re-derived under the new `bramble/strk20-shadow-account/v1`
+  scope domain, so a commitment derived under the old domain is no longer reachable,
+  and a stored `subaccountAnonymizerAddress` value is dropped, so a configured
+  anonymizer must be re-entered in settings.
 
 ## [0.10.3] - 2026-09-16
 

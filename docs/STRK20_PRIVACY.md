@@ -8,7 +8,7 @@ permalink: /strk20-privacy/
 
 Bramble implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. It supports shielded balance discovery, action preparation, private
-submission, dapp-scoped sub-account commitments, explicit account registration, and reviewed
+submission, dapp-scoped shadow-account commitments, explicit account registration, and reviewed
 public-to-private token deposits.
 
 ## Pinned runtime
@@ -34,7 +34,7 @@ Each enabled network needs one complete routing configuration:
 - Transaction Prover URL implementing `starknet_specVersion` and
   `starknet_proveTransaction`.
 - STRK20 pool contract address.
-- Optional SDK sub-account anonymizer module, used only by `subaccount_invoke`. Core registration,
+- Optional SDK shadow-account anonymizer module, used only by `shadow_account_invoke`. Core registration,
   discovery, shield, withdraw, and transfer operations do not need it.
 - Dapp-specific anonymizers/executors are not global pool configuration. A Vesu, Ekubo, or other
   integration supplies its audited contract as an explicit invoke target inside the reviewed action
@@ -106,13 +106,13 @@ device.
 ## Privileged data flow
 
 1. The content/provider bridge strictly parses bounded actions, token lists, proof envelopes, and
-   dapp-scoped sub-account requests. A connected origin sees only its granted active account.
+   dapp-scoped shadow-account requests. A connected origin sees only its granted active account.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
-   and sub-account commitments each create a dedicated approval. Registration uses the explicitly
+   and shadow-account commitments each create a dedicated approval. Registration uses the explicitly
    Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
    queue retains the exact private request and
    exposes display-safe summaries plus the exact action parameters and an account/network/payload
-   digest. Invoke calldata, sub-account call targets and entry points, nonce, and collect policy
+   digest. Invoke calldata, shadow-account call targets and entry points, nonce, and collect policy
    remain expandable in the approval. A private-relay review also lists the relayer-fee withdrawal
    as a separately labelled action with its exact token, amount, and recipient. Denial returns
    `USER_REFUSED_OP`; account, network, grant, or payload changes invalidate the request.
@@ -159,7 +159,7 @@ device.
 
 The Wallet API allows a dapp to submit the result of `wallet_strk20PrepareInvoke`; therefore a
 non-simulated prepare request does not sign or generate that submittable proof until the user
-approves its exact action list. Private balances and the deterministic, origin-scoped sub-account
+approves its exact action list. Private balances and the deterministic, origin-scoped shadow-account
 commitment are likewise never disclosed under the general account connection grant alone.
 
 The standard dapp Wallet API still returns `NOT_REGISTERED` when a site requests an operation
@@ -169,7 +169,7 @@ requests, opens the wallet approval surface immediately, and cannot derive a vie
 until the user approves the account/network/pool/token-bound payload.
 
 The wallet-owned side-panel journey currently exposes registration and deposit-only shielding.
-Private transfer, withdrawal, generic invoke, proof preparation, and sub-account commitment remain
+Private transfer, withdrawal, generic invoke, proof preparation, and shadow-account commitment remain
 Wallet API/dapp approval journeys; they do not appear as standalone portfolio actions yet.
 
 The generic `wallet_addInvokeTransaction` path also preserves an optional prepared proof. Such a
@@ -208,7 +208,7 @@ production deployments require their own audits and operations monitoring.
 - Keep AWS WAF and the backend's DynamoDB rate-limit table enabled for `/rpc/*` and
   `/api/strk20/*`. Configure Vercel Firewall independently for Terminal-only
   `/api/private-swap/*` routes.
-- Configure the SDK sub-account module only when supporting `subaccount_invoke`; keep each
+- Configure the SDK shadow-account module only when supporting `shadow_account_invoke`; keep each
   dapp-specific anonymizer/executor in that dapp's reviewed action plan.
 - Supply a private paymaster/relayer and fee token to enable private transfers, withdrawals,
   invokes, and private relay-fee submission. Registration and deposit-only entry remain available

@@ -69,7 +69,7 @@ const STRK20_STUB_READS = [
   "prepare",
   "privateBalances",
   "quoteActions",
-  "subaccountCommitment",
+  "shadowAccountCommitment",
 ] as const;
 
 /** Bumps a single mutation counter; passed to the stubs as a closure. */
@@ -174,7 +174,7 @@ const strk20Stub = (bump: Bump): Strk20Service => ({
       feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" },
     };
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x1";
   },
   async submitActions() {

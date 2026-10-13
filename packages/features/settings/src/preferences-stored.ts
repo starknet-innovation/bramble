@@ -284,6 +284,45 @@ const normalizedAccountGroups = (value: unknown): unknown =>
     : value;
 
 /**
+ * Legacy repair for the STRK20 sub-account to shadow-account rename: the SDK
+ * module's per-network routing key moved from `subaccountAnonymizerAddress` to
+ * `shadowAccountAnonymizerAddress`, and {@link isStrk20NetworkConfig} rejects
+ * any unknown key, so an un-repaired record would fail validation and leave the
+ * user's preferences unreadable with no in-product way out. The old value is
+ * dropped rather than carried over, because it is optional routing the wallet
+ * re-supplies from its bundled defaults. Deterministic and total: a non-record
+ * map, or an entry that owns no such key, is returned untouched.
+ */
+const withoutRetiredStrk20AnonymizerKey = (entry: unknown): unknown => {
+  if (!isRecord(entry) || !("subaccountAnonymizerAddress" in entry)) {
+    return entry;
+  }
+  const repaired: Record<string, unknown> = {};
+  for (const [field, fieldValue] of Object.entries(entry)) {
+    if (field !== "subaccountAnonymizerAddress") {
+      repaired[field] = fieldValue;
+    }
+  }
+  return repaired;
+};
+
+const dropRetiredShadowAccountAnonymizerKey = (value: unknown): unknown => {
+  if (!isRecord(value)) {
+    return value;
+  }
+  let changed = false;
+  const networks: Record<string, unknown> = {};
+  for (const [networkId, entry] of Object.entries(value)) {
+    const repaired = withoutRetiredStrk20AnonymizerKey(entry);
+    if (repaired !== entry) {
+      changed = true;
+    }
+    networks[networkId] = repaired;
+  }
+  return changed ? networks : value;
+};
+
+/**
  * Brings a stored preferences record to the current entry shape without any
  * user action: token and contact addresses are canonicalized, ids re-derived
  * from them, and records that name the same address on the same network are
@@ -307,12 +346,15 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
   const hasAccountAliases = value["accountLabels"] !== undefined || value["groups"] !== undefined;
   const customNetworks = compactStoredCustomNetworks(value["customNetworks"]);
   const networksChanged = customNetworks !== value["customNetworks"];
-  if (!tokens && !addressBook && !hasAccountAliases && !networksChanged) {
+  const strk20Networks = dropRetiredShadowAccountAnonymizerKey(value["strk20Networks"]);
+  const strk20Changed = strk20Networks !== value["strk20Networks"];
+  if (!tokens && !addressBook && !hasAccountAliases && !networksChanged && !strk20Changed) {
     return value;
   }
   return {
     ...value,
     ...(networksChanged ? { customNetworks } : {}),
+    ...(strk20Changed ? { strk20Networks } : {}),
     ...(value["accountLabels"] === undefined
       ? {}
       : { accountLabels: normalizedAccountLabels(value["accountLabels"]) }),
