@@ -152,6 +152,8 @@ const session = createBackgroundUnlockSession({
     for (const store of [vaultStores?.primary, vaultStores?.staging]) {
       store?.clearKeys();
     }
+    // Declared below; this runs only when the session locks, long after.
+    void wallet.then((service) => service?.clearGrantCache());
   },
 });
 // Storage lockdown is a startup prerequisite, not a best-effort side effect.
@@ -278,12 +280,10 @@ const swapService = (() => {
 // silently accepting signatures or broadcasts into a volatile registry.
 const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
 const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
-// Live phishing feed: fetched from the configured source under an explicit host
-// permission, cached in local storage, and refreshed on worker start and on a
-// recurring alarm, each time only once its TTL has lapsed. The guard reads the feed's in-memory snapshot on every check,
-// so a refresh takes effect with no re-wiring; the bundled seed list in
-// blocklist.ts is always enforced, so protection never drops below baseline
-// even before the first fetch or when the source is unreachable.
+// Live phishing feed, fetched under an explicit host permission, cached locally,
+// and refreshed on worker start and on a recurring alarm once its TTL lapses.
+// The guard reads its in-memory snapshot on every check; the bundled seed list
+// in blocklist.ts is always enforced, before the first fetch and offline too.
 const phishingFeed = (() => {
   try {
     return createPhishingFeed({ fetch: untrustedFetch, store: createBrowserLocalStore() });

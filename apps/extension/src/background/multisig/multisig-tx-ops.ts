@@ -47,6 +47,7 @@ import {
   currentConfigFor,
   signerAccountFor,
 } from "./multisig-ops";
+import { refuseResend } from "./multisig-stale-intents";
 
 const preparationContext = async (
   deps: MultisigOpsDeps,
@@ -143,6 +144,8 @@ const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<R
     },
     rpcUrls: resolved.context.rpcUrls,
   });
+  const resent = await refuseResend(deps, resolved.record.id, prepared, input.confirmResend);
+  if (resent) return resent;
   if (!resolved.authorized.isCurrent()) {
     return { error: "wallet locked" };
   }

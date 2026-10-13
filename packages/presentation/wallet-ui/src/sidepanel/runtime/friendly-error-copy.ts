@@ -141,6 +141,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["approval execution failed", REQUEST_UNKNOWN],
   ["wallet request failed", REQUEST_UNKNOWN],
   ["approval not found", "That request has expired. Ask the site to send it again."],
+  ["approval no longer pending", "That request was already answered or has expired."],
   [
     "no pending ledger sign for id",
     "That signing request is no longer pending. Check Activity before starting again.",
@@ -167,6 +168,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["explorer fallback update failed", SAVE_FAILED],
   ["privacy service configuration failed", SAVE_FAILED],
   ["token visibility update failed", SAVE_FAILED],
+  ["account visibility update failed", SAVE_FAILED],
   ["preferences unavailable", "Couldn't load your settings. Try again."],
   ["diagnostic export failed", "Couldn't export diagnostics. Try again."],
   ["backup import failed", "Couldn't read that backup file. Check the file and try again."],
@@ -181,10 +183,16 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // --- Address book --------------------------------------------------------
   ["address save failed", "Couldn't save that address. Try again."],
   ["address removal failed", "Couldn't remove that address. Try again."],
+  // Sherlock 258: a saved contact's keys change only by removing it first.
+  [
+    "contact keys changed",
+    "This contact is saved with different keys. Remove it first if you mean to replace them.",
+  ],
 
   // --- Accounts ------------------------------------------------------------
   ["account switch failed", "Couldn't switch accounts. Try again."],
   ["add account failed", "Couldn't add that account. Try again."],
+  ["account import failed", "Couldn't add those accounts. Try again."],
   ["import account failed", "Couldn't import that account. Check what you pasted and try again."],
   ["create key vault failed", "Couldn't create your wallet. Try again."],
   ["seed import failed", "Couldn't import that recovery phrase. Check the words and try again."],
@@ -205,6 +213,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "encrypted store is not awaiting recovery",
     "This wallet no longer needs Unlock anyway. Close and reopen Bramble.",
   ],
+  ["vault storage limit reached", "This wallet is full, so this change wasn't saved."],
   [
     "account discovery unavailable",
     "Couldn't search for accounts. Check your connection and try again.",
@@ -218,6 +227,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   [
     "this wallet has no recovery phrase to scan",
     "This wallet was set up without a recovery phrase, so there is nothing to search for.",
+  ],
+  [
+    "no recovery phrase stored for this wallet",
+    "This wallet was set up without a recovery phrase. Import an existing account instead.",
   ],
   [
     "account recovery unavailable",
@@ -314,7 +327,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["balances unavailable", "Couldn't load balances. Check your connection and try again."],
   ["activity scope unavailable", "Couldn't load activity for this account. Try again."],
   ["add token failed", "Couldn't add that token. Check the contract address and try again."],
+  ["remove token failed", "Couldn't remove that token. Try again."],
   ["token detection failed", "Couldn't scan for tokens. Check your connection and try again."],
+  ["connected sites unavailable", "Couldn't load connected sites."],
   ["token list unavailable", "Couldn't load the token list. Check your connection and try again."],
   ["token unavailable", "That token isn't available on this network."],
   ["token unavailable on this network", "That token isn't available on this network."],

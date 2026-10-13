@@ -31,7 +31,7 @@ const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
 
 export const App = (): ReactNode => {
   const [active, setActive] = useState<ScreenId>(() => screenFromHash(window.location.hash));
-  const { clearError, error: walletError } = useWallet();
+  const { address, chainId, clearError, error: walletError } = useWallet();
   const Screen = SCREENS[active];
   const navigate = (screen: ScreenId): void => {
     setActive(screen);
@@ -49,7 +49,10 @@ export const App = (): ReactNode => {
         </div>
       ) : null}
       <main>
-        <Screen onNavigate={navigate} />
+        {/* Screens hold account-bound state (a lending position under review,
+            private balances) and async replies started for one account; a new
+            account or network remounts the screen instead (Sherlock 222). */}
+        <Screen key={`${address ?? ""}:${chainId ?? ""}`} onNavigate={navigate} />
       </main>
       <BottomBar />
     </>

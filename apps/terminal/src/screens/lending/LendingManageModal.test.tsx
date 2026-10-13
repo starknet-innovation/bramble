@@ -2,6 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VesuMarket, VesuPosition } from "../../data/index";
 
+// The vToken the pinned factory registers, which differs from the API's (Sherlock 169).
+const { REGISTERED_VTOKEN } = vi.hoisted(() => ({ REGISTERED_VTOKEN: "0x5e9157e4" }));
+
 const mocks = vi.hoisted(() => ({
   buildClose: vi.fn(() => [{ contractAddress: "0x1", entrypoint: "close" }]),
   buildIncrease: vi.fn(),
@@ -10,7 +13,9 @@ const mocks = vi.hoisted(() => ({
   buildVaultRedeem: vi.fn(),
   quoteClose: vi.fn(async () => ({ maxInputAmount: 1n })),
   quoteIncrease: vi.fn(),
-  quoteLending: vi.fn(async () => ({ action: "supply" })),
+  quoteLending: vi.fn(async () => ({ action: "supply", vTokenAddress: REGISTERED_VTOKEN })),
+  registeredVToken: vi.fn(async () => REGISTERED_VTOKEN),
+  verifyMultiplyPool: vi.fn(async () => undefined),
   requestTransaction: vi.fn(async () => ({ transaction_hash: "0xabc" })),
   watchAsset: vi.fn(async () => undefined),
 }));
@@ -22,6 +27,9 @@ vi.mock("../../protocols/index", () => ({
   buildVesuVaultRedeemCalls: mocks.buildVaultRedeem,
   quoteVesuMultiplyClose: mocks.quoteClose,
   quoteVesuMultiplyIncrease: mocks.quoteIncrease,
+  registeredVesuVToken: mocks.registeredVToken,
+  VESU_VAULT_DEPOSITS_ENABLED: false,
+  verifyVesuMultiplyPool: mocks.verifyMultiplyPool,
 }));
 
 vi.mock("../../protocols/vesu/vesu", () => ({
@@ -119,8 +127,9 @@ describe("LendingManageModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Track vUSDC" }));
     await waitFor(() =>
-      expect(mocks.watchAsset).toHaveBeenCalledWith({ address: market.vTokenAddress }),
+      expect(mocks.watchAsset).toHaveBeenCalledWith({ address: REGISTERED_VTOKEN }),
     );
+    expect(mocks.registeredVToken).toHaveBeenCalledWith(market.poolId, market.assetAddress);
     expect(mocks.requestTransaction).not.toHaveBeenCalled();
     expect(screen.getByText("vUSDC is now tracked in the wallet.")).toBeTruthy();
   });
@@ -147,7 +156,7 @@ describe("LendingManageModal", () => {
     expect(mocks.requestTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ reviewMode: "wallet" }),
     );
-    expect(mocks.watchAsset).toHaveBeenCalledWith({ address: market.vTokenAddress });
+    expect(mocks.watchAsset).toHaveBeenCalledWith({ address: REGISTERED_VTOKEN });
     expect(onSubmitted).toHaveBeenCalled();
   });
 
@@ -175,6 +184,45 @@ describe("LendingManageModal", () => {
     expect(screen.getByText("Close the full multiplied position")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Review in wallet/ }));
     await waitFor(() => expect(mocks.quoteClose).toHaveBeenCalled());
+    expect(mocks.verifyMultiplyPool).toHaveBeenCalledWith(
+      market.poolId,
+      multiply.collateralAddress,
+      multiply.debtAddress,
+    );
     expect(mocks.buildClose).toHaveBeenCalled();
+  });
+
+  it("builds no Multiply calls for a pool the registry does not list (Sherlock 169)", async () => {
+    mocks.verifyMultiplyPool.mockRejectedValueOnce(
+      new Error("This Vesu pool or asset is not registered on chain"),
+    );
+    render(
+      <LendingManageModal
+        markets={[market]}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+        position={{ ...earn, debtAddress: "0x4718", debtRaw: "1", debtSymbol: "STRK", type: "multiply" }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Review in wallet/ }));
+    await waitFor(() =>
+      expect(screen.getByText("This Vesu pool or asset is not registered on chain")).toBeTruthy(),
+    );
+    expect(mocks.quoteClose).not.toHaveBeenCalled();
+    expect(mocks.buildClose).not.toHaveBeenCalled();
+    expect(mocks.requestTransaction).not.toHaveBeenCalled();
+  });
+
+  it("offers a vault position no deposit while vault deposits are paused (Sherlock 169)", () => {
+    render(
+      <LendingManageModal
+        markets={[market]}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+        position={{ ...earn, type: "vault" }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Redeem" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add funds" })).toBeNull();
   });
 });

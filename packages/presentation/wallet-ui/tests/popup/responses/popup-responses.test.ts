@@ -163,6 +163,8 @@ describe("popup response validators", () => {
     expect(isRevealSecretsResponse({ mnemonic: null, ok: true, privateKey })).toBe(true);
     expect(isRevealSecretsResponse({ mnemonic: "too short", ok: true, privateKey })).toBe(false);
     expect(isRevealSecretsResponse({ mnemonic, ok: true, privateKey: "nope" })).toBe(false);
+    expect(isRevealSecretsResponse({ mnemonic, ok: true, privateKey: null })).toBe(true);
+    expect(isRevealSecretsResponse({ mnemonic, ok: true })).toBe(false);
     expect(isRevealSecretsResponse({ mnemonic, ok: false, privateKey })).toBe(false);
     expect(isRevealSecretsResponse({ debug: true, mnemonic, ok: true, privateKey })).toBe(false);
   });

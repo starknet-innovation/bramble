@@ -421,7 +421,7 @@ describe("Argent multisig background lifecycle", () => {
       },
     };
     const multisigStore = createMultisigStore({ store: guardedStore });
-    const harness = await makeMultisigHarness({ multisigStore });
+    const harness = await makeMultisigHarness({ deploymentStatus: true, multisigStore });
     afterWrite = () => harness.session.lock();
     await expect(
       harness.handler(

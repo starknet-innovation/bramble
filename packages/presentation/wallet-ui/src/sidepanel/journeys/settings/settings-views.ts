@@ -181,7 +181,7 @@ export const backupHubFlow = (status: WalletStatus): string => {
  * Renders the non-secret preference export task.
  */
 export const backupExportFlow = (status: WalletStatus): string =>
-  flowHeader("Download backup", status, "Your settings, folders, and address book") +
+  flowHeader("Download backup", status, "Your settings and folders") +
   flowScreen(
     "backup-export",
     `<section class="section">

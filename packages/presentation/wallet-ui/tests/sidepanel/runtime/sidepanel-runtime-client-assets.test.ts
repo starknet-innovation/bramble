@@ -225,11 +225,11 @@ describe("NFT wrappers", () => {
 });
 
 describe("allowances", () => {
-  test("loadAllowances returns the allowance views or []", async () => {
+  test("loadAllowances returns the listing, and marks an error as unavailable", async () => {
     expect(
       await runtimeReturning({ allowances: [allowanceView], ok: true }).loadAllowances(),
-    ).toEqual([allowanceView]);
-    expect(await runtimeReturning(errorEnvelope).loadAllowances()).toEqual([]);
+    ).toEqual({ entries: [allowanceView], notices: [], unavailable: false });
+    expect((await runtimeReturning(errorEnvelope).loadAllowances()).unavailable).toBe(true);
   });
 
   test("revokeAllowance returns the tx hash and throws on failure", async () => {

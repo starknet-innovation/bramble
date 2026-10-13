@@ -19,7 +19,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
 import { rankTokenQueryMatch } from "../../shared/token-search";
 import type { SwapCatalogTokenView } from "../swap/swap-client";
 import { CATALOG_EMPTY_TEXT, CATALOG_LOADING_TEXT } from "./token-catalog-view";
@@ -200,7 +200,7 @@ const bindAdd = (deps: TokenCatalogUiDeps, container: Element): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Add token failed"), "error", control);
+          showToast(errorDetails(error, "Add token failed"), "error", control);
           buttonBusy(control, false);
         },
       );
@@ -223,7 +223,7 @@ const bindToggle = (deps: TokenCatalogUiDeps, container: Element): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Token update failed"), "error", control);
+          showToast(errorDetails(error, "Token update failed"), "error", control);
           buttonBusy(control, false);
         },
       );

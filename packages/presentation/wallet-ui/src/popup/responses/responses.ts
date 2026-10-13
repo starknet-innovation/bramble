@@ -79,7 +79,12 @@ export {
 } from "./responses-verify";
 
 import { isWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
-import { type AllowanceView, isAllowanceView } from "@bramble/transactions/allowance-discovery";
+import {
+  type AllowanceNotice,
+  type AllowanceView,
+  isAllowanceNotices,
+  isAllowanceView,
+} from "@bramble/transactions/allowance-discovery";
 import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-model/accounts";
 import { isReadOnlyReason, type ReadOnlyReason } from "@bramble/wallet-model/recovery";
 import { isVaultRecovery } from "@bramble/wallet-model/vault-recovery";
@@ -129,7 +134,8 @@ export type GenerateMnemonicResponse = {
 export type RevealSecretsResponse = {
   readonly mnemonic: string | null;
   readonly ok: true;
-  readonly privateKey: string;
+  /** `null` on a network with no account: only the recovery phrase is revealed. */
+  readonly privateKey: string | null;
 };
 
 /**
@@ -283,8 +289,8 @@ export const isRevealSecretsResponse = (value: unknown): value is RevealSecretsR
   (value["mnemonic"] === null ||
     (typeof value["mnemonic"] === "string" &&
       value["mnemonic"].trim().split(/\s+/).length >= 12)) &&
-  typeof value["privateKey"] === "string" &&
-  isStarkFieldElement(value["privateKey"]);
+  (value["privateKey"] === null ||
+    (typeof value["privateKey"] === "string" && isStarkFieldElement(value["privateKey"])));
 
 /**
  * Checks plain preferences responses before rendering.
@@ -417,10 +423,12 @@ export const isActivityResponse = (value: unknown): value is ActivityResponse =>
   (value["historyUnavailable"] === undefined || typeof value["historyUnavailable"] === "boolean");
 
 /**
- * Tracked allowances response accepted from the background boundary.
+ * Tracked allowances response accepted from the background boundary. `notices`
+ * names what the listing could not vouch for (see `ALLOWANCE_NOTICES`).
  */
 export type AllowancesResponse = {
   readonly allowances: readonly AllowanceView[];
+  readonly notices?: readonly AllowanceNotice[];
   readonly ok: true;
 };
 
@@ -430,10 +438,40 @@ export type AllowancesResponse = {
 export const isAllowancesResponse = (value: unknown): value is AllowancesResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["allowances", "ok"]) &&
+  hasOnlyKnownKeys(value, ["allowances", "notices", "ok"]) &&
   value["ok"] === true &&
   Array.isArray(value["allowances"]) &&
-  value["allowances"].every(isAllowanceView);
+  value["allowances"].every(isAllowanceView) &&
+  (value["notices"] === undefined || isAllowanceNotices(value["notices"]));
+
+/**
+ * The allowance manager's view of one listing. `unavailable` means the
+ * background answered with an error or an unreadable response, so the empty
+ * `entries` are not a statement that nothing is outstanding (Sherlock 190).
+ */
+export type AllowanceListing = {
+  readonly entries: readonly AllowanceView[];
+  readonly notices: readonly AllowanceNotice[];
+  readonly unavailable: boolean;
+};
+
+/**
+ * The listing before the manager has loaded: nothing to show, nothing claimed.
+ */
+export const EMPTY_ALLOWANCE_LISTING: AllowanceListing = {
+  entries: [],
+  notices: [],
+  unavailable: false,
+};
+
+/**
+ * Turns a background answer into a listing, marking anything that is not a
+ * valid allowances response as unavailable rather than as an empty list.
+ */
+export const allowanceListingFrom = (response: unknown): AllowanceListing =>
+  isAllowancesResponse(response)
+    ? { entries: response.allowances, notices: response.notices ?? [], unavailable: false }
+    : { entries: [], notices: [], unavailable: true };
 
 /**
  * Checks account deployment status responses before rendering.

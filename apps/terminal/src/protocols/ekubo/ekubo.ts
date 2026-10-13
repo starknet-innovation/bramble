@@ -21,6 +21,7 @@ import {
   buildClearCall,
   buildClearMinimumCall,
   buildPoolKey,
+  buildPoolPriceCalldata,
   buildQuoteCalldata,
   buildRouterSwapCall,
   buildRouterTransferCall,
@@ -110,7 +111,7 @@ export const quoteSwap = async (params: SwapQuoteParams): Promise<SwapQuote> => 
 
     const priceResponse = await provider.callContract(
       {
-        calldata: buildQuoteCalldata(best.poolKey, sellToken, sellAmountRaw, sellIsToken0),
+        calldata: buildPoolPriceCalldata(best.poolKey),
         contractAddress: EKUBO_ADDRESSES.core,
         entrypoint: "get_pool_price",
       },

@@ -140,7 +140,7 @@ const mountPanel = (walletOverrides: Record<string, unknown> = {}): Panel => {
       {},
       [],
       null,
-      [],
+      { entries: [], notices: [], unavailable: false },
       null,
       {},
       [],

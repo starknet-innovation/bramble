@@ -8,13 +8,13 @@ import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/mu
 import {
   type AccountSignabilityResponse,
   type ActivityResponse,
-  type AllowancesResponse,
+  type AllowanceListing,
+  allowanceListingFrom,
   type ClassHashVerificationResponse,
   type ConnectedSitesResponse,
   type DeploymentStatusResponse,
   isAccountSignabilityResponse,
   isActivityResponse,
-  isAllowancesResponse,
   isApprovalDecisionResponse,
   isBalancesResponse,
   isClassHashVerificationResponse,
@@ -151,7 +151,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     async connectedSites(): Promise<ConnectedSitesResponse["sites"]> {
       const response = await sendMessage({ type: "wallet.connectedSites" });
-      return isConnectedSitesResponse(response) ? response.sites : [];
+      if (isConnectedSitesResponse(response)) return response.sites;
+      throw responseError(response, "connected sites unavailable");
     },
     async revokeOrigin(origin: string): Promise<ConnectedSitesResponse["sites"]> {
       const response = await sendMessage({ origin, type: "wallet.revokeOrigin" });
@@ -201,9 +202,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({ type: "wallet.transactionAlerts" });
       return isTransactionAlertsResponse(response) ? response.alerts : [];
     },
-    async loadAllowances(): Promise<AllowancesResponse["allowances"]> {
-      const response = await sendMessage({ type: "wallet.allowances" });
-      return isAllowancesResponse(response) ? response.allowances : [];
+    async loadAllowances(): Promise<AllowanceListing> {
+      return allowanceListingFrom(await sendMessage({ type: "wallet.allowances" }));
     },
     async revokeAllowance(id: string, reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
       const response = await sendMessage({

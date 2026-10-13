@@ -1,7 +1,7 @@
 /**
  * Audit #184: the phishing feed cache must survive the production storage
- * boundary. `createMemoryStore` applies the same `assertJsonValue` provider
- * budget as the browser-local adapter (4,096 array entries, 1 MiB), so a real
+ * boundary. `createMemoryStore` applies the same `assertJsonValue` storage
+ * budget as the browser-local adapter (4,096 array entries), so a real
  * list size written as one array is rejected there exactly as in production.
  * These cases pin that a large list persists in byte-budgeted chunks, that the
  * TTL applies across worker restarts, and that a torn or legacy cache fails

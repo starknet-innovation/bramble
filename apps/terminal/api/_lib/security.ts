@@ -6,6 +6,10 @@ export {
 } from "../../shared/privacy.js";
 
 const HTTPS_PROTOCOL = "https:";
+// Plain-HTTP loopback origins for `vercel dev` (Sherlock 200). They are trusted
+// only when Vercel reports a development run: a production or preview
+// deployment, or any host that does not set VERCEL_ENV, never accepts them,
+// whether they come from the fallback or from TERMINAL_ALLOWED_ORIGINS.
 const LOCAL_ORIGINS = new Set([
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5273",
@@ -22,6 +26,8 @@ export type GatewayAudience = "extension" | "terminal";
 type OriginDecision =
   | { readonly allowed: false }
   | { readonly allowed: true; readonly origin?: string };
+
+const allowsLocalOrigins = (): boolean => process.env["VERCEL_ENV"] === "development";
 
 const configuredOrigins = (name: string): readonly string[] =>
   (process.env[name] ?? "")
@@ -50,10 +56,14 @@ const validConfiguredOrigin = (origin: string, audience: GatewayAudience): boole
 };
 
 const expectedOrigins = (audience: GatewayAudience): ReadonlySet<string> => {
+  // A loopback entry left in a deployed TERMINAL_ALLOWED_ORIGINS (the value
+  // the docs used to suggest) is dropped rather than failing the whole list.
   const configured =
     audience === "extension"
       ? configuredOrigins("BRAMBLE_EXTENSION_ORIGINS")
-      : configuredOrigins("TERMINAL_ALLOWED_ORIGINS");
+      : configuredOrigins("TERMINAL_ALLOWED_ORIGINS").filter(
+          (origin) => allowsLocalOrigins() || !LOCAL_ORIGINS.has(origin),
+        );
   const valid = configured.filter((origin) => validConfiguredOrigin(origin, audience));
   if (valid.length > 0 && valid.length === configured.length) {
     return new Set(valid);
@@ -62,7 +72,10 @@ const expectedOrigins = (audience: GatewayAudience): ReadonlySet<string> => {
     return new Set();
   }
   return audience === "terminal"
-    ? new Set(["https://mc-wallet-terminal.vercel.app", ...LOCAL_ORIGINS])
+    ? new Set([
+        "https://mc-wallet-terminal.vercel.app",
+        ...(allowsLocalOrigins() ? LOCAL_ORIGINS : []),
+      ])
     : new Set();
 };
 

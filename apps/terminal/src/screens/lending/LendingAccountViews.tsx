@@ -24,6 +24,8 @@ import {
   buildVesuVaultClaimCalls,
   buildVesuVaultDepositCalls,
   buildVesuVaultRedeemCalls,
+  VESU_VAULT_DEPOSITS_ENABLED,
+  VESU_VAULT_DEPOSITS_PAUSED,
 } from "../../protocols/index";
 import { shortenAddress } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
@@ -284,7 +286,9 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
               </div>
             </label>
             {message !== null ? <p className="lending-ticket-message">{message}</p> : null}
-            <button className="lending-submit" disabled={isConnected && raw === null} onClick={() => void deposit()} type="button">
+            {/* Deposits pay the API-named vault, which nothing verifies yet (Sherlock 169). */}
+            {VESU_VAULT_DEPOSITS_ENABLED ? null : <p className="lending-ticket-message">{VESU_VAULT_DEPOSITS_PAUSED}</p>}
+            <button className="lending-submit" disabled={!VESU_VAULT_DEPOSITS_ENABLED || (isConnected && raw === null)} onClick={() => void deposit()} type="button">
               {isConnected ? "Review deposit" : "Connect wallet"}<ArrowRight size={14} aria-hidden />
             </button>
             <div className="lending-vault-divider" />

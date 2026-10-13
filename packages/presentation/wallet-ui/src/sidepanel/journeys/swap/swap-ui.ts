@@ -19,7 +19,7 @@ import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unkn
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation } from "../../shared/confirm-submitted";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { setFlowStep } from "../../shared/parts";
@@ -479,7 +479,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         return;
       }
       submitting = false;
-      showToast(errorMessage(error, "Swap failed"), "error", root);
+      showToast(errorDetails(error, "Swap failed"), "error", root);
       setResult(root, errorLine(error, "Swap failed"));
       confirmButton.innerHTML = restingContent;
       buttonBusy(confirmButton, false);

@@ -21,21 +21,28 @@ import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { CURRENT_SCHEMA_VERSION, isVaultV11, type Vault } from "../schema/schema";
 import type { WalletVaultService } from "./service-types";
+import { requireVaultCapacity } from "./vault-capacity";
 
 /**
  * Validates and persists a vault snapshot. Refuses to write anything that is
  * not a well-formed current-schema vault, so a buggy caller can never persist
- * a partial or downgraded shape.
+ * a partial or downgraded shape, and names a vault past its capacity before
+ * any storage is touched. `beforeCommit` runs after encryption, immediately
+ * before the envelope's commit starts; throwing there abandons the write with
+ * none of it stored. (Reading the previous envelope first may repair its
+ * commit records, as any read does.)
  */
 export const writeVault = async (
   encryptedStore: EncryptedStore,
   vault: Vault,
   vaultPassphrase: string,
+  beforeCommit?: () => void,
 ): Promise<void> => {
+  requireVaultCapacity(vault);
   if (!isVaultV11(vault)) {
     throw new WalletError("Invalid vault");
   }
-  await encryptedStore.write(vault, vaultPassphrase);
+  await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
 };
 
 type VaultCreationDeps = {

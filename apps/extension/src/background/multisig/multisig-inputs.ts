@@ -193,21 +193,25 @@ export const readRemoveMultisigInput = (
     : null;
 
 /**
- * Parses preparation of one exact call batch.
+ * Parses preparation of one exact call batch. `confirmResend` is the user's
+ * say-so for calls a stale version may already have sent (Sherlock 177).
  */
 export const readPrepareIntentInput = (
   message: unknown,
 ): {
   readonly calls: readonly ArgentMultisigCall[];
+  readonly confirmResend: boolean;
   readonly multisigId: string;
 } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["calls", "multisigId", "type"]) &&
+  hasOnlyKnownKeys(message, ["calls", "confirmResend", "multisigId", "type"]) &&
+  (message["confirmResend"] === undefined || message["confirmResend"] === true) &&
   message["type"] === "wallet.prepareArgentMultisigIntent" &&
   isAccountId(message["multisigId"]) &&
   isArgentMultisigCalls(message["calls"])
     ? {
         calls: message["calls"],
+        confirmResend: message["confirmResend"] === true,
         multisigId: message["multisigId"],
       }
     : null;

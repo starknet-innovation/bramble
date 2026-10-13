@@ -4,7 +4,7 @@ import type { SendRouteResolution } from "@bramble/transactions/send-routes";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation } from "../../shared/confirm-submitted";
-import { errorMessage, showToast } from "../../shared/dom";
+import { errorDetails, errorMessage, showToast } from "../../shared/dom";
 import { watchDeployment } from "../../shell/shell-bindings";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
@@ -15,6 +15,7 @@ import type { TransferExitView, TransferState } from "./transfer-model";
 import {
   friendlyReviewError,
   initialTransferState,
+  isTransferInFlight,
   recipientFieldError,
   type TransferStage,
   transferFields,
@@ -100,8 +101,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const { app, back, navigate, render, wallet } = deps;
   const form = app?.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
+    if (!isTransferInFlight(transferState.stage)) {
+      transferEpoch += 1;
+      transferState = initialTransferState();
+    }
     repaintActiveTransfer = null;
     transferApp = app;
     return;
@@ -173,11 +176,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       complete();
       return;
     }
-    if (back) {
-      back();
-      return;
-    }
-    navigate?.("home");
+    if (back) back();
+    else navigate?.("home");
   };
   form.ownerDocument.querySelector("#send-close")?.addEventListener("click", exit);
   form.ownerDocument.querySelector("#send-header-back")?.addEventListener("click", () => {
@@ -397,7 +397,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = errorMessage(error, preparationFailure(composed));
-            showToast(message, "error", form);
+            showToast(message, "error", form, errorDetails(error, preparationFailure(composed)));
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
           },

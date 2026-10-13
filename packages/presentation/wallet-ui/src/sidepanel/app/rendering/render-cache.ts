@@ -7,9 +7,14 @@
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
-import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
+import {
+  EMPTY_ALLOWANCE_LISTING,
+  type SignabilityVerdict,
+  type WalletStatus,
+} from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
+import type { ConnectedSitesState } from "../screens/support-flows";
 
 // The price snapshot as the runtime client returns it; the cache's price fields
 // derive from this so their types cannot drift from loadPrices.
@@ -42,7 +47,7 @@ export type RenderData = {
   // (Sherlock 210).
   chartTokenId: string | null;
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
-  connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
+  connectedSites: ConnectedSitesState;
   deployment: boolean | null;
   signability: SignabilityVerdict | null;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
@@ -104,7 +109,7 @@ export const updateRenderScope = (
  * value null. Used to prime the cache at boot and to reset it on lock.
  */
 export const emptyRenderCache = (): RenderData => ({
-  allowances: [],
+  allowances: EMPTY_ALLOWANCE_LISTING,
   multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
   multisigsNetworkId: null,
@@ -115,7 +120,7 @@ export const emptyRenderCache = (): RenderData => ({
   chart: [],
   chartTokenId: null,
   classHashVerification: null,
-  connectedSites: [],
+  connectedSites: "loading",
   deployment: null,
   signability: null,
   ...emptyActivityCache(),

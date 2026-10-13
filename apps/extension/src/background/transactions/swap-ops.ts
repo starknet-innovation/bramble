@@ -14,6 +14,7 @@
  * response — nothing is signed on a path that could not be fully checked.
  */
 
+import type { PriceService } from "@bramble/portfolio/prices";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
@@ -42,6 +43,7 @@ import { recordSubmittedActivity } from "./activity-recording";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
+import { walletSwapValueDelta } from "./swap-value-check";
 import { withTrustedRecipients } from "./trusted-recipients";
 
 /**
@@ -49,6 +51,8 @@ import { withTrustedRecipients } from "./trusted-recipients";
  * swap service (injected fetch; unavailable default fails closed).
  */
 export type SwapOpsDeps = WalletOpsDeps & {
+  // The wallet's own price feed, for the quote's value check (Sherlock 137).
+  readonly prices?: PriceService;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
 };
@@ -116,7 +120,7 @@ const swapQuoteResponse = async (
   if ("error" in context) {
     return { error: context.error };
   }
-  const { account, buyToken, networkId, sellToken } = context;
+  const { account, buyToken, networkId, preferences, sellToken } = context;
   const sellAmount = sellAmountHex(input.amount, sellToken.decimals);
   if (!sellAmount) {
     return { error: "enter an amount to swap" };
@@ -129,15 +133,26 @@ const swapQuoteResponse = async (
       sellTokenAddress: sellToken.address,
       takerAddress: account.address,
     });
+    const buyAmount = formatTokenAmount(BigInt(quote.buyAmount), buyToken.decimals);
+    const valueDeltaPercent = await walletSwapValueDelta({
+      buyAmount,
+      buyToken,
+      currency: preferences.displayCurrency ?? "usd",
+      networkId,
+      prices: deps.prices,
+      sellAmount: input.amount,
+      sellToken,
+    });
     return {
       ok: true,
       swapQuote: {
-        buyAmount: formatTokenAmount(BigInt(quote.buyAmount), buyToken.decimals),
+        buyAmount,
         buyAmountInUsd: quote.buyAmountInUsd,
         gasFeesInUsd: quote.gasFeesInUsd,
         quoteId: quote.quoteId,
         sellAmount: input.amount,
         sellAmountInUsd: quote.sellAmountInUsd,
+        ...(valueDeltaPercent === undefined ? {} : { valueDeltaPercent }),
       },
     };
   } catch (error) {

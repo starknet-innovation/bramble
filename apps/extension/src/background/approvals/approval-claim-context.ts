@@ -17,6 +17,7 @@ import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
 import { approvalPayloadMatchesContext } from "./approval-context";
+import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalClaim } from "./approvals";
 import type { SignatureWaiters } from "./signature-waiters";
 
@@ -63,12 +64,19 @@ export const validateClaimContext = async (
     : { error: "approval payload changed" };
 };
 
-/** Settles the dapp's held request with the refusal and returns it for the panel. */
+/**
+ * Settles the dapp's held request with the refusal and returns it for the
+ * panel. The claim already removed the request from the queue, and an error
+ * response broadcasts nothing on its own, so this announces the change itself:
+ * otherwise the toolbar badge and every other open surface keep counting a
+ * request that is gone (Sherlock 217).
+ */
 export const settleClaimError = (
   deps: ClaimContextDeps,
   id: string,
   response: RuntimeResponse,
 ): RuntimeResponse => {
   deps.waiters.settle(id, response);
+  notifyApprovalsChanged();
   return response;
 };

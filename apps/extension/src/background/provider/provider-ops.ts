@@ -1,6 +1,7 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
 import { walletErrorMessage } from "@bramble/core/errors";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
@@ -102,6 +103,11 @@ export type InvokeExecuteDeps = {
    * stubs stay valid; a Ledger invoke with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /**
+   * Watched shared accounts, read into the trusted set for the execution-time
+   * lookalike check (Sherlock 140). Omitted, that check skips them.
+   */
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**
@@ -152,9 +158,12 @@ export const queueInvokeApproval = async (
     trusted,
   );
   const report = verifyCalls(input.calls, trusted, standing);
-  const refusal =
-    refuseOnAccountSelfCall(input.calls, resolved.account.address) ??
-    refuseOnPoisonedRecipient(report);
+  // The self-call refusal depends only on the connected account, which the site
+  // already knows. A poisoned recipient is not refused here: an instant refusal
+  // told the site which addresses the user has saved or paid (Sherlock 140).
+  // Its flag rides on the approval, whose card then offers Deny only, and the
+  // execution-time check below still refuses it.
+  const refusal = refuseOnAccountSelfCall(input.calls, resolved.account.address);
   if (refusal) {
     return refusal;
   }
@@ -248,7 +257,10 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   const passphrase = deps.session.peekPassphrase();
   const authorized = captureSessionAuthorization(deps.session);
   const granted = passphrase ? await deps.wallet.getGrantedAccounts(input.origin, passphrase) : [];
-  if (passphrase && !authorized.isCurrent()) return { error: "wallet locked" };
+  // A lock that lands during the read answers what a locked wallet answers,
+  // never an error only that race produces: a polling page would otherwise
+  // learn when each lock happened (Sherlock 148).
+  if (passphrase && !authorized.isCurrent()) return { ok: true, permissions: [] };
   return { ok: true, permissions: granted.length > 0 ? ["accounts"] : [] };
 };
 

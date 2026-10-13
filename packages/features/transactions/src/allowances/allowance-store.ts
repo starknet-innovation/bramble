@@ -23,13 +23,13 @@ import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/jso
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
-
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
+import { keepLargest, trimToTotal } from "./allowance-retention";
 
 /**
  * Browser storage key for the allowance log.
@@ -117,19 +117,30 @@ export type AllowanceOwner = Pick<AllowanceInput, "accountId" | "networkId">;
 /**
  * One tracked allowance with a deterministic id derived from its account,
  * token, and spender.
+ *
+ * `revoking` marks a grant whose revocation (an `approve(spender, 0)`, or a
+ * decrease to zero from an exact base) this wallet has submitted but the chain
+ * has not yet confirmed. The record keeps the grant's last known amount, which
+ * is still the spender's reach until the revoke executes and stays its reach
+ * if the revoke reverts (Sherlock 192). Only `true` is representable.
  */
-export type AllowanceRecord = AllowanceInput & { readonly id: string };
+export type AllowanceRecord = AllowanceInput & {
+  readonly id: string;
+  readonly revoking?: true;
+};
 
 /**
  * Allowance log surface used by background message handling. `record` upserts by
- * id and treats an exact zero amount as a removal, so revoking cleans up the
- * entry; `applyDelta` upserts RELATIVE to the tracked total in one serialized
+ * id and keeps a grant an exact zero would revoke, marked `revoking`, because
+ * a revoke is recorded when submitted and may still revert; `settleRevocations`
+ * drops it once the chain reads the pair as zero. `applyDelta` upserts RELATIVE to the tracked total in one serialized
  * read-modify-write, which is the only concurrency-safe way to apply an
  * `increase_allowance` (composing `list` + `record` at a caller loses one of two
  * concurrent grants, because `list` is a concurrent read by design).
  * Retention follows `ALLOWANCE_LIMITS`: a per-account-and-network cap so one
  * account never evicts another's records, plus a total cap that keeps the
- * persisted log inside the storage boundary's bounded-JSON budget. Both writers
+ * persisted log inside the storage boundary's bounded-JSON budget; at either
+ * cap the smallest allowances go first. Both writers
  * ignore an entry whose token or spender is not a felt rather than throwing, and
  * a subtraction that lands on zero without an exact base is kept as a
  * zero-valued lower bound rather than deleted — see {@link AllowanceInput}.
@@ -139,6 +150,14 @@ export type AllowanceStore = {
   readonly list: () => Promise<readonly AllowanceRecord[]>;
   readonly record: (entry: AllowanceInput) => Promise<void>;
   readonly remove: (id: string) => Promise<void>;
+  /**
+   * Drops pending revokes and zero lower bounds that a live chain reading
+   * states are zero. Any other reading, and any other record, is left alone.
+   * Readings are untrusted; only an exact "0" acts.
+   */
+  readonly settleRevocations: (
+    readings: readonly { readonly amount: string; readonly id: string }[],
+  ) => Promise<void>;
 };
 
 const isAmount = (value: unknown): value is string =>
@@ -184,6 +203,7 @@ export const hasValidAllowanceFields = (value: Record<string, unknown>): boolean
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   isAmount(value["amount"]) &&
   (value["lowerBound"] === undefined || value["lowerBound"] === true) &&
+  (value["revoking"] === undefined || value["revoking"] === true) &&
   typeof value["id"] === "string" &&
   typeof value["spender"] === "string" &&
   isNonZeroStarkFieldElement(value["spender"]) &&
@@ -202,6 +222,7 @@ export const isAllowanceRecord = (value: unknown): value is AllowanceRecord =>
     "id",
     "lowerBound",
     "networkId",
+    "revoking",
     "spender",
     "token",
   ]) &&
@@ -269,88 +290,77 @@ const readEntries = async (store: KeyValueStore): Promise<readonly AllowanceReco
 const sameScope = (stored: AllowanceRecord, next: AllowanceRecord): boolean =>
   allowanceScope(stored) === allowanceScope(next);
 
-// How many entries each scope may keep once the log as a whole has to fit in
-// `limit`. Each round levels down every scope currently holding the most, so the
-// scopes that caused the overflow pay for it and the survivors end up within one
-// entry of an equal share — a scope is never emptied while another still holds a
-// full quota. Levelling the whole tallest row (rather than picking one scope by
-// name) is what keeps it fair: a tie broken by a fixed rule would send every
-// eviction to the same unlucky account until it was empty.
-const scopeBudgets = (
-  counts: ReadonlyMap<string, number>,
-  limit: number,
-): ReadonlyMap<string, number> => {
-  const budgets = new Map(counts);
-  let total = [...budgets.values()].reduce((sum, count) => sum + count, 0);
-  while (total > limit) {
-    const tallest = Math.max(...budgets.values());
-    for (const [scope, count] of budgets) {
-      if (count === tallest && total > limit) {
-        budgets.set(scope, count - 1);
-        total -= 1;
-      }
-    }
-  }
-  return budgets;
-};
-
-// Fits the log inside the total cap while leaving one slot for the incoming
-// entry, evicting the oldest records of the fullest scopes rather than the
-// oldest records overall.
-//
-// Global age was the trap the per-scope cap only half-closed: with the log
-// full, one account granting allowances all afternoon evicts another account's
-// records one per write until that account reports "no allowances" while still
-// holding live unlimited approvals — the exact false negative this bound exists
-// to prevent, reached at four saturated scopes instead of one. Recency of WRITE
-// is not evidence of liveness, so it may decide which of a scope's own records
-// goes, never which scope goes hungry.
-const trimToTotal = (entries: readonly AllowanceRecord[]): readonly AllowanceRecord[] => {
-  if (entries.length < MAX_ENTRIES_TOTAL) {
-    return entries;
-  }
-  const counts = new Map<string, number>();
-  for (const stored of entries) {
-    counts.set(allowanceScope(stored), (counts.get(allowanceScope(stored)) ?? 0) + 1);
-  }
-  const budgets = scopeBudgets(counts, MAX_ENTRIES_TOTAL - 1);
-  const remaining = new Map(budgets);
-  const kept: AllowanceRecord[] = [];
-  // Newest first, so the slots a scope keeps are its most recent records and
-  // the ones it gives up are its oldest.
-  for (const stored of [...entries].reverse()) {
-    const scope = allowanceScope(stored);
-    const budget = remaining.get(scope) ?? 0;
-    if (budget > 0) {
-      remaining.set(scope, budget - 1);
-      kept.push(stored);
-    }
-  }
-  return kept.reverse();
-};
-
 // Upserts one allowance, trimming the writing account's own network scope before
 // the whole log. A trim that was only global would let a busy account silently
 // drop allowances the user can no longer see or revoke; a trim that was only
 // per-scope would let enough scopes grow the log past the storage boundary's
-// JSON budget, after which every write is rejected and nothing is tracked.
+// JSON budget, after which every write is rejected and nothing is tracked. Both
+// trims drop the smallest allowances first (./allowance-retention), and the
+// incoming entry competes like any other: an approval smaller than every one a
+// full scope already holds is the one not kept.
+//
+// An exact zero does not remove the pair (Sherlock 192). Every writer records a
+// call once it is submitted, not once it executes, and a revoke that then
+// reverts or is rejected leaves the earlier approval standing; deleting the
+// record would hide a live grant the user just tried to revoke. The grant is
+// kept at its last known amount and marked `revoking` until a chain reading
+// of zero confirms the revoke (see `settleRevocations`). Keeping the amount
+// also keeps its rank: a pending revoke of an unlimited grant is not the first
+// record a full scope evicts. An exact zero for a pair the log never held
+// writes nothing: there is no grant here to keep visible.
+const recordedEntry = (
+  entries: readonly AllowanceRecord[],
+  next: AllowanceRecord,
+): AllowanceRecord | null => {
+  if (next.amount !== "0" || next.lowerBound) {
+    return next;
+  }
+  const tracked = entries.find((stored) => stored.id === next.id);
+  return tracked ? { ...tracked, revoking: true as const } : null;
+};
+
 const entriesAfterRecord = (
   entries: readonly AllowanceRecord[],
   next: AllowanceRecord,
 ): readonly AllowanceRecord[] => {
-  const kept = entries.filter((stored) => stored.id !== next.id);
-  // A zero EXACT amount is a revocation — `approve(spender, 0)` states the
-  // standing allowance outright — so the entry goes. A zero LOWER BOUND states
-  // nothing at all about what remains, and dropping it would erase the only
-  // record of a pair the user can still be exposed to and can still revoke.
-  if (next.amount === "0" && !next.lowerBound) {
-    return kept;
+  const recorded = recordedEntry(entries, next);
+  if (!recorded) {
+    return entries;
   }
-  const retained = new Set(
-    kept.filter((stored) => sameScope(stored, next)).slice(-(MAX_ENTRIES_PER_SCOPE - 1)),
+  const withNext = [...entries.filter((stored) => stored.id !== next.id), recorded];
+  const scopeKept = new Set(
+    keepLargest(
+      withNext.filter((stored) => sameScope(stored, recorded)),
+      MAX_ENTRIES_PER_SCOPE,
+    ),
   );
-  const scoped = kept.filter((stored) => !sameScope(stored, next) || retained.has(stored));
-  return [...trimToTotal(scoped), next];
+  return trimToTotal(
+    withNext.filter((stored) => !sameScope(stored, recorded) || scopeKept.has(stored)),
+    MAX_ENTRIES_TOTAL,
+    allowanceScope,
+  );
+};
+
+// Drops the records a chain reading of zero confirms are gone: a pending
+// revoke, and a zero lower bound left by a decrease. Nothing else is touched,
+// and no other reading rewrites a record. A non-zero reading cannot tell a
+// revoke the network has not mined yet from one that reverted, and a record
+// holding a figure may be ahead of the chain (a grant not mined yet), so the
+// display takes the larger of the two instead (../allowance-discovery's
+// `withOnChainAmount`).
+const entriesAfterSettle = (
+  entries: readonly AllowanceRecord[],
+  readings: readonly { readonly amount: string; readonly id: string }[],
+): readonly AllowanceRecord[] | null => {
+  const zeroed = new Set(
+    readings.filter((reading) => reading.amount === "0").map((reading) => reading.id),
+  );
+  const settled = entries.filter(
+    (stored) =>
+      !zeroed.has(stored.id) ||
+      !(stored.revoking === true || (stored.amount === "0" && stored.lowerBound === true)),
+  );
+  return settled.length === entries.length ? null : settled;
 };
 
 // Applies one relative change to what the log already tracks for the same
@@ -437,6 +447,12 @@ export const createAllowanceStore = ({
         const kept = (await readEntries(store)).filter((stored) => stored.id !== id);
         await store.set(ALLOWANCE_STORE_KEY, [...kept]);
       },
+      async settleRevocations(readings) {
+        const settled = entriesAfterSettle(await readEntries(store), readings);
+        if (settled) {
+          await store.set(ALLOWANCE_STORE_KEY, [...settled]);
+        }
+      },
     },
     ["list"],
   );
@@ -465,6 +481,9 @@ export const memoryAllowanceStore = (): AllowanceStore => {
     },
     async remove(id) {
       entries = entries.filter((stored) => stored.id !== id);
+    },
+    async settleRevocations(readings) {
+      entries = [...(entriesAfterSettle(entries, readings) ?? entries)];
     },
   };
 };

@@ -130,6 +130,27 @@ describe("onboarding phrase copy", () => {
     expect(copyButton(app)?.disabled).toBe(false);
   });
 
+  test("names the recovery phrase on its Show, Hide and Copy controls", async () => {
+    const app = await mountAtGenerated([FIRST, SECOND]);
+    const toggle = app.querySelector("#phrase-toggle");
+    // "Show" and "Copy" alone do not say what they reveal or copy (mc-wallet
+    // issue 476); the names keep the visible word first.
+    expect(toggle?.getAttribute("aria-label")).toBe("Show recovery phrase");
+    expect(copyButton(app)?.getAttribute("aria-label")).toBe("Copy recovery phrase");
+
+    click(app, "#phrase-toggle");
+    expect(app.querySelector("#phrase-toggle")?.getAttribute("aria-label")).toBe(
+      "Hide recovery phrase",
+    );
+
+    click(app, '[data-onboarding-step="generated"] [data-onboarding-back]');
+    click(app, "#create-new-button");
+    await tick();
+    expect(app.querySelector("#phrase-toggle")?.getAttribute("aria-label")).toBe(
+      "Show recovery phrase",
+    );
+  });
+
   test("copies the live words and schedules the same one-minute clear", async () => {
     const app = await mountAtGenerated();
     click(app, "#phrase-toggle");

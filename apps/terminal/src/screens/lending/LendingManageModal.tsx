@@ -8,6 +8,9 @@ import {
   buildVesuVaultRedeemCalls,
   quoteVesuMultiplyClose,
   quoteVesuMultiplyIncrease,
+  registeredVesuVToken,
+  VESU_VAULT_DEPOSITS_ENABLED,
+  verifyVesuMultiplyPool,
 } from "../../protocols/index";
 import { buildLendingCalls, quoteLending } from "../../protocols/vesu/vesu";
 import { useWallet } from "../../wallet/connection/WalletProvider";
@@ -52,7 +55,8 @@ const actionsFor = (
     case "vault":
       return [
         { id: "redeem", label: "Redeem" },
-        { id: "deposit", label: "Add funds" },
+        // Paused until vault addresses are verified (Sherlock 169).
+        ...(VESU_VAULT_DEPOSITS_ENABLED ? [{ id: "deposit" as const, label: "Add funds" }] : []),
       ];
   }
 };
@@ -113,6 +117,8 @@ export const LendingManageModal = ({
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
+  // The vToken the last supply quote verified against the registry.
+  const receiptVToken = useRef<string | null>(null);
   const debtMarket = matchingMarket(markets, position.poolId, position.debtAddress);
   const collateralMarket = matchingMarket(
     markets,
@@ -184,6 +190,7 @@ export const LendingManageModal = ({
         action === "borrow" || action === "repay" ? position.collateralAddress : undefined,
       poolId: position.poolId,
     });
+    receiptVToken.current = quote.vTokenAddress;
     return buildLendingCalls({ accountAddress: address, quote });
   };
 
@@ -195,6 +202,8 @@ export const LendingManageModal = ({
     ) {
       throw new Error("This Multiply position is missing its debt leg.");
     }
+    // The pool goes to modify_lever and both delegation calls (Sherlock 169).
+    await verifyVesuMultiplyPool(position.poolId, position.collateralAddress, position.debtAddress);
     if (action === "unwind") {
       const route = await quoteVesuMultiplyClose(
         position.debtAddress,
@@ -245,6 +254,7 @@ export const LendingManageModal = ({
   const submit = async (): Promise<void> => {
     setIsSubmitting(true);
     setMessage(action === "unwind" || action === "wind" ? "Quoting atomic route…" : "Preparing calls…");
+    receiptVToken.current = null;
     try {
       const calls =
         position.type === "multiply"
@@ -271,10 +281,12 @@ export const LendingManageModal = ({
             ? "This increases exposure and liquidation risk. Verify the amount and fee."
             : "Verify the amount and final wallet calldata before approval.",
       });
-      if (action === "supply" && market !== null) {
+      const supplyReceipt = receiptVToken.current;
+      if (action === "supply" && supplyReceipt !== null) {
         setMessage("Transaction broadcast. Add the receipt token in your wallet…");
         try {
-          await watchAsset({ address: market.vTokenAddress });
+          // The registry's vToken from the quote, not the API's (Sherlock 169).
+          await watchAsset({ address: supplyReceipt });
         } catch {
           setMessage("Transaction broadcast. The receipt token was not added to the wallet.");
           onSubmitted();
@@ -295,7 +307,9 @@ export const LendingManageModal = ({
     setIsTracking(true);
     setMessage(`Opening the wallet to add ${receiptSymbol}…`);
     try {
-      await watchAsset({ address: receiptMarket.vTokenAddress });
+      // The registry's vToken, not the API's (Sherlock 169).
+      const vToken = await registeredVesuVToken(position.poolId, receiptMarket.assetAddress);
+      await watchAsset({ address: vToken });
       setMessage(`${receiptSymbol} is now tracked in the wallet.`);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : "Receipt token was not added.");

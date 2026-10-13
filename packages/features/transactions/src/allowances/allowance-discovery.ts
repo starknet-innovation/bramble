@@ -68,6 +68,32 @@ export type AllowanceView = AllowanceRecord & {
 };
 
 /**
+ * What an allowance listing could not vouch for, so the manager never reports
+ * "none found" for a list it knows is partial:
+ * - `scan-incomplete`: on-chain discovery stopped before the end of a tracked
+ *   token's approvals, or could not run (Sherlock 181);
+ * - `multisig-unread`: a watched multisig could not be read, so approvals it
+ *   granted are left out (Sherlock 190);
+ * - `retention-full`: the account's log is at its retention cap, so smaller
+ *   approvals may have been dropped (Sherlock 183).
+ */
+export const ALLOWANCE_NOTICES = ["multisig-unread", "retention-full", "scan-incomplete"] as const;
+
+/**
+ * One of {@link ALLOWANCE_NOTICES}.
+ */
+export type AllowanceNotice = (typeof ALLOWANCE_NOTICES)[number];
+
+/**
+ * Validates an untrusted list of allowance notices: known values, each at most
+ * once.
+ */
+export const isAllowanceNotices = (value: unknown): value is readonly AllowanceNotice[] =>
+  Array.isArray(value) &&
+  value.every((notice) => (ALLOWANCE_NOTICES as readonly unknown[]).includes(notice)) &&
+  new Set(value).size === value.length;
+
+/**
  * One outstanding allowance read from chain: the current on-chain amount for a
  * (token, spender) pair, independent of whether this wallet granted it.
  */
@@ -121,6 +147,7 @@ export const isAllowanceView = (value: unknown): value is AllowanceView =>
     "id",
     "lowerBound",
     "networkId",
+    "revoking",
     "source",
     "spender",
     "token",
@@ -181,11 +208,15 @@ export const parseAllowanceAmount = (response: readonly string[]): string | null
 // the chain has now stated the standing allowance for that exact pair, so the
 // row stops being an "at least" and becomes exact. A smaller reading leaves the
 // record — and its lower-bound marking — alone.
+//
+// A grant with a revoke pending is the exception: nothing this wallet sent can
+// leave the chain BEHIND it, only bring the allowance down, so its reading is
+// taken as it stands. A zero means the revoke executed and the row goes.
 const withOnChainAmount = (view: AllowanceView, onChain: string | undefined): AllowanceView => {
   if (!isBaseUnitsAmount(onChain) || !isBaseUnitsAmount(view.amount)) {
     return view;
   }
-  if (BigInt(onChain) < BigInt(view.amount)) {
+  if (BigInt(onChain) < BigInt(view.amount) && !view.revoking) {
     return view;
   }
   // Rebuilt field by field rather than spread, so the resolved `lowerBound`
@@ -197,6 +228,7 @@ const withOnChainAmount = (view: AllowanceView, onChain: string | undefined): Al
     amount: onChain,
     id: view.id,
     networkId: view.networkId,
+    ...(view.revoking && onChain !== "0" ? { revoking: true as const } : {}),
     source: view.source,
     spender: view.spender,
     token: view.token,

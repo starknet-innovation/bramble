@@ -152,10 +152,12 @@ describe("allowance manager messages", () => {
     expect(revokeCall.entrypoint).toBe("approve");
     expect(revokeCall.calldata).toEqual([`0x${BigInt(SPENDER).toString(16)}`, "0x0", "0x0"]);
 
+    // Until a chain reading of zero confirms it, the submitted revoke leaves
+    // the grant listed and revokable: it may still revert (Sherlock 192).
     const after = (await handler({ type: "wallet.allowances" }, extensionSender)) as {
       allowances: readonly unknown[];
     };
-    expect(after.allowances).toEqual([]);
+    expect(after.allowances).toMatchObject([{ id, revoking: true }]);
   });
 
   test("rejects revoking an unknown allowance", async () => {

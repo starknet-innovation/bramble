@@ -146,9 +146,11 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * assistive tech), so nothing is announced twice. The visible verb is a classification, so the accessible name keeps
  * the full recorded summary (prefixed by the verb when the summary does not
  * already start with it) — the row never announces less than the record says.
- * A recorded counterparty shows truncated with a quiet copy control that
- * carries the full stored address (the row itself is not a button, so the
- * control nests nowhere). Without `pricing` the fiat delta is simply absent.
+ * The transaction hash, its Starkscan link and its copy control, and a
+ * recorded counterparty with its own copy control, sit in the expanded body:
+ * a `<summary>` is one control with its own accessible name, so links and
+ * buttons inside it may never reach assistive tech (mc-wallet issue 476).
+ * Without `pricing` the fiat delta is simply absent.
  */
 export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
@@ -183,14 +185,6 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
         <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-hidden="true" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
         <span class="tx-copy">
           <strong class="tx-title">${escapeHtml(heading)}</strong>
-          <span class="tx-hash-row">
-            ${
-              explorer
-                ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
-                : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
-            }
-            ${inlineCopyButton(entry.hash, "Copy transaction hash")}
-          </span>
         </span>
         ${
           entry.status === "accepted"
@@ -202,6 +196,11 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
       </summary>
       <div class="disclosure-body">
         <dl class="request-detail">
+          <div><dt>Transaction</dt><dd class="tx-hash-row">${
+            explorer
+              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
+              : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
+          }${inlineCopyButton(entry.hash, "Copy transaction hash")}</dd></div>
           ${
             row.counterparty
               ? `<div><dt>${escapeHtml(capitalise(row.counterparty.role))}</dt><dd><code title="${escapeHtml(row.counterparty.address)}">${escapeHtml(accountLabel(row.counterparty.address))}</code>${inlineCopyButton(row.counterparty.address, `Copy ${row.counterparty.role} address`)}</dd></div>`

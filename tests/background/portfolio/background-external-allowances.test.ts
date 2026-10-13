@@ -102,9 +102,12 @@ const makeHarness = (
       // Faithful to the real scan: it can only answer about the tokens it was
       // handed, which is `preferences.tokens` for the active network.
       async getExternalAllowances(input) {
-        return input.tokens.some((token) => BigInt(token) === BigInt(TOKEN))
-          ? [{ amount: "5000", spender: SPENDER, token: TOKEN }]
-          : [];
+        return {
+          allowances: input.tokens.some((token) => BigInt(token) === BigInt(TOKEN))
+            ? [{ amount: "5000", spender: SPENDER, token: TOKEN }]
+            : [],
+          complete: true,
+        };
       },
       async getTrackedAllowances(input) {
         trackedReads.push(input);

@@ -159,3 +159,13 @@ export const AllowancesEmpty = checkpointStory(
   "assets",
   "allowances-empty",
 );
+export const AllowancesPartial = checkpointStory(
+  "Assets · allowances partial",
+  "assets",
+  "allowances-partial",
+);
+export const AllowancesUnavailable = checkpointStory(
+  "Assets · allowances not loaded",
+  "assets",
+  "allowances-unavailable",
+);

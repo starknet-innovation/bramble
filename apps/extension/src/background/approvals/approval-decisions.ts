@@ -12,6 +12,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
 import { isLikelySpam } from "@bramble/portfolio/token-registry";
@@ -60,6 +61,8 @@ export type ApprovalDecisionDeps = {
   readonly approvals: ApprovalQueue;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /** Watched shared accounts, trusted by the execution-time lookalike check (Sherlock 140). */
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -69,6 +72,7 @@ export type ApprovalDecisionDeps = {
 };
 
 const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
+const NO_LONGER_PENDING: RuntimeResponse = { error: "approval no longer pending" };
 // What a connection whose active account moved between paint and click is refused with.
 const ACCOUNT_CHANGED_REFUSAL = "the account changed since this request was reviewed";
 /**
@@ -176,6 +180,7 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -202,6 +207,7 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       actions: payload.actions,
@@ -241,6 +247,7 @@ const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -262,6 +269,7 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -461,12 +469,15 @@ const applyDenyDecision = async (
     return { error: "invalid approval request" };
   }
   const denied = deps.approvals.claim(input.id)?.approval ?? null;
-  if (denied) {
-    await deps.originHistory.record(denied.origin).catch(() => undefined);
-    deps.waiters.settle(input.id, {
-      error: denied.kind === "connect" ? "connection rejected" : "request rejected",
-    });
+  // Nothing to deny: it was answered elsewhere or expired. Reporting success
+  // showed "Request denied" over another window's broadcast (Sherlock 220).
+  if (!denied) {
+    return NO_LONGER_PENDING;
   }
+  await deps.originHistory.record(denied.origin).catch(() => undefined);
+  deps.waiters.settle(input.id, {
+    error: denied.kind === "connect" ? "connection rejected" : "request rejected",
+  });
   return { ok: true, pending: deps.approvals.list() };
 };
 

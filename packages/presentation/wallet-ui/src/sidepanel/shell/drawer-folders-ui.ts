@@ -12,7 +12,7 @@
  */
 
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../shared/dom";
 import { INITIAL_COLLAPSED_FOLDERS } from "./drawer-folders";
 
 /**
@@ -135,7 +135,7 @@ const bindDropTargets = (root: Element, deps: DrawerFolderDeps): void => {
           await repaint(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Could not move that account"), "error", folder);
+          showToast(errorDetails(error, "Could not move that account"), "error", folder);
         },
       );
     });
@@ -199,7 +199,7 @@ const bindNetworkSwitch = (root: Element, deps: DrawerFolderDeps): void => {
   for (const option of root.querySelectorAll<HTMLButtonElement>("[data-drawer-network-id]")) {
     option.addEventListener("click", () => {
       const networkId = option.dataset["drawerNetworkId"];
-      if (!networkId || option.getAttribute("aria-selected") === "true") {
+      if (!networkId || option.getAttribute("aria-current") === "true") {
         return;
       }
       buttonBusy(option, true);
@@ -208,7 +208,7 @@ const bindNetworkSwitch = (root: Element, deps: DrawerFolderDeps): void => {
           await deps.render(status);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Network switch failed"), "error", option);
+          showToast(errorDetails(error, "Network switch failed"), "error", option);
           buttonBusy(option, false);
         },
       );

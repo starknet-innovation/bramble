@@ -3,14 +3,17 @@
 import { withDefaultGroups } from "@bramble/settings/groups";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
-import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import { receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
-import type { ConnectedSite, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
+import type {
+  AllowanceListing,
+  TokenBalance,
+  WalletStatus,
+} from "../../../popup/responses/responses";
 import { recoveryScanFields, recoveryWordInputs } from "../../journeys/onboarding/onboarding-views";
 import { allowancesFlow } from "../../journeys/portfolio/allowance-views";
 import type { PrivacyDisclosureState } from "../../journeys/privacy/privacy-model";
@@ -57,7 +60,7 @@ import {
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
 import { outcomeReceiptSection } from "../../shared/outcome-receipt";
-import { addressBookFlow, connectedSitesFlow } from "./support-flows";
+import { addressBookFlow, type ConnectedSitesState, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
 export { backupHubFlow as backupFlow } from "../../journeys/settings/settings-views";
@@ -295,11 +298,11 @@ export const simpleFlowScreen = (
   activeView: WalletView,
   ctx: {
     readonly account: AccountRef | null;
-    readonly allowances: readonly AllowanceView[];
+    readonly allowances: AllowanceListing;
     readonly balances: readonly TokenBalance[];
     readonly changes: Readonly<Record<string, number>>;
     readonly classHashVerification: ClassHashVerification | null;
-    readonly connectedSites: readonly ConnectedSite[];
+    readonly connectedSites: ConnectedSitesState;
     readonly currency: DisplayCurrency;
     readonly deployment: boolean | null;
     readonly expandedGroupId: string | null;

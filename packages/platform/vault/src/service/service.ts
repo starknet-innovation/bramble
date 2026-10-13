@@ -30,6 +30,7 @@ import { migrateVault } from "../schema/migrations";
 import { isVaultV11, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
+import { createGrantCache } from "./grant-cache";
 import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
@@ -77,11 +78,13 @@ type WalletVaultServiceOptions = {
  */
 export const createWalletVaultService = ({
   actor = "background",
-  encryptedStore,
+  encryptedStore: primaryStore,
   kms,
   migrationStore,
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
+  const grants = createGrantCache();
+  const encryptedStore = grants.watch(primaryStore);
   const requirePassphrase = (vaultPassphrase: string): void => {
     if (!isVaultPassphrase(vaultPassphrase)) {
       throw new WalletError(
@@ -104,8 +107,12 @@ export const createWalletVaultService = ({
 
   const readVault = (vaultPassphrase: string): Promise<Vault> =>
     serialized(async () => {
+      // Not every write is serialized, so one that starts or ends during this
+      // read leaves the cache empty rather than holding what it replaced.
+      const startedAt = grants.generation();
       const vault = await readVaultSnapshot(vaultPassphrase);
       await encryptedStore.upgradeLegacyEnvelope(vaultPassphrase).catch(() => undefined);
+      grants.remember(vaultPassphrase, vault, startedAt);
       return vault;
     });
 
@@ -238,6 +245,10 @@ export const createWalletVaultService = ({
       const accountIds = [...new Set([...(existing?.accountIds ?? []), account.id])];
       requireGrantAuthorization(isAuthorized);
 
+      // Re-checked after encryption, right before the commit starts: a
+      // lock during key derivation abandons the grant with nothing stored. The
+      // rollback covers only a lock during the storage writes themselves
+      // (Sherlock 255).
       await writeVault(
         encryptedStore,
         {
@@ -245,6 +256,7 @@ export const createWalletVaultService = ({
           originGrants: [...grants, { accountIds, origin: input.origin }],
         },
         input.vaultPassphrase,
+        () => requireGrantAuthorization(isAuthorized),
       );
       await rollbackRevokedGrant(isAuthorized, () =>
         writeVault(encryptedStore, vault, input.vaultPassphrase),
@@ -257,11 +269,14 @@ export const createWalletVaultService = ({
         throw new WalletError("Invalid origin");
       }
 
-      const vault = await readVault(vaultPassphrase);
+      // Served from memory between writes, so a site cannot time this read
+      // to learn whether the wallet is unlocked (Sherlock 135).
+      const vault = grants.lookup(vaultPassphrase) ?? (await readVault(vaultPassphrase));
       return grantedAccountIdsFor(vault, origin).map((accountId) =>
         findVaultAccount(vault, accountId),
       );
     },
+    clearGrantCache: grants.clear,
     readVault,
     importSeedAccounts: (input) =>
       serialized(() => importSeedVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),

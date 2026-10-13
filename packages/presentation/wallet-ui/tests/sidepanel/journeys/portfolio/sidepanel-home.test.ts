@@ -213,7 +213,7 @@ describe("sidepanel home", () => {
       prices,
       [],
       null,
-      [],
+      { entries: [], notices: [], unavailable: false },
       null,
       {},
       [],

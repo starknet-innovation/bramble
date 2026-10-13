@@ -4,14 +4,19 @@ import type { Vault } from "../schema/schema";
 import type { RevealedSecrets } from "./service-types";
 
 /**
- * Extracts the active account's private key and the recovery phrase that backs
- * it: an account derived from an imported seed reveals THAT seed's phrase (the
- * one that recovers it elsewhere), every other account reveals the founding
- * phrase. Missing account/key state and a dangling seed reference fail closed;
- * callers must never persist or log the result.
+ * Extracts an account's private key and the recovery phrase that backs it: an
+ * account derived from an imported seed reveals THAT seed's phrase (the one
+ * that recovers it elsewhere), every other account reveals the founding
+ * phrase. `accountId` defaults to the vault's stored pointer; a caller that
+ * shows an account per network passes the one it shows, so the secrets and
+ * the screen describe the same account. Missing account/key state and a
+ * dangling seed reference fail closed; callers must never persist or log the
+ * result.
  */
-export const activeAccountSecrets = (vault: Vault): RevealedSecrets => {
-  const accountId = vault.activeAccountId;
+export const activeAccountSecrets = (
+  vault: Vault,
+  accountId: string | null = vault.activeAccountId,
+): RevealedSecrets => {
   if (!accountId) {
     throw new WalletError("No account selected");
   }

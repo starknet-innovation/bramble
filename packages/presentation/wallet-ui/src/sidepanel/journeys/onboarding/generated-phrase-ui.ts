@@ -51,6 +51,7 @@ export const bindGeneratedPhrase = (
     const masked = !(grid?.classList.contains("is-masked") ?? false);
     setGeneratedPhraseMasked(grid, inputs, masked);
     toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
+    toggle.setAttribute("aria-label", `${masked ? "Show" : "Hide"} recovery phrase`);
     revealed ||= !masked;
     syncUnlocked();
   });
@@ -61,6 +62,7 @@ export const bindGeneratedPhrase = (
       revealed = false;
       setGeneratedPhraseMasked(grid, inputs, true);
       toggle?.lastChild?.replaceWith("Show");
+      toggle?.setAttribute("aria-label", "Show recovery phrase");
       syncUnlocked();
     },
   };

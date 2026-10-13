@@ -14,7 +14,7 @@ import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/prefe
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import type { AllowanceNotice, AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { SwapCatalogToken } from "@bramble/transactions/avnu";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -79,7 +79,8 @@ type ValidateMnemonicResponse = {
 type RevealSecretsResponse = {
   readonly mnemonic: string | null;
   readonly ok: true;
-  readonly privateKey: string;
+  /** `null` on a network with no account: only the recovery phrase is revealed. */
+  readonly privateKey: string | null;
 };
 
 /**
@@ -235,6 +236,9 @@ type SwapQuoteResponse = {
     readonly quoteId: string;
     readonly sellAmount: string;
     readonly sellAmountInUsd: number;
+    // Value delta priced from the wallet's own feed (Sherlock 137); absent
+    // when the feed has no price for either token.
+    readonly valueDeltaPercent?: number;
   };
 };
 
@@ -268,6 +272,7 @@ type TransactionAlertsResponse = {
  */
 type AllowancesResponse = {
   readonly allowances: readonly AllowanceView[];
+  readonly notices?: readonly AllowanceNotice[];
   readonly ok: true;
 };
 

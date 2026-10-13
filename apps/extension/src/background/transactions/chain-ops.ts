@@ -23,8 +23,9 @@ import {
 import type { RpcProvider } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
+import { withApprovalReservation } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import type { PendingApproval } from "../approvals/approval-snapshot";
 import type { ApprovalQueue } from "../approvals/approvals";
 import { promptReconnectForStaleGrant } from "../approvals/reconnect-prompt";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
@@ -32,7 +33,7 @@ import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
   readOriginRequestInput,
-  readSignTypedDataInput,
+  type readSignTypedDataInput,
   readSwitchChainInput,
 } from "../routing/message-inputs";
 import {
@@ -54,6 +55,7 @@ import {
   type UnlockSession,
 } from "../runtime/session";
 import { reviewOutsideExecution } from "./outside-execution-review";
+import { admitSignTypedData } from "./sign-typed-data-admission";
 import { withTrustedRecipients } from "./trusted-recipients";
 import { describeTypedData } from "./typed-data-summary";
 
@@ -195,45 +197,27 @@ type ChainOpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-// The perimeter a typed-data request passes before any session or vault read:
-// a well-formed message, a truthfully claimed and unblocked origin, and room in
-// that origin's share of the approval queue.
-const admitSignTypedData = (
+/**
+ * Everything a dapp typed-data signature request does between admission and
+ * the approval queue: the session and vault reads, the SNIP-12 hash, and the
+ * outside-execution review.
+ *
+ * `summary` is the approval card's one-line description of the request.
+ *
+ * Runs under the origin's admission reservation (Sherlock 151) and calls
+ * `release` in the same synchronous step that queues the approval, so the
+ * queued prompt replaces the reservation. Every refusal is returned as a
+ * response, never thrown; the authorization captured before the first read is
+ * re-checked after every await, so a lock mid-request queues nothing
+ * (Sherlock 166).
+ */
+const queueSignTypedData = async (
   deps: ChainOpsDeps,
-  message: unknown,
-  sender: RuntimeSender | undefined,
-):
-  | { readonly input: NonNullable<ReturnType<typeof readSignTypedDataInput>> }
-  | { readonly refusal: RuntimeResponse } => {
-  const input = readSignTypedDataInput(message);
-  if (!input) {
-    return { refusal: { error: "invalid sign typed data request" } };
-  }
-  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
-    return { refusal: { error: "sender origin mismatch" } };
-  }
-  // A blocklisted origin gets no signing prompt even if it still holds an old
-  // connection grant — the phishing feed is the defense for the post-grant
-  // case. Mirror the sibling dapp surfaces (provider-ops, declare, strk20).
-  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
-    return { refusal: { error: "origin blocked" } };
-  }
-  // Refuse a flooding origin BEFORE the expensive work, not after it. Hashing a
-  // maximum-size SNIP-12 document can monopolize synchronous Pedersen work in
-  // the service worker that also serves the panel, and reading the grants decrypts
-  // the vault — paying both for a request the queue cap will refuse anyway is
-  // how a per-origin cap that bounds memory leaves CPU unbounded.
-  requireApprovalAdmission(deps.approvals, input.origin);
-  return { input };
-};
-
-const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, preferencesStore, session, waiters, wallet } = deps;
-  const admitted = admitSignTypedData(deps, message, sender);
-  if ("refusal" in admitted) {
-    return admitted.refusal;
-  }
-  const { input } = admitted;
+  input: NonNullable<ReturnType<typeof readSignTypedDataInput>>,
+  summary: string,
+  release: () => void,
+): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
+  const { approvals, preferencesStore, session, wallet } = deps;
   // Read the session only after the message is well-formed and its origin is
   // both claimed truthfully and unblocked: the background must validate type,
   // origin, and capability before it acts on a message at all. The
@@ -269,12 +253,15 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   // prompt, so it gets the invoke route's refusals and flags (audit 144),
   // including the standing-allowance totals the invoke route flags against.
   // The trusted set is the invoke route's: contacts plus the user's own
-  // accounts and the recipients this wallet paid (audit 163).
+  // accounts and the recipients this wallet paid (audit 163). A lookalike
+  // recipient is queued with its flag, not refused, so the answer cannot reveal
+  // the address book (Sherlock 140); the signing-time review refuses it.
   const review = reviewOutsideExecution(
     input.typedData,
     account,
     await withTrustedRecipients(deps, preferences, await vaultAccountAddresses(wallet, passphrase)),
     (await deps.allowanceStore?.list().catch(() => [])) ?? [],
+    "queue",
   );
   if (review && "error" in review) {
     return review;
@@ -291,11 +278,30 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
     context,
     origin: input.origin,
     ...(review ? { review } : {}),
-    summary: describeTypedData(input.typedData),
+    summary,
     typedData: input.typedData,
   });
+  release();
   notifyApprovalsChanged();
-  return waiters.register(approval.id);
+  return { approval };
+};
+
+const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
+  const admitted = admitSignTypedData(deps, message, sender);
+  if ("refusal" in admitted) {
+    return admitted.refusal;
+  }
+  const { input } = admitted;
+  // The reservation counts this request against the caps until it queues, so
+  // concurrent requests cannot all pass admission before any of them does the
+  // expensive work below (Sherlock 151).
+  const queued = await withApprovalReservation(deps.approvals, input.origin, (release) =>
+    queueSignTypedData(deps, input, describeTypedData(input.typedData), release),
+  );
+  // Registered once the reservation is released: the queued approval now
+  // counts against the caps itself, and the held response settles only when
+  // the user decides.
+  return "approval" in queued ? deps.waiters.register(queued.approval.id) : queued;
 };
 
 const handleGetChainId: ChainOpsHandler = async (deps, message, sender) => {

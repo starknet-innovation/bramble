@@ -50,11 +50,11 @@ type RevealResult = { readonly resolve: RevealSecretsResponse } | { readonly rej
 
 // Mounts the reveal screen and binds it against a wallet whose revealSecrets
 // yields the scripted outcome, recording the passphrase it was handed.
-const mount = (outcome: RevealResult) => {
+const mount = (outcome: RevealResult, shown: WalletStatus = status) => {
   document.body.replaceChildren();
   const container = document.createElement("div");
   container.id = "app";
-  container.replaceChildren(document.createRange().createContextualFragment(revealFlow(status)));
+  container.replaceChildren(document.createRange().createContextualFragment(revealFlow(shown)));
   document.body.append(container);
 
   const passphrases: string[] = [];
@@ -133,6 +133,20 @@ describe("bindReveal", () => {
       "No recovery phrase is stored for this wallet.",
     );
     expect(container.querySelector("#reveal-key")?.textContent).toBe(PRIVATE_KEY);
+  });
+
+  test("a network with no account reveals the recovery phrase alone, with no key field", async () => {
+    const { container } = mount(
+      { resolve: { mnemonic: MNEMONIC, ok: true, privateKey: null } },
+      { ...status, activeAccountId: null },
+    );
+
+    submit(container);
+    await tick();
+
+    expect(container.querySelector("#reveal-phrase")?.textContent).toBe(MNEMONIC);
+    expect(container.querySelector("#reveal-key")).toBeNull();
+    expect(container.querySelector("#reveal-output")?.hasAttribute("hidden")).toBe(false);
   });
 
   test("a Ledger active account shows the device-recovery note, not a reveal form", () => {

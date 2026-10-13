@@ -51,6 +51,18 @@ const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => 
   });
 };
 
+// The refusal `addDerivedAccount` raises for a vault with no phrase, verbatim.
+const NO_RECOVERY_PHRASE = "No recovery phrase stored for this wallet";
+
+const missingPhraseRefusal = async (ctx: RouterContext): Promise<RuntimeResponse | null> => {
+  const passphrase = ctx.session.peekPassphrase();
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const vault = await ctx.wallet.readVault(passphrase);
+  return vault.mnemonic ? null : { error: NO_RECOVERY_PHRASE };
+};
+
 const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.addAccount") {
     return null;
@@ -60,6 +72,15 @@ const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
     return { error: "invalid add account request" };
   }
   return ctx.activeStateCoordinator.run(async () => {
+    // A vault set up from a private key or a Ledger has no phrase to derive
+    // from, and that refusal is certain. Answer it before the guarded mutation,
+    // which persists the requested network first and locks the session on any
+    // error: a routine menu choice must neither sign the user out nor switch
+    // their network (Sherlock 156).
+    const refusal = await missingPhraseRefusal(ctx);
+    if (refusal) {
+      return refusal;
+    }
     const account = await runUnlockedNetworkMutation(
       ctx.session,
       ctx.preferencesStore,

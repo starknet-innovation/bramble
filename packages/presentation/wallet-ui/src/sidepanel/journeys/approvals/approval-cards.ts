@@ -84,6 +84,24 @@ const decisionRow = (
 const denyOnlyRow = (approval: PendingApproval): string =>
   `<div class="button-row">${denyButton(approval)}</div>`;
 
+// A payment whose recipient mimics an address the user saved or paid reaches
+// the card instead of being refused on arrival, so the site cannot read the
+// address book from the answer (Sherlock 140). It can only be denied: the
+// approve control is absent, and the background refuses it at execution too.
+// The line above the row says why Approve is missing.
+const paysLookalike = (approval: PendingApproval): boolean =>
+  (approval.flags ?? []).some((flag) => flag.code === "address-poisoning");
+
+const paymentDecisionRow = (
+  approval: PendingApproval,
+  label: string,
+  locked: boolean,
+  reviewedFee?: PendingApproval["fee"],
+): string =>
+  paysLookalike(approval)
+    ? `<p class="hint">Bramble won't send this payment.</p>${denyOnlyRow(approval)}`
+    : decisionRow(approval, label, locked, reviewedFee);
+
 // The signing account is identified by its `<network>:<address>` id; the row
 // shows the address half truncated and copies it whole.
 const contextDetails = (approval: PendingApproval): string => {
@@ -255,7 +273,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     }
     ${invokeCallReview(approval)}
     ${contextDisclosure(approval)}
-    ${decisionRow(
+    ${paymentDecisionRow(
       approval,
       "Approve",
       status.locked ||
@@ -271,7 +289,8 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
 // A sign card only offers to sign what the decoder could place on one side of
 // the signed hash or the other; an unclassified payload gets the warning and a
 // Deny-only row instead, because a partial view of a message is exactly what a
-// hostile payload wants the user to trust.
+// hostile payload wants the user to trust. An OutsideExecution paying a
+// lookalike is Deny-only too, like a payment card (Sherlock 140).
 const signCard = (approval: PendingApproval, status: WalletStatus): string => {
   const view = signRequestView(approval.typedData);
   return `
@@ -291,7 +310,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
     ])}
     ${reviewConstraints("No transaction or network fee is submitted. The signed result can still authorize site-specific actions.")}
     ${contextDisclosure(approval)}
-    ${view.classified ? decisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
+    ${view.classified ? paymentDecisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
   </li>`;
 };
 
@@ -302,11 +321,11 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       ${status.locked ? '<p class="hint">Unlock the wallet to review this private transaction.</p>' : ""}
       ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
     </div>
-    ${reviewPanel([...strk20DepositPayeeWarnings(approval), ...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
     ${reviewConstraints("This approval charges no public wallet fee. A relay fee, if listed above, is paid from the private balance. If the wallet pays the network fee for this route, you will review that fee separately.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
-    ${decisionRow(approval, "Approve", status.locked)}
+    ${paymentDecisionRow(approval, "Approve", status.locked)}
   </li>`;
 
 const strk20DisclosureCard = (
@@ -325,11 +344,11 @@ const strk20DisclosureCard = (
       ${status.locked ? `<p class="hint">${copy.lockedHint}</p>` : ""}
       ${approvalCalls(approval) || reviewOutcome(copy.hint)}
     </div>
-    ${reviewPanel([...strk20DepositPayeeWarnings(approval), ...(approval.insights ?? [])])}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...(approval.insights ?? [])])}
     ${reviewConstraints("This approval carries no transaction fee. Any later transaction requires its own review.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
-    ${decisionRow(approval, copy.action, status.locked)}
+    ${paymentDecisionRow(approval, copy.action, status.locked)}
   </li>`;
 
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `

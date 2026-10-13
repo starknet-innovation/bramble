@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./groups": "./src/groups.ts",
-    "./preferences": "./src/preferences.ts"
+    "./preferences": "./src/preferences.ts",
+    "./preferences-backup": "./src/preferences-backup.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",
