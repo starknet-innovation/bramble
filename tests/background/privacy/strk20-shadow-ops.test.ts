@@ -1,7 +1,8 @@
 /**
  * Shadow accounts view messages (#443, PR 5): strict inputs, a scope recorded
  * under another anonymizer listed but not reachable, and nonces the
- * anonymizer's u64 view cannot address reported rather than dropped.
+ * anonymizer's u64 view cannot address reported rather than dropped, and a
+ * sweep that refuses at execution when the anonymizer moved after review.
  */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
@@ -18,6 +19,7 @@ import {
 } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 import {
+  awaitStrk20Job,
   makeStrk20Service,
   STRK20_EXTENSION_SENDER as panel,
   STRK20_TEST_ANONYMIZER,
@@ -266,5 +268,75 @@ describe("shadow accounts view messages", () => {
     );
     expect(prepared).toMatchObject({ ok: true, strk20Preparation: { kind: "shadow-sweep" } });
     expect(store.value[0]?.nonces).toEqual(["0x1", "0x2"]);
+  });
+
+  // Audit F10: the sweep is reviewed against one anonymizer. If the network's
+  // anonymizer changes between review and Confirm, execution refuses before
+  // anything is relayed; the reviewed batch would otherwise run through an
+  // anonymizer the review never named.
+  test("a sweep refuses at execution if the anonymizer changed after review", async () => {
+    const store = { value: [scope({ nonces: ["0x1"] })] as readonly ShadowAccountScopeRef[] };
+    let current = preferences;
+    const submitted: unknown[] = [];
+    const base = makeStrk20Service();
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(
+      {
+        ...createWallet({ shadowAccountScopes: store }),
+        async deriveStrk20ViewingKey() {
+          return "0x55";
+        },
+      },
+      testExtension,
+      {
+        preferencesStore: {
+          ...unavailablePreferencesStore,
+          async read() {
+            return current;
+          },
+        },
+        runtimeRpc: makeRuntimeRpc({
+          async getTokenBalances({ tokens }) {
+            return tokens.map((token) => ({ ...token, balance: "5", formatted: "" }));
+          },
+          strk20: {
+            ...base,
+            async submitActions(input) {
+              submitted.push(input.actions);
+              return base.submitActions(input);
+            },
+          },
+        }),
+        session,
+      },
+    );
+    const prepared = (await handler(
+      {
+        label: "Market",
+        nonce: "0x1",
+        origin: "https://example.com",
+        type: "wallet.strk20PrepareShadowSweep",
+      },
+      panel,
+    )) as { strk20Preparation: { id: string } };
+    expect(prepared.strk20Preparation.id).toBeString();
+    current = {
+      ...preferences,
+      strk20Networks: {
+        ...preferences.strk20Networks,
+        SN_SEPOLIA: { ...mainnet, shadowAccountAnonymizerAddress: "0x99" },
+      },
+    };
+    const executed = await awaitStrk20Job(
+      handler,
+      await handler(
+        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
+        panel,
+      ),
+      panel,
+    );
+    expect(executed).toEqual({ error: "Privacy preparation changed" });
+    expect(submitted).toEqual([]);
   });
 });
