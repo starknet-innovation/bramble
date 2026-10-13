@@ -10,6 +10,11 @@ import axeSource from "axe-core/axe.min.js?raw";
  * renders the live document once more in an ephemeral, offscreen twin frame
  * that is allowed to run the engine, scans that twin's realm, and removes the
  * twin in a `finally`. The review frame is never touched.
+ *
+ * The twin is script-enabled and same-origin with the bench, so the markup it
+ * renders is first made inert: every `<script>` element and every `on*` event
+ * attribute is removed, and the engine is the only code that runs there. This
+ * is a readout for review, not a gate: it reports what the engine finds.
  */
 
 /** One rule failure from the axe engine, reduced to serializable data. */
@@ -74,6 +79,23 @@ const withTimeout = async <T>(work: Promise<T>, timeoutMs: number, message: stri
   }
 };
 
+/**
+ * The markup with every `<script>` element and every `on*` event attribute
+ * removed, so nothing in a reviewed document can run when the script-enabled
+ * twin renders it. Structure, text, attributes and styles are kept, which is
+ * all the accessibility rules read.
+ */
+export const inertMarkup = (markup: string): string => {
+  const parsed = new DOMParser().parseFromString(markup, "text/html");
+  for (const script of parsed.querySelectorAll("script")) script.remove();
+  for (const element of parsed.querySelectorAll("*")) {
+    for (const attribute of [...element.attributes]) {
+      if (attribute.name.toLowerCase().startsWith("on")) element.removeAttribute(attribute.name);
+    }
+  }
+  return `<!doctype html>\n${parsed.documentElement.outerHTML}`;
+};
+
 const parseViolations = (json: string): readonly A11yViolation[] => {
   const parsed: unknown = JSON.parse(json);
   if (!Array.isArray(parsed)) {
@@ -98,7 +120,8 @@ const runAxe = async (frame: HTMLIFrameElement): Promise<readonly A11yViolation[
 /**
  * Scans a standalone document string at a fixed size in a script-enabled twin
  * frame. The twin is same-origin so the bench can inject the engine and read
- * the readout; it carries no navigation capability and is removed afterwards.
+ * the readout; the markup is made inert first ({@link inertMarkup}), the twin
+ * carries no navigation capability, and it is removed afterwards.
  */
 export const scanWalletDocument = async (
   markup: string,
@@ -119,7 +142,7 @@ export const scanWalletDocument = async (
     `width:${Math.max(1, Math.round(size.width))}px`,
     `height:${Math.max(1, Math.round(size.height))}px`,
   ].join(";");
-  frame.srcdoc = markup;
+  frame.srcdoc = inertMarkup(markup);
   host.body.append(frame);
   try {
     await withTimeout(

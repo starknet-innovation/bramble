@@ -66,9 +66,11 @@ Storybook section.
 
 ## Accessibility readout
 
-`Wallet UI Lab / Accessibility scan` runs axe-core against the embedded wallet document, not the
-bench chrome, and reports the violations it finds. The review frame is script-free, so the scan
-renders the live document in an ephemeral twin frame, scans that twin's realm, and removes it.
+`Wallet UI Lab / Accessibility scan` is a readout, not a gate: it runs axe-core against the embedded
+wallet document, not the bench chrome, and reports the violations it finds. The review frame is
+script-free, so the scan renders the live document in an ephemeral twin frame, scans that twin's
+realm, and removes it. The twin runs scripts, so the document is made inert first: every `<script>`
+element and `on*` event attribute is removed, and only the engine runs.
 Open the story and use **Interactions** (or run `bun run test`) to read the result;
 `scanWalletFrame` and `scanWalletDocument` in `src/runtime/a11y-scan.ts` are the helper the lab
 and its tests drive.
