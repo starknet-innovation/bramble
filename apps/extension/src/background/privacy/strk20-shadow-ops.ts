@@ -20,7 +20,11 @@ import {
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
-import { readShadowAccounts, type ShadowScopeTarget } from "./strk20-shadow-reads";
+import {
+  isShadowScopeUnder,
+  readShadowAccounts,
+  type ShadowScopeTarget,
+} from "./strk20-shadow-reads";
 import { recordShadowScopeUses } from "./strk20-shadow-scopes";
 import { prepareShadowSweep } from "./strk20-shadow-sweep";
 
@@ -144,8 +148,9 @@ const SHADOW_OPS: ReadonlyMap<string, ShadowOp> = new Map<string, ShadowOp>([
               // A sweep of a scan-window nonce acts through a shadow account
               // the scope never recorded; record it before the review is
               // returned, so the record stays the complete list of used nonces.
-              const scope = records.find(
-                (record) => record.origin === target.origin && record.label === target.label,
+              const configured = context.accountContext.config?.shadowAccountAnonymizerAddress;
+              const scope = records.find((record) =>
+                isShadowScopeUnder(record, target, configured),
               );
               if (
                 "strk20Preparation" in prepared &&

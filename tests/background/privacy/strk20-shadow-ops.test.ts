@@ -101,6 +101,46 @@ describe("shadow accounts view messages", () => {
     }
   });
 
+  // Audit F3: after the anonymizer changes, one site and label can have a
+  // record under the old anonymizer (A) and one under the configured one (B).
+  // Record order must not decide which one is read, swept, or recorded into.
+  test("a record under the old anonymizer does not hide the configured one", async () => {
+    const old = scope({ anonymizer: "0x99", nonces: ["0x1"] });
+    const current = scope({ nonces: ["0x1"] });
+    for (const order of [
+      [old, current],
+      [current, old],
+    ]) {
+      const store = { value: order as readonly ShadowAccountScopeRef[] };
+      const handler = handlerWith(store.value, store);
+      const balances = await handler(
+        {
+          label: "Market",
+          origin: "https://example.com",
+          type: "wallet.strk20ShadowAccountBalances",
+        },
+        panel,
+      );
+      expect(balances).toMatchObject({ ok: true });
+      const prepared = await handler(
+        {
+          label: "Market",
+          nonce: "0x2",
+          origin: "https://example.com",
+          type: "wallet.strk20PrepareShadowSweep",
+        },
+        panel,
+      );
+      expect(prepared).toMatchObject({ ok: true, strk20Preparation: { kind: "shadow-sweep" } });
+      // The scan-window nonce is recorded into B's record, never A's.
+      const byAnonymizer = (anonymizer: string) =>
+        store.value.find((record) => record.anonymizer === anonymizer)?.nonces;
+      expect(byAnonymizer("0x99")).toEqual(["0x1"]);
+      expect(byAnonymizer(current.anonymizer)).toEqual(["0x1", "0x2"]);
+      expect(store.value).toHaveLength(2);
+    }
+  });
+
   test("a recorded nonce outside the view's range is reported as unlisted", async () => {
     const huge = `0x1${"0".repeat(16)}`;
     const handler = handlerWith([scope({ nonces: ["0x1", huge] })]);

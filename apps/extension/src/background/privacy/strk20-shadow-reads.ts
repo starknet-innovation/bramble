@@ -34,6 +34,22 @@ const SHADOW_ACCOUNT_ANONYMIZER_CHANGED = "shadow account anonymizer changed";
 /** The site and label that name one recorded scope. */
 export type ShadowScopeTarget = { readonly label: string; readonly origin: string };
 
+/**
+ * Whether `record` is the scope `target` names under `anonymizer`. The vault
+ * keys a scope on its anonymizer too, so after the network's anonymizer
+ * changes the same site and label can have one record per anonymizer; only
+ * the one under the configured anonymizer is reachable, wherever it sits in
+ * record order (audit F3).
+ */
+export const isShadowScopeUnder = (
+  record: ShadowAccountScopeRef,
+  target: ShadowScopeTarget,
+  anonymizer: string | undefined,
+): boolean =>
+  record.origin === target.origin &&
+  record.label === target.label &&
+  sameFelt(record.anonymizer, anonymizer);
+
 const nonZeroBalances = async (
   deps: Pick<Strk20WalletOpsDeps, "runtimeRpc">,
   context: ActivePrivacyContext,
@@ -69,8 +85,8 @@ const nonZeroBalances = async (
  * nonces plus the first {@link SHADOW_SCAN_NONCES}, or exactly `nonces` when
  * given. Lists an account when it is recorded, deployed, or holds a tracked
  * token. Recorded nonces the anonymizer's view cannot address are returned as
- * `unlisted`. Refuses a scope that is not recorded or whose anonymizer is not
- * the configured one.
+ * `unlisted`. Reads the record under the configured anonymizer; refuses a
+ * scope that is not recorded, or recorded only under another anonymizer.
  */
 export const readShadowAccounts = async (
   deps: Pick<Strk20WalletOpsDeps, "runtimeRpc">,
@@ -83,14 +99,13 @@ export const readShadowAccounts = async (
   readonly anonymizer: string;
   readonly unlisted: readonly string[];
 }> => {
-  const scope = records.find(
-    (candidate) => candidate.origin === target.origin && candidate.label === target.label,
-  );
+  const configured = context.accountContext.config?.shadowAccountAnonymizerAddress;
+  const scope = records.find((candidate) => isShadowScopeUnder(candidate, target, configured));
   if (!scope) {
-    throw new WalletError(SHADOW_ACCOUNT_SCOPE_UNKNOWN);
-  }
-  if (!sameFelt(context.accountContext.config?.shadowAccountAnonymizerAddress, scope.anonymizer)) {
-    throw new WalletError(SHADOW_ACCOUNT_ANONYMIZER_CHANGED);
+    const named = records.some(
+      (candidate) => candidate.origin === target.origin && candidate.label === target.label,
+    );
+    throw new WalletError(named ? SHADOW_ACCOUNT_ANONYMIZER_CHANGED : SHADOW_ACCOUNT_SCOPE_UNKNOWN);
   }
   const recorded = scope.nonces.map((nonce) => BigInt(nonce));
   const scan = Array.from({ length: Number(SHADOW_SCAN_NONCES) }, (_, index) => BigInt(index));
