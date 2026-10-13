@@ -69,20 +69,20 @@ export type ActivityFilterOptions = {
 };
 
 /**
- * The identity a row's token is grouped, filtered, sorted and totalled by. An
- * entry records only a symbol, so the tracked token it resolves to (exactly one
- * tracked token on the network with that symbol) is keyed by its canonical
- * address: two tokens that share a symbol are never one token. A symbol that
- * resolves to no single tracked token keeps a `symbol:` key of its own, which
- * can never equal an address key. `""` when the row names no token.
+ * The identity a row's token is grouped, filtered, sorted and totalled by: its
+ * canonical address, so two tokens that share a symbol are never one token. A
+ * row records that address (issue 643); a legacy row with only a symbol takes
+ * the address of the one tracked token on its network with that symbol, and
+ * otherwise keeps a `symbol:` key of its own, which can never equal an address
+ * key. `""` when the row names no token.
  */
 export const activityTokenKey = (
-  entry: Pick<ActivityEntry, "networkId" | "token">,
+  entry: Pick<ActivityEntry, "networkId" | "token" | "tokenAddress">,
   pricing?: ActivityPricing,
 ): string => {
   const symbol = entry.token?.trim();
   if (!symbol) return "";
-  const address = activityTrackedToken(entry, pricing)?.address;
+  const address = entry.tokenAddress ?? activityTrackedToken(entry, pricing)?.address;
   const canonical = address ? canonicalFelt(address) : null;
   return canonical ?? `symbol:${symbol.toLowerCase()}`;
 };
@@ -275,14 +275,14 @@ const numericAmount = (amount: string | undefined): number | null => {
  * identity ({@link activityTokenKey}, ordered by symbol) and each token's rows
  * order by recorded amount descending, then most recent first. A token-less row
  * sorts last, and an entry with no numeric amount sorts last within its token
- * rather than being dropped. Without `pricing`, tokens are told apart by symbol
- * alone.
+ * rather than being dropped. Without `pricing`, a legacy row without an address
+ * is told apart by symbol alone.
  */
 export const activityAmountComparator =
   (pricing?: ActivityPricing) =>
   (
-    left: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token">,
-    right: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token">,
+    left: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token" | "tokenAddress">,
+    right: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token" | "tokenAddress">,
   ): number => {
     const leftKey = activityTokenKey(left, pricing);
     const rightKey = activityTokenKey(right, pricing);
