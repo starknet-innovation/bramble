@@ -153,4 +153,23 @@ describe("multisig deployment quote", () => {
     await flush();
     expect(document.querySelector(".toast.error .toast-text")).not.toBeNull();
   });
+  test("an auto-quote never enables Deploy while the account class is unchecked", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const pending = deferred<typeof fixture.deploymentReview>();
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, null, defaultWalletPreferences()),
+      await testClient({ reviewDeployment: () => pending.promise }),
+      fixture.status,
+    );
+    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+    const submit = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(form?.dataset["classReady"]).not.toBe("true");
+    app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    pending.resolve(fixture.deploymentReview);
+    await flush();
+    expect(submit?.disabled).toBe(true);
+  });
 });

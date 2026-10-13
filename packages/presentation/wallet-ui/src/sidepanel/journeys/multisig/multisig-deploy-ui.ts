@@ -8,7 +8,6 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
-import { transitionTaskStage } from "../../app/rendering/stage-transition";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import {
   bindCopyButtons,
@@ -29,11 +28,8 @@ import {
 } from "./multisig-deploy-errors";
 import { bindDeploymentFunding } from "./multisig-deploy-funding-ui";
 import { bindDeploymentSignerPicker } from "./multisig-deploy-signer-ui";
-import {
-  deploymentFundingStage,
-  deploymentReviewMarkup,
-  type MULTISIG_CREATION_STEPS,
-} from "./multisig-deploy-view";
+import { type DeploymentStage, setDeploymentStage } from "./multisig-deploy-stage";
+import { deploymentFundingStage, deploymentReviewMarkup } from "./multisig-deploy-view";
 import {
   bindMultisigParticipantPicker,
   type MultisigParticipant,
@@ -48,50 +44,6 @@ type MultisigDeployUiDeps = {
   readonly openFunding: (intent: SendIntent) => Promise<void>;
   readonly setResult: (id: string, message: string) => void;
   readonly wallet: Pick<SidepanelWallet, "saveAddress">;
-};
-
-type CreationStage = (typeof MULTISIG_CREATION_STEPS)[number][0];
-type DeploymentStage = CreationStage | "submitted";
-const DEPLOYMENT_STAGE_ORDER: Readonly<Record<DeploymentStage, number>> = {
-  approval: 1,
-  deploy: 3,
-  fund: 2,
-  participants: 0,
-  submitted: 4,
-};
-
-const setDeploymentStage = (
-  form: HTMLFormElement,
-  stage: DeploymentStage,
-  afterUpdate?: () => void,
-): void => {
-  const targetForm = form;
-  const previous =
-    (form.dataset["deploymentStage"] as DeploymentStage | undefined) ?? "participants";
-  transitionTaskStage(
-    form.ownerDocument,
-    previous,
-    stage,
-    DEPLOYMENT_STAGE_ORDER,
-    "multisigDeployTransition",
-    "multisigDeployTransitionId",
-    () => {
-      targetForm.dataset["deploymentStage"] = stage;
-      targetForm
-        .closest(".multisig-deploy-section")
-        ?.querySelectorAll<HTMLElement>("[data-multisig-deploy-step]")
-        .forEach((step) => {
-          const targetStep = step;
-          const index = Number(targetStep.dataset["multisigDeployStep"] ?? "0");
-          const current = DEPLOYMENT_STAGE_ORDER[stage];
-          targetStep.dataset["state"] =
-            index < current ? "complete" : index === current ? "active" : "pending";
-          if (index === current) targetStep.setAttribute("aria-current", "step");
-          else targetStep.removeAttribute("aria-current");
-        });
-      afterUpdate?.();
-    },
-  );
 };
 
 const reviews = new WeakMap<
@@ -303,6 +255,13 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       saveContact: participantContactSaver(deps.wallet, form),
     });
   syncSignerSet(false);
+  // Clears busy without bypassing the gate: deploying needs the class checked
+  // and a deployment signer from this wallet.
+  const releaseButton = (): void => {
+    buttonBusy(button, false);
+    if (button)
+      button.disabled = form?.dataset["classReady"] !== "true" || !signerAccountInput?.value;
+  };
   const QUOTE_DEBOUNCE_MS = 350;
   let quoteTimer: ReturnType<typeof setTimeout> | null = null;
   // Runs one quote, painting it beside the fields it read; stage ends only here.
@@ -318,7 +277,8 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         return false;
       }
     };
-    // Busy throughout: a second press cannot deploy an unread review.
+    // Busy throughout: a second press cannot deploy an unread review. Leaving
+    // busy re-applies the class and signer gate, so a quote never enables it.
     buttonBusy(button, true);
     deps.setResult("multisig-deploy-result", "Preparing exact deployment fee…");
     void deps.multisig
@@ -342,7 +302,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
         setDeploymentStage(form, fundingRequired ? "fund" : "deploy");
         if (button) button.hidden = fundingRequired;
         deps.setResult("multisig-deploy-result", "");
-        buttonBusy(button, false);
+        releaseButton();
       })
       .catch((error: unknown) => {
         if (!isCurrent()) return;
@@ -355,7 +315,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
             : "Deployment review failed. Check the error and retry.",
         );
         if (explicit) showToast(message, "error", form);
-        buttonBusy(button, false);
+        releaseButton();
         setDeployLabel();
       });
   };
@@ -386,8 +346,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (reviewRoot) renderFragment(reviewRoot, "");
     if (button) {
       button.hidden = false;
-      buttonBusy(button, false);
-      button.disabled = form.dataset["classReady"] !== "true" || !signerAccountInput?.value;
+      releaseButton();
     }
     deps.setResult("multisig-deploy-result", "");
     setDeployLabel();
