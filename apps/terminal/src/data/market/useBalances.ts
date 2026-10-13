@@ -3,9 +3,10 @@
  * tracked mainnet token set. For each token it issues a `starknet_call` to
  * `balanceOf(address)` (falling back to the snake_case `balance_of` entrypoint),
  * decodes the u256 low/high felt pair into a bigint, and formats it with the
- * token's decimals. Calls run in parallel through the shared RPC failover; a
- * token whose read fails is reported with a zero balance rather than aborting
- * the whole set. With no address the hook returns an empty list (not an error).
+ * token's decimals. Calls run in parallel through the shared RPC failover. A
+ * token whose read fails fails the refresh (the last good balances stay on
+ * screen with an error); only a successful contract response reads as zero.
+ * With no address the hook returns an empty list (not an error).
  *
  * Latest-state RPC is the only source (#650): Starkscan retired its indexed
  * token-holdings snapshot (HTTP 410), and its successor wallet-state route
@@ -22,6 +23,8 @@ import type { Resource, TokenBalance } from "../core/types";
 import { useAsyncResource } from "../core/useAsyncResource";
 
 const POLL_MS = 30_000;
+// The resource layer's existing generic failure text (useAsyncResource).
+const BALANCES_UNAVAILABLE = "Request failed";
 
 // Decodes a balanceOf response (u256 as [low, high] felts) into a single bigint.
 const decodeU256 = (response: readonly string[]): bigint => {
@@ -30,14 +33,17 @@ const decodeU256 = (response: readonly string[]): bigint => {
   return low + (high << 128n);
 };
 
-// Reads one token's balance, trying both entrypoint spellings. Never throws for
-// a semantic contract error — a token that cannot be read reports zero.
+// Reads one token's balance, trying both entrypoint spellings. Only a
+// successful contract response establishes a balance, zero included: when both
+// spellings fail the read throws, so a transport error fails over to the next
+// RPC endpoint and an unreadable token is never shown as an empty one.
 const readBalance = async (
   provider: RpcProvider,
   token: KnownToken,
   address: string,
 ): Promise<bigint> => {
   const calldata = CallData.compile([address]);
+  let lastError: unknown;
   for (const entrypoint of ["balanceOf", "balance_of"]) {
     try {
       const response = await provider.callContract(
@@ -45,13 +51,16 @@ const readBalance = async (
         "latest",
       );
       return decodeU256(response);
-    } catch {
-      // Try the other entrypoint spelling; if both fail, fall through to zero.
+    } catch (cause) {
+      lastError = cause;
     }
   }
-  return 0n;
+  throw lastError;
 };
 
+// Any unreadable token fails the whole refresh: the resource then keeps the
+// last good balances and reports an error instead of a zero it never read.
+// The RPC detail stays out of the message the portfolio banner shows.
 const fetchRpcBalances = async (address: string): Promise<readonly TokenBalance[]> =>
   withRpc(async (provider) =>
     Promise.all(
@@ -69,7 +78,9 @@ const fetchRpcBalances = async (address: string): Promise<readonly TokenBalance[
         };
       }),
     ),
-  );
+  ).catch(() => {
+    throw new Error(BALANCES_UNAVAILABLE);
+  });
 
 /**
  * On-chain balances for `address`. Returns an empty list (no error, no loading)

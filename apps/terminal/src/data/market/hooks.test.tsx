@@ -10,7 +10,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EKUBO_API_BASE, MAINNET_TOKEN_ADDRESSES } from "../../protocols/index";
 
 // Shared, hoisted balance table the stubbed RPC provider reads from.
-const rpc = vi.hoisted(() => ({ balances: new Map<string, bigint>() }));
+const rpc = vi.hoisted(() => ({
+  balances: new Map<string, bigint>(),
+  failing: new Set<string>(),
+}));
 
 vi.mock("../core/client", async () => {
   const actual = await vi.importActual<typeof import("../core/client")>("../core/client");
@@ -19,6 +22,9 @@ vi.mock("../core/client", async () => {
     withRpc: <T,>(run: (provider: unknown) => Promise<T>): Promise<T> =>
       run({
         callContract: async ({ contractAddress }: { contractAddress: string }) => {
+          if (rpc.failing.has(contractAddress.toLowerCase())) {
+            throw new Error("fetch failed: https://rpc.example timed out");
+          }
           const raw = rpc.balances.get(contractAddress.toLowerCase()) ?? 0n;
           const mask = (1n << 128n) - 1n;
           return [`0x${(raw & mask).toString(16)}`, `0x${(raw >> 128n).toString(16)}`];
@@ -131,6 +137,7 @@ const routeFetch = (avnuStatus = 200): void => {
 };
 
 beforeEach(() => {
+  rpc.failing = new Set<string>();
   rpc.balances = new Map<string, bigint>([
     [ETH.toLowerCase(), 1_000_000_000_000_000_000n], // 1 ETH
     [USDC.toLowerCase(), 500_000_000n], // 500 USDC
@@ -224,6 +231,19 @@ describe("useBalances", () => {
     await waitFor(() => expect(result.current.data).not.toBeNull());
     const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
     expect(urls.filter((url) => url.includes("starkscan"))).toEqual([]);
+  });
+
+  it("never shows an unreadable token as zero; keeps the last good balances", async () => {
+    const { result } = renderHook(() => useBalances(ETH));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    rpc.failing.add(ETH.toLowerCase());
+    result.current.refresh();
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    // The banner gets the resource layer's generic text, not the RPC detail.
+    expect(result.current.error).toBe("Request failed");
+    expect(result.current.data?.find((row) => row.symbol === "ETH")?.raw).toBe(
+      1_000_000_000_000_000_000n,
+    );
   });
 
   it("returns an empty list with no address", async () => {
