@@ -19,7 +19,7 @@ const SUBMITTERS = [
   "apps/extension/src/background/accounts/deployment-ops.ts",
   "apps/extension/src/background/accounts/wallet-ops.ts",
   "apps/extension/src/background/portfolio/allowance-ops.ts",
-  "apps/extension/src/background/portfolio/nft-ops.ts",
+  "apps/extension/src/background/portfolio/nft-transfer-submit.ts",
   "apps/extension/src/background/privacy/strk20-approval-execution.ts",
   "apps/extension/src/background/privacy/strk20-wallet-execution.ts",
   "apps/extension/src/background/provider/provider-ops.ts",
@@ -81,7 +81,7 @@ describe("post-broadcast outcome integrity", () => {
   });
 
   // Errors audit F1/F2: once a hash exists the reply is success or status
-  // unknown. The public send, the swap, and every pool route run all of their
+  // unknown. The public send, the NFT send, the swap, and every pool route run all of their
   // post-hash bookkeeping (not just the writes) through the boundary, for the
   // accepted hash and for the signed hash of a lost reply alike.
   test("the send, swap, and pool executors keep every post-hash step behind the boundary", async () => {
@@ -92,6 +92,10 @@ describe("post-broadcast outcome integrity", () => {
       ],
       "apps/extension/src/background/privacy/strk20-wallet-execution.ts": [
         "await afterBroadcast(async () => {\n    // Entering the pool",
+      ],
+      "apps/extension/src/background/portfolio/nft-transfer-submit.ts": [
+        "await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(pending)));",
+        "await afterBroadcast(async () => {\n    await recordSubmittedActivity(deps.activity, activityFor(transactionHash));",
       ],
       "apps/extension/src/background/transactions/swap-ops.ts": [
         "await afterBroadcast(() => recordSubmitted(pending));",

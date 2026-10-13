@@ -4,8 +4,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import type { NftOwnership } from "@bramble/starknet/rpc-assets";
 import { createMemoryStore } from "@bramble/store/kv";
+import { createActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
@@ -85,12 +87,28 @@ const makeHarness = (options?: {
   readonly deployed?: boolean;
   readonly owner?: string;
   readonly ownership?: NftOwnership;
+  readonly submit?: (input: {
+    readonly onSigned?: (signed: {
+      readonly nonce: string;
+      readonly senderAddress: string;
+      readonly transactionHash: string;
+    }) => Promise<void>;
+  }) => Promise<{ readonly transactionHash: string }>;
 }) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const invokeCalls: (readonly unknown[])[] = [];
   const ownership = options?.ownership;
+  let tick = 0;
+  const activity = createActivityLog({
+    now: () => {
+      tick += 1000;
+      return tick;
+    },
+    store: createMemoryStore(),
+  });
   const handler = createMessageHandler(stubFor(options?.account ?? account), testExtension, {
+    activity,
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     runtimeRpc: makeRuntimeRpc({
       ...(ownership
@@ -112,12 +130,15 @@ const makeHarness = (options?: {
       },
       async submitInvokeTransaction(input) {
         invokeCalls.push(input.calls);
+        if (options?.submit) {
+          return { calls: input.calls, ...(await options.submit(input)) };
+        }
         return { calls: input.calls, transactionHash: "0x7cd" };
       },
     }),
     session,
   });
-  return { handler, invokeCalls };
+  return { activity, handler, invokeCalls };
 };
 
 describe("NFT gallery messages", () => {
@@ -271,5 +292,69 @@ describe("NFT gallery messages", () => {
     expect(call.calldata.slice(2)).toEqual(["342", "0", "1", "0", "0"]);
     expect(BigInt(call.calldata[0] ?? "0")).toBe(BigInt(account.address));
     expect(BigInt(call.calldata[1] ?? "0")).toBe(0x777n);
+  });
+});
+
+// Same outcome rules as the token send (audit #173, errors audit F1): a lost
+// broadcast reply is status unknown, never a plain error, and the signed hash
+// is kept as a pending Activity row.
+describe("an NFT send whose broadcast reply was lost", () => {
+  const SIGNED = "0x5eed";
+  const send = {
+    contract: CONTRACT,
+    networkId: "SN_MAIN",
+    recipient: "0x777",
+    reviewedFee,
+    tokenId: "5",
+    type: "wallet.transferNft",
+  };
+  const signed = { nonce: "0x1", senderAddress: account.address, transactionHash: SIGNED };
+
+  test("is status unknown with the signed hash, recorded as pending", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async (input) => {
+        await input.onSigned?.(signed);
+        throw new IndeterminateRpcWriteError("Transaction submission status is unknown.");
+      },
+    });
+    expect(await handler(send, sender)).toEqual({
+      error: "Transaction submission status is unknown.",
+      submissionUnknown: true,
+      transactionHash: SIGNED,
+    });
+    const rows = await activity.list();
+    expect(rows.map((row) => [row.hash, row.status, row.counterparty])).toEqual([
+      [SIGNED, "pending", "0x777"],
+    ]);
+  });
+
+  test("is status unknown without a hash when nothing was signed", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async () => {
+        throw new IndeterminateRpcWriteError("Account deployment status is unknown.");
+      },
+    });
+    expect(await handler(send, sender)).toEqual({
+      error: "Account deployment status is unknown.",
+      submissionUnknown: true,
+    });
+    expect(await activity.list()).toEqual([]);
+  });
+
+  test("a determinate refusal stays a plain error with no row", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async (input) => {
+        await input.onSigned?.(signed);
+        throw new Error("RPC refused the transaction");
+      },
+    });
+    expect(await handler(send, sender)).toEqual({ error: "RPC refused the transaction" });
+    expect(await activity.list()).toEqual([]);
+  });
+
+  test("an accepted send records the accepted hash", async () => {
+    const { activity, handler } = makeHarness();
+    expect(await handler(send, sender)).toEqual({ ok: true, transactionHash: "0x7cd" });
+    expect((await activity.list()).map((row) => row.hash)).toEqual(["0x7cd"]);
   });
 });
