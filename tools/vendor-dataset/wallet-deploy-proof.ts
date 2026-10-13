@@ -17,7 +17,7 @@ import {
 import {
   estimateAccountDeploymentFee,
   submitAccountDeployment,
-} from "/Users/henri/Workshop/mc-wallet/packages/platform/starknet/src/transactions/deployment.ts";
+} from "@bramble/starknet/deployment";
 
 const RPC = ["https://mainnet.nodes.starknet.org/rpc/v0_10"];
 const kp = braavosKeypair(envSeed("BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX"), 6);

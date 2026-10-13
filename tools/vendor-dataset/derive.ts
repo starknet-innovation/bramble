@@ -5,14 +5,13 @@
  * Reads seeds from .env.vendor-seeds.local and prints ONLY addresses/verdicts —
  * never key material.
  */
-import { readFileSync } from "node:fs";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
 import { ec, hash } from "starknet";
+import { envLines } from "./dataset-env";
 
 const { grindKey, getStarkKey } = ec.starkCurve;
 
-const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
 
 const BRAAVOS_BASE = "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6";
 const BRAAVOS_100 = "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201";
@@ -21,7 +20,7 @@ const ARGENT_031 = "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa
 
 function readEnv(): Map<string, string> {
   const out = new Map<string, string>();
-  for (const line of readFileSync(ENV_PATH, "utf8").split("\n")) {
+  for (const line of envLines()) {
     const m = line.match(/^([A-Z0-9_]+)="?([^"]*)"?\s*$/);
     if (m && m[2].trim()) out.set(m[1], m[2].trim());
   }
@@ -32,7 +31,7 @@ function recordedAddresses(): { ready: string[]; braavos: string[] } {
   const ready: string[] = [];
   const braavos: string[] = [];
   let section = "";
-  for (const line of readFileSync(ENV_PATH, "utf8").split("\n")) {
+  for (const line of envLines()) {
     if (line.includes("READY_MAIN")) section = "ready";
     else if (line.includes("BRAAVOS_MAIN")) section = "braavos";
     else if (line.includes("SEED_CROSS")) section = "";

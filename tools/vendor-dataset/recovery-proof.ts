@@ -10,7 +10,7 @@ import {
   getBraavosRecoveryState,
   reviewBraavosRecovery,
   submitBraavosRecovery,
-} from "/Users/henri/Workshop/mc-wallet/packages/platform/starknet/src/rpc/rpc.ts";
+} from "@bramble/starknet/rpc";
 
 const RPC = ["https://mainnet.nodes.starknet.org/rpc/v0_10"];
 const kp = braavosKeypair(envSeed("BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX"), 4);

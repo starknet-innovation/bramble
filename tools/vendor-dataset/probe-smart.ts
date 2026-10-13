@@ -4,23 +4,16 @@
  * backend-salted account still belongs to the seed (the D4 case made concrete).
  * Prints only public chain data and pubkeys.
  */
-import { readFileSync } from "node:fs";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
 import { RpcProvider, ec } from "starknet";
+import { envSeed } from "./dataset-env";
 
 const { grindKey, getStarkKey } = ec.starkCurve;
 
 const SMART = "0x01AF449DD78F05Ca52C3D23404AB9fC84996e7097F61c6C31449DECA4b5CF002";
-const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
 
-const seed = (() => {
-  for (const line of readFileSync(ENV_PATH, "utf8").split("\n")) {
-    const m = line.match(/^BRAMBLE_DATASET_SEED_READY_MAIN="?([^"]+)"?\s*$/);
-    if (m) return m[1].trim();
-  }
-  throw new Error("Ready seed not set");
-})();
+const seed = envSeed("BRAMBLE_DATASET_SEED_READY_MAIN");
 
 function readyKey(mnemonic: string, index: number): string {
   const eth = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive("m/44'/60'/0'/0/0");

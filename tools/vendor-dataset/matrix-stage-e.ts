@@ -4,7 +4,6 @@
  * fixture, a Bramble-axis control, and the R1/B1 ground-truth accounts folded
  * into the manifest. Idempotent; dust-sized; prints public data only.
  */
-import { readFileSync } from "node:fs";
 import { Account, Signer, ec, num, hash, constants, uint256 } from "starknet";
 import { createECDH } from "node:crypto";
 import { HDKey } from "@scure/bip32";
@@ -25,13 +24,13 @@ import {
   tokenBalance,
   transfer,
 } from "./matrix-lib";
+import { envLines } from "./dataset-env";
 
 const { grindKey, getStarkKey, poseidonHashMany } = ec.starkCurve;
 
 const IMPL = "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
 const CHAIN_ID = constants.StarknetChainId.SN_MAIN;
 const UDC = "0x041a78e741e5af2fec34b695679bc6891742439f7afb8484ecd7766661ad02bf";
-const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
 const STRK_FLOAT = 2n * 10n ** 18n;
 
 type KP = { priv: string; pub: string };
@@ -241,7 +240,7 @@ const ensureFloat = async (address: string, entry: ManifestEntry): Promise<void>
 
 // ── ground truth: fold the R1/B1 app-made accounts into the manifest ──
 {
-  const text = readFileSync(ENV_PATH, "utf8").split("\n");
+  const text = envLines();
   let section = "";
   const gt: { vendor: string; n: number; address: string }[] = [];
   for (const line of text) {

@@ -5,7 +5,7 @@
  */
 import { Account, ec, num, Signer, hash as snHash } from "starknet";
 import { readyKeypair, CLASSES, classAt, deployerAccount, envSeed, tokenBalance, transfer, argentAddress, argentConstructor, provider } from "./matrix-lib";
-import { getArgentRecoveryState, reviewArgentRecovery, submitArgentRecovery } from "/Users/henri/Workshop/mc-wallet/packages/platform/starknet/src/rpc/rpc.ts";
+import { getArgentRecoveryState, reviewArgentRecovery, submitArgentRecovery } from "@bramble/starknet/rpc";
 
 const RPC = ["https://mainnet.nodes.starknet.org/rpc/v0_10"];
 const INDEX = 20;

@@ -4,23 +4,16 @@
  * OpenZeppelin 3.0.0 class, salt = pubkey, constructor [pubkey], deployer 0.
  * Prints only the public key and address.
  */
-import { readFileSync } from "node:fs";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
 import { ec, hash } from "starknet";
+import { envSeed } from "./dataset-env";
 
 const { grindKey, getStarkKey } = ec.starkCurve;
 
 const OZ_300 = "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
-const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
 
-const seed = (() => {
-  for (const line of readFileSync(ENV_PATH, "utf8").split("\n")) {
-    const m = line.match(/^BRAMBLE_DATASET_SEED_DEPLOYER="?([^"]+)"?\s*$/);
-    if (m && m[1].trim()) return m[1].trim();
-  }
-  throw new Error("BRAMBLE_DATASET_SEED_DEPLOYER is empty");
-})();
+const seed = envSeed("BRAMBLE_DATASET_SEED_DEPLOYER");
 
 if (seed.split(/\s+/).length !== 12) throw new Error("deployer seed is not 12 words");
 

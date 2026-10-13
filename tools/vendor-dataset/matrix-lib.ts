@@ -4,17 +4,20 @@
  * ledger. Never logs or returns seed words; private keys stay inside account
  * objects. Everything is idempotent-friendly: callers check chain state first.
  */
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
 import { Account, RpcProvider, ec, hash, uint256 } from "starknet";
+import { envSeed } from "./dataset-env";
+
+export { envSeed };
 
 const { grindKey, getStarkKey } = ec.starkCurve;
 
 export const NODE = "https://mainnet.nodes.starknet.org/rpc/v0_10";
-const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
-export const MANIFEST_PATH =
-  "/private/tmp/claude-501/-Users-henri-Workshop-mc-wallet/f23bc925-416e-417b-ac94-2b651f242887/scratchpad/dataset/manifest.json";
+/** The committed dataset ledger, read and rewritten in place by the matrix stages. */
+export const MANIFEST_PATH = resolve(import.meta.dir, "manifest.json");
 
 export const CLASSES = {
   argent040: "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
@@ -34,13 +37,6 @@ export const TOKENS = {
 
 export const provider = new RpcProvider({ nodeUrl: NODE });
 
-export function envSeed(name: string): string {
-  for (const line of readFileSync(ENV_PATH, "utf8").split("\n")) {
-    const m = line.match(new RegExp(`^${name}="?([^"]+)"?\\s*$`));
-    if (m && m[1].trim()) return m[1].trim();
-  }
-  throw new Error(`${name} is empty`);
-}
 
 type Keypair = { readonly priv: string; readonly pub: string };
 

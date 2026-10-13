@@ -5,16 +5,20 @@
  * against tools/vendor-dataset/manifest.json expectations. Prints addresses
  * only — seeds are read from the env file and typed straight into the UI.
  *
- * Run from this worktree: BRAMBLE_E2E_LIVE_NETWORK=1 bun tests/e2e/verify-dataset.ts
+ * Run from the repository root after `bun run build`:
+ *   BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json]
+ * The scorecard goes to the given path, or to the system temp directory; copy a
+ * run into this folder as a dated `verification-*.json` snapshot to keep it.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { launchExtension } from "./extension-fixture";
+import { launchExtension } from "../../tests/e2e/extension-fixture";
+import { envSeed } from "./dataset-env";
+import { loadManifest } from "./matrix-lib";
 
-const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
-const MANIFEST_PATH = "/Users/henri/Workshop/mc-wallet/tools/vendor-dataset/manifest.json";
-const OUT_PATH =
-  "/private/tmp/claude-501/-Users-henri-Workshop-mc-wallet/f23bc925-416e-417b-ac94-2b651f242887/scratchpad/dataset/verification.json";
+const OUT_PATH = resolve(process.argv[2] ?? resolve(tmpdir(), "bramble-vendor-dataset-verification.json"));
 const SCAN_TIMEOUT_MS = 300_000;
 const VAULT_PASSPHRASE = "dataset verification passphrase";
 
@@ -25,14 +29,6 @@ const SEEDS = [
   "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX",
   "BRAMBLE_DATASET_SEED_GAPS",
 ] as const;
-
-const envSeed = (name: string): string => {
-  for (const line of readFileSync(ENV_PATH, "utf8").split("\n")) {
-    const m = line.match(new RegExp(`^${name}="?([^"]+)"?\\s*$`));
-    if (m && m[1].trim()) return m[1].trim();
-  }
-  throw new Error(`${name} is empty`);
-};
 
 type Scraped = { group: string; address: string; title: string; hint: string };
 
@@ -94,15 +90,7 @@ const norm = (a: string): string => {
   }
 };
 
-type ManifestEntry = {
-  id: string;
-  seed: string;
-  address: string;
-  detectability: string;
-  expected: string;
-  state: Record<string, unknown>;
-};
-const manifest: Record<string, ManifestEntry> = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
+const manifest = loadManifest();
 
 const results: Record<string, { status: string; rows: Scraped[] }> = {};
 for (const seedVar of SEEDS) {
