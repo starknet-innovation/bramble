@@ -3,6 +3,7 @@
  * whose only argument is the `PoolKey` (Sherlock 133). Core refuses longer
  * input, so passing the RouterV3 quote calldata made every quote fail.
  */
+import { UINT128_LIMIT } from "@bramble/wallet-model/networks";
 import { describe, expect, it, vi } from "vitest";
 
 type FakeCall = {
@@ -76,15 +77,24 @@ describe("Ekubo pool price read", () => {
     expect(priceRead?.calldata).toHaveLength(5);
   });
 
-  it("keys each tier with the fee Ekubo writes, not the exact product", () => {
-    // Pinned against initialised mainnet ETH/USDC, ETH/STRK and STRK/USDC
-    // pools; the exact products name pools that do not exist.
-    expect(EKUBO_FEE_TIERS.map((tier) => tier.fee)).toEqual([
-      BigInt(0.0001 * 2 ** 128),
-      BigInt(0.0005 * 2 ** 128),
-      BigInt(0.003 * 2 ** 128),
-      BigInt(0.01 * 2 ** 128),
+  it("keys each tier with the fee its mainnet pools were created with", () => {
+    // Read back from mainnet Core get_pool_price (ETH/USDC, STRK/USDC and
+    // STRK/ETH all initialised) and Ekubo's pair pools API; see EKUBO_FEE_TIERS.
+    expect(
+      EKUBO_FEE_TIERS.map((tier) => [tier.label, tier.fee, tier.tickSpacing]),
+    ).toEqual([
+      ["0.01%", 34028236692093847977029636859101184n, 200n],
+      ["0.05%", 170141183460469235273462165868118016n, 1000n],
+      ["0.30%", 1020847100762815411640772995208708096n, 5982n],
+      ["1.00%", 3402823669209384634633746074317682114n, 19802n],
     ]);
-    expect(EKUBO_FEE_TIERS[1]?.fee).toBe(170141183460469235273462165868118016n);
+  });
+
+  it("keys the 1% tier with the exact fee, not the double-precision product", () => {
+    // The 1% pools use floor(2^128 / 100); BigInt(0.01 * 2 ** 128) keys no
+    // initialised pool on any pair checked.
+    const onePercent = EKUBO_FEE_TIERS.find((tier) => tier.label === "1.00%");
+    expect(onePercent?.fee).toBe(UINT128_LIMIT / 100n);
+    expect(onePercent?.fee).not.toBe(BigInt(0.01 * 2 ** 128));
   });
 });

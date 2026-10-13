@@ -58,6 +58,7 @@ import {
 } from "../src/protocols/constants";
 import { STARKNET_NETWORKS } from "../src/protocols/support/networks";
 import { parseVesuMultiplyExactOutQuote } from "../src/protocols/vesu/vesu-multiply";
+import { checkEkuboFeeTiers } from "./check-ekubo-tiers";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const SAMPLE_MARKET = "BTC-USD";
@@ -437,6 +438,8 @@ const main = async (): Promise<void> => {
     const high = res[1] !== undefined ? BigInt(res[1]) : 0n;
     return { status: "rpc", detail: `u256 felts=[${res.slice(0, 2).join(", ")}] -> ${low + (high << 128n)}` };
   });
+
+  await check("Ekubo fee tiers key mainnet pools", true, () => checkEkuboFeeTiers(provider));
 
   await check("Vesu V2 deployed ABIs", true, async () => {
     const [poolClass, multiplyClass] = await Promise.all([

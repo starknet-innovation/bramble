@@ -5,6 +5,7 @@
  */
 export { buildSwapCalls as buildAvnuSwapCalls, quoteSwap as quoteAvnuSwap } from "./avnu/avnu";
 export * from "./constants";
+export { DEFAULT_SLIPPAGE_BPS } from "./support/slippage";
 export { buildSwapCalls as buildEkuboSwapCalls, quoteSwap as quoteEkuboSwap } from "./ekubo/ekubo";
 export * from "./types";
 export {
