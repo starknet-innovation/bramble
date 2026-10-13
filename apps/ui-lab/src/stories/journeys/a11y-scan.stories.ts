@@ -88,7 +88,7 @@ export const ScanRunsNoDocumentCode: LabStory = {
 
 /**
  * Code a document embeds rather than holds: a frame's `srcdoc` script, a
- * `javascript:` frame source, and an object. An embedded frame inherits the
+ * `javascript:` frame source, an object, and a declarative shadow root. An embedded frame inherits the
  * twin's script-enabled, same-origin sandbox, so it must not survive either.
  */
 const EMBEDDED_DOCUMENT =
@@ -96,6 +96,8 @@ const EMBEDDED_DOCUMENT =
   '<iframe title="a" srcdoc="<script>parent.parent.__labScanRan = true;</script>"></iframe>' +
   '<iframe title="b" src=" java\tscript:parent.parent.__labScanRan = true"></iframe>' +
   '<object data="data:text/html,x" aria-label="c"></object>' +
+  '<div><template shadowrootmode="open"><img alt="d" src="data:," ' +
+  'onerror="parent.__labScanRan = true"></template></div>' +
   '<a href="javascript:void 0">Link</a></main></body></html>';
 
 export const ScanRunsNoEmbeddedCode: LabStory = {
@@ -105,7 +107,7 @@ export const ScanRunsNoEmbeddedCode: LabStory = {
     const bench = window as Window & { __labScanRan?: boolean };
     bench.__labScanRan = false;
     const inert = inertMarkup(EMBEDDED_DOCUMENT);
-    expect(inert).not.toMatch(/<iframe|<object|srcdoc|javascript:/i);
+    expect(inert).not.toMatch(/<iframe|<object|<template|srcdoc|javascript:/i);
     expect(inert).toContain(">Link</a>");
     await scanWalletDocument(EMBEDDED_DOCUMENT, { width: 400, height: 760 });
     // A frame source runs on load; give it a turn before checking.

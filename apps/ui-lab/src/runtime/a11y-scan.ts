@@ -81,8 +81,11 @@ const withTimeout = async <T>(work: Promise<T>, timeoutMs: number, message: stri
 
 // Elements that load or run a document of their own (an embedded frame
 // inherits the twin's script-enabled, same-origin sandbox), or that navigate or
-// re-base the twin. None carries anything the accessibility rules need.
-const ACTIVE_ELEMENTS = "script, iframe, frame, frameset, object, embed, base, meta[http-equiv]";
+// re-base the twin. A `<template>` goes too: the parser here never enters its
+// content, but the twin's parser attaches a declarative shadow root from it.
+// None carries anything the accessibility rules need.
+const ACTIVE_ELEMENTS =
+  "script, template, iframe, frame, frameset, object, embed, base, meta[http-equiv]";
 // A `javascript:` URL runs when a frame or link loads it; browsers ignore
 // whitespace and control characters inside the scheme.
 const SCRIPT_URL = /^javascript:/i;
@@ -92,10 +95,11 @@ const withoutControls = (value: string): string =>
 
 /**
  * The markup with every element that runs or embeds a document (scripts,
- * frames, objects, embeds), every `on*` event attribute, every `srcdoc` and
- * every `javascript:` URL removed, so nothing in a reviewed document can run
- * when the script-enabled twin renders it. Structure, text, other attributes
- * and styles are kept, which is all the accessibility rules read.
+ * templates, frames, objects, embeds), every `on*` event attribute, every
+ * `srcdoc` and every `javascript:` URL removed, so nothing in a reviewed
+ * document can run when the script-enabled twin renders it. Structure, text,
+ * other attributes and styles are kept, which is all the accessibility rules
+ * read.
  */
 export const inertMarkup = (markup: string): string => {
   const parsed = new DOMParser().parseFromString(markup, "text/html");
