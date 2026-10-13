@@ -30,7 +30,7 @@ vi.mock("../core/client", async () => {
 import { useBalances } from "./useBalances";
 import { useCandles } from "./useCandles";
 import { usePortfolio } from "./usePortfolio";
-import { usePrices } from "./usePrices";
+import { referenceUsdPrice, usePrices } from "./usePrices";
 import { toAvnuRows, useTokens } from "./useTokens";
 import { useAsyncResource } from "../core/useAsyncResource";
 
@@ -197,6 +197,13 @@ describe("usePrices", () => {
     expect(data?.byAddress[ETH.toLowerCase()]?.usd).toBe(3000);
     expect(data?.byAddress[ETH.toLowerCase()]?.change24h).toBe(-2.1);
     expect(data).not.toHaveProperty("bySymbol");
+  });
+
+  it("serves one token's reference price by address, or null without one (#646)", async () => {
+    await expect(referenceUsdPrice(unpadded(ETH))).resolves.toBe(3000);
+    await expect(referenceUsdPrice(SPOOF)).resolves.toBeNull();
+    routeFetch(500);
+    await expect(referenceUsdPrice(ETH)).resolves.toBeNull();
   });
 });
 

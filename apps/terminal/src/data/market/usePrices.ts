@@ -14,7 +14,7 @@ import { toAvnuRows } from "./useTokens";
 const POLL_MS = 60_000;
 const CACHE_MS = 55_000;
 
-const fetchPrices = async (signal: AbortSignal): Promise<PricesData> => {
+const fetchPrices = async (signal?: AbortSignal): Promise<PricesData> => {
   const payload = await getJson<Parameters<typeof toAvnuRows>[0]>(
     `${AVNU_MARKETS_BASE}/v3/tokens`,
     { signal, cacheMs: CACHE_MS },
@@ -30,6 +30,22 @@ const fetchPrices = async (signal: AbortSignal): Promise<PricesData> => {
     byAddress[canonicalAddress(row.address) ?? row.address.toLowerCase()] = entry;
   }
   return { byAddress };
+};
+
+/**
+ * One token's USD price from the same AVNU feed, keyed by contract address, as
+ * an independent reference for checks on another venue's quote (the Vesu
+ * Multiply swap cap, #646). Resolves null, never throws, when the feed fails or
+ * has no positive finite price, so the caller can refuse rather than guess.
+ */
+export const referenceUsdPrice = async (asset: string): Promise<number | null> => {
+  try {
+    const { byAddress } = await fetchPrices();
+    const usd = byAddress[canonicalAddress(asset) ?? asset.toLowerCase()]?.usd ?? null;
+    return usd !== null && Number.isFinite(usd) && usd > 0 ? usd : null;
+  } catch {
+    return null;
+  }
 };
 
 /** Live AVNU market prices. `inputs` is retained as a refresh dependency for callers. */

@@ -26,7 +26,7 @@ export {
 export { useFollowedAssets } from "./social/follows";
 export { useCandles } from "./market/useCandles";
 export { usePortfolio } from "./market/usePortfolio";
-export { usePrices } from "./market/usePrices";
+export { referenceUsdPrice, usePrices } from "./market/usePrices";
 export { useTokenTrades } from "./market/useTokenTrades";
 export {
   useChainPulse,

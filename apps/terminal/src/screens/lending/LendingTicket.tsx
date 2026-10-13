@@ -6,11 +6,12 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { avnuTokenArtwork } from "../../assets/avnu-token-assets";
 import { TokenIcon } from "../../components/index";
-import type { VesuMarket, VesuPair } from "../../data/index";
+import { referenceUsdPrice, type VesuMarket, type VesuPair } from "../../data/index";
 import {
   buildVesuMultiplyIncreaseCalls,
   quoteVesuMultiplyIncrease,
   recheckVesuLendingQuote,
+  recheckVesuMultiplyQuote,
   verifyVesuMultiplyPool,
 } from "../../protocols/index";
 import { buildLendingCalls, quoteLending } from "../../protocols/vesu/vesu";
@@ -147,10 +148,16 @@ export const LendingTicket = ({
           market.assetAddress,
         );
         setMessage("Quoting the debt-to-collateral route on Ekubo…");
+        // The swap cap is anchored to the AVNU price feed (#646).
         const route = await quoteVesuMultiplyIncrease(
           collateralChoice.market.assetAddress,
           market.assetAddress,
           BigInt(multiplyCollateralOutputRaw),
+          {
+            collateralDecimals: collateralChoice.market.decimals,
+            debtDecimals: market.decimals,
+            priceUsd: referenceUsdPrice,
+          },
         );
         const calls = buildVesuMultiplyIncreaseCalls(
           market.poolId,
@@ -162,13 +169,16 @@ export const LendingTicket = ({
         );
         await requestTransaction({
           calls,
-          // The registry is read again right before the wallet sees the calls (#270).
-          handoffCheck: () =>
-            verifyVesuMultiplyPool(
+          // Right before the wallet sees the calls, the registry is read again
+          // (#270) and the swap cap is re-checked against a fresh price (#646).
+          handoffCheck: async () => {
+            await verifyVesuMultiplyPool(
               market.poolId,
               collateralChoice.market.assetAddress,
               market.assetAddress,
-            ),
+            );
+            await recheckVesuMultiplyQuote(route, referenceUsdPrice);
+          },
           description:
             "Open or increase this Vesu Multiply position using the reviewed Ekubo route. Delegation and allowance are revoked in the same transaction.",
           details: [

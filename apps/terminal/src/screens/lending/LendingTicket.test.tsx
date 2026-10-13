@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { VesuMarket, VesuPair } from "../../data/index";
+import { referenceUsdPrice, type VesuMarket, type VesuPair } from "../../data/index";
 
 const mocks = vi.hoisted(() => ({
   buildIncrease: vi.fn(() => [{ contractAddress: "0x7", entrypoint: "modify_lever" }]),
@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   quoteIncrease: vi.fn(async () => ({ maxInputAmount: 1n })),
   quoteLending: vi.fn(async () => ({ action: "supply", vTokenAddress: null })),
   recheckLendingQuote: vi.fn(async () => undefined),
+  recheckMultiplyQuote: vi.fn(async () => undefined),
   requestTransaction: vi.fn(async () => ({ transaction_hash: "0xabc" })),
   verifyMultiplyPool: vi.fn(async () => undefined),
 }));
@@ -16,6 +17,7 @@ vi.mock("../../protocols/index", () => ({
   buildVesuMultiplyIncreaseCalls: mocks.buildIncrease,
   quoteVesuMultiplyIncrease: mocks.quoteIncrease,
   recheckVesuLendingQuote: mocks.recheckLendingQuote,
+  recheckVesuMultiplyQuote: mocks.recheckMultiplyQuote,
   verifyVesuMultiplyPool: mocks.verifyMultiplyPool,
 }));
 
@@ -126,12 +128,25 @@ describe("LendingTicket wallet handoff", () => {
 
     await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalled());
     expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(1);
+    // The swap cap is anchored to the AVNU feed with each leg's decimals (#646).
+    expect(mocks.quoteIncrease).toHaveBeenCalledWith(
+      collateral.assetAddress,
+      debt.assetAddress,
+      expect.any(BigInt),
+      { collateralDecimals: collateral.decimals, debtDecimals: debt.decimals, priceUsd: referenceUsdPrice },
+    );
+    expect(mocks.recheckMultiplyQuote).not.toHaveBeenCalled();
     await handedOff().handoffCheck?.();
     expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(2);
     expect(mocks.verifyMultiplyPool).toHaveBeenLastCalledWith(
       debt.poolId,
       collateral.assetAddress,
       debt.assetAddress,
+    );
+    // ...and re-checked against a fresh price at handoff.
+    expect(mocks.recheckMultiplyQuote).toHaveBeenCalledWith(
+      await mocks.quoteIncrease.mock.results[0]?.value,
+      referenceUsdPrice,
     );
   });
 });
