@@ -10,6 +10,7 @@ import { PRIVATE_EXECUTION_UNKNOWN } from "../../../../src/sidepanel/journeys/pr
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import { bindShadowAccounts } from "../../../../src/sidepanel/journeys/privacy/shadow-accounts-ui";
 import { shadowAccountsFlow } from "../../../../src/sidepanel/journeys/privacy/shadow-accounts-view";
+import { SUBMISSION_UNKNOWN } from "../../../../src/sidepanel/runtime/friendly-error-shared";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -98,5 +99,15 @@ describe("a shadow sweep's failure", () => {
     const app = await sweepWith(new Error("Privacy preparation not found"));
     expect(document.querySelector(".toast")?.classList.contains("error")).toBe(true);
     expect(confirmButton(app)?.disabled).toBe(false);
+  });
+  // Errors audit C3: re-armed only for a refusal known to come before anything
+  // was sent, as on Send, NFT and swap. An error the panel cannot place may be
+  // on chain, so it reads as an unknown outcome too.
+  test("an unrecognised error is amber and Confirm is not offered again", async () => {
+    const app = await sweepWith(new Error("relay answered 502"));
+    expect(document.querySelector(".toast")?.classList.contains("warning")).toBe(true);
+    expect(document.querySelector(".toast.error")).toBeNull();
+    expect(confirmButton(app)).toBeUndefined();
+    expect(app.textContent).toContain(SUBMISSION_UNKNOWN("The private transaction"));
   });
 });

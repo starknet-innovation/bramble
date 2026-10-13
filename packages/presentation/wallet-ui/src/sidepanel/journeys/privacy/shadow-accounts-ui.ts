@@ -5,8 +5,8 @@
  * value is written through `textContent`; nothing here is an HTML sink.
  */
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { isOutcomeUnknown } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import {
   SHADOW_ACCOUNTS_CHECK,
   SHADOW_ACCOUNTS_CONFIRM_SWEEP,
@@ -76,17 +76,19 @@ const bindSweep = (
               showToast(SHADOW_ACCOUNTS_SWEEP_SENT, "success", row);
             },
             (error: unknown) => {
-              // Possibly on chain: amber, and Confirm gives way to the
-              // outcome line rather than re-arming (errors audit F4).
-              if (isOutcomeUnknown(error)) {
-                confirm.replaceWith(
-                  element("p", errorLine(error, "Private transaction failed"), "hint"),
-                );
-                showToast(errorDetails(error, "Private transaction failed"), "warning", row);
+              const details = errorDetails(error, "Private transaction failed");
+              // Confirm is offered again only for a refusal known to come
+              // before anything was sent. Anything else may be on chain:
+              // amber, and Confirm gives way to the outcome line (errors
+              // audit F4, C3), as on Send, NFT and swap.
+              if (!knownNotSent(error)) {
+                const line = outcomeUnknownReason(error, "The private transaction");
+                confirm.replaceWith(element("p", line, "hint"));
+                showToast(line, "warning", row, details);
                 return;
               }
               buttonBusy(confirm, false);
-              showToast(errorDetails(error, "Private transaction failed"), "error", confirm);
+              showToast(details, "error", confirm);
             },
           );
         });

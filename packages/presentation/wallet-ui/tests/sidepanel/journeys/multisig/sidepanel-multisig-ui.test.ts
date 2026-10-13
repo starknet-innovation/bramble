@@ -12,6 +12,7 @@ import {
   multisigPortfolio,
 } from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
 import type { MultisigUiDeps } from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
+import { SUBMISSION_UNKNOWN } from "../../../../src/sidepanel/runtime/friendly-error-shared";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
@@ -185,7 +186,9 @@ describe("bindMultisigs frozen-intent forms", () => {
       multisigId: fixture.record.id,
     });
   });
-  test("keeps deployment failures in a copyable toast and resets the review action", async () => {
+  // Errors audit C3: a submit error the wallet cannot place before the
+  // broadcast may be on chain, so it is amber and Deploy is not re-armed.
+  test("keeps an unplaced deployment failure amber and copyable, with Deploy down", async () => {
     const fixture = await makeArgentMultisigFixture();
     const signer = fixture.status.accounts[0];
     if (!signer) throw new Error("signer fixture unavailable");
@@ -207,11 +210,12 @@ describe("bindMultisigs frozen-intent forms", () => {
     await flush();
 
     expect(app.querySelector("#multisig-deploy-result")?.textContent).not.toContain("RPC:");
-    expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain("Fund 0x");
-    expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
-    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
-      "Check fee and address",
+    expect(app.querySelector("#multisig-deploy-result")?.textContent).toContain(
+      SUBMISSION_UNKNOWN("The deployment"),
     );
+    expect(document.querySelector(".toast.error")).toBeNull();
+    expect(document.querySelector(".toast.warning .toast-copy")).not.toBeNull();
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
   });
 
   test("syncs an existing account from its address and opens the matched account", async () => {

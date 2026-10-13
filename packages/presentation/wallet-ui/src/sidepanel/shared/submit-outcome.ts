@@ -66,6 +66,11 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
   "the account deployment fee rose above the amount you reviewed. nothing was submitted — review it again.",
   "the account deployment fee was not reviewed. nothing was submitted — deploy the account first.",
   "the transaction could not be recorded before sending. nothing was submitted — try again.",
+  // The multisig deployment gate (multisig-deploy-ops.ts `submitDeployment`):
+  // each is returned before the operation is claimed or anything is signed.
+  "argent multisig deployment address needs strk before deployment",
+  "argent multisig deployment must exactly match a fresh fee review",
+  "switch to the deployment network first",
   // Endpoint refusals raised before the broadcast.
   "the rpc endpoint refused this request (rate limit or gateway rejection). nothing was submitted - wait a moment and try again.",
   WRONG_CHAIN_MESSAGE.toLowerCase(),

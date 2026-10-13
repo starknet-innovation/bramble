@@ -15,6 +15,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
+import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import { awaitDeployment, type DeploymentPollScope } from "../../shell/shell-bindings";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
@@ -85,9 +86,16 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
       },
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);
-        // A deployment whose reply was lost may be on chain: amber, and the
-        // control stays down so it cannot deploy twice (errors audit F4).
-        showToast(errorDetails(error, "Deployment failed"), failureTone(error), button);
+        const details = errorDetails(error, "Deployment failed");
+        // Only the reviewed submit can send anything. Its control is re-armed
+        // only for a refusal known to come before anything was sent; anything
+        // else may be on chain, so it is amber and the control stays down
+        // (errors audit F4, C3). The fee estimate before it is a read.
+        if (reviewedFee && !knownNotSent(error)) {
+          showToast(outcomeUnknownReason(error, "The deployment"), "warning", button, details);
+          return;
+        }
+        showToast(details, failureTone(error), button);
         if (!isOutcomeUnknown(error)) buttonBusy(button, false);
       },
     );
