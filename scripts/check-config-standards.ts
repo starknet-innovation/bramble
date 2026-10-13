@@ -176,6 +176,7 @@ if (
     "!output",
     "!playwright-report",
     "!test-results",
+    "!tools/vendor-dataset",
     "!vendor",
   ])
 ) {
