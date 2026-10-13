@@ -79,18 +79,34 @@ const withTimeout = async <T>(work: Promise<T>, timeoutMs: number, message: stri
   }
 };
 
+// Elements that load or run a document of their own (an embedded frame
+// inherits the twin's script-enabled, same-origin sandbox), or that navigate or
+// re-base the twin. None carries anything the accessibility rules need.
+const ACTIVE_ELEMENTS = "script, iframe, frame, frameset, object, embed, base, meta[http-equiv]";
+// A `javascript:` URL runs when a frame or link loads it; browsers ignore
+// whitespace and control characters inside the scheme.
+const SCRIPT_URL = /^javascript:/i;
+const URL_ATTRIBUTES = new Set(["action", "data", "formaction", "href", "src", "xlink:href"]);
+
 /**
- * The markup with every `<script>` element and every `on*` event attribute
- * removed, so nothing in a reviewed document can run when the script-enabled
- * twin renders it. Structure, text, attributes and styles are kept, which is
- * all the accessibility rules read.
+ * The markup with every element that runs or embeds a document (scripts,
+ * frames, objects, embeds), every `on*` event attribute, every `srcdoc` and
+ * every `javascript:` URL removed, so nothing in a reviewed document can run
+ * when the script-enabled twin renders it. Structure, text, other attributes
+ * and styles are kept, which is all the accessibility rules read.
  */
 export const inertMarkup = (markup: string): string => {
   const parsed = new DOMParser().parseFromString(markup, "text/html");
-  for (const script of parsed.querySelectorAll("script")) script.remove();
+  for (const element of parsed.querySelectorAll(ACTIVE_ELEMENTS)) element.remove();
   for (const element of parsed.querySelectorAll("*")) {
     for (const attribute of [...element.attributes]) {
-      if (attribute.name.toLowerCase().startsWith("on")) element.removeAttribute(attribute.name);
+      const name = attribute.name.toLowerCase();
+      const scriptUrl =
+        URL_ATTRIBUTES.has(name) &&
+        SCRIPT_URL.test(attribute.value.replace(/[\u0000-\u0020]/g, ""));
+      if (name.startsWith("on") || name === "srcdoc" || scriptUrl) {
+        element.removeAttribute(attribute.name);
+      }
     }
   }
   return `<!doctype html>\n${parsed.documentElement.outerHTML}`;
