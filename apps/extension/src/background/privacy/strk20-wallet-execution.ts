@@ -28,6 +28,7 @@ import {
   submitStrk20Actions,
 } from "@bramble/privacy/service";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { activityToken } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
@@ -307,7 +308,7 @@ const executionWork = async (
       kind: "invoke",
       networkId: context.accountContext.account.networkId,
       summary: activitySummary(preparation, context),
-      ...(preparation.kind === "register" ? {} : { token: preparation.token.symbol }),
+      ...(preparation.kind === "register" ? {} : activityToken(preparation.token)),
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
