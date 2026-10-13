@@ -17,6 +17,7 @@ import {
   isLedgerEip2645Application,
   type LedgerEip2645Application,
   MAX_LEDGER_ACCOUNT_BATCH,
+  READY_EIP2645_APPLICATION,
 } from "@bramble/wallet-model/ledger-path";
 import {
   isNonZeroStarkFieldElement,
@@ -37,6 +38,12 @@ const isNonZeroFeltString = (value: unknown): value is string =>
 // this wallet builds can reach.
 const isOptionalApplication = (value: unknown): value is LedgerEip2645Application | undefined =>
   value === undefined || isLedgerEip2645Application(value);
+
+// A Braavos account is owned at the \`argentx\` scheme only: that is the one path
+// Braavos derives a Ledger key from, so a Braavos request at any other scheme
+// would store an address no Braavos account of this device can have.
+const isApplicationForFamily = (accountContractType: unknown, application: unknown): boolean =>
+  accountContractType !== "braavos" || application === READY_EIP2645_APPLICATION;
 
 const optionalApplication = (
   value: LedgerEip2645Application | undefined,
@@ -74,6 +81,7 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
     !isLedgerAccountContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
     !isOptionalApplication(message["eip2645application"]) ||
+    !isApplicationForFamily(message["accountContractType"], message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isNonZeroFeltString(message["publicKeyX"])
   ) {
@@ -122,6 +130,7 @@ export const readCreateLedgerVaultInput = (message: unknown): CreateLedgerVaultR
     !isLedgerAccountContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
     !isOptionalApplication(message["eip2645application"]) ||
+    !isApplicationForFamily(message["accountContractType"], message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isNonZeroFeltString(message["publicKeyX"]) ||
     typeof message["vaultPassphrase"] !== "string"
@@ -201,6 +210,7 @@ export const readDeriveLedgerAccountsInput = (
     message["type"] !== "wallet.deriveLedgerAccounts" ||
     !isLedgerAccountContractType(message["accountContractType"]) ||
     !isOptionalApplication(message["eip2645application"]) ||
+    !isApplicationForFamily(message["accountContractType"], message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !Array.isArray(message["entries"]) ||
     message["entries"].length > MAX_LEDGER_ACCOUNT_BATCH ||

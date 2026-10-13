@@ -104,6 +104,42 @@ describe("Braavos message boundaries", () => {
     ).not.toBeNull();
   });
 
+  test("a Ledger Braavos request at any scheme but argentx is refused", () => {
+    // Braavos derives its Ledger key only at the \`argentx\` scheme, so a request
+    // naming Braavos at Bramble's LedgerW scheme (explicit, or absent) would
+    // store an address no Braavos account of this device can have.
+    for (const scheme of [{ eip2645application: "LedgerW" }, {}] as const) {
+      const braavos = { accountContractType: "braavos", ...scheme } as const;
+      expect(
+        readAddLedgerAccountInput({
+          ...braavos,
+          accountIndex: 0,
+          networkId: "SN_MAIN",
+          publicKeyX: "0x1234",
+          type: "wallet.addLedgerAccount",
+        }),
+      ).toBeNull();
+      expect(
+        readDeriveLedgerAccountsInput({
+          ...braavos,
+          entries: [{ accountIndex: 0, publicKeyX: "0x1234" }],
+          networkId: "SN_MAIN",
+          type: "wallet.deriveLedgerAccounts",
+        }),
+      ).toBeNull();
+      expect(
+        readCreateLedgerVaultInput({
+          ...braavos,
+          accountIndex: 0,
+          networkId: "SN_MAIN",
+          publicKeyX: "0x1234",
+          type: "wallet.createLedgerVault",
+          vaultPassphrase,
+        }),
+      ).toBeNull();
+    }
+  });
+
   test("the same requests pass for a family this wallet creates", () => {
     // Guards the malformed-request test above: it must fail on the family, not
     // on a malformed fixture.
