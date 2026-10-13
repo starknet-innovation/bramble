@@ -3,7 +3,12 @@
  * metadata is authoritative; dapp-provided options are used only as a fallback.
  */
 import { WalletError } from "@bramble/core/errors";
-import { isSafeDecimals, isTokenName, isTokenSymbol } from "@bramble/core/json";
+import {
+  isSafeDecimals,
+  isTokenName,
+  isTokenSymbol,
+  normalizeTokenSymbol,
+} from "@bramble/core/json";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   canonicalAddress,
@@ -198,7 +203,7 @@ export const watchAssetToken = (
     return null;
   }
   const { decimals } = metadata;
-  const symbol = metadata.symbol.trim().toUpperCase();
+  const symbol = normalizeTokenSymbol(metadata.symbol);
   // The on-chain name wins when it is usable, cut to 64 characters as
   // `wallet.addToken` stores it. An empty or over-long one no longer refuses a
   // token `wallet.addToken` would accept: it falls back to the site's name, then

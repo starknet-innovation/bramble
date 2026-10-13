@@ -5,7 +5,7 @@
  * extension-page messages.
  */
 
-import { isTokenName, isTokenSymbol } from "@bramble/core/json";
+import { isTokenName, isTokenSymbol, normalizeTokenSymbol } from "@bramble/core/json";
 import type { PriceService } from "@bramble/portfolio/prices";
 import { isLikelySpam, knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import type { TokenConfig, WalletPreferencesStore } from "@bramble/settings/preferences";
@@ -75,7 +75,7 @@ const buildTokenRecord = (
   networkId: StarknetNetworkId,
   metadata: TokenMetadata,
 ): TokenRecord | null => {
-  const symbol = metadata.symbol.trim().toUpperCase();
+  const symbol = normalizeTokenSymbol(metadata.symbol);
   if (!isTokenSymbol(symbol)) {
     return null;
   }
