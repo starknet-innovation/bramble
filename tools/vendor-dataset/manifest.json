@@ -74,9 +74,7 @@
       "deployed": false,
       "funded": "ETH"
     },
-    "log": [
-      "funded ETH 0x28e76c16cafd17705cea26af679603a879bff723e843ae477db1faebdcc3f72"
-    ]
+    "log": ["funded ETH 0x28e76c16cafd17705cea26af679603a879bff723e843ae477db1faebdcc3f72"]
   },
   "ready-matrix/6": {
     "id": "ready-matrix/6",
@@ -93,9 +91,7 @@
       "deployed": false,
       "funded": "STRK"
     },
-    "log": [
-      "funded STRK 0x282e6ce4ac42657ebfd1221740f44160ffd0d1380775710f7fcd1cc3119ff94"
-    ]
+    "log": ["funded STRK 0x282e6ce4ac42657ebfd1221740f44160ffd0d1380775710f7fcd1cc3119ff94"]
   },
   "ready-matrix/9": {
     "id": "ready-matrix/9",
@@ -173,9 +169,7 @@
       "deployed": false,
       "funded": "USDC-native"
     },
-    "log": [
-      "funded USDC 0x1ea6b78ba2ec762cd6dfc92507fcb3ed9f300487d22332afe13bd0da10e5836"
-    ]
+    "log": ["funded USDC 0x1ea6b78ba2ec762cd6dfc92507fcb3ed9f300487d22332afe13bd0da10e5836"]
   },
   "ready-matrix/3": {
     "id": "ready-matrix/3",
@@ -349,9 +343,7 @@
       "deployed": false,
       "funded": "STRK"
     },
-    "log": [
-      "funded STRK 0xcace1fc603ccf3d95ac761b065e39c9e79d72c909537e359df2fa2e269b8b5"
-    ]
+    "log": ["funded STRK 0xcace1fc603ccf3d95ac761b065e39c9e79d72c909537e359df2fa2e269b8b5"]
   },
   "braavos-matrix/3": {
     "id": "braavos-matrix/3",
@@ -368,9 +360,7 @@
       "deployed": false,
       "funded": "USDC-native"
     },
-    "log": [
-      "funded USDC 0x748740765e495dc3c783d0841b38a078f32bc7695eed21fe760afc5cafb55a1"
-    ]
+    "log": ["funded USDC 0x748740765e495dc3c783d0841b38a078f32bc7695eed21fe760afc5cafb55a1"]
   },
   "cross-vendor/braavos-0": {
     "id": "cross-vendor/braavos-0",
@@ -459,9 +449,7 @@
       "deployedBy": "UDC unique=1",
       "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
     },
-    "log": [
-      "udc-deployed 0x5f68b16bbb39ea59ce19e370f21089e8672533016ebb0b1483d04a979a54a12"
-    ]
+    "log": ["udc-deployed 0x5f68b16bbb39ea59ce19e370f21089e8672533016ebb0b1483d04a979a54a12"]
   },
   "ready-matrix/18": {
     "id": "ready-matrix/18",
@@ -479,9 +467,7 @@
       "salt": "0x5eed5a17",
       "funded": "STRK"
     },
-    "log": [
-      "funded 0x4675b38da3bb122191982d337383343776a1edcc7ff54e9c3025a78f04a8a31"
-    ]
+    "log": ["funded 0x4675b38da3bb122191982d337383343776a1edcc7ff54e9c3025a78f04a8a31"]
   },
   "control/bramble-axis-1": {
     "id": "control/bramble-axis-1",
@@ -672,9 +658,7 @@
       "deployedBy": "bramble-platform-code",
       "note": "deployed BY THE WALLET's platform path (first run; exposed and fixed the signed-hash ordering)"
     },
-    "log": [
-      "deployed (first-run proof)"
-    ]
+    "log": ["deployed (first-run proof)"]
   },
   "braavos-matrix/6": {
     "id": "braavos-matrix/6",
@@ -692,9 +676,7 @@
       "deployedBy": "bramble-platform-code",
       "note": "deployed BY THE WALLET's platform path, clean end-to-end (estimate with validation + submit + hash check)"
     },
-    "log": [
-      "deployed 0x3fcf7128daa3c676f91f173bace93ca43706c60ed5ac2f7f982d404a01f7fdb"
-    ]
+    "log": ["deployed 0x3fcf7128daa3c676f91f173bace93ca43706c60ed5ac2f7f982d404a01f7fdb"]
   },
   "ready-matrix/20": {
     "id": "ready-matrix/20",
@@ -715,10 +697,6 @@
       "usableAfterUnix": 1791815082,
       "note": "Guardian escape triggered through the wallet's own review/submit path; status pending (7-day security period)."
     },
-    "log": [
-      "deployed",
-      "guardian set",
-      "escape triggered"
-    ]
+    "log": ["deployed", "guardian set", "escape triggered"]
   }
 }

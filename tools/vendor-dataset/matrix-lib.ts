@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { Account, RpcProvider, ec, hash, uint256 } from "starknet";
+import { Account, ec, hash, RpcProvider, uint256 } from "starknet";
 import { envSeed } from "./dataset-env";
 
 export { envSeed };
@@ -28,27 +28,33 @@ export const CLASSES = {
 } as const;
 
 export const TOKENS = {
-  STRK: { address: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d", decimals: 18 },
-  ETH: { address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7", decimals: 18 },
+  STRK: {
+    address: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+    decimals: 18,
+  },
+  ETH: {
+    address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+    decimals: 18,
+  },
   // Circle-native USDC (what users hold since the bridged->native migration),
   // NOT the legacy StarkGate-bridged 0x053c9125… token.
-  USDC: { address: "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb", decimals: 6 },
+  USDC: {
+    address: "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+    decimals: 6,
+  },
 } as const;
 
 export const provider = new RpcProvider({ nodeUrl: NODE });
-
 
 type Keypair = { readonly priv: string; readonly pub: string };
 
 /** Ready/Argent X: ETH key at m/44'/60'/0'/0/0 seeds the stark tree. */
 export function readyKeypair(mnemonic: string, index: number): Keypair {
-  const eth = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive(
-    "m/44'/60'/0'/0/0",
-  );
+  const eth = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive("m/44'/60'/0'/0/0");
   if (!eth.privateKey) throw new Error("derivation failed");
   const node = HDKey.fromMasterSeed(eth.privateKey).derive(`m/44'/9004'/0'/0/${index}`);
   if (!node.privateKey) throw new Error("derivation failed");
-  const priv = "0x" + grindKey(node.privateKey);
+  const priv = `0x${grindKey(node.privateKey)}`;
   return { priv, pub: getStarkKey(priv) };
 }
 
@@ -58,7 +64,7 @@ export function braavosKeypair(mnemonic: string, index: number): Keypair {
     `m/44'/9004'/0'/0/${index}`,
   );
   if (!node.privateKey) throw new Error("derivation failed");
-  const priv = "0x" + grindKey(node.privateKey);
+  const priv = `0x${grindKey(node.privateKey)}`;
   return { priv, pub: getStarkKey(priv) };
 }
 
@@ -77,9 +83,9 @@ export function deployerAccount(): Account {
   const seed = envSeed("BRAMBLE_DATASET_SEED_DEPLOYER");
   const node = HDKey.fromMasterSeed(mnemonicToSeedSync(seed)).derive("m/44'/9004'/0'/0/0");
   if (!node.privateKey) throw new Error("derivation failed");
-  const priv = "0x" + grindKey(node.privateKey);
+  const priv = `0x${grindKey(node.privateKey)}`;
   const pub = getStarkKey(priv);
-  const address = "0x" + BigInt(hash.calculateContractAddressFromHash(pub, CLASSES.oz300, [pub], 0)).toString(16);
+  const address = `0x${BigInt(hash.calculateContractAddressFromHash(pub, CLASSES.oz300, [pub], 0)).toString(16)}`;
   return new Account({ provider, address, signer: priv, cairoVersion: "1" });
 }
 
@@ -89,7 +95,10 @@ export async function tokenBalance(token: keyof typeof TOKENS, holder: string): 
     entrypoint: "balanceOf",
     calldata: [holder],
   });
-  return uint256.uint256ToBN({ low: res[0], high: res[1] });
+  const [low, high] = res;
+  if (low === undefined || high === undefined)
+    throw new Error(`balanceOf returned ${res.length} felts`);
+  return uint256.uint256ToBN({ low, high });
 }
 
 export async function classAt(address: string): Promise<string | null> {
@@ -134,4 +143,38 @@ export function loadManifest(): Record<string, ManifestEntry> {
 
 export function saveManifest(m: Record<string, ManifestEntry>): void {
   writeFileSync(MANIFEST_PATH, JSON.stringify(m, null, 2));
+}
+
+/** What a fixture step settles: the entry's new state, and its address when only the step can learn it. */
+export type FixtureOutcome = {
+  readonly address?: string;
+  readonly state: ManifestEntry["state"];
+};
+
+/**
+ * Runs one fixture step and returns the updated entry; never throws. On
+ * success the entry takes the step's outcome (minus any earlier `error`); on
+ * failure the error is appended to the log and recorded in the state, so a
+ * re-run resumes from the chain state rather than from this process.
+ */
+export async function runFixture(
+  entry: ManifestEntry,
+  step: (entry: ManifestEntry) => Promise<FixtureOutcome>,
+): Promise<ManifestEntry> {
+  console.log(`\n== ${entry.id} → ${entry.address.slice(0, 10)}…`);
+  try {
+    const outcome = await step(entry);
+    const state = Object.fromEntries(
+      Object.entries(outcome.state).filter(([key]) => key !== "error"),
+    );
+    return { ...entry, address: outcome.address ?? entry.address, state };
+  } catch (error) {
+    const message = String(error).slice(0, 200);
+    console.log(`   FAILED: ${String(error).slice(0, 160)}`);
+    return {
+      ...entry,
+      log: [...entry.log, `ERROR: ${message}`],
+      state: { ...entry.state, error: message },
+    };
+  }
 }

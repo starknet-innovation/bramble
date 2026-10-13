@@ -6,7 +6,7 @@
  */
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { RpcProvider, ec } from "starknet";
+import { ec, RpcProvider } from "starknet";
 import { envSeed } from "./dataset-env";
 
 const { grindKey, getStarkKey } = ec.starkCurve;
@@ -17,15 +17,17 @@ const seed = envSeed("BRAMBLE_DATASET_SEED_READY_MAIN");
 
 function readyKey(mnemonic: string, index: number): string {
   const eth = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive("m/44'/60'/0'/0/0");
-  const node = HDKey.fromMasterSeed(eth.privateKey!).derive(`m/44'/9004'/0'/0/${index}`);
-  return getStarkKey("0x" + grindKey(node.privateKey!));
+  if (!eth.privateKey) throw new Error("no eth key");
+  const node = HDKey.fromMasterSeed(eth.privateKey).derive(`m/44'/9004'/0'/0/${index}`);
+  if (!node.privateKey) throw new Error("no key");
+  return getStarkKey(`0x${grindKey(node.privateKey)}`);
 }
 
 const provider = new RpcProvider({
   nodeUrl: "https://mainnet.nodes.starknet.org/rpc/v0_10",
 });
 
-const norm = (v: string | bigint) => "0x" + BigInt(v).toString(16);
+const norm = (v: string | bigint) => `0x${BigInt(v).toString(16)}`;
 
 const cls = await provider.getClassHashAt(SMART).catch((e) => `not deployed (${e.message})`);
 console.log("live class:", cls);

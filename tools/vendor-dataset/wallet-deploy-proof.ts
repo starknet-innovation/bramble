@@ -4,6 +4,11 @@
  * functions (estimateAccountDeploymentFee / submitAccountDeployment), with
  * signHash standing in for the vault signer. Prints addresses/hashes only.
  */
+
+import {
+  estimateAccountDeploymentFee,
+  submitAccountDeployment,
+} from "@bramble/starknet/deployment";
 import { ec, num, hash as snHash } from "starknet";
 import {
   braavosKeypair,
@@ -14,16 +19,14 @@ import {
   tokenBalance,
   transfer,
 } from "./matrix-lib";
-import {
-  estimateAccountDeploymentFee,
-  submitAccountDeployment,
-} from "@bramble/starknet/deployment";
 
 const RPC = ["https://mainnet.nodes.starknet.org/rpc/v0_10"];
 const kp = braavosKeypair(envSeed("BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX"), 6);
 const address =
   "0x" +
-  BigInt(snHash.calculateContractAddressFromHash(kp.pub, CLASSES.braavosDeploy, [kp.pub], 0)).toString(16);
+  BigInt(
+    snHash.calculateContractAddressFromHash(kp.pub, CLASSES.braavosDeploy, [kp.pub], 0),
+  ).toString(16);
 console.log("fixture braavos-matrix/6:", address);
 
 if (await classAt(address)) {
@@ -33,7 +36,7 @@ if (await classAt(address)) {
 const strk = await tokenBalance("STRK", address);
 if (strk < 2n * 10n ** 18n) {
   const tx = await transfer(deployerAccount(), "STRK", address, 2n * 10n ** 18n - strk);
-  console.log("fee float:", tx.slice(0, 12) + "…");
+  console.log("fee float:", `${tx.slice(0, 12)}…`);
 }
 
 const account = {

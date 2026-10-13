@@ -12,7 +12,6 @@ import { envLines } from "./dataset-env";
 
 const { grindKey, getStarkKey } = ec.starkCurve;
 
-
 const BRAAVOS_BASE = "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6";
 const BRAAVOS_100 = "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201";
 const ARGENT_040 = "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f";
@@ -21,8 +20,8 @@ const ARGENT_031 = "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa
 function readEnv(): Map<string, string> {
   const out = new Map<string, string>();
   for (const line of envLines()) {
-    const m = line.match(/^([A-Z0-9_]+)="?([^"]*)"?\s*$/);
-    if (m && m[2].trim()) out.set(m[1], m[2].trim());
+    const [, name, value] = line.match(/^([A-Z0-9_]+)="?([^"]*)"?\s*$/) ?? [];
+    if (name && value?.trim()) out.set(name, value.trim());
   }
   return out;
 }
@@ -35,14 +34,14 @@ function recordedAddresses(): { ready: string[]; braavos: string[] } {
     if (line.includes("READY_MAIN")) section = "ready";
     else if (line.includes("BRAAVOS_MAIN")) section = "braavos";
     else if (line.includes("SEED_CROSS")) section = "";
-    const m = line.match(/account \d+ address:\s*(0x[0-9a-fA-F]+)/);
-    if (m && section === "ready") ready.push(m[1]);
-    if (m && section === "braavos") braavos.push(m[1]);
+    const address = line.match(/account \d+ address:\s*(0x[0-9a-fA-F]+)/)?.[1];
+    if (address && section === "ready") ready.push(address);
+    if (address && section === "braavos") braavos.push(address);
   }
   return { ready, braavos };
 }
 
-const norm = (a: string) => "0x" + BigInt(a).toString(16);
+const norm = (a: string) => `0x${BigInt(a).toString(16)}`;
 
 // Braavos: master node straight from the BIP-39 seed, address axis, grindKey.
 function braavosKey(mnemonic: string, index: number): string {
@@ -50,7 +49,7 @@ function braavosKey(mnemonic: string, index: number): string {
     `m/44'/9004'/0'/0/${index}`,
   );
   if (!node.privateKey) throw new Error("no key");
-  return getStarkKey("0x" + grindKey(node.privateKey));
+  return getStarkKey(`0x${grindKey(node.privateKey)}`);
 }
 
 // Ready: ETH key at m/44'/60'/0'/0/0 becomes the master seed, then the same
@@ -60,7 +59,7 @@ function readyKey(mnemonic: string, index: number): string {
   if (!ethNode.privateKey) throw new Error("no eth key");
   const node = HDKey.fromMasterSeed(ethNode.privateKey).derive(`m/44'/9004'/0'/0/${index}`);
   if (!node.privateKey) throw new Error("no key");
-  return getStarkKey("0x" + grindKey(node.privateKey));
+  return getStarkKey(`0x${grindKey(node.privateKey)}`);
 }
 
 // Bramble's own ladder (Krusty semantics): BIP-39 seed directly, account axis.
@@ -69,7 +68,7 @@ function brambleKey(mnemonic: string, accountIndex: number): string {
     `m/44'/9004'/${accountIndex}'/0/0`,
   );
   if (!node.privateKey) throw new Error("no key");
-  return getStarkKey("0x" + grindKey(node.privateKey));
+  return getStarkKey(`0x${grindKey(node.privateKey)}`);
 }
 
 const braavosAddress = (pub: string, cls: string) =>
@@ -95,7 +94,9 @@ if (braavosSeed) {
     const v100 = braavosAddress(pub, BRAAVOS_100);
     console.log(
       `index ${i}: base-class ${norm(base)} [${verdict(base, rec.braavos)}]` +
-        (verdict(v100, rec.braavos).startsWith("MATCH") ? ` | 1.0.0 ${norm(v100)} [${verdict(v100, rec.braavos)}]` : ""),
+        (verdict(v100, rec.braavos).startsWith("MATCH")
+          ? ` | 1.0.0 ${norm(v100)} [${verdict(v100, rec.braavos)}]`
+          : ""),
     );
   }
   console.log("── Braavos seed through Bramble's ladder (account axis) ──");

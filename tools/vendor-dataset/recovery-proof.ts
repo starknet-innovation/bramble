@@ -4,18 +4,30 @@
  * through the REPO's own reviewBraavosRecovery / submitBraavosRecovery. Prints
  * the request hash and when the account becomes usable.
  */
-import { ec, num, hash as snHash } from "starknet";
-import { braavosKeypair, CLASSES, classAt, deployerAccount, envSeed, tokenBalance, transfer } from "./matrix-lib";
+
 import {
   getBraavosRecoveryState,
   reviewBraavosRecovery,
   submitBraavosRecovery,
 } from "@bramble/starknet/rpc";
+import { ec, num, hash as snHash } from "starknet";
+import {
+  braavosKeypair,
+  CLASSES,
+  classAt,
+  deployerAccount,
+  envSeed,
+  tokenBalance,
+  transfer,
+} from "./matrix-lib";
 
 const RPC = ["https://mainnet.nodes.starknet.org/rpc/v0_10"];
 const kp = braavosKeypair(envSeed("BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX"), 4);
 const address =
-  "0x" + BigInt(snHash.calculateContractAddressFromHash(kp.pub, CLASSES.braavosDeploy, [kp.pub], 0)).toString(16);
+  "0x" +
+  BigInt(
+    snHash.calculateContractAddressFromHash(kp.pub, CLASSES.braavosDeploy, [kp.pub], 0),
+  ).toString(16);
 console.log("braavos-matrix/4:", address, "class:", await classAt(address));
 
 const before = await getBraavosRecoveryState({ accountAddress: address, rpcUrls: RPC });
@@ -47,8 +59,13 @@ const signHash = async (messageHash: string) => {
   return { publicKey: kp.pub, r: num.toHex(sig.r), s: num.toHex(sig.s) };
 };
 
-const fee = await reviewBraavosRecovery({ account, rpcUrls: RPC, signHash });
-console.log("reviewed fee:", fee.overallFee, fee.unit);
-const result = await submitBraavosRecovery({ account, reviewedFee: fee, rpcUrls: RPC, signHash });
+const review = await reviewBraavosRecovery({ account, rpcUrls: RPC, signHash });
+console.log("reviewed fee:", review.fee.overallFee, review.fee.unit);
+const result = await submitBraavosRecovery({
+  account,
+  reviewedFee: review.fee,
+  rpcUrls: RPC,
+  signHash,
+});
 console.log("removal request tx:", result.transactionHash);
 console.log("usable after (unix):", result.pendingUntil);

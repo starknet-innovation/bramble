@@ -5,6 +5,8 @@
  * the dataset deployer; all amounts are dust-sized. Prints addresses and tx
  * hashes only.
  */
+
+import { Account } from "starknet";
 import {
   argentAddress,
   argentConstructor,
@@ -17,11 +19,10 @@ import {
   provider,
   readyKeypair,
   saveManifest,
+  type TOKENS,
   tokenBalance,
-  TOKENS,
   transfer,
 } from "./matrix-lib";
-import { Account } from "starknet";
 
 const STRK_FEE_FLOAT = 2n * 10n ** 18n; // 2 STRK sent to a fixture that must self-deploy
 const STRK_DUST = 2n * 10n ** 18n;
@@ -39,30 +40,78 @@ type Spec = {
 };
 
 const SPECS: Spec[] = [
-  { id: "ready-matrix/0", seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX", index: 0, cls: "argent040",
-    expected: "found once #505 fixed (0.4.0, deployed)", detectability: "D2" },
-  { id: "ready-matrix/2", seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX", index: 2, cls: "argent030",
-    expected: "found once #505 fixed (0.3.0, view-only)", detectability: "D2" },
-  { id: "ready-matrix/4", seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX", index: 4, cls: "argent031",
-    expected: "found once #505 fixed (0.3.1, view-only)", detectability: "D2" },
-  { id: "ready-matrix/5", seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX", index: 5, cls: null,
+  {
+    id: "ready-matrix/0",
+    seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    index: 0,
+    cls: "argent040",
+    expected: "found once #505 fixed (0.4.0, deployed)",
+    detectability: "D2",
+  },
+  {
+    id: "ready-matrix/2",
+    seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    index: 2,
+    cls: "argent030",
+    expected: "found once #505 fixed (0.3.0, view-only)",
+    detectability: "D2",
+  },
+  {
+    id: "ready-matrix/4",
+    seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    index: 4,
+    cls: "argent031",
+    expected: "found once #505 fixed (0.3.1, view-only)",
+    detectability: "D2",
+  },
+  {
+    id: "ready-matrix/5",
+    seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    index: 5,
+    cls: null,
     fund: { token: "ETH", amount: ETH_DUST },
-    expected: "found once #505 fixed (undeployed, ETH balance probe)", detectability: "D2" },
-  { id: "ready-matrix/6", seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX", index: 6, cls: null,
+    expected: "found once #505 fixed (undeployed, ETH balance probe)",
+    detectability: "D2",
+  },
+  {
+    id: "ready-matrix/6",
+    seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    index: 6,
+    cls: null,
     fund: { token: "STRK", amount: STRK_DUST },
-    expected: "found once #505 fixed (undeployed, STRK balance probe)", detectability: "D2" },
-  { id: "ready-matrix/9", seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX", index: 9, cls: "argent040",
+    expected: "found once #505 fixed (undeployed, STRK balance probe)",
+    detectability: "D2",
+  },
+  {
+    id: "ready-matrix/9",
+    seedVar: "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    index: 9,
+    cls: "argent040",
     empty: true,
-    expected: "found once #505 fixed (deployed, used, near-zero balance)", detectability: "D2" },
-  { id: "gaps/7", seedVar: "BRAMBLE_DATASET_SEED_GAPS", index: 7, cls: "argent040",
-    expected: "found after a 7-index gap (#504 + #505)", detectability: "D2" },
-  { id: "gaps/25", seedVar: "BRAMBLE_DATASET_SEED_GAPS", index: 25, cls: "argent040",
-    expected: "found past the old 0-19 window only via #504's extension", detectability: "D3" },
+    expected: "found once #505 fixed (deployed, used, near-zero balance)",
+    detectability: "D2",
+  },
+  {
+    id: "gaps/7",
+    seedVar: "BRAMBLE_DATASET_SEED_GAPS",
+    index: 7,
+    cls: "argent040",
+    expected: "found after a 7-index gap (#504 + #505)",
+    detectability: "D2",
+  },
+  {
+    id: "gaps/25",
+    seedVar: "BRAMBLE_DATASET_SEED_GAPS",
+    index: 25,
+    cls: "argent040",
+    expected: "found past the old 0-19 window only via #504's extension",
+    detectability: "D3",
+  },
 ];
 
 const deployer = deployerAccount();
 const manifest = loadManifest();
-const short = (s: string) => s.slice(0, 10) + "…";
+const short = (s: string) => `${s.slice(0, 10)}…`;
 
 for (const spec of SPECS) {
   const kp = readyKeypair(envSeed(spec.seedVar), spec.index);
@@ -88,7 +137,8 @@ for (const spec of SPECS) {
   try {
     // Funding-only fixtures: top up to the dust target and stop.
     if (!spec.cls) {
-      const { token, amount } = spec.fund!;
+      if (!spec.fund) throw new Error(`${spec.id} has neither a class nor a funding target`);
+      const { token, amount } = spec.fund;
       const bal = await tokenBalance(token, address);
       if (bal >= amount) {
         console.log(`   already funded: ${bal} ${token}`);

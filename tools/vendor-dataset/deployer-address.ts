@@ -19,7 +19,7 @@ if (seed.split(/\s+/).length !== 12) throw new Error("deployer seed is not 12 wo
 
 const node = HDKey.fromMasterSeed(mnemonicToSeedSync(seed)).derive("m/44'/9004'/0'/0/0");
 if (!node.privateKey) throw new Error("derivation failed");
-const pub = getStarkKey("0x" + grindKey(node.privateKey));
+const pub = getStarkKey(`0x${grindKey(node.privateKey)}`);
 const address = hash.calculateContractAddressFromHash(pub, OZ_300, [pub], 0);
 console.log("deployer pubkey: ", pub);
-console.log("deployer address:", "0x" + BigInt(address).toString(16));
+console.log("deployer address:", `0x${BigInt(address).toString(16)}`);

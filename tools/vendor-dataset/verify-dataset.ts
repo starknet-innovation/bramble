@@ -18,7 +18,9 @@ import { launchExtension } from "../../tests/e2e/extension-fixture";
 import { envSeed } from "./dataset-env";
 import { loadManifest } from "./matrix-lib";
 
-const OUT_PATH = resolve(process.argv[2] ?? resolve(tmpdir(), "bramble-vendor-dataset-verification.json"));
+const OUT_PATH = resolve(
+  process.argv[2] ?? resolve(tmpdir(), "bramble-vendor-dataset-verification.json"),
+);
 const SCAN_TIMEOUT_MS = 300_000;
 const VAULT_PASSPHRASE = "dataset verification passphrase";
 
@@ -84,7 +86,7 @@ const importAndScan = async (mnemonic: string): Promise<{ rows: Scraped[]; statu
 
 const norm = (a: string): string => {
   try {
-    return "0x" + BigInt(a).toString(16);
+    return `0x${BigInt(a).toString(16)}`;
   } catch {
     return a.toLowerCase();
   }

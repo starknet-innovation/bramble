@@ -5,7 +5,7 @@
  */
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { Account, RpcProvider, ec, hash } from "starknet";
+import { Account, ec, hash, RpcProvider } from "starknet";
 import { envSeed } from "./dataset-env";
 
 const { grindKey, getStarkKey } = ec.starkCurve;
@@ -17,7 +17,7 @@ const seed = envSeed("BRAMBLE_DATASET_SEED_DEPLOYER");
 
 const node = HDKey.fromMasterSeed(mnemonicToSeedSync(seed)).derive("m/44'/9004'/0'/0/0");
 if (!node.privateKey) throw new Error("derivation failed");
-const priv = "0x" + grindKey(node.privateKey);
+const priv = `0x${grindKey(node.privateKey)}`;
 const pub = getStarkKey(priv);
 const address = hash.calculateContractAddressFromHash(pub, OZ_300, [pub], 0);
 
@@ -36,5 +36,5 @@ const { transaction_hash, contract_address } = await account.deployAccount({
 });
 console.log("deploy tx:", transaction_hash);
 const receipt = await provider.waitForTransaction(transaction_hash);
-console.log("status:", receipt.statusReceipt ?? receipt.execution_status ?? "unknown");
-console.log("deployed at:", "0x" + BigInt(contract_address).toString(16));
+console.log("status:", receipt.statusReceipt);
+console.log("deployed at:", `0x${BigInt(contract_address).toString(16)}`);
