@@ -1,4 +1,4 @@
-import { expect, userEvent } from "storybook/test";
+import { expect, userEvent, waitFor } from "storybook/test";
 import {
   assertCheckpointReady,
   checkpointStory,
@@ -27,6 +27,38 @@ export const ActivityAccountARestored = checkpointStory(
   "activity",
   "account-a-restored",
 );
+
+/**
+ * The feed is long enough to scroll. The title bar holds its place at the top
+ * of the panel while the rows move beneath it, which is the whole point of the
+ * checkpoint: assert the resting bar starts below the panel edge, then that a
+ * scroll pins it at zero with the list moving under it.
+ */
+export const ActivityLongFeed: LabStory = {
+  args: { checkpointId: "account-a-long", scenarioId: "activity" },
+  name: "Activity · long feed (pinned title bar)",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const frame = canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]");
+    const win = frame?.contentWindow;
+    const doc = frame?.contentDocument;
+    const header = doc?.querySelector<HTMLElement>(".activity-head");
+    const list = doc?.querySelector<HTMLElement>(".tx-list");
+    if (!win || !doc || !header || !list) throw new Error("Missing Activity feed");
+    // The fixture must actually overflow, or this state would prove nothing.
+    await expect(doc.documentElement.scrollHeight).toBeGreaterThan(
+      doc.documentElement.clientHeight,
+    );
+    const restingTop = Math.round(header.getBoundingClientRect().top);
+    await expect(restingTop).toBeGreaterThan(0);
+    win.scrollTo(0, 240);
+    await waitFor(() => expect(Math.round(header.getBoundingClientRect().top)).toBe(0));
+    await expect(header).toBeVisible();
+    await expect(list.getBoundingClientRect().top).toBeLessThan(restingTop);
+    // Leave the surface at rest, so a snapshot shows the screen, not the scroll.
+    win.scrollTo(0, 0);
+  },
+};
 
 export const Receive: LabStory = {
   args: { checkpointId: "receive", scenarioId: "assets" },

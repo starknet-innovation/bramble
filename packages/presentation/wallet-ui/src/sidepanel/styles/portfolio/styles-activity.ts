@@ -22,6 +22,20 @@ const GLYPH_SIZE = "16px";
  * Activity feed stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const ACTIVITY_STYLES = `
+  /* Activity pins its title bar: the feed is the only thing that scrolls. The
+     bar is the screen's first grid item, so it stays put for as long as the
+     screen is in view, while the rows pass beneath it. The fill is bled past
+     the text column to the panel edges and up over the shell's top inset by a
+     pseudo element, so the rows never show through and the resting layout is
+     unchanged (the inset cancels the bleed). */
+  .activity-head { position: sticky; top: 0; z-index: 2; }
+  .activity-head::before {
+    background: var(--bramble-bg);
+    content: "";
+    inset: calc(-1 * ${SPACE.md}) calc(-1 * ${SPACE.lg}) calc(-1 * ${SPACE.sm});
+    position: absolute;
+    z-index: -1;
+  }
   /* Activity list: rows breathe on a 4px gap with no rule between them; the
      rounded hover fill is the only affordance, since the verb is a link. Row
      content sits on the page's text column — glyphs line up with the screen
