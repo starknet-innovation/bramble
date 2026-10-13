@@ -49,6 +49,10 @@ const thrownMessages = (): ReadonlySet<string> => {
 // Shown as written, by decision. Each is already a sentence a reader can act
 // on, or is unreachable by anything a reader does (marked "unreachable").
 const READER_SENTENCES = new Set([
+  // Actionable: the pair or size has no route right now (copy pending).
+  "Ekubo returned no Multiply liquidity",
+  "AVNU returned no route for this pair",
+  "AVNU returned no market data",
   "Amount must be greater than zero.",
   "Bundled Punk contract artifact is malformed.", // unreachable: build integrity
   "Choose a Punk id between 0 and 9999.",
@@ -98,8 +102,6 @@ const NAMED_PLUMBING = [
   "Invalid AVNU build response",
   "Invalid Ekubo quote response",
   "Empty Ekubo unwind route",
-  "Ekubo returned no Multiply liquidity",
-  "AVNU returned no route for this pair",
   "Vesu pool request failed",
   "Vesu vault amount must be a positive u256",
   "No RPC endpoints configured",

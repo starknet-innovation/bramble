@@ -283,7 +283,9 @@ export const SwapPanel = ({
         });
         setExecMessage("Broadcast accepted. Confirmation is updating automatically.");
       } catch (cause) {
-        setExecMessage(userErrorMessage(cause, "Wallet rejected the swap."));
+        // Not "rejected": a collapsed message here is our own plumbing, not a
+        // decline, so it takes the terminal's neutral wallet-failure sentence.
+        setExecMessage(userErrorMessage(cause, "The wallet could not complete this operation."));
       } finally {
         setIsRequesting(false);
       }

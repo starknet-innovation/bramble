@@ -66,7 +66,8 @@ const INTERNAL_FAMILIES: readonly RegExp[] = [
   /^Invalid [A-Za-z]/,
   /^Could not (?:quote|resolve)\b/,
   /^Empty Ekubo\b/,
-  /^(?:Ekubo|AVNU|Starkscan) returned (?:no|invalid)\b/,
+  // "returned no route / no liquidity" is kept: the reader can act on it.
+  /^(?:Ekubo|AVNU|Starkscan) returned invalid\b/,
   /^(?:AVNU|Vesu) (?:quote |build |pool )?request failed\.?$/,
   /\breturned (?:an )?invalid\b/,
   /\bis invalid\.$/,
