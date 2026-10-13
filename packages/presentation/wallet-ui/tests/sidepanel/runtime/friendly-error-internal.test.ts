@@ -117,8 +117,17 @@ describe("STRK20 (review F1, F2)", () => {
       const raw = `strk20 services unavailable (submission/${category}): reason`;
       expect(friendlyError(raw).message).toBe(raw);
     }
-    const timedOut = "strk20 services unavailable: submission did not finish within 60 s";
-    expect(friendlyError(timedOut).message).toBe(timedOut);
+    // Every budgeted phase (discovery, maturity, proof request, proving) runs
+    // before anything is sent, so outcome-unknown copy would misstate it (R2-4).
+    for (const phase of [
+      "discovering private notes",
+      "waiting for pool maturity",
+      "building the proof request",
+      "proving",
+    ]) {
+      const timedOut = `strk20 services unavailable: ${phase} did not finish within 60 s`;
+      expect(friendlyError(timedOut).message).toBe(timedOut);
+    }
   });
 
   test("only the services-down reasons read as unavailable", () => {
@@ -185,6 +194,13 @@ describe("status lines (errorLine)", () => {
       "The operation would leak private information",
     );
     expect(errorLine(new Error("boom"), "Private transaction failed")).toBe(GENERIC);
+    // The swap review line names the safety check that stopped the build (R2-1).
+    expect(
+      errorLine(
+        new Error("swap build routed the proceeds to another account"),
+        "Could not prepare a safe swap route.",
+      ),
+    ).toBe("swap build routed the proceeds to another account");
     // The fallback is still translated when nothing was thrown.
     expect(errorLine(null, "Private transaction failed")).toContain("may not have gone through");
   });

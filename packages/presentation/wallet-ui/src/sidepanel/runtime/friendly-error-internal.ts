@@ -27,7 +27,6 @@ import {
   KEY_IMPORT_FAILED,
   REVIEW_MOVED,
   SEED_IMPORT_FAILED,
-  SWAP_ROUTE_UNSAFE,
   UNRECOGNIZED_RELEASE,
 } from "./friendly-error-shared";
 
@@ -55,8 +54,6 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
     "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
     "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
   ],
-  // avnu's quote answered a different pair: the swap was refused for safety.
-  ["swap quote does not match the requested pair", SWAP_ROUTE_UNSAFE],
   // The account's deploy class is not one this wallet derives: the same fact
   // the deployed-account checks already tell the reader.
   ["invalid argent account class hash", UNRECOGNIZED_RELEASE.ready],
@@ -85,7 +82,7 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
  * `PLUMBING_DESPITE_FACT_WORD` with its reason (checked by the tests).
  */
 export const FACT_TERMS =
-  /\b(?:signatures?|signed|signing|public[- ]?keys?|private keys?|key material|viewing[- ]keys?|hash(?:es|ed)?|proofs?|chain(?: ?id)?|chainid|verif\w*|mismatch|does not match|do not match|not from|pinned|commitment|origins?|phishing|spoof\w*|scam|poison\w*|mimic\w*|leak\w*|linkage|anonymi[sz]er|executor|nonce|replay\w*|expired|tamper\w*|forged|allowances?|approv\w*|fee cap|ceiling|unknown contract|sanction\w*|screen\w*|blocked|integrity|schema|strk20|private|privacy|notes?|shield\w*|recovered vault|imported-seed vault|prepared|envelope|commit state)\b/i;
+  /\b(?:signatures?|signed|signing|public[- ]?keys?|private keys?|key material|viewing[- ]keys?|hash(?:es|ed)?|proofs?|chain(?: ?id)?|chainid|verif\w*|mismatch|does not match|do not match|not from|pinned|commitment|origins?|phishing|spoof\w*|scam|poison\w*|mimic\w*|leak\w*|linkage|anonymi[sz]er|executor|nonce|replay\w*|expired|tamper\w*|forged|allowances?|approv\w*|fee cap|ceiling|unknown contract|sanction\w*|screen\w*|blocked|integrity|schema|strk20|private|privacy|notes?|shield\w*|recovered vault|imported-seed vault|prepared|envelope|commit state|swap build|proceeds|minimum|beneficiary|lookalike|router|entrypoint|spender)\b/i;
 
 /**
  * Plumbing messages, lowercased, each with the reason it states nothing a
@@ -191,7 +188,6 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
   ["invalid argent multisig address", "response parse"],
   ["invalid argent multisig class response", "response parse"],
   ["invalid argent multisig configuration", "configuration parse"],
-  ["invalid argent multisig salt", "deployment field parse"],
   ["invalid argent multisig signer event", "event parse"],
   ["invalid argent multisig signer membership response", "response parse"],
   ["invalid argent multisig signers response", "response parse"],
@@ -206,7 +202,7 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
   ["invalid slippage", "slippage comes from a fixed control"],
   ["invalid swap quote", "avnu response parse"],
   ["invalid swap call", "avnu response parse"],
-  ["invalid swap build response", "avnu response parse"],
+  ["invalid swap build response", "avnu response parse (a refusal names its check)"],
   ["invalid token list response", "avnu response parse"],
   ["token list failed", "avnu transport"],
   ["swap service unavailable", "avnu transport"],
@@ -219,6 +215,8 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
   ["strk20 signer does not declare classes", "unreachable: as above"],
   ["strk20 signer does not deploy accounts", "unreachable: as above"],
   // --- Plumbing that names a fact word (see PLUMBING_DESPITE_FACT_WORD) --------
+  // (also "invalid swap build response" above: avnu's JSON did not parse; every
+  // safety refusal of a parsed build is its own "swap build …" message)
   ["krusty kms returned invalid class hash json", "KMS's static class table parse"],
   ["krusty kms returned an invalid class hash", "KMS's static class table parse"],
   ["krusty kms returned invalid class hashes", "KMS's static class table parse"],
@@ -229,9 +227,11 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
 ]);
 
 /**
- * `REVIEWED_PLUMBING` entries that contain a `FACT_TERMS` word, and why each is
- * still plumbing. Every one reads the KMS's or wallet's own static class table;
- * none reports a check on chain data, a key, or a signature.
+ * `REVIEWED_PLUMBING` entries that contain a `FACT_TERMS` or other sensitive
+ * word ("signer"), and why each is still plumbing: the KMS's or wallet's own
+ * static class table, an avnu JSON parse, unreachable call-set signer guards,
+ * or a signer-list response parse. None reports a check on chain data, a key,
+ * or a signature. The tests pin this set and fail on any other sensitive entry.
  */
 export const PLUMBING_DESPITE_FACT_WORD: ReadonlySet<string> = new Set([
   "krusty kms returned invalid class hash json",
@@ -245,6 +245,19 @@ export const PLUMBING_DESPITE_FACT_WORD: ReadonlySet<string> = new Set([
   "strk20 signer does not expose public keys",
   "strk20 signer does not declare classes",
   "strk20 signer does not deploy accounts",
+  "invalid swap build response",
+  // Signer-list and signer-event response parses: "signer" names whose data
+  // failed to parse, not a check on a key or a signature.
+  "query signer is only available for argent accounts",
+  "unsupported signer-management action",
+  "invalid argent multisig signer event",
+  "invalid argent multisig signer membership response",
+  "invalid argent multisig signers response",
+  "invalid argent multisig threshold or signer count",
+  "invalid argent signer guid",
+  "invalid argent signer guids",
+  "invalid signer guid",
+  "invalid signer account class response",
 ]);
 
 // Templated plumbing: a missing KMS module export, the KMS's static class

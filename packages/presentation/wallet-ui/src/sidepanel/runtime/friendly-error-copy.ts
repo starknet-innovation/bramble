@@ -407,9 +407,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "No route found for this pair right now. Try a different amount or pair.",
   ],
   ["swap build returned a route the wallet could not decode", SWAP_ROUTE_UNSAFE],
-  ["swap build returned more than one swap call", SWAP_ROUTE_UNSAFE],
-  ["swap build returned no swap call", SWAP_ROUTE_UNSAFE],
-  ["swap build returned too many calls", SWAP_ROUTE_UNSAFE],
+  // Each names the call-shape check that stopped the build: shown as written
+  // (issue 652 review, R2-1), listed so the coverage check records the decision.
+  ["swap build returned more than one swap call", "swap build returned more than one swap call"],
+  ["swap build returned no swap call", "swap build returned no swap call"],
+  ["swap build returned too many calls", "swap build returned too many calls"],
   [
     "swap build touched an unexpected token approval",
     "Blocked for safety: the swap asked to approve the wrong token. Nothing was signed.",
