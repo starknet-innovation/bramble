@@ -253,3 +253,12 @@ describe("STRK20 categories with a reviewed sentence", () => {
     ).toBe("The operation would leak private information");
   });
 });
+
+// Errors audit F7: the panel says what a site's private request already says.
+test("a network without a shadow-account anonymizer reads as the approved notice", () => {
+  expect(
+    friendlyError(
+      "strk20 services unavailable: no shadow account anonymizer is configured for this network",
+    ).message,
+  ).toBe("Private services aren't set up for this network.");
+});

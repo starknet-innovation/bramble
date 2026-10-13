@@ -106,6 +106,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ],
   ["private balances unavailable", "Couldn't load private balances. Try again."],
   ["strk20 services unavailable", "Private balances are unavailable right now. Try again shortly."],
+  [
+    "strk20 services unavailable: no shadow account anonymizer is configured for this network",
+    "Private services aren't set up for this network.",
+  ],
   ["private balances are already active", "Private balances are already active."],
   [
     "private balances are not available for ledger accounts",

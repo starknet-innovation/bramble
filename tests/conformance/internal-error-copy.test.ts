@@ -355,7 +355,6 @@ const SHADOW_PENDING_COPY = new Set([
   "shadow account scope not recorded",
   "shadow sweep batch breaks a batch rule",
   "strk20 services unavailable: could not list shadow accounts (x)",
-  "strk20 services unavailable: no shadow account anonymizer is configured for this network",
 ]);
 
 // The panel's own fallbacks, shown only when a rejection carries no message of

@@ -24,6 +24,7 @@
 
 import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
+import { PRIVATE_SERVICES_UNAVAILABLE_NOTICE } from "@bramble/wallet-protocol/privacy-blocker";
 
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
 import { INTERNAL_ERROR_COPY } from "./friendly-error-internal";
@@ -452,6 +453,12 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // --- Private balances ----------------------------------------------------
   ["private balances unavailable", "Couldn't load private balances. Try again."],
   ["strk20 services unavailable", "Private balances are unavailable right now. Try again shortly."],
+  // The approved line a site's private request already shows for the same
+  // fact (errors audit F7).
+  [
+    "strk20 services unavailable: no shadow account anonymizer is configured for this network",
+    PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
+  ],
   ["private balances are already active", "Private balances are already active."],
   [
     "private balances are not available for ledger accounts",
