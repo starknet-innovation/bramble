@@ -69,7 +69,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const verifyContinue = form.querySelector<HTMLButtonElement>("#verify-continue");
   const passwordContinue = form.querySelector<HTMLButtonElement>("#password-continue-button");
   const submitButton = form.querySelector<HTMLButtonElement>("#create-wallet-button");
-  const accountButton = form.querySelector<HTMLButtonElement>("#account-preview");
   const accountContractInput = form.querySelector<HTMLInputElement>(
     'input[name="accountContractType"]',
   );
@@ -80,7 +79,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let mnemonic = "";
   let importWordCount: 12 | 24 = 12;
   let requiresVerification = false;
-  let accountSelected = false;
   let previewMatchesInput = false;
   let previewGeneration = 0;
   let mnemonicGeneration = 0;
@@ -239,7 +237,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   });
   const refreshAccountGate = (): void => {
     if (submitButton) {
-      submitButton.disabled = !(walletReady && accountSelected && previewMatchesInput);
+      submitButton.disabled = !(walletReady && previewMatchesInput);
     }
   };
 
@@ -372,11 +370,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     showStep("recovery-accounts");
     recoveryAccounts.start();
   });
-  accountButton?.addEventListener("click", () => {
-    accountSelected = !(accountButton.getAttribute("aria-pressed") === "true");
-    accountButton.setAttribute("aria-pressed", String(accountSelected));
-    refreshAccountGate();
-  });
   const runReviewAccount = (): void => {
     if (!passwordOk()) {
       refreshPassword();
@@ -406,8 +399,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           invalidatePreview();
           return;
         }
-        accountSelected = false;
-        accountButton?.setAttribute("aria-pressed", "false");
         if (previewAddress) {
           previewAddress.textContent = `${account.address.slice(0, 10)}…${account.address.slice(-8)}`;
           previewAddress.title = account.address;
@@ -440,9 +431,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (!accountSelected || !previewMatchesInput) {
+    if (!previewMatchesInput) {
       if (result) {
-        result.textContent = "Select the account before continuing.";
+        result.textContent = "Wait for the account to finish deriving.";
       }
       return;
     }

@@ -128,13 +128,13 @@ const classHashRows = (
  */
 export const RECEIVE_QR_LABELS = {
   address: "QR code for your Starknet address",
-  card: "QR code for wallet contact card",
+  card: "QR code for wallet card",
 } as const;
 
-// The contact card is a public document; saying so keeps the signer and
+// The wallet card is a public document; saying so keeps the signer and
 // coordination keys from reading as secrets when they appear beside it.
 const CARD_EXPLAINER =
-  "The contact card is public: this address, the signer public key, and the coordination public key. It holds nothing secret.";
+  "The wallet card is public: this address, the signer public key, and the coordination public key. It holds nothing secret.";
 
 /**
  * Renders the canonical Receive card. The QR carries the plain Starknet
@@ -210,7 +210,7 @@ export const receiveAddressView = ({
       <div class="receive-advanced-fields" id="receive-advanced-fields" hidden>
         <div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
           <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
-          <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Bramble contact card</button>
+          <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Wallet card</button>
         </div>
         <p class="hint receive-card-explainer" data-receive-card-explainer>${escapeHtml(CARD_EXPLAINER)}</p>
         <div class="receive-actions">

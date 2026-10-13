@@ -29,11 +29,19 @@ const digest = `sha256:${"d".repeat(64)}`;
 /** The largest pool fee the wallet accepts, the bound the fee line must hold. */
 const MAX_POOL_FEE_FRI = `0x${STRK20_MAX_POOL_FEE.toString(16)}`;
 
+// Production registration awaits a successful fee estimate before it returns a
+// review, so the fixture carries the same shape and spelling production does: a
+// network fee as a canonical base-units integer with its denomination, and the
+// pool's action fee as a canonical felt. Omitting them, or spelling either in a
+// form the wire grammar rejects, would render a ready-to-authorize review that
+// production never produces.
 const activation: PrivacyPreparation = {
   id: digest,
   kind: "register",
+  networkFee: { overallFee: "2000000000000000", unit: "FRI" },
   payloadDigest: digest,
   poolAddress: STRK20_MAINNET_POOL,
+  poolFeeFri: "0x53444835ec580000",
   route: "public-account",
   summaries: [
     "Register this account with the privacy pool",
@@ -282,6 +290,26 @@ export const privacyScenario: WalletScenario = {
       narrative:
         "A registration whose reply was lost may still be on chain: the amber tone and Activity lead, never the red failure with a blind retry (issue 382).",
       state: { autoRetry: false, severity: "warning", stage: "failure" },
+    },
+    {
+      content: () =>
+        privacyDashboard(
+          disclosure("unregistered"),
+          {
+            blocker: {
+              kind: "service",
+              message: "Could not estimate the network fee for this registration.",
+            },
+            stage: "blocked",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "activation-fee-failed",
+      label: "Fee estimate failed",
+      narrative:
+        "A failed fee estimate never reaches a ready-to-authorize review: the preparation blocks with the reported reason and an explicit retry, and nothing is submitted.",
+      state: { failClosed: true, prerequisite: "fee-estimate", retry: "available" },
     },
     // The funding shortfall sits after the activation sequence so the guided
     // walkthrough's Step order (required, review, proving, submitted) is intact.
