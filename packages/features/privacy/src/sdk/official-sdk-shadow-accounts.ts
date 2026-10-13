@@ -14,15 +14,16 @@ import { isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import { num } from "starknet";
 import type { Strk20ShadowAccountInfo } from "../service";
-import { STRK20_SERVICE_UNAVAILABLE, type Strk20Service } from "../service";
+import {
+  STRK20_SERVICE_UNAVAILABLE,
+  STRK20_SHADOW_VIEW_NONCE_LIMIT,
+  type Strk20Service,
+} from "../service";
 import { mapStrk20ProtocolError } from "./official-sdk-errors";
 import { retryStrk20ServiceRead, type ServiceRetryPause } from "./official-sdk-retry";
 import type { PrivacySdkRuntime } from "./official-sdk-runtime";
 import { transfersFor } from "./official-sdk-transfers";
 import { requireStrk20Config } from "./official-sdk-values";
-
-// The anonymizer's nonce type is u64; larger nonces are outside its view.
-const SHADOW_ACCOUNT_VIEW_NONCE_LIMIT = 1n << 64n;
 
 // The anonymizer's MAX_SCAN_RANGE: one view call covers at most this many nonces.
 const MAX_SCAN_RANGE = 1024n;
@@ -71,8 +72,9 @@ const decodeInfos = (
 };
 
 /**
- * Builds the `shadowAccounts` read. Nonces at or above 2^64 are refused, since the view cannot
- * address them; an unreachable node or a malformed answer fails closed.
+ * Builds the `shadowAccounts` read. Nonces at or above
+ * {@link STRK20_SHADOW_VIEW_NONCE_LIMIT} are refused, since no view window can
+ * include them; an unreachable node or a malformed answer fails closed.
  */
 export const strk20ShadowAccountReads = (deps: {
   readonly pauseForServiceRetry: ServiceRetryPause;
@@ -86,7 +88,7 @@ export const strk20ShadowAccountReads = (deps: {
     if (!anonymizer || !nodeUrl) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
-    if (input.nonces.some((nonce) => nonce < 0n || nonce >= SHADOW_ACCOUNT_VIEW_NONCE_LIMIT)) {
+    if (input.nonces.some((nonce) => nonce < 0n || nonce >= STRK20_SHADOW_VIEW_NONCE_LIMIT)) {
       throw unavailable("a nonce is outside the anonymizer's range");
     }
     let partial: bigint;

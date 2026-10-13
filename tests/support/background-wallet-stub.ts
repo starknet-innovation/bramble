@@ -202,6 +202,16 @@ export const createWallet = (options: WalletStubOptions = {}) => {
       }
       scopes.value = next;
     },
+    async canRecordShadowAccountScope({
+      vaultPassphrase: passphrase,
+      ...input
+    }: RecordShadowAccountScopeInput) {
+      if (passphrase !== vaultPassphrase) {
+        throw new Error("bad passphrase");
+      }
+      const scope = canonicalShadowAccountScope(input);
+      return scope !== null && withShadowAccountScope(scopes.value, scope) !== null;
+    },
     async listShadowAccountScopes(input: ListShadowAccountScopesInput) {
       return shadowAccountScopesFor(
         scopes.value,

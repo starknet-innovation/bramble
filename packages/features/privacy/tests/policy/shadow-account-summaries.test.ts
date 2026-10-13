@@ -8,10 +8,12 @@ import { describe, expect, test } from "bun:test";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import {
   SHADOW_INVOKE_ANONYMIZER,
+  SHADOW_INVOKE_COLLECTS_ALL_TO,
   SHADOW_INVOKE_CONTROL,
   SHADOW_INVOKE_RUNS,
   SHADOW_INVOKE_SETTLES,
   SHADOW_INVOKE_SETTLES_NOTHING,
+  SHADOW_INVOKE_SETTLES_TO,
 } from "../../src/policy/shadow-account-copy";
 import { summarizeStrk20Batch } from "../../src/policy/summaries";
 
@@ -23,16 +25,16 @@ const shadow = { anonymizer: ANONYMIZER, origin: "https://app.example" };
 const assetFor = (token: string) => (token === STRK ? { decimals: 18, symbol: "STRK" } : undefined);
 
 const call = { calldata: ["0x1"], contract_address: OTHER, entry_point: "swap" };
-const invoke = (calls: number, nonce = "0x2"): Strk20Action => ({
+const invoke = (calls: number, nonce = "0x2", collect: "all" | "diff" = "all"): Strk20Action => ({
   calls: Array.from({ length: calls }, () => call),
-  collect_policy: { type: "all" },
+  collect_policy: { type: collect },
   dapp_name: "Market",
   nonce,
   type: "shadow_account_invoke",
 });
-const open = (token: string): Strk20Action => ({
+const open = (token: string, recipient = ACCOUNT): Strk20Action => ({
   amount: "OPEN",
-  recipient: ACCOUNT,
+  recipient,
   token,
   type: "transfer",
 });
@@ -66,9 +68,59 @@ describe("shadow account invoke review", () => {
   });
 
   test("an untrusted token is named by its address, never a guessed symbol", () => {
-    expect(summarizeStrk20Batch([open(OTHER), invoke(1)], { shadow })).toContain(
-      SHADOW_INVOKE_SETTLES("0x012345…cdef"),
+    expect(
+      summarizeStrk20Batch([open(OTHER), invoke(1)], { depositor: ACCOUNT, shadow }),
+    ).toContain(SHADOW_INVOKE_SETTLES("0x012345…cdef"));
+  });
+
+  // Audit F1: "back into private notes" is claimed only for this account's own
+  // notes. A note for anyone else names its recipient, and under `all` says the
+  // whole shadow-account balance of that token goes to them.
+  const STRANGER = "0x0bad000000000000000000000000000000000000000000000000000000000001";
+  test("an OPEN note for someone else names them instead of settling back", () => {
+    const summaries = summarizeStrk20Batch([open(STRK, STRANGER), invoke(1)], {
+      assetFor,
+      depositor: ACCOUNT,
+      shadow,
+    });
+    expect(summaries.slice(1, -1)).toEqual([
+      SHADOW_INVOKE_RUNS(1, "2", shadow.origin),
+      SHADOW_INVOKE_ANONYMIZER(ANONYMIZER),
+      SHADOW_INVOKE_SETTLES_TO("STRK", "0x0bad00…0001"),
+      SHADOW_INVOKE_COLLECTS_ALL_TO("STRK", "0x0bad00…0001"),
+    ]);
+    expect(summaries.join("\n")).not.toContain("back into private notes");
+    expect(SHADOW_INVOKE_COLLECTS_ALL_TO("STRK", "0x0bad00…0001")).toBe(
+      "This shadow account's whole STRK balance goes to 0x0bad00…0001",
     );
+  });
+
+  test("diff to someone else names them without the whole-balance line", () => {
+    const summaries = summarizeStrk20Batch([open(STRK, STRANGER), invoke(1, "0x2", "diff")], {
+      assetFor,
+      depositor: ACCOUNT,
+      shadow,
+    });
+    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("STRK", "0x0bad00…0001"));
+    expect(summaries.join("\n")).not.toContain("whole");
+    expect(summaries.join("\n")).not.toContain("back into private notes");
+  });
+
+  test("own and foreign notes in one batch each get their own line", () => {
+    const summaries = summarizeStrk20Batch([open(STRK), open(OTHER, STRANGER), invoke(1)], {
+      assetFor,
+      depositor: ACCOUNT,
+      shadow,
+    });
+    expect(summaries).toContain(SHADOW_INVOKE_SETTLES("STRK"));
+    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("0x012345…cdef", "0x0bad00…0001"));
+    expect(summaries).toContain(SHADOW_INVOKE_COLLECTS_ALL_TO("0x012345…cdef", "0x0bad00…0001"));
+  });
+
+  test("without a proven depositor, no note is claimed as the user's own", () => {
+    const summaries = summarizeStrk20Batch([open(STRK), invoke(1)], { assetFor, shadow });
+    expect(summaries.join("\n")).not.toContain("back into private notes");
+    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("STRK", ACCOUNT));
   });
 
   test("other actions summarize exactly as before", () => {

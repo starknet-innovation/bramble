@@ -5,7 +5,7 @@
  * validated here so a single source of truth backs both the provider bridge and
  * the background handler. These guards are pure and never touch secret material.
  *
- * The action shapes track the canonical Wallet-API 0.10.4-rc.0 STRK20 definitions
+ * The action shapes track the canonical Wallet-API 0.10.4 STRK20 definitions
  * (starkware-libs/starknet-specs wallet-api/wallet_rpc.json): actions are
  * discriminated by a `type` field; withdraw carries a required `recipient`;
  * transfer accepts either a FELT amount or the literal string "OPEN" (an open

@@ -27,6 +27,7 @@ import {
   type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@bramble/privacy/service";
+import { SHADOW_SWEEP_ACTIVITY } from "@bramble/privacy/shadow-account-copy";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { activityToken } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
@@ -51,7 +52,7 @@ import {
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
-import { shadowSweepActivity, submitShadowSweep } from "./strk20-shadow-sweep";
+import { submitShadowSweep } from "./strk20-shadow-sweep";
 import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
@@ -113,7 +114,9 @@ const activitySummary = (
     return STRK20_REGISTRATION_SUMMARY;
   }
   if (preparation.kind === "shadow-sweep") {
-    return shadowSweepActivity(preparation);
+    // Generic on purpose: activity is plain browser storage and CSV export,
+    // and the scope's site, label, and nonce stay in the encrypted vault.
+    return SHADOW_SWEEP_ACTIVITY;
   }
   const value = `${preparation.amount} ${preparation.token.symbol}`;
   if (preparation.kind === "transfer") {

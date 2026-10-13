@@ -189,6 +189,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "id",
       "insights",
       "kind",
+      "notice",
       "origin",
       "relayFeeAction",
       "reviewAssets",
@@ -281,8 +282,13 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const relayFeeValid =
     relayFeeAction === undefined ||
     (value["kind"] === "strk20-invoke" && relayFeeAction?.type === "withdraw");
+  const noticeValid =
+    value["notice"] === undefined ||
+    (value["kind"] === "strk20-unavailable" &&
+      (value["notice"] === "record-limit" || value["notice"] === "request-failed"));
   return (
     actionReviewValid &&
+    noticeValid &&
     relayFeeValid &&
     tokenValid &&
     feeValid &&

@@ -37,4 +37,24 @@ describe("private-services notice response", () => {
       }),
     ).toBe(false);
   });
+
+  test("admits a notice reason only on the notice, and only a known one", () => {
+    const notice = { id: approvalId, kind: "strk20-unavailable", origin: "https://example.com" };
+    for (const reason of ["record-limit", "request-failed"]) {
+      expect(
+        isPendingApprovalsResponse({ ok: true, pending: [{ ...notice, notice: reason }] }),
+      ).toBe(true);
+    }
+    expect(isPendingApprovalsResponse({ ok: true, pending: [{ ...notice, notice: "x" }] })).toBe(
+      false,
+    );
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [
+          { id: approvalId, kind: "connect", notice: "record-limit", origin: notice.origin },
+        ],
+      }),
+    ).toBe(false);
+  });
 });

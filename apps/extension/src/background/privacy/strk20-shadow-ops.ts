@@ -8,6 +8,7 @@
 import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isWalletOrigin } from "@bramble/core/origin";
+import { SHADOW_ACCOUNT_RECORDS_UNAVAILABLE } from "@bramble/privacy/shadow-account-refusals";
 import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { isStrk20DappName, isStrk20Felt } from "@bramble/wallet-protocol/strk20";
@@ -20,7 +21,11 @@ import {
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
-import { readShadowAccounts, type ShadowScopeTarget } from "./strk20-shadow-reads";
+import {
+  isShadowScopeUnder,
+  readShadowAccounts,
+  type ShadowScopeTarget,
+} from "./strk20-shadow-reads";
 import { recordShadowScopeUses } from "./strk20-shadow-scopes";
 import { prepareShadowSweep } from "./strk20-shadow-sweep";
 
@@ -69,7 +74,7 @@ const recordedShadowScopes = async (
 ): Promise<readonly ShadowAccountScopeRef[]> => {
   const config = context.accountContext.config;
   if (!deps.wallet.listShadowAccountScopes || !config) {
-    throw new WalletError("shadow account records unavailable");
+    throw new WalletError(SHADOW_ACCOUNT_RECORDS_UNAVAILABLE);
   }
   const account = context.accountContext.account;
   return deps.wallet.listShadowAccountScopes({
@@ -144,8 +149,9 @@ const SHADOW_OPS: ReadonlyMap<string, ShadowOp> = new Map<string, ShadowOp>([
               // A sweep of a scan-window nonce acts through a shadow account
               // the scope never recorded; record it before the review is
               // returned, so the record stays the complete list of used nonces.
-              const scope = records.find(
-                (record) => record.origin === target.origin && record.label === target.label,
+              const configured = context.accountContext.config?.shadowAccountAnonymizerAddress;
+              const scope = records.find((record) =>
+                isShadowScopeUnder(record, target, configured),
               );
               if (
                 "strk20Preparation" in prepared &&

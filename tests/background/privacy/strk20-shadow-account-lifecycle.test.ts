@@ -22,6 +22,7 @@ import {
 import { transfersFor } from "@bramble/privacy/official-sdk-transfers";
 import { SHADOW_INVOKE_CONTROL, SHADOW_INVOKE_SETTLES } from "@bramble/privacy/shadow-account-copy";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { activityToCsv, memoryActivityLog } from "@bramble/transactions/activity";
 import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
@@ -156,7 +157,9 @@ const harness = () => {
       return VIEWING_KEY;
     },
   };
+  const activity = memoryActivityLog();
   const handler = createMessageHandler(wallet, testExtension, {
+    activity,
     preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {
@@ -176,7 +179,7 @@ const harness = () => {
     }),
     session,
   });
-  return { handler, heldAt, scopes, submitted };
+  return { activity, handler, heldAt, scopes, submitted };
 };
 
 const approveLatest = async (handler: ReturnType<typeof harness>["handler"]) => {
@@ -189,7 +192,7 @@ const call = { calldata: ["0x1"], contract_address: STRK_TOKEN_ADDRESS, entry_po
 
 describe("shadow account lifecycle against the rc.8 SDK", () => {
   test("commitment, invoke, record, view, balances, and sweep", async () => {
-    const { handler, heldAt, scopes, submitted } = harness();
+    const { activity, handler, heldAt, scopes, submitted } = harness();
 
     // 1. The site asks for nonce 0's commitment; the user approves.
     const commitment = handler(
@@ -345,6 +348,18 @@ describe("shadow account lifecycle against the rc.8 SDK", () => {
         type: "shadow_account_invoke",
       },
     ]);
+
+    // 7. Activity is plain browser storage and goes out in the CSV export, so
+    // the sweep's line names no site, label, nonce, or scope separator (F2).
+    // The site's own invoke line is the pre-existing "<origin> submitted …".
+    const entries = await activity.list();
+    const sweep = entries.filter((entry) => !entry.summary.includes("submitted a private"));
+    expect(sweep.map((entry) => entry.summary)).toEqual(["Sweep shadow account"]);
+    for (const text of [JSON.stringify(sweep), activityToCsv(sweep)]) {
+      for (const secret of [ORIGIN, new URL(ORIGIN).host, LABEL, separator, "#1"]) {
+        expect(text).not.toContain(secret);
+      }
+    }
   });
 
   test("a sweep of an empty shadow account is refused before any quote", async () => {

@@ -6,7 +6,7 @@ permalink: /strk20-privacy/
 
 # STRK20 privacy integration
 
-Bramble implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
+Bramble implements the Wallet API `0.10.4` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. It supports shielded balance discovery, action preparation, private
 submission, dapp-scoped shadow-account commitments, explicit account registration, and reviewed
 public-to-private token deposits.
@@ -125,7 +125,12 @@ device.
    an instant answer would let any site probe whether the user has private services set up: the
    wallet holds it on a notice ("Private services aren't set up for this network.") with only a
    Close control, and the site receives the same `UNKNOWN_ERROR` (`strk20 services unavailable: …`)
-   only when the user closes it or the queue's expiry drops it.
+   only when the user closes it. If the queue's expiry drops it first, the site gets
+   `USER_REFUSED_OP` ("request rejected"), exactly as for any expired approval, so waiting out the
+   expiry does not reveal the configuration. With an anonymizer configured, a shadow invoke's fee is
+   quoted before its card is built; if that quote fails, the request is held on the same notice
+   (with its own line) and the site receives the quote's error only on Close, so a configured and an
+   unconfigured network look the same to the site.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
    and shadow-account commitments each create a dedicated approval. Registration uses the explicitly
    Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
@@ -134,7 +139,10 @@ device.
    digest. Invoke calldata, shadow-account call targets and entry points, nonce, and collect policy
    remain expandable in the approval. A `shadow_account_invoke` is summarized by what it does: the
    calls it runs through which shadow account (#nonce) for which site, the anonymizer, which tokens
-   settle back into private notes (or that none do), and who can move what the calls leave behind
+   settle back into private notes (or that none do), and who can move what the calls leave behind.
+   "Back into private notes" is said only for an `OPEN` note whose recipient is this account; a note
+   for anyone else names that recipient, and under `collect_policy: all` the card also says the
+   shadow account's whole balance of that token goes to them
    (this card copy is proposed and pending review). The anonymizer the card names is bound into the
    approval; execution refuses if the network's configured anonymizer changed after review. A private-relay review also lists the relayer-fee withdrawal
    as a separately labelled action with its exact token, amount, and recipient. Denial returns
@@ -210,21 +218,43 @@ precomputed address before the account is deployed), when a submittable proof na
 a shadow invoke is submitted. Recording happens first and fails closed: a request whose record cannot
 be written does not run. The record reveals which sites someone used privately. It is bounded to 128
 scopes and 64 nonces per scope; past a bound the request is refused rather than a record dropped.
+The bound is checked before a card is queued, so the user is not asked to approve a request the
+record would refuse (the record after approval still re-checks). Such a request is held on the same
+close-only notice as a network with no anonymizer, with its own line, so the site learns nothing
+until the user sees it: Close returns the record refusal, and expiry returns `USER_REFUSED_OP`. There is no way yet to remove
+a record, so a full table stays full.
 Shadow accounts used before this record existed are not in it.
 
 Settings → Shadow accounts lists the records without any network read. Balances are read only when
 the user asks, and the screen says why: the read sends the scope's partial commitment to the RPC node
 (`get_shadow_accounts` on the anonymizer) and then each address's balances, so the node can link
 those addresses to each other and to this client. The read covers the recorded nonces plus the
-first 16 (undeployed included, since they may already hold funds); recorded nonces above the view's
-u64 range are reported as not listable. A scope recorded under another anonymizer is listed but not
+first 16 (undeployed included, since they may already hold funds); recorded nonces from 2^64 − 1
+up are reported as not listable, because the view's exclusive `u64` end bound cannot include them,
+and the scope's other nonces still list. A scope recorded under another anonymizer is listed but not
 reachable.
 
 A sweep is one `OPEN` transfer to this account per tracked token the shadow account holds, then a
 `shadow_account_invoke` with `collect_policy: all` and no calls (the anonymizer accepts this). It is
-always relayed, so the relay fee comes from the private balance; an account with no private balance
-for the fee cannot sweep. The collected amount is the balance at execution, not the one shown at
-review. Untracked tokens are not swept. The settled open notes are screened against the shadow
+always relayed, so the relay fee comes from the private balance. The collected amount is the balance
+at execution, not the one shown at review. Activity records a settled sweep as "Sweep shadow
+account", with no site, label, or nonce, since activity is plain browser storage and part of the CSV
+export.
+
+Limits of the sweep:
+
+- **Tracked tokens only.** Balances are read, and `OPEN` transfers built, only for tokens in the
+  wallet's token list for the network. A token the shadow account holds that is not tracked is not
+  shown and not swept; a listed shadow account holding only untracked tokens shows "No tracked tokens" and
+  has no Sweep control. Track the token first. What the anonymizer does with an untracked token's
+  balance under `collect_policy: all` is not yet confirmed on a live network.
+- **The relay fee needs a private balance in the fee token.** The fee is a private withdrawal in the
+  token the relay quotes, checked against the private balance before the review is built. Funds in
+  the shadow account do not count, so a user whose only funds of that token are in the shadow
+  account cannot sweep until they hold some privately. The Sweep tap is then refused with the
+  existing "Insufficient private balance" error, before any review or Confirm appears.
+
+The settled open notes are screened against the shadow
 account's own address (`Delegated`); whether the prover behind mc-backend performs that screening is
 not yet confirmed (issue 443).
 

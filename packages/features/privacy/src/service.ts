@@ -156,6 +156,12 @@ export type Strk20SubmissionResult = {
 };
 
 /**
+ * Exclusive bound on nonces `get_shadow_accounts` can list: its `end_nonce` is an exclusive Cairo
+ * `u64`, so 2^64 − 1 cannot be listed (audit F4); callers report it as not listable.
+ */
+export const STRK20_SHADOW_VIEW_NONCE_LIMIT = (1n << 64n) - 1n;
+
+/**
  * One shadow account as the anonymizer reports it: the nonce, its address (the
  * deployed one, or the address the primer deploy would derive), and whether it
  * is deployed yet.

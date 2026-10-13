@@ -10,7 +10,7 @@
  * The preparation answers on its request (a few reads and a relay quote, no
  * proof) and is executed through the shared one-time preparation path.
  */
-import { invariant, WalletError } from "@bramble/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   quoteStrk20Actions,
   readStrk20RegistrationStatus,
@@ -21,9 +21,12 @@ import {
 import {
   SHADOW_INVOKE_ANONYMIZER,
   SHADOW_INVOKE_SETTLES,
-  SHADOW_SWEEP_ACTIVITY,
   SHADOW_SWEEP_SUMMARY,
 } from "@bramble/privacy/shadow-account-copy";
+import {
+  SHADOW_ACCOUNT_HOLDS_NO_TRACKED_TOKEN,
+  SHADOW_SWEEP_BREAKS_BATCH_RULE,
+} from "@bramble/privacy/shadow-account-refusals";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import { activityOrigin } from "@bramble/transactions/activity";
 import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
@@ -41,9 +44,6 @@ import {
   type Strk20ShadowSweepPreparation,
   strk20WalletPreparationPayload,
 } from "./strk20-wallet-preparations";
-
-// Refusal when the shadow account holds none of the tracked tokens. Stable error code.
-const SHADOW_ACCOUNT_EMPTY = "shadow account holds no tracked token";
 
 const displayNonce = (nonce: string): string => BigInt(nonce).toString();
 
@@ -99,7 +99,7 @@ export const prepareShadowSweep = async (
   const [first] = held;
   const config = context.accountContext.config;
   if (!shadow || !first || !config) {
-    return { error: SHADOW_ACCOUNT_EMPTY };
+    return { error: SHADOW_ACCOUNT_HOLDS_NO_TRACKED_TOKEN };
   }
   const owner = context.accountContext.account.address;
   const actions = shadowSweepActions(
@@ -110,7 +110,9 @@ export const prepareShadowSweep = async (
   );
   // The sweep is a wallet-built batch, but it must still satisfy every rule a
   // site's batch is held to before approval.
-  invariant(strk20BatchRefusal(actions) === null, "shadow sweep batch breaks a batch rule");
+  if (strk20BatchRefusal(actions) !== null) {
+    throw new WalletError(SHADOW_SWEEP_BREAKS_BATCH_RULE);
+  }
   const plan = await quoteStrk20Actions(service, { ...context.accountContext, actions });
   const unsigned: Omit<Strk20ShadowSweepPreparation, "context" | "id"> = {
     actions,
@@ -173,7 +175,3 @@ export const submitShadowSweep = async (
     plan: preparation.plan,
   });
 };
-
-/** The activity line for a settled sweep. */
-export const shadowSweepActivity = (preparation: Strk20ShadowSweepPreparation): string =>
-  SHADOW_SWEEP_ACTIVITY(displayNonce(preparation.nonce), activityOrigin(preparation.origin));

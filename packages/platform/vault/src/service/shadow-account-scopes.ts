@@ -8,6 +8,8 @@ import { WalletError } from "@bramble/core/errors";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import {
   canonicalShadowAccountScope,
+  SHADOW_ACCOUNT_RECORD_INVALID,
+  SHADOW_ACCOUNT_RECORD_LIMIT,
   shadowAccountScopesFor,
   withShadowAccountScope,
 } from "../accounts/shadow-account-scopes";
@@ -17,12 +19,6 @@ import type { Vault } from "../schema/schema";
 import { writeVault } from "./service-creation";
 import type { WalletVaultService } from "./service-types";
 
-// Refusal when a record would pass a scope or nonce bound. Stable error code.
-const SHADOW_ACCOUNT_RECORD_LIMIT = "shadow account record limit reached";
-
-// Refusal for a malformed scope. Stable error code.
-const SHADOW_ACCOUNT_RECORD_INVALID = "invalid shadow account record";
-
 /**
  * Builds the record and list methods over the vault's own read and write. The
  * caller serializes `recordShadowAccountScope` with every other mutation.
@@ -30,7 +26,19 @@ const SHADOW_ACCOUNT_RECORD_INVALID = "invalid shadow account record";
 export const shadowAccountScopeMethods = (
   encryptedStore: EncryptedStore,
   readVaultSnapshot: (vaultPassphrase: string) => Promise<Vault>,
-): Pick<WalletVaultService, "listShadowAccountScopes" | "recordShadowAccountScope"> => ({
+): Pick<
+  WalletVaultService,
+  "canRecordShadowAccountScope" | "listShadowAccountScopes" | "recordShadowAccountScope"
+> => ({
+  async canRecordShadowAccountScope({ vaultPassphrase, ...input }) {
+    const vault = await readVaultSnapshot(vaultPassphrase);
+    const account = findVaultAccount(vault, input.accountId);
+    const scope = canonicalShadowAccountScope(input);
+    if (!scope || !sameFelt(scope.chainId, STARKNET_NETWORKS[account.networkId].chainId)) {
+      throw new WalletError(SHADOW_ACCOUNT_RECORD_INVALID);
+    }
+    return withShadowAccountScope(vault.shadowAccountScopes, scope) !== null;
+  },
   async listShadowAccountScopes(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     const account = findVaultAccount(vault, input.accountId);

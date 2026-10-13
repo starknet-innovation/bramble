@@ -8,7 +8,11 @@ import { createMemoryStore } from "@bramble/store/kv";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { createEncryptedStore } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
-import { MAX_SHADOW_ACCOUNT_NONCES } from "@bramble/vault/shadow-account-scopes";
+import {
+  canonicalShadowAccountScope,
+  MAX_SHADOW_ACCOUNT_NONCES,
+  MAX_SHADOW_ACCOUNT_SCOPES,
+} from "@bramble/vault/shadow-account-scopes";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
@@ -19,8 +23,9 @@ const ORIGIN = "https://app.example";
 
 const setup = async () => {
   const store = createMemoryStore();
+  const vaultStore = createEncryptedStore(store, "bramble:vault");
   const service = createWalletVaultService({
-    encryptedStore: createEncryptedStore(store, "bramble:vault"),
+    encryptedStore: vaultStore,
     kms: fakeKms(),
     migrationStore: createEncryptedStore(store, "bramble:vault-migration"),
   });
@@ -46,7 +51,7 @@ const setup = async () => {
       poolAddress: POOL,
       vaultPassphrase,
     });
-  return { account, chainId, list, scope, service, store };
+  return { account, chainId, list, scope, service, store, vaultStore };
 };
 
 describe("shadow account scope records", () => {
@@ -113,6 +118,51 @@ describe("shadow account scope records", () => {
       service.recordShadowAccountScope({ ...scope, nonces: [`0x${(1000).toString(16)}`] }),
     ).rejects.toThrow("shadow account record limit reached");
     expect((await list())[0]?.nonces).toHaveLength(MAX_SHADOW_ACCOUNT_NONCES);
+  });
+
+  // Audit F9: the scope bound refuses a new scope; it never evicts the oldest
+  // to make room, since a dropped record is a shadow account the wallet can no
+  // longer find. An existing scope still merges new nonces at the bound.
+  test("refuses past the scope bound rather than evicting a record", async () => {
+    const { list, scope, service, vaultStore } = await setup();
+    // Seeded in one write: recording 128 scopes one by one is 128 vault writes.
+    const { vaultPassphrase: _passphrase, ...ref } = scope;
+    const seeded = Array.from({ length: MAX_SHADOW_ACCOUNT_SCOPES }, (_, index) =>
+      canonicalShadowAccountScope({ ...ref, label: `Site ${index}`, nonces: [] }),
+    );
+    const vault = (await vaultStore.read(vaultPassphrase)) as Record<string, unknown>;
+    await vaultStore.write({ ...vault, shadowAccountScopes: seeded } as never, vaultPassphrase);
+    const full = await list();
+    expect(full).toHaveLength(MAX_SHADOW_ACCOUNT_SCOPES);
+    const next = { ...scope, label: "One more", nonces: ["0x1"] };
+    expect(await service.canRecordShadowAccountScope(next)).toBe(false);
+    await expect(service.recordShadowAccountScope(next)).rejects.toThrow(
+      "shadow account record limit reached",
+    );
+    expect(await list()).toEqual(full);
+    expect(full[0]?.label).toBe("Site 0");
+    // A scope already recorded can still gain a nonce.
+    const existing = { ...scope, label: "Site 0", nonces: ["0x5"] };
+    expect(await service.canRecordShadowAccountScope(existing)).toBe(true);
+    await service.recordShadowAccountScope(existing);
+    expect((await list())[0]?.nonces).toEqual(["0x5"]);
+  });
+
+  test("the pre-check answers like the record without writing", async () => {
+    const { list, scope, service, store } = await setup();
+    const before = JSON.stringify(await store.get("bramble:vault"));
+    expect(await service.canRecordShadowAccountScope({ ...scope, nonces: ["0x1"] })).toBe(true);
+    expect(JSON.stringify(await store.get("bramble:vault"))).toBe(before);
+    expect(await list()).toEqual([]);
+    const nonces = Array.from(
+      { length: MAX_SHADOW_ACCOUNT_NONCES },
+      (_, i) => `0x${i.toString(16)}`,
+    );
+    await service.recordShadowAccountScope({ ...scope, nonces });
+    expect(await service.canRecordShadowAccountScope({ ...scope, nonces: ["0x3e8"] })).toBe(false);
+    await expect(
+      service.canRecordShadowAccountScope({ ...scope, nonces: [], origin: "http://x.example" }),
+    ).rejects.toThrow("invalid shadow account record");
   });
 
   test("refuses a malformed scope, an unknown account, and a wrong passphrase", async () => {

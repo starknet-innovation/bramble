@@ -9,6 +9,7 @@ import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { ProviderChain } from "@bramble/wallet-protocol/add-chain";
 import type { ProviderDeclare } from "@bramble/wallet-protocol/declare";
+import type { Strk20NoticeReason } from "@bramble/wallet-protocol/extension-responses";
 import type { Strk20Action, Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type {
@@ -148,6 +149,8 @@ export type ApprovalQueue = {
    * receives on close or expiry; nothing is signed, prepared, or disclosed.
    */
   readonly requestStrk20Unavailable: (input: {
+    /** Why it is held; absent when the network has no private services for it. */
+    readonly notice?: Strk20NoticeReason;
     readonly origin: string;
     readonly refusal: string;
   }) => PendingApproval;
