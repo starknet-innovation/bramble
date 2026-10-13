@@ -20,6 +20,21 @@ export const SHADOW_INVOKE_ANONYMIZER = (address: string): string =>
 export const SHADOW_INVOKE_SETTLES = (tokens: string): string =>
   `Settles ${tokens} back into private notes`;
 
+/**
+ * The tokens the invoke settles into a private note for someone other than
+ * this account. PROPOSED; mirrors "Transfer … privately to <address>".
+ */
+export const SHADOW_INVOKE_SETTLES_TO = (tokens: string, recipient: string): string =>
+  `Settles ${tokens} into a private note for ${recipient}`;
+
+/**
+ * `collect_policy: all` with an OPEN note for someone other than this account:
+ * the shadow account's whole balance of those tokens goes to them, including
+ * what earlier calls left behind. PROPOSED.
+ */
+export const SHADOW_INVOKE_COLLECTS_ALL_TO = (tokens: string, recipient: string): string =>
+  `This shadow account's whole ${tokens} balance goes to ${recipient}`;
+
 /** No OPEN transfer in the batch: nothing returns to the private balance. Issue wording, negated. */
 export const SHADOW_INVOKE_SETTLES_NOTHING = "Nothing settles back into private notes";
 

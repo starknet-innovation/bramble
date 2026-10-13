@@ -134,7 +134,10 @@ device.
    digest. Invoke calldata, shadow-account call targets and entry points, nonce, and collect policy
    remain expandable in the approval. A `shadow_account_invoke` is summarized by what it does: the
    calls it runs through which shadow account (#nonce) for which site, the anonymizer, which tokens
-   settle back into private notes (or that none do), and who can move what the calls leave behind
+   settle back into private notes (or that none do), and who can move what the calls leave behind.
+   "Back into private notes" is said only for an `OPEN` note whose recipient is this account; a note
+   for anyone else names that recipient, and under `collect_policy: all` the card also says the
+   shadow account's whole balance of that token goes to them
    (this card copy is proposed and pending review). The anonymizer the card names is bound into the
    approval; execution refuses if the network's configured anonymizer changed after review. A private-relay review also lists the relayer-fee withdrawal
    as a separately labelled action with its exact token, amount, and recipient. Denial returns
