@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import { emptyState } from "@bramble/ui-kit/content";
 import { iconButton } from "@bramble/ui-kit/controls";
@@ -80,7 +81,11 @@ export const activityScreen = (
 /**
  * Renders requests the user explicitly parked from the takeover screen.
  */
-export const requestsFlow = (pending: readonly PendingApproval[], status: WalletStatus): string =>
+export const requestsFlow = (
+  pending: readonly PendingApproval[],
+  status: WalletStatus,
+  preferences: WalletPreferences | null = null,
+): string =>
   flowHeader(
     "Wallet requests",
     status,
@@ -92,7 +97,7 @@ export const requestsFlow = (pending: readonly PendingApproval[], status: Wallet
       ${
         pending.length === 0
           ? emptyState("No wallet requests are waiting.")
-          : `<ul class="request-list">${pending.map((approval) => approvalCard(approval, status)).join("")}</ul>`
+          : `<ul class="request-list">${pending.map((approval) => approvalCard(approval, status, preferences)).join("")}</ul>`
       }
       <p id="approval-result" role="status"></p>
     </section>`,

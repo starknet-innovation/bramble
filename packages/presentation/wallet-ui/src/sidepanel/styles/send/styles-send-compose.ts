@@ -398,6 +398,25 @@ export const SEND_COMPOSE_STYLES = `
      control on one line); the address clips first so the control never
      leaves the fact. */
   .send-review-address code { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  /* A native disclosure reveals a party's full address in place, so a keyboard
+     user inspects the exact value without leaving the review; the revealed
+     value wraps inside the fact rather than widening the panel. */
+  .address-reveal { max-width: 100%; min-width: 0; }
+  .address-reveal > summary {
+    color: var(--bramble-accent);
+    cursor: pointer;
+    font-size: ${TYPE.micro.size};
+    list-style: none;
+    text-align: right;
+  }
+  .address-reveal > summary::-webkit-details-marker { display: none; }
+  .address-reveal > code {
+    display: block;
+    font-size: ${TYPE.micro.size};
+    overflow-wrap: anywhere;
+    text-align: right;
+    word-break: break-all;
+  }
   #send-review-button { margin-top: auto; width: 100%; }
   /* The busy review button swaps its send glyph for the shared Liquid Dots
      mark, so a running preparation reads as work rather than as a dimmed
