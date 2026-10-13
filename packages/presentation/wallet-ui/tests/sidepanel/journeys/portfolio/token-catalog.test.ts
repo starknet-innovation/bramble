@@ -226,9 +226,11 @@ describe("avnu catalog screen", () => {
     expect(rows(sepolia.app)).toEqual(["DAI Dai Stablecoin Add"]);
   });
 
-  test("reports a catalog it could not read", async () => {
+  test("reports a catalog it could not read, never as the raw diagnostic", async () => {
     const { app } = await mount(new Error("service offline"), [], "SN_DEVNET");
 
-    expect(app.querySelector("#token-catalog-result")?.textContent).toBe("service offline");
+    expect(app.querySelector("#token-catalog-result")?.textContent).toBe(
+      "Couldn't load the token list. Check your connection and try again.",
+    );
   });
 });

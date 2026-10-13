@@ -229,7 +229,6 @@ describe("submitRejection (shared by the public and pool routes)", () => {
     const rejection = submitRejection(
       state,
       new SubmissionUnknownError("Transaction submission status is unknown.", null),
-      "Private send failed",
     );
     expect(rejection.state.error).toBe("Transaction submission status is unknown.");
     expect(rejection.state.submissionUnknown).toBe(true);
@@ -240,7 +239,7 @@ describe("submitRejection (shared by the public and pool routes)", () => {
   });
 
   test("keeps 'not sent' for a determinate failure, still dropping the review", () => {
-    const rejection = submitRejection(state, new Error("Not enough private STRK"), "x");
+    const rejection = submitRejection(state, new Error("Not enough private STRK"));
     expect(rejection.state.error).toBe("The transaction was not sent. Not enough private STRK");
     expect(rejection.toast).toBe("Transaction was not sent");
     expect(rejection.state.reviewedKey).toBeNull();

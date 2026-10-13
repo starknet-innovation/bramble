@@ -41,6 +41,7 @@ import {
   READY_EIP2645_APPLICATION,
 } from "@bramble/wallet-model/ledger-path";
 import { friendlyError } from "../../runtime/friendly-error";
+import { ADD_ACCOUNT_FAILED } from "../../runtime/friendly-error-shared";
 import {
   type LedgerCandidate,
   type LedgerCandidateState,
@@ -373,9 +374,11 @@ export const createLedgerOnboardController = (
       // Creating a keyless account is a background op (no device), so a failure
       // here is a wallet error (duplicate, locked, a Braavos key with no
       // account), never a device-catalog message. The background replies with
-      // a raw diagnostic, so it is translated before it reaches the picker.
+      // a raw diagnostic, so it is translated before it reaches the picker;
+      // the wallet's own plumbing reads as "couldn't add that account".
       const message = friendlyError(
-        error instanceof Error ? error.message : "Could not add the account.",
+        error instanceof Error ? error.message : "",
+        ADD_ACCOUNT_FAILED,
       ).message;
       await deps.refresh().catch(() => undefined);
       if (epoch === flowEpoch) {
@@ -402,7 +405,10 @@ export const createLedgerOnboardController = (
       deps.render(null);
       await deps.refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not add the account.";
+      const message = friendlyError(
+        error instanceof Error ? error.message : "",
+        ADD_ACCOUNT_FAILED,
+      ).message;
       deps.render({ kind: "error", message });
     } finally {
       busy = false;

@@ -4,7 +4,7 @@ import type { SendRouteResolution } from "@bramble/transactions/send-routes";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation } from "../../shared/confirm-submitted";
-import { errorDetails, errorMessage, showToast } from "../../shared/dom";
+import { errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { watchDeployment } from "../../shell/shell-bindings";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
@@ -310,8 +310,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     transferState = { ...transferState, error: "" };
     form.requestSubmit();
   });
-  const settleRejection = (epoch: number, error: unknown, fallback: string): void => {
-    const rejection = submitRejection(transferState, error, fallback);
+  const settleRejection = (epoch: number, error: unknown): void => {
+    const rejection = submitRejection(transferState, error);
     transferState = rejection.state;
     repaintActiveTransfer?.();
     if (rejection.toast) showToast(rejection.toast, "error", form);
@@ -397,7 +397,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             if (epoch !== transferEpoch) return;
             const message = errorMessage(error, preparationFailure(composed));
             showToast(message, "error", form, errorDetails(error, preparationFailure(composed)));
-            transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
+            const line = errorLine(error, preparationFailure(composed));
+            transferState = { ...initialTransferState(), error: line, fields, stage: "details" };
             returnActiveTransferToDetails?.();
           },
         );
@@ -459,7 +460,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           void confirmSubmitted(epoch);
         },
         (error: unknown) => {
-          if (epoch === transferEpoch) settleRejection(epoch, error, "Private send failed");
+          if (epoch === transferEpoch) settleRejection(epoch, error);
         },
       );
       return;
@@ -491,7 +492,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           void confirmSubmitted(epoch);
         },
         (error: unknown) => {
-          if (epoch === transferEpoch) settleRejection(epoch, error, "Transfer failed");
+          if (epoch === transferEpoch) settleRejection(epoch, error);
         },
       );
   });

@@ -160,6 +160,8 @@ describe("add-account chooser routing", () => {
     controller.choose("regular");
     await tick();
     const final = h.views.at(-1);
-    expect(final?.kind === "error" && final.message).toBe("wallet locked");
+    expect(final?.kind === "error" && final.message).toBe(
+      "The wallet is locked or unavailable. Unlock it and try again.",
+    );
   });
 });
