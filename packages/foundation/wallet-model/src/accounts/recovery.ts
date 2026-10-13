@@ -22,6 +22,15 @@ export const RECOVERY_SCAN_LIMITS = {
 } as const;
 
 /**
+ * The hardened account index strkd reserves for its agent accounts: `"AGNT"`
+ * in ASCII (#336). strkd derives from the same phrase on the same
+ * `accountIndex` axis, and keeps accounts that AI agents may drive under a
+ * permission grant on this branch so they never appear in a mainstream
+ * wallet. Bramble never derives, scans, restores, or creates an account here.
+ */
+export const RESERVED_AGENT_ACCOUNT_INDEX = 0x41474e54;
+
+/**
  * One HD coordinate selected for restoration into the encrypted vault.
  *
  * `classHash` names the release the candidate was derived at. It is part of the
@@ -84,12 +93,18 @@ export type RecoveryAccountCandidate = {
   readonly restriction?: RecoverySigningRestriction;
 };
 
-/** True for a valid hardened BIP-44 account index. */
+/**
+ * True for a valid hardened BIP-44 account index this wallet may use. The
+ * strkd agent index ({@link RESERVED_AGENT_ACCOUNT_INDEX}) is refused, so a
+ * manual index, a restore selection, or a creation request can never land on
+ * it.
+ */
 export const isRecoveryAccountIndex = (value: unknown): value is number =>
   typeof value === "number" &&
   Number.isSafeInteger(value) &&
   value >= 0 &&
-  value <= RECOVERY_SCAN_LIMITS.maxIndex;
+  value <= RECOVERY_SCAN_LIMITS.maxIndex &&
+  value !== RESERVED_AGENT_ACCOUNT_INDEX;
 
 // Whether a selection's class is one its family can be deployed with, given
 // that OpenZeppelin carries none (resolved per network) and Braavos must name one.
