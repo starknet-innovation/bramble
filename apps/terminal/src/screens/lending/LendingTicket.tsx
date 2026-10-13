@@ -10,6 +10,7 @@ import type { VesuMarket, VesuPair } from "../../data/index";
 import {
   buildVesuMultiplyIncreaseCalls,
   quoteVesuMultiplyIncrease,
+  recheckVesuLendingQuote,
   verifyVesuMultiplyPool,
 } from "../../protocols/index";
 import { buildLendingCalls, quoteLending } from "../../protocols/vesu/vesu";
@@ -161,6 +162,13 @@ export const LendingTicket = ({
         );
         await requestTransaction({
           calls,
+          // The registry is read again right before the wallet sees the calls (#270).
+          handoffCheck: () =>
+            verifyVesuMultiplyPool(
+              market.poolId,
+              collateralChoice.market.assetAddress,
+              market.assetAddress,
+            ),
           description:
             "Open or increase this Vesu Multiply position using the reviewed Ekubo route. Delegation and allowance are revoked in the same transaction.",
           details: [
@@ -196,6 +204,8 @@ export const LendingTicket = ({
           : [];
       await requestTransaction({
         calls,
+        // The registry is read again right before the wallet sees the calls (#270).
+        handoffCheck: () => recheckVesuLendingQuote(quote),
         description:
           "Submit the reviewed Vesu V2 position update. Your wallet will show every contract call and network fee.",
         details: [

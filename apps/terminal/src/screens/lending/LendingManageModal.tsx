@@ -8,6 +8,7 @@ import {
   buildVesuVaultRedeemCalls,
   quoteVesuMultiplyClose,
   quoteVesuMultiplyIncrease,
+  recheckVesuLendingQuote,
   registeredVesuVToken,
   VESU_VAULT_DEPOSITS_ENABLED,
   verifyVesuMultiplyPool,
@@ -119,6 +120,8 @@ export const LendingManageModal = ({
   const [isTracking, setIsTracking] = useState(false);
   // The vToken the last supply quote verified against the registry.
   const receiptVToken = useRef<string | null>(null);
+  // The registry re-check the built calls need right before wallet handoff (#270).
+  const handoffCheck = useRef<(() => Promise<void>) | undefined>(undefined);
   const debtMarket = matchingMarket(markets, position.poolId, position.debtAddress);
   const collateralMarket = matchingMarket(
     markets,
@@ -191,6 +194,7 @@ export const LendingManageModal = ({
       poolId: position.poolId,
     });
     receiptVToken.current = quote.vTokenAddress;
+    handoffCheck.current = () => recheckVesuLendingQuote(quote);
     return buildLendingCalls({ accountAddress: address, quote });
   };
 
@@ -204,6 +208,9 @@ export const LendingManageModal = ({
     }
     // The pool goes to modify_lever and both delegation calls (Sherlock 169).
     await verifyVesuMultiplyPool(position.poolId, position.collateralAddress, position.debtAddress);
+    const debtAddress = position.debtAddress;
+    handoffCheck.current = () =>
+      verifyVesuMultiplyPool(position.poolId, position.collateralAddress, debtAddress);
     if (action === "unwind") {
       const route = await quoteVesuMultiplyClose(
         position.debtAddress,
@@ -255,6 +262,7 @@ export const LendingManageModal = ({
     setIsSubmitting(true);
     setMessage(action === "unwind" || action === "wind" ? "Quoting atomic route…" : "Preparing calls…");
     receiptVToken.current = null;
+    handoffCheck.current = undefined;
     try {
       const calls =
         position.type === "multiply"
@@ -262,8 +270,11 @@ export const LendingManageModal = ({
           : position.type === "vault"
             ? vaultCalls()
             : await standardCalls();
+      const recheck = handoffCheck.current;
       await requestTransaction({
         calls,
+        // The registry is read again right before the wallet sees the calls (#270).
+        ...(recheck === undefined ? {} : { handoffCheck: recheck }),
         description: `Manage the existing Vesu ${position.type} position without leaving its current context.`,
         details: [
           { label: "Action", value: actions.find((item) => item.id === action)?.label ?? action },
