@@ -16,6 +16,7 @@ import type {
 import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
+  isLedgerApplicationForFamily,
   isLedgerEip2645Application,
   LEDGER_EIP2645_APPLICATION,
   type LedgerEip2645Application,
@@ -221,6 +222,11 @@ export const deriveLedgerAccount = async (
   }
   const application = input.eip2645application ?? LEDGER_EIP2645_APPLICATION;
   if (!isLedgerEip2645Application(application)) {
+    throw new WalletError("Invalid Ledger path application");
+  }
+  // Repeated below the message boundary so no caller can store a Braavos
+  // address at a scheme Braavos never derives a Ledger key from.
+  if (!isLedgerApplicationForFamily(input.accountContractType, application)) {
     throw new WalletError("Invalid Ledger path application");
   }
 

@@ -326,7 +326,10 @@ export const isStringArray = (value: unknown): value is readonly string[] =>
 export const isSafeDecimals = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 36;
 
-const TOKEN_SYMBOL_PATTERN = /^[A-Z0-9]{2,12}$/;
+// A bridged ticker may carry exactly one lowercase `.e` suffix (`USDC.e`, the
+// curated StarkGate USDC). Nothing else widens: the base stays 2..12 uppercase
+// alphanumerics, and the spoof check folds `X.e` into `X`.
+const TOKEN_SYMBOL_PATTERN = /^[A-Z0-9]{2,12}(?:\.e)?$/;
 // Every base-units integer the wallet handles is an on-chain u256 or smaller,
 // so 78 digits is the widest one that can exist (2^256 - 1 has 78). The bound
 // belongs in the grammar rather than at each call site: an unbounded digit
@@ -337,14 +340,27 @@ const BASE_UNITS_PATTERN = new RegExp(`^(?:0|[1-9][0-9]{0,${MAX_BASE_UNITS_DIGIT
 const DECIMAL_AMOUNT_PATTERN = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
 
 /**
- * Checks a value is an uppercase token ticker of 2..12 alphanumerics — the
- * grammar the on-chain metadata reader, the watch-asset boundary, the stored
- * token entry, and the popup balance reader all have to agree on. The one
+ * Checks a value is an uppercase token ticker of 2..12 alphanumerics, with at
+ * most one bridged `.e` suffix — the grammar the on-chain metadata reader, the
+ * watch-asset boundary, the stored token entry, and the popup balance reader
+ * all have to agree on. The one
  * shared rule; do not re-derive the pattern locally (five copies once drifted,
  * so a symbol one layer stored was rejected by the next).
  */
 export const isTokenSymbol = (value: unknown): value is string =>
   typeof value === "string" && TOKEN_SYMBOL_PATTERN.test(value);
+
+/**
+ * Normalizes an on-chain or site-supplied ticker to the spelling
+ * {@link isTokenSymbol} checks: trimmed and uppercased, except a bridged `.e`
+ * suffix, which keeps its lowercase `e`. Shared by every reader that uppercases
+ * metadata before validating it, so `ETH.e` reaches the grammar (and the spoof
+ * check) as `ETH.e` rather than being refused as `ETH.E`. Does not validate.
+ */
+export const normalizeTokenSymbol = (value: string): string => {
+  const upper = value.trim().toUpperCase();
+  return upper.endsWith(".E") ? `${upper.slice(0, -2)}.e` : upper;
+};
 
 /**
  * Checks a value is non-empty printable ASCII with no angle brackets: the

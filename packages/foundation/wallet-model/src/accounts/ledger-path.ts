@@ -49,6 +49,18 @@ export const isLedgerEip2645Application = (value: unknown): value is LedgerEip26
   value === LEDGER_EIP2645_APPLICATION || value === READY_EIP2645_APPLICATION;
 
 /**
+ * Whether an account family may be owned at a Ledger path scheme. Braavos
+ * derives its Ledger key only at Ready's `argentx` scheme, so a Braavos account
+ * at any other scheme (including an absent marker, which means `LedgerW`) is an
+ * address no Braavos account of that device can have. Every other family is
+ * allowed at either scheme. Pure; callers refuse the request on false.
+ */
+export const isLedgerApplicationForFamily = (
+  accountContractType: unknown,
+  application: unknown,
+): boolean => accountContractType !== "braavos" || application === READY_EIP2645_APPLICATION;
+
+/**
  * Maximum public accounts accepted in one Ledger enumeration response.
  */
 export const MAX_LEDGER_ACCOUNT_BATCH = 5;
