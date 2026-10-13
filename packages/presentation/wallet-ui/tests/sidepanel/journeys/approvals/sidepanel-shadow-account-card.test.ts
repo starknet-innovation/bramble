@@ -11,6 +11,7 @@ import {
   SHADOW_INVOKE_SETTLES_NOTHING,
 } from "@bramble/privacy/shadow-account-copy";
 import {
+  PRIVATE_REQUEST_FAILED_NOTICE,
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
 } from "@bramble/wallet-protocol/privacy-blocker";
@@ -93,7 +94,10 @@ describe("shadow account approval card", () => {
   // The same notice holds a request whose shadow-account record cannot be
   // written, or whose review could not be prepared: each gets its own line
   // (PROPOSED copy), never the not-set-up line, which would be false.
-  for (const [notice, line] of [["record-limit", SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE]] as const) {
+  for (const [notice, line] of [
+    ["record-limit", SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE],
+    ["request-failed", PRIVATE_REQUEST_FAILED_NOTICE],
+  ] as const) {
     test(`a ${notice} notice shows its own line and only Close`, () => {
       const html = approvalCard(
         {

@@ -87,9 +87,9 @@ provider, which can link them, so it runs only on the user's request. A dapp's s
 request on a network with no anonymizer is held on a close-only notice and given its refusal only
 when the user closes it; a notice left to expire answers as any expired approval does ("request
 rejected"), so a site cannot silently probe whether private services are set up. A request whose
-scope the full record table cannot take is held on the same notice, for the same reason. (A configured
-anonymizer still costs a pool quote before an invoke's card is queued, so a fast quote failure is
-a timing signal that one is configured.)
+scope the full record table cannot take is held on the same notice, for the same reason, and so is
+a shadow invoke whose fee quote fails before its card is built: that quote runs only when an
+anonymizer is configured, so an instant failure would reveal one.
 
 ## Primary review questions
 

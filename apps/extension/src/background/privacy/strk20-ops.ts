@@ -398,7 +398,11 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
     notifyApprovalsChanged();
     return deps.waiters.register(approval.id);
   } catch (error) {
-    return { error: strk20ErrorMessage(error) };
+    // A shadow batch's quote runs only when an anonymizer is configured, so
+    // an instant failure would tell the site one is: it is held instead.
+    return needsAnonymizer(input.actions)
+      ? holdStrk20Notice(deps, input.origin, strk20ErrorMessage(error), "request-failed")
+      : { error: strk20ErrorMessage(error) };
   }
 };
 

@@ -40,7 +40,7 @@ describe("private-services notice response", () => {
 
   test("admits a notice reason only on the notice, and only a known one", () => {
     const notice = { id: approvalId, kind: "strk20-unavailable", origin: "https://example.com" };
-    for (const reason of ["record-limit"]) {
+    for (const reason of ["record-limit", "request-failed"]) {
       expect(
         isPendingApprovalsResponse({ ok: true, pending: [{ ...notice, notice: reason }] }),
       ).toBe(true);

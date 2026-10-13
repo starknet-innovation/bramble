@@ -284,7 +284,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     (value["kind"] === "strk20-invoke" && relayFeeAction?.type === "withdraw");
   const noticeValid =
     value["notice"] === undefined ||
-    (value["kind"] === "strk20-unavailable" && value["notice"] === "record-limit");
+    (value["kind"] === "strk20-unavailable" &&
+      (value["notice"] === "record-limit" || value["notice"] === "request-failed"));
   return (
     actionReviewValid &&
     noticeValid &&

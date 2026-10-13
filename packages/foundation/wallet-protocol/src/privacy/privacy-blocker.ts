@@ -34,6 +34,12 @@ export const PRIVATE_SERVICES_UNAVAILABLE_NOTICE =
 export const SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE =
   "Bramble can't record another shadow account, so this request can't run.";
 
+/**
+ * PROPOSED, pending copy review: the notice line when a site's private request
+ * could not be prepared for review (for example its fee quote failed).
+ */
+export const PRIVATE_REQUEST_FAILED_NOTICE = "Couldn't prepare this private request.";
+
 /** Curated wallet refusal; carries its action independently of display wording. */
 export class PrivacyBlockerError extends WalletError {
   public constructor(

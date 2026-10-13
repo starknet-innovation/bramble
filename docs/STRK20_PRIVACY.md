@@ -127,7 +127,10 @@ device.
    Close control, and the site receives the same `UNKNOWN_ERROR` (`strk20 services unavailable: …`)
    only when the user closes it. If the queue's expiry drops it first, the site gets
    `USER_REFUSED_OP` ("request rejected"), exactly as for any expired approval, so waiting out the
-   expiry does not reveal the configuration.
+   expiry does not reveal the configuration. With an anonymizer configured, a shadow invoke's fee is
+   quoted before its card is built; if that quote fails, the request is held on the same notice
+   (with its own line) and the site receives the quote's error only on Close, so a configured and an
+   unconfigured network look the same to the site.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
    and shadow-account commitments each create a dedicated approval. Registration uses the explicitly
    Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
