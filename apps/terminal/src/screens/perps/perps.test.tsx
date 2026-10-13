@@ -260,6 +260,17 @@ describe("Perps screen (live-shaped mocked data)", () => {
     ).toBe(ORDER_DISABLED_REASON);
   });
 
+  it("disables Deposit and Withdraw behind the placement gate (#69)", async () => {
+    render(<Perps />);
+    await screen.findAllByText("BTC-USD");
+
+    for (const name of ["Deposit", "Withdraw"]) {
+      const button = screen.getByRole("button", { name }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(button.getAttribute("title")).toBe(ORDER_DISABLED_REASON);
+    }
+  });
+
   it("sends nothing but public reads however the ticket is used (#69)", async () => {
     render(<Perps />);
     await screen.findAllByText("BTC-USD");

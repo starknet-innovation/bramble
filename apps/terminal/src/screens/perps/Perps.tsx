@@ -74,6 +74,8 @@ type Timeframe = (typeof TIMEFRAMES)[number];
 const ORDER_BOOK_ROWS = 14;
 
 const ORDER_DISABLED_REASON = PERPS_ORDER_PLACEMENT.reason;
+// Collateral transfers to Extended ride the same gate as placement (#69).
+const TICKET_GATED = PERPS_ORDER_PLACEMENT.status === "gated";
 
 const usd = (value: number): string =>
   `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -693,8 +695,17 @@ export default function Perps(): ReactNode {
                 <span className="mono">{usd(0)}</span>
               </div>
               <div className="dwbtns">
-                <button type="button">Deposit</button>
-                <button type="button">Withdraw</button>
+                {(["Deposit", "Withdraw"] as const).map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    disabled={TICKET_GATED}
+                    aria-disabled={TICKET_GATED}
+                    title={TICKET_GATED ? ORDER_DISABLED_REASON : undefined}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

@@ -13,7 +13,7 @@
  * - The earlier unwired order builder and its signing stub were removed. The
  *   Extended data layer only issues GET requests and opens public WS streams.
  * - The ticket stays visible so the market can be read in context, but its CTA
- *   is disabled and carries the reason below.
+ *   and its Deposit / Withdraw buttons are disabled and carry the reason below.
  *
  * Enabling placement later (Decision B) needs a background op that signs the
  * order through the vault Stark signer, behind an off-by-default flag. Until
