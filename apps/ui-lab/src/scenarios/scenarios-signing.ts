@@ -202,6 +202,63 @@ const fixtureActivity = (
   };
 };
 
+// The fixture's Starknet ID: two names are registered (one a saved contact, one
+// listed nowhere); anything else is the naming contract's own zero answer, so
+// the not-found state is reachable too. Every reply names the network it was
+// read on, so the panel can tie it to its own.
+const fixtureNameResolution = (message: unknown, context: FrameContext): unknown => {
+  context.emit({ detail: "fixture Starknet name resolution", kind: "response" });
+  const name = (message as { readonly name?: unknown }).name;
+  if (name === STRANGER_NAME) {
+    return {
+      networkId: "SN_MAIN",
+      ok: true,
+      resolution: { address: STRANGER_ADDRESS, status: "resolved" },
+    };
+  }
+  return name === "altaga.braavos.stark"
+    ? {
+        networkId: "SN_MAIN",
+        ok: true,
+        resolution: { address: RECIPIENT_ADDRESS, status: "resolved" },
+      }
+    : { networkId: "SN_MAIN", ok: true, resolution: { status: "not-found" } };
+};
+
+// Types a Starknet name into the recipient field and continues, so the fixture
+// resolves it the way the background would.
+const typeStarkName = async (context: FrameContext, mode: SendMode): Promise<void> => {
+  const search = context.app.querySelector<HTMLInputElement>("#send-recipient-search");
+  if (!search) {
+    throw new Error("Missing production Send recipient field");
+  }
+  const typed =
+    mode === "recipient-name-long"
+      ? `${"a".repeat(40)}.${"b".repeat(40)}.stark`
+      : mode === "recipient-name-missing"
+        ? "nobody.braavos.stark"
+        : mode === "recipient-name-review"
+          ? STRANGER_NAME
+          : "altaga.braavos.stark";
+  search.value = typed;
+  search.dispatchEvent(new Event("input", { bubbles: true }));
+  context.app.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
+  await nextTurn();
+};
+
+// Unshields one STRK from a one-STRK private balance, so the route refuses
+// with the minimum the amount needs.
+const submitPrivateShortfall = async (context: FrameContext): Promise<void> => {
+  context.app.querySelector<HTMLButtonElement>('[data-send-bucket="source"]')?.click();
+  await nextTurn();
+  updateForm(context, "#send-amount-input", "1");
+  const shortfallForm = context.app.querySelector<HTMLFormElement>("#transfer-form");
+  if (!shortfallForm) {
+    throw new Error("Missing production Send form");
+  }
+  shortfallForm.requestSubmit();
+};
+
 const prepareSend =
   (mode: SendMode) =>
   async (context: FrameContext): Promise<void> => {
@@ -220,26 +277,7 @@ const prepareSend =
           return fixtureActivity(mode, context, unresolved);
         }
         if (type === "wallet.resolveStarkName") {
-          context.emit({ detail: "fixture Starknet name resolution", kind: "response" });
-          // Two names are registered in the fixture (one a saved contact, one
-          // listed nowhere); anything else is the naming contract's own zero
-          // answer, so the not-found state is reachable too. Every reply names
-          // the network it was read on, so the panel can tie it to its own.
-          const name = (message as { readonly name?: unknown }).name;
-          if (name === STRANGER_NAME) {
-            return {
-              networkId: "SN_MAIN",
-              ok: true,
-              resolution: { address: STRANGER_ADDRESS, status: "resolved" },
-            };
-          }
-          return name === "altaga.braavos.stark"
-            ? {
-                networkId: "SN_MAIN",
-                ok: true,
-                resolution: { address: RECIPIENT_ADDRESS, status: "resolved" },
-              }
-            : { networkId: "SN_MAIN", ok: true, resolution: { status: "not-found" } };
+          return fixtureNameResolution(message, context);
         }
         return { error: "UI Lab blocks non-fixture runtime requests" };
       },
@@ -273,22 +311,7 @@ const prepareSend =
       // review variant resolves a name no row lists and carries it through
       // amount entry, so the confirm face shows the full address, its
       // provenance line, and the new-recipient warning.
-      const search = context.app.querySelector<HTMLInputElement>("#send-recipient-search");
-      if (!search) {
-        throw new Error("Missing production Send recipient field");
-      }
-      const typed =
-        mode === "recipient-name-long"
-          ? `${"a".repeat(40)}.${"b".repeat(40)}.stark`
-          : mode === "recipient-name-missing"
-            ? "nobody.braavos.stark"
-            : mode === "recipient-name-review"
-              ? STRANGER_NAME
-              : "altaga.braavos.stark";
-      search.value = typed;
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-      context.app.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
-      await nextTurn();
+      await typeStarkName(context, mode);
       if (mode !== "recipient-name-review") {
         return;
       }
@@ -307,14 +330,7 @@ const prepareSend =
       // Unshield one STRK from a one-STRK private balance: the pool fee is
       // charged in STRK from the same balance, so the amount cannot fit and
       // the amount step must name the figure it needs.
-      context.app.querySelector<HTMLButtonElement>('[data-send-bucket="source"]')?.click();
-      await nextTurn();
-      updateForm(context, "#send-amount-input", "1");
-      const shortfallForm = context.app.querySelector<HTMLFormElement>("#transfer-form");
-      if (!shortfallForm) {
-        throw new Error("Missing production Send form");
-      }
-      shortfallForm.requestSubmit();
+      await submitPrivateShortfall(context);
       return;
     }
     updateForm(context, "#send-amount-input", "0.24");
