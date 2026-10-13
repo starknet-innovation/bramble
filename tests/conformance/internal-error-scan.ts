@@ -44,7 +44,7 @@ const THROWN_CONSTANT = /new\s+([A-Z]\w*)\(\s*([A-Z][A-Z0-9_]+)\s*[,)]/g;
 const REPLY = /\berror:\s*(["`])((?:(?!\1)[^\\]|\\.){3,400})\1/g;
 const REPLY_CONSTANT = /\berror:\s*([A-Z][A-Z0-9_]+)\b/g;
 // `invariant(condition, "…")`.
-const INVARIANT = /\binvariant\(\s*[^,]+,\s*(["`])((?:(?!\2)[^\\]|\\.)*)\2/g;
+const INVARIANT = /\binvariant\(\s*[^,]+,\s*(["`])((?:(?!\1)[^\\]|\\.)*)\1/g;
 // Literals that open with a guard prefix passed through a helper.
 const GUARD_LITERAL = /"((?:Unlock session|Krusty KMS) [^"]+)"/g;
 // `const NAME = "…"` / `` const NAME = `…` `` string constants.

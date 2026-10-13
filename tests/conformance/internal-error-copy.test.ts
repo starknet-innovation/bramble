@@ -169,6 +169,7 @@ const KEPT_VISIBLE = new Set([
   "Invalid Starknet contract class",
   "RPC returned a non-felt Starknet name address",
   "Storage access denied",
+  "Encrypted store scope is required",
   "Response exceeded its size limit",
   "Nostr relay connection closed",
   "Nostr relay connection failed",
