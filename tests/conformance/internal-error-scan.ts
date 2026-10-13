@@ -66,6 +66,15 @@ const RETURNED = /(?:\breturn|[?:])\s*(["`])((?:(?!\1)[^\\]|\\.){3,400})\1/g;
 // `const NAME = "…"` / `` const NAME = `…` `` string constants.
 const STRING_CONSTANT = /\bconst\s+([A-Z][A-Z0-9_]+)\s*=\s*(["`])((?:(?!\2)[^\\]|\\.)*)\2/g;
 
+// Patterns whose capture group `group` is the message literal itself.
+const LITERAL_PATTERNS: readonly (readonly [RegExp, number])[] = [
+  [REPLY, 2],
+  [INVARIANT, 2],
+  [FALLBACK, 2],
+  [BLOCKER, 2],
+  [GUARD_LITERAL, 1],
+];
+
 /** A thrown message and the file it is minted in. */
 export interface ThrownMessage {
   readonly raw: string;
@@ -120,20 +129,18 @@ export const thrownMessages = (dirs: readonly string[]): readonly ThrownMessage[
       if (match[1] && /Error|Refused/.test(match[1]) && match[2])
         add(constants.get(match[2]), file);
     }
-    for (const match of src.matchAll(REPLY)) add(match[2], file);
+    for (const [pattern, group] of LITERAL_PATTERNS) {
+      for (const match of src.matchAll(pattern)) add(match[group], file);
+    }
     for (const match of src.matchAll(REPLY_CONSTANT)) {
       if (match[1]) add(constants.get(match[1]), file);
     }
-    for (const match of src.matchAll(INVARIANT)) add(match[2], file);
-    for (const match of src.matchAll(FALLBACK)) add(match[2], file);
-    for (const match of src.matchAll(BLOCKER)) add(match[2], file);
     if (REFUSAL_SOURCES.includes(file)) {
       // A refusal is a sentence; a one-word branch here is data ("route").
       for (const match of src.matchAll(RETURNED)) {
         if (match[2] && /\s/.test(match[2])) add(match[2], file);
       }
     }
-    for (const match of src.matchAll(GUARD_LITERAL)) add(match[1], file);
   }
   return [...found].map(([raw, file]) => ({ file, raw }));
 };
