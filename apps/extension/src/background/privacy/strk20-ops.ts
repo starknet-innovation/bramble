@@ -8,6 +8,7 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
+  STRK20_SERVICE_UNAVAILABLE,
   type Strk20AssetLookup,
   summarizeStrk20Action,
   summarizeStrk20Plan,
@@ -244,6 +245,19 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
   });
 };
 
+// The SDK sub-account module is opt-in per network. A request that needs it
+// is refused before its approval is queued, not after the user approves into
+// a certain failure (#443); the error is the same one the SDK adapter raises.
+const MISSING_ANONYMIZER = {
+  error: `${STRK20_SERVICE_UNAVAILABLE}: no sub-account anonymizer is configured for this network`,
+} as const;
+
+const lacksAnonymizer = (resolved: ResolvedAccount): boolean =>
+  !resolved.preferences.strk20Networks?.[resolved.account.networkId]?.subaccountAnonymizerAddress;
+
+const needsAnonymizer = (actions: readonly Strk20Action[]): boolean =>
+  actions.some((action) => action.type === "subaccount_invoke");
+
 const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender) => {
   const input = readStrk20PrepareMessage(message);
   if (!input) {
@@ -266,6 +280,9 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
+  }
+  if (needsAnonymizer(input.actions) && lacksAnonymizer(resolved)) {
+    return MISSING_ANONYMIZER;
   }
   // The same recipient policy the wallet's own pool routes apply. A poisoned
   // payment is queued with the flag, which leaves the card with Deny only,
@@ -308,6 +325,9 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
+  }
+  if (needsAnonymizer(input.actions) && lacksAnonymizer(resolved)) {
+    return MISSING_ANONYMIZER;
   }
   // A private transfer or withdrawal to an address that mimics a saved contact
   // is the same attack whether the wallet composed it or the site did. It is
@@ -360,6 +380,9 @@ const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message,
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
+  }
+  if (lacksAnonymizer(resolved)) {
+    return MISSING_ANONYMIZER;
   }
   return queueDisclosure(deps, resolved, {
     kind: "strk20-subaccount",

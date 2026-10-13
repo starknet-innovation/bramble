@@ -31,6 +31,8 @@ export const STRK20_TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1
 export const STRK20_RECIPIENT =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 export const STRK20_ORIGIN = "https://example.com";
+// The opt-in SDK sub-account anonymizer the default harness configures.
+const STRK20_TEST_ANONYMIZER = "0x04f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
 
 export const STRK20_EXTENSION_SENDER: RuntimeSender = extensionSender;
 export const STRK20_CONTENT_SENDER: RuntimeSender = contentSender;
@@ -186,12 +188,14 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
   if (!mainnetStrk20) {
     throw new Error("missing default STRK20 test config");
   }
+  // The opt-in SDK sub-account module is set, so sub-account requests reach
+  // their approval; a test of the unset case passes its own preferences.
   const preferences = options.preferences ?? {
     ...defaults,
     activeNetworkId: "SN_SEPOLIA" as const,
     strk20Networks: {
       ...defaults.strk20Networks,
-      SN_SEPOLIA: mainnetStrk20,
+      SN_SEPOLIA: { ...mainnetStrk20, subaccountAnonymizerAddress: STRK20_TEST_ANONYMIZER },
     },
   };
   const strk20: Strk20Service = options.strk20 ?? makeStrk20Service(options);

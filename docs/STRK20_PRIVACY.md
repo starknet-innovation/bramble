@@ -113,6 +113,9 @@ device.
    after it, two `OPEN` transfers in one token beside a `subaccount_invoke`, and a public deposit
    beside a `subaccount_invoke` that settles open notes (`MULTIPLE_SCREENING_SUBJECTS`). The site
    gets `INVALID_REQUEST_PAYLOAD` with the rule as `data`.
+   A sub-account commitment, or a batch with a `subaccount_invoke`, on a network with no
+   sub-account anonymizer configured is refused at the same point, with the `UNKNOWN_ERROR`
+   (`strk20 services unavailable: …`) the SDK adapter would otherwise raise after approval.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
    and sub-account commitments each create a dedicated approval. Registration uses the explicitly
    Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
