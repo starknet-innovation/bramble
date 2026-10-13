@@ -65,6 +65,8 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
 - **Never** add fallback signing, key derivation, or mnemonic validation — Krusty KMS owns wallet
   crypto; if it is unavailable, fail closed. Keep its published package pinned exactly in
   `package.json` and `bun.lock`; don't bump it casually.
+  The one exception is off-wallet dev tooling that never ships, such as `tools/vendor-dataset`, which
+  derives test-vendor keys to record import fixtures. Nothing in `apps/` or `packages/` may import it.
 - Never log or persist secrets outside the encrypted vault. Secret-material field names are only
   allowed in the boundary modules whitelisted in `scripts/check-file-standards.ts`.
 - Clock/randomness calls live only in explicit boundary modules (inject `clock`/`fetch`/RNG into

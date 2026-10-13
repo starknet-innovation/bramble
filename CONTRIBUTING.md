@@ -110,6 +110,8 @@ history.
   popup boundary modules enforced by `bun run check`.
 - Krusty KMS owns wallet cryptography. Do not add fallback signing, key derivation, or mnemonic
   validation code.
+  Off-wallet dev tooling that never ships (`tools/vendor-dataset`, which records vendor import
+  fixtures) may derive test keys itself; no shipped workspace may import it.
 - Krusty KMS must stay pinned to an exact published version in `package.json` and `bun.lock`.
   `scripts/check-krusty-adapter.ts` verifies the installed package metadata and both runtime-file
   digests before importing it. Update the version and both digests together, and only with the full
