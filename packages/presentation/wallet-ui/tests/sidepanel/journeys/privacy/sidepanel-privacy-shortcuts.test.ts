@@ -341,7 +341,7 @@ describe("the activation entry", () => {
     const last = journeys.at(-1);
     expect(last?.stage === "blocked" ? last.blocker : null).toEqual({
       kind: "service",
-      message: "prover unavailable",
+      message: "Private balances are unavailable right now. Try again shortly.",
     });
   });
 });

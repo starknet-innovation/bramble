@@ -70,7 +70,7 @@ describe("recipientFieldError / friendlyReviewError helpers", () => {
     expect(friendlyReviewError(new Error("invalid transfer review request"))).toBe(
       "Enter a valid Starknet address.",
     );
-    expect(friendlyReviewError(new Error("boom"))).toBe("boom");
+    expect(friendlyReviewError(new Error("boom"))).toBe("Something went wrong. Please try again.");
   });
 });
 
@@ -428,7 +428,9 @@ describe("bindTransfer", () => {
     await flush();
     expect(submitCount).toBe(1);
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("failed");
-    expect(app.querySelector("#send-failure-copy")?.textContent).toContain("network exploded");
+    expect(app.querySelector("#send-failure-copy")?.textContent).toBe(
+      "The transaction was not sent. Something went wrong. Please try again.",
+    );
     expect(app.querySelector("#send-failure")?.hasAttribute("hidden")).toBe(false);
   });
 

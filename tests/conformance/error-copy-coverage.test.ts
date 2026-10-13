@@ -49,7 +49,7 @@ const sourceFiles = (dir: string): string[] => {
   return out;
 };
 
-const ERROR_REPLY = /\{\s*error:\s*"([^"]{3,120})"/g;
+const ERROR_REPLY = /\{\s*error:\s*"([^"]{3,400})"/g;
 // Matched on shape, not on the callee's name: the collectibles client
 // imports responseError as `failure`, and a name-based scan missed five
 // diagnostics for as long as it did.

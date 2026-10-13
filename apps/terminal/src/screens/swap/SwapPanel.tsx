@@ -5,6 +5,7 @@
  * read-only until the wallet review step.
  */
 import { ArrowDownUp, ChevronDown, LoaderCircle, ShieldCheck } from "lucide-react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Call } from "starknet";
 import { usePortfolio, type TokenRow } from "../../data/index";
@@ -159,7 +160,7 @@ export const SwapPanel = ({
         } catch (cause) {
           if (!cancelled) {
             setQuoteState({
-              message: cause instanceof Error ? cause.message : "Could not fetch a live quote.",
+              message: userErrorMessage(cause, "Could not fetch a live quote."),
               status: "error",
             });
             setIsQuoteFetching(false);
@@ -258,7 +259,7 @@ export const SwapPanel = ({
         takerAddress: address,
       });
     } catch (cause) {
-      setExecMessage(cause instanceof Error ? cause.message : "Could not build the swap.");
+      setExecMessage(userErrorMessage(cause, "Could not build the swap."));
       return;
     }
     setIsRequesting(true);
@@ -282,7 +283,9 @@ export const SwapPanel = ({
         });
         setExecMessage("Broadcast accepted. Confirmation is updating automatically.");
       } catch (cause) {
-        setExecMessage(cause instanceof Error ? cause.message : "Wallet rejected the swap.");
+        // Not "rejected": a collapsed message here is our own plumbing, not a
+        // decline, so it takes the terminal's neutral wallet-failure sentence.
+        setExecMessage(userErrorMessage(cause, "The wallet could not complete this operation."));
       } finally {
         setIsRequesting(false);
       }

@@ -238,7 +238,7 @@ export const bindMultisigParticipantPicker = (
       complete();
     } catch (error) {
       const failure = errorMessage(error, "Contact save failed");
-      result.textContent = failure;
+      result.textContent = errorLine(error, "Contact save failed");
       showToast(failure, "error", confirm, errorDetails(error, "Contact save failed"));
     } finally {
       buttonBusy(confirm, false);

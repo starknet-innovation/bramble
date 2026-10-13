@@ -315,7 +315,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   ): void => {
     delete journey.fee;
     const message = errorMessage(error, fallback);
-    if (stage === "quote") journey.quoteNote = message;
+    if (stage === "quote") journey.quoteNote = errorLine(error, fallback);
     // A deployment whose reply was lost may be on chain: amber, not "failed".
     if (toast) {
       showToast(

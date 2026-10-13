@@ -10,9 +10,10 @@
 
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { friendlyError } from "../../runtime/friendly-error";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
-import { errorMessage } from "../../shared/dom";
+import { errorDetails } from "../../shared/dom";
 import { reviewFeeBlocked } from "../../shared/review-render";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
@@ -215,7 +216,6 @@ export const confirmedState = <Review>(
 export const submitRejection = (
   state: TransferState<TransferReview>,
   error: unknown,
-  fallback: string,
 ): SubmitRejection => {
   const cleared: TransferState<TransferReview> = {
     ...state,
@@ -247,7 +247,9 @@ export const submitRejection = (
     follow: false,
     state: {
       ...cleared,
-      error: `The transaction was not sent. ${errorMessage(error, fallback)}`,
+      // Known not sent, so the reason must not be the fallback's "may not have
+      // gone through" sentence: an untranslatable reason reads as generic.
+      error: `The transaction was not sent. ${friendlyError(errorDetails(error, "")).message}`,
       stage: "failed",
       submissionUnknown: false,
     },

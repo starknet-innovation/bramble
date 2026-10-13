@@ -17,7 +17,6 @@
  * outcome; the job keeps its slot until it settles, so coming back rejoins it.
  */
 
-import { errorMessage } from "../../shared/dom";
 import { captureScope, type PrivacyUiDeps, scopeKey, scopeMatches } from "./privacy-disclosure";
 import {
   type PrivacyBlocker,
@@ -122,7 +121,7 @@ export const runActivation = (
       const blocker = privacyBlockerFor(error);
       onBlocked(watched, {
         kind: blocker.kind,
-        message: errorMessage(error, blocker.message),
+        message: blocker.message,
       });
     },
   );

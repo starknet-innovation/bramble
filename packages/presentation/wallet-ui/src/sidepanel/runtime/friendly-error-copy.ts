@@ -26,7 +26,18 @@ import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
-import { SAVE_FAILED, SUBMISSION_UNKNOWN } from "./friendly-error-shared";
+import { INTERNAL_ERROR_COPY } from "./friendly-error-internal";
+import {
+  ADD_ACCOUNT_FAILED,
+  BACKUP_UNREADABLE,
+  KEY_IMPORT_FAILED,
+  REVIEW_MOVED,
+  SAVE_FAILED,
+  SEED_IMPORT_FAILED,
+  SUBMISSION_UNKNOWN,
+  SWAP_ROUTE_UNSAFE,
+  UNRECOGNIZED_RELEASE,
+} from "./friendly-error-shared";
 
 /** Shown when a request was malformed rather than refused. */
 export const GENERIC_VALIDATION =
@@ -49,9 +60,7 @@ export const RATE_LIMITED = "This service is rate limiting requests. Wait a mome
 // Shared endings. A failure the reader cannot diagnose gets the same sentence
 // wherever it comes from, so the wallet sounds like one writer.
 const REQUEST_FAILED = "That request didn't go through. Try again.";
-const REVIEW_MOVED = "This changed while you were reviewing it. Review it again.";
 const FEE_MOVED = "The fee changed while you were reviewing. Check it and submit again.";
-const SWAP_ROUTE_UNSAFE = "Couldn't prepare a safe route for this swap. Get a fresh quote.";
 const REFUSED = "The wallet refused that request.";
 // Catch-alls around a submission. The wallet doesn't know whether the
 // transaction left the device, so the copy must not claim it failed or invite
@@ -95,7 +104,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ],
   [
     "deployed argent account class is not a release this wallet recognizes",
-    "This account runs a release this wallet doesn't recognize. Use it in Ready.",
+    UNRECOGNIZED_RELEASE.ready,
   ],
   [
     "deployed argent account class expects an authorization format this wallet does not produce",
@@ -111,7 +120,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ],
   [
     "deployed braavos account class is not a release this wallet recognizes",
-    "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
+    UNRECOGNIZED_RELEASE.braavos,
   ],
   [
     "braavos account returned a malformed signer list",
@@ -120,7 +129,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["rpc returned an invalid account class hash", "Couldn't read this account. Try again."],
   [
     "braavos account class hash is not a release this wallet recognizes",
-    "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
+    UNRECOGNIZED_RELEASE.braavos,
   ],
   [
     "this wallet does not deploy braavos accounts",
@@ -172,7 +181,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["account visibility update failed", SAVE_FAILED],
   ["preferences unavailable", "Couldn't load your settings. Try again."],
   ["diagnostic export failed", "Couldn't export diagnostics. Try again."],
-  ["backup import failed", "Couldn't read that backup file. Check the file and try again."],
+  ["backup import failed", BACKUP_UNREADABLE],
 
   // --- Folders (the UI word; the code still says group) --------------------
   ["group create failed", "Couldn't create that folder. Try again."],
@@ -192,11 +201,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Accounts ------------------------------------------------------------
   ["account switch failed", "Couldn't switch accounts. Try again."],
-  ["add account failed", "Couldn't add that account. Try again."],
+  ["add account failed", ADD_ACCOUNT_FAILED],
   ["account import failed", "Couldn't add those accounts. Try again."],
-  ["import account failed", "Couldn't import that account. Check what you pasted and try again."],
+  ["import account failed", KEY_IMPORT_FAILED],
   ["create key vault failed", "Couldn't create your wallet. Try again."],
-  ["seed import failed", "Couldn't import that recovery phrase. Check the words and try again."],
+  ["seed import failed", SEED_IMPORT_FAILED],
   ["mnemonic validation unavailable", "Couldn't check that recovery phrase. Try again."],
   ["reveal failed", "Couldn't reveal that. Re-enter your passphrase and try again."],
   ["incorrect passphrase", "That passphrase is wrong."],
@@ -398,9 +407,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "No route found for this pair right now. Try a different amount or pair.",
   ],
   ["swap build returned a route the wallet could not decode", SWAP_ROUTE_UNSAFE],
-  ["swap build returned more than one swap call", SWAP_ROUTE_UNSAFE],
-  ["swap build returned no swap call", SWAP_ROUTE_UNSAFE],
-  ["swap build returned too many calls", SWAP_ROUTE_UNSAFE],
+  // Each names the call-shape check that stopped the build: shown as written
+  // (issue 652 review, R2-1), listed so the coverage check records the decision.
+  ["swap build returned more than one swap call", "swap build returned more than one swap call"],
+  ["swap build returned no swap call", "swap build returned no swap call"],
+  ["swap build returned too many calls", "swap build returned too many calls"],
   [
     "swap build touched an unexpected token approval",
     "Blocked for safety: the swap asked to approve the wrong token. Nothing was signed.",
@@ -478,4 +489,5 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ],
 
   ...MULTISIG_ERROR_COPY,
+  ...INTERNAL_ERROR_COPY,
 ]);
