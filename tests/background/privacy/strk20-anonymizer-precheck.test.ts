@@ -1,13 +1,17 @@
 /**
- * The SDK shadow account module is opt-in per network. A shadow account request on a
- * network without it is refused before its approval is queued (#443, PR 3),
- * instead of reaching the card and failing after the user approves. Requests
- * that do not need the module are unaffected.
+ * The SDK shadow account module is opt-in per network. A shadow account request
+ * on a network without it never reaches an approval card it could only fail
+ * after (#443, PR 3) — but it is not refused at once either, because an instant
+ * refusal lets any site probe silently whether the user has private services
+ * set up. The wallet holds it on its own surface as a notice with one line and
+ * a Close control; the site gets the same refusal only once the user closes it.
+ * Nothing is signed, prepared, or disclosed. Requests that do not need the
+ * module are unaffected.
  */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
-import { flushHeld, waitForPendingApprovals } from "../../support/held";
+import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
 import {
   buildStrk20Handler,
   STRK20_CONTENT_SENDER,
@@ -79,20 +83,46 @@ const pendingCount = async (handler: ReturnType<typeof buildStrk20Handler>): Pro
 
 describe("shadow account requests without an anonymizer", () => {
   for (const request of REQUESTS) {
-    test(`${request.method} is refused before approval`, async () => {
-      const shadowAccountCalls = { value: 0 };
-      const handler = buildStrk20Handler({ preferences: withoutAnonymizer, shadowAccountCalls });
-      const result = await handler(request.message, STRK20_CONTENT_SENDER);
+    for (const close of ["wallet.denyOrigin", "wallet.approveOrigin"] as const) {
+      test(`${request.method} is held on a notice and refused only on ${close}`, async () => {
+        const shadowAccountCalls = { value: 0 };
+        const proveCalls = { value: 0 };
+        const handler = buildStrk20Handler({
+          preferences: withoutAnonymizer,
+          proveCalls,
+          shadowAccountCalls,
+        });
+        let settled: unknown = "unsettled";
+        const held = handler(request.message, STRK20_CONTENT_SENDER).then((result) => {
+          settled = result;
+          return result;
+        });
 
-      expect(result).toEqual({ error: MISSING });
-      expect(await pendingCount(handler)).toBe(0);
-      expect(shadowAccountCalls.value).toBe(0);
-      expect(toProviderPayload(result, request.method).error).toEqual({
-        code: 163,
-        data: MISSING,
-        message: "The wallet request failed",
+        const pending = await waitForPendingApprovals<{
+          readonly id: string;
+          readonly kind: string;
+          readonly summaries?: readonly string[];
+        }>(handler, STRK20_EXTENSION_SENDER);
+        expect(pending.map((approval) => approval.kind)).toEqual(["strk20-unavailable"]);
+        // The notice carries nothing the site sent and nothing to approve.
+        expect(pending[0]?.summaries).toBeUndefined();
+        await flushHeld();
+        expect(settled).toBe("unsettled");
+
+        const id = await latestApprovalId(handler, STRK20_EXTENSION_SENDER);
+        await handler({ id, type: close }, STRK20_EXTENSION_SENDER);
+        const result = await held;
+        expect(result).toEqual({ error: MISSING });
+        expect(await pendingCount(handler)).toBe(0);
+        expect(shadowAccountCalls.value).toBe(0);
+        expect(proveCalls.value).toBe(0);
+        expect(toProviderPayload(result, request.method).error).toEqual({
+          code: 163,
+          data: MISSING,
+          message: "The wallet request failed",
+        });
       });
-    });
+    }
 
     test(`${request.method} reaches its approval once one is configured`, async () => {
       const handler = buildStrk20Handler();

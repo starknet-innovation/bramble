@@ -10,6 +10,7 @@ import {
   SHADOW_INVOKE_CONTROL,
   SHADOW_INVOKE_SETTLES_NOTHING,
 } from "@bramble/privacy/shadow-account-copy";
+import { PRIVATE_SERVICES_UNAVAILABLE_NOTICE } from "@bramble/wallet-protocol/privacy-blocker";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
@@ -57,6 +58,32 @@ describe("shadow account approval card", () => {
       expect(html).toContain(SHADOW_INVOKE_CONTROL);
       // The site's label is escaped wherever it reaches the card.
       expect(html).not.toContain("<b>Example</b>");
+    });
+  }
+
+  // A site's private request on a network with no private services is held on
+  // a notice (#443): one line and Close. Nothing the site sent reaches it, and
+  // there is no approve control — Close answers the site, locked or not.
+  for (const locked of [false, true]) {
+    test(`the private-services notice shows one line and only Close (locked: ${locked})`, () => {
+      const html = approvalCard(
+        {
+          id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+          kind: "strk20-unavailable",
+          origin: ORIGIN,
+          summaries: ["<site text>"],
+        },
+        { ...status, locked },
+      );
+      expect(html).toContain("Private services aren&#39;t set up for this network.");
+      expect(PRIVATE_SERVICES_UNAVAILABLE_NOTICE).toBe(
+        "Private services aren't set up for this network.",
+      );
+      expect(html).toContain('data-approval-action="deny"');
+      expect(html).toContain("Close");
+      expect(html).not.toContain('data-approval-action="approve"');
+      expect(html).not.toContain("site text");
+      expect(html).not.toContain("disabled");
     });
   }
 });

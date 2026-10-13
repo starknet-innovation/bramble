@@ -142,6 +142,15 @@ export type ApprovalQueue = {
     readonly shadowAccountAnonymizer?: string;
     readonly summaries: readonly string[];
   }) => PendingApproval;
+  /**
+   * Holds a site's private request on a notice the user can only close: the
+   * network has no private services for it. `refusal` is what the site
+   * receives on close or expiry; nothing is signed, prepared, or disclosed.
+   */
+  readonly requestStrk20Unavailable: (input: {
+    readonly origin: string;
+    readonly refusal: string;
+  }) => PendingApproval;
   readonly requestSwitchChain: (input: {
     readonly chainId: string;
     readonly networkId: StarknetNetworkId;

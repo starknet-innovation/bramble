@@ -213,6 +213,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value["kind"] !== "strk20-prepare" &&
       value["kind"] !== "strk20-register" &&
       value["kind"] !== "strk20-shadow-account" &&
+      value["kind"] !== "strk20-unavailable" &&
       value["kind"] !== "switch-chain" &&
       value["kind"] !== "watch-asset") ||
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||

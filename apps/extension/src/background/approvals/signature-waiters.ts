@@ -43,7 +43,14 @@ export type SignatureWaiters = {
   /** Moves held callers to a replacement approval without settling them. */
   readonly move: (fromId: string, toId: string) => void;
   readonly pending: () => number;
-  readonly register: (id: string) => Promise<RuntimeResponse>;
+  /**
+   * Parks a response on `id`. `dropResponse` is what {@link release} delivers
+   * if the approval is dropped unanswered; absent, it is
+   * {@link DROPPED_APPROVAL_RESPONSE}. The first registration for an id sets it.
+   */
+  readonly register: (id: string, dropResponse?: RuntimeResponse) => Promise<RuntimeResponse>;
+  /** Settles `id` with its drop response, for an approval dropped unanswered. */
+  readonly release: (id: string) => void;
   readonly settle: (id: string, response: RuntimeResponse) => void;
 };
 
@@ -58,6 +65,17 @@ export type SignatureWaiters = {
  */
 export const createSignatureWaiters = (): SignatureWaiters => {
   const waiters = new Map<string, ((response: RuntimeResponse) => void)[]>();
+  const dropResponses = new Map<string, RuntimeResponse>();
+  const settle = (id: string, response: RuntimeResponse): void => {
+    const resolvers = waiters.get(id);
+    dropResponses.delete(id);
+    if (resolvers) {
+      waiters.delete(id);
+      for (const resolve of resolvers) {
+        resolve(response);
+      }
+    }
+  };
   return {
     move(fromId, toId) {
       if (fromId === toId) {
@@ -73,6 +91,11 @@ export const createSignatureWaiters = (): SignatureWaiters => {
       }
       waiters.delete(fromId);
       waiters.set(toId, [...destination, ...moving]);
+      const dropResponse = dropResponses.get(fromId);
+      dropResponses.delete(fromId);
+      if (dropResponse !== undefined && !dropResponses.has(toId)) {
+        dropResponses.set(toId, dropResponse);
+      }
     },
     pending() {
       let held = 0;
@@ -81,25 +104,23 @@ export const createSignatureWaiters = (): SignatureWaiters => {
       }
       return held;
     },
-    register(id) {
+    register(id, dropResponse) {
       const resolvers = waiters.get(id) ?? [];
       if (resolvers.length >= MAX_WAITERS_PER_APPROVAL) {
         throw new WalletError("Too many pending approvals");
+      }
+      if (dropResponse !== undefined && !dropResponses.has(id)) {
+        dropResponses.set(id, dropResponse);
       }
       return new Promise<RuntimeResponse>((resolve) => {
         resolvers.push(resolve);
         waiters.set(id, resolvers);
       });
     },
-    settle(id, response) {
-      const resolvers = waiters.get(id);
-      if (resolvers) {
-        waiters.delete(id);
-        for (const resolve of resolvers) {
-          resolve(response);
-        }
-      }
+    release(id) {
+      settle(id, dropResponses.get(id) ?? DROPPED_APPROVAL_RESPONSE);
     },
+    settle,
   };
 };
 
@@ -115,9 +136,9 @@ export const createSignatureWaiters = (): SignatureWaiters => {
  * contract `./ledger-sign-queue` keeps for its injected timeout: a bounded wait
  * rejects the parked request rather than leaving a waiter behind.
  *
- * Failure behaviour: dropped requests settle with
- * {@link DROPPED_APPROVAL_RESPONSE} (spec USER_REFUSED_OP), never with a
- * success; `onChange` then signals open surfaces so a panel still rendering the
+ * Failure behaviour: dropped requests settle with their registered drop
+ * response — {@link DROPPED_APPROVAL_RESPONSE} (spec USER_REFUSED_OP) unless the
+ * request parked a refusal of its own — never with a success; `onChange` then signals open surfaces so a panel still rendering the
  * swept card repaints instead of leaving the user a button that can only
  * report "approval not found". Registration replaces any previous observer, so
  * bind each queue exactly once.
@@ -129,7 +150,7 @@ export const releaseWaitersOnApprovalDrop = (
 ): void => {
   approvals.observeDrops((ids) => {
     for (const id of ids) {
-      waiters.settle(id, DROPPED_APPROVAL_RESPONSE);
+      waiters.release(id);
     }
     onChange();
   });
