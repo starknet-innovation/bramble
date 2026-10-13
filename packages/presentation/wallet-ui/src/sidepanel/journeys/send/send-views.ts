@@ -176,6 +176,7 @@ const amountStage = (
         </span>
       </div>
       <p class="send-fiat-estimate" id="send-fiat-estimate">Estimated value —</p>
+      <div class="send-fee-lines" id="send-fee-lines" aria-live="polite"></div>
     </div>
     <button id="send-review-button" type="submit" ${account === null || asset === undefined ? "disabled" : ""}>${icon("send")}${liquidDots("send", true)}<span id="send-review-label">${escapeHtml(copy.reviewLabel)}</span></button>
   </section>`;
@@ -322,13 +323,14 @@ export const sendFlow = (
       `<section class="section send-flow">
         ${account ? "" : noAccountEmpty(status)}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" ${senderAttributes(account, preferences)} data-send-network="${escapeHtml(status.networkId)}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" ${senderAttributes(account, preferences)} data-send-network="${escapeHtml(status.networkId)}" data-send-network-label="${escapeHtml(status.network)}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
           <input name="fiatEstimate" type="hidden" value="" />
           <input name="recipient" type="hidden" value="${escapeHtml(scopedIntent?.recipient ?? "")}" />
           <input name="recipientLabel" type="hidden" value="${escapeHtml(scopedIntent?.recipientLabel ?? "")}" />
+          <input name="recipientResolvedFrom" type="hidden" value="" />
           <input name="source" type="hidden" value="${scopedIntent?.source ?? "public"}" />
           <input name="destination" type="hidden" value="${scopedIntent?.destination ?? "public"}" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />

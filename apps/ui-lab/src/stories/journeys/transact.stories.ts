@@ -16,7 +16,66 @@ const meta: LabMeta = {
 export default meta;
 
 export const SendRecipient = checkpointStory("Send · recipient", "send", "recipient");
+export const SendRecipientByName = checkpointStory(
+  "Send · recipient by name",
+  "send",
+  "recipient-name",
+);
+export const SendRecipientNameReview = checkpointStory(
+  "Send · review a name recipient",
+  "send",
+  "recipient-name-review",
+);
+export const SendRecipientNameMissing = checkpointStory(
+  "Send · name not found",
+  "send",
+  "recipient-name-missing",
+);
+export const SendRecipientNameLong = checkpointStory(
+  "Send · long name wraps",
+  "send",
+  "recipient-name-long",
+);
 export const SendDetails = checkpointStory("Send · amount", "send", "details");
+export const SendAmountFee: LabStory = {
+  args: { checkpointId: "details-fee", scenarioId: "send" },
+  name: "Send · amount and estimated fee",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // The figure the review would bind, on the screen before it.
+    await expect(body?.querySelector("#send-fee-lines")).toHaveTextContent(
+      "Estimated fee: 0.0024 STRK",
+    );
+  },
+};
+export const SendShieldFee: LabStory = {
+  args: { checkpointId: "shield-fee", scenarioId: "send" },
+  name: "Send · shield pool fee",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // A pool route states the pool's charge and no network fee it cannot know.
+    await expect(body?.querySelector("#send-fee-lines")).toHaveTextContent(
+      "Pool fee: 6 STRK from your public balance",
+    );
+  },
+};
+export const SendInsufficientPrivateBalance: LabStory = {
+  args: { checkpointId: "private-shortfall", scenarioId: "send" },
+  name: "Send · insufficient private balance",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const needed =
+      "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.";
+    await expect(body?.querySelector("#send-route-reason")).toHaveTextContent(needed);
+    await expect(body?.querySelector("#transfer-result")).toHaveTextContent(needed);
+  },
+};
 export const SendAsset = checkpointStory("Send · asset picker", "send", "asset");
 export const SendReview = checkpointStory("Send · review", "send", "review");
 export const SendFeeFailure = checkpointStory("Send · fee failure", "send", "fee-failure");

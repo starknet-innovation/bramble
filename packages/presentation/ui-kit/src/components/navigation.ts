@@ -107,18 +107,19 @@ export type DockItemProps = {
 };
 
 /**
- * Renders the shared floating dock: three icon-only roots in one pill, the
- * selected root on a tinted disc. Each root keeps its accessible name as the
- * tab's label and repeats it as a native tooltip, so the name is available to
- * assistive tech and on hover without a visible caption; explicit navigation
- * capabilities remain unchanged.
+ * Renders the shared floating dock: three labelled roots in one pill, the
+ * selected root on a tinted disc. Each root shows the icon and a visible
+ * caption, and repeats the caption as its accessible name, so the destination
+ * is identifiable without hover; explicit navigation capabilities remain
+ * unchanged.
  */
 export const dockNavigation = (items: readonly DockItemProps[]): string =>
   `<nav class="wallet-dock" aria-label="Wallet screens" role="tablist">${items
     .map(
       (item) =>
-        `<button class="nav-item"${uiAttributes(item.attributes)} type="button" role="tab" aria-label="${escapeHtml(item.label)}" title="${escapeHtml(item.label)}" aria-controls="${escapeHtml(item.controls)}" aria-selected="${item.selected}">
+        `<button class="nav-item"${uiAttributes(item.attributes)} type="button" role="tab" aria-label="${escapeHtml(item.label)}" aria-controls="${escapeHtml(item.controls)}" aria-selected="${item.selected}">
           <span class="tab-icon">${icon(item.icon)}${item.count && item.count > 0 ? badge(item.count) : ""}</span>
+          <span class="nav-label">${escapeHtml(item.label)}</span>
         </button>`,
     )
     .join("")}</nav>`;

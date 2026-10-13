@@ -13,6 +13,7 @@ import type {
   LedgerPubKeyEntry,
   RecoverableAccountRef,
 } from "@bramble/wallet-model/accounts";
+import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
   isLedgerEip2645Application,
@@ -171,6 +172,16 @@ export type LedgerAccountInput = LedgerPubKeyEntry & {
   readonly networkId?: StarknetNetworkId;
 };
 
+// A Ledger-owned Braavos account is discovered at the class Braavos's app deploys
+// today. The import path otherwise requires the Braavos class be named, but a
+// device scan is probing the current vendor convention, so default it here —
+// only for Braavos, and only on the Ledger derivation path.
+const ledgerDeployClassHash = (
+  accountContractType: AccountContractType,
+  classHash: string | undefined,
+): string | undefined =>
+  classHash ?? (accountContractType === "braavos" ? BRAAVOS_DEPLOYMENT_CLASS_HASH : undefined);
+
 const validatedNetworkClassHash = async (
   kms: KmsPort,
   accountContractType: AccountContractType,
@@ -223,7 +234,7 @@ export const deriveLedgerAccount = async (
     kms,
     accountContractType,
     networkId,
-    input.classHash,
+    ledgerDeployClassHash(accountContractType, input.classHash),
   );
   const publicKeyX = canonicalFelt(input.publicKeyX) as string;
   const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
@@ -278,7 +289,7 @@ export const deriveLedgerAccountRefs = async (
     kms,
     accountContractType,
     networkId,
-    input.classHash,
+    ledgerDeployClassHash(accountContractType, input.classHash),
   );
   return Promise.all(
     input.entries.map((entry) =>

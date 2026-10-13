@@ -6,21 +6,15 @@ import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
-  type AccountSignabilityResponse,
   type ActivityResponse,
   type AllowanceListing,
   allowanceListingFrom,
-  type ClassHashVerificationResponse,
   type ConnectedSitesResponse,
-  type DeploymentStatusResponse,
-  isAccountSignabilityResponse,
   isActivityResponse,
   isApprovalDecisionResponse,
   isBalancesResponse,
-  isClassHashVerificationResponse,
   isConnectedSitesResponse,
   isCreateAccountResponse,
-  isDeploymentStatusResponse,
   isErrorResponse,
   isFeeReviewResponse,
   isPreferencesResponse,
@@ -62,6 +56,7 @@ export type {
 import { createAccountRuntimeClient } from "./runtime-accounts";
 import { responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
+import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
 import { unavailableStatus } from "./runtime-status";
 
@@ -83,6 +78,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createPrivacyRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
+    ...createLookupRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {
@@ -100,23 +96,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return response.transactionHash;
       }
       throw responseError(response, "deployment failed");
-    },
-    async loadDeploymentStatus(): Promise<DeploymentStatusResponse | null> {
-      const response = await sendMessage({ type: "wallet.deploymentStatus" });
-      return isDeploymentStatusResponse(response) ? response : null;
-    },
-    /** Active-account signability for the Home read-only flag; null on a malformed reply. */
-    async loadAccountSignability(): Promise<AccountSignabilityResponse | null> {
-      const response = await sendMessage({ type: "wallet.accountSignability" });
-      return isAccountSignabilityResponse(response) ? response : null;
-    },
-    async loadClassHashVerification(): Promise<ClassHashVerificationResponse | null> {
-      // Return the whole response (with its `accountId`), not just the verdict,
-      // so the caller can drop a verification that resolved for an account the
-      // user has since switched away from — a stale/foreign verdict must never
-      // be shown under a different account's class hash.
-      const response = await sendMessage({ type: "wallet.verifyClassHash" });
-      return isClassHashVerificationResponse(response) ? response : null;
     },
     /**
      * Settles a pending approval. `reviewedFee` is the figure the deciding card

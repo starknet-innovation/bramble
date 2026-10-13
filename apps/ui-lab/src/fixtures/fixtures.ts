@@ -18,6 +18,7 @@ import type {
   TokenBalance,
   WalletStatus,
 } from "@bramble/wallet-ui/lab";
+import nftFixtureImage from "./nft-fixture.svg?inline";
 
 export const SOFTWARE_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
 export const LEDGER_ADDRESS = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
@@ -191,6 +192,32 @@ export const softwareActivity: readonly ActivityEntry[] = [
   },
 ];
 
+// A feed long enough to overflow the side panel, so the lab can render the one
+// behavior this state exists for: the title bar holds its place while only the
+// list moves. It reuses the row anatomy above; the amounts differ so rows are
+// not byte-identical in a snapshot.
+export const longActivity: readonly ActivityEntry[] = Array.from(
+  { length: 12 },
+  (_, index): ActivityEntry => {
+    const day = Math.floor(index / 6);
+    const nth = (index % 6) + 1;
+    return {
+      ...activity(
+        softwareAccount,
+        `0x9${day}${nth}`,
+        index === 5
+          ? "Swapped 1,234.5678 USDC for 18,640.1234 STRK via the AVNU router on Starknet mainnet"
+          : `Sent ${nth} USDC to 0x4567…cdef`,
+        "accepted",
+      ),
+      amount: String(nth),
+      counterparty: RECIPIENT_ADDRESS,
+      submittedAt: day === 0 ? 1_785_171_200_000 : DAY_BEFORE,
+      token: "USDC",
+    };
+  },
+);
+
 export const secondActivity: readonly ActivityEntry[] = [
   activity(secondAccount, "0x801", "Supplied 200 USDC to Vesu", "pending"),
 ];
@@ -205,7 +232,7 @@ export const discoveredNft: DiscoveredNft = {
   contract: NFT_CONTRACT,
   description: "A deterministic collectible used only inside the Bramble UI Lab.",
   id: nftId,
-  image: "/nft-fixture.svg",
+  image: nftFixtureImage,
   name: "Proof of Participation #342",
   networkId: "SN_MAIN",
   tokenId: "342",

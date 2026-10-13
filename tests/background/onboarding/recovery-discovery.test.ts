@@ -70,7 +70,10 @@ describe("recovery discovery", () => {
           return tokens.map((token) => {
             const balance =
               (accountAddress === "0x4" && token.symbol === "ETH") ||
-              (accountAddress === "0x6" && token.symbol === "STRK")
+              (accountAddress === "0x6" && token.symbol === "STRK") ||
+              // Holds only USDC — no ETH or STRK — so it is found solely by the
+              // widened recovery probe set, not the display defaults.
+              (accountAddress === "0x2" && token.symbol === "USDC")
                 ? "10"
                 : "0";
             return { ...token, balance, formatted: balance };
@@ -98,14 +101,16 @@ describe("recovery discovery", () => {
     expect(first).toMatchObject({
       candidates: [
         { account: { address: "0x1" }, deployed: false, funded: false },
-        { account: { address: "0x2" }, deployed: false, funded: false },
+        { account: { address: "0x2" }, deployed: false, funded: true },
         { account: { address: "0x3" }, deployed: true, funded: false },
         { account: { address: "0x4" }, deployed: false, funded: true },
         { account: { address: "0x6" }, deployed: false, funded: true },
       ],
     });
     expect(manual).toMatchObject({ complete: false, nextIndex: 8, ok: true });
-    expect(requestedTokenSymbols.every((symbols) => symbols.join(",") === "ETH,STRK")).toBe(true);
+    expect(requestedTokenSymbols.every((symbols) => symbols.join(",") === "ETH,STRK,USDC")).toBe(
+      true,
+    );
     expect(
       (manual as { readonly candidates: readonly RecoveryAccountCandidate[] }).candidates.map(
         ({ account }) => `${account.accountContractType}:${recoveryLadderIndex(account)}`,

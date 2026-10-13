@@ -60,11 +60,6 @@ export const ChooseAccounts = checkpointStory(
   "onboarding",
   "accounts",
 );
-export const AccountSelected = checkpointStory(
-  "Existing wallet · account selected",
-  "onboarding",
-  "account-selected",
-);
 export const GeneratedPhrase = checkpointStory(
   "Generated phrase · masked",
   "onboarding",

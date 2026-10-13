@@ -10,9 +10,10 @@
  */
 
 import { strk20SendFeeModel } from "@bramble/privacy/fee-bound";
-import { parseTokenAmount } from "@bramble/starknet/rpc";
+import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   type PoolRegistration,
+  poolFeeAmountIn,
   resolveSendRoute,
   routeFor,
   type SendRoute,
@@ -21,8 +22,9 @@ import {
   spendableForRoute,
   type ValueBucket,
 } from "@bramble/transactions/send-routes";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { STRK_TOKEN_ADDRESS, STRK_TOKEN_DECIMALS, sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
+import { formatFri } from "../../shared/parts";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { TransferFields } from "./transfer-model";
 
@@ -101,6 +103,18 @@ const balanceOfTokenIn = (
 const symbolOfToken = (context: TransferRouteContext, address: string): string | null =>
   privateEntryFor(context, address)?.symbol ?? publicEntryFor(context, address)?.symbol ?? null;
 
+// The fee token's decimal scale: STRK's is fixed, the sent token's is on the
+// form, and any other comes from the public token list. Private balance entries
+// carry no scale, so a token known only there stays unknown.
+const decimalsOfToken = (context: TransferRouteContext, address: string): number | null => {
+  if (sameFelt(address, STRK_TOKEN_ADDRESS)) return STRK_TOKEN_DECIMALS;
+  if (sameFelt(address, context.fields.tokenAddress)) {
+    const decimals = Number(context.fields.tokenDecimals);
+    return Number.isSafeInteger(decimals) ? decimals : null;
+  }
+  return publicEntryFor(context, address)?.decimals ?? null;
+};
+
 const senderRegistration = (privacy: PrivacyDisclosureState): PoolRegistration => {
   if (privacy.loading || !privacy.value) {
     return "unknown";
@@ -143,6 +157,7 @@ const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
     convertedFeeCeilingRaw: feeModel.convertedCeiling,
     destination: fields.destination,
     feeTokenAddress: feeModel.feeToken,
+    feeTokenDecimals: decimalsOfToken(context, feeModel.feeToken),
     feeTokenSymbol:
       symbolOfToken(context, feeModel.feeToken) ??
       (sameFelt(feeModel.feeToken, STRK_TOKEN_ADDRESS) ? "STRK" : "fee token"),
@@ -156,6 +171,7 @@ const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
     sourceFeeBalanceRaw: balanceOfTokenIn(fields.source, feeModel.feeToken, context),
     sourceTokenBalanceRaw: tokenBalanceIn(fields.source, context),
     tokenAddress: fields.tokenAddress,
+    tokenDecimals: Number(fields.tokenDecimals) || 0,
     tokenSymbol: fields.tokenSymbol,
   };
 };
@@ -173,6 +189,23 @@ export const resolveTransferRoute = (context: TransferRouteContext): SendRouteRe
     return { blocked: { pending: false, reason: "Private balances are unavailable right now" } };
   }
   return resolveSendRoute(sendRouteInputFor(context));
+};
+
+/**
+ * The pool fee a composed send will reserve, formatted in the token that pays
+ * it: STRK's exact charge exactly as the review prints it, or a converted fee's
+ * bounded ceiling in its own token, read as "up to" because the relay's quote,
+ * known only at review, may be lower. `null` when the amount or the fee token's
+ * scale is not known yet, so no figure is ever guessed or shown as STRK.
+ */
+export const transferPoolFeeAmount = (context: TransferRouteContext): string | null => {
+  const input = sendRouteInputFor(context);
+  const amount = poolFeeAmountIn(input);
+  if (amount === null) return null;
+  if (sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)) return formatFri(amount.toString());
+  return input.feeTokenDecimals === null
+    ? null
+    : `up to ${formatTokenAmount(amount, input.feeTokenDecimals)} ${input.feeTokenSymbol}`;
 };
 
 /**

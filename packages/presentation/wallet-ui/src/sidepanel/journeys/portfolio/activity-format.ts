@@ -299,6 +299,24 @@ export type ActivityRowModel = ActivityAppearance & {
 };
 
 /**
+ * The tracked token an entry's recorded symbol names: the one tracked token on
+ * the entry's network with that symbol, or `null` when none or several match.
+ * An entry records only a symbol, so an ambiguous one is never guessed.
+ */
+export const activityTrackedToken = (
+  entry: Pick<ActivityEntry, "networkId" | "token">,
+  pricing?: ActivityPricing,
+): ActivityPricing["tokens"][number] | null => {
+  const symbol = entry.token?.trim();
+  if (!symbol || !pricing) return null;
+  const matches = pricing.tokens.filter(
+    (token) =>
+      token.networkId === entry.networkId && token.symbol.toLowerCase() === symbol.toLowerCase(),
+  );
+  return matches.length === 1 ? (matches[0] ?? null) : null;
+};
+
+/**
  * Builds the display model for one entry. Without `pricing` the row still
  * shows its verb, detail, and asset amount; only the fiat delta is omitted.
  */
@@ -310,15 +328,7 @@ export const activityRowModel = (
   const symbol = entry.token?.trim() || null;
   const rawAmount = entry.amount?.trim() || null;
   const amount = symbol && rawAmount ? `${compactActivityAmount(rawAmount)} ${symbol}` : null;
-  const matches =
-    symbol && pricing
-      ? pricing.tokens.filter(
-          (token) =>
-            token.networkId === entry.networkId &&
-            token.symbol.toLowerCase() === symbol.toLowerCase(),
-        )
-      : [];
-  const token = matches.length === 1 ? (matches[0] ?? null) : null;
+  const token = activityTrackedToken(entry, pricing);
   const price = token ? pricing?.prices[token.address] : undefined;
   const value =
     appearance.direction !== null && rawAmount !== null && price !== undefined

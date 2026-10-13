@@ -310,6 +310,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Networks and endpoints ----------------------------------------------
   ["network switch failed", "Couldn't switch networks. Try again."],
+  // Starknet name lookups. The recipient step shows its own note and
+  // drops these replies, so they are mapped only so no raw diagnostic can leak.
+  ["name resolution unavailable", "Starknet names are not available on this network."],
+  ["name resolution network changed", "The network changed. Try again."],
   ["unsupported chain", "This wallet doesn't support that network."],
   ["unsupported api version", "That endpoint speaks an API version this wallet can't use."],
   [

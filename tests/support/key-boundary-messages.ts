@@ -26,6 +26,7 @@ import {
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
+import { LOOKUP_KEY_BOUNDARY_MESSAGES } from "./key-boundary-lookup-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
 import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
@@ -105,9 +106,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
-  { message: { type: "wallet.accountSignability" }, sender: extensionSender },
-  { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
-  { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
+  ...LOOKUP_KEY_BOUNDARY_MESSAGES,
   {
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.deploymentData" },
     sender: contentSender,

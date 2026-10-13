@@ -41,8 +41,10 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('data-view="receive"');
     expect(html).toContain('aria-controls="wallet-screen-home"');
     expect(html).toContain('aria-selected="true"');
-    expect(dock).toContain('aria-label="Home" title="Home"');
-    expect(dock).not.toContain('class="nav-label"');
+    // Each root is named by a visible caption, not a hover-only tooltip.
+    expect(dock).toContain('aria-label="Home" aria-controls="wallet-screen-home"');
+    expect(dock).toContain('<span class="nav-label">Home</span>');
+    expect(dock).not.toContain('title="Home"');
     expect(dock).not.toContain('class="nav-tooltip"');
   });
 
@@ -212,7 +214,7 @@ describe("sidepanel views", () => {
     // screen, and the fee is quoted onto it — so the control is the action.
     expect(html).not.toContain("Deployment creates this account on-chain.");
     expect(html).toContain(">Deploy<");
-    expect(html).not.toContain("Check fee and address");
+    expect(html).not.toContain("Continue to approval");
     expect(html).toMatch(/id="deploy-success"[^>]*hidden/);
     expect(html).not.toContain("wallet-dock");
   });

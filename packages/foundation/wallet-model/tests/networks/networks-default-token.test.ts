@@ -4,7 +4,13 @@
  * address only counts on a network that ships it.
  */
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_TOKENS, isDefaultToken } from "@bramble/wallet-model/networks";
+import {
+  DEFAULT_TOKENS,
+  isDefaultToken,
+  RECOVERY_PROBE_TOKENS,
+  sameFelt,
+  USDC_TOKEN_ADDRESS,
+} from "@bramble/wallet-model/networks";
 
 const ETH_TOKEN_ADDRESS =
   DEFAULT_TOKENS.find((token) => token.networkId === "SN_MAIN" && token.symbol === "ETH")
@@ -23,5 +29,28 @@ describe("isDefaultToken", () => {
 
   test("does not match another address on a built-in network", () => {
     expect(isDefaultToken({ address: "0xbadc0ffee", networkId: "SN_MAIN" })).toBe(false);
+  });
+});
+
+describe("RECOVERY_PROBE_TOKENS", () => {
+  test("is a superset of the display defaults", () => {
+    for (const token of DEFAULT_TOKENS) {
+      expect(
+        RECOVERY_PROBE_TOKENS.some(
+          (probe) => probe.networkId === token.networkId && sameFelt(probe.address, token.address),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("adds native USDC on mainnet as a discovery-only activity signal", () => {
+    const usdc = RECOVERY_PROBE_TOKENS.find(
+      (token) => token.networkId === "SN_MAIN" && token.symbol === "USDC",
+    );
+    expect(usdc).toBeDefined();
+    expect(sameFelt(usdc?.address ?? "", USDC_TOKEN_ADDRESS)).toBe(true);
+    expect(usdc?.decimals).toBe(6);
+    // Widening discovery must not change what every wallet shows by default.
+    expect(isDefaultToken({ address: USDC_TOKEN_ADDRESS, networkId: "SN_MAIN" })).toBe(false);
   });
 });

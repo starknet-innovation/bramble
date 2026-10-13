@@ -36,7 +36,7 @@ export const multisigDeploymentForm = (signerAccountId: string, publicKey: strin
     <input name="salt" value="0x0" />
     <input name="signerAccountId" value="${signerAccountId}" />
     <div id="multisig-deploy-review"></div>
-    <button type="submit">Review deployment</button>
+    <button type="submit">Deploy multisig</button>
     <p id="multisig-deploy-result"></p>
   </form>`;
 

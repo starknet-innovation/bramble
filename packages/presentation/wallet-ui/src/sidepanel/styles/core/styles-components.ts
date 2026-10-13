@@ -171,9 +171,9 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .token-change { font-size: ${TYPE.caption.size}; font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.semibold}; }
   .token-change.up { color: var(--bramble-positive); }
   .token-change.down { color: var(--bramble-danger); }
-  /* The whole row is the tap target; the row's own fill highlight is the hover
-     affordance, so the embedded button stays visually inert (no second fill, no
-     name recolor, no nested press scale — the row scales instead). */
+  .token-change-win { color: var(--bramble-muted); font-weight: 500; }
+  /* The whole row is the tap target; the row's own fill is the hover affordance,
+     so the embedded button stays visually inert and the row scales instead. */
   .token-row .token-open {
     background: transparent;
     border-radius: ${RADIUS.md};

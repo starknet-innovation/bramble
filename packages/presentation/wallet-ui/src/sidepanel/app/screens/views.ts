@@ -47,6 +47,7 @@ import {
   multisigProposeFlow,
   multisigsFlow,
 } from "../../journeys/multisig/multisig-views";
+import { activityContacts } from "../../journeys/portfolio/activity-filter";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
 import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
 import { tokenCatalogFlow } from "../../journeys/portfolio/token-catalog-view";
@@ -351,10 +352,10 @@ export const dashboard = (
   // explicitly snooze it back to Activity after seeing it.
   const actionable = actionableApprovals(pending, snoozedApprovalIds);
   if (actionable.length > 0) {
-    return approvalTakeover(actionable, status, activeView);
+    return approvalTakeover(actionable, status, activeView, preferences);
   }
   if (activeView === "requests") {
-    return requestsFlow(pending, status);
+    return requestsFlow(pending, status, preferences);
   }
   const simpleFlow = simpleFlowScreen(activeView, {
     account,
@@ -444,6 +445,7 @@ export const dashboard = (
               tokens: preferences?.tokens ?? [],
             },
             todayKey,
+            activityContacts(preferences, status.networkId, status.accounts),
           )
         : activeView === "settings"
           ? settingsScreen(status, preferences)

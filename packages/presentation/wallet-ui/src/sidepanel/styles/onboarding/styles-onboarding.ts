@@ -257,11 +257,9 @@ export const ONBOARDING_STYLES = `
       transform ${MOTION.liftMs}ms var(--ease-out);
   }
   .onboarding-account-check .icon { height: 17px; width: 17px; }
-  .onboarding-account[aria-pressed="false"] .onboarding-account-check {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  .onboarding-account[aria-pressed="true"] {
+  /* A single account is reviewed, not chosen: the row is a static read-out of
+     the account that will be created, its check always shown. */
+  .onboarding-account {
     background: var(--bramble-soft-press);
     box-shadow: var(--bramble-elev-sm);
   }
@@ -444,7 +442,6 @@ export const ONBOARDING_STYLES = `
   }
   @media (hover: hover) and (pointer: fine) {
     button.onboarding-option:not(:disabled):hover,
-    button.onboarding-account:not(:disabled):hover,
     button.onboarding-contract:not(:disabled):hover {
       background: var(--bramble-hover);
       color: var(--bramble-text);

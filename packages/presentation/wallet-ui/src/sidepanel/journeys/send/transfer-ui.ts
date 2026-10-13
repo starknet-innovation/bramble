@@ -10,7 +10,9 @@ import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import { transitionSendStage } from "./send-transition";
 import { bindTransferBuckets } from "./transfer-buckets-ui";
+import { createComposeFee } from "./transfer-compose-fee";
 import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transfer-compose-ui";
+import { bindTransferExits } from "./transfer-exits-ui";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
   friendlyReviewError,
@@ -31,6 +33,7 @@ import {
   transferSpendable,
 } from "./transfer-route";
 import {
+  confirmedState,
   preparationFailure,
   preparationFor,
   preparedState,
@@ -38,7 +41,7 @@ import {
   submitRejection,
 } from "./transfer-submit";
 
-export { activityExportToast, bindActivity } from "../portfolio/activity-ui";
+export { type ActivityUiDeps, activityExportToast, bindActivity } from "../portfolio/activity-ui";
 export { friendlyReviewError, recipientFieldError } from "./transfer-model";
 export { reviewPanelHtml } from "./transfer-review-markup";
 
@@ -79,6 +82,9 @@ export type TransferUiDeps = {
 let transferState: TransferState<Review> = initialTransferState();
 let transferEpoch = 0;
 let repaintActiveTransfer: (() => void) | null = null;
+// A failed review returns the form mounted now, not the one that started it: a
+// re-render while preparing replaces it, and the live one stayed "reviewing".
+let returnActiveTransferToDetails: (() => void) | null = null;
 let transferApp: Element | null = null;
 
 /**
@@ -106,6 +112,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       transferState = initialTransferState();
     }
     repaintActiveTransfer = null;
+    returnActiveTransferToDetails = null;
     transferApp = app;
     return;
   }
@@ -141,6 +148,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const goTo = (stage: TransferStage): void => {
     transferState = { ...transferState, fields: transferFields(form), stage };
     repaint();
+    composeFee.refresh();
   };
   // Leaving the review discards it. `reviewedKey` is what the submit handler
   // reads to tell "show me the review" from "I have read it, send it", so a
@@ -160,7 +168,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       reviewedKey: null,
       stage: "details",
     };
-    repaint();
+    goTo("details");
     form.querySelector<HTMLInputElement>("#send-amount-input")?.focus();
   };
   // Closing Send abandons what was composed. Without this, the module-level
@@ -211,6 +219,17 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     }
     return resolveTransferRoute(context);
   };
+  // The Amount screen prices the send from the same route the form composes into.
+  const composeFee = createComposeFee({
+    context: routeContext,
+    form,
+    stage: () => transferState.stage,
+    wallet,
+  });
+  returnActiveTransferToDetails = (): void => {
+    repaint();
+    composeFee.refresh();
+  };
   // A bucket flip or an asset pick changes the route, so the cached review goes
   // and the screen is repainted: the header and actions name the operation the
   // buckets now describe (a shield flipped back to public reads as a send).
@@ -223,14 +242,17 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       reviewedKey: null,
     };
     repaint();
+    composeFee.refresh();
   };
   bindTransferCompose({
     form,
     goTo,
     onFields: (fields) => {
       transferState = { ...transferState, fields };
+      composeFee.refresh();
     },
     navigate: (view) => deps.navigate?.(view),
+    resolveName: (name, networkId) => wallet.resolveStarkName(name, networkId),
     spendable: () => transferSpendable(routeContext()),
   });
   bindTransferBuckets({
@@ -249,18 +271,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   });
 
   form.querySelector("#send-failure-edit")?.addEventListener("click", editDetails);
-  const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
-  if (homeButton) {
-    homeButton.textContent =
-      completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back";
-    homeButton.addEventListener("click", complete);
-  }
-  form
-    .querySelector("#send-view-activity")
-    ?.addEventListener("click", () => navigate?.("activity"));
-  for (const id of ["#send-pending-activity", "#send-failure-activity"]) {
-    form.querySelector(id)?.addEventListener("click", () => navigate?.("activity"));
-  }
+  bindTransferExits(form, { complete, completionTarget, navigate });
 
   // Polls to the last checkpoint, then hands over to "Check again".
   const confirmSubmitted = async (epoch: number): Promise<void> => {
@@ -279,19 +290,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       repaintActiveTransfer?.();
       return;
     }
-    // A failed outcome drops the review, so Try again reviews afresh rather
-    // than re-signing the old one (audit 247).
-    transferState =
-      outcome.kind === "succeeded"
-        ? { ...transferState, error: "", stage: "submitted" }
-        : {
-            ...transferState,
-            error: outcome.message,
-            review: null,
-            reviewedKey: null,
-            stage: "failed",
-            submissionUnknown: false,
-          };
+    transferState = confirmedState(transferState, outcome);
     repaintActiveTransfer?.();
     // Only a confirmed private route moved a balance the indexer must catch up on.
     const settledRoute = transferState.fields ? transferRoute(transferState.fields).id : null;
@@ -358,7 +357,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         fields,
         stage: "details",
       };
-      repaint();
+      goTo("details");
       return;
     }
     const key = transferKey(fields);
@@ -399,7 +398,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             const message = errorMessage(error, preparationFailure(composed));
             showToast(message, "error", form, errorDetails(error, preparationFailure(composed)));
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
-            repaintActiveTransfer?.();
+            returnActiveTransferToDetails?.();
           },
         );
         return;
@@ -423,7 +422,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             const message = friendlyReviewError(error);
             showToast(message, "error", form);
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
-            repaintActiveTransfer?.();
+            returnActiveTransferToDetails?.();
           },
         );
       return;

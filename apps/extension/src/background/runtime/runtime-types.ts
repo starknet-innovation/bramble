@@ -11,7 +11,6 @@ import type {
 import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
-import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { AllowanceNotice, AllowanceView } from "@bramble/transactions/allowance-discovery";
@@ -45,6 +44,10 @@ import type {
   RecoverAccountResponse,
   RecoveryReviewResponse,
 } from "./recovery-types";
+import type {
+  ClassHashVerificationResponse,
+  StarkNameResolutionResponse,
+} from "./runtime-lookup-types";
 import type {
   FeeReviewResponse,
   TransferResponse,
@@ -298,16 +301,6 @@ type AccountSignabilityResponse = {
 };
 
 /**
- * On-chain class-hash verification: the discriminated
- * {@link ClassHashVerification} outcome, so the UI need not re-read the chain.
- */
-type ClassHashVerificationResponse = {
-  readonly accountId: string;
-  readonly ok: true;
-  readonly verification: ClassHashVerification;
-};
-
-/**
  * Supported spec or wallet-API version list returned through the dapp provider
  * bridge for the discovery methods.
  */
@@ -437,6 +430,7 @@ export type RuntimeResponse =
   | DeclareResponse
   | ChainIdResponse
   | ClassHashVerificationResponse
+  | StarkNameResolutionResponse
   | ConnectedSitesResponse
   | CreateAccountResponse
   | DeploymentDataResponse

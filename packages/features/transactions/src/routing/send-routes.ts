@@ -5,15 +5,16 @@
  * Shielding and unshielding are sends: a source bucket, a destination bucket,
  * and a recipient. Expressing all four combinations as one table means the
  * submission route, the fee source, and the on-chain disclosure are answered by
- * data rather than by three parallel flows that each re-derive them. Pure and
- * dependency-free on purpose, so the side panel and the background can gate
- * against the same rules.
+ * data rather than by three parallel flows that each re-derive them. It does no
+ * I/O and holds no state, so the side panel and the background can gate against
+ * the same rules.
  *
  * Out of scope: network gas. The account route's gas is estimated by the
  * existing review path and warned about by the fee-affordability guard; only
  * the pool's per-batch STRK charge is reasoned about here.
  */
 
+import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
   isNonZeroStarkFieldElement,
   STRK_TOKEN_ADDRESS,
@@ -70,6 +71,11 @@ export type SendRouteInput = {
   readonly destination: ValueBucket;
   /** The token the pool fee is charged in, as the relay route selects it. */
   readonly feeTokenAddress: string;
+  /**
+   * Decimal scale of `feeTokenAddress`, for stating a fee minimum. `null` when
+   * the wallet does not know it, in which case no figure is stated.
+   */
+  readonly feeTokenDecimals: number | null;
   /** Display symbol of `feeTokenAddress`, for gate wording. */
   readonly feeTokenSymbol: string;
   readonly poolFeeFri: bigint | null;
@@ -83,6 +89,8 @@ export type SendRouteInput = {
   readonly sourceFeeBalanceRaw: bigint | null;
   readonly sourceTokenBalanceRaw: bigint | null;
   readonly tokenAddress: string;
+  /** The sent token's decimal scale, used to render a required minimum. */
+  readonly tokenDecimals: number;
   readonly tokenSymbol: string;
 };
 
@@ -223,10 +231,13 @@ const recipientBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlo
 const shortOf = (balance: bigint | null, needed: bigint): boolean =>
   balance !== null && needed > balance;
 
-// The pool fee's amount in the token it is charged in. STRK is the exact
-// on-chain charge; any other token is the bounded ceiling derived from an
-// independent price, so reserving it never understates what the relay may take.
-const poolFeeAmountIn = (input: SendRouteInput): bigint | null =>
+/**
+ * The pool fee's amount in the token it is charged in, as the gate reserves it.
+ * STRK is the exact on-chain charge; any other token is the bounded ceiling
+ * derived from an independent price, so reserving it never understates what the
+ * relay may take. `null` while the figure is unknown.
+ */
+export const poolFeeAmountIn = (input: SendRouteInput): bigint | null =>
   sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)
     ? input.poolFeeFri
     : input.convertedFeeCeilingRaw;
@@ -261,7 +272,14 @@ const feeBlocker = (input: SendRouteInput, feeAmount: bigint): SendRouteBlocker 
   if (!shortOf(input.sourceFeeBalanceRaw, feeAmount)) {
     return null;
   }
-  return refuse(`Not enough ${feeAssetLabel(input)} to cover the pool fee`);
+  const shortOfFee = `Not enough ${feeAssetLabel(input)} to cover the pool fee`;
+  // The figure is the fee to keep in its own token (a converted fee is a
+  // ceiling, not an exact charge), given only where that token's scale is known.
+  return input.feeTokenDecimals === null
+    ? refuse(shortOfFee)
+    : refuse(
+        `${shortOfFee}. Keep ${formatTokenAmount(feeAmount, input.feeTokenDecimals)} ${input.feeTokenSymbol} for the fee.`,
+      );
 };
 
 const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocker | null => {
@@ -277,7 +295,7 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
   }
   if (!route.poolFeeRequired) {
     return shortOf(input.sourceTokenBalanceRaw, input.amountRaw)
-      ? refuse(shortfall(input, route))
+      ? refuse(shortfall(input, route, input.amountRaw))
       : null;
   }
   const feeAmount = poolFeeAmountIn(input);
@@ -291,16 +309,23 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
   const samePot = feeInSentToken(input);
   const needed = input.amountRaw + (samePot ? feeAmount : 0n);
   if (shortOf(input.sourceTokenBalanceRaw, needed)) {
-    return refuse(shortfall(input, route));
+    return refuse(shortfall(input, route, needed));
   }
   return samePot ? null : feeBlocker(input, feeAmount);
 };
 
-const shortfall = (input: SendRouteInput, route: SendRoute): string => {
+// A refusal names the figure the user has to act on. When the pool fee leaves
+// the same balance, that is the fee to keep back: the gate reserves it in the
+// token it is charged in, and a converted fee is a bounded ceiling rather than
+// an exact charge, so the line says what to keep, not a precise minimum.
+// Otherwise it is the amount alone.
+const shortfall = (input: SendRouteInput, route: SendRoute, needed: bigint): string => {
   const asset = input.source === "private" ? `private ${input.tokenSymbol}` : input.tokenSymbol;
-  return route.poolFeeRequired && feeInSentToken(input)
-    ? `Not enough ${asset} for this amount plus the pool fee`
-    : `Not enough ${asset}`;
+  if (route.poolFeeRequired && feeInSentToken(input)) {
+    const fee = formatTokenAmount(needed - input.amountRaw, input.tokenDecimals);
+    return `Not enough ${asset} for this amount plus the pool fee. Keep ${fee} ${input.tokenSymbol} for the fee.`;
+  }
+  return `Not enough ${asset}. You need at least ${formatTokenAmount(needed, input.tokenDecimals)} ${input.tokenSymbol}.`;
 };
 
 /**

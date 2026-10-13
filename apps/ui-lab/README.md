@@ -64,13 +64,24 @@ Storybook section.
 5. Use the Canvas for motion review and the Interactions panel to rewind or step through story play
    functions.
 
+## Accessibility readout
+
+`Wallet UI Lab / Accessibility scan` is a readout, not a gate: it runs axe-core against the embedded
+wallet document, not the bench chrome, and reports the violations it finds. The review frame is
+script-free, so the scan renders the live document in an ephemeral twin frame, scans that twin's
+realm, and removes it. The twin runs scripts, so the document is made inert first: every `<script>`
+element and `on*` event attribute is removed, and only the engine runs.
+Open the story and use **Interactions** (or run `bun run test`) to read the result;
+`scanWalletFrame` and `scanWalletDocument` in `src/runtime/a11y-scan.ts` are the helper the lab
+and its tests drive.
+
 ## Journey coverage
 
-The lab has 214 deterministic checkpoints across 15 scenario families:
+The lab has 226 deterministic checkpoints across 15 scenario families:
 
 | Family | Review surface |
 | --- | --- |
-| Full-screen onboarding | Welcome, import method, phrase entry, local passphrase, account selection, generated-backup verification, Ledger protection, and completion. |
+| Full-screen onboarding | Welcome, import method, phrase entry, local passphrase, account review, generated-backup verification, Ledger protection, and completion. |
 | Returning unlock | Locked, request-waiting, failed-authentication, and recovery (wallet cannot be verified, out of date, or cannot be opened) side-panel states. |
 | Home and portfolio | Ready, tabs, account drawer, undeployed (including a Braavos account that must deploy first), deployment receipt and failure, offline, error, and empty-network states. |
 | Send lifecycle | Details, review latency, fee failure, signing, broadcast, and receipt. |
@@ -80,7 +91,7 @@ The lab has 214 deterministic checkpoints across 15 scenario families:
 | Ledger account onboarding | Setup method, device grants, enumeration, multi-select, partial add, and errors. |
 | dApp approvals | Every provider approval kind, a nested typed-data message, blocked origin, queue visibility, and live authorization handoff. |
 | dApp request takeover | Foreground takeover, receipt-token watch, explicit review-later behavior, and a dedicated parked-request list. |
-| Account-isolated Activity | Account switching, immediate clearing, refresh, restoration, and separation from dApp decisions. |
+| Account-isolated Activity | Account switching, immediate clearing, refresh, restoration, separation from dApp decisions, and the feed's own type, status, token, sort, and search controls. |
 | Assets and permissions | Receive, focused add/detect token journeys, token detail, address book, and ERC20 allowances. |
 | NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, submission, and a reverted transfer. |
 | Argent multisig | Empty/setup, deployment availability, shared portfolio, collecting/ready/stale intents, signer-authority drift, exact review, and sync recovery. |
@@ -130,6 +141,9 @@ checkpoints for durable comparisons.
 - All accounts, sites, transactions, metadata, timing, errors, and device states are fixtures.
 - The wallet frame is a sandboxed `srcdoc` iframe with no script or navigation capability; forms
   are enabled only so parent-attached production bindings can intercept their submit events.
+- The accessibility scan renders the live wallet document a second time in an ephemeral,
+  script-enabled twin frame (same-origin so the bench can inject the engine), scans that twin, and
+  removes it immediately; the wallet frame above keeps its no-script boundary throughout.
 - Production bindings are attached by the lab only to deterministic in-memory runtime clients.
 - The lab must not import Chrome APIs, encrypted storage, Krusty KMS, Ledger transports, or live
   network clients.

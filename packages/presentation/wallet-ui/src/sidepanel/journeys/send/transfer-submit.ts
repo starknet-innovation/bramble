@@ -11,6 +11,7 @@
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { errorMessage } from "../../shared/dom";
 import { reviewFeeBlocked } from "../../shared/review-render";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
@@ -180,6 +181,26 @@ export type SubmitRejection = {
   readonly state: TransferState<TransferReview>;
   readonly toast: string | null;
 };
+
+/**
+ * The journey state once a submitted transaction's outcome is known. A
+ * success lands on the receipt; a failure drops the review, so Try again
+ * reviews afresh rather than re-signing the old one (audit 247).
+ */
+export const confirmedState = <Review>(
+  state: TransferState<Review>,
+  outcome: ConfirmationOutcome,
+): TransferState<Review> =>
+  outcome.kind === "succeeded"
+    ? { ...state, error: "", stage: "submitted" }
+    : {
+        ...state,
+        error: outcome.message,
+        review: null,
+        reviewedKey: null,
+        stage: "failed",
+        submissionUnknown: false,
+      };
 
 /**
  * Settles a rejected submit (public) or execute (pool route).

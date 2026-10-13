@@ -4,7 +4,7 @@
  * who added a token (audit 171) and the removal (audit 134).
  */
 import { WalletError } from "@bramble/core/errors";
-import { isDefaultToken, sameFelt } from "@bramble/wallet-model/networks";
+import { isDefaultToken, RECOVERY_PROBE_TOKENS, sameFelt } from "@bramble/wallet-model/networks";
 import {
   isTokenConfig,
   isTokenId,
@@ -122,3 +122,14 @@ export const withUpsertedToken = (
         hiddenTokens: carriedHiddenTokens(preferences.hiddenTokens, replaced, nextToken.id),
       };
 };
+
+/**
+ * Token configs the first-run recovery scan probes for balances to decide an
+ * undeployed account has been used. Broader than the display defaults (see
+ * {@link RECOVERY_PROBE_TOKENS}) so an account funded only in a high-value ERC20
+ * such as native USDC is still discovered; the ids are assigned the same way the
+ * default display tokens get theirs, so the two never disagree about a token.
+ * Read-only activity signal — this list is never persisted or shown.
+ */
+export const recoveryProbeTokens = (): readonly TokenConfig[] =>
+  RECOVERY_PROBE_TOKENS.map(withTokenId);

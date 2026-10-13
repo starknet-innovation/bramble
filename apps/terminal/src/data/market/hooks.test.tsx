@@ -41,19 +41,13 @@ const STRK = MAINNET_TOKEN_ADDRESSES.STRK;
 const SPOOF = "0x5f00f";
 const unpadded = (address: string): string => `0x${BigInt(address).toString(16)}`;
 
-type FakeResponse = {
-  ok: boolean;
-  status: number;
-  json: () => Promise<unknown>;
-  text: () => Promise<string>;
-};
-
-const respond = (body: unknown, status = 200): FakeResponse => ({
-  ok: status >= 200 && status < 300,
-  status,
-  json: async () => body,
-  text: async () => JSON.stringify(body),
-});
+// Returns a real `Response` so the production bounded network boundary can read
+// its status, headers and streamed body exactly as it would a live upstream.
+const respond = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status,
+  });
 
 const AVNU_TOKENS = [
   {

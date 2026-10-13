@@ -11,6 +11,7 @@
 import { CairoCustomEnum, type Call, CallData, cairo } from "starknet";
 import { VESU_ADDRESSES } from "../constants";
 import { CAIRO_U128_MAX, CAIRO_U256_MAX } from "../support/cairo-integers";
+import { boundedFetch } from "../support/bounded-network";
 import { WalletError } from "../support/errors";
 import { isRecord } from "../support/json";
 import {
@@ -223,11 +224,14 @@ export const quoteVesuMultiplyIncrease = async (
   ) {
     throw new WalletError("Invalid Vesu wind request");
   }
-  const response = await fetch(
+  const response = await boundedFetch(
     `${EKUBO_QUOTER}/${MAINNET_CHAIN_DECIMAL}/-${collateralOutputRaw}/${collateralAsset}/${debtAsset}`,
     { headers: { accept: "application/json" } },
   );
-  if (!response.ok) throw new WalletError("Could not quote Vesu wind route");
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new WalletError("Could not quote Vesu wind route");
+  }
   return parseVesuMultiplyExactOutQuote(await response.json(), collateralOutputRaw, slippageBps, {
     calculated: debtAsset,
     specified: collateralAsset,
@@ -249,11 +253,14 @@ export const quoteVesuMultiplyClose = async (
   ) {
     throw new WalletError("Invalid Vesu unwind request");
   }
-  const response = await fetch(
+  const response = await boundedFetch(
     `${EKUBO_QUOTER}/${MAINNET_CHAIN_DECIMAL}/-${debtAmountRaw}/${debtAsset}/${collateralAsset}`,
     { headers: { accept: "application/json" } },
   );
-  if (!response.ok) throw new WalletError("Could not quote Vesu unwind route");
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new WalletError("Could not quote Vesu unwind route");
+  }
   return parseVesuMultiplyExactOutQuote(await response.json(), debtAmountRaw, slippageBps, {
     calculated: collateralAsset,
     specified: debtAsset,

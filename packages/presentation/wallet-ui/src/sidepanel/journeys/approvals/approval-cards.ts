@@ -6,12 +6,18 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
+import {
+  accountDisplayName,
+  accountIdAddress,
+  accountLabel,
+  inlineCopyButton,
+} from "../../shared/parts";
 import {
   reviewCallsList,
   reviewConstraints,
@@ -35,11 +41,11 @@ import {
   declarationWarnings,
 } from "./approval-declaration-review";
 
-const denyButton = (approval: PendingApproval): string =>
+const denyButton = (approval: PendingApproval, label = "Deny"): string =>
   button({
     attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
     icon: "x",
-    label: "Deny",
+    label,
     tone: "danger",
     variant: "secondary",
   });
@@ -60,8 +66,9 @@ const decisionRow = (
   locked: boolean,
   reviewedFee?: PendingApproval["fee"],
   reviewed: Readonly<Record<string, string>> = {},
+  denyLabel = "Deny",
 ): string =>
-  `<div class="button-row">${denyButton(approval)}${button({
+  `<div class="button-row">${denyButton(approval, denyLabel)}${button({
     attributes: {
       "data-approval-action": "approve",
       ...(reviewedFee
@@ -171,20 +178,24 @@ const approvalCalls = (approval: PendingApproval): string =>
 // face — not behind a disclosure — and echoed back with the decision so the
 // background can refuse if it moved. The grant delta is stated only when the
 // queue knows a grant already exists; otherwise the plain first-share copy.
-const connectIdentity = (status: WalletStatus): string => {
+const connectIdentity = (status: WalletStatus, preferences: WalletPreferences | null): string => {
   const account = status.accounts.find((candidate) => candidate.id === status.activeAccountId);
   if (!account) {
     return `<p class="hint">${status.locked ? "Unlock the wallet to see which account will be shared." : "Select an account on this network to share it."}</p>`;
   }
-  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>Account</dt><dd class="request-account"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong><span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy account address")}</span></dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
 };
 
-const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
+const connectCard = (
+  approval: PendingApproval,
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Connection request")}
       ${status.locked ? '<p class="hint">Unlock the wallet to approve this site.</p>' : ""}
-      ${connectIdentity(status)}
+      ${connectIdentity(status, preferences)}
       ${reviewOutcome(
         approval.existingGrant
           ? "Adds this account to the ones already shared with this site, until you disconnect it."
@@ -195,10 +206,11 @@ const connectCard = (approval: PendingApproval, status: WalletStatus): string =>
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(
       approval,
-      "Approve",
+      "Connect account",
       status.locked || status.activeAccountId === null,
       undefined,
       status.activeAccountId === null ? {} : { "data-approval-account": status.activeAccountId },
+      "Cancel",
     )}
   </li>`;
 
@@ -403,7 +415,11 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
 /**
  * Renders the correct approval card for a pending dapp request by kind.
  */
-export const approvalCard = (approval: PendingApproval, status: WalletStatus): string => {
+export const approvalCard = (
+  approval: PendingApproval,
+  status: WalletStatus,
+  preferences: WalletPreferences | null = null,
+): string => {
   switch (approval.kind) {
     case "watch-asset":
       return watchAssetCard(approval);
@@ -451,6 +467,6 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
     case "declare":
       return declareCard(approval, status);
     case "connect":
-      return connectCard(approval, status);
+      return connectCard(approval, status, preferences);
   }
 };
