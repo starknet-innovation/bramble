@@ -15,8 +15,6 @@ import {
   DEFAULT_SLIPPAGE_BPS,
   MAINNET_TOKEN_ADDRESSES,
   MAINNET_TOKEN_DECIMALS,
-  quoteAvnuSwap,
-  quoteEkuboSwap,
 } from "../../protocols/index";
 import { sameAddress } from "../../protocols/support/networks";
 import { useWallet } from "../../wallet/connection/WalletProvider";
@@ -29,9 +27,9 @@ import {
   toSmallestUnit,
   usdValue,
   type PickerTarget,
-  type QuoteState,
   type SwapVenue,
 } from "./swap-panel-utils";
+import { useLiveSwapQuote } from "./use-live-swap-quote";
 
 type SwapPanelProps = {
   readonly selectedToken: TokenRow;
@@ -59,9 +57,6 @@ export const SwapPanel = ({
   const [slippageBps, setSlippageBps] = useState(DEFAULT_SLIPPAGE_BPS);
   const [pickerTarget, setPickerTarget] = useState<PickerTarget | null>(null);
   const [search, setSearch] = useState("");
-  const [quoteVersion, setQuoteVersion] = useState(0);
-  const [quoteState, setQuoteState] = useState<QuoteState>({ status: "idle" });
-  const [isQuoteFetching, setIsQuoteFetching] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [execMessage, setExecMessage] = useState<string | null>(null);
 
@@ -95,6 +90,16 @@ export const SwapPanel = ({
     tokens.find((token) => sameAddress(token.address, spendAddress)) ?? ethToken;
   const receive =
     tokens.find((token) => sameAddress(token.address, receiveAddress)) ?? initialReceiveToken;
+  const { isQuoteFetching, quoteState, requote, setQuoteState } = useLiveSwapQuote({
+    address,
+    amount,
+    isConnected,
+    isRequesting,
+    receive,
+    slippageBps,
+    spend,
+    venue,
+  });
   const spendHolding = portfolio.data.holdings.find((holding) =>
     sameAddress(holding.address, spend.address),
   );
@@ -124,76 +129,6 @@ export const SwapPanel = ({
   useEffect(() => {
     setExecMessage(null);
   }, [amount, receive.address, slippageBps, spend.address, venue]);
-
-  useEffect(() => {
-    if (isRequesting) {
-      setIsQuoteFetching(false);
-      return;
-    }
-    if (!isConnected || address === null) {
-      setQuoteState({ status: "idle" });
-      setIsQuoteFetching(false);
-      return;
-    }
-    const sellAmount = toSmallestUnit(amount, spend.decimals);
-    if (sellAmount === null) {
-      setQuoteState({ status: "idle" });
-      setIsQuoteFetching(false);
-      return;
-    }
-    let cancelled = false;
-    setIsQuoteFetching(true);
-    setQuoteState((current) => (current.status === "ready" ? current : { status: "loading" }));
-    const handle = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const quote = await (venue === "avnu" ? quoteAvnuSwap : quoteEkuboSwap)({
-            buyToken: receive.address,
-            sellAmount,
-            sellToken: spend.address,
-            slippageBps,
-            takerAddress: address,
-          });
-          if (!cancelled) {
-            setQuoteState({ quote, receiveDecimals: receive.decimals, status: "ready" });
-            setIsQuoteFetching(false);
-          }
-        } catch (cause) {
-          if (!cancelled) {
-            setQuoteState({
-              message: userErrorMessage(cause, "Could not fetch a live quote."),
-              status: "error",
-            });
-            setIsQuoteFetching(false);
-          }
-        }
-      })();
-    }, 180);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(handle);
-    };
-  }, [
-    address,
-    amount,
-    isConnected,
-    quoteVersion,
-    receive.address,
-    receive.decimals,
-    isRequesting,
-    slippageBps,
-    spend.address,
-    spend.decimals,
-    venue,
-  ]);
-
-  useEffect(() => {
-    if (quoteState.status !== "ready" || isRequesting || isQuoteFetching) {
-      return;
-    }
-    const handle = window.setInterval(() => setQuoteVersion((value) => value + 1), 5_000);
-    return () => window.clearInterval(handle);
-  }, [isQuoteFetching, isRequesting, quoteState.status]);
 
   const chooseToken = (target: PickerTarget, token: TokenRow): void => {
     setQuoteState({ status: "idle" });
@@ -329,7 +264,7 @@ export const SwapPanel = ({
     if (!isConnected) {
       void connect();
     } else if (quoteState.status === "error") {
-      setQuoteVersion((value) => value + 1);
+      requote();
     } else {
       onSubmit();
     }
