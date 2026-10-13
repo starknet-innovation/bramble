@@ -221,8 +221,8 @@ if (import.meta.main) {
     // Keyless availability fallback when a Foundation node is unreachable.
     "https://api.cartridge.gg/*",
     "https://api.coingecko.com/*",
-    // Read-only indexed activity and complete token-holdings snapshots. This
-    // never participates in signing or transaction submission.
+    // Read-only indexed activity and per-token balance reads (the RPC outage
+    // fallback). This never participates in signing or transaction submission.
     "https://starkscan.co/*",
     // AVNU swap aggregator (quotes + build calldata) for the in-wallet swap
     // flow, per network. Responses are validated in

@@ -168,9 +168,12 @@ export const getStarkscanTransactionHistory = async (
 };
 
 /**
- * Serves an exact, complete indexed holdings snapshot as the wallet balance
- * response. Any incomplete or mismatched snapshot throws so callers can fall
- * back to latest-state RPC rather than silently treating missing rows as zero.
+ * Serves the gateway's latest balance of each tracked token as the wallet
+ * balance response, one `balance-of` read per token (#650: Starkscan retired
+ * the indexed token-holdings snapshot this lane used to read). Every answer
+ * must echo the requested network, token, owner and `latest` block tag, and
+ * any token that cannot be read fails the whole read: a missing row never
+ * becomes a zero balance, so callers keep the RPC failure instead.
  */
 export const getStarkscanTokenBalances = async (
   client: StarkscanClient,
@@ -187,28 +190,25 @@ export const getStarkscanTokenBalances = async (
   ) {
     throw new Error("Starkscan balance input must contain one indexed network");
   }
-  const snapshot = await client.getTokenHoldings(networkId, input.accountAddress, { limit: 200 });
-  if (
-    snapshot.chainId !== networkId ||
-    !sameFelt(snapshot.ownerAddress, input.accountAddress) ||
-    !snapshot.exact ||
-    snapshot.truncated ||
-    !snapshot.completeness.exact ||
-    snapshot.completeness.truncated ||
-    !snapshot.completeness.complete ||
-    snapshot.completeness.reasonCode !== "complete"
-  ) {
-    throw new Error("Starkscan holdings snapshot is incomplete");
-  }
-  return input.tokens.map((token) => {
-    const holding = snapshot.items.find((item) => sameFelt(item.tokenAddress, token.address));
-    const raw = BigInt(holding?.indexedBalanceRaw ?? "0");
-    return {
-      ...token,
-      balance: raw.toString(),
-      formatted: formatTokenAmount(raw, token.decimals),
-    };
-  });
+  return Promise.all(
+    input.tokens.map(async (token) => {
+      const reply = await client.getTokenBalance(networkId, token.address, input.accountAddress);
+      if (
+        reply.chainId !== networkId ||
+        reply.blockTag !== "latest" ||
+        !sameFelt(reply.tokenAddress, token.address) ||
+        !sameFelt(reply.ownerAddress, input.accountAddress)
+      ) {
+        throw new Error("Starkscan balance does not match the request");
+      }
+      const raw = BigInt(reply.balanceRaw);
+      return {
+        ...token,
+        balance: raw.toString(),
+        formatted: formatTokenAmount(raw, token.decimals),
+      };
+    }),
+  );
 };
 
 /**
