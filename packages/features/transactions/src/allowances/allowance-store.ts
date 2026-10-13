@@ -399,8 +399,12 @@ export const memoryAllowanceStore = ({
   const ranking = rankingSource(trackedTokens);
   let entries: AllowanceRecord[] = [];
   return {
+    // Each write awaits its ranking BEFORE reading `entries`, then reads and
+    // replaces it with no await in between, so concurrent writes never apply
+    // to a snapshot another write has already replaced.
     async applyDelta(delta) {
-      const next = entriesAfterDelta(entries, delta, await ranking());
+      const rank = await ranking();
+      const next = entriesAfterDelta(entries, delta, rank);
       if (next) {
         entries = [...next];
       }
@@ -413,7 +417,8 @@ export const memoryAllowanceStore = ({
       if (!next) {
         return;
       }
-      entries = [...entriesAfterRecord(entries, next, transactionHash, await ranking())];
+      const rank = await ranking();
+      entries = [...entriesAfterRecord(entries, next, transactionHash, rank)];
     },
     async remove(id) {
       entries = entries.filter((stored) => stored.id !== id);

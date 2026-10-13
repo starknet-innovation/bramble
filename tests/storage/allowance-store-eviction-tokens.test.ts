@@ -163,3 +163,30 @@ describe("the background's ranked allowance log", () => {
     expect(await tokensKept(store)).not.toContain(dappToken.address);
   });
 });
+
+describe("memoryAllowanceStore: concurrent writes while ranking is read", () => {
+  // The token list resolves asynchronously, as the preferences read does, so a
+  // write that read the log before awaiting it would overwrite its sibling.
+  const slowTokens: AllowanceStoreOptions = {
+    trackedTokens: () => new Promise((resolve) => setTimeout(() => resolve([SIX]), 1)),
+  };
+
+  test("two concurrent records both survive", async () => {
+    const store = memoryAllowanceStore(slowTokens);
+    await Promise.all([
+      store.record(grant(0, SIX.address, "1")),
+      store.record(grant(1, SIX.address, "2")),
+    ]);
+    expect(await store.list()).toHaveLength(2);
+  });
+
+  test("two concurrent increases both apply", async () => {
+    const store = memoryAllowanceStore(slowTokens);
+    await store.record(grant(0, SIX.address, "10"));
+    await Promise.all([
+      store.applyDelta({ direction: "add", input: grant(0, SIX.address, "1") }),
+      store.applyDelta({ direction: "add", input: grant(0, SIX.address, "2") }),
+    ]);
+    expect((await store.list())[0]?.amount).toBe("13");
+  });
+});
