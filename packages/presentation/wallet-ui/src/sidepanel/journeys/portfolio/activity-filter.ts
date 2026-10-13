@@ -56,7 +56,7 @@ export type ActivityContact = {
  * One token the feed's token control offers. `key` identifies the token (see
  * {@link activityTokenKey}); `label` is the symbol the reader sees.
  */
-export type ActivityTokenOption = {
+type ActivityTokenOption = {
   readonly key: string;
   readonly label: string;
 };
