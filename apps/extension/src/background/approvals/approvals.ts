@@ -379,6 +379,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       origin,
       plan,
       reviewAssets = [],
+      shadowAccountAnonymizer,
       summaries,
     }) {
       if (!isWalletOrigin(origin)) {
@@ -386,6 +387,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       }
 
       return enqueue({
+        ...(shadowAccountAnonymizer === undefined ? {} : { shadowAccountAnonymizer }),
         actionReviews: cloneApprovalValue(actions),
         actions: cloneApprovalValue(actions),
         context: { ...context },
@@ -397,6 +399,17 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
         strk20Plan: cloneApprovalValue(plan),
         summaries: [...summaries],
+      });
+    },
+    requestStrk20Unavailable({ origin, refusal }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+      return enqueue({
+        id: crypto.randomUUID(),
+        kind: "strk20-unavailable",
+        noticeRefusal: refusal,
+        origin,
       });
     },
     requestSwitchChain({ chainId, networkId, origin, summary }) {

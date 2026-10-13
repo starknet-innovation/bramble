@@ -12,7 +12,10 @@ import {
 } from "@bramble/wallet-model/account-families";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
+import {
+  RESERVED_AGENT_ACCOUNT_INDEX,
+  type RecoveryAccountSelection,
+} from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { findAccountsFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindFindAccounts } from "../../../../src/sidepanel/journeys/settings/find-accounts-ui";
@@ -140,6 +143,20 @@ describe("find-accounts flow", () => {
     expect(flow.app.querySelector('input[name="recoveryManualIndex"]')).not.toBeNull();
     // No phrase cells: this screen never asks the reader for one.
     expect(flow.app.querySelectorAll('input[data-recovery-kind="import"]').length).toBe(0);
+  });
+
+  test("a manual index on strkd's agent branch is refused before any scan (#336)", async () => {
+    const flow = mount();
+    const field = flow.app.querySelector<HTMLInputElement>('input[name="recoveryManualIndex"]');
+    if (!field) throw new Error("manual index field missing");
+    for (const index of [RESERVED_AGENT_ACCOUNT_INDEX, RESERVED_AGENT_ACCOUNT_INDEX + 1]) {
+      field.value = String(index);
+      click(flow.app, "#recovery-manual-search");
+      await tick();
+      await tick();
+    }
+
+    expect(flow.scans).toEqual([["SN_MAIN", RESERVED_AGENT_ACCOUNT_INDEX + 1]]);
   });
 
   test("searching rescans the wallet's own accounts and reveals the picker", async () => {

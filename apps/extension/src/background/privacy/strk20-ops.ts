@@ -8,16 +8,20 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
+  STRK20_SERVICE_UNAVAILABLE,
   type Strk20AssetLookup,
-  summarizeStrk20Action,
+  type Strk20ShadowAccountReview,
+  summarizeStrk20Batch,
   summarizeStrk20Plan,
 } from "@bramble/privacy/service";
+import { SHADOW_INVOKE_ANONYMIZER } from "@bramble/privacy/shadow-account-copy";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import type { ActivityLog } from "@bramble/transactions/activity";
+import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-responses";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
+import { strk20BatchRefusalError } from "@bramble/wallet-protocol/strk20-batch";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
@@ -49,7 +53,7 @@ import {
   readStrk20InvokeMessage,
   readStrk20PrepareMessage,
   readStrk20RegisterMessage,
-  readStrk20SubaccountMessage,
+  readStrk20ShadowAccountMessage,
 } from "./strk20-provider-inputs";
 import { poisonedStrk20ActionFlags } from "./strk20-recipient-policy";
 
@@ -243,6 +247,59 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
   });
 };
 
+// The SDK shadow account module is opt-in per network. A request that needs it
+// is refused before any approval is queued, not after the user approves into
+// a certain failure (#443); the error is the same one the SDK adapter raises.
+const MISSING_ANONYMIZER = {
+  error: `${STRK20_SERVICE_UNAVAILABLE}: no shadow account anonymizer is configured for this network`,
+} as const;
+
+// An instant refusal would let any site probe, silently, whether this user has
+// private services set up. Instead the request is held on the wallet's own
+// surface as a notice the user can only close, and the site receives the same
+// refusal only once it is closed or expires. Nothing is signed, prepared, or
+// disclosed on this path.
+const holdUnavailable = async (deps: Strk20OpsDeps, origin: string): Promise<RuntimeResponse> => {
+  try {
+    const notice = deps.approvals.requestStrk20Unavailable({
+      origin,
+      refusal: MISSING_ANONYMIZER.error,
+    });
+    notifyApprovalsChanged();
+    return await deps.waiters.register(notice.id, MISSING_ANONYMIZER);
+  } catch (error) {
+    return { error: strk20ErrorMessage(error) };
+  }
+};
+
+const configuredAnonymizer = (resolved: ResolvedAccount): string | undefined =>
+  resolved.preferences.strk20Networks?.[resolved.account.networkId]?.shadowAccountAnonymizerAddress;
+
+const needsAnonymizer = (actions: readonly Strk20Action[]): boolean =>
+  actions.some((action) => action.type === "shadow_account_invoke");
+
+// What the card states for a batch, and the anonymizer it named. The
+// anonymizer is bound into the approval so execution can refuse if the
+// network's configuration moved after review: the calls the user reviewed
+// would otherwise run through a different anonymizer than the card showed.
+const batchReview = (
+  resolved: ResolvedAccount,
+  origin: string,
+  actions: readonly Strk20Action[],
+): { readonly anonymizer?: string; readonly summaries: readonly string[] } => {
+  const anonymizer = needsAnonymizer(actions) ? configuredAnonymizer(resolved) : undefined;
+  const shadow: Strk20ShadowAccountReview | undefined =
+    anonymizer === undefined ? undefined : { anonymizer, origin: activityOrigin(origin) };
+  return {
+    ...(anonymizer === undefined ? {} : { anonymizer }),
+    summaries: summarizeStrk20Batch(actions, {
+      assetFor: trustedAssetLookup(resolved),
+      depositor: resolved.account.address,
+      ...(shadow ? { shadow } : {}),
+    }),
+  };
+};
+
 const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender) => {
   const input = readStrk20PrepareMessage(message);
   if (!input) {
@@ -252,6 +309,12 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   if (gate) {
     return gate;
   }
+  // A batch the SDK or pool is known to reject, or whose reviewed call is not
+  // the executed one, is refused before it can reach the user (#443).
+  const refusal = strk20BatchRefusalError(input.actions);
+  if (refusal) {
+    return { error: refusal };
+  }
   // Queue admission first: no privacy approval here deduplicates, so an origin
   // at its cap is refused whatever this request contains — and refusing it now
   // costs a map filter instead of a vault read plus a pool quote.
@@ -260,20 +323,27 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   if ("error" in resolved) {
     return resolved;
   }
+  if (needsAnonymizer(input.actions) && configuredAnonymizer(resolved) === undefined) {
+    return holdUnavailable(deps, input.origin);
+  }
   // The same recipient policy the wallet's own pool routes apply. A poisoned
   // payment is queued with the flag, which leaves the card with Deny only,
   // rather than refused at once: an instant refusal told the site which
   // addresses the user has saved or paid (Sherlock 140).
   const flags = poisonedStrk20ActionFlags(resolved.account, resolved.preferences, input.actions);
+  const review = batchReview(resolved, input.origin, input.actions);
   return queueDisclosure(deps, resolved, {
     flags,
     kind: "strk20-prepare",
     origin: input.origin,
-    request: { actions: input.actions, simulate: input.simulate, type: "prepare" },
+    request: {
+      actions: input.actions,
+      ...(review.anonymizer === undefined ? {} : { anonymizer: review.anonymizer }),
+      simulate: input.simulate,
+      type: "prepare",
+    },
     summaries: [
-      ...input.actions.map((action) =>
-        summarizeStrk20Action(action, resolved.account.address, trustedAssetLookup(resolved)),
-      ),
+      ...review.summaries,
       input.simulate
         ? "Simulate only — no submittable proof"
         : "Generate a submittable private proof for this site",
@@ -290,6 +360,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   if (gate) {
     return gate;
   }
+  const refusal = strk20BatchRefusalError(input.actions);
+  if (refusal) {
+    return { error: refusal };
+  }
   // Queue admission first: no privacy approval here deduplicates, so an origin
   // at its cap is refused whatever this request contains — and refusing it now
   // costs a map filter instead of a vault read plus a pool quote.
@@ -297,6 +371,9 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
+  }
+  if (needsAnonymizer(input.actions) && configuredAnonymizer(resolved) === undefined) {
+    return holdUnavailable(deps, input.origin);
   }
   // A private transfer or withdrawal to an address that mimics a saved contact
   // is the same attack whether the wallet composed it or the site did. It is
@@ -308,8 +385,12 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
       ...strk20AccountContext(deps, resolved),
       actions: input.actions,
     });
-    const payload = { actions: input.actions, strk20Plan: plan };
+    const review = batchReview(resolved, input.origin, input.actions);
+    const anonymizer =
+      review.anonymizer === undefined ? {} : { shadowAccountAnonymizer: review.anonymizer };
+    const payload = { actions: input.actions, ...anonymizer, strk20Plan: plan };
     const approval = deps.approvals.requestStrk20Invoke({
+      ...anonymizer,
       actions: input.actions,
       context: await createApprovalContext(resolved.account, payload),
       flags,
@@ -320,9 +401,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
       summaries: [
-        ...input.actions.map((action) =>
-          summarizeStrk20Action(action, resolved.account.address, trustedAssetLookup(resolved)),
-        ),
+        ...review.summaries,
         summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
       ],
     });
@@ -333,10 +412,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   }
 };
 
-const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readStrk20SubaccountMessage(message);
+const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readStrk20ShadowAccountMessage(message);
   if (!input) {
-    return { error: "invalid strk20 subaccount request" };
+    return { error: "invalid strk20 shadow account request" };
   }
   const gate = gateOrigin(deps, input.origin, sender);
   if (gate) {
@@ -350,18 +429,24 @@ const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message,
   if ("error" in resolved) {
     return resolved;
   }
+  const anonymizer = configuredAnonymizer(resolved);
+  if (anonymizer === undefined) {
+    return holdUnavailable(deps, input.origin);
+  }
   return queueDisclosure(deps, resolved, {
-    kind: "strk20-subaccount",
+    kind: "strk20-shadow-account",
     origin: input.origin,
     request: {
+      anonymizer,
       dappName: input.dappName,
       ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
-      type: "subaccount",
+      type: "shadowAccount",
     },
     summaries: [
-      `Share a private sub-account commitment for ${input.origin}`,
+      `Share a private shadow account commitment for ${input.origin}`,
       `Site-chosen scope label ${input.dappName}`,
       ...(input.nonce === undefined ? [] : [`Nonce ${input.nonce}`]),
+      SHADOW_INVOKE_ANONYMIZER(anonymizer),
     ],
   });
 };
@@ -372,7 +457,7 @@ const STRK20_OPS_HANDLERS: Readonly<Record<string, Strk20OpsHandler>> = {
   "wallet.strk20InvokeTransaction": handleStrk20InvokeTransaction,
   "wallet.strk20PrepareInvoke": handleStrk20PrepareInvoke,
   "wallet.strk20Register": handleStrk20Register,
-  "wallet.strk20SubaccountCommitment": handleStrk20SubaccountCommitment,
+  "wallet.strk20ShadowAccountCommitment": handleStrk20ShadowAccountCommitment,
 };
 
 /**

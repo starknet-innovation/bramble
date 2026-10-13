@@ -23,6 +23,7 @@ import {
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { WalletScenario } from "../runtime/types";
 import { privacyDappCheckpoints } from "./scenarios-privacy-dapp";
+import { shadowAccountCheckpoints } from "./scenarios-shadow-accounts";
 
 const digest = `sha256:${"d".repeat(64)}`;
 
@@ -348,11 +349,12 @@ export const privacyScenario: WalletScenario = {
       state: { blocked: "fund", poolFee: "protocol maximum" },
     },
     ...privacyDappCheckpoints,
+    ...shadowAccountCheckpoints,
   ],
   description:
-    "Balance disclosure, pool registration, dapp approvals, dapp anonymizers, AVNU private swap, sub-accounts, and fail-closed recovery. Shielding, unshielding, and private sends are composed in Send, so they are checkpointed with the other send routes rather than here.",
+    "Balance disclosure, pool registration, dapp approvals, dapp anonymizers, AVNU private swap, shadow accounts, and fail-closed recovery. Shielding, unshielding, and private sends are composed in Send, so they are checkpointed with the other send routes rather than here.",
   id: "privacy",
   surface: "sidepanel",
   title: "Private balances and actions",
-  views: ["home", "token-detail", "privacy", "requests"],
+  views: ["home", "token-detail", "privacy", "requests", "shadow-accounts"],
 };

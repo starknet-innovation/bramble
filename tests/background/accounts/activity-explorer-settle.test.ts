@@ -1,10 +1,11 @@
 /**
- * An explorer row cannot settle a transaction the wallet is still observing
- * (Sherlock 150). The user's node still reports the send as pending; the
- * explorer lists a transfer for its hash. The Activity refresh adds nothing
- * and keeps the row pending, so the Send journey does not report it confirmed
- * and the "could not confirm" notice stays owed. The wallet's own event scan
- * still settles it.
+ * A discovered row cannot settle a transaction the wallet is still observing,
+ * from either lane (Sherlock 150, #653). The user's node still reports the send
+ * as pending; history lists a transfer for its hash. The Activity refresh adds
+ * nothing and keeps the row pending, so the Send journey does not report it
+ * confirmed and the "could not confirm" notice stays owed. A reverted
+ * transaction still emits its fee Transfer, so even the wallet's own event
+ * scan is no evidence of success; only the status re-poll settles the row.
  */
 import { describe, expect, test } from "bun:test";
 import type { ActivityEntry } from "@bramble/transactions/activity";
@@ -43,16 +44,13 @@ const refreshed = async (lane: "chain-events" | "explorer") => {
   return activity.list();
 };
 
-describe("an explorer row for a pending send", () => {
-  test("leaves it pending", async () => {
-    const [row, ...rest] = await refreshed("explorer");
-    expect(rest).toEqual([]);
-    expect(row?.status).toBe("pending");
-    expect(row?.summary).toBe("Send 1 ETH");
-  });
-
-  test("while the wallet's own event scan settles it", async () => {
-    const [row] = await refreshed("chain-events");
-    expect(row?.status).toBe("accepted");
-  });
+describe("a discovered row for a pending send", () => {
+  for (const lane of ["explorer", "chain-events"] as const) {
+    test(`leaves it pending (${lane})`, async () => {
+      const [row, ...rest] = await refreshed(lane);
+      expect(rest).toEqual([]);
+      expect(row?.status).toBe("pending");
+      expect(row?.summary).toBe("Send 1 ETH");
+    });
+  }
 });

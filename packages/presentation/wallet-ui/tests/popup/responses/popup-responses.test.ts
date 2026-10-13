@@ -234,7 +234,7 @@ describe("popup response validators", () => {
       "strk20-balances",
       "strk20-prepare",
       "strk20-register",
-      "strk20-subaccount",
+      "strk20-shadow-account",
     ] as const) {
       const actionReviews =
         kind === "strk20-prepare"

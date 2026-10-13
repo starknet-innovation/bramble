@@ -192,12 +192,12 @@ Recovery boundaries are deliberately explicit:
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is at **v11**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
+The vault schema is at **v12**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
 v4 adds encrypted `accountSecrets` (public `AccountRef` records cannot contain optional secrets; Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance);
 v5 canonicalizes account ids; v6 records the account-contract type; v7 retains the Argent deployment salt; v8 retains imported seeds; v9 admits Ready's `argentx` Ledger path scheme;
-v10 admits Braavos accounts (with their deployment salt) and an Argent account at any release it could have been deployed with; v11 admits Ready-scheme accounts (`argentx-bip44`, issue 505), x-only with no `publicKeyY`.
+v10 admits Braavos accounts (with their deployment salt) and an Argent account at any release it could have been deployed with; v11 admits Ready-scheme accounts (`argentx-bip44`, issue 505), x-only with no `publicKeyY`; v12 adds `shadowAccountScopes`, the encrypted record of which shadow-account scopes (account, chain, pool, anonymizer, origin, label, exact nonces) each account used (#443), and its step adds an empty collection.
 The v3–v8 validators stay pinned to `LedgerW`, so the v9 step rewrites nothing but the version stamp; likewise the v9 validator stays pinned to Argent 0.4 and no Braavos, and the v10 validator refuses the Ready-scheme kind, so the v10 and v11 steps each rewrite nothing but the version stamp. Vaults migrated from v1 carry `mnemonic: null`; they cannot add software
-accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v11`).
+accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v12`).
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs
@@ -291,9 +291,8 @@ object is frozen and installed as a non-configurable global.
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
-`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and sub-account-commitment
-methods behind the same origin and phishing gates. Private-state requests additionally require a
-held approval bound to the account, network, and payload digest; connection alone is insufficient.
+`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and shadow-account-commitment methods behind the same origin and phishing gates, under the Wallet API 0.10.4 names (`wallet_strk20ShadowAccountCommitment`, `shadow_account_invoke`; the old sub-account names have no alias).
+Private-state requests additionally require a held approval bound to the account, network, and payload digest; connection alone is insufficient. A shadow-account approval is also bound to the anonymizer its card named, and its scope is recorded in the vault's `shadowAccountScopes` before it runs; extension-only `wallet.strk20ShadowAccounts`, `wallet.strk20ShadowAccountBalances`, and `wallet.strk20PrepareShadowSweep` list, read on request, and sweep them.
 
 Grants and provider events are isolated per origin: each origin reads only its own accounts
 (`wallet.getGrantedAccounts`) and each content script derives page events from its own history

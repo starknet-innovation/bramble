@@ -130,10 +130,10 @@ const POLLABLE_MESSAGES: Readonly<Record<string, Record<string, unknown>>> = {
     type: "wallet.strk20PrepareInvoke",
   },
   "wallet.strk20Register": { origin: grantedOrigin, type: "wallet.strk20Register" },
-  "wallet.strk20SubaccountCommitment": {
+  "wallet.strk20ShadowAccountCommitment": {
     dappName: "poller",
     origin: grantedOrigin,
-    type: "wallet.strk20SubaccountCommitment",
+    type: "wallet.strk20ShadowAccountCommitment",
   },
   "wallet.switchChain": {
     chainId: "0x534e5f4d41494e",

@@ -17,6 +17,15 @@ export const PRIVACY_DEPLOY_REQUIRED = "Deploy this account before enabling priv
  */
 export const PRIVACY_FUNDS_REQUIRED = "Deposit some STRK, then come back";
 
+/**
+ * The one line a site's private request shows when this network has no private
+ * services for it (no shadow-account anonymizer configured). Approved copy.
+ * The request is held on the wallet's own surface until the user closes it, so
+ * a site cannot time an instant refusal to learn what the user has set up.
+ */
+export const PRIVATE_SERVICES_UNAVAILABLE_NOTICE =
+  "Private services aren't set up for this network.";
+
 /** Curated wallet refusal; carries its action independently of display wording. */
 export class PrivacyBlockerError extends WalletError {
   public constructor(

@@ -51,6 +51,7 @@ import {
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
+import { shadowSweepActivity, submitShadowSweep } from "./strk20-shadow-sweep";
 import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
@@ -110,6 +111,9 @@ const activitySummary = (
 ): string => {
   if (preparation.kind === "register") {
     return STRK20_REGISTRATION_SUMMARY;
+  }
+  if (preparation.kind === "shadow-sweep") {
+    return shadowSweepActivity(preparation);
   }
   const value = `${preparation.amount} ${preparation.token.symbol}`;
   if (preparation.kind === "transfer") {
@@ -273,6 +277,9 @@ const submitPreparation = (
   if (preparation.kind === "transfer" || preparation.kind === "withdraw") {
     return submitPreparedPrivateBatch(deps, service, preparation, context);
   }
+  if (preparation.kind === "shadow-sweep") {
+    return submitShadowSweep(service, preparation, context);
+  }
   return submitPreparedRegistration(deps, service, preparation, context);
 };
 
@@ -303,13 +310,17 @@ const executionWork = async (
     });
     await recordSubmittedActivity(deps.activity, {
       accountId: context.accountContext.account.id,
-      ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
+      ...(preparation.kind === "register" || preparation.kind === "shadow-sweep"
+        ? {}
+        : { amount: preparation.amount }),
       ...counterpartyOf(otherParty(preparation, context)),
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.accountContext.account.networkId,
       summary: activitySummary(preparation, context),
-      ...(preparation.kind === "register" ? {} : activityToken(preparation.token)),
+      ...(preparation.kind === "register" || preparation.kind === "shadow-sweep"
+        ? {}
+        : activityToken(preparation.token)),
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {

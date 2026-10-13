@@ -22,6 +22,7 @@ import {
 } from "@bramble/wallet-model/networks";
 import {
   RECOVERY_SCAN_LIMITS,
+  RESERVED_AGENT_ACCOUNT_INDEX,
   type RecoveryAccountCandidate,
   type RecoveryDerivationKind,
   recoveryScanTarget,
@@ -241,6 +242,10 @@ const runRecoveryDiscovery = async (
   const discovered: RecoveryAccountCandidate[] = [];
   for (let accountIndex = start; accountIndex <= end; accountIndex += 1) {
     if (!stillAuthorized()) return { error: "wallet locked" };
+    // strkd's agent branch (#336) is never derived. The walk is bounded by
+    // `maxScannedIndexes` far below it and a manual index is refused at input,
+    // so this only holds the line if either bound ever moves.
+    if (accountIndex === RESERVED_AGENT_ACCOUNT_INDEX) continue;
     const candidates = await scanRecoveryIndex(deps, input, accountIndex, tokens, rpcUrls);
     discovered.push(
       ...candidates.filter(

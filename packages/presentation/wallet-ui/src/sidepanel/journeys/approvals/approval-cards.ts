@@ -10,6 +10,7 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { PRIVATE_SERVICES_UNAVAILABLE_NOTICE } from "@bramble/wallet-protocol/privacy-blocker";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
@@ -363,6 +364,18 @@ const strk20DisclosureCard = (
     ${paymentDecisionRow(approval, copy.action, status.locked)}
   </li>`;
 
+// A site's private request on a network with no private services for it. The
+// site is answered only when the user closes this, so it cannot probe what the
+// wallet has set up. One fixed line and a Close control; nothing the site sent
+// is shown, and there is nothing to approve — Close works locked too.
+const strk20UnavailableCard = (approval: PendingApproval): string => `
+  <li class="request-card">
+    <div class="request-copy">
+      <p>${escapeHtml(PRIVATE_SERVICES_UNAVAILABLE_NOTICE)}</p>
+    </div>
+    <div class="button-row">${denyButton(approval, "Close")}</div>
+  </li>`;
+
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -453,13 +466,15 @@ export const approvalCard = (
         lockedHint: "Unlock the wallet to review this private-balance activation.",
         title: "Activate private balances",
       });
-    case "strk20-subaccount":
+    case "strk20-shadow-account":
       return strk20DisclosureCard(approval, status, {
         action: "Share commitment",
         hint: "This reveals a deterministic, site-scoped private identity commitment that may link sessions for this site.",
         lockedHint: "Unlock the wallet to review this private identity request.",
         title: "Private identity request",
       });
+    case "strk20-unavailable":
+      return strk20UnavailableCard(approval);
     case "switch-chain":
       return switchCard(approval, status);
     case "add-chain":

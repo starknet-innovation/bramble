@@ -119,7 +119,7 @@ history.
 - The official Privacy SDK source is pinned in `scripts/vendor-privacy-sdk.ts`; the browser bundle
   and its source map are digest-pinned in `scripts/check-privacy-sdk.ts`, which reads the revision
   back out of the vendor script rather than keeping a second copy. Do not replace its proving,
-  note-discovery, or sub-account cryptography with local implementations.
+  note-discovery, or shadow-account cryptography with local implementations.
 - Every vendored checkout is verified through `scripts/vendor-pin-policy.ts`: pinned revision,
   clean worktree, and a reviewed digest for every artifact that ships. Add a new vendored source
   through those helpers, never with a private copy of the checks.

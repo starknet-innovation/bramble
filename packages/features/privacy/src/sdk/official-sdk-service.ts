@@ -38,6 +38,7 @@ import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official
 import { strk20ReadMethods } from "./official-sdk-reads";
 import type { ServiceRetryPause } from "./official-sdk-retry";
 import type { PrivacySdkRuntime } from "./official-sdk-runtime";
+import { strk20ShadowAccountReads } from "./official-sdk-shadow-accounts";
 import {
   approveCalls,
   RELAY_PAYS_POOL_FEE,
@@ -151,6 +152,7 @@ export const createOfficialStrk20Service = ({
   };
   return {
     ...strk20ReadMethods({ pauseForServiceRetry, providerFor, sdk, waits }),
+    ...strk20ShadowAccountReads({ pauseForServiceRetry, providerFor, sdk }),
     async prepare(input) {
       return prepare(input);
     },

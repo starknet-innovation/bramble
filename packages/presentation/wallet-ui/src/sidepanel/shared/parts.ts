@@ -12,6 +12,7 @@ import { type IconName, icon } from "@bramble/ui-kit/icons";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountContractType, AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { SHADOW_ACCOUNTS_TITLE } from "../journeys/privacy/shadow-accounts-copy";
 import { networkDisplayName } from "./network-label";
 
 export { accountAvatar } from "../shell/account-avatar";
@@ -48,6 +49,7 @@ export const WALLET_VIEWS = [
   "token-discover",
   "token-detail",
   "privacy",
+  "shadow-accounts",
   "allowances",
   "multisigs",
   "multisig-add",
@@ -125,6 +127,7 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   "nft-send": "Send collectible",
   "nft-watch": "Watch collectible",
   privacy: "Private balances",
+  "shadow-accounts": SHADOW_ACCOUNTS_TITLE,
   receive: "Receive",
   requests: "Wallet requests",
   "request-settings": "Request display",

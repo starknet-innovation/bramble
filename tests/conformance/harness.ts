@@ -69,7 +69,7 @@ const STRK20_STUB_READS = [
   "prepare",
   "privateBalances",
   "quoteActions",
-  "subaccountCommitment",
+  "shadowAccountCommitment",
 ] as const;
 
 /** Bumps a single mutation counter; passed to the stubs as a closure. */
@@ -120,7 +120,8 @@ const walletStub = (bump: Bump) => ({
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [ACCOUNT.id], origin: ORIGIN }],
-      schemaVersion: 11 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: ACCOUNT.id, privateKey: "0x123456" }],
     };
   },
@@ -174,7 +175,7 @@ const strk20Stub = (bump: Bump): Strk20Service => ({
       feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" },
     };
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x1";
   },
   async submitActions() {

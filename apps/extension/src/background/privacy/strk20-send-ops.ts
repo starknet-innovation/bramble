@@ -35,6 +35,7 @@ import { depositPreparation } from "./strk20-deposit-ops";
 import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import { errorText, resolvePrivacyContext, type Strk20WalletOpsDeps } from "./strk20-op-context";
 import { openPoolRoute } from "./strk20-pool-route";
+import { handleStrk20ShadowOps } from "./strk20-shadow-ops";
 import {
   readStrk20DepositPreparationInput,
   readStrk20PreparationStatusInput,
@@ -301,5 +302,5 @@ export const handleStrk20SendOps = async (
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
   const op = SEND_OPS.get(messageType);
-  return op ? op(deps, message) : null;
+  return op ? op(deps, message) : handleStrk20ShadowOps(deps, messageType, message);
 };

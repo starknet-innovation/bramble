@@ -296,9 +296,9 @@ export const createRpcFirstBalances =
   };
 
 /**
- * Discovered history rows and the lane that produced them. The lane travels
- * with the rows because only the wallet's own event scan may settle the status
- * of a transaction it is still observing (see `mergeActivity`).
+ * Discovered history rows and the lane that produced them. The lane is
+ * provenance only: no discovered row settles the status of a transaction the
+ * wallet is still observing (see `mergeActivity`).
  */
 export type DiscoveredHistory = {
   readonly entries: readonly ActivityEntry[];

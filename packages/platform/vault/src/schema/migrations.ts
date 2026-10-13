@@ -22,6 +22,7 @@ import {
   isVaultV9,
   isVaultV10,
   isVaultV11,
+  isVaultV12,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -196,6 +197,20 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 11,
   },
+  {
+    fromVersion: 11,
+    // v12 keeps an encrypted record of the shadow-account scopes each account
+    // used (#443). No v11 vault recorded any, so the only deterministic
+    // migration is an empty collection: shadow accounts used before this
+    // build are not in it, and only the sites that drove them can name them.
+    migrate(value) {
+      if (!isVaultV11(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 12, shadowAccountScopes: [] };
+    },
+    toVersion: 12,
+  },
 ];
 
 const requiredAccountId = (value: string): string => {
@@ -279,7 +294,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV11(value)) {
+  if (isVaultV12(value)) {
     return value;
   }
 
@@ -297,7 +312,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV11(migrated)) {
+  if (!isVaultV12(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

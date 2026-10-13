@@ -75,7 +75,7 @@ export type PrivacyPreparation = {
   readonly amount?: string;
   readonly authorization?: PaymasterAuthorizationReview;
   readonly id: string;
-  readonly kind: "deposit" | "register" | "transfer" | "withdraw";
+  readonly kind: "deposit" | "register" | "shadow-sweep" | "transfer" | "withdraw";
   readonly networkFee?: FeeEstimate;
   readonly payloadDigest: string;
   readonly poolAddress: string;
@@ -151,7 +151,33 @@ type ExpectedPreparation = {
 const hasRouteFee = (route: unknown, fee: unknown): boolean =>
   route === "public-account" ? isFeeEstimate(fee) : fee === undefined;
 
-const readPreparation = (
+// Which fields each kind must carry and which route it takes.
+const hasKindShape = (value: Readonly<Record<string, unknown>>): boolean =>
+  !(
+    // A deposit names whose private balance it credits — the depositor for a
+    // shield, a registered third party otherwise — so the recipient is required
+    // here exactly as it is for a transfer or a withdrawal.
+    (value["kind"] === "deposit" &&
+      (typeof value["amount"] !== "string" || typeof value["recipient"] !== "string")) ||
+    ((value["kind"] === "transfer" || value["kind"] === "withdraw") &&
+      (typeof value["amount"] !== "string" ||
+        typeof value["recipient"] !== "string" ||
+        value["route"] !== "private-relay")) ||
+    (value["kind"] === "shadow-sweep" &&
+      (value["amount"] !== undefined ||
+        typeof value["recipient"] !== "string" ||
+        value["route"] !== "private-relay")) ||
+    (value["kind"] === "register" &&
+      (value["amount"] !== undefined ||
+        value["recipient"] !== undefined ||
+        value["route"] !== "public-account"))
+  );
+
+/**
+ * Validates one preparation review against what the panel asked for, or null.
+ * Shared with the Shadow accounts client so every review crosses one guard.
+ */
+export const readPrivacyPreparation = (
   response: unknown,
   expected: ExpectedPreparation,
 ): PrivacyPreparation | null => {
@@ -214,19 +240,7 @@ const readPreparation = (
     (expected.recipient !== undefined &&
       (typeof value["recipient"] !== "string" ||
         !sameFelt(value["recipient"], expected.recipient))) ||
-    // A deposit names whose private balance it credits — the depositor for a
-    // shield, a registered third party otherwise — so the recipient is required
-    // here exactly as it is for a transfer or a withdrawal.
-    (value["kind"] === "deposit" &&
-      (typeof value["amount"] !== "string" || typeof value["recipient"] !== "string")) ||
-    ((value["kind"] === "transfer" || value["kind"] === "withdraw") &&
-      (typeof value["amount"] !== "string" ||
-        typeof value["recipient"] !== "string" ||
-        value["route"] !== "private-relay")) ||
-    (value["kind"] === "register" &&
-      (value["amount"] !== undefined ||
-        value["recipient"] !== undefined ||
-        value["route"] !== "public-account"))
+    !hasKindShape(value)
   ) {
     return null;
   }
@@ -395,7 +409,7 @@ export const createPrivacyRuntimeClient = (
         { amount, recipient, tokenId, type: "wallet.strk20PrepareDeposit" },
         onProgress,
       );
-      const preparation = readPreparation(response, {
+      const preparation = readPrivacyPreparation(response, {
         amount,
         kind: "deposit",
         recipient,
@@ -410,7 +424,7 @@ export const createPrivacyRuntimeClient = (
       onProgress?: PreparationProgressSink,
     ): Promise<PrivacyPreparation> {
       const response = await job({ type: "wallet.strk20PrepareRegistration" }, onProgress);
-      const preparation = readPreparation(response, { kind: "register" });
+      const preparation = readPrivacyPreparation(response, { kind: "register" });
       if (preparation) {
         return preparation;
       }
@@ -427,7 +441,7 @@ export const createPrivacyRuntimeClient = (
         tokenId,
         type: "wallet.strk20PrepareTransfer",
       });
-      const preparation = readPreparation(response, {
+      const preparation = readPrivacyPreparation(response, {
         amount,
         kind: "transfer",
         recipient,
@@ -449,7 +463,7 @@ export const createPrivacyRuntimeClient = (
         tokenId,
         type: "wallet.strk20PrepareWithdraw",
       });
-      const preparation = readPreparation(response, {
+      const preparation = readPrivacyPreparation(response, {
         amount,
         kind: "withdraw",
         recipient,

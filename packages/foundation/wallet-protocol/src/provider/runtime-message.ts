@@ -91,7 +91,7 @@ export type RuntimeMessage =
       readonly dappName: string;
       readonly nonce?: string;
       readonly origin: string;
-      readonly type: "wallet.strk20SubaccountCommitment";
+      readonly type: "wallet.strk20ShadowAccountCommitment";
     }
   | {
       readonly chainId: string;

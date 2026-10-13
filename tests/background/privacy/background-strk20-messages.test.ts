@@ -252,21 +252,21 @@ describe("background strk20 messages", () => {
   });
 
   test("derives a dapp-scoped commitment only after approval", async () => {
-    const subaccountCalls = { value: 0 };
-    const handler = buildHandler({ subaccountCalls });
+    const shadowAccountCalls = { value: 0 };
+    const handler = buildHandler({ shadowAccountCalls });
     const result = await approveHeld(
       handler,
       {
         dappName: "Example",
         nonce: "0x1",
         origin,
-        type: "wallet.strk20SubaccountCommitment",
+        type: "wallet.strk20ShadowAccountCommitment",
       },
-      "strk20-subaccount",
-      () => expect(subaccountCalls.value).toBe(0),
+      "strk20-shadow-account",
+      () => expect(shadowAccountCalls.value).toBe(0),
     );
     expect(result).toEqual({ commitment: "0x123", ok: true });
-    expect(subaccountCalls.value).toBe(1);
+    expect(shadowAccountCalls.value).toBe(1);
   });
 
   test("rejects the old `action`-discriminated shape at routing (114)", async () => {
@@ -368,7 +368,7 @@ describe("background strk20 messages", () => {
           discoveryUrl: "https://discovery.example/strk20",
           poolAddress: token,
           proverUrl: "https://prover.example/strk20",
-          subaccountAnonymizerAddress: recipient,
+          shadowAccountAnonymizerAddress: recipient,
         },
       },
     };
@@ -386,7 +386,7 @@ describe("background strk20 messages", () => {
           feeAction: { amount: "0x1", recipient, token, type: "withdraw" },
         };
       },
-      async subaccountCommitment() {
+      async shadowAccountCommitment() {
         return "0x123";
       },
       async submitActions() {
@@ -423,20 +423,20 @@ describe("background strk20 messages", () => {
       },
     },
     {
-      kind: "strk20-subaccount",
-      method: "wallet_strk20SubaccountCommitment",
+      kind: "strk20-shadow-account",
+      method: "wallet_strk20ShadowAccountCommitment",
       payload: {
         dappName: "Example",
         origin,
-        type: "wallet.strk20SubaccountCommitment",
+        type: "wallet.strk20ShadowAccountCommitment",
       },
     },
   ] as const) {
     test(`maps a denied ${request.kind} request to USER_REFUSED_OP (113)`, async () => {
       const balanceCalls = { value: 0 };
       const proveCalls = { value: 0 };
-      const subaccountCalls = { value: 0 };
-      const handler = buildHandler({ balanceCalls, proveCalls, subaccountCalls });
+      const shadowAccountCalls = { value: 0 };
+      const handler = buildHandler({ balanceCalls, proveCalls, shadowAccountCalls });
       const held = handler(request.payload, contentSender);
       await flushHeld();
       const id = await latestApprovalId(handler, sender);
@@ -445,7 +445,7 @@ describe("background strk20 messages", () => {
       expect(toProviderPayload(result, request.method).error?.code).toBe(113);
       expect(balanceCalls.value).toBe(0);
       expect(proveCalls.value).toBe(0);
-      expect(subaccountCalls.value).toBe(0);
+      expect(shadowAccountCalls.value).toBe(0);
     });
   }
 
