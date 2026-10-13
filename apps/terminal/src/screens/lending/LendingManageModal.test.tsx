@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { VesuMarket, VesuPosition } from "../../data/index";
+import { freshReferenceUsdPrice, referenceUsdPrice, type VesuMarket, type VesuPosition } from "../../data/index";
 
 // The vToken the pinned factory registers, which differs from the API's (Sherlock 169).
 const { REGISTERED_VTOKEN } = vi.hoisted(() => ({ REGISTERED_VTOKEN: "0x5e9157e4" }));
@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   quoteIncrease: vi.fn(),
   quoteLending: vi.fn(async () => ({ action: "supply", vTokenAddress: REGISTERED_VTOKEN })),
   recheckLendingQuote: vi.fn(async () => undefined),
+  recheckMultiplyQuote: vi.fn(async () => undefined),
   registeredVToken: vi.fn(async () => REGISTERED_VTOKEN),
   verifyMultiplyPool: vi.fn(async () => undefined),
   requestTransaction: vi.fn(async () => ({ transaction_hash: "0xabc" })),
@@ -29,6 +30,7 @@ vi.mock("../../protocols/index", () => ({
   quoteVesuMultiplyClose: mocks.quoteClose,
   quoteVesuMultiplyIncrease: mocks.quoteIncrease,
   recheckVesuLendingQuote: mocks.recheckLendingQuote,
+  recheckVesuMultiplyQuote: mocks.recheckMultiplyQuote,
   registeredVesuVToken: mocks.registeredVToken,
   VESU_VAULT_DEPOSITS_ENABLED: false,
   verifyVesuMultiplyPool: mocks.verifyMultiplyPool,
@@ -202,15 +204,28 @@ describe("LendingManageModal", () => {
       multiply.debtAddress,
     );
     expect(mocks.buildClose).toHaveBeenCalled();
+    // The swap cap is anchored to the AVNU feed with each leg's decimals (#646).
+    expect(mocks.quoteClose).toHaveBeenCalledWith(
+      multiply.debtAddress,
+      multiply.collateralAddress,
+      BigInt(multiply.debtRaw ?? "0"),
+      { collateralDecimals: 6, debtDecimals: 18, priceUsd: referenceUsdPrice },
+    );
     // Both legs are re-verified at wallet handoff (#270).
     await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalled());
     expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(1);
+    expect(mocks.recheckMultiplyQuote).not.toHaveBeenCalled();
     await handedOff().handoffCheck?.();
     expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(2);
     expect(mocks.verifyMultiplyPool).toHaveBeenLastCalledWith(
       market.poolId,
       multiply.collateralAddress,
       multiply.debtAddress,
+    );
+    // ...and the quoted swap cap is re-checked against an uncached price (#646).
+    expect(mocks.recheckMultiplyQuote).toHaveBeenCalledWith(
+      await mocks.quoteClose.mock.results[0]?.value,
+      freshReferenceUsdPrice,
     );
   });
 
@@ -223,7 +238,14 @@ describe("LendingManageModal", () => {
         markets={[market]}
         onClose={vi.fn()}
         onSubmitted={vi.fn()}
-        position={{ ...earn, debtAddress: "0x4718", debtRaw: "1", debtSymbol: "STRK", type: "multiply" }}
+        position={{
+          ...earn,
+          debtAddress: "0x4718",
+          debtDecimals: 18,
+          debtRaw: "1",
+          debtSymbol: "STRK",
+          type: "multiply",
+        }}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Review in wallet/ }));

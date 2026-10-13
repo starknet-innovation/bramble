@@ -20,6 +20,10 @@ export {
   verifyVesuMultiplyPool,
 } from "./vesu/vesu-anchors";
 export {
+  recheckVesuMultiplyQuote,
+  type VesuMultiplyAnchoredQuote,
+} from "./vesu/vesu-multiply-anchor";
+export {
   buildVesuMultiplyCloseCalls,
   buildVesuMultiplyIncreaseCalls,
   quoteVesuMultiplyClose,

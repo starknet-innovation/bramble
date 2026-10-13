@@ -1,6 +1,11 @@
 import { ArrowRight, LoaderCircle, Radio, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { VesuMarket, VesuPosition } from "../../data/index";
+import {
+  freshReferenceUsdPrice,
+  referenceUsdPrice,
+  type VesuMarket,
+  type VesuPosition,
+} from "../../data/index";
 import {
   buildVesuMultiplyCloseCalls,
   buildVesuMultiplyIncreaseCalls,
@@ -9,8 +14,10 @@ import {
   quoteVesuMultiplyClose,
   quoteVesuMultiplyIncrease,
   recheckVesuLendingQuote,
+  recheckVesuMultiplyQuote,
   registeredVesuVToken,
   VESU_VAULT_DEPOSITS_ENABLED,
+  type VesuMultiplyAnchoredQuote,
   verifyVesuMultiplyPool,
 } from "../../protocols/index";
 import { buildLendingCalls, quoteLending } from "../../protocols/vesu/vesu";
@@ -202,21 +209,36 @@ export const LendingManageModal = ({
     if (
       address === null ||
       position.debtAddress === null ||
-      position.debtRaw === null
+      position.debtRaw === null ||
+      position.debtDecimals === null
     ) {
       throw new Error("This Multiply position is missing its debt leg.");
     }
     // The pool goes to modify_lever and both delegation calls (Sherlock 169).
     await verifyVesuMultiplyPool(position.poolId, position.collateralAddress, position.debtAddress);
     const debtAddress = position.debtAddress;
-    handoffCheck.current = () =>
-      verifyVesuMultiplyPool(position.poolId, position.collateralAddress, debtAddress);
+    // The swap cap is anchored to the AVNU price feed when quoting (#646).
+    const anchor = {
+      collateralDecimals: position.collateralDecimals,
+      debtDecimals: position.debtDecimals,
+      priceUsd: referenceUsdPrice,
+    };
+    // Right before the wallet sees the calls, the registry is read again (#270)
+    // and the quoted swap cap is re-checked against an uncached price (#646).
+    const armHandoff = (route: VesuMultiplyAnchoredQuote): void => {
+      handoffCheck.current = async () => {
+        await verifyVesuMultiplyPool(position.poolId, position.collateralAddress, debtAddress);
+        await recheckVesuMultiplyQuote(route, freshReferenceUsdPrice);
+      };
+    };
     if (action === "unwind") {
       const route = await quoteVesuMultiplyClose(
         position.debtAddress,
         position.collateralAddress,
         BigInt(position.debtRaw),
+        anchor,
       );
+      armHandoff(route);
       return buildVesuMultiplyCloseCalls(
         position.poolId,
         position.collateralAddress,
@@ -235,7 +257,9 @@ export const LendingManageModal = ({
       position.collateralAddress,
       position.debtAddress,
       BigInt(outputRaw),
+      anchor,
     );
+    armHandoff(route);
     return buildVesuMultiplyIncreaseCalls(
       position.poolId,
       position.collateralAddress,

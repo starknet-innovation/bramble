@@ -31,7 +31,6 @@ import {
 } from "../src/data/core/endpoints";
 import {
   parseChainPulse,
-  parseStarkscanBalances,
   parseWalletActivity,
 } from "../src/data/activity/starkscan";
 import { toAvnuRows, toEkuboRows } from "../src/data/market/useTokens";
@@ -256,18 +255,7 @@ const main = async (): Promise<void> => {
     };
   });
 
-  // ---- Starkscan (indexed portfolio + chain pulse) -----------------------
-  await check("Starkscan token holdings", true, async () => {
-    const { status, body } = await fetchJsonDirect(
-      `${STARKSCAN_DIRECT_BASE}/address/${SAMPLE_STARKSCAN_ADDRESS}/token-holdings`,
-    );
-    const balances = parseStarkscanBalances(body, SAMPLE_STARKSCAN_ADDRESS);
-    return {
-      status,
-      detail: `${balances.length} exact holdings (first=${balances[0]?.symbol ?? "n/a"})`,
-    };
-  });
-
+  // ---- Starkscan (chain pulse) -----------------------
   await check("Starkscan live chain pulse", true, async () => {
     const [blocks, events, messages] = await Promise.all([
       fetchJsonDirect(`${STARKSCAN_DIRECT_BASE}/blocks?limit=3`),

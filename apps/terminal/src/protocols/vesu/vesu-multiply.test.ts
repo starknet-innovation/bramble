@@ -184,16 +184,25 @@ describe("Vesu Multiply boundary", () => {
       total_calculated: "-500000000000000",
     };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(answer))));
+    // 1 USDC for 0.0005 ETH is the mid-price at $2,000 per ETH.
+    const priceUsd = async (asset: string) => (asset === ETH ? 2_000 : 1);
     // Increase: an exact collateral (USDC) output priced in debt (ETH).
-    await expect(quoteVesuMultiplyIncrease(USDC, ETH, 1_000_000n)).resolves.toMatchObject({
-      requiredInputAmount: 500_000_000_000_000n,
-    });
+    await expect(
+      quoteVesuMultiplyIncrease(USDC, ETH, 1_000_000n, {
+        collateralDecimals: 6,
+        debtDecimals: 18,
+        priceUsd,
+      }),
+    ).resolves.toMatchObject({ requiredInputAmount: 500_000_000_000_000n });
     // Close: an exact debt (USDC) repayment priced in collateral (ETH).
-    await expect(quoteVesuMultiplyClose(USDC, ETH, 1_000_000n)).resolves.toMatchObject({
+    const closeAnchor = { collateralDecimals: 18, debtDecimals: 6, priceUsd };
+    await expect(quoteVesuMultiplyClose(USDC, ETH, 1_000_000n, closeAnchor)).resolves.toMatchObject({
       requiredInputAmount: 500_000_000_000_000n,
     });
     // The same route for the opposite pairing does not connect.
-    await expect(quoteVesuMultiplyClose(ETH, USDC, 1_000_000n)).rejects.toThrow("does not connect");
+    await expect(quoteVesuMultiplyClose(ETH, USDC, 1_000_000n, closeAnchor)).rejects.toThrow(
+      "does not connect",
+    );
   });
 });
 
