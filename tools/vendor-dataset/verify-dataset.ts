@@ -2,7 +2,7 @@
  * Dataset verification: imports each vendor-dataset seed into the built wallet
  * (live mainnet, fresh profile per seed), lets the recovery scan finish, and
  * scrapes every candidate the UI lists. Output: a scorecard diffing reality
- * against tools/vendor-dataset/manifest.json expectations. Prints addresses
+ * against the tools/vendor-dataset/manifest/ expectations. Prints addresses
  * only — seeds are read from the env file and typed straight into the UI.
  *
  * Run from the repository root after `bun run build`:

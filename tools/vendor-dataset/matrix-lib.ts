@@ -4,8 +4,8 @@
  * ledger. Never logs or returns seed words; private keys stay inside account
  * objects. Everything is idempotent-friendly: callers check chain state first.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
 import { Account, ec, hash, RpcProvider, uint256 } from "starknet";
@@ -16,8 +16,10 @@ export { envSeed };
 const { grindKey, getStarkKey } = ec.starkCurve;
 
 export const NODE = "https://mainnet.nodes.starknet.org/rpc/v0_10";
-/** The committed dataset ledger, read and rewritten in place by the matrix stages. */
-export const MANIFEST_PATH = resolve(import.meta.dir, "manifest.json");
+// The committed dataset ledger, read and rewritten in place by the matrix
+// stages: one JSON file per fixture group (the id before its first "/"), so
+// each stays under the repository's 500-line file cap as the matrix grows.
+const MANIFEST_DIR = resolve(import.meta.dir, "manifest");
 
 export const CLASSES = {
   argent040: "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
@@ -136,13 +138,35 @@ export type ManifestEntry = {
   log: string[];
 };
 
+/** Every fixture across the per-group manifest files, keyed by id. */
 export function loadManifest(): Record<string, ManifestEntry> {
-  if (!existsSync(MANIFEST_PATH)) return {};
-  return JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
+  const manifest: Record<string, ManifestEntry> = {};
+  if (!existsSync(MANIFEST_DIR)) return manifest;
+  for (const file of readdirSync(MANIFEST_DIR).sort()) {
+    if (!file.endsWith(".json")) continue;
+    Object.assign(manifest, JSON.parse(readFileSync(join(MANIFEST_DIR, file), "utf8")));
+  }
+  return manifest;
 }
 
+/**
+ * Rewrites the per-group manifest files from `m`. Output is plain
+ * JSON.stringify; run `bun run format` afterwards so Biome's layout is kept.
+ */
 export function saveManifest(m: Record<string, ManifestEntry>): void {
-  writeFileSync(MANIFEST_PATH, JSON.stringify(m, null, 2));
+  const groups = new Map<string, Record<string, ManifestEntry>>();
+  for (const [id, entry] of Object.entries(m)) {
+    const group = id.split("/")[0] ?? id;
+    groups.set(group, { ...groups.get(group), [id]: entry });
+  }
+  mkdirSync(MANIFEST_DIR, { recursive: true });
+  for (const [group, entries] of groups) {
+    writeFileSync(
+      join(MANIFEST_DIR, `${group}.json`),
+      `${JSON.stringify(entries, null, 2)}
+`,
+    );
+  }
 }
 
 /** What a fixture step settles: the entry's new state, and its address when only the step can learn it. */
