@@ -31,7 +31,10 @@ See DEVELOPMENT.md and RELEASING.md.
   instead of `0.10.4-rc.0`, which still used the old ones.
 - Every shadow-account identity changes: the scope domain is now
   `bramble/strk20-shadow-account/v1`. Shadow accounts derived under the old domain are not
-  reachable from this build.
+  reachable from this build, by a site or by the wallet, and are not in the new Shadow accounts
+  records. Only users who entered a sub-account anonymizer by hand on v0.8.0–v0.10.5 (no build
+  bundled one) can have funded such an account; recovering it requires an old build together
+  with that old anonymizer.
 - The per-network setting `subaccountAnonymizerAddress` is now `shadowAccountAnonymizerAddress`.
   A stored value under the old key is dropped, not carried over, and must be re-entered with a
   current anonymizer.
