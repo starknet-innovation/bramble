@@ -6,7 +6,12 @@ import {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { avnuTokenArtwork } from "../../assets/avnu-token-assets";
 import { TokenIcon } from "../../components/index";
-import { referenceUsdPrice, type VesuMarket, type VesuPair } from "../../data/index";
+import {
+  freshReferenceUsdPrice,
+  referenceUsdPrice,
+  type VesuMarket,
+  type VesuPair,
+} from "../../data/index";
 import {
   buildVesuMultiplyIncreaseCalls,
   quoteVesuMultiplyIncrease,
@@ -170,14 +175,14 @@ export const LendingTicket = ({
         await requestTransaction({
           calls,
           // Right before the wallet sees the calls, the registry is read again
-          // (#270) and the swap cap is re-checked against a fresh price (#646).
+          // (#270) and the swap cap is re-checked against an uncached price (#646).
           handoffCheck: async () => {
             await verifyVesuMultiplyPool(
               market.poolId,
               collateralChoice.market.assetAddress,
               market.assetAddress,
             );
-            await recheckVesuMultiplyQuote(route, referenceUsdPrice);
+            await recheckVesuMultiplyQuote(route, freshReferenceUsdPrice);
           },
           description:
             "Open or increase this Vesu Multiply position using the reviewed Ekubo route. Delegation and allowance are revoked in the same transaction.",

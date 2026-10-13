@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { referenceUsdPrice, type VesuMarket, type VesuPair } from "../../data/index";
+import { freshReferenceUsdPrice, referenceUsdPrice, type VesuMarket, type VesuPair } from "../../data/index";
 
 const mocks = vi.hoisted(() => ({
   buildIncrease: vi.fn(() => [{ contractAddress: "0x7", entrypoint: "modify_lever" }]),
@@ -143,10 +143,10 @@ describe("LendingTicket wallet handoff", () => {
       collateral.assetAddress,
       debt.assetAddress,
     );
-    // ...and re-checked against a fresh price at handoff.
+    // ...and re-checked against an uncached price at handoff.
     expect(mocks.recheckMultiplyQuote).toHaveBeenCalledWith(
       await mocks.quoteIncrease.mock.results[0]?.value,
-      referenceUsdPrice,
+      freshReferenceUsdPrice,
     );
   });
 });

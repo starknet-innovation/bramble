@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { referenceUsdPrice, type VesuMarket, type VesuPosition } from "../../data/index";
+import { freshReferenceUsdPrice, referenceUsdPrice, type VesuMarket, type VesuPosition } from "../../data/index";
 
 // The vToken the pinned factory registers, which differs from the API's (Sherlock 169).
 const { REGISTERED_VTOKEN } = vi.hoisted(() => ({ REGISTERED_VTOKEN: "0x5e9157e4" }));
@@ -222,10 +222,10 @@ describe("LendingManageModal", () => {
       multiply.collateralAddress,
       multiply.debtAddress,
     );
-    // ...and the quoted swap cap is re-checked against a fresh price (#646).
+    // ...and the quoted swap cap is re-checked against an uncached price (#646).
     expect(mocks.recheckMultiplyQuote).toHaveBeenCalledWith(
       await mocks.quoteClose.mock.results[0]?.value,
-      referenceUsdPrice,
+      freshReferenceUsdPrice,
     );
   });
 

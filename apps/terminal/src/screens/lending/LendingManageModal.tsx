@@ -1,6 +1,11 @@
 import { ArrowRight, LoaderCircle, Radio, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { referenceUsdPrice, type VesuMarket, type VesuPosition } from "../../data/index";
+import {
+  freshReferenceUsdPrice,
+  referenceUsdPrice,
+  type VesuMarket,
+  type VesuPosition,
+} from "../../data/index";
 import {
   buildVesuMultiplyCloseCalls,
   buildVesuMultiplyIncreaseCalls,
@@ -219,11 +224,11 @@ export const LendingManageModal = ({
       priceUsd: referenceUsdPrice,
     };
     // Right before the wallet sees the calls, the registry is read again (#270)
-    // and the quoted swap cap is re-checked against a fresh price (#646).
+    // and the quoted swap cap is re-checked against an uncached price (#646).
     const armHandoff = (route: VesuMultiplyAnchoredQuote): void => {
       handoffCheck.current = async () => {
         await verifyVesuMultiplyPool(position.poolId, position.collateralAddress, debtAddress);
-        await recheckVesuMultiplyQuote(route, referenceUsdPrice);
+        await recheckVesuMultiplyQuote(route, freshReferenceUsdPrice);
       };
     };
     if (action === "unwind") {
