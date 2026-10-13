@@ -17,7 +17,7 @@ import type {
   Strk20DisclosureRequest,
 } from "../privacy/strk20-approval-types";
 import type { ApprovalContext } from "./approval-context";
-import type { ApprovalFeeRevision } from "./approval-limits";
+import type { ApprovalFeeRevision, ApprovalReservation } from "./approval-limits";
 import type { ApprovalPayload } from "./approval-payload";
 import type {
   ApprovalRiskFlag,
@@ -61,8 +61,10 @@ export type ApprovalQueue = {
    * release runs, the reservation counts against the caps as one more prompt
    * for that origin, so concurrent requests cannot all pass admission before
    * any of them queues. Release in a `finally`; releasing twice is a no-op.
+   * Its `arrivedAt` is the request's admission time, which a STRK20 request
+   * passes on as the deadline its approval expires from.
    */
-  readonly reserve: (origin: string) => () => void;
+  readonly reserve: (origin: string) => ApprovalReservation;
   readonly claim: (id: string) => ApprovalClaim | null;
   readonly get: (id: string) => PendingApproval | null;
   readonly list: () => readonly PendingApproval[];
@@ -117,6 +119,12 @@ export type ApprovalQueue = {
   }) => PendingApproval;
   readonly requestStrk20Disclosure: (input: {
     /**
+     * When the request was admitted (its reservation's `arrivedAt`): the
+     * approval expires from then, not from when the wallet's own work let it
+     * queue. Never later than the enqueue time.
+     */
+    readonly arrivedAt?: number;
+    /**
      * Recipient risk flags. An `address-poisoning` flag leaves the card with
      * Deny only; the page learns nothing until the user decides.
      */
@@ -129,6 +137,12 @@ export type ApprovalQueue = {
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestStrk20Invoke: (input: {
+    /**
+     * When the request was admitted (its reservation's `arrivedAt`): the
+     * approval expires from then, not from when the wallet's own work let it
+     * queue. Never later than the enqueue time.
+     */
+    readonly arrivedAt?: number;
     readonly actions: readonly Strk20Action[];
     /**
      * Recipient risk flags. An `address-poisoning` flag leaves the card with
@@ -149,6 +163,12 @@ export type ApprovalQueue = {
    * receives on close or expiry; nothing is signed, prepared, or disclosed.
    */
   readonly requestStrk20Unavailable: (input: {
+    /**
+     * When the request was admitted (its reservation's `arrivedAt`): the
+     * approval expires from then, not from when the wallet's own work let it
+     * queue. Never later than the enqueue time.
+     */
+    readonly arrivedAt?: number;
     /** Why it is held; absent when the network has no private services for it. */
     readonly notice?: Strk20NoticeReason;
     readonly origin: string;

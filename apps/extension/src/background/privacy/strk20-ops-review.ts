@@ -24,6 +24,7 @@ import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-respon
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
+import type { ApprovalReservation } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { requireRenderableSummaries } from "../approvals/approval-summary-bound";
 import type { ApprovalQueue } from "../approvals/approvals";
@@ -156,6 +157,8 @@ export const queueStrk20Disclosure = async (
   deps: Strk20DisclosureDeps,
   resolved: ResolvedAccount,
   input: {
+    /** The request's admission: the card takes over its slot and its deadline. */
+    readonly admission: ApprovalReservation;
     readonly flags?: readonly ApprovalRiskFlag[];
     readonly holdFailures: boolean;
     readonly kind: Strk20DisclosureApprovalKind;
@@ -167,11 +170,18 @@ export const queueStrk20Disclosure = async (
   const recording = disclosureScopeRecording(input.request);
   const unrecordable = await shadowRecordRefusal(deps.wallet, resolved, input.origin, recording);
   if (unrecordable) {
-    return holdStrk20Notice(deps, input.origin, unrecordable.error, "record-limit");
+    return holdStrk20Notice(
+      deps,
+      input.origin,
+      unrecordable.error,
+      "record-limit",
+      input.admission,
+    );
   }
   try {
     const payload = { strk20Request: input.request };
     const approval = deps.approvals.requestStrk20Disclosure({
+      arrivedAt: input.admission.arrivedAt,
       context: await createApprovalContext(resolved.account, payload),
       ...(input.flags === undefined ? {} : { flags: input.flags }),
       kind: input.kind,
@@ -189,11 +199,18 @@ export const queueStrk20Disclosure = async (
       ),
       summaries: input.summaries,
     });
+    input.admission.release();
     notifyApprovalsChanged();
     return deps.waiters.register(approval.id);
   } catch (error) {
     return input.holdFailures
-      ? holdStrk20Notice(deps, input.origin, strk20ErrorMessage(error), "request-failed")
+      ? holdStrk20Notice(
+          deps,
+          input.origin,
+          strk20ErrorMessage(error),
+          "request-failed",
+          input.admission,
+        )
       : { error: strk20ErrorMessage(error) };
   }
 };
