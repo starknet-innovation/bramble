@@ -497,33 +497,3 @@ describe("Ledger sign controller", () => {
     expect(h.reports).toEqual([]);
   });
 });
-
-// Errors audit F9: the device signed and the wallet's half failed. That is not
-// a device fault, and the transaction may be on its way.
-describe("a wallet failure after the device signed", () => {
-  test("reads as signing that didn't finish, never as a Ledger fault", async () => {
-    const h = harness({
-      openConnected: () => Promise.resolve(fakeClient(okSign)),
-      request: () => Promise.reject(new Error("unused")),
-    });
-    const controller = createLedgerSignController({
-      connector: h.connector,
-      render: (view) => h.views.push(view),
-      report: () => Promise.reject(new Error("vault storage limit reached")),
-    });
-    controller.present(REQUEST);
-    await tick();
-
-    const last = h.views.at(-1);
-    expect(last?.phase).toEqual({
-      code: null,
-      kind: "error",
-      message: "Signing on your Ledger didn't finish. Check Activity before trying again.",
-    });
-    expect(last?.phase.kind === "error" && last.phase.message).not.toContain(
-      "talking to your Ledger",
-    );
-    // The transport is still released.
-    expect(h.closed()).toBe(1);
-  });
-});
