@@ -95,17 +95,15 @@ const request = (type: "wallet.addLedgerAccount" | "wallet.createLedgerVault", f
   ...(type === "wallet.createLedgerVault" ? { vaultPassphrase } : {}),
 });
 
-const ERRORS = {
-  "wallet.addLedgerAccount": "invalid add ledger account request",
-  "wallet.createLedgerVault": "invalid create ledger vault request",
-} as const;
+const NOT_FOUND = { error: "braavos ledger account not found" };
+const UNREADABLE = { error: "braavos ledger account status unavailable" };
 
 describe("Braavos Ledger accounts are stored only when already in use", () => {
   for (const type of ["wallet.addLedgerAccount", "wallet.createLedgerVault"] as const) {
     test(`${type} refuses a never-used Braavos address`, async () => {
       const h = harness(NEVER_USED);
       const response = await h.handler(request(type, "braavos"), extensionSender);
-      expect(response).toEqual({ error: ERRORS[type] });
+      expect(response).toEqual(NOT_FOUND);
       expect(h.stored).toEqual([]);
       // The check reads the address the vault would store, not the device key.
       expect(h.statusReads).toEqual([braavosAccount.address]);
@@ -117,8 +115,19 @@ describe("Braavos Ledger accounts are stored only when already in use", () => {
         getTokenBalances: () => Promise.reject(new Error("rpc down")),
       });
       const response = await h.handler(request(type, "braavos"), extensionSender);
-      expect(response).toEqual({ error: ERRORS[type] });
+      expect(response).toEqual(UNREADABLE);
       expect(h.stored).toEqual([]);
+    });
+
+    test(`${type} reports a half-read chain as unreadable, not as no account`, async () => {
+      for (const chain of [
+        { ...NEVER_USED, getTokenBalances: () => Promise.reject(new Error("rpc down")) },
+        { ...NEVER_USED, getDeploymentStatus: () => Promise.reject(new Error("rpc down")) },
+      ]) {
+        const h = harness(chain);
+        expect(await h.handler(request(type, "braavos"), extensionSender)).toEqual(UNREADABLE);
+        expect(h.stored).toEqual([]);
+      }
     });
 
     test(`${type} stores a deployed Braavos account`, async () => {
@@ -164,7 +173,36 @@ describe("Braavos Ledger accounts are stored only when already in use", () => {
       session,
     });
     const response = await handler(request("wallet.addLedgerAccount", "braavos"), extensionSender);
-    expect(response).toEqual({ error: ERRORS["wallet.addLedgerAccount"] });
+    expect(response).toEqual({ error: "wallet unavailable" });
     expect(stored).toEqual([]);
+  });
+
+  test("a network with no curated tokens reads an undeployed address as no account", async () => {
+    // Sepolia has no curated token list, so there is no balance to read: that
+    // is not an unreadable chain, and the reader is told there is no account.
+    const h = harness(NEVER_USED);
+    const response = await h.handler(
+      { ...request("wallet.addLedgerAccount", "braavos"), networkId: "SN_SEPOLIA" },
+      extensionSender,
+    );
+    expect(response).toEqual(NOT_FOUND);
+  });
+
+  test("a derivation that throws refuses as wallet unavailable", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const wallet = {
+      ...createWallet(),
+      async addLedgerAccount(): Promise<never> {
+        throw new Error("must not store");
+      },
+      deriveLedgerAccounts: () => Promise.reject(new Error("kms down")),
+    };
+    const handler = createMessageHandler(wallet, testExtension, {
+      runtimeRpc: makeRuntimeRpc({}),
+      session,
+    });
+    const response = await handler(request("wallet.addLedgerAccount", "braavos"), extensionSender);
+    expect(response).toEqual({ error: "wallet unavailable" });
   });
 });

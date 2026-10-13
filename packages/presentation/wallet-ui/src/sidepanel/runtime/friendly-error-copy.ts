@@ -22,6 +22,7 @@
  * like it was generated rather than written.
  */
 
+import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
@@ -417,6 +418,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["add ledger account failed", LEDGER_RETRY],
   ["create ledger wallet failed", LEDGER_RETRY],
   ["derive ledger accounts failed", LEDGER_RETRY],
+  // The background stores a Braavos Ledger account only when it is already in
+  // use (issue 644): no account to retry, or a chain read to retry.
+  ["braavos ledger account not found", "No Braavos account found for this key."],
+  ["braavos ledger account status unavailable", NETWORK_RETRY_MESSAGE],
   [
     "complete ledger sign failed",
     "Signing on your Ledger didn't finish. Check Activity before trying again.",

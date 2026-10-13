@@ -265,7 +265,8 @@ describe("Ledger onboard controller", () => {
     expect(h.created).toEqual([0]);
     expect(final?.kind).toBe("picker");
     if (final?.kind === "picker") {
-      expect(final.message).toBe("temporary write failure");
+      // An unmapped lowercase diagnostic is never shown raw in the picker.
+      expect(final.message).toBe("Something went wrong. Please try again.");
       expect(final.selected).toEqual([idOf(1)]);
       expect(final.candidates[0]?.duplicate).toBe(true);
       expect(final.candidates[1]?.duplicate).toBe(false);

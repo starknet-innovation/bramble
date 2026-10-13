@@ -74,39 +74,55 @@ export const readLedgerAccountState = async (
 };
 
 /**
- * Whether the background may store this Ledger account. Bramble never creates a
- * Braavos account, so a Braavos request passes only when its derived address is
- * proven active on chain — deployed, or funded in a known token, the same rule
- * the picker's `ledgerCandidateSelectable` applies. Fails closed: an
- * unavailable wallet, a failed derivation, or an unreadable chain state refuses.
+ * Why the background refuses to store a Ledger account, as the stable raw
+ * diagnostic the panel translates (friendly-error-copy), or null to proceed.
+ * The two Braavos refusals stay distinct because the reader's move differs: a
+ * key with no Braavos account has nothing to retry, an unreadable chain does.
+ */
+export type LedgerStoreRefusal = { readonly error: string } | null;
+
+/**
+ * Checks whether the background may store this Ledger account. Bramble never
+ * creates a Braavos account, so a Braavos request passes only when its derived
+ * address is proven active on chain — deployed, or funded in a known token, the
+ * same rule the picker's `ledgerCandidateSelectable` applies. Fails closed:
+ * - no or failing derivation refuses as `wallet unavailable`;
+ * - an address read as neither deployed nor funded refuses as not found;
+ * - a chain read that failed without proving activity refuses as unavailable.
  * Every other family passes unchecked (Argent's picker rule is unchanged).
  */
-export const ledgerAccountMayBeStored = async (
+export const ledgerStoreRefusal = async (
   deps: WalletOpsDeps,
   input: AddLedgerAccountRequest,
-): Promise<boolean> => {
+): Promise<LedgerStoreRefusal> => {
   if (input.accountContractType !== "braavos") {
-    return true;
+    return null;
   }
   const derive = deps.wallet.deriveLedgerAccounts;
-  if (!derive) {
-    return false;
+  const account = derive
+    ? await derive({
+        accountContractType: input.accountContractType,
+        ...(input.eip2645application === undefined
+          ? {}
+          : { eip2645application: input.eip2645application }),
+        entries: [{ accountIndex: input.accountIndex, publicKeyX: input.publicKeyX }],
+        networkId: input.networkId,
+      }).then(
+        ([derived]) => derived,
+        () => undefined,
+      )
+    : undefined;
+  if (!account) {
+    return { error: "wallet unavailable" };
   }
-  try {
-    const [account] = await derive({
-      accountContractType: input.accountContractType,
-      ...(input.eip2645application === undefined
-        ? {}
-        : { eip2645application: input.eip2645application }),
-      entries: [{ accountIndex: input.accountIndex, publicKeyX: input.publicKeyX }],
-      networkId: input.networkId,
-    });
-    if (!account) {
-      return false;
-    }
-    const state = await readLedgerAccountState(deps, account.address, input.networkId);
-    return state.deployed === true || state.funded === true;
-  } catch {
-    return false;
+  const state = await readLedgerAccountState(deps, account.address, input.networkId);
+  if (state.deployed === true || state.funded === true) {
+    return null;
   }
+  // A network with no curated tokens has no balance to read, which is not a
+  // failed read: there, a known-undeployed address is simply not in use.
+  const funded = knownTokensForNetwork(input.networkId).length === 0 ? false : state.funded;
+  return state.deployed === false && funded === false
+    ? { error: "braavos ledger account not found" }
+    : { error: "braavos ledger account status unavailable" };
 };

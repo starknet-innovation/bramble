@@ -17,7 +17,7 @@ import {
 } from "../runtime/active-network-mutation";
 import { runActiveStateMutation } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { ledgerAccountMayBeStored, readLedgerAccountState } from "./ledger-activity";
+import { ledgerStoreRefusal, readLedgerAccountState } from "./ledger-activity";
 import {
   readAddLedgerAccountInput,
   readCompleteLedgerSignInput,
@@ -37,8 +37,9 @@ const handleCreateLedgerVault: LedgerOpsHandler = async (deps, message) => {
   if (!createLedgerVault) {
     return { error: "wallet unavailable" };
   }
-  if (!(await ledgerAccountMayBeStored(deps, input))) {
-    return { error: "invalid create ledger vault request" };
+  const refusal = await ledgerStoreRefusal(deps, input);
+  if (refusal) {
+    return refusal;
   }
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
     const account = await runVaultCreationWithNetwork(
@@ -72,8 +73,9 @@ const handleAddLedgerAccount: LedgerOpsHandler = async (deps, message) => {
   }
   // Bramble never creates a Braavos account: a Braavos Ledger row the picker
   // should have disabled is refused here too, before anything is stored.
-  if (!(await ledgerAccountMayBeStored(deps, input))) {
-    return { error: "invalid add ledger account request" };
+  const refusal = await ledgerStoreRefusal(deps, input);
+  if (refusal) {
+    return refusal;
   }
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
     const account = await runUnlockedNetworkMutation(
