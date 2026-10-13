@@ -340,6 +340,14 @@ export type WalletVaultService = {
    * record; refuses rather than evicts at the bound. Background-only.
    */
   readonly recordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<void>;
+  /**
+   * Whether {@link recordShadowAccountScope} would accept `input` now: false
+   * when a scope or nonce bound would refuse it, without writing anything.
+   * Lets a request be refused before the user is asked to approve it; the
+   * record itself still re-checks and fails closed. Throws on a malformed
+   * scope. Background-only.
+   */
+  readonly canRecordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<boolean>;
   /** Lists one account's recorded scopes on one chain and pool. Background-only. */
   readonly listShadowAccountScopes: (
     input: ListShadowAccountScopesInput,

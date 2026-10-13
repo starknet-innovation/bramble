@@ -100,6 +100,12 @@ export type WalletStatusReader = {
    * without it, because an unrecorded shadow account cannot be recovered.
    */
   readonly recordShadowAccountScope?: (input: RecordShadowAccountScopeInput) => Promise<void>;
+  /**
+   * Whether a scope record would be accepted now, without writing. Optional
+   * only for partial test stubs; without it the request is still refused at
+   * record time, after approval.
+   */
+  readonly canRecordShadowAccountScope?: (input: RecordShadowAccountScopeInput) => Promise<boolean>;
   /** Lists recorded shadow-account scopes; optional only for partial test stubs. */
   readonly listShadowAccountScopes?: (
     input: ListShadowAccountScopesInput,
@@ -205,6 +211,9 @@ export const createWalletReader = (
     },
     async recordShadowAccountScope(input) {
       return (await required()).recordShadowAccountScope(input);
+    },
+    async canRecordShadowAccountScope(input) {
+      return (await required()).canRecordShadowAccountScope(input);
     },
     async listShadowAccountScopes(input) {
       return (await required()).listShadowAccountScopes(input);

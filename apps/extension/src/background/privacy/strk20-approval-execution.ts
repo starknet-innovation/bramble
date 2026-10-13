@@ -45,7 +45,11 @@ import {
   type Strk20TrustedPreferences,
 } from "./strk20-recipient-policy";
 import { bindStrk20ActionsToOrigin, strk20ShadowAccountCommitment } from "./strk20-shadow-account";
-import { recordShadowScopeUses, shadowScopeUses } from "./strk20-shadow-scopes";
+import {
+  disclosureScopeRecording,
+  invokeScopeRecording,
+  recordShadowScopeUses,
+} from "./strk20-shadow-scopes";
 
 /**
  * Dependencies needed to execute a held STRK20 invoke once the user approves.
@@ -212,12 +216,9 @@ const executeApprovedPrepare = async (
   }
   // A submittable proof can act through the shadow account once the site
   // relays it, so the scope is recorded first; a simulation cannot.
-  if (!request.simulate && request.anonymizer !== undefined) {
-    await recordShadowScopeUses(deps.wallet, resolved, {
-      anonymizer: request.anonymizer,
-      origin,
-      uses: shadowScopeUses(request.actions),
-    });
+  const recording = disclosureScopeRecording(request);
+  if (recording) {
+    await recordShadowScopeUses(deps.wallet, resolved, { ...recording, origin });
   }
   const callAndProof = await prepareStrk20CallAndProof(strk20ServiceForRuntime(deps.runtimeRpc), {
     ...context,
@@ -245,11 +246,10 @@ const executeApprovedCommitment = async (
   }
   // Recorded when the commitment is shared, not only on invoke: a site can
   // fund the precomputed address before the shadow account is deployed.
-  await recordShadowScopeUses(deps.wallet, resolved, {
-    anonymizer: request.anonymizer,
-    origin,
-    uses: [{ label: request.dappName, nonces: request.nonce === undefined ? [] : [request.nonce] }],
-  });
+  const recording = disclosureScopeRecording(request);
+  if (recording) {
+    await recordShadowScopeUses(deps.wallet, resolved, { ...recording, origin });
+  }
   return strk20ShadowAccountCommitment(deps.runtimeRpc, context, { origin, request });
 };
 
@@ -334,12 +334,9 @@ export const executeStrk20InvokeApproval = async (
     return refusal;
   }
   try {
-    if (approval.shadowAccountAnonymizer !== undefined) {
-      await recordShadowScopeUses(deps.wallet, resolved, {
-        anonymizer: approval.shadowAccountAnonymizer,
-        origin: approval.origin,
-        uses: shadowScopeUses(approval.actions),
-      });
+    const recording = invokeScopeRecording(approval.shadowAccountAnonymizer, approval.actions);
+    if (recording) {
+      await recordShadowScopeUses(deps.wallet, resolved, { ...recording, origin: approval.origin });
     }
     const result = await submitStrk20Actions(strk20ServiceForRuntime(deps.runtimeRpc), {
       ...strk20AccountContext(deps, resolved),

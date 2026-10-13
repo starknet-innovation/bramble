@@ -26,7 +26,19 @@ import type { WalletVaultService } from "./service-types";
 export const shadowAccountScopeMethods = (
   encryptedStore: EncryptedStore,
   readVaultSnapshot: (vaultPassphrase: string) => Promise<Vault>,
-): Pick<WalletVaultService, "listShadowAccountScopes" | "recordShadowAccountScope"> => ({
+): Pick<
+  WalletVaultService,
+  "canRecordShadowAccountScope" | "listShadowAccountScopes" | "recordShadowAccountScope"
+> => ({
+  async canRecordShadowAccountScope({ vaultPassphrase, ...input }) {
+    const vault = await readVaultSnapshot(vaultPassphrase);
+    const account = findVaultAccount(vault, input.accountId);
+    const scope = canonicalShadowAccountScope(input);
+    if (!scope || !sameFelt(scope.chainId, STARKNET_NETWORKS[account.networkId].chainId)) {
+      throw new WalletError(SHADOW_ACCOUNT_RECORD_INVALID);
+    }
+    return withShadowAccountScope(vault.shadowAccountScopes, scope) !== null;
+  },
   async listShadowAccountScopes(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     const account = findVaultAccount(vault, input.accountId);

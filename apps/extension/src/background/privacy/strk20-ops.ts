@@ -56,6 +56,11 @@ import {
   readStrk20ShadowAccountMessage,
 } from "./strk20-provider-inputs";
 import { poisonedStrk20ActionFlags } from "./strk20-recipient-policy";
+import {
+  disclosureScopeRecording,
+  invokeScopeRecording,
+  shadowRecordRefusal,
+} from "./strk20-shadow-scopes";
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.
@@ -127,6 +132,11 @@ const queueDisclosure = async (
     readonly summaries: readonly string[];
   },
 ): Promise<RuntimeResponse> => {
+  const recording = disclosureScopeRecording(input.request);
+  const unrecordable = await shadowRecordRefusal(deps.wallet, resolved, input.origin, recording);
+  if (unrecordable) {
+    return unrecordable;
+  }
   try {
     const payload = { strk20Request: input.request };
     const approval = deps.approvals.requestStrk20Disclosure({
@@ -382,12 +392,17 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   // queued with the flag, Deny only, rather than refused on arrival, so the
   // site cannot use the answer to read the address book (Sherlock 140).
   const flags = poisonedStrk20ActionFlags(resolved.account, resolved.preferences, input.actions);
+  const review = batchReview(resolved, input.origin, input.actions);
+  const recording = invokeScopeRecording(review.anonymizer, input.actions);
+  const unrecordable = await shadowRecordRefusal(deps.wallet, resolved, input.origin, recording);
+  if (unrecordable) {
+    return unrecordable;
+  }
   try {
     const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
       ...strk20AccountContext(deps, resolved),
       actions: input.actions,
     });
-    const review = batchReview(resolved, input.origin, input.actions);
     const anonymizer =
       review.anonymizer === undefined ? {} : { shadowAccountAnonymizer: review.anonymizer };
     const payload = { actions: input.actions, ...anonymizer, strk20Plan: plan };
