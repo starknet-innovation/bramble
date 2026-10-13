@@ -7,14 +7,12 @@
  * result so one market/token is never rendered under another one's heading.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import type { Resource } from "./types";
 
-const toMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "Request failed";
-};
+// Transport detail (a URL, a response body) and terminal plumbing collapse to
+// the existing "Request failed"; see ../../protocols/support/user-error.
+const toMessage = (error: unknown): string => userErrorMessage(error, "Request failed");
 
 const sameDependencies = (left: readonly unknown[], right: readonly unknown[]): boolean =>
   left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
