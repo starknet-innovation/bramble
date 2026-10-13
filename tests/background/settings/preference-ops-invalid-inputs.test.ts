@@ -170,7 +170,7 @@ describe("handlePreferenceOps input validation", () => {
       paymaster: { feeToken: "0x5", url: "https://privacy.example/paymaster" },
       poolAddress: "0x2",
       proverUrl: "https://privacy.example/prover",
-      subaccountAnonymizerAddress: "0x3",
+      shadowAccountAnonymizerAddress: "0x3",
     };
     await expect(
       handlePreferenceOps(preferencesStore, "wallet.setStrk20NetworkConfig", {

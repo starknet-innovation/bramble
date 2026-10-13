@@ -46,7 +46,7 @@ export type Strk20NetworkConfig = {
    * Optional SDK shadow account module used only by `shadow_account_invoke`. Dapp
    * anonymizers/executors are separate reviewed invoke targets.
    */
-  readonly subaccountAnonymizerAddress?: string;
+  readonly shadowAccountAnonymizerAddress?: string;
 };
 
 /**
@@ -76,7 +76,7 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
     "paymaster",
     "poolAddress",
     "proverUrl",
-    "subaccountAnonymizerAddress",
+    "shadowAccountAnonymizerAddress",
   ]) &&
   typeof value["discoveryUrl"] === "string" &&
   isServiceUrl(value["discoveryUrl"]) &&
@@ -88,9 +88,9 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
   typeof value["proverUrl"] === "string" &&
   isServiceUrl(value["proverUrl"]) &&
-  (value["subaccountAnonymizerAddress"] === undefined ||
-    (typeof value["subaccountAnonymizerAddress"] === "string" &&
-      isNonZeroStarkFieldElement(value["subaccountAnonymizerAddress"])));
+  (value["shadowAccountAnonymizerAddress"] === undefined ||
+    (typeof value["shadowAccountAnonymizerAddress"] === "string" &&
+      isNonZeroStarkFieldElement(value["shadowAccountAnonymizerAddress"])));
 
 /**
  * Bundled mainnet routing uses the wallet-owned AWS gateway so private upstream

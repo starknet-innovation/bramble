@@ -140,7 +140,7 @@ export const shadowAccountPoolPreferences = (): WalletPreferences => {
     ...base,
     strk20Networks: {
       ...base.strk20Networks,
-      SN_SEPOLIA: { ...sepolia, subaccountAnonymizerAddress: "0x456" },
+      SN_SEPOLIA: { ...sepolia, shadowAccountAnonymizerAddress: "0x456" },
     },
   };
 };

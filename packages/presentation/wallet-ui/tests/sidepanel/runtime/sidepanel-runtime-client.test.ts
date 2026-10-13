@@ -482,7 +482,7 @@ describe("token and preference wrappers", () => {
       discoveryUrl: "https://discovery.example",
       poolAddress: "0x1",
       proverUrl: "https://prover.example",
-      subaccountAnonymizerAddress: "0x2",
+      shadowAccountAnonymizerAddress: "0x2",
     };
     await expect(
       runtimeReturning(preferencesResponse).setStrk20NetworkConfig("SN_MAIN", config),

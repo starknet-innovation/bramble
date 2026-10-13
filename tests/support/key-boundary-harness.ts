@@ -375,7 +375,7 @@ const seedStores = async (stores: {
   const mainnet = DEFAULT_STRK20_NETWORKS.SN_MAIN;
   if (!mainnet) throw new Error("key-boundary harness needs the bundled Mainnet STRK20 config");
   await stores.preferencesStore.setStrk20NetworkConfig({
-    config: { ...mainnet, subaccountAnonymizerAddress: "0x2" },
+    config: { ...mainnet, shadowAccountAnonymizerAddress: "0x2" },
     networkId: "SN_MAIN",
   });
   const addressBookId = contacts.addressBook.at(-1)?.id;

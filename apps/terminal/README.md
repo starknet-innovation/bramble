@@ -106,7 +106,7 @@ handles private notes according to that dapp's rules, so its contract appears
 as an explicit target in that dapp's reviewed action plan. AVNU private swap
 uses AVNU's private executor, while Vesu or another dapp uses its own audited
 adapter. Core pool operations do not configure one. The wallet's optional
-`subaccountAnonymizerAddress` setting is a separate SDK module used only for
+`shadowAccountAnonymizerAddress` setting is a separate SDK module used only for
 generic `shadow_account_invoke` actions.
 
 ## NFT Studio

@@ -195,7 +195,7 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
     activeNetworkId: "SN_SEPOLIA" as const,
     strk20Networks: {
       ...defaults.strk20Networks,
-      SN_SEPOLIA: { ...mainnetStrk20, subaccountAnonymizerAddress: STRK20_TEST_ANONYMIZER },
+      SN_SEPOLIA: { ...mainnetStrk20, shadowAccountAnonymizerAddress: STRK20_TEST_ANONYMIZER },
     },
   };
   const strk20: Strk20Service = options.strk20 ?? makeStrk20Service(options);

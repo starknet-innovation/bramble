@@ -116,7 +116,7 @@ export const strk20ReadMethods = ({
   },
   async shadowAccountCommitment(input) {
     const config = requireStrk20Config(input);
-    if (!config.subaccountAnonymizerAddress) {
+    if (!config.shadowAccountAnonymizerAddress) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
     try {

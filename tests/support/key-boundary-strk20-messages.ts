@@ -33,7 +33,7 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
         ohttpEnabled: false,
         poolAddress: "0x1",
         proverUrl: "https://prover.example",
-        subaccountAnonymizerAddress: "0x2",
+        shadowAccountAnonymizerAddress: "0x2",
       },
       networkId: "SN_SEPOLIA",
       type: "wallet.setStrk20NetworkConfig",

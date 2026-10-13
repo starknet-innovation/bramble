@@ -253,7 +253,8 @@ const MISSING_ANONYMIZER = {
 } as const;
 
 const lacksAnonymizer = (resolved: ResolvedAccount): boolean =>
-  !resolved.preferences.strk20Networks?.[resolved.account.networkId]?.subaccountAnonymizerAddress;
+  !resolved.preferences.strk20Networks?.[resolved.account.networkId]
+    ?.shadowAccountAnonymizerAddress;
 
 const needsAnonymizer = (actions: readonly Strk20Action[]): boolean =>
   actions.some((action) => action.type === "shadow_account_invoke");

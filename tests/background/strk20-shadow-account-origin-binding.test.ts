@@ -60,7 +60,7 @@ const preferences = {
       discoveryUrl: "https://discovery.example",
       poolAddress: STRK20_TOKEN,
       proverUrl: "https://prover.example",
-      subaccountAnonymizerAddress: STRK20_RECIPIENT,
+      shadowAccountAnonymizerAddress: STRK20_RECIPIENT,
     },
   },
 };

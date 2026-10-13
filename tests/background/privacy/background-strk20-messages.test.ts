@@ -368,7 +368,7 @@ describe("background strk20 messages", () => {
           discoveryUrl: "https://discovery.example/strk20",
           poolAddress: token,
           proverUrl: "https://prover.example/strk20",
-          subaccountAnonymizerAddress: recipient,
+          shadowAccountAnonymizerAddress: recipient,
         },
       },
     };

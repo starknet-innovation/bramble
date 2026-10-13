@@ -54,10 +54,10 @@ export const strk20ServicesForm = (
     className: "mono",
     hint: "Optional SDK module for shadow_account_invoke. Dapp anonymizers are reviewed transaction targets, not network settings.",
     label: "SDK shadow account module",
-    name: "subaccountAnonymizerAddress",
+    name: "shadowAccountAnonymizerAddress",
     placeholder: "0x…",
     spellcheck: false,
-    value: config?.subaccountAnonymizerAddress ?? "",
+    value: config?.shadowAccountAnonymizerAddress ?? "",
   })}
   ${textField({
     autocomplete: "off",

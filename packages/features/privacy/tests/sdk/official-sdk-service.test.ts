@@ -262,7 +262,7 @@ describe("official STRK20 SDK adapter", () => {
     ).rejects.toThrow("strk20 services unavailable");
     const withAnonymizer = {
       ...privateContext,
-      config: { ...privateContext.config, subaccountAnonymizerAddress: "0x789" },
+      config: { ...privateContext.config, shadowAccountAnonymizerAddress: "0x789" },
     };
     await expect(service.privateBalances({ ...withAnonymizer, tokens: [] })).resolves.toEqual([]);
     expect(sdkInput).toHaveProperty("shadowAccountAnonymizerAddress", "0x789");
