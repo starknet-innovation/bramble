@@ -22,9 +22,11 @@ const HEX_FELT_PATTERN = /^0x[0-9a-fA-F]+$/;
 // `${openNoteIds[N]}` (zero-based) or `${poolAddress}`.
 const CALLDATA_PLACEHOLDER_PATTERN = /^\$\{(?:openNoteIds\[[0-9]+\]|poolAddress)\}$/;
 const ENTRY_POINT_PATTERN = /^(?:0x[0-9a-fA-F]{1,64}|[A-Za-z_][A-Za-z0-9_]*)$/;
-// The literal transfer amount that requests a new open note instead of a fixed
-// transfer.
-const OPEN_AMOUNT = "OPEN";
+/**
+ * The literal transfer amount that requests a new open note instead of a fixed
+ * transfer.
+ */
+export const OPEN_AMOUNT = "OPEN";
 
 /**
  * Cross-layer STRK20 container limits shared by dapp params, prover responses,

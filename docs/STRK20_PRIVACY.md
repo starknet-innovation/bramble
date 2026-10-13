@@ -107,6 +107,12 @@ device.
 
 1. The content/provider bridge strictly parses bounded actions, token lists, proof envelopes, and
    dapp-scoped sub-account requests. A connected origin sees only its granted active account.
+   Before any approval is queued, the background refuses batch shapes the pinned SDK or pool
+   rejects only later (`strk20-batch.ts`): more than one `invoke`/`subaccount_invoke`, a `0x…`
+   sub-account `entry_point` (the SDK hashes it as a name), an `OPEN` transfer with no invoke or
+   after it, two `OPEN` transfers in one token beside a `subaccount_invoke`, and a public deposit
+   beside a `subaccount_invoke` that settles open notes (`MULTIPLE_SCREENING_SUBJECTS`). The site
+   gets `INVALID_REQUEST_PAYLOAD` with the rule as `data`.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
    and sub-account commitments each create a dedicated approval. Registration uses the explicitly
    Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The

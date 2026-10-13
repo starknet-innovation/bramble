@@ -18,6 +18,7 @@ import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-responses";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
+import { strk20BatchRefusalError } from "@bramble/wallet-protocol/strk20-batch";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
@@ -252,6 +253,12 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   if (gate) {
     return gate;
   }
+  // A batch the SDK or pool is known to reject, or whose reviewed call is not
+  // the executed one, is refused before it can reach the user (#443).
+  const refusal = strk20BatchRefusalError(input.actions);
+  if (refusal) {
+    return { error: refusal };
+  }
   // Queue admission first: no privacy approval here deduplicates, so an origin
   // at its cap is refused whatever this request contains — and refusing it now
   // costs a map filter instead of a vault read plus a pool quote.
@@ -289,6 +296,10 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   const gate = gateOrigin(deps, input.origin, sender);
   if (gate) {
     return gate;
+  }
+  const refusal = strk20BatchRefusalError(input.actions);
+  if (refusal) {
+    return { error: refusal };
   }
   // Queue admission first: no privacy approval here deduplicates, so an origin
   // at its cap is refused whatever this request contains — and refusing it now
