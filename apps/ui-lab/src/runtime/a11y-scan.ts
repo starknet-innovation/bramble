@@ -87,6 +87,8 @@ const ACTIVE_ELEMENTS = "script, iframe, frame, frameset, object, embed, base, m
 // whitespace and control characters inside the scheme.
 const SCRIPT_URL = /^javascript:/i;
 const URL_ATTRIBUTES = new Set(["action", "data", "formaction", "href", "src", "xlink:href"]);
+const withoutControls = (value: string): string =>
+  [...value].filter((character) => character.charCodeAt(0) > 0x20).join("");
 
 /**
  * The markup with every element that runs or embeds a document (scripts,
@@ -102,8 +104,7 @@ export const inertMarkup = (markup: string): string => {
     for (const attribute of [...element.attributes]) {
       const name = attribute.name.toLowerCase();
       const scriptUrl =
-        URL_ATTRIBUTES.has(name) &&
-        SCRIPT_URL.test(attribute.value.replace(/[\u0000-\u0020]/g, ""));
+        URL_ATTRIBUTES.has(name) && SCRIPT_URL.test(withoutControls(attribute.value));
       if (name.startsWith("on") || name === "srcdoc" || scriptUrl) {
         element.removeAttribute(attribute.name);
       }
