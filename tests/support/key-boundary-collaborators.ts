@@ -17,6 +17,11 @@ import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/mul
 import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
 import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
 import type { Vault } from "@bramble/vault/schema";
+import {
+  canonicalShadowAccountScope,
+  type ShadowAccountScopeRef,
+  withShadowAccountScope,
+} from "@bramble/vault/shadow-account-scopes";
 import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
@@ -89,6 +94,9 @@ const ledgerAccount: LedgerAccountRef = {
  */
 export const viewingKeyDerivations = { value: 0 };
 
+// Shadow-account scopes the key-boundary wallet double has recorded.
+const recordedScopes: { value: readonly ShadowAccountScopeRef[] } = { value: [] };
+
 /** The salted stub vault service the scan runs the router against. */
 export const walletStub = {
   async addDerivedAccount() {
@@ -148,6 +156,24 @@ export const walletStub = {
   },
   async grantOrigin() {
     return [account];
+  },
+  // Recorded through the vault's own merge, so the scan exercises the real
+  // record shape; the records are not secret but must stay privileged.
+  async recordShadowAccountScope({
+    vaultPassphrase,
+    ...input
+  }: { readonly vaultPassphrase: string } & ShadowAccountScopeRef) {
+    if (vaultPassphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
+    const scope = canonicalShadowAccountScope(input);
+    const next = scope ? withShadowAccountScope(recordedScopes.value, scope) : null;
+    if (next) {
+      recordedScopes.value = next;
+    }
+  },
+  async listShadowAccountScopes() {
+    return recordedScopes.value;
   },
   async readVault(passphrase: string) {
     if (passphrase !== SECRET_PASSPHRASE) {

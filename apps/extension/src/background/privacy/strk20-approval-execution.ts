@@ -45,6 +45,7 @@ import {
   type Strk20TrustedPreferences,
 } from "./strk20-recipient-policy";
 import { bindStrk20ActionsToOrigin, strk20ShadowAccountCommitment } from "./strk20-shadow-account";
+import { recordShadowScopeUses, shadowScopeUses } from "./strk20-shadow-scopes";
 
 /**
  * Dependencies needed to execute a held STRK20 invoke once the user approves.
@@ -177,6 +178,81 @@ const reviewedAnonymizerRefusal = (
 const hasShadowInvoke = (actions: readonly Strk20Action[]): boolean =>
   actions.some((action) => action.type === "shadow_account_invoke");
 
+type ApprovedRequest<T extends Strk20DisclosureRequest["type"]> = Extract<
+  Strk20DisclosureRequest,
+  { readonly type: T }
+>;
+
+// An approved proof request. Throws on an SDK or vault failure; the caller maps it.
+const executeApprovedPrepare = async (
+  deps: Strk20ExecuteDeps,
+  resolved: ResolvedAccount,
+  origin: string,
+  request: ApprovedRequest<"prepare">,
+): Promise<RuntimeResponse> => {
+  // Re-applied after consent, not only before it: the contact this recipient
+  // mimics may have been saved while the request sat in the queue, and the
+  // proof this produces is submittable.
+  const refusal = refusePoisonedStrk20Actions(
+    resolved.account,
+    resolved.preferences,
+    request.actions,
+  );
+  if (refusal) {
+    return refusal;
+  }
+  const context = strk20AccountContext(deps, resolved);
+  const moved = reviewedAnonymizerRefusal(
+    context.config?.shadowAccountAnonymizerAddress,
+    request.anonymizer,
+    hasShadowInvoke(request.actions),
+  );
+  if (moved) {
+    return moved;
+  }
+  // A submittable proof can act through the shadow account once the site
+  // relays it, so the scope is recorded first; a simulation cannot.
+  if (!request.simulate && request.anonymizer !== undefined) {
+    await recordShadowScopeUses(deps.wallet, resolved, {
+      anonymizer: request.anonymizer,
+      origin,
+      uses: shadowScopeUses(request.actions),
+    });
+  }
+  const callAndProof = await prepareStrk20CallAndProof(strk20ServiceForRuntime(deps.runtimeRpc), {
+    ...context,
+    actions: await bindStrk20ActionsToOrigin(origin, request.actions),
+    simulate: request.simulate,
+  });
+  return { callAndProof, ok: true };
+};
+
+// An approved commitment disclosure. Throws on an SDK or vault failure.
+const executeApprovedCommitment = async (
+  deps: Strk20ExecuteDeps,
+  resolved: ResolvedAccount,
+  origin: string,
+  request: ApprovedRequest<"shadowAccount">,
+): Promise<RuntimeResponse> => {
+  const context = strk20AccountContext(deps, resolved);
+  const moved = reviewedAnonymizerRefusal(
+    context.config?.shadowAccountAnonymizerAddress,
+    request.anonymizer,
+    true,
+  );
+  if (moved) {
+    return moved;
+  }
+  // Recorded when the commitment is shared, not only on invoke: a site can
+  // fund the precomputed address before the shadow account is deployed.
+  await recordShadowScopeUses(deps.wallet, resolved, {
+    anonymizer: request.anonymizer,
+    origin,
+    uses: [{ label: request.dappName, nonces: request.nonce === undefined ? [] : [request.nonce] }],
+  });
+  return strk20ShadowAccountCommitment(deps.runtimeRpc, context, { origin, request });
+};
+
 /**
  * Executes an approved private disclosure or proof request after re-validating
  * the origin's account and network context. No SDK private-state operation runs
@@ -207,47 +283,9 @@ export const executeStrk20DisclosureApproval = async (
       return { balances, ok: true };
     }
     if (approval.request.type === "prepare") {
-      // Re-applied after consent, not only before it: the contact this recipient
-      // mimics may have been saved while the request sat in the queue, and the
-      // proof this produces is submittable.
-      const refusal = refusePoisonedStrk20Actions(
-        resolved.account,
-        resolved.preferences,
-        approval.request.actions,
-      );
-      if (refusal) {
-        return refusal;
-      }
-      const moved = reviewedAnonymizerRefusal(
-        context.config?.shadowAccountAnonymizerAddress,
-        approval.request.anonymizer,
-        hasShadowInvoke(approval.request.actions),
-      );
-      if (moved) {
-        return moved;
-      }
-      const callAndProof = await prepareStrk20CallAndProof(
-        strk20ServiceForRuntime(deps.runtimeRpc),
-        {
-          ...context,
-          actions: await bindStrk20ActionsToOrigin(approval.origin, approval.request.actions),
-          simulate: approval.request.simulate,
-        },
-      );
-      return { callAndProof, ok: true };
+      return await executeApprovedPrepare(deps, resolved, approval.origin, approval.request);
     }
-    const moved = reviewedAnonymizerRefusal(
-      context.config?.shadowAccountAnonymizerAddress,
-      approval.request.anonymizer,
-      true,
-    );
-    if (moved) {
-      return moved;
-    }
-    return strk20ShadowAccountCommitment(deps.runtimeRpc, context, {
-      origin: approval.origin,
-      request: approval.request,
-    });
+    return await executeApprovedCommitment(deps, resolved, approval.origin, approval.request);
   } catch (error) {
     return { error: strk20ErrorMessage(error) };
   }
@@ -296,6 +334,13 @@ export const executeStrk20InvokeApproval = async (
     return refusal;
   }
   try {
+    if (approval.shadowAccountAnonymizer !== undefined) {
+      await recordShadowScopeUses(deps.wallet, resolved, {
+        anonymizer: approval.shadowAccountAnonymizer,
+        origin: approval.origin,
+        uses: shadowScopeUses(approval.actions),
+      });
+    }
     const result = await submitStrk20Actions(strk20ServiceForRuntime(deps.runtimeRpc), {
       ...strk20AccountContext(deps, resolved),
       actions: await bindStrk20ActionsToOrigin(approval.origin, approval.actions),
