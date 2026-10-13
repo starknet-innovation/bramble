@@ -276,6 +276,8 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
         warning: input.warning,
       };
       const perform = async (): Promise<InvokeFunctionResponse> => {
+        // Runs on every attempt, right before the wallet sees the calls.
+        await input.handoffCheck?.();
         const params = walletInvokeParams(input.calls);
         if (wallet !== null && typeof wallet.request === "function") {
           const raw = wallet.request as unknown as WalletRequest;
