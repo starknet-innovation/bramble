@@ -219,8 +219,9 @@ Settings → Shadow accounts lists the records without any network read. Balance
 the user asks, and the screen says why: the read sends the scope's partial commitment to the RPC node
 (`get_shadow_accounts` on the anonymizer) and then each address's balances, so the node can link
 those addresses to each other and to this client. The read covers the recorded nonces plus the
-first 16 (undeployed included, since they may already hold funds); recorded nonces above the view's
-u64 range are reported as not listable. A scope recorded under another anonymizer is listed but not
+first 16 (undeployed included, since they may already hold funds); recorded nonces from 2^64 − 1
+up are reported as not listable, because the view's exclusive `u64` end bound cannot include them,
+and the scope's other nonces still list. A scope recorded under another anonymizer is listed but not
 reachable.
 
 A sweep is one `OPEN` transfer to this account per tracked token the shadow account holds, then a

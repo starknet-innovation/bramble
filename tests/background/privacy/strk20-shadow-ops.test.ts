@@ -163,6 +163,69 @@ describe("shadow accounts view messages", () => {
     );
   });
 
+  // Audit F4: a site can record nonce 2^64 − 1 through its commitment request.
+  // No view window can include it (end_nonce would be 2^64), so it is reported
+  // as unlisted and the scope's other nonces still list.
+  test("nonce 2^64 − 1 is unlisted and does not block the scope's other nonces", async () => {
+    const max = `0x${"f".repeat(16)}`;
+    const asked: bigint[][] = [];
+    const store = { value: [scope({ nonces: ["0x1", max] })] as readonly ShadowAccountScopeRef[] };
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const base = makeStrk20Service();
+    const handler = createMessageHandler(
+      {
+        ...createWallet({ shadowAccountScopes: store }),
+        async deriveStrk20ViewingKey() {
+          return "0x55";
+        },
+      },
+      testExtension,
+      {
+        preferencesStore: {
+          ...unavailablePreferencesStore,
+          async read() {
+            return preferences;
+          },
+        },
+        runtimeRpc: makeRuntimeRpc({
+          async getTokenBalances({ tokens }) {
+            return tokens.map((token) => ({ ...token, balance: "5", formatted: "" }));
+          },
+          strk20: {
+            ...base,
+            async shadowAccounts(input) {
+              asked.push([...input.nonces]);
+              if (input.nonces.some((nonce) => nonce >= (1n << 64n) - 1n)) {
+                throw new Error("could not list shadow accounts (u64 overflow)");
+              }
+              return base.shadowAccounts?.(input) ?? [];
+            },
+          },
+        }),
+        session,
+      },
+    );
+    const response = (await handler(
+      {
+        label: "Market",
+        origin: "https://example.com",
+        type: "wallet.strk20ShadowAccountBalances",
+      },
+      panel,
+    )) as {
+      strk20ShadowAccountBalances: {
+        accounts: readonly { nonce: string }[];
+        unlisted: readonly string[];
+      };
+    };
+    expect(response.strk20ShadowAccountBalances.unlisted).toEqual([max]);
+    expect(response.strk20ShadowAccountBalances.accounts.map((entry) => entry.nonce)).toContain(
+      "0x1",
+    );
+    expect(asked.flat()).not.toContain((1n << 64n) - 1n);
+  });
+
   test("malformed requests are refused before any read", async () => {
     const handler = handlerWith([scope({})]);
     for (const message of [

@@ -77,6 +77,17 @@ describe("shadow account listing", () => {
     ]);
   });
 
+  test("the last listable nonce, 2^64 − 2, ends its window at the u64 maximum", async () => {
+    const calls: Call[] = [];
+    const { shadowAccounts } = reads(anonymizerAnswering(calls, new Set()));
+    const last = (1n << 64n) - 2n;
+    await shadowAccounts?.({ ...STRK20_SDK_CONTEXT, dappName: "scope", nonces: [last] });
+    expect(calls[0]?.calldata.slice(1, 3)).toEqual([
+      `0x${last.toString(16)}`,
+      `0x${((1n << 64n) - 1n).toString(16)}`,
+    ]);
+  });
+
   test("fails closed on a malformed answer, a missing anonymizer, or an out-of-range nonce", async () => {
     const calls: Call[] = [];
     const corrupt = reads(anonymizerAnswering(calls, new Set(), true)).shadowAccounts;
@@ -94,6 +105,10 @@ describe("shadow account listing", () => {
     ).rejects.toThrow("strk20 services unavailable");
     await expect(
       shadowAccounts?.({ ...STRK20_SDK_CONTEXT, dappName: "scope", nonces: [1n << 64n] }),
+    ).rejects.toThrow("outside the anonymizer's range");
+    // 2^64 − 1 would need end_nonce 2^64, which is not a u64 (audit F4).
+    await expect(
+      shadowAccounts?.({ ...STRK20_SDK_CONTEXT, dappName: "scope", nonces: [(1n << 64n) - 1n] }),
     ).rejects.toThrow("outside the anonymizer's range");
     const unreachable = reads(
       () =>

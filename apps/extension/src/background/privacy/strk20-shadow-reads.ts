@@ -9,6 +9,7 @@
  * it runs only on an explicit request, never on a view's hydration.
  */
 import { WalletError } from "@bramble/core/errors";
+import { STRK20_SHADOW_VIEW_NONCE_LIMIT } from "@bramble/privacy/service";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
 import { sameFelt } from "@bramble/wallet-model/networks";
@@ -20,8 +21,6 @@ import { strk20ShadowAccountScope } from "./strk20-shadow-account";
 // Nonces every scope is read at, recorded or not: a site may fund one first.
 const SHADOW_SCAN_NONCES = 16n;
 
-/** Largest nonce the anonymizer's view can address (its nonce is a u64). */
-const VIEW_NONCE_LIMIT = 1n << 64n;
 
 // Refusal for a scope the vault has no record of. Stable error code.
 const SHADOW_ACCOUNT_SCOPE_UNKNOWN = "shadow account scope not recorded";
@@ -120,7 +119,7 @@ export const readShadowAccounts = async (
   const infos = await service.shadowAccounts({
     ...context.accountContext,
     dappName: await strk20ShadowAccountScope(scope.origin, scope.label),
-    nonces: wanted.filter((nonce) => nonce < VIEW_NONCE_LIMIT),
+    nonces: wanted.filter((nonce) => nonce < STRK20_SHADOW_VIEW_NONCE_LIMIT),
   });
   const accounts: ShadowAccountEntry[] = [];
   for (const info of infos) {
@@ -133,6 +132,6 @@ export const readShadowAccounts = async (
   return {
     accounts,
     anonymizer: scope.anonymizer,
-    unlisted: scope.nonces.filter((nonce) => BigInt(nonce) >= VIEW_NONCE_LIMIT),
+    unlisted: scope.nonces.filter((nonce) => BigInt(nonce) >= STRK20_SHADOW_VIEW_NONCE_LIMIT),
   };
 };
