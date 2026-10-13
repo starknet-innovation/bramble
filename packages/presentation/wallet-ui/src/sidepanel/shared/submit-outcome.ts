@@ -72,10 +72,10 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Ledger answers that arrive before a signature exists. Not here: a chain
+ * Ledger answers that arrive before the device has signed. Not here: a chain
  * failure (it was sent), a wallet restart mid-sign, a sign still waiting, and
- * the catch-all device error, which a wallet-side failure after the signature
- * also becomes.
+ * the catch-all device error, which a wallet-side failure after the device
+ * signed also becomes.
  */
 const PRE_SIGNATURE_LEDGER_CODES: ReadonlySet<LedgerRejectionCode> = new Set([
   "app-below-minimum",
