@@ -4,7 +4,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
-import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
+import {
+  EMPTY_ALLOWANCE_LISTING,
+  type TokenBalance,
+  type WalletStatus,
+} from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
 const status: WalletStatus = {
@@ -46,7 +50,7 @@ describe("sidepanel home hero caption", () => {
       { "0x00aa": 5 },
       [],
       null,
-      [],
+      EMPTY_ALLOWANCE_LISTING,
       null,
       { "0x00aa": 4 },
     );
@@ -78,7 +82,7 @@ describe("sidepanel home hero caption", () => {
       { "0x00aa": 5 },
       [],
       null,
-      [],
+      EMPTY_ALLOWANCE_LISTING,
       null,
       {},
     );
