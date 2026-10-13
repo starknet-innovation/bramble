@@ -56,11 +56,17 @@ export const ActivityLongFeed: LabStory = {
       doc.documentElement.clientHeight,
     );
     const restingTop = Math.round(header.getBoundingClientRect().top);
+    const listRestingTop = list.getBoundingClientRect().top;
     await expect(restingTop).toBeGreaterThan(0);
     win.scrollTo(0, 240);
     await waitFor(() => expect(Math.round(header.getBoundingClientRect().top)).toBe(0));
     await expect(header).toBeVisible();
-    await expect(list.getBoundingClientRect().top).toBeLessThan(restingTop);
+    // The filter toolbar sits between the bar and the first day's rows, so
+    // compare the rows with where they rested: they moved by the whole scroll.
+    await expect(Math.round(listRestingTop - list.getBoundingClientRect().top)).toBe(
+      Math.round(win.scrollY),
+    );
+    await expect(win.scrollY).toBeGreaterThan(0);
     // Leave the surface at rest, so a snapshot shows the screen, not the scroll.
     win.scrollTo(0, 0);
   },
