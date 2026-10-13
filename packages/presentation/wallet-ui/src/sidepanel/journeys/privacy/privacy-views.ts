@@ -96,6 +96,17 @@ const preparing = (
 const shortAddress = (value: string): string =>
   value.length <= 15 ? value : `${value.slice(0, 8)}…${value.slice(-5)}`;
 
+// Owner-approved consent copy (issue 438). The fee sentence rides on the same
+// condition as the Cost section's "Pool fee … from public STRK" line, so the
+// two never disagree; the amount itself stays only in Cost. Registration from
+// the background always takes the public-account route with a pool fee.
+const activationOutcome = (
+  preparation: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>["preparation"],
+): string =>
+  preparation.poolFeeFri
+    ? "Going private sets up a private balance for this account. Registering costs a one-time pool fee, paid from your public STRK."
+    : "Going private sets up a private balance for this account.";
+
 const preparationDetails = (
   journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>,
   status: WalletStatus,
@@ -108,7 +119,7 @@ const preparationDetails = (
     </header>
     <section class="decision-layer decision-outcome" aria-label="What will happen">
       <p class="decision-label">What will happen</p>
-      <p>This one-time registration lets this account discover and use its private notes.</p>
+      <p>${escapeHtml(activationOutcome(preparation))}</p>
     </section>
     ${reviewPanel([
       "Registration is public. It stores this account's viewing-key commitment on-chain and opens its private channel. It does not reveal the viewing key or your private balance.",
