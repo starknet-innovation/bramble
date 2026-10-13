@@ -10,11 +10,13 @@ import {
   quoteStrk20Plan,
   STRK20_SERVICE_UNAVAILABLE,
   type Strk20AssetLookup,
-  summarizeStrk20Action,
+  type Strk20ShadowAccountReview,
+  summarizeStrk20Batch,
   summarizeStrk20Plan,
 } from "@bramble/privacy/service";
+import { SHADOW_INVOKE_ANONYMIZER } from "@bramble/privacy/shadow-account-copy";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import type { ActivityLog } from "@bramble/transactions/activity";
+import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { ApprovalRiskFlag } from "@bramble/wallet-protocol/extension-responses";
@@ -252,12 +254,33 @@ const MISSING_ANONYMIZER = {
   error: `${STRK20_SERVICE_UNAVAILABLE}: no shadow account anonymizer is configured for this network`,
 } as const;
 
-const lacksAnonymizer = (resolved: ResolvedAccount): boolean =>
-  !resolved.preferences.strk20Networks?.[resolved.account.networkId]
-    ?.shadowAccountAnonymizerAddress;
+const configuredAnonymizer = (resolved: ResolvedAccount): string | undefined =>
+  resolved.preferences.strk20Networks?.[resolved.account.networkId]?.shadowAccountAnonymizerAddress;
 
 const needsAnonymizer = (actions: readonly Strk20Action[]): boolean =>
   actions.some((action) => action.type === "shadow_account_invoke");
+
+// What the card states for a batch, and the anonymizer it named. The
+// anonymizer is bound into the approval so execution can refuse if the
+// network's configuration moved after review: the calls the user reviewed
+// would otherwise run through a different anonymizer than the card showed.
+const batchReview = (
+  resolved: ResolvedAccount,
+  origin: string,
+  actions: readonly Strk20Action[],
+): { readonly anonymizer?: string; readonly summaries: readonly string[] } => {
+  const anonymizer = needsAnonymizer(actions) ? configuredAnonymizer(resolved) : undefined;
+  const shadow: Strk20ShadowAccountReview | undefined =
+    anonymizer === undefined ? undefined : { anonymizer, origin: activityOrigin(origin) };
+  return {
+    ...(anonymizer === undefined ? {} : { anonymizer }),
+    summaries: summarizeStrk20Batch(actions, {
+      assetFor: trustedAssetLookup(resolved),
+      depositor: resolved.account.address,
+      ...(shadow ? { shadow } : {}),
+    }),
+  };
+};
 
 const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender) => {
   const input = readStrk20PrepareMessage(message);
@@ -282,7 +305,7 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   if ("error" in resolved) {
     return resolved;
   }
-  if (needsAnonymizer(input.actions) && lacksAnonymizer(resolved)) {
+  if (needsAnonymizer(input.actions) && configuredAnonymizer(resolved) === undefined) {
     return MISSING_ANONYMIZER;
   }
   // The same recipient policy the wallet's own pool routes apply. A poisoned
@@ -290,15 +313,19 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   // rather than refused at once: an instant refusal told the site which
   // addresses the user has saved or paid (Sherlock 140).
   const flags = poisonedStrk20ActionFlags(resolved.account, resolved.preferences, input.actions);
+  const review = batchReview(resolved, input.origin, input.actions);
   return queueDisclosure(deps, resolved, {
     flags,
     kind: "strk20-prepare",
     origin: input.origin,
-    request: { actions: input.actions, simulate: input.simulate, type: "prepare" },
+    request: {
+      actions: input.actions,
+      ...(review.anonymizer === undefined ? {} : { anonymizer: review.anonymizer }),
+      simulate: input.simulate,
+      type: "prepare",
+    },
     summaries: [
-      ...input.actions.map((action) =>
-        summarizeStrk20Action(action, resolved.account.address, trustedAssetLookup(resolved)),
-      ),
+      ...review.summaries,
       input.simulate
         ? "Simulate only — no submittable proof"
         : "Generate a submittable private proof for this site",
@@ -327,7 +354,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   if ("error" in resolved) {
     return resolved;
   }
-  if (needsAnonymizer(input.actions) && lacksAnonymizer(resolved)) {
+  if (needsAnonymizer(input.actions) && configuredAnonymizer(resolved) === undefined) {
     return MISSING_ANONYMIZER;
   }
   // A private transfer or withdrawal to an address that mimics a saved contact
@@ -340,8 +367,12 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
       ...strk20AccountContext(deps, resolved),
       actions: input.actions,
     });
-    const payload = { actions: input.actions, strk20Plan: plan };
+    const review = batchReview(resolved, input.origin, input.actions);
+    const anonymizer =
+      review.anonymizer === undefined ? {} : { shadowAccountAnonymizer: review.anonymizer };
+    const payload = { actions: input.actions, ...anonymizer, strk20Plan: plan };
     const approval = deps.approvals.requestStrk20Invoke({
+      ...anonymizer,
       actions: input.actions,
       context: await createApprovalContext(resolved.account, payload),
       flags,
@@ -352,9 +383,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
       summaries: [
-        ...input.actions.map((action) =>
-          summarizeStrk20Action(action, resolved.account.address, trustedAssetLookup(resolved)),
-        ),
+        ...review.summaries,
         summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
       ],
     });
@@ -382,13 +411,15 @@ const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, messa
   if ("error" in resolved) {
     return resolved;
   }
-  if (lacksAnonymizer(resolved)) {
+  const anonymizer = configuredAnonymizer(resolved);
+  if (anonymizer === undefined) {
     return MISSING_ANONYMIZER;
   }
   return queueDisclosure(deps, resolved, {
     kind: "strk20-shadow-account",
     origin: input.origin,
     request: {
+      anonymizer,
       dappName: input.dappName,
       ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
       type: "shadowAccount",
@@ -397,6 +428,7 @@ const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, messa
       `Share a private shadow account commitment for ${input.origin}`,
       `Site-chosen scope label ${input.dappName}`,
       ...(input.nonce === undefined ? [] : [`Nonce ${input.nonce}`]),
+      SHADOW_INVOKE_ANONYMIZER(anonymizer),
     ],
   });
 };

@@ -7,7 +7,7 @@
  */
 
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
-import type { DeferredStrk20Approval } from "../privacy/strk20-approval-execution";
+import type { DeferredStrk20Approval } from "../privacy/strk20-approval-staging";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PendingApproval } from "./approvals";
 

@@ -26,9 +26,11 @@ import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
+} from "../privacy/strk20-approval-execution";
+import {
   stageApprovedStrk20Deposit,
   stageApprovedStrk20Registration,
-} from "../privacy/strk20-approval-execution";
+} from "../privacy/strk20-approval-staging";
 import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
@@ -182,6 +184,9 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
       ...(approval.context === undefined ? {} : { context: approval.context }),
       origin: approval.origin,
       plan: payload.strk20Plan,
+      ...(payload.shadowAccountAnonymizer === undefined
+        ? {}
+        : { shadowAccountAnonymizer: payload.shadowAccountAnonymizer }),
     },
   );
   return settleExecutor(result);

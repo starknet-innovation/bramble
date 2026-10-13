@@ -34,6 +34,7 @@ import {
   STRK20_EXTENSION_SENDER,
   STRK20_ORIGIN,
   STRK20_RECIPIENT,
+  STRK20_TEST_ANONYMIZER,
   STRK20_TOKEN,
 } from "../support/strk20-background";
 
@@ -135,7 +136,12 @@ const commitmentFor = async (
 ): Promise<unknown> =>
   executeStrk20DisclosureApproval(executeDeps(seen), {
     origin,
-    request: { dappName, ...(nonce === undefined ? {} : { nonce }), type: "shadowAccount" },
+    request: {
+      anonymizer: STRK20_RECIPIENT,
+      dappName,
+      ...(nonce === undefined ? {} : { nonce }),
+      type: "shadowAccount",
+    },
   });
 
 type Strk20ShadowAccountInvoke = Extract<Strk20Action, { readonly type: "shadow_account_invoke" }>;
@@ -226,6 +232,7 @@ describe("STRK20 shadow account origin binding", () => {
     expect(listed.at(-1)?.summaries).toEqual([
       `Share a private shadow account commitment for ${STRK20_ORIGIN}`,
       "Site-chosen scope label Trust Me",
+      `Shadow account anonymizer ${STRK20_TEST_ANONYMIZER}`,
     ]);
 
     const id = await latestApprovalId(handler, STRK20_EXTENSION_SENDER);
@@ -242,6 +249,7 @@ describe("STRK20 shadow account origin binding", () => {
         origin: "https://example.com",
         request: {
           actions: [deposit, shadowAccountAction("Example")],
+          anonymizer: STRK20_RECIPIENT,
           simulate: true,
           type: "prepare",
         },
@@ -264,6 +272,7 @@ describe("STRK20 shadow account origin binding", () => {
       executeStrk20InvokeApproval(executeDeps(seen), {
         actions: [shadowAccountAction("Example")],
         origin: "https://example.com",
+        shadowAccountAnonymizer: STRK20_RECIPIENT,
         plan: {
           feeAction: {
             amount: "0x1",
@@ -291,6 +300,7 @@ describe("STRK20 shadow account origin binding", () => {
       await executeStrk20InvokeApproval(executeDeps(seen), {
         actions: [shadowAccountAction("Example")],
         origin,
+        shadowAccountAnonymizer: STRK20_RECIPIENT,
         plan: {
           feeAction: {
             amount: "0x1",
@@ -304,5 +314,54 @@ describe("STRK20 shadow account origin binding", () => {
 
     const names = seen.submitted.map((actions) => JSON.stringify(actions[0]));
     expect(names[0]).not.toBe(names[1]);
+  });
+
+  // PR 4: the card names the anonymizer, so the approval is bound to it. A
+  // network whose anonymizer changed after review must not run the reviewed
+  // calls through a different one, and a shadow request with no reviewed
+  // anonymizer is never trusted.
+  test("refuses to execute under an anonymizer other than the one the card named", async () => {
+    const plan = {
+      feeAction: {
+        amount: "0x1",
+        recipient: STRK20_RECIPIENT,
+        token: STRK20_TOKEN,
+        type: "withdraw" as const,
+      },
+    };
+    for (const shadowAccountAnonymizer of ["0x999", undefined]) {
+      const seen = recorded();
+      await expect(
+        executeStrk20InvokeApproval(executeDeps(seen), {
+          actions: [shadowAccountAction("Example")],
+          origin: "https://example.com",
+          plan,
+          ...(shadowAccountAnonymizer === undefined ? {} : { shadowAccountAnonymizer }),
+        }),
+      ).resolves.toEqual({ error: "approval context changed" });
+      await expect(
+        executeStrk20DisclosureApproval(executeDeps(seen), {
+          origin: "https://example.com",
+          request: {
+            actions: [shadowAccountAction("Example")],
+            ...(shadowAccountAnonymizer === undefined
+              ? {}
+              : { anonymizer: shadowAccountAnonymizer }),
+            simulate: false,
+            type: "prepare",
+          },
+        }),
+      ).resolves.toEqual({ error: "approval context changed" });
+      expect(seen.submitted).toEqual([]);
+      expect(seen.prepared).toEqual([]);
+    }
+    const seen = recorded();
+    await expect(
+      executeStrk20DisclosureApproval(executeDeps(seen), {
+        origin: "https://example.com",
+        request: { anonymizer: "0x999", dappName: "Example", type: "shadowAccount" },
+      }),
+    ).resolves.toEqual({ error: "approval context changed" });
+    expect(seen.commitments).toEqual([]);
   });
 });

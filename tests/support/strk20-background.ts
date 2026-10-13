@@ -32,7 +32,8 @@ export const STRK20_RECIPIENT =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 export const STRK20_ORIGIN = "https://example.com";
 // The opt-in SDK shadow account anonymizer the default harness configures.
-const STRK20_TEST_ANONYMIZER = "0x04f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
+export const STRK20_TEST_ANONYMIZER =
+  "0x04f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
 
 export const STRK20_EXTENSION_SENDER: RuntimeSender = extensionSender;
 export const STRK20_CONTENT_SENDER: RuntimeSender = contentSender;

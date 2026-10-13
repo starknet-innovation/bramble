@@ -379,6 +379,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       origin,
       plan,
       reviewAssets = [],
+      shadowAccountAnonymizer,
       summaries,
     }) {
       if (!isWalletOrigin(origin)) {
@@ -386,6 +387,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       }
 
       return enqueue({
+        ...(shadowAccountAnonymizer === undefined ? {} : { shadowAccountAnonymizer }),
         actionReviews: cloneApprovalValue(actions),
         actions: cloneApprovalValue(actions),
         context: { ...context },

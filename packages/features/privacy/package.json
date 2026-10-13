@@ -24,7 +24,8 @@
     "./paymaster": "./src/paymaster/paymaster.ts",
     "./paymaster-typed-data": "./src/paymaster/paymaster-typed-data.ts",
     "./phases": "./src/policy/phases.ts",
-    "./service": "./src/service.ts"
+    "./service": "./src/service.ts",
+    "./shadow-account-copy": "./src/policy/shadow-account-copy.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

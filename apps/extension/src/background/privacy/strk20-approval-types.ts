@@ -33,10 +33,18 @@ export type Strk20DisclosureRequest =
     }
   | {
       readonly actions: readonly Strk20Action[];
+      /**
+       * The shadow-account anonymizer the card named, present exactly when the
+       * batch holds a `shadow_account_invoke`. Execution refuses if the
+       * network's configured anonymizer has changed since.
+       */
+      readonly anonymizer?: string;
       readonly simulate: boolean;
       readonly type: "prepare";
     }
   | {
+      /** The anonymizer the commitment is derived under, as the card named it. */
+      readonly anonymizer: string;
       readonly dappName: string;
       readonly nonce?: string;
       readonly type: "shadowAccount";

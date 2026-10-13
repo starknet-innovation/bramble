@@ -2,7 +2,7 @@
  * Dapp-facing STRK20 checkpoints. Every value is deterministic fixture data;
  * these stories never derive notes, request proofs, or contact a remote service.
  */
-import { formatStrk20PoolFee } from "@bramble/privacy/service";
+import { formatStrk20PoolFee, summarizeStrk20Batch } from "@bramble/privacy/service";
 import type { PendingApproval } from "@bramble/wallet-ui/lab";
 import { RECIPIENT_ADDRESS, softwareAccount, statusFor, USDC_ADDRESS } from "../fixtures/fixtures";
 import {
@@ -206,33 +206,42 @@ const shadowAccountIdentity: PendingApproval = {
   summaries: ["Share a site-scoped private identity commitment with Private Market"],
 };
 
+// The scoped shadow account's anonymizer, as the network settings configure it.
+const SHADOW_ANONYMIZER = "0x04f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
+
+const shadowAccountActions = [
+  { amount: "OPEN", recipient: softwareAccount.address, token: USDC_ADDRESS, type: "transfer" },
+  {
+    calls: [
+      {
+        calldata: [USDC_ADDRESS, "0x2faf080"],
+        contract_address: EXECUTOR,
+        entry_point: "open_position",
+      },
+    ],
+    collect_policy: { type: "diff" },
+    dapp_name: "Private Market",
+    nonce: "0x9",
+    type: "shadow_account_invoke",
+  },
+] as const;
+
+// The card's lines come from the production summarizer, so this checkpoint
+// renders exactly what the background queues for the batch (#443, PR 4).
 const shadowAccountInvoke: PendingApproval = {
-  actionReviews: [
-    {
-      calls: [
-        {
-          calldata: [USDC_ADDRESS, "0x2faf080"],
-          contract_address: EXECUTOR,
-          entry_point: "open_position",
-        },
-      ],
-      collect_policy: { type: "diff" },
-      dapp_name: "Private Market",
-      nonce: "0x9",
-      type: "shadow_account_invoke",
-    },
-  ],
+  actionReviews: [...shadowAccountActions],
   context: context("9"),
   id: approvalId("209"),
-  insights: [
-    "This route uses the separately configured SDK shadow account module, not a generic pool anonymizer.",
-  ],
   kind: "strk20-prepare",
   origin: DAPP_ORIGIN,
   reviewAssets: [USDC_REVIEW_ASSET],
   summaries: [
-    "Open one Private Market position through the scoped shadow account",
-    "Collect only the resulting balance difference into private notes",
+    ...summarizeStrk20Batch(shadowAccountActions, {
+      assetFor: (token) => (token === USDC_ADDRESS ? { decimals: 6, symbol: "USDC" } : undefined),
+      depositor: softwareAccount.address,
+      shadow: { anonymizer: SHADOW_ANONYMIZER, origin: DAPP_ORIGIN },
+    }),
+    "Generate a submittable private proof for this site",
   ],
 };
 

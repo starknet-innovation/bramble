@@ -242,7 +242,7 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
     },
     {
       kind: "strk20-shadow-account",
-      request: { dappName: "Example", type: "shadowAccount" },
+      request: { anonymizer: "0x4", dappName: "Example", type: "shadowAccount" },
     },
   ] as const) {
     test(`${input.kind} approval passes a locked-context error through`, async () => {

@@ -138,6 +138,8 @@ export type ApprovalQueue = {
     readonly origin: string;
     readonly plan: Strk20SubmissionPlan;
     readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
+    /** The anonymizer the card named; required when the batch holds a shadow invoke. */
+    readonly shadowAccountAnonymizer?: string;
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestSwitchChain: (input: {

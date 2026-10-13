@@ -30,6 +30,11 @@ export type ApprovalPayload = {
   readonly declare?: ProviderDeclare;
   readonly networkId?: StarknetNetworkId;
   readonly proof?: Strk20Proof;
+  /**
+   * The shadow-account anonymizer a `strk20-invoke` card named, present exactly
+   * when its batch holds a `shadow_account_invoke`.
+   */
+  readonly shadowAccountAnonymizer?: string;
   readonly strk20Request?: Strk20DisclosureRequest;
   readonly strk20Plan?: Strk20SubmissionPlan;
   readonly typedData?: unknown;
@@ -59,6 +64,9 @@ const readStrk20Invoke: PayloadReader = (approval) =>
     ? null
     : {
         actions: cloneApprovalValue(approval.actions),
+        ...(approval.shadowAccountAnonymizer === undefined
+          ? {}
+          : { shadowAccountAnonymizer: approval.shadowAccountAnonymizer }),
         strk20Plan: cloneApprovalValue(approval.strk20Plan),
       };
 

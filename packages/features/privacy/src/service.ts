@@ -51,8 +51,10 @@ export {
   formatStrk20PoolFee,
   type Strk20AssetLookup,
   type Strk20FeeAsset,
+  type Strk20ShadowAccountReview,
   strk20CallToInvoke,
   summarizeStrk20Action,
+  summarizeStrk20Batch,
   summarizeStrk20Plan,
 } from "./policy/summaries";
 
