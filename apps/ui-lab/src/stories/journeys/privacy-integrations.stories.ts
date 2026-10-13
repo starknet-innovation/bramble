@@ -48,3 +48,9 @@ export const ShadowAccountParameters = checkpointStory(
   "privacy",
   "shadow-account-parameters",
 );
+export const ShadowAccounts = checkpointStory("Shadow accounts", "privacy", "shadow-accounts");
+export const ShadowAccountBalances = checkpointStory(
+  "Shadow account balances",
+  "privacy",
+  "shadow-accounts-balances",
+);
