@@ -107,6 +107,13 @@ export const STRK_TOKEN_ADDRESS =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 
 /**
+ * STRK's fixed 18-decimal scale. The pool charges its fee in STRK on every
+ * supported network, so fee arithmetic names this constant rather than
+ * re-deriving the scale from a token entry or a bare literal.
+ */
+export const STRK_TOKEN_DECIMALS = 18;
+
+/**
  * Default ERC20 tokens queried on each configured network.
  */
 export const DEFAULT_TOKENS: readonly DefaultToken[] = [
@@ -119,7 +126,7 @@ export const DEFAULT_TOKENS: readonly DefaultToken[] = [
   },
   {
     address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
+    decimals: STRK_TOKEN_DECIMALS,
     name: "Starknet Token",
     networkId: "SN_MAIN",
     symbol: "STRK",
@@ -133,7 +140,7 @@ export const DEFAULT_TOKENS: readonly DefaultToken[] = [
   },
   {
     address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
+    decimals: STRK_TOKEN_DECIMALS,
     name: "Sepolia Starknet Token",
     networkId: "SN_SEPOLIA",
     symbol: "STRK",
@@ -147,7 +154,7 @@ export const DEFAULT_TOKENS: readonly DefaultToken[] = [
   },
   {
     address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
+    decimals: STRK_TOKEN_DECIMALS,
     name: "Devnet Starknet Token",
     networkId: "SN_DEVNET",
     symbol: "STRK",

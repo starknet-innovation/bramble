@@ -156,6 +156,7 @@ const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
     sourceFeeBalanceRaw: balanceOfTokenIn(fields.source, feeModel.feeToken, context),
     sourceTokenBalanceRaw: tokenBalanceIn(fields.source, context),
     tokenAddress: fields.tokenAddress,
+    tokenDecimals: Number(fields.tokenDecimals) || 0,
     tokenSymbol: fields.tokenSymbol,
   };
 };
