@@ -14,7 +14,11 @@ export {
   buildVesuVaultRedeemCalls,
   VESU_VAULT_DEPOSITS_PAUSED,
 } from "./vesu/vesu-actions";
-export { registeredVesuVToken, verifyVesuMultiplyPool } from "./vesu/vesu-anchors";
+export {
+  recheckVesuLendingQuote,
+  registeredVesuVToken,
+  verifyVesuMultiplyPool,
+} from "./vesu/vesu-anchors";
 export {
   buildVesuMultiplyCloseCalls,
   buildVesuMultiplyIncreaseCalls,

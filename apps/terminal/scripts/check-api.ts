@@ -376,7 +376,10 @@ const main = async (): Promise<void> => {
     const { status, body } = await fetchJsonDirect(
       `https://prod-api-quoter.ekubo.org/${chainId}/-${debtAmount}/${MAINNET_TOKEN_ADDRESSES.USDC}/${MAINNET_TOKEN_ADDRESSES.USDT}`,
     );
-    const quote = parseVesuMultiplyExactOutQuote(body, debtAmount, 100);
+    const quote = parseVesuMultiplyExactOutQuote(body, debtAmount, 100, {
+      calculated: MAINNET_TOKEN_ADDRESSES.USDT,
+      specified: MAINNET_TOKEN_ADDRESSES.USDC,
+    });
     return {
       status,
       detail: `max collateral=${quote.maxInputAmount} splits=${quote.splits.length}`,

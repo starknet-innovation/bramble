@@ -107,8 +107,12 @@ const DeclareProbe = (): ReactNode => {
 };
 
 const TransactionProbe = ({
+  handoffCheck,
   reviewMode,
-}: { readonly reviewMode?: "wallet" } = {}): ReactNode => {
+}: {
+  readonly handoffCheck?: () => Promise<void>;
+  readonly reviewMode?: "wallet";
+} = {}): ReactNode => {
   const wallet = useWallet();
   const [result, setResult] = useState("idle");
   return (
@@ -130,6 +134,7 @@ const TransactionProbe = ({
               ],
               description: "Move one test asset.",
               details: [{ label: "Recipient", value: "0x2" }],
+              ...(handoffCheck === undefined ? {} : { handoffCheck }),
               ...(reviewMode === undefined ? {} : { reviewMode }),
               title: "Send test asset",
             })
@@ -348,6 +353,40 @@ describe("WalletProvider", () => {
     await waitFor(() =>
       expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),
     );
+  });
+
+  test("re-runs the handoff check on every attempt, and a refusal never reaches the wallet", async () => {
+    const wallet = makeWallet();
+    const handoffCheck = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Could not verify the Vesu pool on chain"))
+      .mockResolvedValueOnce(undefined);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
+    render(
+      <WalletProvider>
+        <TransactionProbe handoffCheck={handoffCheck} />
+      </WalletProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("transaction-address").textContent).toBe("0x1234"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("heading", { name: "Send test asset" })).toBeTruthy();
+    // Quote-time state is not re-read while the user is still reviewing.
+    expect(handoffCheck).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue in wallet" }));
+    expect(await screen.findByText("Could not verify the Vesu pool on chain")).toBeTruthy();
+    expect(handoffCheck).toHaveBeenCalledTimes(1);
+    expect(wallet.invoke).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),
+    );
+    expect(handoffCheck).toHaveBeenCalledTimes(2);
+    expect(wallet.invoke).toHaveBeenCalledTimes(1);
   });
 
   describe("a wallet account or network change (Sherlock 222)", () => {

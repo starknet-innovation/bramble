@@ -12,6 +12,13 @@ export type WalletTransactionRequest = {
   readonly description: string;
   readonly details?: readonly WalletRequestDetail[];
   /**
+   * Re-verifies the call targets immediately before each wallet handoff,
+   * including a retry. Discovery state read at quote time can go stale while
+   * the user reviews, so a rejection here stops the request before the wallet
+   * sees it; the thrown message is shown as the request's failure.
+   */
+  readonly handoffCheck?: () => Promise<void>;
+  /**
    * `terminal` adds a second confirmation before opening the wallet. Use
    * `wallet` only when the initiating screen already presents the material
    * transaction facts and the connected wallet is the canonical review.

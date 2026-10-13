@@ -10,8 +10,9 @@
 import { CallData, type RpcProvider } from "starknet";
 import { VESU_ADDRESSES } from "../constants";
 import { WalletError } from "../support/errors";
-import { DEFAULT_NETWORK, isStarkFieldElement } from "../support/networks";
+import { DEFAULT_NETWORK, isStarkFieldElement, sameAddress } from "../support/networks";
 import { withRpcFallback } from "../support/provider";
+import type { LendingQuote } from "../types";
 
 /** Refusal when the pinned factory does not list the asset in the pool. */
 export const VESU_UNREGISTERED = "This Vesu pool or asset is not registered on chain";
@@ -72,4 +73,30 @@ export const verifyVesuMultiplyPool = async (
 ): Promise<void> => {
   await registeredVesuVToken(pool, collateralAsset, readWith);
   await registeredVesuVToken(pool, debtAsset, readWith);
+};
+
+/**
+ * Re-reads the pinned factory's registry for a lending quote right before the
+ * wallet handoff (#270). `quoteLending` reads it once, when quoting, and the
+ * review can sit open for as long as the user takes, so the targets its calls
+ * use — the pool, and the vToken a supply approves and deposits into — are
+ * checked again here. Throws {@link VESU_UNREGISTERED} when the pool no longer
+ * lists the asset or the collateral asset, and {@link VESU_REGISTRY_UNAVAILABLE}
+ * when the registry cannot be read or now names a different vToken than the
+ * quote's.
+ */
+export const recheckVesuLendingQuote = async (
+  quote: Pick<LendingQuote, "asset" | "collateralAsset" | "poolAddress" | "vTokenAddress">,
+  readWith?: <T>(run: (provider: RpcProvider) => Promise<T>) => Promise<T>,
+): Promise<void> => {
+  if (quote.vTokenAddress === null) {
+    throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
+  }
+  const vToken = await registeredVesuVToken(quote.poolAddress, quote.asset, readWith);
+  if (!sameAddress(vToken, quote.vTokenAddress)) {
+    throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
+  }
+  if (quote.collateralAsset !== null) {
+    await registeredVesuVToken(quote.poolAddress, quote.collateralAsset, readWith);
+  }
 };

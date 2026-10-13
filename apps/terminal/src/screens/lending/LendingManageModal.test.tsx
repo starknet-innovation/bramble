@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   quoteClose: vi.fn(async () => ({ maxInputAmount: 1n })),
   quoteIncrease: vi.fn(),
   quoteLending: vi.fn(async () => ({ action: "supply", vTokenAddress: REGISTERED_VTOKEN })),
+  recheckLendingQuote: vi.fn(async () => undefined),
   registeredVToken: vi.fn(async () => REGISTERED_VTOKEN),
   verifyMultiplyPool: vi.fn(async () => undefined),
   requestTransaction: vi.fn(async () => ({ transaction_hash: "0xabc" })),
@@ -27,6 +28,7 @@ vi.mock("../../protocols/index", () => ({
   buildVesuVaultRedeemCalls: mocks.buildVaultRedeem,
   quoteVesuMultiplyClose: mocks.quoteClose,
   quoteVesuMultiplyIncrease: mocks.quoteIncrease,
+  recheckVesuLendingQuote: mocks.recheckLendingQuote,
   registeredVesuVToken: mocks.registeredVToken,
   VESU_VAULT_DEPOSITS_ENABLED: false,
   verifyVesuMultiplyPool: mocks.verifyMultiplyPool,
@@ -110,6 +112,10 @@ const earn: VesuPosition = {
   type: "earn",
 };
 
+type Handoff = { readonly handoffCheck?: () => Promise<void> };
+const handedOff = (): Handoff =>
+  (mocks.requestTransaction.mock.calls.at(-1) as unknown as [Handoff] | undefined)?.[0] ?? {};
+
 describe("LendingManageModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -158,6 +164,12 @@ describe("LendingManageModal", () => {
     );
     expect(mocks.watchAsset).toHaveBeenCalledWith({ address: REGISTERED_VTOKEN });
     expect(onSubmitted).toHaveBeenCalled();
+    // The quote's registry anchors are read again at wallet handoff (#270).
+    expect(mocks.recheckLendingQuote).not.toHaveBeenCalled();
+    await handedOff().handoffCheck?.();
+    expect(mocks.recheckLendingQuote).toHaveBeenCalledWith(
+      await mocks.quoteLending.mock.results[0]?.value,
+    );
   });
 
   it("offers a full atomic unwind without asking for another amount", async () => {
@@ -190,6 +202,16 @@ describe("LendingManageModal", () => {
       multiply.debtAddress,
     );
     expect(mocks.buildClose).toHaveBeenCalled();
+    // Both legs are re-verified at wallet handoff (#270).
+    await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalled());
+    expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(1);
+    await handedOff().handoffCheck?.();
+    expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(2);
+    expect(mocks.verifyMultiplyPool).toHaveBeenLastCalledWith(
+      market.poolId,
+      multiply.collateralAddress,
+      multiply.debtAddress,
+    );
   });
 
   it("builds no Multiply calls for a pool the registry does not list (Sherlock 169)", async () => {

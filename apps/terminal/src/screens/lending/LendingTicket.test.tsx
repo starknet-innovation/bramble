@@ -1,0 +1,137 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { VesuMarket, VesuPair } from "../../data/index";
+
+const mocks = vi.hoisted(() => ({
+  buildIncrease: vi.fn(() => [{ contractAddress: "0x7", entrypoint: "modify_lever" }]),
+  buildLending: vi.fn(() => [{ contractAddress: "0x1", entrypoint: "deposit" }]),
+  quoteIncrease: vi.fn(async () => ({ maxInputAmount: 1n })),
+  quoteLending: vi.fn(async () => ({ action: "supply", vTokenAddress: null })),
+  recheckLendingQuote: vi.fn(async () => undefined),
+  requestTransaction: vi.fn(async () => ({ transaction_hash: "0xabc" })),
+  verifyMultiplyPool: vi.fn(async () => undefined),
+}));
+
+vi.mock("../../protocols/index", () => ({
+  buildVesuMultiplyIncreaseCalls: mocks.buildIncrease,
+  quoteVesuMultiplyIncrease: mocks.quoteIncrease,
+  recheckVesuLendingQuote: mocks.recheckLendingQuote,
+  verifyVesuMultiplyPool: mocks.verifyMultiplyPool,
+}));
+
+vi.mock("../../protocols/vesu/vesu", () => ({
+  buildLendingCalls: mocks.buildLending,
+  quoteLending: mocks.quoteLending,
+}));
+
+vi.mock("../../wallet/connection/WalletProvider", () => ({
+  useWallet: () => ({
+    address: "0x123",
+    chainId: "SN_MAIN",
+    connect: vi.fn(),
+    isConnected: true,
+    isConnecting: false,
+    requestTransaction: mocks.requestTransaction,
+    watchAsset: vi.fn(async () => undefined),
+  }),
+}));
+
+import { LendingTicket } from "./LendingTicket";
+
+const market = (assetAddress: string, symbol: string): VesuMarket => ({
+  assetAddress,
+  borrowApr: 4,
+  canBeBorrowed: true,
+  decimals: 6,
+  debt: 10,
+  feeRate: 0,
+  fullUtilizationApr: 10,
+  isPaused: false,
+  liquidity: 100,
+  maxFullUtilizationApr: 20,
+  maxTargetUtilization: 90,
+  maxUtilization: 95,
+  minFullUtilizationApr: 2,
+  minTargetUtilization: 70,
+  name: symbol,
+  oracleAddress: "0xfeed",
+  oracleAggregationMode: "median",
+  oracleKey: `Pragma ${symbol}/USD`,
+  oracleSources: 3,
+  oracleTimeWindowSeconds: 120,
+  oracleTimeoutSeconds: 300,
+  poolId: "0x451fe",
+  poolName: "Prime",
+  poolOwner: "0x1",
+  priceUsd: 1,
+  rateHalfLifeSeconds: 3600,
+  rateUpdatedAt: null,
+  riskUrl: null,
+  supplied: 1000,
+  supplyApy: 3,
+  symbol,
+  targetRatePercent: 4,
+  targetUtilization: 80,
+  utilization: 50,
+  vTokenAddress: "0x387e8",
+  zeroUtilizationApr: 1,
+});
+
+const debt = market("0x33068", "USDC");
+const collateral = market("0x49d36", "ETH");
+const pair: VesuPair = {
+  collateralAddress: collateral.assetAddress,
+  debtAddress: debt.assetAddress,
+  debtCap: 1_000_000,
+  liquidationFactor: 0.9,
+  maxLtv: 80,
+  poolId: debt.poolId,
+};
+
+type Handoff = { readonly handoffCheck?: () => Promise<void> };
+const handedOff = (): Handoff =>
+  (mocks.requestTransaction.mock.calls.at(-1) as unknown as [Handoff] | undefined)?.[0] ?? {};
+
+// The registry is read once when quoting; the review can stay open for as long
+// as the user takes, so every Vesu request must re-read it at handoff (#270).
+describe("LendingTicket wallet handoff", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("re-checks a lending quote's registry anchors when the wallet is opened", async () => {
+    render(<LendingTicket collateralPairs={[]} market={debt} />);
+    fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Review supply" }));
+
+    await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalled());
+    const quote = await mocks.quoteLending.mock.results[0]?.value;
+    const { handoffCheck } = handedOff();
+    expect(handoffCheck).toBeTypeOf("function");
+    expect(mocks.recheckLendingQuote).not.toHaveBeenCalled();
+    await handoffCheck?.();
+    expect(mocks.recheckLendingQuote).toHaveBeenCalledWith(quote);
+  });
+
+  it("re-verifies both Multiply legs when the wallet is opened", async () => {
+    render(
+      <LendingTicket
+        collateralPairs={[{ market: collateral, pair }]}
+        market={debt}
+        requestedAction="multiply"
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Review Multiply" }));
+
+    await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalled());
+    expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(1);
+    await handedOff().handoffCheck?.();
+    expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(2);
+    expect(mocks.verifyMultiplyPool).toHaveBeenLastCalledWith(
+      debt.poolId,
+      collateral.assetAddress,
+      debt.assetAddress,
+    );
+  });
+});
