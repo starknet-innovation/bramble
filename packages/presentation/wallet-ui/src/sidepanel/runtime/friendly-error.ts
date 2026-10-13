@@ -146,6 +146,12 @@ export const friendlyError = (raw: string, context?: string): FriendlyError => {
     return { message: GENERIC_VALIDATION };
   }
 
+  // Before the STRK20 branch, which would otherwise answer the listed
+  // unreachable "strk20 …" guards first and leave them shown (errors audit F6).
+  if (isReviewedPlumbing(trimmed)) {
+    return { message: fallback };
+  }
+
   if (STRK20.test(normalized)) {
     return { message: strk20Message(trimmed, normalized) };
   }
@@ -170,9 +176,6 @@ export const friendlyError = (raw: string, context?: string): FriendlyError => {
     return { message: SERVICE_REJECTED };
   }
 
-  if (isReviewedPlumbing(trimmed)) {
-    return { message: fallback };
-  }
   // The pre-existing lowercase backstop, narrowed: a lowercase diagnostic that
   // names a security, privacy, or funds fact keeps its words.
   if (DEVELOPER_VOICE.test(trimmed) && !FACT_TERMS.test(trimmed)) {
