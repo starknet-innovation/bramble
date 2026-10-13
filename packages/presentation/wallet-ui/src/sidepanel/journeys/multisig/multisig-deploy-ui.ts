@@ -9,10 +9,12 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { isOutcomeUnknown } from "../../runtime/runtime-errors";
 import {
   bindCopyButtons,
   buttonBusy,
   errorDetails,
+  errorLine,
   errorMessage,
   renderFragment,
   showToast,
@@ -437,6 +439,13 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
           });
         },
         (error: unknown) => {
+          // A deployment whose reply was lost may be on chain: say so, amber,
+          // and keep Deploy down so it cannot run twice (errors audit F4).
+          if (isOutcomeUnknown(error)) {
+            deps.setResult("multisig-deploy-result", errorLine(error, "Deployment failed"));
+            showToast(errorDetails(error, "Deployment failed"), "warning", form);
+            return;
+          }
           const message = errorMessage(error, "Deployment failed");
           deps.setResult(
             "multisig-deploy-result",

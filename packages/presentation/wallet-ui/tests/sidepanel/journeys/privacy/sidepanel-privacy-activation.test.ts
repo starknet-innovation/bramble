@@ -5,6 +5,7 @@
  * reports deployed, and never before the deployment is submitted.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { bindDeployAndRegister } from "../../../../src/sidepanel/journeys/privacy/privacy-activation-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -147,5 +148,22 @@ describe("deploy then register", () => {
     await flush();
 
     expect(started).toEqual([]);
+  });
+
+  // Errors audit F4: a deployment whose reply was lost may be on chain, so it
+  // is not shown as failed and the control is not re-armed for a second one.
+  test("a lost deployment reply keeps the control down", async () => {
+    const app = mount();
+    const { started } = bind(app, {
+      async deployAccount() {
+        throw new SubmissionUnknownError("Account deployment status is unknown.", null);
+      },
+    });
+    app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]")?.click();
+    await flush();
+    expect(started).toEqual([]);
+    expect(app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]")?.disabled).toBe(
+      true,
+    );
   });
 });

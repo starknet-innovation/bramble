@@ -52,6 +52,16 @@ describe("isOutcomeUnknown", () => {
     expect(isOutcomeUnknown(new Error("Nonce too old"))).toBe(false);
     expect(isOutcomeUnknown(INDETERMINATE_RPC_WRITE_MESSAGE)).toBe(false);
   });
+
+  // Errors audit F4: a fallback whose reviewed sentence already says the
+  // outcome is unknown is never styled as failed.
+  test("recognises an unrecognised-reply fallback that reads as outcome unknown", () => {
+    for (const raw of ["transfer failed", "deployment failed", "approval failed", "swap failed"]) {
+      expect(isOutcomeUnknown(new Error(raw)), raw).toBe(true);
+    }
+    expect(isOutcomeUnknown(new Error("Request expired"))).toBe(false);
+    expect(isOutcomeUnknown(new Error("fee estimate failed"))).toBe(false);
+  });
 });
 
 describe("warning toast", () => {

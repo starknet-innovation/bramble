@@ -16,6 +16,7 @@ import {
   SubmissionUnknownError,
 } from "@bramble/wallet-protocol/submission-unknown";
 import { isErrorResponse } from "../../popup/responses/responses";
+import { friendlyError } from "./friendly-error";
 import { REQUEST_UNKNOWN } from "./friendly-error-copy";
 
 /**
@@ -30,16 +31,25 @@ export const responseError = (response: unknown, fallback: string): Error =>
   readPrivacyBlockerError(response) ??
   new Error(isErrorResponse(response) ? response.error : fallback);
 
+// The ending every outcome-unknown sentence in the copy table shares
+// (SUBMISSION_UNKNOWN, REQUEST_UNKNOWN, OUTCOME_UNKNOWN, the Ledger "didn't
+// finish" line): an error shown with one of them is never styled as failed.
+const READS_AS_UNKNOWN = /check activity before trying again\.$/i;
+
 /**
  * Whether a rejected panel call is a write whose outcome is unknown rather than
- * a failure: a typed {@link SubmissionUnknownError}, or the single-sourced
- * indeterminate-write sentence a lane passed through as a plain error. Such a
+ * a failure: a typed {@link SubmissionUnknownError}, the single-sourced
+ * indeterminate-write sentence a lane passed through as a plain error, or an
+ * unrecognised-reply fallback whose reviewed sentence already says the outcome
+ * is unknown ("transfer failed", "deployment failed", "approval failed"). Such a
  * write may already be on chain, so it is shown as a warning and never styled
  * as "failed", which would invite a blind re-send (issue 382).
  */
 export const isOutcomeUnknown = (error: unknown): boolean =>
   error instanceof SubmissionUnknownError ||
-  (error instanceof Error && error.message === INDETERMINATE_RPC_WRITE_MESSAGE);
+  (error instanceof Error &&
+    (error.message === INDETERMINATE_RPC_WRITE_MESSAGE ||
+      READS_AS_UNKNOWN.test(friendlyError(error.message).message)));
 
 /**
  * The toast tone for a rejected panel call: amber for an outcome the wallet

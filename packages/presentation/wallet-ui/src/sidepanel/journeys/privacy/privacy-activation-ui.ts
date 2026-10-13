@@ -12,6 +12,7 @@
 
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
 import { awaitDeployment, type DeploymentPollScope } from "../../shell/shell-bindings";
@@ -74,7 +75,7 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
         if (!deployed) {
           showToast(
             `Deployment ${response.slice(0, 10)}… is still settling. Register once it lands.`,
-            "error",
+            "warning",
             button,
           );
           return;
@@ -84,8 +85,10 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
       },
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);
-        showToast(errorDetails(error, "Deployment failed"), "error", button);
-        buttonBusy(button, false);
+        // A deployment whose reply was lost may be on chain: amber, and the
+        // control stays down so it cannot deploy twice (errors audit F4).
+        showToast(errorDetails(error, "Deployment failed"), failureTone(error), button);
+        if (!isOutcomeUnknown(error)) buttonBusy(button, false);
       },
     );
   });
