@@ -42,15 +42,19 @@ import {
 // site has already been shown, so it is asserted literally rather than
 // recomputed from the implementation.
 //
-// It moved once, when SCOPE_DOMAIN was rebranded from `mc-wallet/...` to
-// `bramble/strk20-subaccount/v1`. That is a deliberate pre-release break: every
-// (origin, label) pair derives a new separator, so nothing derived under the old
-// domain is reachable. Re-derived independently as
-// sha256("<domain>|<origin>|<label>")[:30], not copied from the failing run. It is 30 hex characters, not a 0x felt,
-// because the pinned SDK short-string-encodes every string dapp name and
-// starknet.js rejects a short string over 31 bytes — see
+// It has moved twice, each a deliberate break that leaves nothing derived under
+// the previous domain reachable: once when SCOPE_DOMAIN was rebranded from
+// `mc-wallet/...` to `bramble/strk20-subaccount/v1`, and once (#443, decision 2)
+// to `bramble/strk20-shadow-account/v1` with the Wallet API 0.10.4 rename. The
+// second costs nothing extra: the new anonymizer address already gives every
+// user a new identity. Re-derived independently as
+// sha256("<domain>|<origin>|<label>")[:30] with Python's hashlib and with
+// sha256sum, not copied from the failing run; the same recipe reproduces the
+// previous pin, 49889a0d8866de58dafba23c59d93e. It is 30 hex characters, not a
+// 0x felt, because the pinned SDK short-string-encodes every string dapp name
+// and starknet.js rejects a short string over 31 bytes — see
 // strk20-shadow-account-sdk-boundary.test.ts, which drives the real encoder.
-const EXAMPLE_COM_SCOPE = "49889a0d8866de58dafba23c59d93e";
+const EXAMPLE_COM_SCOPE = "3460122ba58b82b90d76344fb5edd4";
 
 const preferences = {
   ...defaultWalletPreferences(),
@@ -177,6 +181,9 @@ describe("STRK20 shadow account origin binding", () => {
     // the wallet's own parser is the same 31-byte printable-ASCII rule.
     expect(isStrk20DappName(EXAMPLE_COM_SCOPE)).toBe(true);
     expect(EXAMPLE_COM_SCOPE.length).toBeLessThanOrEqual(31);
+    // The 30-hex-character truncation is part of the identity, not a display
+    // choice: a longer cut would cross the short-string limit for no gain.
+    expect(seen.commitments[0]).toMatch(/^[0-9a-f]{30}$/);
   });
 
   test("keeps one origin's own labels in separate scopes", async () => {

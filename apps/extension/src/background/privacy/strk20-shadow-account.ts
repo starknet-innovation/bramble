@@ -23,7 +23,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { Strk20ShadowAccountCommitmentResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 
-const SCOPE_DOMAIN = "bramble/strk20-subaccount/v1";
+const SCOPE_DOMAIN = "bramble/strk20-shadow-account/v1";
 
 // The pinned SDK short-string-encodes every `string` dapp name (`encodeDappName`
 // in vendor/starknet-privacy/sdk/src/internal/shadow-accounts.ts), and starknet.js
