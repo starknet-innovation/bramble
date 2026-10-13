@@ -6,9 +6,6 @@ reality rather than its own assumptions. Scripts and the manifest live in this r
 **the seed phrases themselves are never committed** — they stay in a password manager
 and reach the scripts through environment variables at run time.
 
-Interactive combination map ("tree of life"):
-https://claude.ai/artifact/2Mba3kTgzJzZkvrWbu7J42
-
 ## Runbook — setting the dataset up (state as of 2026-10-02)
 
 Ground rules first: the password manager holds the authoritative copy of every
@@ -33,8 +30,8 @@ both.
    address per app. Two minutes, no funds.
 
 **Script seeds (2 min, no apps):** generate one fresh 12-word phrase per empty
-slot (`READY_MATRIX`, `BRAAVOS_MATRIX`, `GAPS`, `SEED_DEPLOYER`) — the
-calibration project has `gen-seed.ts` for this — store each in the password
+slot (`READY_MATRIX`, `BRAAVOS_MATRIX`, `GAPS`, `SEED_DEPLOYER`) with
+`bun tools/vendor-dataset/gen-seed.ts`, store each in the password
 manager, paste into the env file. These seeds never touch a vendor app; the
 Phase-3 script derives and deploys everything from them.
 
@@ -143,8 +140,8 @@ against Argent's backend** (`ARGENT_SMART_ACCOUNT_DISCOVERY_URL`,
 
 ## Phase 2 status — calibration PASSED (2026-10-02)
 
-An independent reimplementation (scratchpad `dataset/calib/derive.ts`; @scure/bip32,
-@scure/bip39, @scure/starknet, starknet.js — no Krusty) reproduced the ground-truth
+An independent reimplementation (`tools/vendor-dataset/derive.ts`; @scure/bip32,
+@scure/bip39 and starknet.js's bundled @scure/starknet — no Krusty) reproduced the ground-truth
 seeds' recorded addresses on the first run:
 
 - **Braavos**: all four recorded accounts match the vendor derivation at indices 0–3,
@@ -183,7 +180,8 @@ probes in ETH/STRK/native USDC, used-and-emptied, gap and past-window indices,
 simulated guardian states (set / removed / escape pending / owner-escape
 pending), Braavos deploys at both indices plus 2FA-at-deploy with a real P-256
 key, custom-salt and UDC-unique D4 shapes, a funded custom-salt counterfactual
-(D5), the 25th-word fixture, a Bramble-axis control, the cross-vendor account,
+(D5), a 25th-word fixture (`passphrase/0`, since removed: neither vendor
+exposes a BIP-39 passphrase), a Bramble-axis control, the cross-vendor account,
 and the nine app-made ground-truth accounts. Ledger of record:
 `tools/vendor-dataset/manifest/` (one file per fixture group). Two Braavos tooling facts worth keeping:
 fee estimation must run with validation on (the constructor parses the
@@ -204,7 +202,7 @@ with zero off-class results:
   index-0 accounts, and the real app-made Braavos #1 ("Deployed · view only").
 - **Missed (20 × D2):** everything behind the derivation bugs and table gaps —
   the entire Ready population (both real and scripted, #505), Braavos index 1+
-  (vendor axis), the gap fixture at index 7.
+  (vendor axis), the gap fixture at index 7, and the since-removed `passphrase/0`.
 - **Missed (4 × D3):** the USDC-only and past-window fixtures — richer probes
   (#504 covers `gaps/25`).
 - **Missed (3 × D4, 3 × D5):** confirmed unreachable without an indexer /
@@ -212,7 +210,15 @@ with zero off-class results:
 
 The scorecard doubles as the acceptance test for the fixes: #505 should flip
 the twenty D2 rows, #504 flips `gaps/25`, probe work flips the remaining D3s,
-and D4 stays a deliberate architecture decision. One command re-runs it.
+and D4 stays a deliberate architecture decision. One command re-runs it after
+`bun run build`: `BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts`.
+
+**Current ledger:** the manifest now holds 36 fixtures (D1 ×4, D2 ×23, D3 ×3,
+D4 ×3, D5 ×3). Since the first run, `braavos-matrix/5`,
+`braavos-matrix/6` and `ready-matrix/20` were added, `ground-truth/braavos-3`
+moved from D3 to D2, and `passphrase/0` was removed. The latest snapshot, `verification-post-usdc.json`,
+scores 27/36. The older `verification*.json` snapshots keep their
+`passphrase/0` rows as recorded.
 
 ## Phases
 
