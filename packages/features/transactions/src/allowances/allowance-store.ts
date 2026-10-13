@@ -28,7 +28,13 @@ import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
 } from "@bramble/wallet-model/networks";
-import { keepLargest, trimToTotal } from "./allowance-retention";
+import {
+  type AllowanceRanking,
+  type AllowanceRankToken,
+  keepLargest,
+  rankingFor,
+  trimToTotal,
+} from "./allowance-retention";
 import {
   entriesAfterSettle,
   isCanonicalHash,
@@ -36,8 +42,8 @@ import {
   recordedEntry,
 } from "./allowance-revoke";
 
-/** The revoke outcome type, re-exported from its split module. */
-export type { RevokeOutcome } from "./allowance-revoke";
+/** Revoke helpers re-exported from their split module. */
+export { allowanceTarget, type RevokeOutcome } from "./allowance-revoke";
 
 /**
  * Browser storage key for the allowance log.
@@ -105,7 +111,7 @@ import type {
  * Retention follows `ALLOWANCE_LIMITS`: a per-account-and-network cap so one
  * account never evicts another's records, plus a total cap that keeps the
  * persisted log inside the storage boundary's bounded-JSON budget; at either
- * cap the smallest allowances go first. Both writers
+ * cap the least risky allowances go first (./allowance-retention). Both writers
  * ignore an entry whose token or spender is not a felt rather than throwing, and
  * a subtraction that lands on zero without an exact base is kept as a
  * zero-valued lower bound rather than deleted — see {@link AllowanceInput}.
@@ -204,39 +210,6 @@ export const isAllowanceRecord = (value: unknown): value is AllowanceRecord =>
   (value["revokeHash"] === undefined ||
     (value["revoking"] === true && isCanonicalHash(value["revokeHash"])));
 
-/**
- * Recovers the token and spender an allowance id targets, scoped to a specific
- * account. Returns null unless the id is exactly `<accountId>:<token>:<spender>`
- * with both a non-zero token and spender felt — so an id belonging to another
- * account, or a malformed one, is rejected. Lets a revoke resolve its target
- * from the id alone, covering externally discovered allowances that were never
- * written to the local store.
- */
-export const allowanceTarget = (
-  id: string,
-  accountId: string,
-): { readonly spender: string; readonly token: string } | null => {
-  const prefix = `${accountId}:`;
-  if (!id.startsWith(prefix)) {
-    return null;
-  }
-  const parts = id.slice(prefix.length).split(":");
-  if (parts.length !== 2) {
-    return null;
-  }
-  const token = canonicalFelt(parts[0] ?? "");
-  const spender = canonicalFelt(parts[1] ?? "");
-  if (
-    !token ||
-    !spender ||
-    !isNonZeroStarkFieldElement(token) ||
-    !isNonZeroStarkFieldElement(spender)
-  ) {
-    return null;
-  }
-  return { spender, token };
-};
-
 const toRecord = (entry: AllowanceInput): AllowanceRecord | null => {
   const token = canonicalFelt(entry.token);
   const spender = canonicalFelt(entry.spender);
@@ -278,7 +251,8 @@ const sameScope = (stored: AllowanceRecord, next: AllowanceRecord): boolean =>
 const entriesAfterRecord = (
   entries: readonly AllowanceRecord[],
   next: AllowanceRecord,
-  transactionHash?: string,
+  transactionHash: string | undefined,
+  ranking: AllowanceRanking,
 ): readonly AllowanceRecord[] => {
   const recorded = recordedEntry(entries, next, transactionHash);
   if (!recorded) {
@@ -289,12 +263,14 @@ const entriesAfterRecord = (
     keepLargest(
       withNext.filter((stored) => sameScope(stored, recorded)),
       MAX_ENTRIES_PER_SCOPE,
+      ranking,
     ),
   );
   return trimToTotal(
     withNext.filter((stored) => !sameScope(stored, recorded) || scopeKept.has(stored)),
     MAX_ENTRIES_TOTAL,
     allowanceScope,
+    ranking,
   );
 };
 
@@ -343,26 +319,41 @@ const appliedDeltaInput = (
 const entriesAfterDelta = (
   entries: readonly AllowanceRecord[],
   delta: AllowanceDelta,
+  ranking: AllowanceRanking,
 ): readonly AllowanceRecord[] | null => {
   const id = allowanceId(delta.input);
   const tracked = id === null ? undefined : entries.find((stored) => stored.id === id);
   const applied = appliedDeltaInput(tracked, delta);
   const next = applied ? toRecord(applied) : null;
-  return next ? entriesAfterRecord(entries, next, delta.transactionHash) : null;
+  return next ? entriesAfterRecord(entries, next, delta.transactionHash, ranking) : null;
 };
+
+/**
+ * What a log reads beyond its storage. `trackedTokens` lists the tokens the
+ * wallet trusts, read on every write so eviction ranks amounts in whole tokens
+ * (see ./allowance-retention); without it, or when it fails, every record
+ * ranks as untracked and the write still goes through.
+ */
+export type AllowanceStoreOptions = {
+  readonly trackedTokens?: () => Promise<readonly AllowanceRankToken[]>;
+};
+
+const rankingSource =
+  (trackedTokens: AllowanceStoreOptions["trackedTokens"]) => async (): Promise<AllowanceRanking> =>
+    rankingFor(trackedTokens ? await trackedTokens().catch(() => []) : []);
 
 /**
  * Creates the persistent allowance log.
  */
 export const createAllowanceStore = ({
   store,
-}: {
-  readonly store: KeyValueStore;
-}): AllowanceStore =>
-  serializeStoreMutations<AllowanceStore>(
+  trackedTokens,
+}: AllowanceStoreOptions & { readonly store: KeyValueStore }): AllowanceStore => {
+  const ranking = rankingSource(trackedTokens);
+  return serializeStoreMutations<AllowanceStore>(
     {
       async applyDelta(delta) {
-        const entries = entriesAfterDelta(await readEntries(store), delta);
+        const entries = entriesAfterDelta(await readEntries(store), delta, await ranking());
         if (entries) {
           await store.set(ALLOWANCE_STORE_KEY, [...entries]);
         }
@@ -375,7 +366,12 @@ export const createAllowanceStore = ({
         if (!next) {
           return;
         }
-        const entries = entriesAfterRecord(await readEntries(store), next, transactionHash);
+        const entries = entriesAfterRecord(
+          await readEntries(store),
+          next,
+          transactionHash,
+          await ranking(),
+        );
         await store.set(ALLOWANCE_STORE_KEY, [...entries]);
       },
       async remove(id) {
@@ -391,15 +387,19 @@ export const createAllowanceStore = ({
     },
     ["list"],
   );
+};
 
 /**
  * In-memory allowance log used as the test and fallback default.
  */
-export const memoryAllowanceStore = (): AllowanceStore => {
+export const memoryAllowanceStore = ({
+  trackedTokens,
+}: AllowanceStoreOptions = {}): AllowanceStore => {
+  const ranking = rankingSource(trackedTokens);
   let entries: AllowanceRecord[] = [];
   return {
     async applyDelta(delta) {
-      const next = entriesAfterDelta(entries, delta);
+      const next = entriesAfterDelta(entries, delta, await ranking());
       if (next) {
         entries = [...next];
       }
@@ -412,7 +412,7 @@ export const memoryAllowanceStore = (): AllowanceStore => {
       if (!next) {
         return;
       }
-      entries = [...entriesAfterRecord(entries, next, transactionHash)];
+      entries = [...entriesAfterRecord(entries, next, transactionHash, await ranking())];
     },
     async remove(id) {
       entries = entries.filter((stored) => stored.id !== id);

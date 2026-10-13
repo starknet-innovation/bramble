@@ -56,7 +56,11 @@ export type DecodedCall = {
 /**
  * Re-exported verifier context so callers keep importing it from this module.
  */
-export { type VerificationContext, verificationContext } from "./verification-context";
+export {
+  trustedTokens,
+  type VerificationContext,
+  verificationContext,
+} from "./verification-context";
 
 /**
  * Abbreviates an address for display as `0x1234…abcd`.

@@ -1,11 +1,44 @@
 /**
- * How a revoke enters and leaves the allowance log. Split from
- * ./allowance-store so that module stays a store; everything here is a pure
- * function of the stored entries, the chain readings and the revoke
- * transactions' outcomes.
+ * How a revoke finds its target, and how it enters and leaves the allowance
+ * log. Split from ./allowance-store so that module stays a store; everything
+ * here is a pure function of an id, the stored entries, the chain readings
+ * and the revoke transactions' outcomes.
  */
 import { canonicalFelt, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { AllowanceRecord } from "./allowance-record";
+
+/**
+ * Recovers the token and spender an allowance id targets, scoped to a specific
+ * account. Returns null unless the id is exactly `<accountId>:<token>:<spender>`
+ * with both a non-zero token and spender felt — so an id belonging to another
+ * account, or a malformed one, is rejected. Lets a revoke resolve its target
+ * from the id alone, covering externally discovered allowances that were never
+ * written to the local store.
+ */
+export const allowanceTarget = (
+  id: string,
+  accountId: string,
+): { readonly spender: string; readonly token: string } | null => {
+  const prefix = `${accountId}:`;
+  if (!id.startsWith(prefix)) {
+    return null;
+  }
+  const parts = id.slice(prefix.length).split(":");
+  if (parts.length !== 2) {
+    return null;
+  }
+  const token = canonicalFelt(parts[0] ?? "");
+  const spender = canonicalFelt(parts[1] ?? "");
+  if (
+    !token ||
+    !spender ||
+    !isNonZeroStarkFieldElement(token) ||
+    !isNonZeroStarkFieldElement(spender)
+  ) {
+    return null;
+  }
+  return { spender, token };
+};
 
 /**
  * A transaction hash as a record stores it: one canonical non-zero felt, so a

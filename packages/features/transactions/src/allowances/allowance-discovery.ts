@@ -17,23 +17,13 @@ import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
-  UINT128_LIMIT,
   uint256Felts,
 } from "@bramble/wallet-model/networks";
 import { hash } from "starknet";
 
-/**
- * A uint256 amount at or above this threshold is treated as an effectively
- * unlimited allowance: the conventional max-u128 sentinel, or any value that
- * sets the high 128-bit word, is far beyond a real spend cap. The one shared cut-off — the pre-sign verifier's
- * unlimited-approval risk flag (@bramble/transactions/verify) and the
- * allowance manager's display both read it here, so a transaction flagged
- * before signing is the same one the manager later lists as unlimited. Do not
- * re-derive the `1n << 128n` literal locally — the exponent itself is
- * `UINT128_LIMIT` in @bramble/wallet-model/networks, the same bound the
- * shared uint256 join holds each limb to.
- */
-export const UNLIMITED_ALLOWANCE_THRESHOLD = UINT128_LIMIT - 1n;
+// The unlimited cut-off lives with eviction ranking, which also reads it; it
+// is re-exported here, its public home, so every consumer keeps one import.
+export { isUnlimitedAllowance, UNLIMITED_ALLOWANCE_THRESHOLD } from "./allowance-retention";
 
 /**
  * The Starknet event selector emitted by an ERC20 `approve`.
@@ -120,19 +110,6 @@ export type AllowanceReading = {
 export type DecodedApprovalEvent = {
   readonly owner: string;
   readonly spender: string;
-};
-
-/**
- * Checks whether a decimal allowance amount should display as unlimited.
- * Non-numeric input is treated as not unlimited so a malformed amount never
- * silently reads as an infinite approval.
- */
-export const isUnlimitedAllowance = (amount: string): boolean => {
-  try {
-    return BigInt(amount) >= UNLIMITED_ALLOWANCE_THRESHOLD;
-  } catch {
-    return false;
-  }
 };
 
 /**
