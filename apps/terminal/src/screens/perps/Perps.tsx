@@ -7,9 +7,9 @@
  *   - trade tape                       -> usePerpsTrades (WS publicTrades)
  *   - funding history + mark/index/OI  -> useFunding / market stats
  *
- * The order-placement ticket stays intentionally gated: signing is stubbed and
- * placement is region-locked, so the CTA is visible but disabled with a clear
- * reason. ALL market data on the surface is live (no sample/mock rows remain).
+ * Order placement is off everywhere (#69, Decision A; see ./perps-placement):
+ * the ticket stays visible but its CTA is disabled with the recorded reason.
+ * ALL market data on the surface is live (no sample/mock rows remain).
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -63,6 +63,7 @@ import {
   toMarketRow,
   type OrderBookLevel,
 } from "./perps-data";
+import { PERPS_ORDER_PLACEMENT } from "./perps-placement";
 
 type Side = "long" | "short";
 type OrderType = "market" | "limit" | "stop";
@@ -72,9 +73,7 @@ const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
 const ORDER_BOOK_ROWS = 14;
 
-// Order placement is stubbed (no signer) and region-locked; surfaced verbatim.
-const ORDER_DISABLED_REASON =
-  "Order placement requires a signed session and isn't available in your region.";
+const ORDER_DISABLED_REASON = PERPS_ORDER_PLACEMENT.reason;
 
 const usd = (value: number): string =>
   `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -385,10 +384,7 @@ export default function Perps(): ReactNode {
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         <div className="regionbanner">
           <TriangleAlert size={14} strokeWidth={2} style={{ flexShrink: 0 }} aria-hidden />
-          <span>
-            Market data is live. Order placement requires a signed session and isn&apos;t available
-            in your region.
-          </span>
+          <span>Market data is live. {ORDER_DISABLED_REASON}</span>
         </div>
 
         <div className={isMarketRailOpen ? "perpscols" : "perpscols rail-collapsed"}>
@@ -544,7 +540,7 @@ export default function Perps(): ReactNode {
             )}
           </div>
 
-          {/* ORDER TICKET — visible but gated (signing stubbed + region-locked). */}
+          {/* ORDER TICKET — visible but gated (#69 Decision A, see ./perps-placement). */}
           <div className="ticket">
             <div className="ti">
               <SegmentedTabs
