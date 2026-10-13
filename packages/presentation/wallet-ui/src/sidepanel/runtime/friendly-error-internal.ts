@@ -113,7 +113,6 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
   ["invalid nostr relay configuration", "configuration built by the wallet"],
   ["invalid nostr relay idle timeout", "timeout is a constant"],
   ["invalid preferences", "preferences record built by the wallet"],
-  ["invalid stored preferences", "storage parse of the wallet's own record"],
   ["invalid wallet contact card", "card built by the wallet"],
   ["invalid token", "token record built by the wallet"],
   ["invalid token address", "address is pre-validated in the UI"],

@@ -262,3 +262,12 @@ test("a network without a shadow-account anonymizer reads as the approved notice
     ).message,
   ).toBe("Private services aren't set up for this network.");
 });
+
+// Errors audit F10: unreadable stored settings persist across retries, so the
+// reader is never told to try again.
+test("unreadable stored settings are not told to try again", () => {
+  expect(friendlyError("Invalid stored preferences").message).toBe("Invalid stored preferences");
+  expect(
+    friendlyError("Invalid stored preferences", "Couldn't add that account. Try again.").message,
+  ).toBe("Invalid stored preferences");
+});

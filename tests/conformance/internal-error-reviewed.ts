@@ -328,7 +328,6 @@ export const REVIEWED_PLUMBING_SNAPSHOT: readonly string[] = [
   "invalid starkscan cursor",
   "invalid starkscan page limit",
   "invalid starkscan response",
-  "invalid stored preferences",
   "invalid swap build response",
   "invalid swap call",
   "invalid swap quote",
