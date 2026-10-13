@@ -1,31 +1,51 @@
 /**
- * No error the wallet's own code throws reaches a reader in a developer's
- * words, and no security or cryptographic fact is hidden on the way (mc-wallet
- * issue 652).
+ * What the side panel shows for every message the wallet's own code throws or
+ * replies with (mc-wallet issue 652 and its review).
  *
- * The background replies to its extension pages with any thrown message as
- * written (`runtimeErrorResponse`), and the panel shows an unmapped
- * capitalised message as written. This walks every message thrown in the
- * production sources, runs it through the real classifier, and requires each
- * to land in exactly one reviewed place:
+ * The default is to show a message as written. This walks the production
+ * sources — thrown errors, `{ error }` replies, `invariant` guards, string
+ * constants, and template heads — runs each message through the real
+ * classifier, and requires:
  *
- * - collapsed (internal plumbing): never shown verbatim;
- * - a reviewed fact (FACT_KEPT) or a guarded unreviewed fact: shown with its
- *   words, never as the generic fallback;
- * - a reviewed sentence below: shown as written, by decision.
- *
- * A new thrown message fails here until someone decides which.
+ * - a message that comes out replaced is either a copy-table translation or on
+ *   the explicit REVIEWED_PLUMBING list. Nothing is hidden implicitly;
+ * - no security, cryptographic, privacy, signing, or approval message is
+ *   replaced by the generic fallback or by a caller's context sentence;
+ * - every message shown as written was decided on (lists below).
  */
 import { describe, expect, test } from "bun:test";
 import { friendlyError } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error";
-import { UNEXPECTED_FALLBACK } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy";
 import {
-  FACT_KEPT,
+  ERROR_COPY,
+  UNEXPECTED_FALLBACK,
+} from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy";
+import {
   FACT_TERMS,
-  INTERNAL_DIAGNOSTICS,
-  isInternalDiagnostic,
+  isReviewedPlumbing,
+  REVIEWED_PLUMBING,
 } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal";
 import { PANEL_ERROR_SOURCES, thrownMessages } from "./internal-error-scan";
+
+const CONTEXT = "Context sentence from the calling screen.";
+
+// STRK20 shapes built from runtime values the scan cannot resolve
+// (`${base} (${stage}/${category})`, strk20WaitExceeded), pinned by hand.
+const STRK20_RUNTIME_SHAPES = [
+  "strk20 services unavailable (submission/execution-reverted): reason",
+  "strk20 services unavailable (submission/proof-rejected): reason",
+  "strk20 services unavailable (submission/validation-failed): reason",
+  "strk20 services unavailable (submission/invalid-nonce): reason",
+  "strk20 services unavailable (proving/service-unavailable): reason",
+  "strk20 privacy leak (proving/service-unavailable): USER_LINKAGE",
+  "strk20 services unavailable: submission did not finish within 60 s",
+];
+
+// Security, cryptographic, privacy, signing, or approval messages: never
+// replaced by the fallback or a context sentence.
+const SENSITIVE = new RegExp(
+  `${FACT_TERMS.source}|\\b(?:sign\\w*|approv\\w*|privacy|private|strk20)\\b`,
+  "i",
+);
 
 // Already a sentence a reader can act on; shown as written by decision.
 const READER_SENTENCES = new Set([
@@ -123,7 +143,70 @@ const PENDING_COPY = new Set([
   "Transfer calldata is unavailable",
 ]);
 
-const REVIEWED_AS_WRITTEN = [READER_SENTENCES, GUARDED_FACTS, PENDING_COPY];
+// Developer wording kept visible on purpose (issue 652 review): it may carry a
+// fact about calls being signed, chain data, or storage integrity, or it tells
+// the reader which service is down. When in doubt a message stays visible.
+const KEPT_VISIBLE = new Set([
+  "Argent multisig deployment claim x",
+  "Argent multisig is already deployed",
+  "Argent multisig registry x",
+  "Argent multisig intent x",
+  "Argent multisig submission claim x",
+  "Declared Argent multisig class is malformed",
+  "Invalid Argent multisig accepted block response",
+  "Invalid Argent multisig call",
+  "Invalid Argent multisig calls",
+  "Invalid Argent multisig calldata length",
+  "Invalid Argent multisig execute calldata length",
+  "Invalid Argent multisig management calldata",
+  "Invalid Argent multisig management self-call",
+  "Invalid Argent multisig management threshold",
+  "Invalid Argent multisig resource bounds",
+  "Invalid Argent multisig x response",
+  "Unsupported Argent multisig self-call",
+  "Invalid x",
+  "Invalid x response",
+  "Invalid Starknet contract class",
+  "RPC returned a non-felt Starknet name address",
+  "Storage access denied",
+  "Response exceeded its size limit",
+  "Nostr relay connection closed",
+  "Nostr relay connection failed",
+  "Nostr relay publish failed",
+  "Nostr relay refused the subscription",
+  "Nostr relay sync failed",
+  "Nostr relays are unavailable",
+  "No RPC endpoints configured",
+  "RPC endpoints are temporarily unavailable",
+  "Starkscan does not index devnet",
+  "Request too large to review",
+  "Ledger needs attention",
+]);
+
+// Wallet-written sentences the wider scan found (constants, replies, UI copy).
+const SCANNED_SENTENCES = new Set([
+  "Deploy this account first (Settings → Deploy account).",
+  "Not enough x",
+  "The network fee was not reviewed. Nothing was submitted — review the transaction again.",
+  "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.",
+  "The transaction could not be recorded before sending. Nothing was submitted — try again.",
+  "The account deployment fee rose above the amount you reviewed. Nothing was submitted — review it again.",
+  "The account deployment fee was not reviewed. Nothing was submitted — deploy the account first.",
+  "The recovery fee changed. Review it and try again.",
+  "Passphrase must be at least x characters",
+  "Multisig balances are loading.",
+  "The transaction was not sent. x",
+  "Enter an amount greater than zero.",
+  "Review this send first",
+]);
+
+const REVIEWED_AS_WRITTEN = [
+  READER_SENTENCES,
+  GUARDED_FACTS,
+  PENDING_COPY,
+  KEPT_VISIBLE,
+  SCANNED_SENTENCES,
+];
 
 // The strings issue 652 named, which must stay collapsed.
 const ISSUE_NAMED = [
@@ -144,56 +227,65 @@ const ISSUE_NAMED = [
 describe("internal error copy (issue 652)", () => {
   const thrown = thrownMessages(PANEL_ERROR_SOURCES);
   const raws = new Set(thrown.map((entry) => entry.raw));
+  const messages = [...raws, ...STRK20_RUNTIME_SHAPES];
 
   test("the scan finds the strings it is meant to guard", () => {
     // A broken pattern would make every assertion below vacuously pass.
-    expect(raws.size).toBeGreaterThan(250);
+    expect(raws.size).toBeGreaterThan(550);
     for (const raw of ISSUE_NAMED) expect(raws.has(raw)).toBe(true);
+    // Constants, templates and replies are read, not only `new Error("…")`.
+    expect(
+      raws.has(
+        "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
+      ),
+    ).toBe(true);
+    expect(raws.has("strk20 privacy leak")).toBe(true);
+    expect(raws.has("Krusty KMS export missing: x")).toBe(true);
   });
 
-  test("the issue's named diagnostics are never shown as written", () => {
-    for (const raw of ISSUE_NAMED) {
-      expect(friendlyError(raw).message).not.toBe(raw);
-      expect(friendlyError(raw).message).toBe(UNEXPECTED_FALLBACK);
-    }
+  test("the issue's named diagnostics are replaced", () => {
+    for (const raw of ISSUE_NAMED) expect(friendlyError(raw).message).toBe(UNEXPECTED_FALLBACK);
   });
 
-  test("every thrown message is collapsed, translated, or reviewed as written", () => {
+  test("a replaced message is a copy-table translation or explicitly reviewed plumbing", () => {
+    const implicit = messages
+      .filter((raw) => friendlyError(raw).message === UNEXPECTED_FALLBACK)
+      .filter((raw) => !ERROR_COPY.has(raw.trim().toLowerCase()))
+      .filter((raw) => !isReviewedPlumbing(raw.trim()))
+      .sort();
+    expect(implicit).toEqual([]);
+  });
+
+  test("every reviewed plumbing entry is still minted", () => {
+    const lowered = new Set([...raws].map((raw) => raw.toLowerCase()));
+    expect([...REVIEWED_PLUMBING.keys()].filter((raw) => !lowered.has(raw)).sort()).toEqual([]);
+  });
+
+  test("no sensitive message is replaced by the fallback or a context sentence", () => {
+    const hidden = messages
+      .filter((raw) => SENSITIVE.test(raw))
+      .filter((raw) => {
+        const plain = friendlyError(raw).message;
+        const withContext = friendlyError(raw, CONTEXT).message;
+        return plain === UNEXPECTED_FALLBACK || withContext === CONTEXT;
+      })
+      .filter((raw) => !isReviewedPlumbing(raw.trim()))
+      .sort();
+    expect(hidden).toEqual([]);
+  });
+
+  test("every message shown as written was decided on", () => {
     const unreviewed = thrown
+      .filter(({ raw }) => /^[A-Z]/.test(raw))
       .filter(({ raw }) => friendlyError(raw).message === raw.trim())
-      .filter(({ raw }) => !FACT_KEPT.has(raw.trim().toLowerCase()))
       .filter(({ raw }) => !REVIEWED_AS_WRITTEN.some((set) => set.has(raw)))
+      .filter(({ raw }) => !SENSITIVE.test(raw))
       .map(({ file, raw }) => `${file}: ${raw}`)
       .sort();
     expect(unreviewed).toEqual([]);
   });
 
-  test("no thrown internal diagnostic comes out verbatim", () => {
-    const leaked = thrown
-      .filter(({ raw }) => isInternalDiagnostic(raw.trim()))
-      .filter(({ raw }) => friendlyError(raw).message === raw.trim())
-      .map(({ raw }) => raw);
-    expect(leaked).toEqual([]);
-  });
-
-  test("every thrown fact comes out with its facts, never as the generic fallback", () => {
-    const hidden = thrown
-      .filter(({ raw }) => FACT_TERMS.test(raw) || FACT_KEPT.has(raw.trim().toLowerCase()))
-      .filter(({ raw }) => !INTERNAL_DIAGNOSTICS.has(raw.trim().toLowerCase()))
-      .filter(({ raw }) => friendlyError(raw).message === UNEXPECTED_FALLBACK)
-      .map(({ raw }) => raw);
-    expect(hidden).toEqual([]);
-  });
-
-  test("every reviewed fact is still thrown and still shown as written", () => {
-    const lowered = new Set([...raws].map((raw) => raw.toLowerCase()));
-    expect([...FACT_KEPT].filter((fact) => !lowered.has(fact))).toEqual([]);
-    for (const raw of raws) {
-      if (FACT_KEPT.has(raw.toLowerCase())) expect(friendlyError(raw).message).toBe(raw);
-    }
-  });
-
-  test("every reviewed-as-written entry is still thrown and still shown as written", () => {
+  test("every reviewed-as-written entry is still minted and still shown as written", () => {
     for (const set of REVIEWED_AS_WRITTEN) {
       for (const raw of set) {
         expect(raws.has(raw)).toBe(true);

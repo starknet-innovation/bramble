@@ -36,8 +36,19 @@ const sourceFiles = (dir: string): string[] => {
   return out;
 };
 
+// `new <Something>Error(` / `new RefusedBeforeWrite(` with a literal or template.
 const THROWN = /new\s+([A-Z]\w*)\(\s*(["`])((?:(?!\2)[^\\]|\\.)*)\2/g;
+// `new <Something>Error(CONSTANT)` and `{ error: CONSTANT }`.
+const THROWN_CONSTANT = /new\s+([A-Z]\w*)\(\s*([A-Z][A-Z0-9_]+)\s*[,)]/g;
+// `{ error: "…" }` / `{ error: `…` }` replies, including multi-line ones.
+const REPLY = /\berror:\s*(["`])((?:(?!\1)[^\\]|\\.){3,400})\1/g;
+const REPLY_CONSTANT = /\berror:\s*([A-Z][A-Z0-9_]+)\b/g;
+// `invariant(condition, "…")`.
+const INVARIANT = /\binvariant\(\s*[^,]+,\s*(["`])((?:(?!\2)[^\\]|\\.)*)\2/g;
+// Literals that open with a guard prefix passed through a helper.
 const GUARD_LITERAL = /"((?:Unlock session|Krusty KMS) [^"]+)"/g;
+// `const NAME = "…"` / `` const NAME = `…` `` string constants.
+const STRING_CONSTANT = /\bconst\s+([A-Z][A-Z0-9_]+)\s*=\s*(["`])((?:(?!\2)[^\\]|\\.)*)\2/g;
 
 /** A thrown message and the file it is minted in. */
 export interface ThrownMessage {
@@ -45,22 +56,58 @@ export interface ThrownMessage {
   readonly file: string;
 }
 
-/** Every distinct thrown message under `dirs`, with one file that mints it. */
-export const thrownMessages = (dirs: readonly string[]): readonly ThrownMessage[] => {
-  const found = new Map<string, string>();
-  for (const dir of dirs) {
-    for (const file of sourceFiles(dir)) {
-      const src = readFileSync(join(root, file), "utf8");
-      for (const match of src.matchAll(THROWN)) {
-        const [, callee, , raw] = match;
-        if (!callee || !raw || !/Error|Refused/.test(callee) || raw.includes("${")) continue;
-        if (!found.has(raw)) found.set(raw, file);
-      }
-      for (const match of src.matchAll(GUARD_LITERAL)) {
-        const raw = match[1];
-        if (raw && !found.has(raw)) found.set(raw, file);
-      }
+const readSources = (dirs: readonly string[]): readonly (readonly [string, string])[] =>
+  dirs.flatMap((dir) =>
+    sourceFiles(dir).map((file) => [file, readFileSync(join(root, file), "utf8")] as const),
+  );
+
+// Resolves `${NAME}` against the scanned string constants (iterated, so a
+// constant built from another resolves too); any other substitution becomes
+// "x", the shape a runtime value takes in the classifier's eyes.
+const resolver = (sources: readonly (readonly [string, string])[]) => {
+  const constants = new Map<string, string>();
+  for (const [, src] of sources) {
+    for (const match of src.matchAll(STRING_CONSTANT)) {
+      const [, name, , value] = match;
+      if (name && value !== undefined && !constants.has(name)) constants.set(name, value);
     }
+  }
+  const resolve = (text: string, depth = 0): string =>
+    text.replace(/\$\{\s*([A-Za-z_$][\w$.]*)\s*\}|\$\{[^}]*\}/g, (_whole, name?: string) => {
+      const value = name ? constants.get(name) : undefined;
+      return value !== undefined && depth < 4 ? resolve(value, depth + 1) : "x";
+    });
+  return { constants, resolve };
+};
+
+/**
+ * Every distinct message the wallet's own code throws or replies with under
+ * `dirs`, with one file that mints it. Templates are resolved against string
+ * constants; unresolved substitutions read as "x".
+ */
+export const thrownMessages = (dirs: readonly string[]): readonly ThrownMessage[] => {
+  const sources = readSources(dirs);
+  const { constants, resolve } = resolver(sources);
+  const found = new Map<string, string>();
+  const add = (raw: string | undefined, file: string): void => {
+    if (raw === undefined) return;
+    const text = resolve(raw).trim();
+    if (text.length >= 3 && /\s/.test(text) && !found.has(text)) found.set(text, file);
+  };
+  for (const [file, src] of sources) {
+    for (const match of src.matchAll(THROWN)) {
+      if (match[1] && /Error|Refused/.test(match[1])) add(match[3], file);
+    }
+    for (const match of src.matchAll(THROWN_CONSTANT)) {
+      if (match[1] && /Error|Refused/.test(match[1]) && match[2])
+        add(constants.get(match[2]), file);
+    }
+    for (const match of src.matchAll(REPLY)) add(match[2], file);
+    for (const match of src.matchAll(REPLY_CONSTANT)) {
+      if (match[1]) add(constants.get(match[1]), file);
+    }
+    for (const match of src.matchAll(INVARIANT)) add(match[2], file);
+    for (const match of src.matchAll(GUARD_LITERAL)) add(match[1], file);
   }
   return [...found].map(([raw, file]) => ({ file, raw }));
 };
