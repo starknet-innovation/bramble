@@ -6,11 +6,9 @@
  */
 import { readFileSync } from "node:fs";
 import { Account, Signer, ec, num, hash, constants, uint256 } from "starknet";
-import { poseidonHashMany } from "@scure/starknet";
-import { p256 } from "@noble/curves/nist.js";
+import { createECDH } from "node:crypto";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { grindKey, getStarkKey } from "@scure/starknet";
 import {
   argentAddress,
   argentConstructor,
@@ -28,6 +26,8 @@ import {
   transfer,
 } from "./matrix-lib";
 
+const { grindKey, getStarkKey, poseidonHashMany } = ec.starkCurve;
+
 const IMPL = "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
 const CHAIN_ID = constants.StarknetChainId.SN_MAIN;
 const UDC = "0x041a78e741e5af2fec34b695679bc6891742439f7afb8484ecd7766661ad02bf";
@@ -41,6 +41,9 @@ const manifest = loadManifest();
 const short = (s: string) => s.slice(0, 10) + "…";
 const norm = (a: string) => "0x" + BigInt(a).toString(16);
 
+// Order n of the P-256 (secp256r1) group, SEC 2 section 2.4.2.
+const P256_ORDER = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+
 // Deterministic secp256r1 (P-256) key for the simulated 2FA signer: deployer
 // seed child 3's grinded key reduced into the P-256 scalar field.
 const r1Key = (() => {
@@ -48,10 +51,14 @@ const r1Key = (() => {
     "m/44'/9004'/0'/0/3",
   );
   if (!node.privateKey) throw new Error("derivation failed");
-  const order: bigint = (p256 as unknown as { Point: { Fn: { ORDER: bigint } } }).Point.Fn.ORDER;
-  const scalar = (BigInt("0x" + grindKey(node.privateKey)) % (order - 1n)) + 1n;
-  const point = (p256 as unknown as { Point: { BASE: { multiply(s: bigint): { toAffine(): { x: bigint; y: bigint } } } } }).Point.BASE.multiply(scalar).toAffine();
-  return { x: point.x, y: point.y };
+  const scalar = (BigInt("0x" + grindKey(node.privateKey)) % (P256_ORDER - 1n)) + 1n;
+  const ecdh = createECDH("prime256v1");
+  ecdh.setPrivateKey(Buffer.from(scalar.toString(16).padStart(64, "0"), "hex"));
+  const point = ecdh.getPublicKey(); // uncompressed: 0x04 || x (32 bytes) || y (32 bytes)
+  return {
+    x: BigInt(`0x${point.subarray(1, 33).toString("hex")}`),
+    y: BigInt(`0x${point.subarray(33, 65).toString("hex")}`),
+  };
 })();
 const u256felts = (v: bigint): [string, string] => {
   const u = uint256.bnToUint256(v);

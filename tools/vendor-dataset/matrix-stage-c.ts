@@ -10,7 +10,6 @@
 import { Account, Signer, ec, num } from "starknet";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { grindKey, getStarkKey } from "@scure/starknet";
 import {
   argentAddress,
   argentConstructor,
@@ -26,6 +25,8 @@ import {
   tokenBalance,
   transfer,
 } from "./matrix-lib";
+
+const { grindKey, getStarkKey } = ec.starkCurve;
 
 const STRK_FLOAT = 2n * 10n ** 18n;
 const USDC_DUST = 2n * 10n ** 6n; // 2 USDC

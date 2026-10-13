@@ -7,8 +7,9 @@
 import { readFileSync } from "node:fs";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { grindKey, getStarkKey } from "@scure/starknet";
-import { RpcProvider, hash } from "starknet";
+import { RpcProvider, ec } from "starknet";
+
+const { grindKey, getStarkKey } = ec.starkCurve;
 
 const SMART = "0x01AF449DD78F05Ca52C3D23404AB9fC84996e7097F61c6C31449DECA4b5CF002";
 const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";

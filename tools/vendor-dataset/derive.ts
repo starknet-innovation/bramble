@@ -8,8 +8,9 @@
 import { readFileSync } from "node:fs";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { grindKey, getStarkKey } from "@scure/starknet";
-import { hash } from "starknet";
+import { ec, hash } from "starknet";
+
+const { grindKey, getStarkKey } = ec.starkCurve;
 
 const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
 

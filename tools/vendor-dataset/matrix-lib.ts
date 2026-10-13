@@ -7,8 +7,9 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { grindKey, getStarkKey } from "@scure/starknet";
-import { Account, RpcProvider, hash, uint256 } from "starknet";
+import { Account, RpcProvider, ec, hash, uint256 } from "starknet";
+
+const { grindKey, getStarkKey } = ec.starkCurve;
 
 export const NODE = "https://mainnet.nodes.starknet.org/rpc/v0_10";
 const ENV_PATH = "/Users/henri/Workshop/mc-wallet/.env.vendor-seeds.local";
