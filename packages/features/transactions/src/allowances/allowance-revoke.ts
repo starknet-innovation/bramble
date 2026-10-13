@@ -104,14 +104,15 @@ export type RevokeOutcome = {
 // chain (a grant not mined yet), so the display takes the larger of the two
 // instead (../allowance-discovery's `withOnChainAmount`).
 //
-// The revoke's own outcome is what tells those two apart (issue 647). A
-// revoke that failed leaves the grant standing at its recorded amount, so the
-// mark is cleared and the row stops saying a revoke is on its way. A revoke
-// the chain accepted set the allowance to zero, so the record goes — unless
-// this round read a non-zero amount for the pair, in which case the record is
-// left exactly as it is for the next zero reading to settle: something after
-// the revoke may have granted again, and a cleared mark would let the larger
-// recorded figure stand over the chain's.
+// The revoke's own outcome is what tells those two apart (issue 647), but it
+// never deletes a record by itself: only a zero reading does. A revoke that
+// failed leaves the grant standing at its recorded amount, so the mark is
+// cleared and the row stops saying a revoke is on its way. An accepted revoke
+// with a non-zero reading in the same round means something still stands (a
+// re-grant after it, or a relative decrease that did not reach zero), so the
+// mark is cleared and the grant kept for the display to take the chain's
+// figure. An accepted revoke with no reading keeps its mark until a reading
+// settles it: a failed read is not evidence that the allowance is gone.
 const settledEntry = (
   stored: AllowanceRecord,
   zeroed: ReadonlySet<string>,
@@ -123,11 +124,11 @@ const settledEntry = (
     return null;
   }
   const outcome = pending && stored.revokeHash ? outcomes.get(stored.revokeHash) : undefined;
-  if (outcome === "failed") {
-    const { revokeHash: _failed, revoking: _cleared, ...grant } = stored;
+  if (outcome === "failed" || (outcome === "accepted" && nonZero.has(stored.id))) {
+    const { revokeHash: _settled, revoking: _cleared, ...grant } = stored;
     return grant;
   }
-  return outcome === "accepted" && !nonZero.has(stored.id) ? null : stored;
+  return stored;
 };
 
 /**

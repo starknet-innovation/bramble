@@ -3,9 +3,9 @@
  * allowance manager settles the pending mark on that transaction's outcome as
  * the wallet's activity reconciliation observed it, through the real message
  * handler. A revoke the chain rejected or reverted stops showing as on its
- * way and leaves the grant listed and revokable; one the chain accepted drops
- * the row even when no allowance reading is available; one still pending
- * keeps the mark.
+ * way and leaves the grant listed and revokable; one the chain accepted is
+ * never dropped on its outcome alone: with no allowance reading it keeps the
+ * mark until a reading settles it; one still pending keeps the mark.
  */
 import { describe, expect, test } from "bun:test";
 import { type ActivityStatus, memoryActivityLog } from "@bramble/transactions/activity";
@@ -168,13 +168,13 @@ describe("issue 647: a revoke settles on its own transaction's outcome", () => {
     },
   );
 
-  test("an accepted revoke drops the row even without a chain reading", async () => {
+  test("an accepted revoke with no chain reading keeps the row and its mark", async () => {
     const harness = makeHarness();
-    await grantThenRevoke(harness);
+    const id = await grantThenRevoke(harness);
     await settle(harness, "accepted");
 
-    expect((await harness.list()).allowances).toEqual([]);
-    expect(await harness.allowanceStore.list()).toEqual([]);
+    expect((await harness.list()).allowances).toMatchObject([{ id, revoking: true }]);
+    expect(await harness.allowanceStore.list()).toHaveLength(1);
   });
 
   test.each(["pending", "preconfirmed"] as const)(

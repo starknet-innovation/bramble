@@ -136,20 +136,52 @@ describe("revoke hash: settling on the outcome", () => {
     expect(await store.list()).toEqual([{ ...input("1000"), id: ID }]);
   });
 
-  test("an accepted revoke drops the record", async () => {
+  // An accepted revoke never deletes a record by itself: only a zero reading
+  // does. A failed read is not evidence that nothing stands.
+  const ACCEPTED = [{ hash: REVOKE, status: "accepted" as const }];
+
+  test("an accepted revoke with no reading keeps the record and its mark", async () => {
     const store = await pending();
-    await store.settleRevocations([], [{ hash: REVOKE, status: "accepted" }]);
+    const before = await store.list();
+    await store.settleRevocations([], ACCEPTED);
+    expect(await store.list()).toEqual(before);
+  });
+
+  test("an accepted revoke with a zero reading drops the record", async () => {
+    const store = await pending();
+    await store.settleRevocations([{ amount: "0", id: ID }], ACCEPTED);
     expect(await store.list()).toEqual([]);
   });
 
-  test("an accepted revoke with a non-zero reading is left for a later zero reading", async () => {
+  test("an accepted revoke with a non-zero reading clears the mark and keeps the grant", async () => {
     const store = await pending();
-    const before = await store.list();
-    await store.settleRevocations(
-      [{ amount: "5", id: ID }],
-      [{ hash: REVOKE, status: "accepted" }],
-    );
-    expect(await store.list()).toEqual(before);
+    await store.settleRevocations([{ amount: "5", id: ID }], ACCEPTED);
+    expect(await store.list()).toEqual([{ ...input("1000"), id: ID }]);
+  });
+
+  test("a re-grant read once as non-zero survives a later failed read", async () => {
+    const store = await pending();
+    await store.settleRevocations([{ amount: "5", id: ID }], ACCEPTED);
+    // The next round's allowance read fails: no reading at all.
+    await store.settleRevocations([], ACCEPTED);
+    expect(await store.list()).toEqual([{ ...input("1000"), id: ID }]);
+  });
+
+  test("an accepted decrease to zero with an external increase keeps the grant", async () => {
+    const store = createAllowanceStore({ store: createMemoryStore() });
+    await store.record(input("1000"));
+    await store.applyDelta({
+      direction: "subtract",
+      input: input("1000"),
+      transactionHash: REVOKE,
+    });
+    // A grant made outside the wallet raised the allowance meanwhile.
+    await store.settleRevocations([{ amount: "400", id: ID }], ACCEPTED);
+    const [record] = await store.list();
+    expect(record).toMatchObject({ amount: "1000", id: ID });
+    expect(record?.revoking).toBeUndefined();
+    await store.settleRevocations([], ACCEPTED);
+    expect(await store.list()).toHaveLength(1);
   });
 
   test("an outcome for another transaction changes nothing", async () => {

@@ -65,8 +65,9 @@ export type AllowanceOwner = Pick<AllowanceInput, "accountId" | "networkId">;
  *
  * `revokeHash` is the canonical hash of the transaction that carried that
  * revoke, so its outcome can settle the mark (issue 647): a revoke the chain
- * rejected or reverted clears `revoking`, and one it accepted drops the
- * record. It exists only beside `revoking`, and only on the stored record —
+ * rejected or reverted clears `revoking`, as does an accepted one the chain
+ * still reads as non-zero; only a zero reading removes the record. It exists
+ * only beside `revoking`, and only on the stored record —
  * a display view never carries it. A revoke recorded before the field existed
  * has none and settles on a zero reading alone, as it always did.
  */
