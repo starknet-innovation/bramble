@@ -259,12 +259,14 @@ const handleListAllowances: AllowanceOpsHandler = async (deps, message) => {
     rpcUrls,
     trusted.tokens.map((token) => token.address),
   );
-  const readings = await readTrackedAmounts(deps, scoped, owners, rpcUrls);
   // A revoke is recorded when submitted; a reading of zero, or its own
-  // transaction's outcome, is what settles it. The rows listed below are the
-  // settled ones, so a failed revoke stops showing as on its way in the same
-  // listing. Best effort: the listing does not depend on it.
+  // transaction's outcome, is what settles it. Outcomes are read BEFORE the
+  // allowance readings, so an `accepted` outcome is never paired with a
+  // reading taken before the reconciler saw the revoke execute. The rows
+  // listed below are the settled ones, so a failed revoke stops showing as on
+  // its way in the same listing. Best effort: the listing does not depend on it.
   const outcomes = await revokeOutcomes(deps, scoped, context.networkId);
+  const readings = await readTrackedAmounts(deps, scoped, owners, rpcUrls);
   await deps.allowanceStore.settleRevocations(readings, outcomes).catch(() => undefined);
   const settled =
     outcomes.length === 0

@@ -4,6 +4,7 @@
  * here is a pure function of an id, the stored entries, the chain readings
  * and the revoke transactions' outcomes.
  */
+import { isBaseUnitsAmount } from "@bramble/core/json";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { AllowanceRecord } from "./allowance-record";
 
@@ -108,15 +109,21 @@ export type RevokeOutcome = {
 // never deletes a record by itself: only a zero reading does. A revoke that
 // failed leaves the grant standing at its recorded amount, so the mark is
 // cleared and the row stops saying a revoke is on its way. An accepted revoke
-// with a non-zero reading in the same round means something still stands (a
-// re-grant after it, or a relative decrease that did not reach zero), so the
-// mark is cleared and the grant kept for the display to take the chain's
-// figure. An accepted revoke with no reading keeps its mark until a reading
-// settles it: a failed read is not evidence that the allowance is gone.
+// with no reading keeps its mark until a reading settles it: a failed read is
+// not evidence that the allowance is gone.
+//
+// An accepted revoke with a non-zero reading cannot be told apart from a
+// reading a lagging or failed-over node took before the revoke executed. The
+// recorded figure is obsolete either way, so the record takes the reading as
+// its exact amount and keeps the pending mark (the outcome itself is spent,
+// so the hash goes). A genuine re-grant is then listed at the chain's figure,
+// and a stale reading is followed by a zero one that drops the record. Clearing
+// the mark here instead would leave the pre-revoke figure standing over every
+// later zero reading, listing a revoked grant as live.
 const settledEntry = (
   stored: AllowanceRecord,
   zeroed: ReadonlySet<string>,
-  nonZero: ReadonlySet<string>,
+  nonZero: ReadonlyMap<string, string>,
   outcomes: ReadonlyMap<string, RevokeOutcome["status"]>,
 ): AllowanceRecord | null => {
   const pending = stored.revoking === true;
@@ -124,12 +131,22 @@ const settledEntry = (
     return null;
   }
   const outcome = pending && stored.revokeHash ? outcomes.get(stored.revokeHash) : undefined;
-  if (outcome === "failed" || (outcome === "accepted" && nonZero.has(stored.id))) {
+  if (outcome === "failed") {
     const { revokeHash: _settled, revoking: _cleared, ...grant } = stored;
     return grant;
   }
+  const reading = nonZero.get(stored.id);
+  if (outcome === "accepted" && reading !== undefined) {
+    const { lowerBound: _resolved, revokeHash: _spent, ...grant } = stored;
+    return { ...grant, amount: reading };
+  }
   return stored;
 };
+
+// A reading adopted as a stored amount must pass the store's own amount rule:
+// decimal base units of at most 78 digits.
+const isStoredAmount = (amount: string): boolean =>
+  isBaseUnitsAmount(amount) && amount.length <= 78;
 
 /**
  * The log after one settling round, or null when nothing changed. Readings
@@ -143,7 +160,11 @@ export const entriesAfterSettle = (
   outcomes: readonly RevokeOutcome[],
 ): readonly AllowanceRecord[] | null => {
   const zeroed = new Set(readings.filter((r) => r.amount === "0").map((r) => r.id));
-  const nonZero = new Set(readings.filter((r) => r.amount !== "0").map((r) => r.id));
+  const nonZero = new Map(
+    readings
+      .filter((r) => r.amount !== "0" && isStoredAmount(r.amount))
+      .map((r) => [r.id, r.amount]),
+  );
   const byHash = new Map(outcomes.map((outcome) => [outcome.hash, outcome.status]));
   let changed = false;
   const settled: AllowanceRecord[] = [];

@@ -153,18 +153,39 @@ describe("revoke hash: settling on the outcome", () => {
     expect(await store.list()).toEqual([]);
   });
 
-  test("an accepted revoke with a non-zero reading clears the mark and keeps the grant", async () => {
+  // Accepted with a non-zero reading: the reading becomes the exact amount and
+  // the pending mark stays, so a stale pre-revoke reading cannot outlive the
+  // zero reading that follows it.
+  const adopted = (amount: string) => ({ ...input(amount), id: ID, revoking: true as const });
+
+  test("an accepted revoke with a non-zero reading adopts it as the exact amount", async () => {
     const store = await pending();
     await store.settleRevocations([{ amount: "5", id: ID }], ACCEPTED);
-    expect(await store.list()).toEqual([{ ...input("1000"), id: ID }]);
+    expect(await store.list()).toEqual([adopted("5")]);
   });
 
-  test("a re-grant read once as non-zero survives a later failed read", async () => {
+  test("an accepted revoke read stale as non-zero is dropped by the next zero reading", async () => {
     const store = await pending();
-    await store.settleRevocations([{ amount: "5", id: ID }], ACCEPTED);
+    // A lagging node answers with the pre-revoke figure.
+    await store.settleRevocations([{ amount: "1000", id: ID }], ACCEPTED);
+    await store.settleRevocations([{ amount: "0", id: ID }]);
+    expect(await store.list()).toEqual([]);
+  });
+
+  test("a genuine re-grant is kept at its amount, through a later failed read", async () => {
+    const store = await pending();
+    await store.settleRevocations([{ amount: "250", id: ID }], ACCEPTED);
     // The next round's allowance read fails: no reading at all.
     await store.settleRevocations([], ACCEPTED);
-    expect(await store.list()).toEqual([{ ...input("1000"), id: ID }]);
+    expect(await store.list()).toEqual([adopted("250")]);
+    const views = mergeAllowanceViews({
+      account: { id: ACCOUNT_ID },
+      external: [],
+      inWallet: await store.list(),
+      networkId: "SN_MAIN",
+      readings: [{ amount: "250", id: ID }],
+    });
+    expect(views[0]?.amount).toBe("250");
   });
 
   test("an accepted decrease to zero with an external increase keeps the grant", async () => {
@@ -177,11 +198,15 @@ describe("revoke hash: settling on the outcome", () => {
     });
     // A grant made outside the wallet raised the allowance meanwhile.
     await store.settleRevocations([{ amount: "400", id: ID }], ACCEPTED);
-    const [record] = await store.list();
-    expect(record).toMatchObject({ amount: "1000", id: ID });
-    expect(record?.revoking).toBeUndefined();
     await store.settleRevocations([], ACCEPTED);
-    expect(await store.list()).toHaveLength(1);
+    expect(await store.list()).toEqual([adopted("400")]);
+  });
+
+  test("a malformed non-zero reading is never adopted", async () => {
+    const store = await pending();
+    const before = await store.list();
+    await store.settleRevocations([{ amount: "-5", id: ID }], ACCEPTED);
+    expect(await store.list()).toEqual(before);
   });
 
   test("an outcome for another transaction changes nothing", async () => {

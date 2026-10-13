@@ -84,6 +84,7 @@ const walletStub = {
 const APPROVE_HASH = "0x1001";
 const REVOKE_HASH = "0x1002";
 
+type TrackedReading = { readonly amount: string; readonly id: string };
 type Listing = { readonly allowances: readonly { readonly id: string; revoking?: true }[] };
 
 const makeHarness = () => {
@@ -92,10 +93,17 @@ const makeHarness = () => {
   const allowanceStore = memoryAllowanceStore();
   const activity = memoryActivityLog(() => 1);
   const hashes = [APPROVE_HASH, REVOKE_HASH];
+  // What the node answers for `allowance(owner, spender)`; none by default.
+  const node: { read: (ids: readonly string[]) => Promise<readonly TrackedReading[]> } = {
+    read: async () => [],
+  };
   const handler = createMessageHandler(walletStub, testExtension, {
     activity,
     allowanceStore,
     runtimeRpc: makeRuntimeRpc({
+      async getTrackedAllowances(input) {
+        return node.read(input.pairs.map((pair) => pair.id));
+      },
       async submitInvokeTransaction(input) {
         return { calls: input.calls, transactionHash: hashes.shift() ?? "0x1fff" };
       },
@@ -104,7 +112,7 @@ const makeHarness = () => {
   });
   const list = async (): Promise<Listing> =>
     (await handler({ type: "wallet.allowances" }, extensionSender)) as Listing;
-  return { activity, allowanceStore, handler, list };
+  return { activity, allowanceStore, handler, list, node };
 };
 
 // Grants through the dapp invoke path, then revokes the grant from the
@@ -187,4 +195,41 @@ describe("issue 647: a revoke settles on its own transaction's outcome", () => {
       expect((await harness.list()).allowances).toMatchObject([{ id, revoking: true }]);
     },
   );
+
+  test("outcomes are read before the allowance readings", async () => {
+    const harness = makeHarness();
+    const id = await grantThenRevoke(harness);
+    // The reconciler sees the revoke execute while the node is answering with
+    // the figure it held before: that reading must not be paired with it.
+    harness.node.read = async (ids) => {
+      await settle(harness, "accepted");
+      return ids.map((pairId) => ({ amount: "1000", id: pairId }));
+    };
+    await harness.list();
+    expect(await harness.allowanceStore.list()).toMatchObject([
+      { id, revokeHash: REVOKE_HASH, revoking: true },
+    ]);
+  });
+
+  test("accepted, a stale non-zero reading, then zero: the row goes", async () => {
+    const harness = makeHarness();
+    const id = await grantThenRevoke(harness);
+    await settle(harness, "accepted");
+    harness.node.read = async () => [{ amount: "1000", id }];
+    expect((await harness.list()).allowances).toMatchObject([{ id, revoking: true }]);
+    harness.node.read = async () => [{ amount: "0", id }];
+    expect((await harness.list()).allowances).toEqual([]);
+    expect(await harness.allowanceStore.list()).toEqual([]);
+  });
+
+  test("accepted with a genuine re-grant: the row shows the re-grant amount", async () => {
+    const harness = makeHarness();
+    const id = await grantThenRevoke(harness);
+    await settle(harness, "accepted");
+    harness.node.read = async () => [{ amount: "250", id }];
+    expect((await harness.list()).allowances).toMatchObject([{ amount: "250", id }]);
+    // Still "250" when the next read fails.
+    harness.node.read = async () => [];
+    expect((await harness.list()).allowances).toMatchObject([{ amount: "250", id }]);
+  });
 });

@@ -128,9 +128,9 @@ export type AllowanceStore = {
   /**
    * Drops pending revokes and zero lower bounds that a live chain reading
    * states are zero, and settles a pending revoke on its own transaction's
-   * outcome: a failed one clears the mark, and so does an accepted one whose
-   * reading this round is non-zero. An outcome never deletes a record; only a
-   * zero reading does. Any other reading, and
+   * outcome: a failed one clears the mark; an accepted one whose reading this
+   * round is non-zero takes that reading as its exact amount and stays marked.
+   * An outcome never deletes a record; only a zero reading does. Any other reading, and
    * any other record, is left alone. Readings are untrusted; only an exact "0"
    * acts. Outcomes come from the wallet's own activity reconciliation.
    */
