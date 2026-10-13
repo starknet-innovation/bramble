@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAINNET_TOKEN_ADDRESSES } from "../constants";
 import { quoteVesuMultiplyClose, quoteVesuMultiplyIncrease } from "./vesu-multiply";
-import { recheckVesuMultiplyQuote, VESU_MULTIPLY_MAX_PREMIUM_BPS } from "./vesu-multiply-anchor";
+import {
+  recheckVesuMultiplyQuote,
+  VESU_MULTIPLY_MAX_PREMIUM_BPS,
+  VesuMultiplyAnchorError,
+} from "./vesu-multiply-anchor";
 
 const { ETH, USDC } = MAINNET_TOKEN_ADDRESSES;
 
@@ -46,6 +50,12 @@ const increase = (priceUsd: (asset: string) => Promise<number | null>) =>
 // the mid-price input: required × 1.01 ≤ mid × 1.11.
 const LARGEST_ALLOWED_INPUT =
   (MID_INPUT * BigInt(10_000 + VESU_MULTIPLY_MAX_PREMIUM_BPS + 100)) / 10_100n;
+
+const refusalCode = (promise: Promise<unknown>): Promise<unknown> =>
+  promise.then(
+    () => "resolved",
+    (cause: unknown) => (cause instanceof VesuMultiplyAnchorError ? cause.code : cause),
+  );
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -119,5 +129,26 @@ describe("Vesu Multiply swap cap anchor (#646)", () => {
     await expect(recheckVesuMultiplyQuote(quote, prices(null))).rejects.toThrow(
       "Could not quote Vesu wind route",
     );
+  });
+
+  it("names each refusal with a stable code for copy mapping", async () => {
+    quoterReturns(MID_INPUT);
+    const quote = await increase(prices(2_000));
+    await expect(refusalCode(recheckVesuMultiplyQuote(quote, prices(2_400)))).resolves.toBe(
+      "price_premium_exceeded",
+    );
+    await expect(refusalCode(recheckVesuMultiplyQuote(quote, prices(null)))).resolves.toBe(
+      "price_unavailable",
+    );
+    const badDecimals = {
+      ...quote,
+      anchor: { ...quote.anchor, calculated: { ...quote.anchor.calculated, decimals: -1 } },
+    };
+    await expect(refusalCode(recheckVesuMultiplyQuote(badDecimals, prices(2_000)))).resolves.toBe(
+      "price_unavailable",
+    );
+    // A quoter outage is the quote path's own refusal, not an anchor refusal.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
+    await expect(refusalCode(increase(prices(2_000)))).resolves.not.toBe("price_unavailable");
   });
 });

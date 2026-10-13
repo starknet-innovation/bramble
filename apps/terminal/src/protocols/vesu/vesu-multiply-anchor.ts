@@ -14,6 +14,28 @@
 import { WalletError } from "../support/errors";
 import type { VesuMultiplyExactOutQuote } from "./vesu-multiply";
 
+/**
+ * Why the anchor refused a route, as a stable code callers can map to
+ * reviewed copy: `price_unavailable` when no independent price (or no usable
+ * decimals) could be read, `price_premium_exceeded` when the swap cap is above
+ * the allowed premium over the reference mid-price.
+ */
+type VesuMultiplyAnchorRefusal = "price_premium_exceeded" | "price_unavailable";
+
+/**
+ * A price-anchor refusal. The message stays the quote path's existing refusal
+ * text; `code` is what distinguishes the two cases.
+ */
+export class VesuMultiplyAnchorError extends WalletError {
+  public readonly code: VesuMultiplyAnchorRefusal;
+
+  public constructor(code: VesuMultiplyAnchorRefusal, message: string) {
+    super(message);
+    this.name = "VesuMultiplyAnchorError";
+    this.code = code;
+  }
+}
+
 /** Largest premium over the reference mid-price a swap cap may carry, before slippage. */
 export const VESU_MULTIPLY_MAX_PREMIUM_BPS = 1_000;
 
@@ -56,9 +78,10 @@ const validDecimals = (value: number): boolean =>
   Number.isInteger(value) && value >= 0 && value <= 36;
 
 /**
- * Re-checks an anchored quote's swap cap against fresh reference prices.
- * Throws the quote's existing refusals: its unpriced message when no price is
- * available, and the route amount mismatch when the cap exceeds the premium.
+ * Re-checks an anchored quote's swap cap against the prices `priceUsd` reads
+ * (at handoff, pass an uncached reader). Throws a {@link VesuMultiplyAnchorError}:
+ * `price_unavailable` (with the quote's unpriced message) when no price is
+ * available, `price_premium_exceeded` when the cap exceeds the premium.
  */
 export const recheckVesuMultiplyQuote = async (
   quote: VesuMultiplyAnchoredQuote,
@@ -66,14 +89,14 @@ export const recheckVesuMultiplyQuote = async (
 ): Promise<void> => {
   const { calculated, specified, unpricedMessage } = quote.anchor;
   if (!validDecimals(calculated.decimals) || !validDecimals(specified.decimals)) {
-    throw new WalletError(unpricedMessage);
+    throw new VesuMultiplyAnchorError("price_unavailable", unpricedMessage);
   }
   const [specifiedPrice, calculatedPrice] = await Promise.all([
     priceUsd(specified.address).then(scaledPrice, () => null),
     priceUsd(calculated.address).then(scaledPrice, () => null),
   ]);
   if (specifiedPrice === null || calculatedPrice === null) {
-    throw new WalletError(unpricedMessage);
+    throw new VesuMultiplyAnchorError("price_unavailable", unpricedMessage);
   }
   const allowedBps = BigInt(10_000 + VESU_MULTIPLY_MAX_PREMIUM_BPS + quote.slippageBps);
   // Mid-price input for the exact output, raised by the premium and slippage:
@@ -82,7 +105,10 @@ export const recheckVesuMultiplyQuote = async (
     (quote.outputAmount * specifiedPrice * 10n ** BigInt(calculated.decimals) * allowedBps) /
     (calculatedPrice * 10n ** BigInt(specified.decimals) * 10_000n);
   if (quote.maxInputAmount > allowedInput) {
-    throw new WalletError("Ekubo Multiply route amount mismatch");
+    throw new VesuMultiplyAnchorError(
+      "price_premium_exceeded",
+      "Ekubo Multiply route amount mismatch",
+    );
   }
 };
 
