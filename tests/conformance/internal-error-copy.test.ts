@@ -14,6 +14,7 @@
  * - every message shown as written was decided on (lists below).
  */
 import { describe, expect, test } from "bun:test";
+import { isLedgerRejectionCode, ledgerMessage } from "@bramble/ledger-protocol/errors";
 import { friendlyError } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error";
 import {
   ERROR_COPY,
@@ -22,9 +23,40 @@ import {
 import {
   FACT_TERMS,
   isReviewedPlumbing,
+  PLUMBING_DESPITE_FACT_WORD,
   REVIEWED_PLUMBING,
 } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal";
+import { REVIEWED_PLUMBING_SNAPSHOT, SENSITIVE_COPY_REVIEWED } from "./internal-error-reviewed";
 import { PANEL_ERROR_SOURCES, thrownMessages } from "./internal-error-scan";
+
+// Constructor first arguments the scan reads as messages but are not: the
+// PrivacyBlockerError kind tag ("fund", "deploy"), whose sentence is the
+// second argument.
+const NOT_MESSAGES = new Set(["fund", "deploy"]);
+
+// The swap-build safety refusals (swap-build-policy.ts, avnu-route.ts). Each
+// names the check that stopped the build, so each is shown as written (issue
+// 652 review, R2-1); none may read as a vague sentence.
+const SWAP_SAFETY_REFUSALS = [
+  "swap build routed a token you are not selling",
+  "swap build routed an amount you did not review",
+  "swap build bought a token you did not choose",
+  "swap build routed the proceeds to another account",
+  "swap build accepted less than the minimum you reviewed",
+  "swap build charged an aggregator fee beyond the wallet's cap",
+  "swap build called a contract that is not the avnu router",
+  "swap build called an entrypoint that is not an avnu swap",
+  "swap build requested a direct token transfer",
+  "swap build requested an additive token allowance",
+  "swap build requested an unexpected token allowance",
+  "swap build approved an unexpected spender",
+  "swap build omitted the sell token approval",
+  "swap build returned multiple token approvals",
+  "swap build returned too many calls",
+  "swap build returned no swap call",
+  "swap build returned more than one swap call",
+  "swap quote does not match the requested pair",
+];
 
 const CONTEXT = "Context sentence from the calling screen.";
 
@@ -170,6 +202,8 @@ const KEPT_VISIBLE = new Set([
   "RPC returned a non-felt Starknet name address",
   "Storage access denied",
   "Encrypted store scope is required",
+  // A field the reader types (multisig deploy form); shown so it names itself.
+  "Invalid Argent multisig salt",
   // The KMS result-field checks: the field can be a public key or a signature.
   "Krusty KMS result missing field element: x",
   "Krusty KMS result missing non-zero field element: x",
@@ -231,7 +265,7 @@ const ISSUE_NAMED = [
 
 describe("internal error copy (issue 652)", () => {
   const thrown = thrownMessages(PANEL_ERROR_SOURCES);
-  const raws = new Set(thrown.map((entry) => entry.raw));
+  const raws = new Set(thrown.map((entry) => entry.raw).filter((raw) => !NOT_MESSAGES.has(raw)));
   const messages = [...raws, ...STRK20_RUNTIME_SHAPES];
 
   test("the scan finds the strings it is meant to guard", () => {
@@ -246,6 +280,38 @@ describe("internal error copy (issue 652)", () => {
     ).toBe(true);
     expect(raws.has("strk20 privacy leak")).toBe(true);
     expect(raws.has("Krusty KMS export missing: x")).toBe(true);
+  });
+
+  test("every scanned message without a space is a Ledger code read as its catalog sentence", () => {
+    const words = [...raws].filter((raw) => !/\s/.test(raw));
+    expect(words.length).toBeGreaterThan(0);
+    for (const raw of words) {
+      expect(isLedgerRejectionCode(raw), raw).toBe(true);
+      if (isLedgerRejectionCode(raw)) expect(friendlyError(raw).message).toBe(ledgerMessage(raw));
+    }
+  });
+
+  test("every swap-build safety refusal is read and shown as written (R2-1)", () => {
+    for (const raw of SWAP_SAFETY_REFUSALS) {
+      expect(raws.has(raw), raw).toBe(true);
+      expect(friendlyError(raw).message, raw).toBe(raw);
+      expect(friendlyError(raw, CONTEXT).message, raw).toBe(raw);
+    }
+  });
+
+  test("the plumbing list matches its reviewed snapshot (hiding a message takes two edits)", () => {
+    expect([...REVIEWED_PLUMBING.keys()].sort()).toEqual([...REVIEWED_PLUMBING_SNAPSHOT]);
+  });
+
+  test("every sensitive copy-table mapping matches its reviewed snapshot", () => {
+    const current = [...ERROR_COPY].filter(([raw]) => SENSITIVE.test(raw));
+    expect(current).toEqual(SENSITIVE_COPY_REVIEWED.map(([raw, copy]) => [raw, copy]));
+  });
+
+  test("no sensitive message is on the plumbing list unless its reason is recorded", () => {
+    const listed = [...REVIEWED_PLUMBING.keys()].filter((raw) => SENSITIVE.test(raw));
+    expect(listed.every((raw) => PLUMBING_DESPITE_FACT_WORD.has(raw))).toBe(true);
+    for (const raw of SWAP_SAFETY_REFUSALS) expect(REVIEWED_PLUMBING.has(raw)).toBe(false);
   });
 
   test("the issue's named diagnostics are replaced", () => {

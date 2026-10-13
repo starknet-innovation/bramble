@@ -47,6 +47,15 @@ const REPLY_CONSTANT = /\berror:\s*([A-Z][A-Z0-9_]+)\b/g;
 const INVARIANT = /\binvariant\(\s*[^,]+,\s*(["`])((?:(?!\1)[^\\]|\\.)*)\1/g;
 // Literals that open with a guard prefix passed through a helper.
 const GUARD_LITERAL = /"((?:Unlock session|Krusty KMS) [^"]+)"/g;
+// Refusals a policy returns rather than throws (`return "…"`, or a ternary
+// branch), read only from the modules that mint them: everywhere else a
+// returned string is ordinary data.
+export const REFUSAL_SOURCES = [
+  "apps/extension/src/background/transactions/swap-build-policy.ts",
+  "apps/extension/src/background/approvals/approval-limits.ts",
+  "packages/foundation/wallet-model/src/swap/avnu-route.ts",
+];
+const RETURNED = /(?:\breturn|[?:])\s*(["`])((?:(?!\1)[^\\]|\\.){3,400})\1/g;
 // `const NAME = "…"` / `` const NAME = `…` `` string constants.
 const STRING_CONSTANT = /\bconst\s+([A-Z][A-Z0-9_]+)\s*=\s*(["`])((?:(?!\2)[^\\]|\\.)*)\2/g;
 
@@ -81,8 +90,10 @@ const resolver = (sources: readonly (readonly [string, string])[]) => {
 };
 
 /**
- * Every distinct message the wallet's own code throws or replies with under
- * `dirs`, with one file that mints it. Templates are resolved against string
+ * Every distinct message the wallet's own code throws, replies with, or (in
+ * REFUSAL_SOURCES) returns under `dirs`, with one file that mints it. A
+ * message with no space is kept too: it is a Ledger rejection code, or a
+ * constructor's first argument the tests account for. Templates are resolved against string
  * constants; unresolved substitutions read as "x".
  */
 export const thrownMessages = (dirs: readonly string[]): readonly ThrownMessage[] => {
@@ -92,7 +103,7 @@ export const thrownMessages = (dirs: readonly string[]): readonly ThrownMessage[
   const add = (raw: string | undefined, file: string): void => {
     if (raw === undefined) return;
     const text = resolve(raw).trim();
-    if (text.length >= 3 && /\s/.test(text) && !found.has(text)) found.set(text, file);
+    if (text.length >= 3 && !found.has(text)) found.set(text, file);
   };
   for (const [file, src] of sources) {
     for (const match of src.matchAll(THROWN)) {
@@ -107,6 +118,12 @@ export const thrownMessages = (dirs: readonly string[]): readonly ThrownMessage[
       if (match[1]) add(constants.get(match[1]), file);
     }
     for (const match of src.matchAll(INVARIANT)) add(match[2], file);
+    if (REFUSAL_SOURCES.includes(file)) {
+      // A refusal is a sentence; a one-word branch here is data ("route").
+      for (const match of src.matchAll(RETURNED)) {
+        if (match[2] && /\s/.test(match[2])) add(match[2], file);
+      }
+    }
     for (const match of src.matchAll(GUARD_LITERAL)) add(match[1], file);
   }
   return [...found].map(([raw, file]) => ({ file, raw }));
