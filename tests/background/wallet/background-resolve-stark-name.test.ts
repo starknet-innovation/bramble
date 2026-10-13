@@ -9,6 +9,7 @@ import { describe, expect, test } from "bun:test";
 import type { ResolveStarkNameInput } from "@bramble/starknet/stark-name";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -127,7 +128,14 @@ describe("background Starknet name resolution message", () => {
       ok: true,
       resolution: { address: account.address, status: "resolved" },
     });
-    expect(calls).toEqual([{ name: "altaga.braavos.stark", rpcUrls: MAINNET_RPC_URLS }]);
+    // The read is bound to mainnet's chain id, so an endpoint on another chain is refused.
+    expect(calls).toEqual([
+      {
+        expectedChainId: STARKNET_NETWORKS.SN_MAIN.chainId,
+        name: "altaga.braavos.stark",
+        rpcUrls: MAINNET_RPC_URLS,
+      },
+    ]);
   });
 
   test("passes an unregistered name through as not-found, without an address", async () => {

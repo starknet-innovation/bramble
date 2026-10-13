@@ -39,6 +39,11 @@ export type StarkNameResolution =
  * and get the default `RpcProvider` per endpoint.
  */
 export type ResolveStarkNameInput = {
+  /**
+   * The chain id the caller's network expects. An endpoint reporting another
+   * chain is not trusted: its naming contract answers for a different network.
+   */
+  readonly expectedChainId?: string | undefined;
   readonly name: string;
   readonly rpcUrls: readonly string[];
   readonly makeProvider?: ((nodeUrl: string) => RpcProvider) | undefined;
@@ -65,6 +70,7 @@ export const normalizeStarkName = (name: string): string | null => {
  * as "no such name".
  */
 export const resolveStarkName = async ({
+  expectedChainId,
   name,
   rpcUrls,
   makeProvider,
@@ -78,11 +84,25 @@ export const resolveStarkName = async ({
     domain: labels.map((label) => starknetId.useEncoded(label).toString(10)),
     hint: [],
   });
+  // Set when an endpoint answers for another chain. Such an endpoint is failed
+  // over like a fault, but if no endpoint matches, the lookup fails closed as an
+  // error rather than reading as an unreachable network.
+  let sawOtherChain = false;
   try {
     return await withRpcFallback(
       rpcUrls,
       async (provider): Promise<StarkNameResolution> => {
         const chainId = await provider.getChainId();
+        // An endpoint on another chain would resolve the name against that
+        // chain's naming contract, so its answer is never read as this
+        // network's address. It fails over, and fails closed if none matches.
+        if (
+          expectedChainId !== undefined &&
+          canonicalFelt(chainId) !== canonicalFelt(expectedChainId)
+        ) {
+          sawOtherChain = true;
+          throw new Error("RPC reported another chain for a Starknet name lookup");
+        }
         let contractAddress: string;
         try {
           contractAddress = starknetId.getStarknetIdContract(chainId);
@@ -108,6 +128,9 @@ export const resolveStarkName = async ({
       makeProvider,
     );
   } catch (error) {
+    if (sawOtherChain) {
+      throw new Error("No RPC endpoint answered on this network's chain");
+    }
     if (isTransportRpcError(error)) {
       return { status: "unreachable" };
     }

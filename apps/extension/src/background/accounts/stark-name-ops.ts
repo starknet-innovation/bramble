@@ -54,12 +54,11 @@ export const handleResolveStarkName = async (
   if (input.networkId !== context.networkId) {
     return { error: "name resolution network changed" };
   }
+  const network = STARKNET_NETWORKS[context.networkId];
   const resolution = await deps.runtimeRpc.resolveStarkName({
+    expectedChainId: network.chainId,
     name: input.name,
-    rpcUrls: networkRpcUrls(
-      STARKNET_NETWORKS[context.networkId],
-      await deps.preferencesStore.read(),
-    ),
+    rpcUrls: networkRpcUrls(network, await deps.preferencesStore.read()),
   });
   // The answer carries the network its address belongs to, so the panel can
   // drop a resolution whose network changed while the read was in flight.

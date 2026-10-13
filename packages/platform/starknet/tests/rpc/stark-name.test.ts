@@ -142,6 +142,44 @@ describe("resolveStarkName", () => {
     expect(call).toBe(2);
   });
 
+  test("never reads an answer from an endpoint on another chain", async () => {
+    // A Sepolia endpoint configured for mainnet resolves the name against
+    // Sepolia's naming contract; that address is not mainnet's, so the lookup
+    // fails over and, with no matching endpoint, fails closed.
+    const reads: string[] = [];
+    const providerOn = (chainId: string, nodeUrl: string) =>
+      ({
+        async getChainId() {
+          return chainId;
+        },
+        async callContract() {
+          reads.push(nodeUrl);
+          return [KNOWN_ADDRESS];
+        },
+      }) as unknown as RpcProvider;
+    await expect(
+      resolveStarkName({
+        expectedChainId: "0x534e5f4d41494e",
+        makeProvider: (nodeUrl) => providerOn("0x534e5f5345504f4c4941", nodeUrl),
+        name: KNOWN_NAME,
+        rpcUrls: ["https://sepolia.example/rpc"],
+      }),
+    ).rejects.toThrow();
+    expect(reads).toEqual([]);
+    const result = await resolveStarkName({
+      expectedChainId: "0x534e5f4d41494e",
+      makeProvider: (nodeUrl) =>
+        providerOn(
+          nodeUrl.includes("sepolia") ? "0x534e5f5345504f4c4941" : "0x534e5f4d41494e",
+          nodeUrl,
+        ),
+      name: KNOWN_NAME,
+      rpcUrls: ["https://sepolia.example/rpc", "https://mainnet.example/rpc"],
+    });
+    expect(result).toEqual({ address: KNOWN_ADDRESS, status: "resolved" });
+    expect(reads).toEqual(["https://mainnet.example/rpc"]);
+  });
+
   test("returns unreachable when every endpoint fails at the transport level", async () => {
     const result = await resolve(
       providerWith({
