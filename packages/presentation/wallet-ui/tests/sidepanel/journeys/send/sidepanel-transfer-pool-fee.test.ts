@@ -121,7 +121,7 @@ describe("pool fee in its own token", () => {
 
   test("the refusal states a non-STRK fee in its own token and decimals", () => {
     expect(resolveTransferRoute(ethSend("0")).blocked?.reason).toBe(
-      "Not enough private USDC to cover the pool fee. You need at least 6 USDC.",
+      "Not enough private USDC to cover the pool fee. Keep 6 USDC for the fee.",
     );
   });
 

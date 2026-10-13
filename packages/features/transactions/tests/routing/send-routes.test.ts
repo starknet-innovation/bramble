@@ -229,7 +229,7 @@ describe("gates", () => {
       "Not enough private ETH. You need at least 606 ETH.",
     );
     expect(blockerFor({ ...eth, sourceFeeBalanceRaw: 0n }).reason).toBe(
-      "Not enough private STRK to cover the pool fee. You need at least 6 STRK.",
+      "Not enough private STRK to cover the pool fee. Keep 6 STRK for the fee.",
     );
   });
 
@@ -244,7 +244,7 @@ describe("gates", () => {
         tokenAddress: ETH,
         tokenSymbol: "ETH",
       }).reason,
-    ).toBe("Not enough private STRK to cover the pool fee. You need at least 6 STRK.");
+    ).toBe("Not enough private STRK to cover the pool fee. Keep 6 STRK for the fee.");
   });
 });
 

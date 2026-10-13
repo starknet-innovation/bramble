@@ -273,12 +273,12 @@ const feeBlocker = (input: SendRouteInput, feeAmount: bigint): SendRouteBlocker 
     return null;
   }
   const shortOfFee = `Not enough ${feeAssetLabel(input)} to cover the pool fee`;
-  // The figure is the fee in its own token, the same charge the review states,
-  // and is only given where that token's scale is known.
+  // The figure is the fee to keep in its own token (a converted fee is a
+  // ceiling, not an exact charge), given only where that token's scale is known.
   return input.feeTokenDecimals === null
     ? refuse(shortOfFee)
     : refuse(
-        `${shortOfFee}. You need at least ${formatTokenAmount(feeAmount, input.feeTokenDecimals)} ${input.feeTokenSymbol}.`,
+        `${shortOfFee}. Keep ${formatTokenAmount(feeAmount, input.feeTokenDecimals)} ${input.feeTokenSymbol} for the fee.`,
       );
 };
 

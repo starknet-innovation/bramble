@@ -84,7 +84,7 @@ describe("#356 converted-fee affordability", () => {
           sourceFeeBalanceRaw: 0n,
         }),
       ).blocked?.reason,
-    ).toBe("Not enough private STRK to cover the pool fee. You need at least 6 STRK.");
+    ).toBe("Not enough private STRK to cover the pool fee. Keep 6 STRK for the fee.");
   });
 
   test("waits, rather than refusing, while the sent-token balance is unknown", () => {
@@ -121,7 +121,7 @@ describe("#356 converted-fee affordability", () => {
     });
     expect(resolveSendRoute(otherSend).blocked).toBeUndefined();
     expect(resolveSendRoute({ ...otherSend, sourceFeeBalanceRaw: 0n }).blocked?.reason).toBe(
-      "Not enough private USDC to cover the pool fee. You need at least 6 USDC.",
+      "Not enough private USDC to cover the pool fee. Keep 6 USDC for the fee.",
     );
   });
 
@@ -137,7 +137,7 @@ describe("#356 converted-fee affordability", () => {
       tokenSymbol: "USDT",
     });
     expect(resolveSendRoute(otherSend).blocked?.reason).toBe(
-      "Not enough private USDC to cover the pool fee. You need at least 6 USDC.",
+      "Not enough private USDC to cover the pool fee. Keep 6 USDC for the fee.",
     );
     // A fee token whose scale the wallet does not know names no figure.
     expect(resolveSendRoute({ ...otherSend, feeTokenDecimals: null }).blocked?.reason).toBe(
