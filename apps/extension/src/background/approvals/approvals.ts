@@ -401,13 +401,14 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [...summaries],
       });
     },
-    requestStrk20Unavailable({ origin, refusal }) {
+    requestStrk20Unavailable({ notice, origin, refusal }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
       return enqueue({
         id: crypto.randomUUID(),
         kind: "strk20-unavailable",
+        ...(notice === undefined ? {} : { notice }),
         noticeRefusal: refusal,
         origin,
       });

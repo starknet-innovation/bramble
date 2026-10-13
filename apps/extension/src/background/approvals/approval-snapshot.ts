@@ -46,6 +46,10 @@ export type InvokeFeeReview = {
  */
 export type ApprovalRequest = PendingApproval & ApprovalPayload;
 
+// A notice's wallet-chosen reason, absent for every other kind.
+const noticeSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> =>
+  approval.notice === undefined ? {} : { notice: approval.notice };
+
 // Copies an invoke entry's fee review onto its snapshot without materializing
 // absent fields, so non-invoke snapshots stay byte-identical to before.
 const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
@@ -114,6 +118,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
   ...(approval.existingGrant === undefined ? {} : { existingGrant: approval.existingGrant }),
   id: approval.id,
   kind: approval.kind,
+  ...noticeSnapshot(approval),
   origin: approval.origin,
   ...(approval.relayFeeAction === undefined
     ? {}

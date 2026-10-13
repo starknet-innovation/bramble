@@ -10,7 +10,10 @@ import {
   SHADOW_INVOKE_CONTROL,
   SHADOW_INVOKE_SETTLES_NOTHING,
 } from "@bramble/privacy/shadow-account-copy";
-import { PRIVATE_SERVICES_UNAVAILABLE_NOTICE } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
+  SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
@@ -84,6 +87,27 @@ describe("shadow account approval card", () => {
       expect(html).not.toContain('data-approval-action="approve"');
       expect(html).not.toContain("site text");
       expect(html).not.toContain("disabled");
+    });
+  }
+
+  // The same notice holds a request whose shadow-account record cannot be
+  // written, or whose review could not be prepared: each gets its own line
+  // (PROPOSED copy), never the not-set-up line, which would be false.
+  for (const [notice, line] of [["record-limit", SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE]] as const) {
+    test(`a ${notice} notice shows its own line and only Close`, () => {
+      const html = approvalCard(
+        {
+          id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+          kind: "strk20-unavailable",
+          notice,
+          origin: ORIGIN,
+        },
+        status,
+      );
+      expect(html).toContain(line.replaceAll("'", "&#39;"));
+      expect(html).not.toContain("set up for this network");
+      expect(html).toContain('data-approval-action="deny"');
+      expect(html).not.toContain('data-approval-action="approve"');
     });
   }
 });

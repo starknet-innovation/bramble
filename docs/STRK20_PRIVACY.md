@@ -215,8 +215,10 @@ precomputed address before the account is deployed), when a submittable proof na
 a shadow invoke is submitted. Recording happens first and fails closed: a request whose record cannot
 be written does not run. The record reveals which sites someone used privately. It is bounded to 128
 scopes and 64 nonces per scope; past a bound the request is refused rather than a record dropped.
-The bound is checked before the request is queued, so the user is not asked to approve a request
-the record would refuse (the record after approval still re-checks). There is no way yet to remove
+The bound is checked before a card is queued, so the user is not asked to approve a request the
+record would refuse (the record after approval still re-checks). Such a request is held on the same
+close-only notice as a network with no anonymizer, with its own line, so the site learns nothing
+until the user sees it: Close returns the record refusal, and expiry returns `USER_REFUSED_OP`. There is no way yet to remove
 a record, so a full table stays full.
 Shadow accounts used before this record existed are not in it.
 

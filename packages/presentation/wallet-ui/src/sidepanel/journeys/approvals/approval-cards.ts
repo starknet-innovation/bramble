@@ -10,7 +10,10 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import { PRIVATE_SERVICES_UNAVAILABLE_NOTICE } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
+  SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
@@ -371,7 +374,11 @@ const strk20DisclosureCard = (
 const strk20UnavailableCard = (approval: PendingApproval): string => `
   <li class="request-card">
     <div class="request-copy">
-      <p>${escapeHtml(PRIVATE_SERVICES_UNAVAILABLE_NOTICE)}</p>
+      <p>${escapeHtml(
+        approval.notice === "record-limit"
+          ? SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE
+          : PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
+      )}</p>
     </div>
     <div class="button-row">${denyButton(approval, "Close")}</div>
   </li>`;

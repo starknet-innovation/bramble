@@ -8,7 +8,6 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
-  STRK20_SERVICE_UNAVAILABLE,
   type Strk20AssetLookup,
   type Strk20ShadowAccountReview,
   summarizeStrk20Batch,
@@ -47,6 +46,7 @@ import type {
   Strk20DisclosureRequest,
 } from "./strk20-approval-types";
 import { strk20FeeAssetFor } from "./strk20-fee-reference";
+import { holdStrk20Notice, MISSING_ANONYMIZER_REFUSAL } from "./strk20-notice";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
 import {
   readStrk20BalancesMessage,
@@ -135,7 +135,7 @@ const queueDisclosure = async (
   const recording = disclosureScopeRecording(input.request);
   const unrecordable = await shadowRecordRefusal(deps.wallet, resolved, input.origin, recording);
   if (unrecordable) {
-    return unrecordable;
+    return holdStrk20Notice(deps, input.origin, unrecordable.error, "record-limit");
   }
   try {
     const payload = { strk20Request: input.request };
@@ -257,33 +257,6 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
   });
 };
 
-// The SDK shadow account module is opt-in per network. A request that needs it
-// is refused before any approval is queued, not after the user approves into
-// a certain failure (#443); the error is the same one the SDK adapter raises.
-const MISSING_ANONYMIZER = {
-  error: `${STRK20_SERVICE_UNAVAILABLE}: no shadow account anonymizer is configured for this network`,
-} as const;
-
-// An instant refusal would let any site probe, silently, whether this user has
-// private services set up. Instead the request is held on the wallet's own
-// surface as a notice the user can only close, and the site receives the
-// refusal only once the user closes it. Unanswered, it expires exactly like any
-// other approval ("request rejected", 113), so waiting out the TTL tells the
-// site nothing a real approval card would not. Nothing is signed, prepared, or
-// disclosed on this path.
-const holdUnavailable = async (deps: Strk20OpsDeps, origin: string): Promise<RuntimeResponse> => {
-  try {
-    const notice = deps.approvals.requestStrk20Unavailable({
-      origin,
-      refusal: MISSING_ANONYMIZER.error,
-    });
-    notifyApprovalsChanged();
-    return await deps.waiters.register(notice.id);
-  } catch (error) {
-    return { error: strk20ErrorMessage(error) };
-  }
-};
-
 const configuredAnonymizer = (resolved: ResolvedAccount): string | undefined =>
   resolved.preferences.strk20Networks?.[resolved.account.networkId]?.shadowAccountAnonymizerAddress;
 
@@ -336,7 +309,7 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
     return resolved;
   }
   if (needsAnonymizer(input.actions) && configuredAnonymizer(resolved) === undefined) {
-    return holdUnavailable(deps, input.origin);
+    return holdStrk20Notice(deps, input.origin, MISSING_ANONYMIZER_REFUSAL);
   }
   // The same recipient policy the wallet's own pool routes apply. A poisoned
   // payment is queued with the flag, which leaves the card with Deny only,
@@ -385,7 +358,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
     return resolved;
   }
   if (needsAnonymizer(input.actions) && configuredAnonymizer(resolved) === undefined) {
-    return holdUnavailable(deps, input.origin);
+    return holdStrk20Notice(deps, input.origin, MISSING_ANONYMIZER_REFUSAL);
   }
   // A private transfer or withdrawal to an address that mimics a saved contact
   // is the same attack whether the wallet composed it or the site did. It is
@@ -396,7 +369,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   const recording = invokeScopeRecording(review.anonymizer, input.actions);
   const unrecordable = await shadowRecordRefusal(deps.wallet, resolved, input.origin, recording);
   if (unrecordable) {
-    return unrecordable;
+    return holdStrk20Notice(deps, input.origin, unrecordable.error, "record-limit");
   }
   try {
     const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
@@ -448,7 +421,7 @@ const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, messa
   }
   const anonymizer = configuredAnonymizer(resolved);
   if (anonymizer === undefined) {
-    return holdUnavailable(deps, input.origin);
+    return holdStrk20Notice(deps, input.origin, MISSING_ANONYMIZER_REFUSAL);
   }
   return queueDisclosure(deps, resolved, {
     kind: "strk20-shadow-account",

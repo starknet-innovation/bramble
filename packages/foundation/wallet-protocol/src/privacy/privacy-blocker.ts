@@ -26,6 +26,14 @@ export const PRIVACY_FUNDS_REQUIRED = "Deposit some STRK, then come back";
 export const PRIVATE_SERVICES_UNAVAILABLE_NOTICE =
   "Private services aren't set up for this network.";
 
+/**
+ * PROPOSED, pending copy review: the notice line when the shadow-account
+ * record table cannot take this request's scope. Not "Private services aren't
+ * set up for this network.", which would be false here.
+ */
+export const SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE =
+  "Bramble can't record another shadow account, so this request can't run.";
+
 /** Curated wallet refusal; carries its action independently of display wording. */
 export class PrivacyBlockerError extends WalletError {
   public constructor(

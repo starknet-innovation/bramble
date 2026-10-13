@@ -1,9 +1,10 @@
 /**
  * The shadow-account record bound is checked before the user is asked (audit
  * F9). A request the vault would refuse to record — a new scope past
- * MAX_SHADOW_ACCOUNT_SCOPES, or a new nonce past MAX_SHADOW_ACCOUNT_NONCES — is
- * refused before any card is queued, with the same answer the site would get
- * from the record after approval. A request that records nothing (a
+ * MAX_SHADOW_ACCOUNT_SCOPES, or a new nonce past MAX_SHADOW_ACCOUNT_NONCES —
+ * never reaches a card. It is held on the close-only notice instead, so the
+ * site learns nothing until the user sees it: Close gives the same answer the
+ * record would after approval, and expiry gives 113 like any approval. A request that records nothing (a
  * simulation) or that only merges into an existing scope still reaches the
  * user. The record after approval still re-checks and fails closed.
  */
@@ -16,6 +17,10 @@ import {
   type ShadowAccountScopeRef,
 } from "@bramble/vault/shadow-account-scopes";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import {
+  APPROVAL_TTL_MS,
+  createApprovalQueue,
+} from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -71,6 +76,7 @@ const fullTable = (): readonly ShadowAccountScopeRef[] =>
 
 const harness = (seed: readonly ShadowAccountScopeRef[]) => {
   const scopes = { value: seed };
+  const clock = { now: 1_700_000_000_000 };
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const handler = createMessageHandler(
@@ -82,6 +88,7 @@ const harness = (seed: readonly ShadowAccountScopeRef[]) => {
     },
     testExtension,
     {
+      approvals: createApprovalQueue({ now: () => clock.now }),
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {
@@ -99,7 +106,7 @@ const harness = (seed: readonly ShadowAccountScopeRef[]) => {
     };
     return response.pending.length;
   };
-  return { handler, pending, scopes };
+  return { clock, handler, pending, scopes };
 };
 
 const invoke = (label: string, nonce: string) => ({
@@ -122,25 +129,52 @@ const requests = (label: string, nonce: string) => [
 ];
 
 describe("shadow-account record bound before approval", () => {
-  test("a new scope past the bound is refused before any card, never evicting", async () => {
+  // Owner rule: a site never learns the user's shadow-account setup without
+  // the user seeing something. A full record table is held on the close-only
+  // notice like a missing anonymizer: the site gets the refusal on Close, and
+  // on expiry the same 113 any expired approval gives.
+  const heldOnNotice = async (h: ReturnType<typeof harness>, message: object) => {
+    let settled: unknown = "unsettled";
+    const held = h.handler(message, dapp).then((result) => {
+      settled = result;
+      return result;
+    });
+    const [notice] = await waitForPendingApprovals<{
+      readonly id: string;
+      readonly kind: string;
+      readonly notice?: string;
+      readonly summaries?: readonly string[];
+    }>(h.handler, panel);
+    expect(notice).toMatchObject({ kind: "strk20-unavailable", notice: "record-limit" });
+    expect(notice?.summaries).toBeUndefined();
+    await flushHeld();
+    expect(settled).toBe("unsettled");
+    return { held, id: notice?.id ?? "" };
+  };
+
+  test("a new scope past the bound is held until Close, never evicting", async () => {
     for (const message of requests("New site", "0x1")) {
-      const { handler, pending, scopes } = harness(fullTable());
-      const before = scopes.value;
-      expect(await handler(message, dapp)).toEqual(LIMIT);
-      expect(await pending()).toBe(0);
-      expect(scopes.value).toBe(before);
+      const h = harness(fullTable());
+      const before = h.scopes.value;
+      const { held, id } = await heldOnNotice(h, message);
+      await h.handler({ id, type: "wallet.denyOrigin" }, panel);
+      expect(await held).toEqual(LIMIT);
+      expect(await h.pending()).toBe(0);
+      expect(h.scopes.value).toBe(before);
     }
   });
 
-  test("a new nonce past the per-scope bound is refused before any card", async () => {
+  test("a new nonce past the per-scope bound is held, and expires as 113", async () => {
     const nonces = Array.from(
       { length: MAX_SHADOW_ACCOUNT_NONCES },
       (_, i) => `0x${i.toString(16)}`,
     );
     for (const message of requests("Market", "0x3e8")) {
-      const { handler, pending } = harness([scope("Market", nonces)]);
-      expect(await handler(message, dapp)).toEqual(LIMIT);
-      expect(await pending()).toBe(0);
+      const h = harness([scope("Market", nonces)]);
+      const { held } = await heldOnNotice(h, message);
+      h.clock.now += APPROVAL_TTL_MS + 1;
+      expect(await h.pending()).toBe(0);
+      expect(await held).toEqual({ error: "request rejected" });
     }
   });
 
