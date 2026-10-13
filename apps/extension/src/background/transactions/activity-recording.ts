@@ -28,6 +28,23 @@ export const recordSubmittedActivity = async (
 };
 
 /**
+ * Runs the bookkeeping that follows a broadcast — allowance rows, the activity
+ * line, and the values they are built from — so that nothing in it can replace
+ * the reply. Once a transaction hash exists the caller must answer with that
+ * hash (success, or status unknown), never a plain error the panel would read
+ * as "not sent" (errors audit F1/F2). A failure here leaves a local row
+ * missing, which reconciliation recovers from chain history; it says nothing
+ * about the transaction, so it is absorbed rather than reported as one.
+ */
+export const afterBroadcast = async (bookkeeping: () => Promise<void>): Promise<void> => {
+  try {
+    await bookkeeping();
+  } catch {
+    // The transaction is on its way; only a local record is missing.
+  }
+};
+
+/**
  * The `counterparty` to record for a wallet-submitted call set that pays one
  * recipient, so the payee joins the paid-recipient trust set (audit #163).
  * Only a single call whose selector has a known recipient position counts: a

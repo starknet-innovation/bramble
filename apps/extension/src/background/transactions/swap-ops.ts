@@ -40,7 +40,7 @@ import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "./activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "./activity-recording";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
@@ -367,12 +367,15 @@ const swapExecuteResponse = async (
       // The swap may already be on chain: record it as pending and tell the
       // panel the outcome is unknown, so it never re-quotes into a blind second
       // swap of the same amount.
-      if (signedHash !== undefined) {
-        await recordSubmitted(signedHash);
+      const pending = signedHash;
+      if (pending !== undefined) {
+        await afterBroadcast(() => recordSubmitted(pending));
       }
       return submissionUnknownResponse(error.message, signedHash);
     }
-    await recordSubmitted(transactionHash);
+    // Outside the catch below: once a hash exists the reply carries it, so the
+    // panel never re-quotes a swap that is already on chain (audit 173).
+    await afterBroadcast(() => recordSubmitted(transactionHash));
     return { ok: true, transactionHash };
   } catch (error) {
     return { error: errorText(error, "swap failed") };

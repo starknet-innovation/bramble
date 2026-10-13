@@ -38,7 +38,7 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
@@ -378,12 +378,13 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     // The transfer may already be on chain. Record it as pending so Activity
     // and the reconciler can follow it, and tell the panel the outcome is
     // unknown so it never offers a blind re-send.
-    if (signedHash !== undefined) {
-      await recordSubmittedActivity(deps.activity, activityFor(signedHash));
+    const pending = signedHash;
+    if (pending !== undefined) {
+      await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(pending)));
     }
     return submissionUnknownResponse(error.message, signedHash);
   }
-  await recordSubmittedActivity(deps.activity, activityFor(transactionHash));
+  await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(transactionHash)));
   return { ok: true, transactionHash };
 };
 
