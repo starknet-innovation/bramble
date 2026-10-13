@@ -16,8 +16,16 @@ describe("walletRequestError", () => {
     const refusal = "Private swap service returned a substituted route; refused";
     expect(walletRequestError(new WalletError(refusal))).toBe(refusal);
     expect(walletRequestError(new WalletError("The terminal refused an empty wallet request."))).toBe(
-      "The wallet could not complete this request. You can safely try again.",
+      "The terminal refused an empty wallet request.",
     );
+  });
+
+  // Issue 652 review, F7: a connected wallet's own words are never run
+  // through the terminal's plumbing list, even when they read the same.
+  it("passes a wallet's own error through, whatever its wording", () => {
+    for (const message of ["Invalid transaction", "Invalid chainId", "Invalid nonce", "Invalid AVNU build response"]) {
+      expect(walletRequestError(new Error(message))).toBe(message);
+    }
   });
 
   it("hides terminal plumbing and keeps facts and wallet errors", () => {

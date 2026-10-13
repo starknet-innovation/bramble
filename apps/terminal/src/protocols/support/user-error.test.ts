@@ -16,7 +16,12 @@ import { VESU_VAULT_DEPOSITS_PAUSED } from "../vesu/vesu-actions";
 import { ResponseTooLargeError } from "./bounded-network";
 import { HttpError } from "../../data/core/client";
 import { WalletError } from "./errors";
-import { isFactMessage, isInternalMessage, userErrorMessage } from "./user-error";
+import {
+  isFactMessage,
+  isInternalMessage,
+  reviewedPlumbing,
+  userErrorMessage,
+} from "./user-error";
 
 const FALLBACK = "Vesu request failed.";
 const SRC = join(import.meta.dirname, "../..");
@@ -82,6 +87,7 @@ const READER_SENTENCES = new Set([
   "Punk id must be between 0 and 9999.",
   "Request timed out",
   "Root container #root not found", // unreachable: boot invariant
+  "The terminal refused an empty wallet request.", // unreachable: guard
   "Switch the connected wallet to Starknet Mainnet before minting.",
   "Symbol must be 2–10 uppercase letters or numbers.",
   "This Multiply position is missing its debt leg.",
@@ -94,8 +100,8 @@ const READER_SENTENCES = new Set([
   "useWallet must be used within a <WalletProvider>", // unreachable: developer invariant
 ]);
 
-// The diagnostics issue 652 named, plus their siblings. Pinned so a family
-// pattern cannot silently stop matching them.
+// The diagnostics issue 652 named, plus their siblings, pinned as reviewed
+// plumbing.
 const NAMED_PLUMBING = [
   "Could not quote Vesu wind route",
   "Could not quote Vesu unwind route",
@@ -107,9 +113,33 @@ const NAMED_PLUMBING = [
   "No RPC endpoints configured",
   "Wallet did not authorize an account.",
   "Could not resolve the connected account.",
-  "The terminal refused an empty wallet request.",
   "Ekubo buildSwapCalls needs an Ekubo route",
 ];
+
+// Developer wording kept visible on purpose (issue 652 review): each may carry
+// a route, amount, approval, or privacy fact, is raised as a plain Error rather
+// than the terminal's own WalletError, or is otherwise in doubt.
+const KEPT_VISIBLE = new Set([
+  "Ekubo returned invalid pair events",
+  "Invalid AVNU minimum output",
+  "Invalid AVNU route",
+  "Invalid AVNU swap intent",
+  "Invalid Multiply x",
+  "Invalid Vesu unwind quote",
+  "Invalid approval address",
+  "Invalid unwind x",
+  "Invalid x",
+  "Missing private swap invocation.",
+  "Privacy pool returned an invalid view result.",
+  "Private swap service returned an invalid route.",
+  "Starkscan returned invalid chain activity",
+  "Starkscan returned invalid wallet activity",
+  "The private action batch is invalid.",
+  "The private balance token list is invalid.",
+  "Wallet returned an invalid contract declaration result.",
+  "Wallet returned invalid private balances.",
+  "x must be a positive u256",
+]);
 
 // Security and cryptographic facts. Each must reach the reader with its fact.
 const NAMED_FACTS = [
@@ -169,10 +199,37 @@ describe("terminal error copy conformance", () => {
     expect(hidden).toEqual([]);
   });
 
+  it("keeps every kept-visible message visible, as the terminal's own error too", () => {
+    for (const message of KEPT_VISIBLE) {
+      expect(userErrorMessage(new WalletError(message), FALLBACK), message).toBe(message);
+    }
+    // F6: the private route verification failure is a fact.
+    expect(
+      userErrorMessage(new Error("Private swap service returned an invalid route."), FALLBACK),
+    ).toBe("Private swap service returned an invalid route.");
+  });
+
+  it("lists no fact and only messages the terminal still throws", () => {
+    for (const message of reviewedPlumbing()) {
+      expect(isFactMessage(message), message).toBe(false);
+      expect(thrown.has(message), message).toBe(true);
+    }
+  });
+
+  it("collapses plumbing only when it is the terminal's own error", () => {
+    expect(userErrorMessage(new WalletError("Invalid AVNU build response"), FALLBACK)).toBe(FALLBACK);
+    expect(userErrorMessage(new Error("Invalid AVNU build response"), FALLBACK)).toBe(
+      "Invalid AVNU build response",
+    );
+  });
+
   it("classifies every thrown message", () => {
     const unclassified = [...thrown].filter(
       (message) =>
-        !isFactMessage(message) && !isInternalMessage(message) && !READER_SENTENCES.has(message),
+        !isFactMessage(message) &&
+        !isInternalMessage(message) &&
+        !READER_SENTENCES.has(message) &&
+        !KEPT_VISIBLE.has(message),
     );
     expect(unclassified.sort()).toEqual([]);
   });

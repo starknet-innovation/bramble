@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { WalletError } from "../../protocols/support/errors";
 import { userErrorMessage } from "../../protocols/support/user-error";
 import type { AccountInterface, InvokeFunctionResponse } from "starknet";
 import {
@@ -150,12 +151,12 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       const addresses = await requestAccounts(target);
       const nextAddress = addresses[0];
       if (nextAddress === undefined) {
-        throw new Error("Wallet did not authorize an account.");
+        throw new WalletError("Wallet did not authorize an account.");
       }
       const nextChainId = await requestChainId(target);
       const nextAccount = await resolveAccount(target, nextChainId);
       if (nextAccount === null) {
-        throw new Error("Could not resolve the connected account.");
+        throw new WalletError("Could not resolve the connected account.");
       }
       applyConnected(target, nextAccount, nextAddress, nextChainId);
     } catch (cause) {
