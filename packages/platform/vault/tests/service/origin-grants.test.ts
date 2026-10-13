@@ -35,7 +35,8 @@ const vaultWith = (
   importedSeeds: [],
   mnemonic: null,
   originGrants: accountIds === null ? [] : [{ accountIds, origin: ORIGIN }],
-  schemaVersion: 11,
+  schemaVersion: 12,
+  shadowAccountScopes: [],
   signingKeys: [],
 });
 

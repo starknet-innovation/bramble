@@ -66,7 +66,8 @@ const walletStub = (connected: () => readonly AccountRef[], grants: string[] = [
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 11 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -117,7 +118,8 @@ const vaultWallet = (input: {
     importedSeeds: [],
     mnemonic: null,
     originGrants: [...(input.otherGrants ?? []), { accountIds: [...input.grant], origin }],
-    schemaVersion: 11,
+    schemaVersion: 12,
+    shadowAccountScopes: [],
     signingKeys: [],
   });
   const wallet = {

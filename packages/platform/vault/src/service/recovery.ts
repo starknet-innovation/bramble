@@ -11,7 +11,7 @@ import {
 import { deriveAccount } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { isVaultV11, type Vault } from "../schema/schema";
+import { isVaultV12, type Vault } from "../schema/schema";
 import { requireVaultCapacity } from "./vault-capacity";
 
 /** Privileged recovery input; the phrase and unlock credential never leave this boundary. */
@@ -110,7 +110,7 @@ export const recoverVaultAccounts = async (
     signingKeys: derived.map(({ account, privateKey }) => ({ accountId: account.id, privateKey })),
   };
   requireVaultCapacity(next);
-  if (!isVaultV11(next)) throw new WalletError("Invalid recovered vault");
+  if (!isVaultV12(next)) throw new WalletError("Invalid recovered vault");
   await encryptedStore.write(next, input.vaultPassphrase);
   return next.accounts;
 };
@@ -157,7 +157,7 @@ export const importSeedVaultAccounts = async (
     ],
   };
   requireVaultCapacity(next);
-  if (!isVaultV11(next)) throw new WalletError("Invalid imported-seed vault");
+  if (!isVaultV12(next)) throw new WalletError("Invalid imported-seed vault");
   await encryptedStore.write(next, input.vaultPassphrase);
   return derived.map(({ account }) => account);
 };

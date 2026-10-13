@@ -198,6 +198,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/vault/src/schema/migrations.ts",
   "packages/platform/vault/src/schema/schema-types.ts",
   "packages/platform/vault/src/schema/schema.ts",
+  // Imported-seed validators split from schema.ts on the size budget; they name
+  // the retained phrase field only to validate it inside the vault.
+  "packages/platform/vault/src/schema/schema-seeds.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
   // Split from accounts.ts by the size budget: same boundary, same rules — the
@@ -220,5 +223,8 @@ export const SECRET_MATERIAL_FILES = new Set([
   // same encrypted-vault/Krusty boundary and never return private material.
   "packages/platform/vault/src/service/nostr.ts",
   "packages/platform/vault/src/service/service.ts",
+  // Shadow-account scope records (#443): reads and writes the encrypted vault
+  // with the caller's vault passphrase, like every other vault service method.
+  "packages/platform/vault/src/service/shadow-account-scopes.ts",
   "packages/platform/vault/src/service/service-types.ts",
 ]);

@@ -27,7 +27,7 @@ import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { migrateVault } from "../schema/migrations";
-import { isVaultV11, type Vault } from "../schema/schema";
+import { isVaultV12, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { createGrantCache } from "./grant-cache";
@@ -36,6 +36,7 @@ import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
 import { vaultCreationMethods, writeVault } from "./service-creation";
 import type { VaultRecovery, WalletVaultService } from "./service-types";
+import { shadowAccountScopeMethods } from "./shadow-account-scopes";
 
 export { activeAccountSecrets } from "./reveal";
 /** Re-exports the documented type surface from its size-budget split. */
@@ -50,9 +51,11 @@ export type {
   EnsureNetworkAccountInput,
   ForgetLedgerStrk20ViewingKeyInput,
   ImportRawKeyAccountInput,
+  ListShadowAccountScopesInput,
   OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
+  RecordShadowAccountScopeInput,
   RecoverVaultAccountsInput,
   RevealedSecrets,
   RevokeOriginInput,
@@ -224,6 +227,7 @@ export const createWalletVaultService = ({
       return kms.generateMnemonic();
     },
     ...nostrWalletMethods(kms, readVault),
+    ...shadowAccountScopeMethods(encryptedStore, readVaultSnapshot),
     previewAccount: (input) => deriveAccountRef(kms, input),
     validateMnemonic: (mnemonic) => kms.validateMnemonic(mnemonic),
     async grantOrigin(input) {
@@ -334,7 +338,7 @@ export const createWalletVaultService = ({
       serialized(async () => {
         requirePassphrase(vaultPassphrase);
         const vault = migrateVault(await encryptedStore.readUnverified(vaultPassphrase));
-        invariant(isVaultV11(vault), "Unsupported vault schema");
+        invariant(isVaultV12(vault), "Unsupported vault schema");
         // A rollback can restore a revoked site connection or a removed Ledger
         // viewing key; the user cannot tell which, so recovery drops them all.
         await encryptedStore.replaceUnverified(
@@ -391,6 +395,7 @@ export const createWalletVaultService = ({
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
+    recordShadowAccountScope: (input) => serialized(() => service.recordShadowAccountScope(input)),
     setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),
     storeLedgerStrk20ViewingKey: (input) =>
       serialized(() => service.storeLedgerStrk20ViewingKey(input)),

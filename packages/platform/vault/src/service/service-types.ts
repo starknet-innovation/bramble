@@ -21,6 +21,7 @@ import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
 import type { VaultRecovery } from "@bramble/wallet-model/vault-recovery";
 import type { AccountDerivationInput } from "../accounts/accounts";
+import type { ShadowAccountScopeRef } from "../accounts/shadow-account-scopes";
 import type { NostrApplicationData } from "../kms-port";
 import type { Vault } from "../schema/schema";
 import type { RecoverVaultAccountsInput } from "./recovery";
@@ -333,4 +334,27 @@ export type WalletVaultService = {
    * secrets. This is intentionally absent from extension message surfaces.
    */
   readonly storeLedgerStrk20ViewingKey: (input: StoreLedgerStrk20ViewingKeyInput) => Promise<void>;
+  /**
+   * Records, inside the encrypted vault only, that an account used a
+   * shadow-account scope and which exact nonces (#443). Merges into an existing
+   * record; refuses rather than evicts at the bound. Background-only.
+   */
+  readonly recordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<void>;
+  /** Lists one account's recorded scopes on one chain and pool. Background-only. */
+  readonly listShadowAccountScopes: (
+    input: ListShadowAccountScopesInput,
+  ) => Promise<readonly ShadowAccountScopeRef[]>;
+};
+
+/** One shadow-account scope to record, with the nonces used under it. */
+export type RecordShadowAccountScopeInput = ShadowAccountScopeRef & {
+  readonly vaultPassphrase: string;
+};
+
+/** The account, chain, and pool whose recorded scopes are listed. */
+export type ListShadowAccountScopesInput = {
+  readonly accountId: string;
+  readonly chainId: string;
+  readonly poolAddress: string;
+  readonly vaultPassphrase: string;
 };

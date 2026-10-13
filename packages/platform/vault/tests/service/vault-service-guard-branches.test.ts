@@ -200,7 +200,8 @@ describe("vault service guard branches", () => {
       importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 11,
+      schemaVersion: 12,
+      shadowAccountScopes: [],
       signingKeys: [
         { accountId: mainnet.id, privateKey: "0x123456" },
         { accountId: foreignSepolia.id, privateKey: "0x654321" },
