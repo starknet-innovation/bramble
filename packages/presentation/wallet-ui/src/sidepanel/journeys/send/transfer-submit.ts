@@ -15,8 +15,10 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { errorDetails } from "../../shared/dom";
 import { reviewFeeBlocked } from "../../shared/review-render";
+import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
+import { transferRoute } from "./transfer-route";
 
 /**
  * Review shape the Send screen renders. Structurally the public review, so the
@@ -207,11 +209,13 @@ export const confirmedState = <Review>(
  * Settles a rejected submit (public) or execute (pool route).
  *
  * Every branch drops the review and its key, so Try again always runs a fresh
- * review before anything is signed again (audits 173 and 247). A
- * {@link SubmissionUnknownError} is never reported as "not sent": the write may
- * already be on chain. With a captured hash the journey follows it like any
- * submitted transaction; without one the receipt says the status is unknown
- * and offers Activity instead of a re-send.
+ * review before anything is signed again (audits 173 and 247). "Not sent" is
+ * said only for the closed set of pre-submit refusals in `knownNotSent`; any
+ * other rejection — a lost or unrecognised reply, the router's catch-all, an
+ * unreviewed message — may already be on chain (errors audit F1). A
+ * {@link SubmissionUnknownError} with a captured hash is followed like any
+ * submitted transaction; every other unknown outcome says so and offers
+ * Activity instead of a re-send.
  */
 export const submitRejection = (
   state: TransferState<TransferReview>,
@@ -224,35 +228,40 @@ export const submitRejection = (
     review: null,
     reviewedKey: null,
   };
-  if (error instanceof SubmissionUnknownError) {
-    return error.transactionHash
-      ? {
-          follow: true,
-          state: {
-            ...cleared,
-            error: "",
-            stage: "confirming",
-            submissionUnknown: false,
-            transactionHash: error.transactionHash,
-          },
-          toast: null,
-        }
-      : {
-          follow: false,
-          state: { ...cleared, error: error.message, stage: "failed", submissionUnknown: true },
-          toast: null,
-        };
+  if (error instanceof SubmissionUnknownError && error.transactionHash) {
+    return {
+      follow: true,
+      state: {
+        ...cleared,
+        error: "",
+        stage: "confirming",
+        submissionUnknown: false,
+        transactionHash: error.transactionHash,
+      },
+      toast: null,
+    };
   }
+  if (knownNotSent(error)) {
+    return {
+      follow: false,
+      state: {
+        ...cleared,
+        error: `The transaction was not sent. ${friendlyError(errorDetails(error, "")).message}`,
+        stage: "failed",
+        submissionUnknown: false,
+      },
+      toast: "Transaction was not sent",
+    };
+  }
+  const pooled = state.fields !== null && transferRoute(state.fields).id !== "public-public";
   return {
     follow: false,
     state: {
       ...cleared,
-      // Known not sent, so the reason must not be the fallback's "may not have
-      // gone through" sentence: an untranslatable reason reads as generic.
-      error: `The transaction was not sent. ${friendlyError(errorDetails(error, "")).message}`,
+      error: outcomeUnknownReason(error, pooled ? "The private transaction" : "The transfer"),
       stage: "failed",
-      submissionUnknown: false,
+      submissionUnknown: true,
     },
-    toast: "Transaction was not sent",
+    toast: null,
   };
 };

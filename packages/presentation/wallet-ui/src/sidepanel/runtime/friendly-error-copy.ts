@@ -59,14 +59,16 @@ export const RATE_LIMITED = "This service is rate limiting requests. Wait a mome
 
 // Shared endings. A failure the reader cannot diagnose gets the same sentence
 // wherever it comes from, so the wallet sounds like one writer.
-const REQUEST_FAILED = "That request didn't go through. Try again.";
+/** A request that certainly did not complete, where trying again is safe. */
+export const REQUEST_FAILED = "That request didn't go through. Try again.";
 const FEE_MOVED = "The fee changed while you were reviewing. Check it and submit again.";
 const REFUSED = "The wallet refused that request.";
 // Catch-alls around a submission. The wallet doesn't know whether the
 // transaction left the device, so the copy must not claim it failed or invite
 // a retry that could send it twice.
 // The router's own catch-all can wrap a submission, so it says the same.
-const REQUEST_UNKNOWN =
+/** The catch-all that may wrap a submission; never claims failure. */
+export const REQUEST_UNKNOWN =
   "That didn't complete. If it was a transaction, check Activity before trying again.";
 const LEDGER_RETRY = "Couldn't reach your Ledger. Reconnect the device and try again.";
 const ACTIVATE_FIRST = "Activate private balances first.";
