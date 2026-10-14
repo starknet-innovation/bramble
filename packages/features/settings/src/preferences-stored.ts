@@ -47,6 +47,7 @@ import {
 } from "@bramble/wallet-model/preferences";
 import { type AccountGroups, isAccountGroups } from "./groups";
 import { compactStoredCustomNetworks } from "./preferences-custom-networks";
+import { withCanonicalEndpoints } from "./preferences-endpoints";
 import { dropRetiredStrk20RoutingKeys } from "./preferences-strk20-routing";
 import type { WalletPreferences } from "./preferences-types";
 
@@ -286,26 +287,10 @@ const normalizedAccountGroups = (value: unknown): unknown =>
       )
     : value;
 
-/**
- * Brings a stored preferences record to the current entry shape without any
- * user action: token and contact addresses are canonicalized, ids re-derived
- * from them, and records that name the same address on the same network are
- * collapsed to one — carrying hidden-token and dapp-token ids across the
- * rename so a token hidden (or dapp-supplied) before the collapse stays so.
- * Stored custom networks are shrunk to their bounded shape (Sherlock audit
- * 153), so a record a dapp filled is written back small on the next mutation.
- * A pre-0.10.4 STRK20 anonymizer key is dropped from the routing map (#443).
- *
- * Deterministic and total: a non-record value, or a collection this build
- * cannot read, is returned untouched for {@link isWalletPreferences} to reject.
- * Nothing here widens what validates; it only repairs records an earlier build
- * wrote in a second spelling, whose duplicate otherwise left the private
- * balance surface permanently unreadable with no in-product way out.
- */
-export const normalizeStoredPreferences = (value: unknown): unknown => {
-  if (!isRecord(value)) {
-    return value;
-  }
+// Token, contact, account-alias, custom-network and STRK20-routing repairs.
+const normalizedEntries = (
+  value: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> => {
   const tokens = rebuildCollection(value["tokens"], rebuiltToken);
   const addressBook = rebuildCollection(value["addressBook"], rebuiltContact);
   const hasAccountAliases = value["accountLabels"] !== undefined || value["groups"] !== undefined;
@@ -334,6 +319,27 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
       : {}),
   };
 };
+
+/**
+ * Brings a stored preferences record to the current entry shape without any
+ * user action: token and contact addresses are canonicalized, ids re-derived
+ * from them, and records that name the same address on the same network are
+ * collapsed to one — carrying hidden-token and dapp-token ids across the
+ * rename so a token hidden (or dapp-supplied) before the collapse stays so.
+ * Stored custom networks are shrunk to their bounded shape (Sherlock audit
+ * 153), so a record a dapp filled is written back small on the next mutation.
+ * A pre-0.10.4 STRK20 anonymizer key is dropped from the routing map (#443).
+ * Every endpoint is then brought to its canonical spelling, which earlier
+ * builds did not require (`withCanonicalEndpoints`).
+ *
+ * Deterministic and total: a non-record value, or a collection this build
+ * cannot read, is returned untouched for {@link isWalletPreferences} to reject.
+ * Nothing here widens what validates; it only repairs records an earlier build
+ * wrote in a second spelling, whose duplicate otherwise left the private
+ * balance surface permanently unreadable with no in-product way out.
+ */
+export const normalizeStoredPreferences = (value: unknown): unknown =>
+  isRecord(value) ? withCanonicalEndpoints(normalizedEntries(value)) : value;
 
 /**
  * The organisational slice of stored preferences: naming, grouping, display,

@@ -16,20 +16,92 @@ export const normalizeHostname = (hostname: string): string => {
   return lower.endsWith(".") ? lower.slice(0, -1) : lower;
 };
 
-const isUrlFor = (value: unknown, secureProtocol: string, loopbackProtocol: string): boolean => {
-  if (typeof value !== "string" || value.length === 0 || value.length > 2048) return false;
+// The longest endpoint kept, measured on its canonical spelling.
+const MAX_SERVICE_URL_LENGTH = 2048;
+
+// The endpoint rule before spelling was checked, which is what an earlier build
+// stored under: a string the URL parser reads as a credential- and
+// fragment-free URL on the secure scheme, or the loopback one on a loopback host.
+const parseEndpoint = (
+  value: string,
+  secureProtocol: string,
+  loopbackProtocol: string,
+): URL | null => {
+  if (value.length === 0 || value.length > MAX_SERVICE_URL_LENGTH) return null;
   try {
     const url = new URL(value);
-    return (
-      url.username === "" &&
+    return url.username === "" &&
       url.password === "" &&
       url.hash === "" &&
       (url.protocol === secureProtocol ||
         (url.protocol === loopbackProtocol && LOOPBACK_HOSTS.has(url.hostname)))
-    );
+      ? url
+      : null;
   } catch {
-    return false;
+    return null;
   }
+};
+
+// True when the last character the parser reads is a slash or backslash. The
+// parser drops trailing C0 controls and spaces, and ASCII tab, CR and LF
+// anywhere, so those are skipped.
+const endsWithSeparator = (value: string): boolean => {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) <= 0x20) {
+    end -= 1;
+  }
+  const last = value.charCodeAt(end - 1);
+  return last === 0x2f || last === 0x5c;
+};
+
+// The characters {@link redactEndpoints} ends a URL at. The parser
+// percent-encodes them in a path, and all but the backtick in a query; a host
+// may still hold a quote or a backtick. Encoding what is left changes no
+// request: the parser decodes a host, and a server reads %60 in a query as a
+// backtick.
+const REDACTION_BREAKS = /[\s"<>`]/gu;
+
+// The parser's serialization, with two changes. A bare origin keeps the form it
+// was written in, because the parser adds a slash ("https://rpc.example" would
+// become ".../"), and that would break equality with a bundled default or an
+// existing list entry. And every redaction break left is percent-encoded.
+const canonicalFor = (
+  value: unknown,
+  secureProtocol: string,
+  loopbackProtocol: string,
+): string | null => {
+  if (typeof value !== "string") return null;
+  const url = parseEndpoint(value, secureProtocol, loopbackProtocol);
+  if (url === null) return null;
+  const href = url.href;
+  const bare = url.pathname === "/" && href.endsWith("/") && !endsWithSeparator(value);
+  const canonical = (bare ? href.slice(0, -1) : href).replace(REDACTION_BREAKS, (char) =>
+    encodeURIComponent(char),
+  );
+  return canonical.length <= MAX_SERVICE_URL_LENGTH ? canonical : null;
+};
+
+const isCanonicalFor = (
+  value: unknown,
+  secureProtocol: string,
+  loopbackProtocol: string,
+): boolean =>
+  typeof value === "string" && canonicalFor(value, secureProtocol, loopbackProtocol) === value;
+
+// An endpoint an earlier build stored, carried to its canonical spelling. See
+// normalizeStoredServiceUrl.
+const normalizeStoredFor = (
+  value: unknown,
+  secureProtocol: string,
+  loopbackProtocol: string,
+): unknown => {
+  if (typeof value !== "string" || !parseEndpoint(value, secureProtocol, loopbackProtocol)) {
+    return value;
+  }
+  const canonical = canonicalFor(value, secureProtocol, loopbackProtocol);
+  return canonical !== null && isCanonicalFor(canonical, secureProtocol, loopbackProtocol)
+    ? canonical
+    : undefined;
 };
 
 /**
@@ -43,42 +115,45 @@ export const trimTrailingSlashes = (value: string): string => {
   return value.slice(0, end);
 };
 
-// The characters {@link redactEndpoints} ends a URL at: any whitespace (the
-// Unicode set, so a no-break or ideographic space counts) and the quote, angle
-// bracket and backtick a URL cannot carry unescaped.
-const REDACTION_BREAK = /[\s"<>`]/u;
-
 /**
- * True when an endpoint holds a character {@link redactEndpoints} would end the
- * URL at. Such an endpoint could leave part of an API key visible in a redacted
- * error, so it is refused when entered. Stored records are not re-validated with
- * it: tightening the stored rule could make a settings record that loads today
- * unreadable.
+ * Checks a service endpoint without performing network access: HTTPS, or HTTP
+ * on a loopback host, with no credentials or fragment, written in its canonical
+ * spelling. That spelling is the URL parser's serialization (a bare origin may
+ * keep or drop its trailing slash) with no character {@link redactEndpoints}
+ * ends a URL at. The parser would otherwise accept a raw spelling it only fixes
+ * when it serializes: backslashes, missing or extra slashes, tab, CR and LF
+ * anywhere, and whitespace, quotes, angle brackets and backticks it
+ * percent-encodes. Such a spelling, if stored and echoed, could leave the tail
+ * of an API key outside a redaction. A record an earlier build stored is
+ * brought to this rule by {@link normalizeStoredServiceUrl}.
  */
-export const hasRedactionBreak = (value: string): boolean => REDACTION_BREAK.test(value);
+export const isServiceUrl = (value: unknown): value is string =>
+  isCanonicalFor(value, "https:", "http:");
 
 /**
- * Checks a user-configured service endpoint without performing network access.
- */
-export const isServiceUrl = (value: unknown): value is string => isUrlFor(value, "https:", "http:");
-
-/**
- * Checks a user-configured WebSocket endpoint: WSS anywhere, WS only on loopback.
+ * Checks a WebSocket endpoint: WSS anywhere, WS only on loopback, in the
+ * canonical spelling {@link isServiceUrl} describes.
  */
 export const isWebSocketServiceUrl = (value: unknown): value is string =>
-  isUrlFor(value, "wss:", "ws:");
+  isCanonicalFor(value, "wss:", "ws:");
 
 /**
- * Checks an endpoint as it is entered (settings, a dapp's chain request): an
- * {@link isServiceUrl} that {@link redactEndpoints} can redact whole, so it holds
- * no {@link hasRedactionBreak} character.
+ * Brings an endpoint an earlier build stored to the rule of
+ * {@link isServiceUrl}. Those builds stored the spelling as entered, so a
+ * preferences record could hold one this build refuses. Returns the canonical
+ * spelling, which makes the same request. Returns `undefined` when the earlier
+ * rule accepted the endpoint but its canonical spelling is over the
+ * 2,048-character cap, which only a long run of characters the parser
+ * percent-encodes can cause. The caller drops such an endpoint rather than fail
+ * the whole record. Anything else is returned unchanged for the record's
+ * validator to reject, because the earlier rule refused it too. Pure and total.
  */
-export const isEnteredServiceUrl = (value: unknown): value is string =>
-  isServiceUrl(value) && !hasRedactionBreak(value);
+export const normalizeStoredServiceUrl = (value: unknown): unknown =>
+  normalizeStoredFor(value, "https:", "http:");
 
-/** The entered-endpoint rule of {@link isEnteredServiceUrl} for a WebSocket endpoint. */
-export const isEnteredWebSocketServiceUrl = (value: unknown): value is string =>
-  isWebSocketServiceUrl(value) && !hasRedactionBreak(value);
+/** The {@link normalizeStoredServiceUrl} carry for a WebSocket endpoint. */
+export const normalizeStoredWebSocketServiceUrl = (value: unknown): unknown =>
+  normalizeStoredFor(value, "wss:", "ws:");
 
 /**
  * Checks a chain descriptor's endpoint list: non-empty, every entry a
@@ -111,27 +186,11 @@ export const isOptionalServiceUrlList = (value: unknown): value is readonly stri
 /** What an endpoint reads as once {@link redactEndpoints} has removed it. */
 export const REDACTED_ENDPOINT = "[endpoint]";
 
-// The URL parser drops ASCII tab, CR and LF anywhere in its input, so
-// `isServiceUrl` accepts "https:\t//host/key" or a tab inside the key and stores
-// the string as written. The pattern lets them appear anywhere in a match.
-const IGNORED = "[\\t\\n\\r]*";
-const spaced = (word: string): string => [...word].join(IGNORED);
-// A URL runs to the first character it cannot carry unescaped — whitespace, a
-// quote, an angle bracket, a backtick — so a key never survives as a tail. A
-// run of ignored characters continues it only when the URL goes on after it.
-const URL_CHAR = '[^\\s"<>`]';
-// Any scheme written "scheme://", which is how every URL leaves the wallet and
-// so how a node or gateway echoes one; or one of the schemes the validators
-// above accept (http, https, ws, wss) in any spelling the parser normalizes for
-// them: ignored characters anywhere, backslashes, extra slashes, or none at
-// all. The lookbehind starts a match only at the front of a word, which keeps
-// the scan linear.
-const ENDPOINT_PATTERN = new RegExp(
-  "(?<![a-z0-9+.-])(?:[a-z][a-z0-9+.-]*://" +
-    `|(?:${spaced("https")}|${spaced("http")}|${spaced("wss")}|${spaced("ws")})${IGNORED}:[\\t\\n\\r\\\\/]*)` +
-    `(?:${URL_CHAR}|[\\t\\n\\r]+(?=${URL_CHAR}))+`,
-  "gi",
-);
+// A scheme, "://", then everything up to the first character a URL cannot
+// carry unescaped (whitespace, a quote, an angle bracket, a backtick), so a key
+// in the path or query never survives as a tail. The lookbehind starts a match
+// only at the front of a word, which keeps the scan linear.
+const ENDPOINT_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"<>`]+/gi;
 
 /**
  * Replaces every scheme-qualified URL in failure text with
@@ -140,9 +199,10 @@ const ENDPOINT_PATTERN = new RegExp(
  * data, a gateway page quoted in a parse error, an SDK message. Apply it to any
  * such text before a user can see or copy it. Everything else — the method,
  * an RPC code, a revert reason, felts — is kept, so the text stays a useful
- * diagnostic. Every spelling the validators above accept is matched whole; to
- * cover the characters the URL parser ignores, a word glued to the end of a URL
- * by only a tab or line break is redacted with it. Pure, total, and linear.
+ * diagnostic. An endpoint the wallet holds is redacted whole: it passed
+ * {@link isServiceUrl}, so it is written "scheme://" and holds no character the
+ * match stops at, and a node or gateway echoes the same serialized form. Pure,
+ * total, and linear.
  */
 export const redactEndpoints = (text: string): string =>
   text.replace(ENDPOINT_PATTERN, REDACTED_ENDPOINT);

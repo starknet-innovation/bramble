@@ -67,12 +67,26 @@ describe("site-chosen network names", () => {
 });
 
 describe("site-sent chain endpoints", () => {
-  test("refuses an endpoint the redactor could not remove whole", () => {
-    for (const brk of [" ", String.fromCharCode(0xa0), String.fromCharCode(0x3000), '"', "`"]) {
-      const url = `https://rpc.example/key${brk}secret`;
+  // Only the canonical spelling is accepted (`isServiceUrl`), so the redactor
+  // removes a stored endpoint whole and the store never refuses a chain the
+  // site was told it could add.
+  test("refuses an endpoint in any spelling the URL parser would rewrite", () => {
+    for (const url of [
+      ...[" ", String.fromCharCode(0xa0), String.fromCharCode(0x3000), '"', "<", "`"].map(
+        (brk) => `https://rpc.example/key${brk}secret`,
+      ),
+      "https://rpc.example/key?k=a`b",
+      "https:\\\\rpc.example\\key",
+      "https:rpc.example/key",
+      "https://rpc.example/k\tey",
+      "HTTPS://RPC.example/key",
+      "https://rpc.example:443/key",
+    ]) {
       expect(readProviderChain({ ...base, rpc_urls: [url] })).toBeNull();
       expect(readProviderChain({ ...base, block_explorer_url: [url] })).toBeNull();
     }
-    expect(readProviderChain({ ...base, rpc_urls: ["https://rpc.example/key"] })).not.toBeNull();
+    for (const url of ["https://rpc.example/key", "https://rpc.example", "https://rpc.example/"]) {
+      expect(readProviderChain({ ...base, rpc_urls: [url] })).not.toBeNull();
+    }
   });
 });

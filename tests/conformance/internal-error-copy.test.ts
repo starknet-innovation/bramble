@@ -101,7 +101,7 @@ const READER_SENTENCES = new Set([
   "Could not read NFT metadata URI",
   "Could not read NFT owner",
   "Could not read NFT ownership",
-  "Enter a secure HTTPS service URL",
+  "Enter a secure HTTPS service URL with no spaces, quotes or backslashes",
   "Guardian removal is still in its waiting period",
   "Host permission controls are unavailable in this browser",
   "No RPC endpoint answered on this network's chain",

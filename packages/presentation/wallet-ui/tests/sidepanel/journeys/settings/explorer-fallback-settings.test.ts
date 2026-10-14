@@ -227,6 +227,38 @@ describe("advanced endpoints explorer-fallback control", () => {
     expect(calls).toEqual([["SN_MAIN", true, MY_EXPLORER]]);
   });
 
+  // The store accepts only an endpoint's canonical spelling, so one it would
+  // refuse must not reach the browser's host-permission prompt first.
+  test("refuses an endpoint in a raw spelling before asking for host access", async () => {
+    for (const apiUrl of ["https://explorer.example/v1/a b", "https:\\\\explorer.example\\v1"]) {
+      document.body.replaceChildren();
+      const app = screen(true, apiUrl);
+      const calls: Array<readonly [string, boolean, string]> = [];
+      const origins: string[][] = [];
+      bindEndpointSettings({
+        app,
+        networkId: () => "SN_MAIN",
+        permissions: {
+          request: async ({ origins: requested }) => {
+            origins.push(requested);
+            return true;
+          },
+        },
+        render: async () => undefined,
+        wallet: walletStub(calls),
+      });
+
+      app.querySelector<HTMLFormElement>("#explorer-fallback-form")?.requestSubmit();
+      await tick();
+
+      expect(origins).toEqual([]);
+      expect(calls).toEqual([]);
+      expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain(
+        "no spaces, quotes or backslashes",
+      );
+    }
+  });
+
   test("does not store an endpoint when Chrome denies its host permission", async () => {
     const app = screen(true, MY_EXPLORER);
     const calls: Array<readonly [string, boolean, string]> = [];

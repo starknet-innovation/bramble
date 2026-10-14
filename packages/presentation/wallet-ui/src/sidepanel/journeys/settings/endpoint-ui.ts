@@ -33,8 +33,12 @@ const requestHostAccess = (
   urls: readonly string[],
 ): Promise<boolean> => {
   const configured = urls.filter(Boolean);
+  // The store's own rule, canonical spelling included, so an endpoint it would
+  // refuse never reaches the browser's host-permission prompt.
   if (!configured.every(isServiceUrl)) {
-    return Promise.reject(new Error("Enter a secure HTTPS service URL"));
+    return Promise.reject(
+      new Error("Enter a secure HTTPS service URL with no spaces, quotes or backslashes"),
+    );
   }
   const origins = [...new Set(configured.map((value) => `${new URL(value).origin}/*`))];
   if (origins.length === 0) return Promise.resolve(true);
