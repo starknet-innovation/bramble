@@ -14,6 +14,8 @@
  * which this suite cannot reach.
  */
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { strk20BuilderFor } from "@bramble/privacy/official-sdk-builder";
 import {
   createOfficialStrk20Service,
@@ -60,9 +62,13 @@ type SdkBundle = PrivacySdkRuntime & {
 };
 
 // The pinned rc.8 browser bundle the extension ships (built by vendor:privacy).
-const sdk = (await import(
-  "../../../vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js"
-)) as unknown as SdkBundle;
+// The PR fast-checks job runs without vendored artifacts, so this suite runs
+// wherever the bundle exists: locally after vendor:privacy, and in
+// release-validation, whose `bun run check` follows vendor:privacy and whose
+// check:privacy fails if the bundle is missing.
+const SDK_BUNDLE = "../../../vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js";
+const sdkBuilt = existsSync(resolve(import.meta.dir, SDK_BUNDLE));
+const sdk = (sdkBuilt ? await import(SDK_BUNDLE) : null) as unknown as SdkBundle;
 
 const VIEWING_KEY = "0x55";
 const ANONYMIZER = "0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
@@ -190,7 +196,7 @@ const approveLatest = async (handler: ReturnType<typeof harness>["handler"]) => 
 
 const call = { calldata: ["0x1"], contract_address: STRK_TOKEN_ADDRESS, entry_point: "transfer" };
 
-describe("shadow account lifecycle against the rc.8 SDK", () => {
+describe.skipIf(!sdkBuilt)("shadow account lifecycle against the rc.8 SDK", () => {
   test("commitment, invoke, record, view, balances, and sweep", async () => {
     const { activity, handler, heldAt, scopes, submitted } = harness();
 
