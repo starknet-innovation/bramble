@@ -87,9 +87,14 @@ export const REDACTED_ENDPOINT = "[endpoint]";
 
 // A scheme, "://", then everything up to the first character a URL cannot
 // carry unescaped (whitespace, a quote, an angle bracket, a backtick), so a key
-// in the path or query never survives as a tail. The lookbehind starts a match
-// only at the front of a word, which keeps the scan linear.
-const ENDPOINT_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"<>`]+/gi;
+// in the path or query never survives as a tail. The schemes the validators
+// above accept (http, https, ws, wss) also match every slash spelling the URL
+// parser normalizes for them — backslashes, extra slashes, none at all — since
+// `isServiceUrl` accepts and stores "https:\\host\key" and "https:host/key" as
+// written, and a configured string can be echoed back that way. The lookbehind
+// starts a match only at the front of a word, which keeps the scan linear.
+const ENDPOINT_PATTERN =
+  /(?<![a-z0-9+.-])(?:[a-z][a-z0-9+.-]*:\/\/|(?:https?|wss?):[\\/]*)[^\s"<>`]+/gi;
 
 /**
  * Replaces every scheme-qualified URL in failure text with

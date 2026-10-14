@@ -65,6 +65,27 @@ describe("redactEndpoints", () => {
     ).toBe(`failed at ${REDACTED_ENDPOINT} then ${REDACTED_ENDPOINT}`);
   });
 
+  // `isServiceUrl` validates through the URL parser, which accepts these
+  // spellings and normalizes them only when it serializes; the raw string is
+  // what gets stored, so it is what a local error could echo.
+  test("covers every slash spelling the validators accept for their schemes", () => {
+    for (const spelling of [
+      "https:\\\\rpc.example\\v1\\node-key-123",
+      "https:rpc.example/v1/node-key-123",
+      "https:/rpc.example/v1/node-key-123",
+      "HTTPS:///rpc.example/v1/node-key-123",
+      "http:\\\\localhost:8787\\node-key-123",
+      "wss:\\\\relay.example\\node-key-123",
+    ]) {
+      expect(isServiceUrl(spelling) || isWebSocketServiceUrl(spelling)).toBe(true);
+      expect(redactEndpoints(`failed at ${spelling} now`)).toBe(
+        `failed at ${REDACTED_ENDPOINT} now`,
+      );
+    }
+    // A bare scheme word is prose, not an endpoint.
+    expect(redactEndpoints("use https: only")).toBe("use https: only");
+  });
+
   test("stops at a character a URL cannot carry, so quoted JSON stays readable", () => {
     expect(redactEndpoints('{"url":"https://rpc.example.test/key","code":-32603}')).toBe(
       '{"url":"[endpoint]","code":-32603}',
