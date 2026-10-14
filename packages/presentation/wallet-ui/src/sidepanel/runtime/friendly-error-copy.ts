@@ -38,6 +38,8 @@ import {
   SUBMISSION_UNKNOWN,
   SWAP_ROUTE_UNSAFE,
   UNRECOGNIZED_RELEASE,
+  VAULT_UNVERIFIED,
+  WRONG_CHAIN_ENDPOINT,
 } from "./friendly-error-shared";
 
 /** Shown when a request was malformed rather than refused. */
@@ -157,8 +159,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["request rejected", "That request was rejected."],
   ["dapps cannot call the wallet account contract itself", "A site can't call your own account."],
   // The panel's fallback for an unrecognised reply to an approval decision,
-  // which may have signed and submitted (errors audit F3).
+  // which may have signed and submitted (errors audit F3). A Deny, connection,
+  // or network switch keeps the generic sentence; an approved transaction has
+  // its own code (copy review bf08).
   ["approval failed", REQUEST_UNKNOWN],
+  ["transaction approval failed", SUBMISSION_UNKNOWN("The approval")],
   ["approval execution failed", REQUEST_UNKNOWN],
   ["wallet request failed", REQUEST_UNKNOWN],
   ["approval not found", "That request has expired. Ask the site to send it again."],
@@ -222,14 +227,8 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["incorrect passphrase", "That passphrase is wrong."],
   // A vault the background cannot verify shows the recovery gate; these reach
   // the user only if its state changed between the status read and the submit.
-  [
-    "encrypted store commit state missing",
-    "Bramble cannot verify this wallet. Close and reopen Bramble.",
-  ],
-  [
-    "encrypted store rollback detected",
-    "Bramble cannot verify this wallet. Close and reopen Bramble.",
-  ],
+  ["encrypted store commit state missing", VAULT_UNVERIFIED],
+  ["encrypted store rollback detected", VAULT_UNVERIFIED],
   [
     "encrypted store is not awaiting recovery",
     "This wallet no longer needs Unlock anyway. Close and reopen Bramble.",
@@ -337,10 +336,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["name resolution network changed", "The network changed. Try again."],
   ["unsupported chain", "This wallet doesn't support that network."],
   ["unsupported api version", "That endpoint speaks an API version this wallet can't use."],
-  [
-    WRONG_CHAIN_MESSAGE.toLowerCase(),
-    "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",
-  ],
+  [WRONG_CHAIN_MESSAGE.toLowerCase(), WRONG_CHAIN_ENDPOINT],
   ["switch to the deployment network first", "Switch to that account's network to deploy it."],
   [
     "switch to the participant account network first",
@@ -376,9 +372,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Allowances ----------------------------------------------------------
   ["allowance not found", "That allowance is no longer on-chain. Refresh the list."],
-  // An unrecognised reply to a revoke (a site's access, or an on-chain
-  // allowance revoke) may have run (errors audit F3).
+  // An unrecognised reply to a revoke may have run (errors audit F3). Connected
+  // sites' revoke is not a transaction, so it keeps the generic sentence; the
+  // on-chain allowance revoke has its own code (copy review bf07).
   ["revoke failed", REQUEST_UNKNOWN],
+  ["allowance revoke failed", SUBMISSION_UNKNOWN("The revoke")],
   [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",

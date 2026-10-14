@@ -187,9 +187,7 @@ export const allowancesFlow = (
               : listing.unavailable
                 ? emptyState(UNAVAILABLE_COPY, "alert")
                 : scoped.length === 0
-                  ? emptyState(
-                      "No outstanding allowances found for this account. Approvals on tokens you don't track are not scanned.",
-                    )
+                  ? emptyState("No allowances on tokens you track.")
                   : `<ul class="allowance-list">${scoped.map((allowance) => allowanceRow(allowance, tokenFor(allowance, preferences))).join("")}</ul>`
         }
         <p id="allowance-result" role="status"></p>

@@ -32,7 +32,7 @@ import { activityViewState, setActivityViewState } from "./activity-view-state";
 import { activityEmptyCopy, transactionGroups, transactionList } from "./home-tabs";
 
 const HISTORY_UNAVAILABLE_NOTICE =
-  "Couldn't load on-chain history. Showing transactions recorded on this device only — check your connection or RPC endpoint and refresh.";
+  "Couldn't load on-chain history. Showing this device's records only.";
 
 // Status words as the filter offers them. Pre-confirmed carries its own
 // spelling, matching the row.

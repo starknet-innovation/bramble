@@ -55,6 +55,9 @@ describe("invoke approval card (A-H1)", () => {
     expect(html).toContain("0x0005, 0x3e8, 0x0");
     expect(html).toContain(`data-approval-action="approve" data-approval-id="${INVOKE_ID}"`);
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${INVOKE_ID}"`);
+    // Approve carries the kind, so an unknown outcome can say the approval of a
+    // transaction may not have gone through (copy review bf08).
+    expect(html).toContain('data-approval-kind="invoke" data-approval-action="approve"');
   });
 
   test("disables approve while the wallet is locked", () => {

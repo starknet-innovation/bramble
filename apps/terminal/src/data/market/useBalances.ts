@@ -21,10 +21,11 @@ import { formatTokenAmount } from "../core/format";
 import { KNOWN_TOKENS, type KnownToken } from "./knownTokens";
 import type { Resource, TokenBalance } from "../core/types";
 import { useAsyncResource } from "../core/useAsyncResource";
+import { REQUEST_FAILED } from "../../protocols/support/user-error";
 
 const POLL_MS = 30_000;
 // The resource layer's existing generic failure text (useAsyncResource).
-const BALANCES_UNAVAILABLE = "Request failed";
+const BALANCES_UNAVAILABLE = REQUEST_FAILED;
 
 // Decodes a balanceOf response (u256 as [low, high] felts) into a single bigint.
 const decodeU256 = (response: readonly string[]): bigint => {

@@ -31,6 +31,19 @@ export const responseError = (response: unknown, fallback: string): Error =>
   readPrivacyBlockerError(response) ??
   new Error(isErrorResponse(response) ? response.error : fallback);
 
+/**
+ * A lost reply to a write names no action ({@link lostReplySend} cannot know
+ * it); a client that knows which write it sent re-labels it with that write's
+ * own outcome-unknown code, so the reader is told what may not have gone
+ * through. Anything else passes through unchanged.
+ */
+export const relabelLostReply = (error: unknown, code: string): unknown =>
+  error instanceof SubmissionUnknownError &&
+  error.transactionHash === null &&
+  error.message === REQUEST_UNKNOWN
+    ? new SubmissionUnknownError(code, null)
+    : error;
+
 // The ending every outcome-unknown sentence in the copy table shares
 // (SUBMISSION_UNKNOWN, REQUEST_UNKNOWN, OUTCOME_UNKNOWN, the Ledger "didn't
 // finish" line): an error shown with one of them is never styled as failed.

@@ -41,7 +41,7 @@ export const PAYMASTER_TIMEOUT_MS = 20_000;
 const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
 /**
  * The one relay method that puts a transaction on the wire, mirroring
- * `BROADCAST_RPC_METHODS` in `../provider`: only a broadcast-capable call can
+ * `BROADCAST_RPC_METHODS` in `@bramble/starknet/rpc-transport`: only a broadcast-capable call can
  * leave a write in flight, so only it may mint the ambiguity marker.
  */
 export const BROADCAST_PAYMASTER_METHOD = "paymaster_executeTransaction";

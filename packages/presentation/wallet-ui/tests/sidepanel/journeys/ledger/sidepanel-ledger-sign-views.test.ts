@@ -38,7 +38,7 @@ const render = (phase: LedgerSignView["phase"]): string =>
 describe("ledgerSignScreen", () => {
   test("connect phase offers the connect gesture and names the signer index", () => {
     const html = render({ kind: "connect" });
-    expect(html).toContain("Connect your Ledger");
+    expect(html).toContain("Connect and unlock your Ledger, then open the Starknet app.");
     expect(html).toContain("data-ledger-connect");
     // The account index is recovered from the stored path for the signer line.
     expect(html).toContain("Account 3");
@@ -83,8 +83,14 @@ describe("ledgerSignScreen", () => {
     });
     expect(html).toContain("Signing on your Ledger didn&#39;t finish");
     expect(html).not.toContain("The transaction has not been signed or broadcast.");
+    // The device did its part: the title and line say the wallet didn't finish
+    // (copy review bf09), not that the Ledger needs attention.
+    expect(html).toContain("<h2>Signing didn&#39;t finish</h2>");
+    expect(html).toContain("Your Ledger signed; the wallet didn&#39;t finish.");
+    expect(html).not.toContain("Ledger needs attention");
     const device = render({ code: "rejected-on-device", kind: "error", message: "x" });
     expect(device).toContain("The transaction has not been signed or broadcast.");
+    expect(device).toContain("Ledger needs attention");
   });
 
   test("device phase renders escaped device choices", () => {
@@ -100,10 +106,15 @@ describe("ledgerSignScreen", () => {
     expect(html).toContain("Ledger &lt;2&gt;");
   });
 
+  // Copy review #385: the title and liveness line carry checking and
+  // submitting, so their body sentences were deleted.
   test("verification and handoff phases describe the real work in progress", () => {
-    expect(render({ kind: "checking" })).toContain("Reading the Starknet app version");
-    expect(render({ kind: "verifying" })).toContain("Matching the device public key");
-    expect(render({ kind: "submitting" })).toContain("Signature received");
+    expect(render({ kind: "checking" })).toContain("Checking the Starknet app");
+    expect(render({ kind: "checking" })).not.toContain("Reading the Starknet app version");
+    expect(render({ kind: "verifying" })).toContain("Checking this is the right Ledger.");
+    expect(render({ kind: "confirming" })).toContain("Approve the request on your Ledger.");
+    expect(render({ kind: "submitting" })).toContain("Finishing securely");
+    expect(render({ kind: "submitting" })).not.toContain("Bramble is completing its final");
   });
 
   test("a path with no recoverable index omits the index suffix", () => {

@@ -9,65 +9,44 @@
 // classes, or the encrypted store that failed or could not run: a fact the
 // reader keeps, never collapsed. Reviewed copy may reword, not hide.
 export const SECURITY_FACTS: ReadonlySet<string> = new Set([
-  "Account deployment parameters do not match the stored address",
   "Account is not the pinned Argent Multisig 0.2 class",
   "Account is not the pinned Argent multisig class",
-  "Argent account class hash does not match the pinned release",
-  "Argent multisig class hash does not match the pinned release",
   "Argent multisig requires exactly x signature(s)",
   "Argent multisig signature is not from a configured signer",
   "Argent multisig signatures must use distinct signers",
   "Braavos deployment chain id unavailable",
   "Committed encrypted envelope required",
-  "Declared Argent multisig class does not match the stable pin",
-  "Deployed Argent multisig class does not match the pinned release",
   "Invalid Argent multisig management signer array",
   "Invalid Argent multisig nonce response",
   "Invalid Argent multisig signer public key",
   "Invalid Argent multisig transaction hash",
   "Invalid Ledger STRK20 viewing key",
   "Invalid Ledger STRK20 viewing-key scope",
-  "Invalid Ledger public key",
   "Invalid STRK20 approval",
   "Invalid STRK20 network configuration",
   "Invalid STRK20 viewing-key input",
   "Invalid Stark signing input",
   "Invalid Starknet contract class hash",
-  "Invalid account public key",
   "Invalid approval address",
   "Invalid approval payload",
   "Invalid encrypted store commit state",
   "Invalid encrypted store envelope",
   "Invalid imported-seed vault",
-  "Invalid message hash",
   "Invalid origin",
   "Invalid prepared Argent multisig resource bounds",
   "Invalid prepared Argent multisig transaction",
-  "Invalid privacy preparation commitment",
   "Invalid recovered vault",
-  "Invalid swap preparation commitment",
-  "Invalid transaction hash",
   "Invalid x account class hash",
   "Krusty KMS class hashes are missing x",
-  "Krusty KMS public-key probe did not verify",
   "Krusty KMS result missing non-zero private key: x",
   "Krusty KMS returned an invalid Nostr public key",
   "Krusty KMS returned an invalid STRK20 viewing key",
   "Krusty KMS returned invalid account key material",
   "Krusty KMS returned invalid public key",
-  "Krusty KMS signature key mismatch",
-  "Ledger signature verification failed",
-  "RPC endpoint chain id does not match the account network",
   "RPC reported another chain for a Starknet name lookup",
   "RPC returned a non-felt class hash",
   "RPC returned an invalid accepted Starknet block hash",
-  "Signature public key does not match the account",
-  "Supplied class hash does not match the Starknet contract class",
-  "Typed data cannot be hashed",
-  "Typed data chain does not match the active network",
-  "Typed data produced an invalid hash",
   "Unsupported vault schema",
-  "Vault migration verification failed",
 ]);
 
 // Private-balance, fee-ceiling, relay, and site-request facts in developer
@@ -88,17 +67,10 @@ export const PRIVATE_FACTS: ReadonlySet<string> = new Set([
   "strk20 private submission unavailable: x",
 ]);
 
-// Shadow-account facts (issue 443), pending reviewed copy that keeps each one
-// (proposed in the errors audit F7 report). Owned with the shadow-account
-// screens; none is plumbing.
+// Shadow-account facts (issue 443), pending reviewed copy that keeps each one.
+// Owned with the shadow-account screens; none is plumbing. (The record and
+// sweep refusals have reviewed copy in the privacy table.)
 export const SHADOW_PENDING_COPY: ReadonlySet<string> = new Set([
-  "invalid shadow account record",
-  "shadow account anonymizer changed",
-  "shadow account holds no tracked token",
-  "shadow account record limit reached",
-  "shadow account records unavailable",
-  "shadow account scope not recorded",
-  "shadow sweep batch breaks a batch rule",
   "strk20 services unavailable: could not list shadow accounts (x)",
 ]);
 

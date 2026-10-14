@@ -95,13 +95,13 @@ describe("NFT detail animation", () => {
     expect(play?.hasAttribute("hidden")).toBe(true);
   });
 
-  test("promises isolation, not the absence of every network channel (Sherlock 236)", () => {
+  test("never promises the absence of every network channel (Sherlock 236)", () => {
     const app = fromHtml(nftDetailFlow(status, account, preferences, animated.id, [animated]));
     const hint = app.querySelector("[data-nft-play]")?.previousElementSibling?.textContent ?? "";
     // CSP does not govern WebRTC, and DNS prefetching differs by browser, so
-    // the hint must not claim the sandbox has no network access.
-    expect(hint).toContain("isolated sandbox");
-    expect(hint).toContain("nothing loads until you press play");
+    // the hint must not claim the sandbox has no network access. Copy review
+    // #385 shortened it to what the reader does: nothing loads before play.
+    expect(hint).toBe("This collectible draws its own animation. Press play to load it.");
     expect(hint.toLowerCase()).not.toContain("network");
   });
 

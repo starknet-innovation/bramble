@@ -26,6 +26,39 @@ import {
   takeAddressBookLabelFocus,
 } from "./address-draft";
 
+// Approval kinds whose approval signs and submits a transaction (stamped on the
+// approve control as data-approval-kind): only their unknown outcome says the
+// approval may not have gone through (copy review bf08).
+const TRANSACTION_APPROVALS: ReadonlySet<string> = new Set(["declare", "invoke", "strk20-invoke"]);
+
+// What the panel says while a decision runs and when it lands. Closing a
+// notice answers the site like Deny, but there was nothing to deny: no live
+// line, and the toast says only that it closed.
+const decisionWords = (
+  action: "approve" | "deny",
+  notice: boolean,
+): {
+  readonly done: string;
+  readonly line: string;
+  readonly pending: string;
+  readonly title: string;
+} => {
+  if (notice) return { done: "Closed", line: "", pending: "", title: "" };
+  return action === "approve"
+    ? {
+        done: "Request approved",
+        line: "The reviewed request is locked while the wallet signs and submits it.",
+        pending: "Approved. Signing and broadcasting…",
+        title: "Authorizing request",
+      }
+    : {
+        done: "Request denied",
+        line: "The wallet is returning control to the requesting site.",
+        pending: "Rejecting request…",
+        title: "Denying request",
+      };
+};
+
 /**
  * Shared context: the app root, the runtime client, and a full re-render.
  * `snoozeApproval` (optional; the takeover's "Not now") parks a pending
@@ -314,17 +347,16 @@ export const bindApprovals = ({
       if (approvalCard) {
         approvalCard.dataset["state"] = "working";
       }
-      if (live) {
+      const notice = approvalCard?.hasAttribute("data-approval-notice") === true;
+      if (live && !notice) {
         live.hidden = false;
       }
+      const words = decisionWords(action, notice);
       if (liveTitle) {
-        liveTitle.textContent = action === "approve" ? "Authorizing request" : "Denying request";
+        liveTitle.textContent = words.title;
       }
       if (liveCopy) {
-        liveCopy.textContent =
-          action === "approve"
-            ? "The reviewed request is locked while the wallet signs and submits it."
-            : "The wallet is returning control to the requesting site.";
+        liveCopy.textContent = words.line;
       }
       app
         ?.querySelectorAll<HTMLButtonElement>("[data-approval-id], [data-approval-later]")
@@ -334,8 +366,7 @@ export const bindApprovals = ({
           }
         });
       if (result) {
-        result.textContent =
-          action === "approve" ? "Approved. Signing and broadcasting…" : "Rejecting request…";
+        result.textContent = words.pending;
       }
       // The fee this card painted, read back off the control that was clicked
       // rather than from any later status refresh, so the figure the user saw is
@@ -347,38 +378,37 @@ export const bindApprovals = ({
       // Likewise the account a connection card named: read off the clicked
       // control, so the account the user saw is the one the decision reports.
       const reviewedAccountId = button.dataset["approvalAccount"];
-      void wallet.decideApproval(id, action === "approve", reviewedFee, reviewedAccountId).then(
-        () => {
-          // The status is read when the outcome paints, not when the decision
-          // resolved: a snapshot taken up to the pacer's hold earlier could
-          // repaint over a newer refresh (a request queued in the meantime).
-          paced.settle(() => {
-            showToast(
-              action === "approve" ? "Request approved" : "Request denied",
-              "success",
-              button,
-            );
-            void wallet
-              .loadStatus()
-              .then(render)
-              .catch(() => undefined);
-          });
-        },
-        (error: unknown) => {
-          // The background atomically consumes an approval before execution.
-          // Repaint after any executor error so stale controls cannot decide the
-          // already-removed id and surface a misleading "approval not found".
-          paced.settle(() => {
-            showFailure(error, button);
-            void wallet
-              .loadStatus()
-              .then(render, () => {
-                deciding.delete(id);
-              })
-              .catch(() => undefined);
-          });
-        },
-      );
+      const transaction = TRANSACTION_APPROVALS.has(button.dataset["approvalKind"] ?? "");
+      void wallet
+        .decideApproval(id, action === "approve", reviewedFee, reviewedAccountId, transaction)
+        .then(
+          () => {
+            // The status is read when the outcome paints, not when the decision
+            // resolved: a snapshot taken up to the pacer's hold earlier could
+            // repaint over a newer refresh (a request queued in the meantime).
+            paced.settle(() => {
+              showToast(words.done, "success", button);
+              void wallet
+                .loadStatus()
+                .then(render)
+                .catch(() => undefined);
+            });
+          },
+          (error: unknown) => {
+            // The background atomically consumes an approval before execution.
+            // Repaint after any executor error so stale controls cannot decide the
+            // already-removed id and surface a misleading "approval not found".
+            paced.settle(() => {
+              showFailure(error, button);
+              void wallet
+                .loadStatus()
+                .then(render, () => {
+                  deciding.delete(id);
+                })
+                .catch(() => undefined);
+            });
+          },
+        );
     });
   });
   // Fee-estimate retry on a queued invoke card: asks the background to

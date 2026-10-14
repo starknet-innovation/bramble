@@ -94,7 +94,7 @@ const phaseBody = (view: LedgerSignView): string => {
     return `<p>Checking for a Ledger already connected to this browser.</p>${cancelButton()}`;
   }
   if (phase.kind === "connect") {
-    return `<p>Connect your Ledger, unlock it, and open the Starknet app. Your transaction stays safely paused until the device is ready.</p>
+    return `<p>Connect and unlock your Ledger, then open the Starknet app.</p>
       <div class="ledger-phase-actions">
         ${button({
           attributes: { "data-ledger-connect": true },
@@ -105,19 +105,19 @@ const phaseBody = (view: LedgerSignView): string => {
       </div>`;
   }
   if (phase.kind === "connecting") {
-    return `<p>Complete the secure device chooser in the Ledger tab. This transaction resumes automatically after connection.</p>${cancelButton()}`;
+    return `<p>Choose your Ledger in the Ledger tab.</p>${cancelButton()}`;
   }
   if (phase.kind === "checking") {
-    return `<p>Reading the Starknet app version and checking that the device is ready to sign.</p>${cancelButton()}`;
+    return cancelButton();
   }
   if (phase.kind === "verifying") {
-    return `<p>Matching the device public key to this wallet account. A different Ledger fails closed before signing.</p>${cancelButton()}`;
+    return `<p>Checking this is the right Ledger.</p>${cancelButton()}`;
   }
   if (phase.kind === "confirming") {
-    return `<p>Approve the request on your Ledger. The wallet verifies the returned signature before it can be used.</p>${cancelButton()}`;
+    return `<p>Approve the request on your Ledger.</p>${cancelButton()}`;
   }
   if (phase.kind === "submitting") {
-    return "<p>Signature received. Bramble is completing its final verification and returning it to the transaction.</p>";
+    return "";
   }
   if (phase.kind === "devices") {
     return `<p>More than one Ledger is connected. Choose the device that holds this account.</p>
@@ -200,11 +200,20 @@ const phaseLiveness: Readonly<Record<LedgerSignView["phase"]["kind"], string>> =
   verifying: "Comparing the device key with this account…",
 };
 
-// "Not signed or broadcast" is false once the device has signed, so a
-// wallet-side failure after the signature (`code: null`) says nothing here; its
-// message carries the outcome (errors audit F9).
+// A wallet-side failure after the device signed (`code: null`) is not the
+// device's fault, and "not signed or broadcast" is false once it has signed
+// (errors audit F9), so it has its own title and line (copy review bf09); its
+// message carries the outcome.
+const signedUnfinished = (view: LedgerSignView): boolean =>
+  view.phase.kind === "error" && view.phase.code === null;
+
+const titleText = (view: LedgerSignView): string =>
+  signedUnfinished(view) ? "Signing didn't finish" : phaseTitle[view.phase.kind];
+
 const livenessText = (view: LedgerSignView): string =>
-  view.phase.kind === "error" && view.phase.code === null ? "" : phaseLiveness[view.phase.kind];
+  signedUnfinished(view)
+    ? "Your Ledger signed; the wallet didn't finish."
+    : phaseLiveness[view.phase.kind];
 
 const livenessMark = (view: LedgerSignView): string => {
   if (view.phase.kind === "error") {
@@ -257,7 +266,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
       <div class="ledger-progress-hero">
         <span class="ledger-device-mark" aria-hidden="true">${icon("shield")}</span>
         <p class="context-label">Secure hardware signature</p>
-        <h2>${escapeHtml(phaseTitle[view.phase.kind])}</h2>
+        <h2>${escapeHtml(titleText(view))}</h2>
         ${signerLine(view.request)}
       </div>
       ${ledgerProgress(view)}

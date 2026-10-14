@@ -161,7 +161,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       applyConnected(target, nextAccount, nextAddress, nextChainId);
     } catch (cause) {
       clear();
-      setError(userErrorMessage(cause, "Failed to connect wallet."));
+      setError(userErrorMessage(cause, "Couldn't connect your wallet. Try again."));
     } finally {
       setIsConnecting(false);
     }

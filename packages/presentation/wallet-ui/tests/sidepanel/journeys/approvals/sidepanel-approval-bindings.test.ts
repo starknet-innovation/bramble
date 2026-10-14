@@ -144,6 +144,50 @@ describe("bindApprovals", () => {
     expect(host.querySelector("#approval-result")?.textContent).toBe("Rejecting request…");
     expect(renders).toBe(1);
   });
+
+  // Closing a private-services notice answers the site like Deny, but there was
+  // nothing to deny: no live line, no "Rejecting request…", and the toast says
+  // "Closed" (copy review b1011).
+  test("closing a notice says it closed, never that a request was denied", async () => {
+    const notice: PendingApproval = {
+      id: "c2d9e06c-9a5f-4f58-9f0e-1d7c3b2a4e51",
+      kind: "strk20-unavailable",
+      origin: "https://dapp.example",
+    };
+    const host = document.createElement("div");
+    host.innerHTML = `<ul>${approvalCard(notice, STATUS)}</ul>
+      <section id="approval-live" hidden>
+        <strong id="approval-live-title"></strong>
+        <p id="approval-live-copy"></p>
+      </section>
+      <p id="approval-result"></p>`;
+    document.body.replaceChildren(host);
+    const decisions: boolean[] = [];
+    const stageTimers = manualTimers();
+    bindApprovals({
+      app: host,
+      render: async () => undefined,
+      stageTimers,
+      wallet: {
+        decideApproval: async (_approvalId: string, approved: boolean) => {
+          decisions.push(approved);
+        },
+        loadStatus: async () => STATUS,
+      } as unknown as SidepanelWallet,
+    });
+
+    host.querySelector<HTMLButtonElement>('[data-approval-action="deny"]')?.click();
+    expect(host.querySelector<HTMLElement>("#approval-live")?.hidden).toBe(true);
+    expect(host.querySelector("#approval-result")?.textContent).toBe("");
+    await flush();
+    stageTimers.flush();
+    await flush();
+
+    expect(decisions).toEqual([false]);
+    const toasts = [...document.querySelectorAll(".toast")].map((toast) => toast.textContent);
+    expect(toasts.some((text) => text?.includes("Closed"))).toBe(true);
+    expect(toasts.some((text) => text?.includes("Request denied"))).toBe(false);
+  });
 });
 
 // A transaction card's decision must report the fee THAT PAINT displayed, not

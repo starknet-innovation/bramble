@@ -68,16 +68,33 @@ const STRK20_SERVICES_DOWN = "strk20 services unavailable";
 const withDetail = (sentence: string, detail: string | undefined): string =>
   detail ? `${sentence} (${detail})` : sentence;
 
+// A reviewed head with the sanitised reason after it (copy review bf01-bf05).
+const withReason =
+  (head: string) =>
+  (detail: string | undefined): string =>
+    detail ? `${head}: ${detail}` : `${head}.`;
+
+// The STRK20 SDK categories that say what happened to a private transaction,
+// each in the reader's words. The nonce sentence names the reader's move and
+// drops the reason, which stays behind the toast's copy control.
+const STRK20_STAGE_COPY: ReadonlyMap<string, (detail: string | undefined) => string> = new Map([
+  ["execution-reverted", withReason("Starknet rejected the private transaction")],
+  ["insufficient-fee", withReason("The fee couldn't be covered")],
+  ["invalid-nonce", () => "The account's nonce changed. Review the transaction again."],
+  ["proof-rejected", withReason("The privacy pool rejected the proof")],
+  ["validation-failed", withReason("The private transaction failed validation")],
+]);
+
 /**
  * STRK20 messages share one head, "strk20 services unavailable", whatever
  * actually happened. Only a category that means rate limiting or an
  * unreachable network earns the matching reviewed sentence; the SDK's
- * catch-all category is shown as written; a revert, a
- * rejected proof, a failed validation, a nonce or a fee is a fact with no
- * reviewed sentence yet, so it is shown as written without the head, which
- * would say the services were down when the transaction was refused (errors
- * audit F5). An unknown submission status, a privacy-leak refusal, and every
- * other STRK20 message keep their own words.
+ * catch-all category is shown as written; a revert, a rejected proof, a
+ * failed validation, a nonce or a fee reads as its reviewed sentence, never the
+ * head, which would say the services were down when the transaction was
+ * refused (errors audit F5); any other category is shown without the head. An
+ * unknown submission status, a privacy-leak refusal, and every other STRK20
+ * message keep their own words.
  */
 const strk20Message = (trimmed: string, normalized: string): string => {
   if (STRK20_PRIVACY_LEAK.test(normalized)) return PRIVACY_LEAK;
@@ -92,6 +109,8 @@ const strk20Message = (trimmed: string, normalized: string): string => {
     // The SDK's catch-all category: it names no outage, so the reader keeps
     // the message as written (issue 652 review, F1).
     if (category === "service-unavailable") return trimmed;
+    const reviewed = category === undefined ? undefined : STRK20_STAGE_COPY.get(category);
+    if (reviewed) return reviewed(detail);
     return `strk20 ${stage}/${category}${detail ? `: ${detail}` : ""}`;
   }
   const cause = STRK20_PROTOCOL.exec(trimmed)?.[1];

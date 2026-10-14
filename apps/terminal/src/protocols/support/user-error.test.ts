@@ -19,6 +19,9 @@ import { WalletError } from "./errors";
 import {
   isFactMessage,
   isInternalMessage,
+  loadFailedMessage,
+  REQUEST_FAILED,
+  reviewedCopy,
   reviewedPlumbing,
   userErrorMessage,
 } from "./user-error";
@@ -54,9 +57,6 @@ const thrownMessages = (): ReadonlySet<string> => {
 // Shown as written, by decision. Each is already a sentence a reader can act
 // on, or is unreachable by anything a reader does (marked "unreachable").
 const READER_SENTENCES = new Set([
-  // Actionable: the pair or size has no route right now (copy pending).
-  "Ekubo returned no Multiply liquidity",
-  "AVNU returned no route for this pair",
   "AVNU returned no market data",
   "Amount must be greater than zero.",
   "Bundled Punk contract artifact is malformed.", // unreachable: build integrity
@@ -103,8 +103,6 @@ const READER_SENTENCES = new Set([
 // The diagnostics issue 652 named, plus their siblings, pinned as reviewed
 // plumbing.
 const NAMED_PLUMBING = [
-  "Could not quote Vesu wind route",
-  "Could not quote Vesu unwind route",
   "Invalid AVNU build response",
   "Invalid Ekubo quote response",
   "Empty Ekubo unwind route",
@@ -140,6 +138,60 @@ const KEPT_VISIBLE = new Set([
   "Wallet returned invalid private balances.",
   "x must be a positive u256",
 ]);
+
+// Reviewed sentences (issue 652 copy review), pinned: changing one takes two
+// edits. A fact's sentence keeps what failed and says what did not happen.
+const REVIEWED_SNAPSHOT: readonly (readonly [string, string])[] = [
+  ["Could not quote Vesu wind route", "Couldn't get a Multiply quote. Try again."],
+  ["Could not quote Vesu unwind route", "Couldn't get a Multiply quote. Try again."],
+  [
+    "Ekubo returned no Multiply liquidity",
+    "Not enough liquidity for this Multiply size. Try a smaller amount.",
+  ],
+  ["AVNU returned no route for this pair", "No route for this pair right now. Try another amount or pair."],
+  [
+    "Ekubo Multiply route amount mismatch",
+    "The swap route doesn't match the Multiply amount, so nothing was sent. Get a fresh quote.",
+  ],
+  [
+    "Ekubo route does not connect the Multiply assets",
+    "The swap route doesn't connect these assets, so nothing was sent.",
+  ],
+  [
+    "Invalid Multiply route",
+    "This quote didn't pass the price check, so nothing was sent. Get a fresh quote.",
+  ],
+  [
+    "Invalid unwind route",
+    "This quote didn't pass the price check, so nothing was sent. Get a fresh quote.",
+  ],
+  ["Invalid Vesu reward proof", "The reward proof didn't check out, so nothing was claimed."],
+  [
+    "The Vesu API named a vToken this pool does not register",
+    "Vesu named a receipt token this pool doesn't register, so nothing was sent.",
+  ],
+  [VESU_UNREGISTERED, "This Vesu pool or asset isn't registered on chain, so nothing was sent."],
+  [
+    "AVNU build changed the quoted output",
+    "AVNU's swap build changed the quoted output, so nothing was signed.",
+  ],
+  [
+    "AVNU build charged an unrequested fee",
+    "AVNU's swap build charged a fee you didn't ask for, so nothing was signed.",
+  ],
+  [
+    "AVNU build returned an unexpected exchange address",
+    "AVNU's swap build used an unexpected exchange address, so nothing was signed.",
+  ],
+  [
+    "AVNU quote changed the requested swap",
+    "AVNU's quote changed the swap you asked for, so nothing was signed.",
+  ],
+  ["Invalid AVNU route calldata", "AVNU returned route calldata that isn't valid, so nothing was signed."],
+];
+
+// What a fact reads as: its reviewed sentence, or its own words.
+const factCopy = (message: string): string => reviewedCopy().get(message) ?? message;
 
 // Security and cryptographic facts. Each must reach the reader with its fact.
 const NAMED_FACTS = [
@@ -190,11 +242,12 @@ describe("terminal error copy conformance", () => {
     for (const message of NAMED_FACTS) {
       expect(thrown.has(message), message).toBe(true);
       expect(isFactMessage(message), message).toBe(true);
-      expect(userErrorMessage(new WalletError(message), FALLBACK), message).toBe(message);
+      expect(userErrorMessage(new WalletError(message), FALLBACK), message).toBe(factCopy(message));
     }
     const hidden = [...thrown].filter(
       (message) =>
-        isFactMessage(message) && userErrorMessage(new WalletError(message), FALLBACK) !== message,
+        isFactMessage(message) &&
+        userErrorMessage(new WalletError(message), FALLBACK) !== factCopy(message),
     );
     expect(hidden).toEqual([]);
   });
@@ -207,6 +260,17 @@ describe("terminal error copy conformance", () => {
     expect(
       userErrorMessage(new Error("Private swap service returned an invalid route."), FALLBACK),
     ).toBe("Private swap service returned an invalid route.");
+  });
+
+  it("pins every reviewed sentence, each for a message the terminal still throws", () => {
+    expect([...reviewedCopy()]).toEqual(REVIEWED_SNAPSHOT.map(([raw, copy]) => [raw, copy]));
+    for (const [message, sentence] of reviewedCopy()) {
+      expect(thrown.has(message), message).toBe(true);
+      expect(userErrorMessage(new WalletError(message), FALLBACK), message).toBe(sentence);
+      expect(isInternalMessage(message), message).toBe(false);
+      // A refused fact says what did not happen.
+      if (isFactMessage(message)) expect(sentence, message).toMatch(/so nothing was \w+/);
+    }
   });
 
   it("lists no fact and only messages the terminal still throws", () => {
@@ -228,6 +292,7 @@ describe("terminal error copy conformance", () => {
       (message) =>
         !isFactMessage(message) &&
         !isInternalMessage(message) &&
+        !reviewedCopy().has(message) &&
         !READER_SENTENCES.has(message) &&
         !KEPT_VISIBLE.has(message),
     );
@@ -272,6 +337,13 @@ describe("userErrorMessage", () => {
     const upstream = new Error("Market not found");
     upstream.name = "ExtendedApiError";
     expect(userErrorMessage(upstream, FALLBACK)).toBe(FALLBACK);
+  });
+
+  it("words a data banner as a retry only when the error is the bare fallback", () => {
+    expect(loadFailedMessage("Vesu", REQUEST_FAILED)).toBe("Couldn't load Vesu. Try again.");
+    expect(loadFailedMessage("Vesu", "Vesu lending is temporarily unavailable")).toBe(
+      "Couldn't load Vesu: Vesu lending is temporarily unavailable",
+    );
   });
 
   it("uses the fallback for a non-Error or an empty message", () => {

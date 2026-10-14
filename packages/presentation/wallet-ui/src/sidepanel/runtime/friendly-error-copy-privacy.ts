@@ -7,6 +7,9 @@ import { PRIVATE_SERVICES_UNAVAILABLE_NOTICE } from "@bramble/wallet-protocol/pr
 import { SUBMISSION_UNKNOWN } from "./friendly-error-shared";
 
 const ACTIVATE_FIRST = "Activate private balances first.";
+const SHADOW_LOAD_FAILED = "Couldn't load shadow accounts. Try again.";
+const SHADOW_BALANCES_FAILED = "Couldn't check balances. Try again.";
+const SHADOW_SWEEP_FAILED = "Couldn't prepare the sweep. Nothing was sent.";
 const DEPLOY_FIRST = "Deploy this account first.";
 
 /** Private-balance entries merged into ERROR_COPY, in table order. */
@@ -65,4 +68,42 @@ export const PRIVACY_ERROR_COPY: readonly (readonly [string, string])[] = [
     "the previous submission did not reach starknet. try again.",
     "The last submission didn't reach Starknet. Try again.",
   ],
+
+  // Shadow accounts (issue 443; copy review b1029-b1036). Each refusal keeps
+  // its fact and says nothing was sent: all are raised by the view, its reads,
+  // or the sweep's preparation, before anything is signed.
+  [
+    "shadow account anonymizer changed",
+    "This shadow account was made under a different anonymizer, so it can't be checked or swept here. Nothing was sent.",
+  ],
+  [
+    "shadow account holds no tracked token",
+    "This shadow account holds none of your tracked tokens. Nothing was sent.",
+  ],
+  [
+    "shadow account scope not recorded",
+    "Bramble has no record of this shadow account. Nothing was sent.",
+  ],
+  [
+    "shadow account records unavailable",
+    "Couldn't read your shadow account records. Nothing was sent.",
+  ],
+  [
+    "shadow account record limit reached",
+    "Bramble can't record another shadow account. Nothing was sent.",
+  ],
+  ["invalid shadow account record", "This shadow account record isn't valid. Nothing was sent."],
+  // The sweep's own batch can break only the one-OPEN-per-token rule: it has
+  // one call-less invoke after its transfers, and reads skip unlistable nonces.
+  [
+    "shadow sweep batch breaks a batch rule",
+    "Couldn't build the sweep: two tracked tokens share one address. Nothing was sent.",
+  ],
+  // The view's fallback codes and the background's own fallbacks.
+  ["shadow_accounts_unavailable", SHADOW_LOAD_FAILED],
+  ["shadow accounts unavailable", SHADOW_LOAD_FAILED],
+  ["shadow_account_balances_unavailable", SHADOW_BALANCES_FAILED],
+  ["shadow account balances unavailable", SHADOW_BALANCES_FAILED],
+  ["shadow_account_sweep_unavailable", SHADOW_SWEEP_FAILED],
+  ["shadow account sweep preparation failed", SHADOW_SWEEP_FAILED],
 ];

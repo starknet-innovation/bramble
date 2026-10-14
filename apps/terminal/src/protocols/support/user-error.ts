@@ -26,10 +26,64 @@
  * message becomes the fallback the calling screen already showed.
  */
 
+import { VESU_UNREGISTERED } from "../vesu/vesu-anchors";
 import { WalletError } from "./errors";
 
-/** Diagnostic (exact text) to a reviewed sentence. Empty until copy is approved. */
-const REVIEWED_COPY: ReadonlyMap<string, string> = new Map<string, string>([]);
+/**
+ * Diagnostic (exact text) to a reviewed sentence (issue 652 copy review). A
+ * fact keeps its fact in the sentence and adds what did not happen; the
+ * conformance test pins every entry.
+ */
+const REVIEWED_COPY: ReadonlyMap<string, string> = new Map<string, string>([
+  // Multiply quotes: the screen's generic fallback did not say which step failed.
+  ["Could not quote Vesu wind route", "Couldn't get a Multiply quote. Try again."],
+  ["Could not quote Vesu unwind route", "Couldn't get a Multiply quote. Try again."],
+  [
+    "Ekubo returned no Multiply liquidity",
+    "Not enough liquidity for this Multiply size. Try a smaller amount.",
+  ],
+  ["AVNU returned no route for this pair", "No route for this pair right now. Try another amount or pair."],
+  // Security and route-integrity refusals.
+  [
+    "Ekubo Multiply route amount mismatch",
+    "The swap route doesn't match the Multiply amount, so nothing was sent. Get a fresh quote.",
+  ],
+  [
+    "Ekubo route does not connect the Multiply assets",
+    "The swap route doesn't connect these assets, so nothing was sent.",
+  ],
+  [
+    "Invalid Multiply route",
+    "This quote didn't pass the price check, so nothing was sent. Get a fresh quote.",
+  ],
+  [
+    "Invalid unwind route",
+    "This quote didn't pass the price check, so nothing was sent. Get a fresh quote.",
+  ],
+  ["Invalid Vesu reward proof", "The reward proof didn't check out, so nothing was claimed."],
+  [
+    "The Vesu API named a vToken this pool does not register",
+    "Vesu named a receipt token this pool doesn't register, so nothing was sent.",
+  ],
+  [VESU_UNREGISTERED, "This Vesu pool or asset isn't registered on chain, so nothing was sent."],
+  [
+    "AVNU build changed the quoted output",
+    "AVNU's swap build changed the quoted output, so nothing was signed.",
+  ],
+  [
+    "AVNU build charged an unrequested fee",
+    "AVNU's swap build charged a fee you didn't ask for, so nothing was signed.",
+  ],
+  [
+    "AVNU build returned an unexpected exchange address",
+    "AVNU's swap build used an unexpected exchange address, so nothing was signed.",
+  ],
+  [
+    "AVNU quote changed the requested swap",
+    "AVNU's quote changed the swap you asked for, so nothing was signed.",
+  ],
+  ["Invalid AVNU route calldata", "AVNU returned route calldata that isn't valid, so nothing was signed."],
+]);
 
 /** Error class names whose message is transport detail, never reader copy. */
 const TRANSPORT_ERROR_NAMES: ReadonlySet<string> = new Set([
@@ -73,9 +127,7 @@ const FACT_GUARD: readonly RegExp[] = [
  * listed (checked against `FACT_GUARD`); when in doubt it stays visible.
  */
 const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
-  // Quote and resolve transport: the screen's own sentence says what failed.
-  ["Could not quote Vesu wind route", "quote transport"],
-  ["Could not quote Vesu unwind route", "quote transport"],
+  // Resolve transport: the screen's own sentence says what failed.
   ["Could not resolve Vesu pool", "pool lookup transport"],
   ["Vesu pool request failed", "pool lookup transport"],
   ["Vesu vToken not resolved for asset", "pool lookup transport"],
@@ -139,6 +191,9 @@ export const isFactMessage = (message: string): boolean =>
 export const isInternalMessage = (message: string): boolean =>
   REVIEWED_PLUMBING.has(message) && !isFactMessage(message);
 
+/** Every reviewed sentence by diagnostic, for the conformance test. */
+export const reviewedCopy = (): ReadonlyMap<string, string> => REVIEWED_COPY;
+
 /** Every reviewed plumbing message, for the conformance test. */
 export const reviewedPlumbing = (): readonly string[] => [...REVIEWED_PLUMBING.keys()];
 
@@ -151,8 +206,19 @@ export const userErrorMessage = (cause: unknown, fallback: string): string => {
   if (!(cause instanceof Error)) return fallback;
   const message = cause.message.trim();
   if (message === "") return fallback;
-  const reviewed = REVIEWED_COPY.get(message);
+  // Only the terminal's own error: a connected wallet's text is never reworded.
+  const reviewed = cause instanceof WalletError ? REVIEWED_COPY.get(message) : undefined;
   if (reviewed !== undefined) return reviewed;
   if (TRANSPORT_ERROR_NAMES.has(cause.name)) return fallback;
   return cause instanceof WalletError && isInternalMessage(message) ? fallback : message;
 };
+
+/** What a data hook reports when its fetch failed with nothing a reader needs. */
+export const REQUEST_FAILED = "Request failed";
+
+/**
+ * A data banner's sentence. The bare fallback reads as a retry; any other
+ * message is kept beside the subject, so a fact still reaches the reader.
+ */
+export const loadFailedMessage = (subject: string, error: string): string =>
+  error === REQUEST_FAILED ? `Couldn't load ${subject}. Try again.` : `Couldn't load ${subject}: ${error}`;

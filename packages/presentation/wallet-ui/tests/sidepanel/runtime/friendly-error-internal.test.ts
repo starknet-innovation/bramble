@@ -106,20 +106,33 @@ describe("STRK20 (review F1, F2)", () => {
   });
 
   test("a revert, rejected proof, failed validation, or nonce stays visible", () => {
-    // The fact stays; the shared "services unavailable" head, which would say
-    // the services were down when the transaction was refused, does not
-    // (errors audit F5).
-    for (const category of [
-      "execution-reverted",
-      "proof-rejected",
-      "validation-failed",
-      "invalid-nonce",
-      "insufficient-fee",
-    ]) {
+    // The fact stays, in the reader's words (copy review bf01-bf05); the shared
+    // "services unavailable" head, which would say the services were down when
+    // the transaction was refused, does not (errors audit F5).
+    for (const [category, shown] of [
+      ["execution-reverted", "Starknet rejected the private transaction: reason"],
+      ["proof-rejected", "The privacy pool rejected the proof: reason"],
+      ["validation-failed", "The private transaction failed validation: reason"],
+      // The nonce sentence names the reader's move; the reason stays behind
+      // the toast's copy control.
+      ["invalid-nonce", "The account's nonce changed. Review the transaction again."],
+      ["insufficient-fee", "The fee couldn't be covered: reason"],
+    ] as const) {
       const raw = `strk20 services unavailable (submission/${category}): reason`;
-      expect(friendlyError(raw).message).toBe(`strk20 submission/${category}: reason`);
+      expect(friendlyError(raw).message).toBe(shown);
       expect(friendlyError(raw).message).not.toContain("unavailable");
     }
+    // Without a reason the sentence ends there.
+    expect(friendlyError("strk20 services unavailable (proving/proof-rejected)").message).toBe(
+      "The privacy pool rejected the proof.",
+    );
+    // A category with no reviewed sentence keeps its words without the head.
+    expect(friendlyError("strk20 services unavailable (submission/other): reason").message).toBe(
+      "strk20 submission/other: reason",
+    );
+    expect(friendlyError("strk20 services unavailable (submission/constructor): x").message).toBe(
+      "strk20 submission/constructor: x",
+    );
     // The SDK's catch-all names no outage and keeps its words.
     const unclassified = "strk20 services unavailable (submission/service-unavailable): reason";
     expect(friendlyError(unclassified).message).toBe(unclassified);
@@ -189,7 +202,9 @@ describe("the lowercase backstop", () => {
   test("keeps the revoke safety refusal's fact", () => {
     const raw =
       "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an NFT instead; revoke it from the dapp";
-    expect(friendlyError(raw).message).toBe(raw);
+    expect(friendlyError(raw).message).toBe(
+      "Couldn't confirm that contract is a token, so the revoke wasn't sent. Revoke it from the site that asked.",
+    );
   });
 });
 
@@ -240,7 +255,7 @@ describe("STRK20 categories with a reviewed sentence", () => {
     const raw =
       "strk20 services unavailable (submission/execution-reverted): Error in the called contract (0x1): ENTRYPOINT_FAILED";
     expect(friendlyError(raw).message).toBe(
-      "strk20 submission/execution-reverted: Error in the called contract (0x1): ENTRYPOINT_FAILED",
+      "Starknet rejected the private transaction: Error in the called contract (0x1): ENTRYPOINT_FAILED",
     );
   });
 
@@ -266,8 +281,21 @@ test("a network without a shadow-account anonymizer reads as the approved notice
 // Errors audit F10: unreadable stored settings persist across retries, so the
 // reader is never told to try again.
 test("unreadable stored settings are not told to try again", () => {
-  expect(friendlyError("Invalid stored preferences").message).toBe("Invalid stored preferences");
+  const shown = "Couldn't read your saved settings. Restore them from a backup.";
+  expect(friendlyError("Invalid stored preferences").message).toBe(shown);
   expect(
     friendlyError("Invalid stored preferences", "Couldn't add that account. Try again.").message,
-  ).toBe("Invalid stored preferences");
+  ).toBe(shown);
+});
+
+// The RPC refusal is known not to have been submitted; its sentence keeps that
+// fact, which the generic rate-limit line dropped (copy review bf06).
+test("an endpoint refusal says nothing was submitted", async () => {
+  const { RPC_REFUSED_MESSAGE } = await import("@bramble/starknet/rpc-transport");
+  expect(friendlyError(RPC_REFUSED_MESSAGE).message).toBe(
+    "The RPC endpoint refused this request (rate limit or gateway). Nothing was submitted. Wait a moment and try again.",
+  );
+  expect(friendlyError("429 Too Many Requests").message).toBe(
+    "This service is rate limiting requests. Wait a moment and try again.",
+  );
 });

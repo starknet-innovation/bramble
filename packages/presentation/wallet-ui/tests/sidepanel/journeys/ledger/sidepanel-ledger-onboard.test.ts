@@ -246,7 +246,10 @@ describe("Ledger onboard controller", () => {
       ["Invalid Ledger account index", "Couldn't add that account. Try again."],
       ["Invalid Ledger path application", "Couldn't add that account. Try again."],
       ["Invalid Starknet network", "Couldn't add that account. Try again."],
-      ["Invalid Ledger public key", "Invalid Ledger public key"],
+      [
+        "Invalid Ledger public key",
+        "Your Ledger returned a public key Bramble can't use. Nothing was added.",
+      ],
     ] as const) {
       const h = onboardHarness({ create: () => Promise.reject(new Error(raw)) });
       const controller = createLedgerOnboardController(h.deps);

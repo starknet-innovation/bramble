@@ -42,7 +42,7 @@ const render = (listing: Partial<AllowanceListing>): string =>
     preferences,
   );
 
-const EMPTY = "No outstanding allowances found for this account.";
+const EMPTY = "No allowances on tokens you track.";
 
 describe("allowance listing notices", () => {
   test("before the first answer it claims neither a count nor none found", () => {

@@ -1,6 +1,6 @@
 /**
- * PROPOSED copy for the Shadow accounts view and sweep (issue 443, PR 5), pending
- * copy review. One constant per line. The reason line carries the issue's
+ * Approved copy for the Shadow accounts view and sweep (issue 443, PR 5; copy
+ * review b1012-b1020). One constant per line. The reason line carries the issue's
  * required disclosure: balances are read only on request because the reads
  * link these addresses at the RPC provider.
  */

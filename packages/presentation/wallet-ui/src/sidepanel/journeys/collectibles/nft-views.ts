@@ -410,7 +410,7 @@ const nftAnimationSection = (item: NftGalleryItem): string =>
   item.animationUrl
     ? `<section class="section">
         <h2>Animation</h2>
-        <span class="hint">This collectible renders its own animation on-chain. It runs in an isolated sandbox, and nothing loads until you press play.</span>
+        <span class="hint">This collectible draws its own animation. Press play to load it.</span>
         <button class="secondary small" data-nft-play="${escapeHtml(item.animationUrl)}" type="button">${icon("gamepad")}Play animation</button>
         <iframe class="nft-animation" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
       </section>`

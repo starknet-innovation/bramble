@@ -286,9 +286,7 @@ describe("sidepanel views", () => {
       null,
       true,
     );
-    expect(degraded).toContain(
-      "load on-chain history. Showing transactions recorded on this device only",
-    );
+    expect(degraded).toContain("load on-chain history. Showing this device&#39;s records only.");
     expect(degraded).toContain("No transactions recorded on this device yet.");
   });
 

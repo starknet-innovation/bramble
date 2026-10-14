@@ -64,6 +64,7 @@ import {
   type OrderBookLevel,
 } from "./perps-data";
 import { PERPS_ORDER_PLACEMENT } from "./perps-placement";
+import { loadFailedMessage } from "../../protocols/support/user-error";
 
 type Side = "long" | "short";
 type OrderType = "market" | "limit" | "stop";
@@ -102,7 +103,7 @@ const TradeTape = ({
   error: string | null;
 }): ReactNode => {
   if (error !== null && trades.length === 0) {
-    return <ErrorBanner message={`Couldn't load trades: ${error}`} />;
+    return <ErrorBanner message={loadFailedMessage("trades", error)} />;
   }
   if (isLoading && trades.length === 0) {
     return <SkeletonRows rows={8} />;
@@ -266,7 +267,7 @@ export default function Perps(): ReactNode {
       );
     }
     if (markets.error !== null && rows.length === 0) {
-      return <ErrorBanner message={`Couldn't load markets: ${markets.error}`} />;
+      return <ErrorBanner message={loadFailedMessage("markets", markets.error)} />;
     }
     if (markets.isLoading && rows.length === 0) {
       return <SkeletonRows rows={8} />;
@@ -316,7 +317,7 @@ export default function Perps(): ReactNode {
       return <SkeletonChart height={320} />;
     }
     if (candles.error !== null) {
-      return <ErrorBanner message={`Couldn't load candles: ${candles.error}`} />;
+      return <ErrorBanner message={loadFailedMessage("candles", candles.error)} />;
     }
     return (
       <EmptyState
@@ -336,7 +337,7 @@ export default function Perps(): ReactNode {
     }
     if (tradeTab === "funding") {
       if (funding.error !== null && fundingData.history.length === 0) {
-        return <ErrorBanner message={`Couldn't load funding: ${funding.error}`} />;
+        return <ErrorBanner message={loadFailedMessage("funding", funding.error)} />;
       }
       if (funding.isLoading && fundingData.history.length === 0) {
         return <SkeletonRows rows={6} />;
@@ -528,7 +529,7 @@ export default function Perps(): ReactNode {
                 </div>
               </>
             ) : orderBook.error !== null ? (
-              <ErrorBanner message={`Couldn't load order book: ${orderBook.error}`} />
+              <ErrorBanner message={loadFailedMessage("order book", orderBook.error)} />
             ) : orderBook.isLoading ? (
               <div className="orderbook-loading">
                 <SkeletonRows rows={10} />

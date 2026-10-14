@@ -71,7 +71,7 @@ export const connectedSitesFlow = (status: WalletStatus, sites: ConnectedSitesSt
   flowScreen(
     "connected-sites",
     `<section class="section">
-      <p class="hint">Connected sites can see your granted account addresses. Revoke any you no longer trust; the site is asked to reconnect next time.</p>
+      <p class="hint">Connected sites see the addresses you granted. Revoke any you no longer trust.</p>
       ${connectedSitesBody(sites)}
       <p id="connected-sites-result" role="status"></p>
     </section>`,

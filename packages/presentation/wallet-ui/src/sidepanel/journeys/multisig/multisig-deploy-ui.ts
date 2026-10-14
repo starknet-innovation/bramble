@@ -418,7 +418,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
                 `<section class="multisig-deployment-success" role="status" aria-live="polite">
                 <span class="multisig-deployment-success-mark">${icon("check")}</span>
                 <div><p class="context-label">Submitted to Starknet</p><h2>Multisig deployment is in progress</h2></div>
-                <p>The account is saved and the transaction hash will remain available while the network confirms deployment.</p>
+                <p>Account saved. Deployment is confirming.</p>
                 <dl class="request-detail">
                   <div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(result.address))}</code>${copyButton(result.address, "Copy multisig address")}</dd></div>
                   <div><dt>Transaction</dt><dd><code>${escapeHtml(accountLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, "Copy deployment transaction hash")}</dd></div>

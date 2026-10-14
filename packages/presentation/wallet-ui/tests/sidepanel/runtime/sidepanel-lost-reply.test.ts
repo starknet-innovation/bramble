@@ -40,13 +40,46 @@ const rejection = async (run: () => Promise<unknown>): Promise<unknown> => {
   throw new Error("expected a rejection");
 };
 
+// The approved transaction and the allowance revoke name what may not have
+// gone through (copy review bf07, bf08); every other write keeps the generic
+// sentence, which is true of a denial, a connection, or a site revoke.
+const REVOKE_UNKNOWN = "The revoke may not have gone through. Check Activity before trying again.";
+const APPROVAL_UNKNOWN =
+  "The approval may not have gone through. Check Activity before trying again.";
+
 describe("a lost reply on a write call", () => {
   const wallet = createSidepanelRuntime(lost);
+  const named: readonly (readonly [string, () => Promise<unknown>, string, string])[] = [
+    [
+      "a transaction approval",
+      () => wallet.decideApproval("id", true, undefined, undefined, true),
+      "transaction approval failed",
+      APPROVAL_UNKNOWN,
+    ],
+    [
+      "an allowance revoke",
+      () => wallet.revokeAllowance("id", { overallFee: "1", unit: "FRI" }),
+      "allowance revoke failed",
+      REVOKE_UNKNOWN,
+    ],
+  ];
+  for (const [name, run, code, shown] of named) {
+    test(`${name} is outcome unknown, in its own words`, async () => {
+      const error = await rejection(run);
+      expect(error).toBeInstanceOf(SubmissionUnknownError);
+      expect((error as SubmissionUnknownError).transactionHash).toBeNull();
+      expect((error as Error).message).toBe(code);
+      expect(friendlyError((error as Error).message).message).toBe(shown);
+    });
+  }
   const writes: readonly (readonly [string, () => Promise<unknown>])[] = [
     ["an approval decision", () => wallet.decideApproval("id", true)],
     ["a denial", () => wallet.decideApproval("id", false)],
-    ["an allowance revoke", () => wallet.revokeAllowance("id", { overallFee: "1", unit: "FRI" })],
+    ["a transaction denial", () => wallet.decideApproval("id", false, undefined, undefined, true)],
     ["a site revoke", () => wallet.revokeOrigin("https://example.com")],
+    // The first allowance-revoke call only estimates the fee; nothing can have
+    // been submitted, so it must not say the revoke may not have gone through.
+    ["an allowance revoke fee estimate", () => wallet.revokeAllowance("id")],
     ["a send", () => wallet.submitTransfer("a", "t", "0x1", "1")],
     ["a saved setting", () => wallet.setDisplay({ theme: "dark" })],
     ["a swap", () => createSwapClient(lost).execute("prep")],
@@ -86,6 +119,27 @@ describe("unrecognised replies to a write", () => {
   test("approval and revoke fallbacks no longer claim a certain failure", () => {
     expect(friendlyError("approval failed").message).toBe(REQUEST_UNKNOWN);
     expect(friendlyError("revoke failed").message).toBe(REQUEST_UNKNOWN);
+    expect(friendlyError("transaction approval failed").message).toBe(APPROVAL_UNKNOWN);
+    expect(friendlyError("allowance revoke failed").message).toBe(REVOKE_UNKNOWN);
+  });
+
+  test("only the on-chain revoke and an approved transaction use their own code", async () => {
+    const wallet = createSidepanelRuntime({ sendMessage: async () => ({ unexpected: true }) });
+    const message = async (run: () => Promise<unknown>): Promise<string> =>
+      ((await rejection(run)) as Error).message;
+    expect(
+      await message(() => wallet.revokeAllowance("id", { overallFee: "1", unit: "FRI" })),
+    ).toBe("allowance revoke failed");
+    // The fee estimate submits nothing, so it keeps the generic code.
+    expect(await message(() => wallet.revokeAllowance("id"))).toBe("revoke failed");
+    expect(await message(() => wallet.revokeOrigin("https://example.com"))).toBe("revoke failed");
+    expect(await message(() => wallet.decideApproval("id", true, undefined, undefined, true))).toBe(
+      "transaction approval failed",
+    );
+    expect(
+      await message(() => wallet.decideApproval("id", false, undefined, undefined, true)),
+    ).toBe("approval failed");
+    expect(await message(() => wallet.decideApproval("id", true))).toBe("approval failed");
   });
 });
 
@@ -120,6 +174,43 @@ describe("the approval decision sink", () => {
     expect(toast?.querySelector(".toast-text")?.textContent).toBe(REQUEST_UNKNOWN);
     expect(host.querySelector("#approval-result")?.textContent).toBe(REQUEST_UNKNOWN);
   });
+
+  // The card stamps its kind on Approve; only a transaction says the approval
+  // may not have gone through (a connection or network switch does not).
+  for (const [kind, shown] of [
+    ["invoke", APPROVAL_UNKNOWN],
+    ["declare", APPROVAL_UNKNOWN],
+    ["strk20-invoke", APPROVAL_UNKNOWN],
+    ["connect", REQUEST_UNKNOWN],
+    ["switch-chain", REQUEST_UNKNOWN],
+    ["sign-typed-data", REQUEST_UNKNOWN],
+  ] as const) {
+    test(`a lost reply to approving a ${kind} card reads as its own outcome`, async () => {
+      const id = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
+      const host = document.createElement("div");
+      host.innerHTML = `
+        <article class="request-card">
+          <button data-approval-kind="${kind}" data-approval-action="approve" data-approval-id="${id}">Approve</button>
+        </article>
+        <p id="approval-result"></p>`;
+      document.body.replaceChildren(host);
+      const stageTimers = manualTimers();
+      const runtime = createSidepanelRuntime(lost);
+      bindApprovals({
+        app: host,
+        render: async () => undefined,
+        stageTimers,
+        wallet: { ...runtime, loadStatus: async () => ({}) } as unknown as SidepanelWallet,
+      });
+      host.querySelector<HTMLButtonElement>('[data-approval-action="approve"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      stageTimers.flush();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const toast = document.querySelector(".toast");
+      expect(toast?.classList.contains("warning")).toBe(true);
+      expect(toast?.querySelector(".toast-text")?.textContent).toBe(shown);
+    });
+  }
 });
 
 describe("the allowance revoke sink", () => {

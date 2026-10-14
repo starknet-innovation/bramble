@@ -29,7 +29,7 @@ describe("walletRequestError", () => {
   });
 
   it("hides terminal plumbing and keeps facts and wallet errors", () => {
-    expect(walletRequestError(new WalletError("Could not quote Vesu wind route"))).toBe(
+    expect(walletRequestError(new WalletError("Vesu pool request failed"))).toBe(
       "The wallet could not complete this request. You can safely try again.",
     );
     expect(walletRequestError(new Error("Wallet returned an invalid transaction hash."))).toBe(

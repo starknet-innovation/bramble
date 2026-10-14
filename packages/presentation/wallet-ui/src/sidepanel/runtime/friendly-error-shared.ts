@@ -37,6 +37,10 @@ export const SWAP_ROUTE_UNSAFE = "Couldn't prepare a safe route for this swap. G
 /** Shared ending for a review whose subject changed while the reader read it. */
 export const REVIEW_MOVED = "This changed while you were reviewing it. Review it again.";
 
+/** A review whose prepared commitment no longer matches what the reader reviewed. */
+export const PREPARATION_MISMATCH =
+  "This review no longer matches what was prepared. Review it again.";
+
 /** Shared ending for a backup file the wallet could not read. */
 export const BACKUP_UNREADABLE = "Couldn't read that backup file. Check the file and try again.";
 
@@ -45,3 +49,10 @@ export const BACKUP_UNREADABLE = "Couldn't read that backup file. Check the file
  * wallet's own words for this refusal to sites (rpc-errors PRIVACY_LEAK).
  */
 export const PRIVACY_LEAK = "The operation would leak private information";
+
+/** Shown when an endpoint reports another Starknet chain than the account's. */
+export const WRONG_CHAIN_ENDPOINT =
+  "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.";
+
+/** Shown when the encrypted store cannot be verified. */
+export const VAULT_UNVERIFIED = "Bramble cannot verify this wallet. Close and reopen Bramble.";
