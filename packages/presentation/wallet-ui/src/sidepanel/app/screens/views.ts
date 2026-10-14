@@ -367,6 +367,7 @@ export const dashboard = (
     currency,
     deployment,
     expandedGroupId,
+    fundedForFees,
     multisigs,
     preferences,
     prices,

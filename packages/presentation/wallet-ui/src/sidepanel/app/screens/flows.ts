@@ -1,5 +1,6 @@
 /** Focused side-panel task screens opened from the wallet dock. */
 
+import { escapeHtml } from "@bramble/core/html";
 import { withDefaultGroups } from "@bramble/settings/groups";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
@@ -23,6 +24,7 @@ import {
   privacyPoolNotice,
   receiveAddressView,
 } from "../../journeys/send/receive-view";
+import { FIRST_SEND_DEPLOYS } from "../../journeys/send/transfer-review-markup";
 import { accountNamesSection, hiddenAccountsSection } from "../../journeys/settings/account-names";
 import { groupsSection } from "../../journeys/settings/group-members";
 import {
@@ -61,6 +63,7 @@ import {
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
 import { outcomeReceiptSection } from "../../shared/outcome-receipt";
+import { DEPLOY_NEEDS_STRK } from "../../shell/deploy-errors";
 import { addressBookFlow, type ConnectedSitesState, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
@@ -99,6 +102,26 @@ const receiveFlow = (
   );
 
 /**
+ * The deploy screen's notes for an account that is not deployed (issue 662).
+ * A balance read that found no STRK says so before the press rather than after
+ * a node rejection; an unread balance (`null`) says nothing. An account whose
+ * first send deploys it is told deploying here is optional; an undeployed
+ * Braavos account is refused on a first send, so it is not.
+ */
+const deployNotes = (
+  account: AccountRef,
+  deployment: boolean | null,
+  fundedForFees: boolean | null,
+): string => {
+  if (deployment !== false) return "";
+  const notes = [
+    ...(fundedForFees === false ? [DEPLOY_NEEDS_STRK] : []),
+    ...(account.accountContractType === "braavos" ? [] : [FIRST_SEND_DEPLOYS]),
+  ];
+  return notes.map((note) => `<p class="hint">${escapeHtml(note)}</p>`).join("");
+};
+
+/**
  * Account deployment follows the same review and receipt model as other
  * fee-paying transactions instead of expanding controls into Home.
  */
@@ -107,6 +130,7 @@ const deployAccountFlow = (
   account: AccountRef | null,
   preferences: WalletPreferences | null,
   deployment: boolean | null,
+  fundedForFees: boolean | null,
 ): string =>
   flowHeader("Deploy account", status) +
   flowScreen(
@@ -129,6 +153,7 @@ const deployAccountFlow = (
                 },
                 { label: "Network", value: networkDisplayName(status.network) },
               ])}
+              ${deployNotes(account, deployment, fundedForFees)}
               <div id="deploy-review" aria-live="polite"></div>
               ${button({
                 attributes: { id: "deploy-button" },
@@ -307,6 +332,8 @@ export const simpleFlowScreen = (
     readonly currency: DisplayCurrency;
     readonly deployment: boolean | null;
     readonly expandedGroupId: string | null;
+    /** Whether a successful balance read found STRK; `null` when unread. */
+    readonly fundedForFees?: boolean | null;
     readonly multisigs?: readonly ArgentMultisigView[];
     readonly selectedMultisigId?: string | null;
     readonly preferences: WalletPreferences | null;
@@ -342,7 +369,13 @@ export const simpleFlowScreen = (
         ctx.classHashVerification,
       );
     case "deploy-account":
-      return deployAccountFlow(ctx.status, ctx.account, ctx.preferences, ctx.deployment);
+      return deployAccountFlow(
+        ctx.status,
+        ctx.account,
+        ctx.preferences,
+        ctx.deployment,
+        ctx.fundedForFees ?? null,
+      );
     case "network":
       return networkFlow(ctx.status, ctx.preferences);
     case "advanced-network":
