@@ -13,15 +13,16 @@ import type { BalanceState } from "../../runtime/runtime";
 
 /**
  * Whether the loaded public balances can pay a deployment fee.
- * `null` means the balance read has not succeeded, which is not the same as
- * a successful read that found no STRK.
+ * `null` means unknown: the balance read has not succeeded, or it holds no
+ * STRK reading (STRK untracked or not read yet). Only a STRK balance actually
+ * read as zero is `false`, so "add STRK" is never said over an unknown
+ * balance (audit L4).
  */
-export const strkAvailableForFees = (balances: BalanceState): boolean | null =>
-  "balances" in balances
-    ? balances.balances.some(
-        (token) => sameFelt(token.address, STRK_TOKEN_ADDRESS) && BigInt(token.balance) > 0n,
-      )
-    : null;
+export const strkAvailableForFees = (balances: BalanceState): boolean | null => {
+  if (!("balances" in balances)) return null;
+  const strk = balances.balances.find((token) => sameFelt(token.address, STRK_TOKEN_ADDRESS));
+  return strk === undefined || strk.formatted === "" ? null : BigInt(strk.balance) > 0n;
+};
 
 import { formatFiat, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
