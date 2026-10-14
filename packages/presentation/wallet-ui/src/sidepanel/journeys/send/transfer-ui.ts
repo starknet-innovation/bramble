@@ -171,12 +171,12 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     goTo("details");
     form.querySelector<HTMLInputElement>("#send-amount-input")?.focus();
   };
-  // Closing Send abandons what was composed. Without this, the module-level
-  // journey survived the close and the next visit resumed mid-flow — a cancelled
-  // shield reopened as a half-filled shield. A submitted transaction is kept, so
-  // its receipt or pending screen is still reachable on return.
+  // Closing Send abandons what was composed, so a cancelled shield does not
+  // reopen half-filled. A send past the confirm is kept, hash or not: the
+  // background still broadcasts it, so its outcome must show on return (audit
+  // M2; the rule `bindTransfer` applies to a takeover, Sherlock 164).
   const exit = (): void => {
-    if (transferState.transactionHash === null) {
+    if (transferState.transactionHash === null && !isTransferInFlight(transferState.stage)) {
       transferEpoch += 1;
       transferState = initialTransferState();
     }
