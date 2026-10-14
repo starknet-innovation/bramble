@@ -7,6 +7,7 @@ import {
   LockKeyhole,
   Radio,
 } from "lucide-react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import { useMemo, useState, type ReactNode } from "react";
 import { avnuTokenArtwork } from "../../assets/avnu-token-assets";
 import { ErrorBanner, SkeletonRows, TokenIcon } from "../../components/index";
@@ -185,7 +186,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
       setMessage("Vault deposit submitted.");
       setAmount("");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Vault request failed.");
+      setMessage(userErrorMessage(cause, "Vault request failed."));
     }
   };
 
@@ -212,7 +213,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
       setRedeemAmount("");
       setMessage("Redemption requested. The queue will refresh shortly.");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Redemption request failed.");
+      setMessage(userErrorMessage(cause, "Redemption request failed."));
     }
   };
 
@@ -231,7 +232,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
       });
       setMessage("Redemption claim submitted.");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Redemption claim failed.");
+      setMessage(userErrorMessage(cause, "Redemption claim failed."));
     }
   };
 
@@ -372,7 +373,7 @@ export const LendingRewards = ({ resource, connected, onConnect }: RewardsProps)
       });
       setMessage("Reward claim submitted.");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Reward claim failed.");
+      setMessage(userErrorMessage(cause, "Reward claim failed."));
     }
   };
 

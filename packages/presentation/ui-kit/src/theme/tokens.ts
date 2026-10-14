@@ -8,7 +8,14 @@
  */
 
 /**
- * Spacing scale on a 4px grid, from tightest inset to section rhythm.
+ * Spacing scale on a 4px grid, from tightest inset to page rhythm. Every
+ * padding and margin in the wallet stylesheets comes from here.
+ *
+ * - `xxs` (2px) — the half step: hairline insets inside compact controls and
+ *   optical nudges that align an icon or a heading to the line beside it.
+ * - `xs`…`xl` — component insets and the rhythm between blocks.
+ * - `xxl`, `xxxl` — page-level rhythm on the full-page onboarding canvas, the
+ *   one surface whose margins are larger than a card's.
  */
 export const SPACE = {
   lg: "16px",
@@ -16,6 +23,9 @@ export const SPACE = {
   sm: "8px",
   xl: "24px",
   xs: "4px",
+  xxl: "32px",
+  xxs: "2px",
+  xxxl: "48px",
 } as const;
 
 /**
@@ -82,6 +92,10 @@ export const MOTION = {
   enterMs: 200,
   liftMs: 160,
   pressMs: 90,
+  // The least time one step of a progress list stays on screen, so a step the
+  // work finished in a few milliseconds is still read rather than flashed.
+  // Display-only: the stage pacer holds what is painted, never the work.
+  stageMinMs: 500,
   tabMs: 220,
   toastMs: 220,
   waitLoopMs: 2000,

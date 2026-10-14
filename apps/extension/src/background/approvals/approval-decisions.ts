@@ -26,9 +26,11 @@ import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
+} from "../privacy/strk20-approval-execution";
+import {
   stageApprovedStrk20Deposit,
   stageApprovedStrk20Registration,
-} from "../privacy/strk20-approval-execution";
+} from "../privacy/strk20-approval-staging";
 import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
@@ -49,7 +51,7 @@ import { pendingFeeRefusal } from "./approval-fee-refusal";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue } from "./approvals";
-import type { SignatureWaiters } from "./signature-waiters";
+import { DROPPED_APPROVAL_RESPONSE, type SignatureWaiters } from "./signature-waiters";
 
 /**
  * Dependencies for resolving a queued approval into its settled result. These
@@ -182,6 +184,9 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
       ...(approval.context === undefined ? {} : { context: approval.context }),
       origin: approval.origin,
       plan: payload.strk20Plan,
+      ...(payload.shadowAccountAnonymizer === undefined
+        ? {}
+        : { shadowAccountAnonymizer: payload.shadowAccountAnonymizer }),
     },
   );
   return settleExecutor(result);
@@ -191,7 +196,7 @@ const isStrk20DisclosureKind = (kind: ApprovalKind): kind is Strk20DisclosureApp
   kind === "strk20-balances" ||
   kind === "strk20-prepare" ||
   kind === "strk20-register" ||
-  kind === "strk20-subaccount";
+  kind === "strk20-shadow-account";
 
 const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }) => {
   if (
@@ -352,6 +357,15 @@ const applyConnect: ApproveApplier = async (deps, { approval }, decision) => {
   });
 };
 
+// A private-services notice has nothing to approve. Its only control closes
+// it; an approve that reaches it anyway delivers the same refusal as Close.
+const applyStrk20Unavailable: ApproveApplier = async (_deps, { payload }) =>
+  reject(
+    payload?.noticeRefusal === undefined
+      ? DROPPED_APPROVAL_RESPONSE
+      : { error: payload.noticeRefusal },
+  );
+
 /**
  * Total map from approval kind to its approve applier. Keeping it exhaustive
  * over `ApprovalKind` means an added kind is a compile error here rather than a
@@ -367,7 +381,8 @@ const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
   "strk20-invoke": applyStrk20Invoke,
   "strk20-prepare": applyStrk20Disclosure,
   "strk20-register": applyStrk20Disclosure,
-  "strk20-subaccount": applyStrk20Disclosure,
+  "strk20-shadow-account": applyStrk20Disclosure,
+  "strk20-unavailable": applyStrk20Unavailable,
   "switch-chain": applySwitchChain,
   "watch-asset": applyWatchAsset,
 };
@@ -440,16 +455,25 @@ const applyDenyDecision = async (
   if (!input) {
     return { error: "invalid approval request" };
   }
-  const denied = deps.approvals.claim(input.id)?.approval ?? null;
+  const claim = deps.approvals.claim(input.id);
+  const denied = claim?.approval ?? null;
   // Nothing to deny: it was answered elsewhere or expired. Reporting success
   // showed "Request denied" over another window's broadcast (Sherlock 220).
   if (!denied) {
     return NO_LONGER_PENDING;
   }
   await deps.originHistory.record(denied.origin).catch(() => undefined);
-  deps.waiters.settle(input.id, {
-    error: denied.kind === "connect" ? "connection rejected" : "request rejected",
-  });
+  // Closing a private-services notice is how the site learns the network has
+  // no private services: it gets the refusal it would have had at once, and
+  // only now, after the user saw the notice (#443).
+  const noticeRefusal =
+    denied.kind === "strk20-unavailable" ? claim?.payload?.noticeRefusal : undefined;
+  deps.waiters.settle(
+    input.id,
+    noticeRefusal === undefined
+      ? { error: denied.kind === "connect" ? "connection rejected" : "request rejected" }
+      : { error: noticeRefusal },
+  );
   return { ok: true, pending: deps.approvals.list() };
 };
 

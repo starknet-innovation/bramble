@@ -13,7 +13,7 @@ export const ONBOARDING_WELCOME_STYLES = `
   .onboarding-welcome {
     align-items: center;
     justify-content: flex-end;
-    padding-top: 26px;
+    padding-top: ${SPACE.xl};
     text-align: center;
   }
   /* The lockup takes the free height above the actions and centres in it,

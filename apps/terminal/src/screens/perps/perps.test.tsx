@@ -48,6 +48,7 @@ vi.mock("lightweight-charts", () => ({
 
 import Perps from "./Perps";
 import { fmtSize } from "./perps-data";
+import { ORDER_DISABLED_REASON, PERPS_ORDER_PLACEMENT } from "./perps-placement";
 
 // Returns a real `Response` so the production bounded network boundary can read
 // its status, headers and streamed body exactly as it would a live upstream.
@@ -92,6 +93,8 @@ const CANDLES = ok([
   { o: "63820", h: "63900", l: "63800", c: "63850", v: "12.5", T: 1710000060000 },
 ]);
 let holdOrderBook = false;
+// Counts frames the screen pushes up a socket; the public streams need none.
+const wsSends = { count: 0 };
 
 // A fake WebSocket that emits the right SNAPSHOT/TRADE/candle/funding frame for
 // the stream URL it was opened with, so the WS-driven surfaces populate.
@@ -113,7 +116,7 @@ class FakeWebSocket {
     this.onclose?.();
   }
   send(): void {
-    // no-op
+    wsSends.count += 1;
   }
 }
 
@@ -178,6 +181,7 @@ beforeEach(() => {
 
 afterEach(() => {
   holdOrderBook = false;
+  wsSends.count = 0;
   vi.restoreAllMocks();
 });
 
@@ -239,6 +243,61 @@ describe("Perps screen (live-shaped mocked data)", () => {
     expect(
       screen.getAllByText(/Order placement requires a signed session/).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("records placement as gated and shows one reason in the banner and the ticket (#69)", async () => {
+    expect(PERPS_ORDER_PLACEMENT).toEqual({ reason: ORDER_DISABLED_REASON, status: "gated" });
+    render(<Perps />);
+    await screen.findAllByText("BTC-USD");
+
+    expect(document.querySelector(".regionbanner")?.textContent).toBe(
+      `Market data is live. ${ORDER_DISABLED_REASON}`,
+    );
+    const note = document.querySelector(".ticket [role='note']");
+    expect(note?.textContent).toBe(ORDER_DISABLED_REASON);
+    expect(
+      screen.getByRole("button", { name: "Order Placement Unavailable" }).getAttribute("title"),
+    ).toBe(ORDER_DISABLED_REASON);
+  });
+
+  it("disables Deposit and Withdraw behind the placement gate (#69)", async () => {
+    render(<Perps />);
+    await screen.findAllByText("BTC-USD");
+
+    for (const name of ["Deposit", "Withdraw"]) {
+      const button = screen.getByRole("button", { name }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(button.getAttribute("title")).toBe(ORDER_DISABLED_REASON);
+    }
+  });
+
+  it("sends nothing but public reads however the ticket is used (#69)", async () => {
+    render(<Perps />);
+    await screen.findAllByText("BTC-USD");
+    const ticket = document.querySelector(".ticket");
+    expect(ticket).toBeTruthy();
+
+    const amount = ticket?.querySelector("input[inputmode='decimal']");
+    if (amount !== null && amount !== undefined) {
+      fireEvent.change(amount, { target: { value: "250" } });
+    }
+    const slider = ticket?.querySelector("input[type='range']");
+    if (slider !== null && slider !== undefined) {
+      fireEvent.change(slider, { target: { value: "100" } });
+    }
+    for (const button of Array.from(ticket?.querySelectorAll("button") ?? [])) {
+      fireEvent.click(button);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const calls = vi.mocked(globalThis.fetch).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    for (const [input, init] of calls) {
+      expect((init?.method ?? "GET").toUpperCase()).toBe("GET");
+      expect(init?.body ?? null).toBeNull();
+      expect(String(input)).not.toMatch(/\/user\//);
+    }
+    expect(wsSends.count).toBe(0);
   });
 
   it("persists followed markets in the Follows tab", async () => {

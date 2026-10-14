@@ -9,16 +9,15 @@
  * extension-page senders; no dapp origin can reach the device or the vault.
  */
 
-import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
-import { networkRpcUrls, runActiveStateMutation } from "../runtime/runtime-state";
+import { runActiveStateMutation } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { ledgerStoreRefusal, readLedgerAccountState } from "./ledger-activity";
 import {
   readAddLedgerAccountInput,
   readCompleteLedgerSignInput,
@@ -29,37 +28,6 @@ import {
 
 type LedgerOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
-// Best-effort balances for a candidate address across every known token on the
-// network — the same token set the recovery scan's funded check reads, so a
-// Ready Ledger account holding only ETH is detected exactly like a phrase
-// recovery would detect it. `balance` is the first non-zero holding formatted
-// for display (registry order), or the zero STRK line when nothing is held;
-// `funded` is true when any known token balance is non-zero. A failed read
-// degrades both to null so the picker shows "checking"/"unavailable" rather
-// than blocking or fabricating a value.
-const ledgerAccountBalances = async (
-  deps: WalletOpsDeps,
-  address: string,
-  networkId: StarknetNetworkId,
-  rpcUrls: readonly string[],
-): Promise<{ readonly balance: string | null; readonly funded: boolean | null }> => {
-  const tokens = knownTokensForNetwork(networkId);
-  if (tokens.length === 0) {
-    return { balance: null, funded: null };
-  }
-  const balances = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: address,
-    rpcUrls,
-    tokens,
-  });
-  const held = balances.find((entry) => BigInt(entry.balance) > 0n);
-  const shown = held ?? balances.find((entry) => entry.symbol === "STRK") ?? balances[0];
-  return {
-    balance: shown ? `${shown.formatted} ${shown.symbol}` : null,
-    funded: held !== undefined,
-  };
-};
-
 const handleCreateLedgerVault: LedgerOpsHandler = async (deps, message) => {
   const input = readCreateLedgerVaultInput(message);
   if (!input) {
@@ -68,6 +36,10 @@ const handleCreateLedgerVault: LedgerOpsHandler = async (deps, message) => {
   const createLedgerVault = deps.wallet.createLedgerVault;
   if (!createLedgerVault) {
     return { error: "wallet unavailable" };
+  }
+  const refusal = await ledgerStoreRefusal(deps, input);
+  if (refusal) {
+    return refusal;
   }
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
     const account = await runVaultCreationWithNetwork(
@@ -86,18 +58,8 @@ const handleLedgerAccountStatus: LedgerOpsHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid ledger account status request" };
   }
-  const preferences = await deps.preferencesStore.read();
-  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
-  const [deployed, balances] = await Promise.all([
-    deps.runtimeRpc
-      .getDeploymentStatus({ accountAddress: input.address, rpcUrls })
-      .catch(() => null),
-    ledgerAccountBalances(deps, input.address, input.networkId, rpcUrls).catch(() => ({
-      balance: null,
-      funded: null,
-    })),
-  ]);
-  return { balance: balances.balance, deployed, funded: balances.funded, ok: true };
+  const state = await readLedgerAccountState(deps, input.address, input.networkId);
+  return { ...state, ok: true };
 };
 
 const handleAddLedgerAccount: LedgerOpsHandler = async (deps, message) => {
@@ -108,6 +70,12 @@ const handleAddLedgerAccount: LedgerOpsHandler = async (deps, message) => {
   const addLedgerAccount = deps.wallet.addLedgerAccount;
   if (!addLedgerAccount) {
     return { error: "wallet unavailable" };
+  }
+  // Bramble never creates a Braavos account: a Braavos Ledger row the picker
+  // should have disabled is refused here too, before anything is stored.
+  const refusal = await ledgerStoreRefusal(deps, input);
+  if (refusal) {
+    return refusal;
   }
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
     const account = await runUnlockedNetworkMutation(

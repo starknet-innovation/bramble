@@ -33,9 +33,9 @@ export const PROVIDER_METHOD_POLICY = {
     approvalSurface: true,
     runtimeType: "wallet.strk20PrepareInvoke",
   },
-  wallet_strk20SubaccountCommitment: {
+  wallet_strk20ShadowAccountCommitment: {
     approvalSurface: true,
-    runtimeType: "wallet.strk20SubaccountCommitment",
+    runtimeType: "wallet.strk20ShadowAccountCommitment",
   },
   wallet_supportedSpecs: { approvalSurface: false, runtimeType: "wallet.supportedSpecs" },
   wallet_supportedWalletApi: {

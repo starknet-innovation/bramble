@@ -69,8 +69,8 @@ export const transfersFor = (
       retry: { maxRetries: STRK20_PROVER_REQUEST.retries },
       url: config.proverUrl,
     },
-    ...(config.subaccountAnonymizerAddress
-      ? { shadowAccountAnonymizerAddress: config.subaccountAnonymizerAddress }
+    ...(config.shadowAccountAnonymizerAddress
+      ? { shadowAccountAnonymizerAddress: config.shadowAccountAnonymizerAddress }
       : {}),
     viewingKeyProvider: {
       async getViewingKey() {

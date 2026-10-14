@@ -10,6 +10,7 @@
 import type { DisplayCurrency, TokenConfig } from "@bramble/settings/preferences";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { IconName } from "@bramble/ui-kit/icons";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
 import { compactAmount } from "./token-row";
@@ -45,8 +46,8 @@ export const compactActivityAmount = (amount: string): string => {
 
 /**
  * Prices and tracked tokens the feed needs to price a row. Prices are keyed by
- * token address while an entry only records a symbol, so the tracked-token
- * list is the bridge between them.
+ * token address; a row recorded before it carried one has only a symbol, so
+ * the tracked-token list is the bridge between them.
  */
 export type ActivityPricing = {
   readonly currency: DisplayCurrency;
@@ -285,9 +286,8 @@ const activityDetail = (
  * Everything one Activity row displays, derived from the entry and the current
  * prices. The asset amount needs the recorded amount and symbol; the fiat
  * figure additionally needs a direction (signed in or out, unsigned when the
- * value only moved between the owner's own balances), exactly one tracked
- * token with that symbol on the entry's network (a symbol shared by two
- * tracked tokens is ambiguous and yields nothing), and a price for it.
+ * value only moved between the owner's own balances), the tracked token the
+ * row resolves to (see {@link activityTrackedToken}), and a price for it.
  */
 export type ActivityRowModel = ActivityAppearance & {
   readonly amount: string | null;
@@ -299,19 +299,25 @@ export type ActivityRowModel = ActivityAppearance & {
 };
 
 /**
- * The tracked token an entry's recorded symbol names: the one tracked token on
- * the entry's network with that symbol, or `null` when none or several match.
- * An entry records only a symbol, so an ambiguous one is never guessed.
+ * The tracked token an entry names. A row that recorded its token's address
+ * (issue 643) resolves to the tracked token at that address on the entry's
+ * network, and only while its symbol still agrees with the recorded one: a
+ * likely-spam token is recorded under the untracked symbol, and must not be
+ * priced or shown by its own (Sherlock 249). A legacy row with only a symbol
+ * resolves to the one tracked token with that symbol, or `null` when none or
+ * several match, so an ambiguous symbol is never guessed.
  */
 export const activityTrackedToken = (
-  entry: Pick<ActivityEntry, "networkId" | "token">,
+  entry: Pick<ActivityEntry, "networkId" | "token" | "tokenAddress">,
   pricing?: ActivityPricing,
 ): ActivityPricing["tokens"][number] | null => {
-  const symbol = entry.token?.trim();
+  const symbol = entry.token?.trim().toLowerCase();
   if (!symbol || !pricing) return null;
   const matches = pricing.tokens.filter(
     (token) =>
-      token.networkId === entry.networkId && token.symbol.toLowerCase() === symbol.toLowerCase(),
+      token.networkId === entry.networkId &&
+      token.symbol.toLowerCase() === symbol &&
+      (entry.tokenAddress === undefined || sameFelt(token.address, entry.tokenAddress)),
   );
   return matches.length === 1 ? (matches[0] ?? null) : null;
 };

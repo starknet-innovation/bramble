@@ -73,6 +73,20 @@ describe("ledgerSignScreen", () => {
     expect(html).not.toContain('data-liquid-dots="ledger"');
   });
 
+  // Errors audit F9: once the device has signed, "not signed or broadcast" is
+  // false, so a wallet-side failure after the signature does not say it.
+  test("a failure after the signature does not claim nothing was signed", () => {
+    const html = render({
+      code: null,
+      kind: "error",
+      message: "Signing on your Ledger didn't finish. Check Activity before trying again.",
+    });
+    expect(html).toContain("Signing on your Ledger didn&#39;t finish");
+    expect(html).not.toContain("The transaction has not been signed or broadcast.");
+    const device = render({ code: "rejected-on-device", kind: "error", message: "x" });
+    expect(device).toContain("The transaction has not been signed or broadcast.");
+  });
+
   test("device phase renders escaped device choices", () => {
     const html = render({
       devices: [

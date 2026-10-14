@@ -22,6 +22,7 @@ import {
   isVaultV9,
   isVaultV10,
   isVaultV11,
+  isVaultV12,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -196,6 +197,25 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 11,
   },
+  {
+    fromVersion: 11,
+    // v12 keeps an encrypted record of the shadow-account scopes each account
+    // used (#443). No v11 vault recorded any, so the only deterministic
+    // migration is an empty collection. Shadow accounts from before this build
+    // are not in it and are not reachable from it at all: this build derives
+    // every scope under the new `bramble/strk20-shadow-account/v1` domain and
+    // drops the old `subaccountAnonymizerAddress` setting, so neither a site
+    // nor this wallet can name an old-domain account again. Only users who set
+    // an anonymizer by hand on v0.8.0–v0.10.5 (none was bundled) can have
+    // funded one; recovering it needs an old build plus that old anonymizer.
+    migrate(value) {
+      if (!isVaultV11(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 12, shadowAccountScopes: [] };
+    },
+    toVersion: 12,
+  },
 ];
 
 const requiredAccountId = (value: string): string => {
@@ -279,7 +299,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV11(value)) {
+  if (isVaultV12(value)) {
     return value;
   }
 
@@ -297,7 +317,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV11(migrated)) {
+  if (!isVaultV12(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

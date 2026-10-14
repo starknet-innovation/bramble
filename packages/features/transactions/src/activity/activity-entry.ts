@@ -8,6 +8,8 @@ import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isTransactionFee, type TransactionFee } from "@bramble/starknet/rpc";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
@@ -126,6 +128,14 @@ export type ActivityEntry = {
   readonly submittedAt: number;
   readonly summary: string;
   readonly token?: string;
+  /**
+   * The canonical address of the token `token` names, recorded where the
+   * writer knows it (issue 643). A symbol alone cannot tell two contracts that
+   * share it apart, so the feed groups, filters and sorts by this address and
+   * falls back to the symbol only on rows that lack it. Never present without
+   * `token`. Absent on rows recorded before it existed, which stay valid.
+   */
+  readonly tokenAddress?: string;
 };
 
 /**
@@ -205,6 +215,16 @@ const isActivityKind = (value: unknown): value is ActivityEntry["kind"] =>
 const isOptionalDetail = (value: unknown): value is string | undefined =>
   value === undefined || (typeof value === "string" && value.length > 0 && value.length <= 200);
 
+// A recorded token address is one canonical non-zero felt, so two rows naming
+// the same contract compare equal as strings, and it only ever qualifies a
+// recorded symbol: an address with no symbol is not a shape any writer makes.
+const isRecordedTokenAddress = (value: unknown, token: unknown): boolean =>
+  value === undefined ||
+  (typeof value === "string" &&
+    typeof token === "string" &&
+    isNonZeroStarkFieldElement(value) &&
+    canonicalFelt(value) === value);
+
 /**
  * Checks stored activity entries before trusting them. The detail fields are
  * optional, so older entries that predate them still validate.
@@ -229,6 +249,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "submittedAt",
     "summary",
     "token",
+    "tokenAddress",
   ]) &&
   isStarknetNetworkId(value["networkId"]) &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
@@ -249,12 +270,29 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     value["direction"] === "in" ||
     value["direction"] === "out") &&
   isOptionalDetail(value["token"]) &&
+  isRecordedTokenAddress(value["tokenAddress"], value["token"]) &&
   isFailureNotice(value["failureNotice"]) &&
   (value["feePaid"] === undefined || isTransactionFee(value["feePaid"])) &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
   (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
   isNotFoundCount(value["notFoundCount"]) &&
   (value["origin"] === undefined || value["origin"] === "wallet");
+
+/**
+ * The token fields a writer records for a row that moved one known token: its
+ * symbol and, when the address is a felt, its canonical address. The one
+ * spelling every writer uses, so no path records a symbol without the address
+ * it knows (issue 643).
+ */
+export const activityToken = (token: {
+  readonly address: string;
+  readonly symbol: string;
+}): Pick<ActivityEntry, "token" | "tokenAddress"> => {
+  const address = canonicalFelt(token.address);
+  return address !== null && isNonZeroStarkFieldElement(address)
+    ? { token: token.symbol, tokenAddress: address }
+    : { token: token.symbol };
+};
 
 /** Whether an entry belongs to one account on one network. */
 export const matchesScope = (entry: ActivityEntry, scope: ActivityScope): boolean =>

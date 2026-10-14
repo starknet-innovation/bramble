@@ -19,7 +19,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { rankTokenQueryMatch } from "../../shared/token-search";
 import type { SwapCatalogTokenView } from "../swap/swap-client";
 import { CATALOG_EMPTY_TEXT, CATALOG_LOADING_TEXT } from "./token-catalog-view";
@@ -100,7 +100,7 @@ const ensureCatalog = (deps: TokenCatalogUiDeps, repaint: () => void): void => {
   };
   deps.catalog().then(
     (tokens) => settle(tokens, null),
-    (error: unknown) => settle([], errorMessage(error, "Token list unavailable")),
+    (error: unknown) => settle([], errorLine(error, "Token list unavailable")),
   );
 };
 

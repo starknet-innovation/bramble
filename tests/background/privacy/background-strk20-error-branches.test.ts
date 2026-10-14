@@ -121,7 +121,8 @@ const walletStub = (
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 11 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -149,7 +150,7 @@ const strk20Service: Strk20Service = {
       feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" },
     };
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x123";
   },
   async submitActions(input) {

@@ -7,6 +7,7 @@
  * notions of what the origin may see.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
 import type { Vault } from "@bramble/vault/schema";
 import type {
@@ -17,6 +18,16 @@ import type {
   SignHashInput,
   WalletStatus,
 } from "@bramble/vault/service";
+import type {
+  ListShadowAccountScopesInput,
+  RecordShadowAccountScopeInput,
+} from "@bramble/vault/service-types";
+import {
+  canonicalShadowAccountScope,
+  type ShadowAccountScopeRef,
+  shadowAccountScopesFor,
+  withShadowAccountScope,
+} from "@bramble/vault/shadow-account-scopes";
 import type { AccountRef, DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import type {
   ExtensionIdentity,
@@ -115,6 +126,12 @@ export type WalletStubOptions = {
   readonly captureCreateKeyVault?: (input: CreateKeyVaultInput) => void;
   readonly captureGrant?: (input: OriginGrantInput) => void;
   readonly captureSign?: (input: SignHashInput) => void;
+  /**
+   * Shadow-account scope records the stub vault holds, shared with the suite so
+   * it can read what a request recorded. Merged through the vault's own
+   * helpers, so the stub keeps the real canonicalization and bounds.
+   */
+  readonly shadowAccountScopes?: { value: readonly ShadowAccountScopeRef[] };
 };
 
 /**
@@ -122,6 +139,7 @@ export type WalletStubOptions = {
  */
 export const createWallet = (options: WalletStubOptions = {}) => {
   const accounts = options.accounts ?? [account];
+  const scopes = options.shadowAccountScopes ?? { value: [] };
   const vault = (): Vault => ({
     accounts,
     accountSecrets: [],
@@ -129,7 +147,8 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     importedSeeds: [],
     mnemonic: null,
     originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 11,
+    schemaVersion: 12,
+    shadowAccountScopes: scopes.value,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
   return {
@@ -168,6 +187,38 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     async grantOrigin(input: OriginGrantInput) {
       options.captureGrant?.(input);
       return [account];
+    },
+    async recordShadowAccountScope({
+      vaultPassphrase: passphrase,
+      ...input
+    }: RecordShadowAccountScopeInput) {
+      if (passphrase !== vaultPassphrase) {
+        throw new Error("bad passphrase");
+      }
+      const scope = canonicalShadowAccountScope(input);
+      const next = scope ? withShadowAccountScope(scopes.value, scope) : null;
+      if (!next) {
+        throw new WalletError("shadow account record limit reached");
+      }
+      scopes.value = next;
+    },
+    async canRecordShadowAccountScope({
+      vaultPassphrase: passphrase,
+      ...input
+    }: RecordShadowAccountScopeInput) {
+      if (passphrase !== vaultPassphrase) {
+        throw new Error("bad passphrase");
+      }
+      const scope = canonicalShadowAccountScope(input);
+      return scope !== null && withShadowAccountScope(scopes.value, scope) !== null;
+    },
+    async listShadowAccountScopes(input: ListShadowAccountScopesInput) {
+      return shadowAccountScopesFor(
+        scopes.value,
+        input.accountId,
+        input.chainId,
+        input.poolAddress,
+      );
     },
     async readVault(passphrase: string) {
       if (passphrase !== vaultPassphrase) {

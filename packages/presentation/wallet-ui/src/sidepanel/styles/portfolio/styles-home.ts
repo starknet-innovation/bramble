@@ -29,7 +29,7 @@ export const HOME_STYLES = `
     font-size: ${TYPE.caption.size};
     gap: 6px;
     line-height: ${TYPE.caption.line};
-    margin-top: 6px;
+    margin-top: ${SPACE.sm};
   }
   .verify-status .icon { flex: none; }
   .verify-status.verified { color: var(--bramble-positive); font-weight: 600; }
@@ -139,7 +139,7 @@ export const HOME_STYLES = `
   .drawer-list { align-content: start; display: grid; gap: 6px; }
   /* The folders are the drawer's one scroll region, so the head stays put and
      "Add account" stays reachable however many folders there are. */
-  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; }
+  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; scrollbar-gutter: stable; }
   /* Folders: a heading that collapses its own list, and a section that is the
      drop target — an account can be dropped onto an empty folder, not only
      between rows. */
@@ -270,7 +270,9 @@ export const HOME_STYLES = `
     box-shadow: var(--bramble-elev-lg);
     display: grid;
     opacity: 1;
-    padding: 6px;
+    /* Concentric corners: the inset is the gap between the menu's radius and
+       its rows', so a row's hover fill follows the menu's curve. */
+    padding: calc(${RADIUS.lg} - ${RADIUS.md});
     position: absolute;
     right: 0;
     top: calc(100% + 6px);

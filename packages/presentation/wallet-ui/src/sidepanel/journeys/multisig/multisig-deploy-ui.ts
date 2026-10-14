@@ -9,6 +9,7 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
+
 import {
   bindCopyButtons,
   buttonBusy,
@@ -19,6 +20,7 @@ import {
 } from "../../shared/dom";
 import { icon } from "../../shared/icons";
 import { accountLabel, copyButton } from "../../shared/parts";
+import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import type { SendIntent } from "../send/send-model";
 import {
   ALREADY_DEPLOYED_MESSAGE,
@@ -437,6 +439,15 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
           });
         },
         (error: unknown) => {
+          // Deploy is offered again only for a refusal known to come before
+          // anything was sent. Anything else may be on chain: say so, amber,
+          // and keep Deploy down so it cannot run twice (errors audit F4, C3).
+          if (!knownNotSent(error)) {
+            const line = outcomeUnknownReason(error, "The deployment");
+            deps.setResult("multisig-deploy-result", line);
+            showToast(line, "warning", form, errorDetails(error, "Deployment failed"));
+            return;
+          }
           const message = errorMessage(error, "Deployment failed");
           deps.setResult(
             "multisig-deploy-result",

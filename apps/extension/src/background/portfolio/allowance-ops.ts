@@ -35,12 +35,17 @@ import {
   ALLOWANCE_LIMITS,
   type AllowanceRecord,
   allowanceTarget,
+  type RevokeOutcome,
 } from "@bramble/transactions/allowance-store";
 import { type ApprovedAssets, approvedAssetKind } from "@bramble/transactions/allowances";
 import { verifyCalls } from "@bramble/transactions/verify";
 import { isWatchedNftContract } from "@bramble/transactions/verify-decode";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+} from "@bramble/wallet-model/networks";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import { readTypeOnlyInput } from "../routing/message-inputs";
@@ -106,6 +111,47 @@ const readTrackedAmounts = async (
     }
   }
   return read({ pairs, rpcUrls }).catch(() => []);
+};
+
+// The settled outcome of each pending revoke in `records`, read from the
+// wallet's own activity reconciliation, which keeps checking a submitted hash
+// after the panel closes (issue 647). Only the row this wallet recorded for the
+// transaction it submitted (`origin: "wallet"`) in the revoking record's own
+// scope counts: a chain-discovered or other-scope row with the same hash is
+// not this wallet's observation. A revoke still pending or pre-confirmed, or
+// whose activity line was never written, has no outcome and keeps settling on
+// readings alone. Conflicting rows resolve in the store, failed over accepted.
+const revokeOutcomes = async (
+  deps: WalletOpsDeps,
+  records: readonly AllowanceRecord[],
+  networkId: StarknetNetworkId,
+): Promise<readonly RevokeOutcome[]> => {
+  const pending = new Set(
+    records.flatMap((record) =>
+      record.revokeHash ? [`${record.accountId}|${record.revokeHash}`] : [],
+    ),
+  );
+  if (pending.size === 0) {
+    return [];
+  }
+  const entries = await deps.activity.list().catch(() => []);
+  return entries.flatMap((entry): readonly RevokeOutcome[] => {
+    const hash = canonicalFelt(entry.hash);
+    if (
+      entry.origin !== "wallet" ||
+      entry.networkId !== networkId ||
+      hash === null ||
+      !pending.has(`${entry.accountId}|${hash}`)
+    ) {
+      return [];
+    }
+    if (entry.status === "accepted") {
+      return [{ hash, status: "accepted" }];
+    }
+    return entry.status === "rejected" || entry.status === "reverted"
+      ? [{ hash, status: "failed" }]
+      : [];
+  });
 };
 
 // Scopes this account may READ allowances for, mapped to the ADDRESS that owns
@@ -224,10 +270,21 @@ const handleListAllowances: AllowanceOpsHandler = async (deps, message) => {
     rpcUrls,
     trusted.tokens.map((token) => token.address),
   );
+  // A revoke is recorded when submitted; a reading of zero, or its own
+  // transaction's outcome, is what settles it. Outcomes are read BEFORE the
+  // allowance readings, so an `accepted` outcome is never paired with a
+  // reading taken before the reconciler saw the revoke execute. The rows
+  // listed below are the settled ones, so a failed revoke stops showing as on
+  // its way in the same listing. Best effort: the listing does not depend on it.
+  const outcomes = await revokeOutcomes(deps, scoped, context.networkId);
   const readings = await readTrackedAmounts(deps, scoped, owners, rpcUrls);
-  // A revoke is recorded when submitted; a reading of zero is what says it
-  // took. Best effort: the listing does not depend on it.
-  await deps.allowanceStore.settleRevocations(readings).catch(() => undefined);
+  await deps.allowanceStore.settleRevocations(readings, outcomes).catch(() => undefined);
+  const settled =
+    outcomes.length === 0
+      ? scoped
+      : (await deps.allowanceStore.list().catch(() => stored)).filter((entry) =>
+          scoped.some((candidate) => candidate.id === entry.id),
+        );
   const notices = listingNotices({
     multisigUnread,
     // The total cap evicts too, from the fullest scopes, so a full log counts.
@@ -242,10 +299,10 @@ const handleListAllowances: AllowanceOpsHandler = async (deps, message) => {
       mergeAllowanceViews({
         account: context.account,
         external: external.allowances,
-        inWallet: scoped.filter((entry) => entry.accountId === context.account.id),
+        inWallet: settled.filter((entry) => entry.accountId === context.account.id),
         // Never both: an entry the active account owns is listed once, as its own
         // and revokable, whatever else claims the same scope id.
-        multisig: scoped.filter((entry) => entry.accountId !== context.account.id),
+        multisig: settled.filter((entry) => entry.accountId !== context.account.id),
         networkId: context.networkId,
         readings,
       }),
@@ -330,6 +387,7 @@ const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
     calls: [call],
     owner: allowanceOwner(context.account),
     store: deps.allowanceStore,
+    transactionHash: result.transactionHash,
   });
   await recordSubmittedActivity(deps.activity, {
     accountId: context.account.id,

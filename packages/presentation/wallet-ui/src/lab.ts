@@ -32,6 +32,7 @@ export * from "./sidepanel/journeys/portfolio/home-ui";
 export * from "./sidepanel/journeys/portfolio/token-row";
 export * from "./sidepanel/journeys/privacy/privacy-model";
 export * from "./sidepanel/journeys/privacy/privacy-runtime";
+export { bindShadowAccounts } from "./sidepanel/journeys/privacy/shadow-accounts-ui";
 export * from "./sidepanel/journeys/send/send-model";
 export * from "./sidepanel/journeys/send/send-views";
 export * from "./sidepanel/journeys/send/transfer-ui";

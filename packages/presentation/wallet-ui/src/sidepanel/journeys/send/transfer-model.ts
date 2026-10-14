@@ -7,7 +7,7 @@
 import { normalizeStarkName } from "@bramble/starknet/stark-name";
 import type { ValueBucket } from "@bramble/transactions/send-routes";
 import { isStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
-import { errorMessage } from "../../shared/dom";
+import { errorLine, errorMessage } from "../../shared/dom";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 
@@ -40,11 +40,16 @@ export const recipientFieldError = (recipient: string): string | null =>
 export const isStarkName = (value: string): boolean => normalizeStarkName(value) !== null;
 
 /**
- * Maps a malformed-recipient background error onto the same friendly copy.
+ * Maps a malformed-recipient background error onto the same friendly copy, and
+ * any other review failure onto its reader-facing sentence: the result is
+ * written to a status line as well as a toast, so it must never be the raw
+ * diagnostic (issue 652).
  */
 export const friendlyReviewError = (error: unknown): string => {
   const message = errorMessage(error, "Transfer review failed");
-  return INVALID_REVIEW_ERRORS.has(message) ? INVALID_RECIPIENT_MESSAGE : message;
+  return INVALID_REVIEW_ERRORS.has(message)
+    ? INVALID_RECIPIENT_MESSAGE
+    : errorLine(error, "Transfer review failed");
 };
 
 /**

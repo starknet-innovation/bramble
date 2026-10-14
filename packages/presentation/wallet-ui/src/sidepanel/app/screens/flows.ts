@@ -17,6 +17,7 @@ import type {
 import { recoveryScanFields, recoveryWordInputs } from "../../journeys/onboarding/onboarding-views";
 import { allowancesFlow } from "../../journeys/portfolio/allowance-views";
 import type { PrivacyDisclosureState } from "../../journeys/privacy/privacy-model";
+import { shadowAccountsFlow } from "../../journeys/privacy/shadow-accounts-view";
 import {
   type PoolNoticeAction,
   privacyPoolNotice,
@@ -360,6 +361,8 @@ export const simpleFlowScreen = (
       return connectedSitesFlow(ctx.status, ctx.connectedSites);
     case "allowances":
       return allowancesFlow(ctx.status, ctx.account, ctx.allowances, ctx.preferences);
+    case "shadow-accounts":
+      return shadowAccountsFlow(ctx.status);
     case "appearance":
       return appearanceFlow(ctx.status, ctx.preferences);
     case "request-settings":

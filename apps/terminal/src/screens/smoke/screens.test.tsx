@@ -196,42 +196,6 @@ beforeEach(() => {
   ]);
   globalThis.fetch = vi.fn(async (input: string | URL) => {
     const url = String(input);
-    if (url.includes("starkscan.co") && url.includes("/token-holdings")) {
-      return respond({
-        chainId: "SN_MAIN",
-        ownerAddress: wallet.value.address,
-        items: [
-          {
-            tokenAddress: ETH,
-            normalizedTokenAddress: ETH,
-            indexedBalanceRaw: "1000000000000000000",
-            symbol: "ETH",
-            name: "Ether",
-            decimals: 18,
-          },
-          {
-            tokenAddress: USDC,
-            normalizedTokenAddress: USDC,
-            indexedBalanceRaw: "500000000",
-            symbol: "USDC",
-            name: "USD Coin",
-            decimals: 6,
-          },
-        ],
-        exact: true,
-        truncated: false,
-        completeness: {
-          exact: true,
-          truncated: false,
-          complete: true,
-          reasonCode: "complete",
-          reason: "Complete snapshot.",
-          lagBlocks: 0,
-          capped: false,
-          cap: null,
-        },
-      });
-    }
     if (url.includes("starkscan.co") && url.includes("/transactions?limit=30")) {
       return respond({
         items: [

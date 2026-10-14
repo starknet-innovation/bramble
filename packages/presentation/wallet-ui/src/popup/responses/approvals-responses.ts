@@ -189,6 +189,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "id",
       "insights",
       "kind",
+      "notice",
       "origin",
       "relayFeeAction",
       "reviewAssets",
@@ -212,7 +213,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value["kind"] !== "strk20-invoke" &&
       value["kind"] !== "strk20-prepare" &&
       value["kind"] !== "strk20-register" &&
-      value["kind"] !== "strk20-subaccount" &&
+      value["kind"] !== "strk20-shadow-account" &&
+      value["kind"] !== "strk20-unavailable" &&
       value["kind"] !== "switch-chain" &&
       value["kind"] !== "watch-asset") ||
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
@@ -266,7 +268,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "strk20-invoke" ||
     value["kind"] === "strk20-prepare" ||
     value["kind"] === "strk20-register" ||
-    value["kind"] === "strk20-subaccount";
+    value["kind"] === "strk20-shadow-account";
   const declarationValid =
     value["kind"] === "declare"
       ? isDeclarationReview(value["declaration"])
@@ -280,8 +282,13 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const relayFeeValid =
     relayFeeAction === undefined ||
     (value["kind"] === "strk20-invoke" && relayFeeAction?.type === "withdraw");
+  const noticeValid =
+    value["notice"] === undefined ||
+    (value["kind"] === "strk20-unavailable" &&
+      (value["notice"] === "record-limit" || value["notice"] === "request-failed"));
   return (
     actionReviewValid &&
+    noticeValid &&
     relayFeeValid &&
     tokenValid &&
     feeValid &&

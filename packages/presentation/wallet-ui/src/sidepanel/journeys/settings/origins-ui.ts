@@ -5,6 +5,7 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { failureTone } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 
 /**
@@ -35,7 +36,7 @@ export const bindConnectedSites = ({ app, render, wallet }: ConnectedSitesUiDeps
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Revoke failed"), "error", button);
+          showToast(errorDetails(error, "Revoke failed"), failureTone(error), button);
           if (result) {
             result.textContent = errorLine(error, "Revoke failed");
           }

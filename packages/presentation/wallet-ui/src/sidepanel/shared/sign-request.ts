@@ -43,6 +43,7 @@ export const SIGN_REQUEST_STYLES = `
     max-height: 240px;
     overflow: auto;
     padding: ${SPACE.sm} ${SPACE.md};
+    scrollbar-gutter: stable;
   }
   .sign-unsigned { background: var(--bramble-danger-soft); }
   .sign-more { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; font-style: italic; }
@@ -77,6 +78,7 @@ export const SIGN_REQUEST_STYLES = `
     max-height: 200px;
     overflow: auto;
     padding: ${SPACE.sm};
+    scrollbar-gutter: stable;
   }`;
 
 /**

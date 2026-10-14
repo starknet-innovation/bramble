@@ -14,7 +14,7 @@ import {
 } from "@bramble/core/json";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { RuntimeApi } from "../../runtime/runtime";
-import { responseError } from "../../runtime/runtime-errors";
+import { lostReplySend, responseError } from "../../runtime/runtime-errors";
 
 /**
  * Display-ready quote consumed by the swap screen: decimal amounts plus the
@@ -181,7 +181,7 @@ export type SwapClient = ReturnType<typeof createSwapClient>;
  * Creates side panel swap actions over chrome.runtime messaging.
  */
 export const createSwapClient = (runtime?: RuntimeApi) => {
-  const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  const sendMessage = lostReplySend(runtime);
 
   return {
     async execute(preparationId: string): Promise<string> {

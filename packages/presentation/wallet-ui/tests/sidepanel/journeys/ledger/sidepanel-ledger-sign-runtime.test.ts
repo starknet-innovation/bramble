@@ -7,6 +7,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { MOTION } from "@bramble/ui-kit/tokens";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type {
   LedgerSignRequestSummary,
@@ -19,6 +20,7 @@ import type {
   LedgerDeviceSession,
 } from "../../../../src/sidepanel/journeys/ledger/sign-session";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
+import { type ManualTimers, manualTimers } from "../../../support/manual-timers";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -103,7 +105,11 @@ type Harness = {
 const mountRuntime = (
   source: ClientConnector,
   pending: readonly LedgerSignRequestSummary[],
-): Harness & { readonly poll: () => Promise<void> } => {
+): Harness & {
+  readonly poll: () => Promise<void>;
+  readonly settle: () => Promise<void>;
+  readonly timers: ManualTimers;
+} => {
   document.body.replaceChildren();
   const mount = document.createElement("div");
   // Mirror the host (index.ts), which appends the overlay hidden.
@@ -125,9 +131,13 @@ const mountRuntime = (
       source.openConnected(deviceId).then((client) => (client ? wrap(client) : null)),
     request: () => source.request().then(wrap),
   };
+  // The takeover paces its steps on screen; these tests assert where the
+  // journey ends up, so each settle lets the work run, then drains the pacing.
+  const timers = manualTimers();
   const runtime = createLedgerSignRuntime({
     connector,
     mount,
+    timers,
     onSignatureReported: () => {
       signatureReports += 1;
     },
@@ -145,7 +155,12 @@ const mountRuntime = (
     mount,
     poll: runtime.poll,
     reports,
+    settle: async () => {
+      await tick();
+      timers.flush();
+    },
     signatureReports: () => signatureReports,
+    timers,
   };
 };
 
@@ -171,7 +186,7 @@ describe("Ledger sign runtime (DOM)", () => {
       [],
     );
     await h.poll();
-    await tick();
+    await h.settle();
     expect(h.reports).toEqual([]);
     expect(h.mount.hidden).toBe(true);
     expect(h.mount.children.length).toBe(0);
@@ -186,7 +201,7 @@ describe("Ledger sign runtime (DOM)", () => {
       [PENDING],
     );
     await h.poll();
-    await tick();
+    await h.settle();
 
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
     // Dismissed after success, and the owned transport was released.
@@ -210,14 +225,14 @@ describe("Ledger sign runtime (DOM)", () => {
       [PENDING],
     );
     await h.poll();
-    await tick();
+    await h.settle();
 
     // Connect state is showing with a live button.
     expect(h.mount.hidden).toBe(false);
     expect(h.mount.querySelector("[data-ledger-connect]")).not.toBeNull();
 
     click(h.mount, "[data-ledger-connect]");
-    await tick();
+    await h.settle();
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
     expect(h.mount.hidden).toBe(true);
   });
@@ -236,7 +251,7 @@ describe("Ledger sign runtime (DOM)", () => {
       [{ ...PENDING, messageHash }],
     );
     await h.poll();
-    await tick();
+    await h.settle();
 
     expect(h.mount.hidden).toBe(false);
     const value = h.mount.querySelector(".ledger-hash-value")?.textContent ?? "";
@@ -264,14 +279,14 @@ describe("Ledger sign runtime (DOM)", () => {
       [PENDING],
     );
     await h.poll();
-    await tick();
+    await h.settle();
 
     expect(h.mount.textContent).toContain("Choose your Ledger");
     expect(h.mount.querySelector('[data-ledger-device="second"]')).not.toBeNull();
     expect(openedId).toBeUndefined();
 
     click(h.mount, '[data-ledger-device="second"]');
-    await tick();
+    await h.settle();
     expect(openedId).toBe("second");
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
   });
@@ -282,10 +297,10 @@ describe("Ledger sign runtime (DOM)", () => {
       [PENDING],
     );
     await h.poll();
-    await tick();
+    await h.settle();
 
     click(h.mount, "[data-ledger-cancel]");
-    await tick();
+    await h.settle();
     expect(h.reports).toEqual([{ error: "rejected-on-device", id: "ledger-sign-1" }]);
     expect(h.mount.hidden).toBe(true);
     expect(h.signatureReports()).toBe(0);
@@ -316,11 +331,101 @@ describe("Ledger sign runtime (DOM)", () => {
       [PENDING],
     );
     await h.poll();
-    await tick();
+    await h.settle();
     expect(h.mount.querySelector("[data-ledger-retry]")).not.toBeNull();
 
     click(h.mount, "[data-ledger-retry]");
-    await tick();
+    await h.settle();
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
+  });
+
+  describe("stage pacing (#436)", () => {
+    const phaseOf = (mount: HTMLElement): string | null =>
+      mount.hidden
+        ? null
+        : (mount.querySelector<HTMLElement>(".ledger-progress-card")?.dataset["phase"] ?? null);
+
+    test("each step stays on screen for the minimum while the device work runs ahead", async () => {
+      const h = mountRuntime(
+        {
+          openConnected: () => Promise.resolve(okClient()),
+          request: () => Promise.reject(new Error("x")),
+        },
+        [PENDING],
+      );
+      await h.poll();
+      await tick();
+      // The device has already signed and the signature is reported: the work
+      // was not held for the paint.
+      expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
+      expect(h.timers.now()).toBe(0);
+      const seen: Array<string | null> = [phaseOf(h.mount)];
+      for (let step = 0; step < 5; step += 1) {
+        h.timers.advance(MOTION.stageMinMs - 1);
+        // Never replaced before its minimum.
+        expect(phaseOf(h.mount)).toBe(seen.at(-1) ?? null);
+        h.timers.advance(1);
+        seen.push(phaseOf(h.mount));
+      }
+      expect(seen).toEqual(["checking", "verifying", "confirming", "submitting", null, null]);
+      expect(h.mount.children.length).toBe(0);
+    });
+
+    test("a device error shows right after the steps queued before it", async () => {
+      const client = fakeClient(() => Promise.reject(new Error("x")), {
+        getAppVersion: () => Promise.reject(new Error("device is locked")),
+      });
+      const h = mountRuntime(
+        {
+          openConnected: () => Promise.resolve(client),
+          request: () => Promise.reject(new Error("x")),
+        },
+        [PENDING],
+      );
+      await h.poll();
+      await tick();
+      expect(phaseOf(h.mount)).toBe("checking");
+      h.timers.advance(MOTION.stageMinMs);
+      expect(phaseOf(h.mount)).toBe("error");
+      expect(h.mount.querySelector("[data-ledger-retry]")).not.toBeNull();
+      // The error is not held: nothing is left queued behind it.
+      expect(h.timers.pending()).toBe(0);
+    });
+
+    test("cancel takes the overlay down at once and no queued step comes back", async () => {
+      const device: { approve?: () => void } = {};
+      const client = fakeClient(
+        () =>
+          new Promise((resolve) => {
+            device.approve = () =>
+              resolve({
+                errorMessage: "No errors",
+                r: new Uint8Array([...Array(31).fill(0), 1]),
+                returnCode: 0x9000,
+                s: new Uint8Array([...Array(31).fill(0), 2]),
+              });
+          }),
+      );
+      const h = mountRuntime(
+        {
+          openConnected: () => Promise.resolve(client),
+          request: () => Promise.reject(new Error("x")),
+        },
+        [PENDING],
+      );
+      await h.poll();
+      await tick();
+      // Checking is painted; verifying and confirming are queued behind it.
+      expect(phaseOf(h.mount)).toBe("checking");
+      click(h.mount, "[data-ledger-cancel]");
+      await tick();
+      expect(h.reports).toEqual([{ error: "rejected-on-device", id: "ledger-sign-1" }]);
+      expect(phaseOf(h.mount)).toBeNull();
+      device.approve?.();
+      await tick();
+      h.timers.flush();
+      expect(phaseOf(h.mount)).toBeNull();
+      expect(h.mount.children.length).toBe(0);
+    });
   });
 });

@@ -13,6 +13,7 @@ import { systemClock } from "@bramble/transactions/activity";
 import { matchesStrk20DisclosureKind } from "../privacy/strk20-approval-types";
 import {
   APPROVAL_TOO_LARGE,
+  type ApprovalReservation,
   approvalAdmissionRefusal,
   approvalCapacityVictim,
   isExpiredApproval,
@@ -161,14 +162,14 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
     return [...queued(), ...held];
   };
 
-  const reserve = (origin: string): (() => void) => {
+  const reserve = (origin: string): ApprovalReservation => {
     const refusal = approvalAdmissionRefusal(admissionView(), origin);
     if (refusal) {
       throw new WalletError(refusal);
     }
     reservations.set(origin, (reservations.get(origin) ?? 0) + 1);
     let released = false;
-    return () => {
+    const release = (): void => {
       if (released) {
         return;
       }
@@ -180,6 +181,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         reservations.delete(origin);
       }
     };
+    return { arrivedAt: now(), release };
   };
 
   const get = (id: string): PendingApproval | null => {
@@ -199,7 +201,9 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
     };
   };
 
-  const enqueue = (approval: ApprovalRequest): PendingApproval => {
+  // `arrivedAt` dates an approval from its request's admission (audit N3); it
+  // can only bring the deadline forward, never extend it.
+  const enqueue = (approval: ApprovalRequest, arrivedAt?: number): PendingApproval => {
     requireRenderableSummaries(approval);
     const live = queued();
     const refusal = approvalAdmissionRefusal(live, approval.origin);
@@ -218,7 +222,12 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       pending.delete(victim.id);
       dropObserver([victim.id]);
     }
-    pending.set(approval.id, { ...approval, feeRevision: 0, queuedAt: now() });
+    const at = now();
+    pending.set(approval.id, {
+      ...approval,
+      feeRevision: 0,
+      queuedAt: Math.min(arrivedAt ?? at, at),
+    });
     return snapshot;
   };
 
@@ -344,6 +353,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       });
     },
     requestStrk20Disclosure({
+      arrivedAt,
       context,
       flags = [],
       kind,
@@ -358,46 +368,70 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       if (!matchesStrk20DisclosureKind(kind, request)) {
         throw new WalletError("Invalid STRK20 approval");
       }
-      return enqueue({
-        ...(request.type === "prepare"
-          ? { actionReviews: cloneApprovalValue(request.actions) }
-          : {}),
-        context: { ...context },
-        ...copyFlags(flags),
-        id: crypto.randomUUID(),
-        kind,
-        origin,
-        ...copyReviewAssets(reviewAssets),
-        strk20Request: cloneApprovalValue(request),
-        summaries: [...summaries],
-      });
+      return enqueue(
+        {
+          ...(request.type === "prepare"
+            ? { actionReviews: cloneApprovalValue(request.actions) }
+            : {}),
+          context: { ...context },
+          ...copyFlags(flags),
+          id: crypto.randomUUID(),
+          kind,
+          origin,
+          ...copyReviewAssets(reviewAssets),
+          strk20Request: cloneApprovalValue(request),
+          summaries: [...summaries],
+        },
+        arrivedAt,
+      );
     },
     requestStrk20Invoke({
       actions,
+      arrivedAt,
       context,
       flags = [],
       origin,
       plan,
       reviewAssets = [],
+      shadowAccountAnonymizer,
       summaries,
     }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
-      return enqueue({
-        actionReviews: cloneApprovalValue(actions),
-        actions: cloneApprovalValue(actions),
-        context: { ...context },
-        ...copyFlags(flags),
-        id: crypto.randomUUID(),
-        kind: "strk20-invoke",
-        origin,
-        ...copyReviewAssets(reviewAssets),
-        ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
-        strk20Plan: cloneApprovalValue(plan),
-        summaries: [...summaries],
-      });
+      return enqueue(
+        {
+          ...(shadowAccountAnonymizer === undefined ? {} : { shadowAccountAnonymizer }),
+          actionReviews: cloneApprovalValue(actions),
+          actions: cloneApprovalValue(actions),
+          context: { ...context },
+          ...copyFlags(flags),
+          id: crypto.randomUUID(),
+          kind: "strk20-invoke",
+          origin,
+          ...copyReviewAssets(reviewAssets),
+          ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
+          strk20Plan: cloneApprovalValue(plan),
+          summaries: [...summaries],
+        },
+        arrivedAt,
+      );
+    },
+    requestStrk20Unavailable({ arrivedAt, notice, origin, refusal }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+      return enqueue(
+        {
+          id: crypto.randomUUID(),
+          kind: "strk20-unavailable",
+          ...(notice === undefined ? {} : { notice }),
+          noticeRefusal: refusal,
+          origin,
+        },
+        arrivedAt,
+      );
     },
     requestSwitchChain({ chainId, networkId, origin, summary }) {
       if (!isWalletOrigin(origin)) {

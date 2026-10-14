@@ -99,7 +99,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
     const ohttpEnabled = data.get("ohttpEnabled") === "on";
     const proverUrl = field("proverUrl");
     const poolAddress = field("poolAddress");
-    const subaccountAnonymizerAddress = field("subaccountAnonymizerAddress");
+    const shadowAccountAnonymizerAddress = field("shadowAccountAnonymizerAddress");
     const ohttpRelayUrl = field("ohttpRelayUrl");
     const paymasterUrl = field("paymasterUrl");
     const feeToken = field("feeToken");
@@ -107,7 +107,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
       discoveryUrl,
       proverUrl,
       poolAddress,
-      subaccountAnonymizerAddress,
+      shadowAccountAnonymizerAddress,
       ohttpRelayUrl,
       paymasterUrl,
       feeToken,
@@ -119,7 +119,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
           ...(ohttpEnabled ? { ohttpEnabled: true } : {}),
           poolAddress,
           proverUrl,
-          ...(subaccountAnonymizerAddress ? { subaccountAnonymizerAddress } : {}),
+          ...(shadowAccountAnonymizerAddress ? { shadowAccountAnonymizerAddress } : {}),
           ...(ohttpRelayUrl ? { ohttpRelayUrl } : {}),
           ...(paymasterUrl || feeToken ? { paymaster: { feeToken, url: paymasterUrl } } : {}),
         };

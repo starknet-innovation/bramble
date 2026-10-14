@@ -18,6 +18,7 @@ import type { PriceService } from "@bramble/portfolio/prices";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
+import { activityToken } from "@bramble/transactions/activity";
 import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
 import { reviewedMinBuyAmount } from "@bramble/transactions/avnu-route";
 import {
@@ -39,7 +40,7 @@ import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "./activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "./activity-recording";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
@@ -247,6 +248,7 @@ const swapPrepareResponse = async (
       minBuyAmount: minBuyText,
       reviewedFee,
       sellSymbol: sellToken.symbol,
+      sellTokenAddress: sellToken.address,
       summaries: report.calls.map((call, index) =>
         index === routeIndex
           ? `Swap ${input.amount} ${sellToken.symbol} for at least ${minBuyText} ${buyToken.symbol}, paid to ${shortAddress(canonical(account.address))}`
@@ -329,6 +331,7 @@ const swapExecuteResponse = async (
         calls: preparation.calls,
         owner: allowanceOwner(context.account),
         store: deps.allowanceStore,
+        transactionHash: hash,
       });
       await recordSubmittedActivity(deps.activity, {
         accountId: context.account.id,
@@ -337,7 +340,7 @@ const swapExecuteResponse = async (
         kind: "invoke",
         networkId: context.networkId,
         summary: `Swap ${preparation.amount} ${preparation.sellSymbol} for ~${preparation.buyAmount} ${preparation.buySymbol} via avnu`,
-        token: preparation.sellSymbol,
+        ...activityToken({ address: preparation.sellTokenAddress, symbol: preparation.sellSymbol }),
       });
     };
     // The hash of the invoke as signed, captured before it is sent. Only used
@@ -364,12 +367,15 @@ const swapExecuteResponse = async (
       // The swap may already be on chain: record it as pending and tell the
       // panel the outcome is unknown, so it never re-quotes into a blind second
       // swap of the same amount.
-      if (signedHash !== undefined) {
-        await recordSubmitted(signedHash);
+      const pending = signedHash;
+      if (pending !== undefined) {
+        await afterBroadcast(() => recordSubmitted(pending));
       }
       return submissionUnknownResponse(error.message, signedHash);
     }
-    await recordSubmitted(transactionHash);
+    // Outside the catch below: once a hash exists the reply carries it, so the
+    // panel never re-quotes a swap that is already on chain (audit 173).
+    await afterBroadcast(() => recordSubmitted(transactionHash));
     return { ok: true, transactionHash };
   } catch (error) {
     return { error: errorText(error, "swap failed") };

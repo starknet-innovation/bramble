@@ -10,7 +10,7 @@ import {
   activityForScope,
   systemClock,
 } from "@bramble/transactions/activity";
-import { asUntrackedToken, type HistoryLane } from "@bramble/transactions/tx-history";
+import { asUntrackedToken } from "@bramble/transactions/tx-history";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { readActivityInput } from "../routing/message-inputs";
@@ -100,15 +100,13 @@ const activityTarget = async (
     : null;
 };
 
-// Rows from the lane that answered; an empty or unavailable read names the
-// event lane, which is harmless because it brings no rows to settle anything.
+// Rows from the lane that answered.
 type AccountHistory = {
-  readonly lane: HistoryLane;
   readonly onChain: readonly ActivityEntry[];
   readonly unavailable: boolean;
 };
 
-const NO_HISTORY: AccountHistory = { lane: "chain-events", onChain: [], unavailable: false };
+const NO_HISTORY: AccountHistory = { onChain: [], unavailable: false };
 
 const accountHistory = async (
   deps: ActivityOpsDeps,
@@ -131,7 +129,7 @@ const accountHistory = async (
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[target.networkId], preferences),
       tokens,
     });
-    return { lane: discovered.lane, onChain: discovered.entries, unavailable: false };
+    return { onChain: discovered.entries, unavailable: false };
   } catch {
     return { ...NO_HISTORY, unavailable: true };
   }
@@ -168,7 +166,7 @@ export const handleActivity = async (
     : { ...NO_HISTORY, unavailable: previousSync?.unavailable ?? false };
   const merged =
     scanHistory && !history.unavailable
-      ? await mergeReconciledHistory(deps, target.scope, history.onChain, history.lane)
+      ? await mergeReconciledHistory(deps, target.scope, history.onChain)
       : local;
   if (scanHistory) {
     await deps.activity

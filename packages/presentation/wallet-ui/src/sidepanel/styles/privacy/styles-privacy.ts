@@ -57,7 +57,7 @@ export const PRIVACY_STYLES = `
   .token-breakdown {
     display: grid;
     gap: ${SPACE.sm};
-    padding: ${SPACE.md} ${SPACE.sm} ${SPACE.sm} calc(40px + ${SPACE.md});
+    padding: ${SPACE.md} ${SPACE.sm} ${SPACE.sm} calc(${SIZE.mark} + ${SPACE.md});
   }
   .token-breakdown-row {
     align-items: center;

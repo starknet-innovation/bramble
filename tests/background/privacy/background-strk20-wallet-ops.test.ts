@@ -37,7 +37,7 @@ const preferences = (): WalletPreferences => ({
       discoveryUrl: "https://discovery.example/strk20",
       poolAddress: "0x123",
       proverUrl: "https://prover.example/strk20",
-      subaccountAnonymizerAddress: "0x456",
+      shadowAccountAnonymizerAddress: "0x456",
     },
   },
 });

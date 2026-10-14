@@ -31,7 +31,6 @@ import {
 } from "../src/data/core/endpoints";
 import {
   parseChainPulse,
-  parseStarkscanBalances,
   parseWalletActivity,
 } from "../src/data/activity/starkscan";
 import { toAvnuRows, toEkuboRows } from "../src/data/market/useTokens";
@@ -59,6 +58,7 @@ import {
 } from "../src/protocols/constants";
 import { STARKNET_NETWORKS } from "../src/protocols/support/networks";
 import { parseVesuMultiplyExactOutQuote } from "../src/protocols/vesu/vesu-multiply";
+import { checkEkuboFeeTiers } from "./check-ekubo-tiers";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const SAMPLE_MARKET = "BTC-USD";
@@ -256,18 +256,7 @@ const main = async (): Promise<void> => {
     };
   });
 
-  // ---- Starkscan (indexed portfolio + chain pulse) -----------------------
-  await check("Starkscan token holdings", true, async () => {
-    const { status, body } = await fetchJsonDirect(
-      `${STARKSCAN_DIRECT_BASE}/address/${SAMPLE_STARKSCAN_ADDRESS}/token-holdings`,
-    );
-    const balances = parseStarkscanBalances(body, SAMPLE_STARKSCAN_ADDRESS);
-    return {
-      status,
-      detail: `${balances.length} exact holdings (first=${balances[0]?.symbol ?? "n/a"})`,
-    };
-  });
-
+  // ---- Starkscan (chain pulse) -----------------------
   await check("Starkscan live chain pulse", true, async () => {
     const [blocks, events, messages] = await Promise.all([
       fetchJsonDirect(`${STARKSCAN_DIRECT_BASE}/blocks?limit=3`),
@@ -449,6 +438,8 @@ const main = async (): Promise<void> => {
     const high = res[1] !== undefined ? BigInt(res[1]) : 0n;
     return { status: "rpc", detail: `u256 felts=[${res.slice(0, 2).join(", ")}] -> ${low + (high << 128n)}` };
   });
+
+  await check("Ekubo fee tiers key mainnet pools", true, () => checkEkuboFeeTiers(provider));
 
   await check("Vesu V2 deployed ABIs", true, async () => {
     const [poolClass, multiplyClass] = await Promise.all([

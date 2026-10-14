@@ -134,6 +134,19 @@ const phaseBody = (view: LedgerSignView): string => {
       </div>
       ${cancelButton()}`;
   }
+  // After the device signed (`code: null`) the request may already be on its
+  // way, so neither a re-sign nor a refusal is offered: only Close (audit N4).
+  if (phase.code === null) {
+    return `<p class="review-flag" role="alert">${escapeHtml(phase.message)}</p>
+    <div class="ledger-phase-actions">
+      ${button({
+        attributes: { "data-ledger-close": true },
+        label: "Close",
+        size: "small",
+        variant: "ghost",
+      })}
+    </div>`;
+  }
   return `<p class="review-flag" role="alert">${escapeHtml(phase.message)}</p>
     <div class="ledger-phase-actions">
       ${button({
@@ -186,6 +199,12 @@ const phaseLiveness: Readonly<Record<LedgerSignView["phase"]["kind"], string>> =
   submitting: "Signature received; completing wallet verification…",
   verifying: "Comparing the device key with this account…",
 };
+
+// "Not signed or broadcast" is false once the device has signed, so a
+// wallet-side failure after the signature (`code: null`) says nothing here; its
+// message carries the outcome (errors audit F9).
+const livenessText = (view: LedgerSignView): string =>
+  view.phase.kind === "error" && view.phase.code === null ? "" : phaseLiveness[view.phase.kind];
 
 const livenessMark = (view: LedgerSignView): string => {
   if (view.phase.kind === "error") {
@@ -246,7 +265,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
       <div class="ledger-phase-body">${phaseBody(view)}</div>
       <p class="ledger-liveness" role="status">
         <span class="ledger-liveness-mark">${livenessMark(view)}</span>
-        ${escapeHtml(phaseLiveness[view.phase.kind])}
+        ${escapeHtml(livenessText(view))}
       </p>
     </section>
     <p id="ledger-sign-result" role="status" aria-live="polite"></p>

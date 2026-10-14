@@ -16,8 +16,8 @@
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
   type ActivityEntry,
+  activityToken,
   clampActivitySummary,
-  isUnresolvedActivityStatus,
 } from "@bramble/transactions/activity";
 import {
   canonicalFelt,
@@ -207,7 +207,7 @@ export const onChainActivityEntry = (input: {
     status: "accepted",
     submittedAt: timestampMs,
     summary: clampActivitySummary(summary),
-    token: token.symbol,
+    ...activityToken(token),
   };
 };
 
@@ -228,7 +228,7 @@ const txKey = (entry: ActivityEntry): string =>
 // source) so the separator can never appear inside a felt-derived value or a
 // free-form token symbol and make two distinct legs alias.
 const legKey = (entry: ActivityEntry): string =>
-  `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
+  `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.tokenAddress ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
 
 // The symbol the explorer lane gives a token the wallet does not track.
 const UNTRACKED_TOKEN_SYMBOL = "TOKEN";
@@ -280,41 +280,31 @@ export const withoutPlantedRows = (entries: readonly ActivityEntry[]): readonly 
   });
 
 /**
- * Which lane discovered a set of history rows. Only `"chain-events"`, the
- * wallet's own RPC `getEvents` scan, proves that a transaction was included:
- * an emitted `Transfer` exists only in a block. An `"explorer"` row is a
- * third party's HTTP answer, which adds history but proves nothing about a
- * transaction the wallet is still observing (Sherlock 150).
+ * Which lane discovered a set of history rows: the wallet's own RPC `getEvents`
+ * scan, or a third party's explorer answer. It is provenance only. Neither lane
+ * settles the status of a transaction the wallet is still observing (see
+ * {@link mergeActivity}).
  */
 export type HistoryLane = "chain-events" | "explorer";
 
-// Local rows by leg, plus the leg keys each local transaction owns.
+// Local rows by leg, plus the transactions the local log owns.
 const indexLocalLegs = (
   local: readonly ActivityEntry[],
 ): {
   readonly byKey: Map<string, ActivityEntry>;
-  readonly localLegs: ReadonlyMap<string, readonly string[]>;
+  readonly localTxs: ReadonlySet<string>;
 } => {
   const byKey = new Map<string, ActivityEntry>();
-  const localLegs = new Map<string, string[]>();
+  const localTxs = new Set<string>();
   for (const entry of local) {
     const key = legKey(entry);
     if (byKey.has(key)) {
       continue;
     }
     byKey.set(key, entry);
-    localLegs.set(txKey(entry), [...(localLegs.get(txKey(entry)) ?? []), key]);
+    localTxs.add(txKey(entry));
   }
-  return { byKey, localLegs };
-};
-
-const promoteUnresolved = (byKey: Map<string, ActivityEntry>, keys: readonly string[]): void => {
-  for (const key of keys) {
-    const entry = byKey.get(key);
-    if (entry !== undefined && isUnresolvedActivityStatus(entry.status)) {
-      byKey.set(key, { ...entry, status: "accepted" });
-    }
-  }
+  return { byKey, localTxs };
 };
 
 /**
@@ -324,16 +314,14 @@ const promoteUnresolved = (byKey: Map<string, ActivityEntry>, keys: readonly str
  * user-facing summary, so it keeps its identity while purely chain-discovered
  * transactions are added around it.
  *
- * The one exception is status, and only for the `"chain-events"` lane: a local
- * row still unresolved (`pending` or the provisional `preconfirmed`) is
- * reconciled to `accepted` when the wallet's own event scan found a `Transfer`
- * for its hash, since an emitted event proves the transaction was included and
- * succeeded (a reverted transaction emits none). This closes the gap where the
- * status re-poll fails but the event scan succeeds. An `"explorer"` row never
- * changes a local row's status, because `accepted` cannot be walked back and
- * would also cancel the "could not confirm" notice the observation owes.
- * Terminal local states (`accepted`, `rejected`, `reverted`) are authoritative
- * and left untouched.
+ * A chain leg never changes a local row's status, from either lane. A
+ * `Transfer` event for a hash does not prove the transaction succeeded: a
+ * reverted Starknet transaction still pays its fee, and the fee payment emits
+ * a `Transfer` from the account that the scan cannot tell apart from a value
+ * transfer (#653). Only the status re-poll, which reads the receipt's
+ * execution status, settles a local row; until then it stays unresolved, and
+ * an observation that never resolves is retired with its "could not confirm"
+ * notice rather than shown as done.
  *
  * Both sides are keyed per leg, so a swap or multicall keeps all of its
  * transfers rather than showing one arbitrary leg. That includes the local
@@ -345,17 +333,12 @@ const promoteUnresolved = (byKey: Map<string, ActivityEntry>, keys: readonly str
 export const mergeActivity = (
   local: readonly ActivityEntry[],
   onChain: readonly ActivityEntry[],
-  lane: HistoryLane,
 ): readonly ActivityEntry[] => {
-  const { byKey, localLegs } = indexLocalLegs(local);
+  const { byKey, localTxs } = indexLocalLegs(local);
   for (const entry of onChain) {
-    const owned = localLegs.get(txKey(entry));
-    if (owned !== undefined) {
-      // A local record owns this transaction and keeps its richer summary, so
-      // the chain leg adds no row; it can only settle the local rows' status.
-      if (lane === "chain-events" && entry.status === "accepted") {
-        promoteUnresolved(byKey, owned);
-      }
+    if (localTxs.has(txKey(entry))) {
+      // A local record owns this transaction and keeps its richer summary and
+      // its status, so the chain leg adds nothing.
       continue;
     }
     const key = legKey(entry);

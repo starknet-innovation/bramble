@@ -11,12 +11,43 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+### Added
+- Shadow-account recovery. Every shadow-account scope a site drives (origin, label, anonymizer,
+  and the exact nonces used) is recorded in the encrypted vault before the request runs (vault
+  schema v12). Settings → Shadow accounts lists them, reads balances only when asked (the read
+  links the addresses at the RPC provider, and the screen says so), and sweeps what a site left
+  back into private notes through the private relay, paying the relay fee from the private
+  balance.
+- A shadow-account approval card that states what the invoke does: the calls it runs through which
+  shadow account for which site, the anonymizer, which tokens settle back into private notes, and
+  who can move what the calls leave. The card's anonymizer is bound into the approval. (Card,
+  screen, and sweep copy are proposed and pending review.)
+
 ### Changed
+- **Breaking for dapps:** STRK20 sub-accounts use the Wallet API 0.10.4 shadow-account names:
+  `wallet_strk20ShadowAccountCommitment` and the `shadow_account_invoke` action. The old names are
+  refused with no alias.
+- `wallet_supportedWalletApi` reports `0.10.4`, the stable Wallet API release with these names,
+  instead of `0.10.4-rc.0`, which still used the old ones.
+- Every shadow-account identity changes: the scope domain is now
+  `bramble/strk20-shadow-account/v1`. Shadow accounts derived under the old domain are not
+  reachable from this build, by a site or by the wallet, and are not in the new Shadow accounts
+  records. Only users who entered a sub-account anonymizer by hand on v0.8.0–v0.10.5 (no build
+  bundled one) can have funded such an account; recovering it requires an old build together
+  with that old anonymizer.
+- The per-network setting `subaccountAnonymizerAddress` is now `shadowAccountAnonymizerAddress`.
+  A stored value under the old key is dropped, not carried over, and must be re-entered with a
+  current anonymizer.
+- A site's shadow-account request on a network with no anonymizer is no longer refused at once:
+  the wallet shows "Private services aren't set up for this network." with a Close control, and the
+  site receives the same refusal only after the user closes it. Left to expire, the notice
+  answers the site as any expired approval does ("request rejected").
 - The pinned official Starknet privacy SDK moved from `0.14.3-rc.4` to
   `0.14.3-rc.8`. Upstream renamed its sub-account surface to shadow accounts, so
   the adapter follows the new `shadowAccounts(...)` builder and
-  `shadowAccountAnonymizerAddress` factory key internally. There is no change to
-  dapp-visible behaviour, stored data, settings, or the Wallet API names.
+  `shadowAccountAnonymizerAddress` factory key internally. The SDK bump on its own
+  changes no dapp-visible behaviour, stored data, settings, or Wallet API names; the
+  shadow-account changes above do.
 
 ## [0.10.3] - 2026-09-16
 

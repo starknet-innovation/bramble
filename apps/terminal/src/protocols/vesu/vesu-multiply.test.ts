@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAINNET_TOKEN_ADDRESSES, VESU_ADDRESSES } from "../constants";
+import { anchorVesuMultiplyQuote } from "./vesu-multiply-anchor";
 import {
   quoteVesuMultiplyClose,
   quoteVesuMultiplyIncrease,
@@ -35,6 +36,18 @@ const response = {
   total_calculated: "500000000000000",
 };
 
+// Anchors a parsed fixture quote (exact USDC out, priced in ETH) at $1 USDC and
+// $2,000 ETH, which its 0.000505 ETH cap sits within.
+const anchored = (quote: ReturnType<typeof parseVesuMultiplyExactOutQuote>) =>
+  anchorVesuMultiplyQuote(
+    quote,
+    {
+      calculated: { address: MAINNET_TOKEN_ADDRESSES.ETH, decimals: 18 },
+      specified: { address: MAINNET_TOKEN_ADDRESSES.USDC, decimals: 6 },
+    },
+    async (asset) => (asset === MAINNET_TOKEN_ADDRESSES.USDC ? 1 : 2_000),
+  );
+
 describe("Vesu Multiply boundary", () => {
   it("validates exact-output totals and applies the slippage ceiling", () => {
     const quote = parseVesuMultiplyExactOutQuote(
@@ -63,8 +76,8 @@ describe("Vesu Multiply boundary", () => {
     ).toThrow("route amount mismatch");
   });
 
-  it("wraps Multiply with temporary approval and delegation", () => {
-    const quote = parseVesuMultiplyExactOutQuote(
+  it("wraps Multiply with temporary approval and delegation", async () => {
+    const parsed = parseVesuMultiplyExactOutQuote(
       {
         ...response,
         splits: [{
@@ -78,6 +91,7 @@ describe("Vesu Multiply boundary", () => {
       100,
       USDC_FOR_ETH,
     );
+    const quote = await anchored(parsed);
     const calls = buildVesuMultiplyIncreaseCalls(
       POOL,
       MAINNET_TOKEN_ADDRESSES.ETH,
@@ -96,8 +110,8 @@ describe("Vesu Multiply boundary", () => {
     expect(calls[2]?.contractAddress).toBe(VESU_ADDRESSES.multiply);
   });
 
-  it("atomically closes a position and revokes delegation", () => {
-    const closeQuote = parseVesuMultiplyExactOutQuote(
+  it("atomically closes a position and revokes delegation", async () => {
+    const parsedClose = parseVesuMultiplyExactOutQuote(
       {
         ...response,
         splits: [{
@@ -111,6 +125,7 @@ describe("Vesu Multiply boundary", () => {
       100,
       USDC_FOR_ETH,
     );
+    const closeQuote = await anchored(parsedClose);
     expect(closeQuote.maxInputAmount).toBe(505_000_000_000_000n);
     expect(closeQuote.weights).toEqual([1_000_000_000_000_000_000n]);
     const calls = buildVesuMultiplyCloseCalls(
@@ -125,6 +140,46 @@ describe("Vesu Multiply boundary", () => {
       "modify_lever",
       "modify_delegation",
     ]);
+  });
+
+  it("builds no calls from a quote the price anchor never passed (#646)", async () => {
+    const parsed = parseVesuMultiplyExactOutQuote(
+      {
+        ...response,
+        splits: [{
+          ...response.splits[0],
+          amount_calculated: "-500000000000000",
+          amount_specified: "-1000000",
+        }],
+        total_calculated: "-500000000000000",
+      },
+      1_000_000n,
+      100,
+      USDC_FOR_ETH,
+    );
+    // The anchored shape alone is not enough: only the anchor's own result passes.
+    const lookalike = { ...(await anchored(parsed)) };
+    for (const quote of [parsed, lookalike] as never[]) {
+      expect(() =>
+        buildVesuMultiplyIncreaseCalls(
+          POOL,
+          MAINNET_TOKEN_ADDRESSES.ETH,
+          MAINNET_TOKEN_ADDRESSES.USDC,
+          "0x123",
+          1_000_000_000_000_000_000n,
+          quote,
+        ),
+      ).toThrow("Invalid Multiply route");
+      expect(() =>
+        buildVesuMultiplyCloseCalls(
+          POOL,
+          MAINNET_TOKEN_ADDRESSES.ETH,
+          MAINNET_TOKEN_ADDRESSES.USDC,
+          "0x123",
+          quote,
+        ),
+      ).toThrow("Invalid unwind route");
+    }
   });
 
   it("refuses a route that does not connect the Multiply assets (Sherlock 147)", () => {
@@ -184,16 +239,25 @@ describe("Vesu Multiply boundary", () => {
       total_calculated: "-500000000000000",
     };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(answer))));
+    // 1 USDC for 0.0005 ETH is the mid-price at $2,000 per ETH.
+    const priceUsd = async (asset: string) => (asset === ETH ? 2_000 : 1);
     // Increase: an exact collateral (USDC) output priced in debt (ETH).
-    await expect(quoteVesuMultiplyIncrease(USDC, ETH, 1_000_000n)).resolves.toMatchObject({
-      requiredInputAmount: 500_000_000_000_000n,
-    });
+    await expect(
+      quoteVesuMultiplyIncrease(USDC, ETH, 1_000_000n, {
+        collateralDecimals: 6,
+        debtDecimals: 18,
+        priceUsd,
+      }),
+    ).resolves.toMatchObject({ requiredInputAmount: 500_000_000_000_000n });
     // Close: an exact debt (USDC) repayment priced in collateral (ETH).
-    await expect(quoteVesuMultiplyClose(USDC, ETH, 1_000_000n)).resolves.toMatchObject({
+    const closeAnchor = { collateralDecimals: 18, debtDecimals: 6, priceUsd };
+    await expect(quoteVesuMultiplyClose(USDC, ETH, 1_000_000n, closeAnchor)).resolves.toMatchObject({
       requiredInputAmount: 500_000_000_000_000n,
     });
     // The same route for the opposite pairing does not connect.
-    await expect(quoteVesuMultiplyClose(ETH, USDC, 1_000_000n)).rejects.toThrow("does not connect");
+    await expect(quoteVesuMultiplyClose(ETH, USDC, 1_000_000n, closeAnchor)).rejects.toThrow(
+      "does not connect",
+    );
   });
 });
 

@@ -4,6 +4,15 @@ import { formatTokenAmount } from "@bramble/starknet/rpc";
 import { DEFAULT_TOKENS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action, Strk20InvokeCall } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
+import {
+  SHADOW_INVOKE_ANONYMIZER,
+  SHADOW_INVOKE_COLLECTS_ALL_TO,
+  SHADOW_INVOKE_CONTROL,
+  SHADOW_INVOKE_RUNS,
+  SHADOW_INVOKE_SETTLES,
+  SHADOW_INVOKE_SETTLES_NOTHING,
+  SHADOW_INVOKE_SETTLES_TO,
+} from "./shadow-account-copy";
 import type { Strk20SubmissionPlan } from "./submission-plan";
 
 const shortAddress = (value: string): string =>
@@ -81,11 +90,127 @@ export const summarizeStrk20Action = (
         : actionAmount(action.amount, action.token, assetFor);
     return `Transfer ${amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
   }
-  if (action.type === "subaccount_invoke") {
-    return `Private ${action.dapp_name} sub-account invoke (${action.calls.length} calls)`;
+  if (action.type === "shadow_account_invoke") {
+    return `Private ${action.dapp_name} shadow account invoke (${action.calls.length} calls)`;
   }
   return `Private invoke on ${shortAddress(action.contract)}`;
 };
+
+/**
+ * The wallet-side facts a shadow-account invoke is reviewed against: the
+ * anonymizer the network is configured with, and the origin the request was
+ * gated on (already shortened for display by the caller).
+ */
+export type Strk20ShadowAccountReview = {
+  readonly anonymizer: string;
+  readonly origin: string;
+};
+
+// A nonce reads as a number on the card ("#1"); the exact felt stays in the
+// action parameters. A malformed nonce cannot reach here (the batch parsed),
+// but display code must not throw a review surface away, so it degrades.
+const displayNonce = (nonce: string): string => {
+  try {
+    return BigInt(nonce).toString();
+  } catch {
+    return nonce;
+  }
+};
+
+// The tokens an invoke settles, grouped by who receives the open note: one
+// entry per OPEN transfer in the batch, named by the trusted symbol when the
+// wallet knows the token, else by its address. `self` is true only when the
+// recipient is proven to be `depositor`, as for a deposit.
+const settledTokens = (
+  actions: readonly Strk20Action[],
+  depositor: string | undefined,
+  assetFor: Strk20AssetLookup | undefined,
+): readonly { readonly recipient: string; readonly self: boolean; readonly tokens: string[] }[] => {
+  const groups: { readonly recipient: string; readonly self: boolean; tokens: string[] }[] = [];
+  for (const action of actions) {
+    if (action.type !== "transfer" || action.amount !== "OPEN") {
+      continue;
+    }
+    const self = sameFelt(action.recipient, depositor);
+    const token = assetFor?.(action.token)?.symbol ?? shortAddress(action.token);
+    const group = groups.find(
+      (candidate) => candidate.self === self && sameFelt(candidate.recipient, action.recipient),
+    );
+    if (group) {
+      group.tokens.push(token);
+    } else {
+      groups.push({ recipient: action.recipient, self, tokens: [token] });
+    }
+  }
+  return groups;
+};
+
+// One line per recipient: "back into private notes" only for this account's
+// own notes. A note for anyone else names them, and under `collect_policy: all`
+// also says the whole shadow-account balance of those tokens goes to them.
+const settlementLines = (
+  action: Extract<Strk20Action, { readonly type: "shadow_account_invoke" }>,
+  actions: readonly Strk20Action[],
+  depositor: string | undefined,
+  assetFor: Strk20AssetLookup | undefined,
+): readonly string[] => {
+  const groups = settledTokens(actions, depositor, assetFor);
+  if (groups.length === 0) {
+    return [SHADOW_INVOKE_SETTLES_NOTHING];
+  }
+  return groups.flatMap((group) => {
+    const tokens = group.tokens.join(", ");
+    if (group.self) {
+      return [SHADOW_INVOKE_SETTLES(tokens)];
+    }
+    const recipient = shortAddress(group.recipient);
+    return [
+      SHADOW_INVOKE_SETTLES_TO(tokens, recipient),
+      ...(action.collect_policy.type === "all"
+        ? [SHADOW_INVOKE_COLLECTS_ALL_TO(tokens, recipient)]
+        : []),
+    ];
+  });
+};
+
+const shadowInvokeSummaries = (
+  action: Extract<Strk20Action, { readonly type: "shadow_account_invoke" }>,
+  actions: readonly Strk20Action[],
+  review: Strk20ShadowAccountReview,
+  depositor: string | undefined,
+  assetFor: Strk20AssetLookup | undefined,
+): readonly string[] => [
+  SHADOW_INVOKE_RUNS(action.calls.length, displayNonce(action.nonce), review.origin),
+  SHADOW_INVOKE_ANONYMIZER(review.anonymizer),
+  ...settlementLines(action, actions, depositor, assetFor),
+  SHADOW_INVOKE_CONTROL,
+];
+
+/**
+ * Review summaries for a whole validated batch, in batch order. A
+ * `shadow_account_invoke` expands into the facts its card must state — the
+ * calls it runs and through which shadow account for which site, the
+ * anonymizer, the tokens it settles and for whom (back into private notes only
+ * when the open note's recipient is `depositor`; otherwise naming the
+ * recipient, and under `collect_policy: all` that the shadow account's whole
+ * balance of those tokens goes to them), and who can move what the calls leave
+ * behind — which is why it needs `shadow`: without it the
+ * batch's shadow invokes keep the context-free label of
+ * {@link summarizeStrk20Action}. Display-only, like every summary here.
+ */
+export const summarizeStrk20Batch = (
+  actions: readonly Strk20Action[],
+  options: {
+    readonly assetFor?: Strk20AssetLookup;
+    readonly depositor?: string;
+    readonly shadow?: Strk20ShadowAccountReview;
+  } = {},
+): readonly string[] =>
+  actions.flatMap((action) =>
+    action.type === "shadow_account_invoke" && options.shadow
+      ? shadowInvokeSummaries(action, actions, options.shadow, options.depositor, options.assetFor)
+      : [summarizeStrk20Action(action, options.depositor, options.assetFor)],
+  );
 
 /**
  * The pool's own fee is charged in STRK on every network, so its display

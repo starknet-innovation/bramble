@@ -41,6 +41,7 @@ import {
 } from "@bramble/ledger-protocol/session";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { LedgerSignRequestSummary } from "../../../popup/responses/responses";
+import { LEDGER_SIGN_UNFINISHED } from "../../runtime/friendly-error-copy";
 import type { LedgerSignOutcome } from "./runtime-client";
 
 /**
@@ -62,7 +63,12 @@ export type LedgerSignPhase =
   | { readonly kind: "confirming" }
   | { readonly kind: "discovering" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
-  | { readonly kind: "error"; readonly code: LedgerRejectionCode; readonly message: string }
+  | {
+      readonly kind: "error";
+      /** The device catalog code, or `null` when the wallet failed after the device signed. */
+      readonly code: LedgerRejectionCode | null;
+      readonly message: string;
+    }
   | { readonly kind: "submitting" }
   | { readonly kind: "verifying" };
 
@@ -95,11 +101,26 @@ export type LedgerSignController = {
   readonly activeId: () => string | null;
   readonly cancel: () => Promise<void>;
   readonly chooseDevice: (deviceId: string) => void;
+  /**
+   * Takes down a request whose signature the device already gave but the
+   * wallet could not finish, reporting nothing; it is not offered again here.
+   */
+  readonly close: () => void;
+  /** Whether `id` was closed with {@link LedgerSignController.close}. */
+  readonly closed: (id: string) => boolean;
   readonly connect: () => void;
   readonly dismiss: () => void;
   readonly present: (request: LedgerSignRequestSummary) => void;
   readonly retry: () => void;
   readonly whenIdle: () => Promise<void>;
+};
+
+// A wallet-side failure after the device signed (`completeLedgerSign`): the
+// reviewed sentence for it, never a device rejection.
+const UNFINISHED_PHASE: LedgerSignPhase = {
+  code: null,
+  kind: "error",
+  message: LEDGER_SIGN_UNFINISHED,
 };
 
 const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
@@ -129,6 +150,10 @@ export const createLedgerSignController = (
   let busy = false;
   let operationEpoch = 0;
   let idleWaiters: Array<() => void> = [];
+  // Requests closed after an unfinished signature. The background still holds
+  // each until it settles or times out; re-presenting it would start a second
+  // device prompt for a hash that may already be on its way.
+  const closedIds = new Set<string>();
 
   const settle = (): void => {
     busy = false;
@@ -179,7 +204,15 @@ export const createLedgerSignController = (
       return;
     }
     show({ kind: "submitting" });
-    await deps.report({ id: request.id, r: signature.r, s: signature.s });
+    try {
+      await deps.report({ id: request.id, r: signature.r, s: signature.s });
+    } catch {
+      // The device signed; the wallet's half did not finish. That is not a
+      // device fault, and the transaction may already be on its way (errors
+      // audit F9), so it reads as the reviewed outcome-unknown line.
+      if (isActive()) show(UNFINISHED_PHASE);
+      return;
+    }
     current = null;
     devices = [];
     operationEpoch += 1;
@@ -251,6 +284,18 @@ export const createLedgerSignController = (
     await drive(() => deps.connector.openConnected(devices[0]?.id));
   };
 
+  const dismiss = (): void => {
+    if (!current) {
+      return;
+    }
+    // The epoch bump stops an in-flight device operation from reporting or
+    // repainting; its session is still closed by `drive`'s finally.
+    current = null;
+    devices = [];
+    operationEpoch += 1;
+    deps.render(null);
+  };
+
   return {
     activeId: () => current?.id ?? null,
     async cancel() {
@@ -278,19 +323,16 @@ export const createLedgerSignController = (
       show({ kind: "connecting" });
       void drive(deps.connector.request);
     },
-    dismiss() {
-      if (!current) {
-        return;
+    close() {
+      if (current) {
+        closedIds.add(current.id);
       }
-      // The epoch bump stops an in-flight device operation from reporting or
-      // repainting; its session is still closed by `drive`'s finally.
-      current = null;
-      devices = [];
-      operationEpoch += 1;
-      deps.render(null);
+      dismiss();
     },
+    closed: (id) => closedIds.has(id),
+    dismiss,
     present(request) {
-      if (current || busy) {
+      if (current || busy || closedIds.has(request.id)) {
         return;
       }
       current = request;

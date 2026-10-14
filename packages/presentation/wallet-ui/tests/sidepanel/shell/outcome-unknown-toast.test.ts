@@ -14,6 +14,7 @@ import { showToast } from "../../../src/sidepanel/shared/dom";
 import { bindApprovals } from "../../../src/sidepanel/shell/dashboard-bindings";
 import { bindDeploy, type ShellBindingDeps } from "../../../src/sidepanel/shell/shell-bindings";
 import { registerDom, unregisterDom } from "../../support/groups-harness";
+import { manualTimers } from "../../support/manual-timers";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -50,6 +51,16 @@ describe("isOutcomeUnknown", () => {
     expect(isOutcomeUnknown(new Error(INDETERMINATE_RPC_WRITE_MESSAGE))).toBe(true);
     expect(isOutcomeUnknown(new Error("Nonce too old"))).toBe(false);
     expect(isOutcomeUnknown(INDETERMINATE_RPC_WRITE_MESSAGE)).toBe(false);
+  });
+
+  // Errors audit F4: a fallback whose reviewed sentence already says the
+  // outcome is unknown is never styled as failed.
+  test("recognises an unrecognised-reply fallback that reads as outcome unknown", () => {
+    for (const raw of ["transfer failed", "deployment failed", "approval failed", "swap failed"]) {
+      expect(isOutcomeUnknown(new Error(raw)), raw).toBe(true);
+    }
+    expect(isOutcomeUnknown(new Error("Request expired"))).toBe(false);
+    expect(isOutcomeUnknown(new Error("fee estimate failed"))).toBe(false);
   });
 });
 
@@ -114,9 +125,11 @@ const approveWith = async (failure: Error): Promise<void> => {
     </article>
     <p id="approval-result"></p>`;
   document.body.replaceChildren(host);
+  const stageTimers = manualTimers();
   bindApprovals({
     app: host,
     render: async () => undefined,
+    stageTimers,
     wallet: {
       decideApproval: async () => {
         throw failure;
@@ -126,6 +139,8 @@ const approveWith = async (failure: Error): Promise<void> => {
   });
   host.querySelector<HTMLButtonElement>('[data-approval-action="approve"]')?.click();
   await tick();
+  // The outcome paints once "Authorizing request" has had its time on screen.
+  stageTimers.flush();
   await tick();
 };
 

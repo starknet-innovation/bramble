@@ -449,6 +449,34 @@ describe("token and counterparty identity", () => {
     expect(ordered.map((entry) => entry.token)).toEqual(["STRK", "USDC"]);
   });
 
+  test("tokens sharing a ticker are told apart by a short address, others are not", () => {
+    const native = "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+    const bridged = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+    const usdc = (hash: string, tokenAddress?: string): ActivityEntry => ({
+      ...sent,
+      hash,
+      summary: "Send 1.5 USDC",
+      token: "USDC",
+      ...(tokenAddress === undefined ? {} : { tokenAddress }),
+    });
+    const options = activityFilterOptions(
+      [usdc("0xb1", bridged), usdc("0xa1", native), sent, usdc("0xa2")],
+      pricing,
+    );
+    expect(options.tokens.map((option) => option.label)).toEqual([
+      "STRK",
+      "USDC · 0x0330…35fb",
+      "USDC · 0x053c…68a8",
+      "USDC",
+    ]);
+    expect(options.tokens.map((option) => option.key)).toEqual([
+      canonicalFelt(STRK_TOKEN_ADDRESS) ?? "",
+      canonicalFelt(native) ?? "",
+      canonicalFelt(bridged) ?? "",
+      "symbol:usdc",
+    ]);
+  });
+
   test("one counterparty written with and without leading zeros is one counterparty", () => {
     const summary = activityPartySummary([
       summaryRow({ amount: "1", counterparty: CONTACT_SHORT }),

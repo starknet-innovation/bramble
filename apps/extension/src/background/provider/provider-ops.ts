@@ -457,6 +457,7 @@ export const executeInvokeApproval = async (
       calls,
       owner: allowanceOwner(account),
       store: allowanceStore,
+      transactionHash: result.transactionHash,
     });
     await recordSubmittedActivity(activity, {
       accountId: account.id,

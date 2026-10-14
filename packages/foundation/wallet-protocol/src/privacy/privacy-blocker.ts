@@ -17,6 +17,29 @@ export const PRIVACY_DEPLOY_REQUIRED = "Deploy this account before enabling priv
  */
 export const PRIVACY_FUNDS_REQUIRED = "Deposit some STRK, then come back";
 
+/**
+ * The one line a site's private request shows when this network has no private
+ * services for it (no shadow-account anonymizer configured). Approved copy.
+ * The request is held on the wallet's own surface until the user closes it, so
+ * a site cannot time an instant refusal to learn what the user has set up.
+ */
+export const PRIVATE_SERVICES_UNAVAILABLE_NOTICE =
+  "Private services aren't set up for this network.";
+
+/**
+ * PROPOSED, pending copy review: the notice line when the shadow-account
+ * record table cannot take this request's scope. Not "Private services aren't
+ * set up for this network.", which would be false here.
+ */
+export const SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE =
+  "Bramble can't record another shadow account, so this request can't run.";
+
+/**
+ * PROPOSED, pending copy review: the notice line when a site's private request
+ * could not be prepared for review (for example its fee quote failed).
+ */
+export const PRIVATE_REQUEST_FAILED_NOTICE = "Couldn't prepare this private request.";
+
 /** Curated wallet refusal; carries its action independently of display wording. */
 export class PrivacyBlockerError extends WalletError {
   public constructor(

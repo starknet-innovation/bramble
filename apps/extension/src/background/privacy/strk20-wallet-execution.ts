@@ -27,7 +27,9 @@ import {
   type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@bramble/privacy/service";
+import { SHADOW_SWEEP_ACTIVITY } from "@bramble/privacy/shadow-account-copy";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { activityToken } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
@@ -36,7 +38,7 @@ import { approvalPayloadMatchesContext } from "../approvals/approval-context";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import type { Strk20WalletExecuteResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
@@ -50,6 +52,7 @@ import {
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
+import { submitShadowSweep } from "./strk20-shadow-sweep";
 import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
@@ -109,6 +112,11 @@ const activitySummary = (
 ): string => {
   if (preparation.kind === "register") {
     return STRK20_REGISTRATION_SUMMARY;
+  }
+  if (preparation.kind === "shadow-sweep") {
+    // Generic on purpose: activity is plain browser storage and CSV export,
+    // and the scope's site, label, and nonce stay in the encrypted vault.
+    return SHADOW_SWEEP_ACTIVITY;
   }
   const value = `${preparation.amount} ${preparation.token.symbol}`;
   if (preparation.kind === "transfer") {
@@ -272,6 +280,9 @@ const submitPreparation = (
   if (preparation.kind === "transfer" || preparation.kind === "withdraw") {
     return submitPreparedPrivateBatch(deps, service, preparation, context);
   }
+  if (preparation.kind === "shadow-sweep") {
+    return submitShadowSweep(service, preparation, context);
+  }
   return submitPreparedRegistration(deps, service, preparation, context);
 };
 
@@ -285,9 +296,21 @@ const executionWork = async (
   report: Strk20PhaseSink,
 ): Promise<RuntimeResponse> => {
   const context = reportingPrivacyContext(resolved, report);
+  let result: Strk20SubmissionResult;
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
-    const result = await submitPreparation(deps, service, preparation, context);
+    result = await submitPreparation(deps, service, preparation, context);
+  } catch (error) {
+    // A lost relay or RPC reply may still land: say so instead of "failed",
+    // so the panel does not report it as not sent (audit #173).
+    if (error instanceof IndeterminateRpcWriteError) {
+      return submissionUnknownResponse(errorText(error, "Private transaction failed"));
+    }
+    return { error: errorText(error, "Private transaction failed") };
+  }
+  // The hash exists from here on, so the reply carries it whatever the
+  // bookkeeping does (errors audit F1).
+  await afterBroadcast(async () => {
     // Entering the pool approves it to pull the deposit and its fee from the
     // account's PUBLIC balance, so those grants are tracked exactly like any
     // other approval this wallet submits — see `Strk20SubmissionResult`. Filed
@@ -298,26 +321,24 @@ const executionWork = async (
       calls: result.allowanceGrants ?? [],
       owner: allowanceOwner(context.accountContext.account),
       store: deps.allowanceStore,
+      transactionHash: result.transactionHash,
     });
     await recordSubmittedActivity(deps.activity, {
       accountId: context.accountContext.account.id,
-      ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
+      ...(preparation.kind === "register" || preparation.kind === "shadow-sweep"
+        ? {}
+        : { amount: preparation.amount }),
       ...counterpartyOf(otherParty(preparation, context)),
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.accountContext.account.networkId,
       summary: activitySummary(preparation, context),
-      ...(preparation.kind === "register" ? {} : { token: preparation.token.symbol }),
+      ...(preparation.kind === "register" || preparation.kind === "shadow-sweep"
+        ? {}
+        : activityToken(preparation.token)),
     });
-    return { ok: true, transactionHash: result.transactionHash };
-  } catch (error) {
-    // A lost relay or RPC reply may still land: say so instead of "failed",
-    // so the panel does not report it as not sent (audit #173).
-    if (error instanceof IndeterminateRpcWriteError) {
-      return submissionUnknownResponse(errorText(error, "Private transaction failed"));
-    }
-    return { error: errorText(error, "Private transaction failed") };
-  }
+  });
+  return { ok: true, transactionHash: result.transactionHash };
 };
 
 /**

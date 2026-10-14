@@ -20,9 +20,13 @@ import {
   bindTransfer,
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import { createSidepanelRuntime } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x5eed";
+// A refusal the background makes before anything is signed.
+const FEE_ROSE =
+  "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.";
 const TOKEN_ADDRESS = "0x3456";
 const TOKEN = {
   address: TOKEN_ADDRESS,
@@ -174,7 +178,7 @@ describe("a lost broadcast reply on Send", () => {
 
   test("a determinate failure resets the severity and keeps Try again", async () => {
     const { app, form } = mount(async () => {
-      throw new Error("The network fee could not be estimated");
+      throw new Error(FEE_ROSE);
     }, "pending");
     await reviewAndConfirm(form);
 
@@ -188,7 +192,7 @@ describe("a lost broadcast reply on Send", () => {
 describe("Try again after a failure", () => {
   test("re-reviews a determinate submit failure before signing again", async () => {
     const { app, calls, form } = mount(async (call) => {
-      if (call === 1) throw new Error("The network fee could not be estimated");
+      if (call === 1) throw new Error(FEE_ROSE);
       return HASH;
     }, "accepted");
     await reviewAndConfirm(form);
@@ -229,7 +233,6 @@ describe("submitRejection (shared by the public and pool routes)", () => {
     const rejection = submitRejection(
       state,
       new SubmissionUnknownError("Transaction submission status is unknown.", null),
-      "Private send failed",
     );
     expect(rejection.state.error).toBe("Transaction submission status is unknown.");
     expect(rejection.state.submissionUnknown).toBe(true);
@@ -239,11 +242,139 @@ describe("submitRejection (shared by the public and pool routes)", () => {
     expect(rejection.state.privatePreparation).toBeNull();
   });
 
-  test("keeps 'not sent' for a determinate failure, still dropping the review", () => {
-    const rejection = submitRejection(state, new Error("Not enough private STRK"), "x");
-    expect(rejection.state.error).toBe("The transaction was not sent. Not enough private STRK");
+  test("keeps 'not sent' for a pre-submit refusal, still dropping the review", () => {
+    const rejection = submitRejection(state, new Error("Insufficient private balance"));
+    expect(rejection.state.error).toBe(
+      "The transaction was not sent. Insufficient private balance",
+    );
     expect(rejection.toast).toBe("Transaction was not sent");
     expect(rejection.state.reviewedKey).toBeNull();
     expect(rejection.follow).toBe(false);
+  });
+});
+
+// Errors audit F1: the whole rendered receipt for every way a confirm can be
+// rejected. "Not sent" only for a pre-submit refusal; everything else may be on
+// chain and says so, in one sentence that does not contradict itself.
+describe("the rendered Send receipt for each rejection", () => {
+  const UNKNOWN = "The transfer may not have gone through. Check Activity before trying again.";
+  const NOT_SENT = /\b(?:not sent|nothing was (?:submitted|signed|sent))\b/i;
+  const MAYBE = /\b(?:may not have gone through|status is unknown|could not be confirmed)\b/i;
+  const cases: readonly (readonly [string, () => Error, string, string])[] = [
+    ["an unrecognised reply", () => new Error("transfer failed"), "Status unknown", UNKNOWN],
+    ["the router's catch-all", () => new Error("wallet request failed"), "Status unknown", UNKNOWN],
+    [
+      "a bookkeeping failure that surfaced as a plain error",
+      () => new Error("vault storage limit reached"),
+      "Status unknown",
+      `This wallet is full, so this change wasn't saved. ${UNKNOWN}`,
+    ],
+    [
+      "a raw RPC answer",
+      () => new Error("RPC: starknet_addInvokeTransaction with params {}"),
+      "Status unknown",
+      `The RPC rejected this request. Copy the error details for the full response. ${UNKNOWN}`,
+    ],
+    [
+      "the indeterminate-write sentence passed through as a plain error",
+      () =>
+        new Error(
+          "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+        ),
+      "Status unknown",
+      "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+    ],
+    [
+      "a lost reply the background typed",
+      () => new SubmissionUnknownError("Transaction submission status is unknown.", null),
+      "Status unknown",
+      "Transaction submission status is unknown.",
+    ],
+    [
+      "a wallet failure after the Ledger signed",
+      () => new Error("unexpected-device-error"),
+      "Status unknown",
+      `Something went wrong talking to your Ledger. Open the Starknet app, close other apps using it, then try again. ${UNKNOWN}`,
+    ],
+    [
+      "a fee ceiling refusal",
+      () => new Error(FEE_ROSE),
+      "Transaction not sent",
+      `The transaction was not sent. ${FEE_ROSE}`,
+    ],
+    [
+      "a poisoned recipient",
+      () =>
+        new Error(
+          "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+        ),
+      "Transaction not sent",
+      "The transaction was not sent. The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+    ],
+    [
+      "a request declined on the Ledger",
+      () => new Error("rejected-on-device"),
+      "Transaction not sent",
+      "The transaction was not sent. You rejected the request on your Ledger. Nothing was submitted.",
+    ],
+    [
+      "a locked wallet",
+      () => new Error("wallet locked"),
+      "Transaction not sent",
+      "The transaction was not sent. The wallet is locked or unavailable. Unlock it and try again.",
+    ],
+  ];
+
+  for (const [name, error, title, copy] of cases) {
+    test(name, async () => {
+      const { app, form } = mount(async () => {
+        throw error();
+      }, "pending");
+      await reviewAndConfirm(form);
+
+      const shownTitle = app.querySelector("#send-failure-title")?.textContent ?? "";
+      const shownCopy = app.querySelector("#send-failure-copy")?.textContent ?? "";
+      expect(shownTitle).toBe(title);
+      expect(shownCopy).toBe(copy);
+      // One claim per receipt: never "not sent" beside "may not have gone through".
+      const whole = `${shownTitle}. ${shownCopy}`;
+      expect(NOT_SENT.test(whole) && MAYBE.test(whole), whole).toBe(false);
+      expect(visible(app, "#send-retry")).toBe(title === "Transaction not sent");
+      expect(visible(app, "#send-failure-activity")).toBe(title === "Status unknown");
+    });
+  }
+
+  test("a reply the browser lost (worker stopped) through the real client", async () => {
+    const runtime = createSidepanelRuntime({
+      sendMessage: () =>
+        Promise.reject(new Error("The message port closed before a response was received.")),
+    });
+    const { app, form } = mount(() => runtime.submitTransfer("a", "t", "0x1", "1"), "pending");
+    await reviewAndConfirm(form);
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Status unknown");
+    expect(app.querySelector("#send-failure-copy")?.textContent).toBe(UNKNOWN);
+  });
+
+  test("a pool route names the private transaction", () => {
+    const rejection = submitRejection(
+      {
+        error: "",
+        fields: { destination: "private", source: "private" } as never,
+        privatePreparation: null,
+        progress: null,
+        requiresDeployment: false,
+        review: null,
+        reviewedKey: null,
+        stage: "authorizing",
+        submissionUnknown: false,
+        transactionHash: null,
+      },
+      new Error("Private transaction failed"),
+    );
+    expect(rejection.state.error).toBe(
+      "The private transaction may not have gone through. Check Activity before trying again.",
+    );
+    expect(rejection.state.submissionUnknown).toBe(true);
+    expect(rejection.toast).toBeNull();
   });
 });

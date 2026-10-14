@@ -166,6 +166,7 @@ const recordDelta = (
     calls: [{ calldata: [SPENDER, amount, "0x0"], contractAddress: token, entrypoint }],
     owner: allowanceOwner(account),
     store: allowanceStore,
+    transactionHash: "0x7ab",
   });
 
 const recordIncrease = (
@@ -356,6 +357,7 @@ describe("NFT collection approvals are not ERC20 allowances", () => {
         ],
         owner: allowanceOwner(account),
         store: allowanceStore,
+        transactionHash: "0x7ab",
       });
     return { allowanceStore, fileApprove, handler, invokeCalls };
   };

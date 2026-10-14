@@ -10,6 +10,7 @@ import {
   toProviderPayload,
   toRuntimeMessage,
 } from "@bramble/wallet-protocol/bridge";
+import { DAPP_RUNTIME_MESSAGE_TYPES, isProviderMethod } from "@bramble/wallet-protocol/methods";
 import { readProviderParams } from "@bramble/wallet-protocol/request-params";
 
 const origin = "https://example.com";
@@ -103,13 +104,13 @@ describe("strk20 bridge params", () => {
       ).toEqual({ actions, origin, type: "wallet.strk20InvokeTransaction" });
       expect(
         toRuntimeMessage(
-          request("wallet_strk20SubaccountCommitment", { api_version, dapp_name: "Terminal" }),
+          request("wallet_strk20ShadowAccountCommitment", { api_version, dapp_name: "Terminal" }),
           origin,
         ),
-      ).toEqual({ dappName: "Terminal", origin, type: "wallet.strk20SubaccountCommitment" });
+      ).toEqual({ dappName: "Terminal", origin, type: "wallet.strk20ShadowAccountCommitment" });
       expect(
         toRuntimeMessage(
-          request("wallet_strk20SubaccountCommitment", {
+          request("wallet_strk20ShadowAccountCommitment", {
             api_version,
             dapp_name: "Terminal",
             nonce: "0x1",
@@ -120,8 +121,35 @@ describe("strk20 bridge params", () => {
         dappName: "Terminal",
         nonce: "0x1",
         origin,
-        type: "wallet.strk20SubaccountCommitment",
+        type: "wallet.strk20ShadowAccountCommitment",
       });
+    }
+  });
+
+  // Wallet API 0.10.4 renamed sub-accounts to shadow accounts, and #443 drops
+  // the old names with no alias: a page still speaking them gets no route.
+  test("refuses the pre-0.10.4 sub-account names with no alias", () => {
+    expect(isProviderMethod("wallet_strk20SubaccountCommitment")).toBe(false);
+    expect(DAPP_RUNTIME_MESSAGE_TYPES.has("wallet.strk20SubaccountCommitment")).toBe(false);
+    const call = { calldata: [], contract_address: token, entry_point: "swap" };
+    const legacy = {
+      calls: [call],
+      collect_policy: { type: "all" },
+      dapp_name: "Terminal",
+      nonce: "0x1",
+      type: "subaccount_invoke",
+    };
+    for (const method of [
+      "wallet_strk20PrepareInvoke",
+      "wallet_strk20InvokeTransaction",
+    ] as const) {
+      expect(toRuntimeMessage(request(method, { actions: [legacy] }), origin)).toBeNull();
+      expect(
+        toRuntimeMessage(
+          request(method, { actions: [{ ...legacy, type: "shadow_account_invoke" }] }),
+          origin,
+        ),
+      ).not.toBeNull();
     }
   });
 
@@ -132,7 +160,7 @@ describe("strk20 bridge params", () => {
         ["wallet_strk20PrepareInvoke", { actions, api_version }],
         ["wallet_strk20PrepareInvoke", { actions, api_version, simulate: true }],
         ["wallet_strk20InvokeTransaction", { actions, api_version }],
-        ["wallet_strk20SubaccountCommitment", { api_version, dapp_name: "Terminal" }],
+        ["wallet_strk20ShadowAccountCommitment", { api_version, dapp_name: "Terminal" }],
       ] as const) {
         expect(toRuntimeMessage(request(method, params), origin)).toBeNull();
       }

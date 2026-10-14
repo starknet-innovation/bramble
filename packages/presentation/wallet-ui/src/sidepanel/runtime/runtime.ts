@@ -38,6 +38,7 @@ import { createNftRuntimeClient } from "../journeys/collectibles/nft-runtime";
 import { createLedgerRuntimeClient } from "../journeys/ledger/runtime-client";
 import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding-runtime";
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
+import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
 
 /**
@@ -54,7 +55,7 @@ export type {
 } from "./runtime-types";
 
 import { createAccountRuntimeClient } from "./runtime-accounts";
-import { responseError } from "./runtime-errors";
+import { lostReplySend, responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
@@ -69,13 +70,14 @@ export type SidepanelWallet = ReturnType<typeof createSidepanelRuntime>;
  * Creates side panel actions over chrome.runtime messaging.
  */
 export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
-  const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  const sendMessage = lostReplySend(runtime);
 
   return {
     ...createLedgerRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
     ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
+    ...createShadowAccountsRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
     ...createLookupRuntimeClient(sendMessage),

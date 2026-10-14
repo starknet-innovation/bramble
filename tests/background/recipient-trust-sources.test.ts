@@ -295,6 +295,7 @@ describe("NFT send and swap execute use the same trusted set (#163)", () => {
       minBuyAmount: "1",
       reviewedFee: { overallFee: "1", unit: "FRI" as const },
       sellSymbol: "ETH",
+      sellTokenAddress: "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
       summaries: ["Swap"],
     };
     const context = await createApprovalContext(account, swapPreparationPayload(unsigned));

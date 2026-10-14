@@ -23,7 +23,6 @@ import {
 } from "@bramble/settings/preferences";
 import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnostics";
 import { createActivityLog, systemClock } from "@bramble/transactions/activity";
-import { createAllowanceStore } from "@bramble/transactions/allowance-store";
 import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
@@ -60,6 +59,7 @@ import { createSignatureWaiters } from "./approvals/signature-waiters";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
+import { createRankedAllowanceStore } from "./portfolio/allowance-log";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
@@ -254,7 +254,7 @@ const originHistory = (() => {
 })();
 const allowanceLog = (() => {
   try {
-    return createAllowanceStore({ store: createBrowserLocalStore() });
+    return createRankedAllowanceStore(createBrowserLocalStore(), readPreferences);
   } catch {
     return undefined;
   }

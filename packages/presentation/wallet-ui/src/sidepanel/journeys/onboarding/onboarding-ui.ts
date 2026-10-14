@@ -5,7 +5,7 @@ import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import {
   BACKUP_VERIFY_COPY,
   backupVerifyPositions,
@@ -421,7 +421,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         }
         const message = errorMessage(error, "Could not derive this account");
         if (passphraseResult) {
-          passphraseResult.textContent = message;
+          passphraseResult.textContent = errorLine(error, "Could not derive this account");
         }
         showToast(message, "error", form, errorDetails(error, "Could not derive this account"));
         buttonBusy(passwordContinue, false);
@@ -455,7 +455,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           const message = errorMessage(error, "Account import failed");
           showToast(message, "error", form, errorDetails(error, "Account import failed"));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, "Account import failed");
           }
           buttonBusy(submitButton, false);
         },

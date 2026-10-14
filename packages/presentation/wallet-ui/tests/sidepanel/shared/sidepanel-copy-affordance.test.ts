@@ -290,7 +290,7 @@ describe("truncated identifiers are copyable in full", () => {
           collect_policy: { type: "all" },
           dapp_name: "Example",
           nonce: "0x7",
-          type: "subaccount_invoke",
+          type: "shadow_account_invoke",
         },
       ],
       context,

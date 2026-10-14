@@ -33,18 +33,24 @@ export const PrivateSwapProcessing = checkpointStory(
   "privacy",
   "private-swap-processing",
 );
-export const SubaccountIdentity = checkpointStory(
+export const ShadowAccountIdentity = checkpointStory(
   "Share scoped identity",
   "privacy",
-  "subaccount-identity",
+  "shadow-account-identity",
 );
-export const SubaccountInvoke = checkpointStory(
-  "Review sub-account action",
+export const ShadowAccountInvoke = checkpointStory(
+  "Review shadow account action",
   "privacy",
-  "subaccount-invoke",
+  "shadow-account-invoke",
 );
-export const SubaccountParameters = checkpointStory(
-  "Inspect sub-account parameters",
+export const ShadowAccountParameters = checkpointStory(
+  "Inspect shadow account parameters",
   "privacy",
-  "subaccount-parameters",
+  "shadow-account-parameters",
+);
+export const ShadowAccounts = checkpointStory("Shadow accounts", "privacy", "shadow-accounts");
+export const ShadowAccountBalances = checkpointStory(
+  "Shadow account balances",
+  "privacy",
+  "shadow-accounts-balances",
 );

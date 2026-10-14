@@ -352,15 +352,27 @@ export const SEND_COMPOSE_STYLES = `
     margin: 0;
     padding: 0 ${SPACE.lg};
   }
+  /* A fact's label sits on the first line of its value — beside the name, not
+     halfway down a name-over-address pair — while the row as a whole stays
+     centred in its height: the wrapping line box is what gets centred, and the
+     zero flex basis on the value keeps the pair on that one line. */
   .send-context-receipt > div,
   .send-review-facts > div {
-    align-items: center;
+    align-content: center;
+    align-items: baseline;
     display: flex;
+    flex-wrap: wrap;
     gap: ${SPACE.md};
     justify-content: space-between;
     min-height: ${SIZE.rowCompact};
     position: relative;
   }
+  .send-context-receipt dt,
+  .send-review-facts dt { flex: none; }
+  /* A value that leads with a mark (the network dot, the token logo) is one
+     visual line as tall as the mark: the label centres on it instead. */
+  .send-context-receipt > div:has(> dd.network-inline-value),
+  .send-review-facts > div:has(.send-review-amount) { align-items: center; }
   .send-context-receipt > div + div::before,
   .send-review-facts > div + div::before {
     background: var(--bramble-hairline);
@@ -407,6 +419,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-context-receipt dd,
   .send-review-facts dd {
     display: grid;
+    flex: 1 1 0;
     gap: 2px;
     justify-items: end;
     margin: 0;

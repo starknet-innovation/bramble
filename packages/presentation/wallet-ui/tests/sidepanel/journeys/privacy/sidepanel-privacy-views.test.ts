@@ -74,6 +74,32 @@ describe("privacy journey templates", () => {
     expect(html).toContain("viewing-key commitment");
   });
 
+  test("activation review says what going private does and what it costs (#438)", () => {
+    const review = (preparation: PrivacyPreparation) =>
+      privacyFlow(status, preferences, {
+        preparation,
+        stage: "activate-review",
+        tokenId: token.id,
+      });
+    const outcome = (html: string) =>
+      /aria-label="What will happen">\s*<p class="decision-label">What will happen<\/p>\s*<p>([^<]*)<\/p>/.exec(
+        html,
+      )?.[1];
+
+    // The registration the background builds: public account, pool fee in STRK.
+    const html = review({ ...registration, poolFeeFri: "0x2386f26fc10000" });
+    expect(outcome(html)).toBe(
+      "Going private sets up a private balance for this account. Registering costs a one-time pool fee, paid from your public STRK.",
+    );
+    // The amount stays in one place: the Cost section.
+    expect(html).toContain("Pool fee");
+    expect(outcome(html)).not.toMatch(/[0-9]/);
+    // No pool fee on the route, no claim that one is paid from public STRK.
+    expect(outcome(review(relayedRegistration))).toBe(
+      "Going private sets up a private balance for this account.",
+    );
+  });
+
   test("activation review states the network fee in the estimate's own unit", () => {
     const review = (unit: string) =>
       privacyFlow(status, preferences, {

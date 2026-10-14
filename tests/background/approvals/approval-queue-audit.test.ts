@@ -103,14 +103,14 @@ describe("admission reservations (Sherlock 151)", () => {
     expect(() => queue.reserve(VICTIM)).toThrow(ORIGIN_REFUSAL);
     expect(queue.canAdmit(NEWCOMER)).toBeNull();
 
-    releases[0]?.();
-    releases[0]?.();
+    releases[0]?.release();
+    releases[0]?.release();
     expect(queue.canAdmit(VICTIM)).toBeNull();
     const again = queue.reserve(VICTIM);
     expect(() => queue.reserve(VICTIM)).toThrow(ORIGIN_REFUSAL);
-    again();
-    for (const release of releases.slice(1)) {
-      release();
+    again.release();
+    for (const reservation of releases.slice(1)) {
+      reservation.release();
     }
     expect(queue.list()).toEqual([]);
   });
@@ -149,7 +149,7 @@ describe("admission reservations (Sherlock 151)", () => {
     for (let index = 0; index < MAX_PENDING_APPROVALS_PER_ORIGIN - 2; index += 1) {
       invoke(queue, VICTIM, 1);
     }
-    let reservedAfterQueueing: (() => void) | null = null;
+    let reservedAfterQueueing: { readonly release: () => void } | null = null;
     await withApprovalReservation(queue, VICTIM, async (release) => {
       invoke(queue, VICTIM, 1);
       release();

@@ -169,10 +169,21 @@ export const requireApprovalAdmission = (
 };
 
 /**
+ * One admitted request's claim on a queue slot, held while its pre-queue work
+ * runs. `arrivedAt` is when it was admitted, so an approval that replaces it
+ * can keep the deadline the request arrived with; `release` gives the slot back
+ * and is a no-op the second time.
+ */
+export type ApprovalReservation = {
+  readonly arrivedAt: number;
+  readonly release: () => void;
+};
+
+/**
  * The queue capability {@link withApprovalReservation} needs.
  */
 export type ApprovalReservationProbe = {
-  readonly reserve: (origin: string) => () => void;
+  readonly reserve: (origin: string) => ApprovalReservation;
 };
 
 /**
@@ -187,18 +198,19 @@ export type ApprovalReservationProbe = {
  * `work` receives the release and must call it in the same synchronous step
  * that queues its approval, so the queued prompt replaces the reservation with
  * no gap in which both count. It is released anyway when `work` settles, and
- * releasing twice is a no-op.
+ * releasing twice is a no-op. `work` also receives the reservation itself, for
+ * a surface that dates its approval from arrival.
  */
 export const withApprovalReservation = async <T>(
   approvals: ApprovalReservationProbe,
   origin: string,
-  work: (release: () => void) => Promise<T>,
+  work: (release: () => void, reservation: ApprovalReservation) => Promise<T>,
 ): Promise<T> => {
-  const release = approvals.reserve(origin);
+  const reservation = approvals.reserve(origin);
   try {
-    return await work(release);
+    return await work(reservation.release, reservation);
   } finally {
-    release();
+    reservation.release();
   }
 };
 

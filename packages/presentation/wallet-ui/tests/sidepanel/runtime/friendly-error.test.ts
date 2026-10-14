@@ -215,14 +215,18 @@ describe("friendlyError", () => {
       "token visibility update failed",
     ].map((raw) => friendlyError(raw).message);
     expect(new Set(saves).size).toBe(1);
+  });
 
-    const routes = [
+  // Issue 652 review (R2-1): a swap-build safety refusal names the check that
+  // stopped the build, so it is not folded into one route sentence.
+  test("shows each swap-build call-shape refusal as written", () => {
+    for (const raw of [
       "swap build returned no swap call",
       "swap build returned too many calls",
       "swap build returned more than one swap call",
-      "swap build returned a route the wallet could not decode",
-    ].map((raw) => friendlyError(raw).message);
-    expect(new Set(routes).size).toBe(1);
+    ]) {
+      expect(friendlyError(raw).message).toBe(raw);
+    }
   });
 
   // The code says group, the UI says folder. The error layer follows the UI.

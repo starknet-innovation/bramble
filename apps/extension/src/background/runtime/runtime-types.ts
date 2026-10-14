@@ -32,7 +32,9 @@ import type {
   Strk20BalancesResponse,
   Strk20PrepareResponse,
   Strk20RecipientStatusResponse,
-  Strk20SubaccountCommitmentResponse,
+  Strk20ShadowAccountBalancesResponse,
+  Strk20ShadowAccountCommitmentResponse,
+  Strk20ShadowAccountsResponse,
   Strk20WalletPreparationResponse,
   Strk20WalletStateResponse,
 } from "../privacy/runtime-strk20-types";
@@ -469,7 +471,9 @@ export type RuntimeResponse =
   | Strk20BalancesResponse
   | Strk20PrepareResponse
   | Strk20RecipientStatusResponse
-  | Strk20SubaccountCommitmentResponse
+  | Strk20ShadowAccountBalancesResponse
+  | Strk20ShadowAccountCommitmentResponse
+  | Strk20ShadowAccountsResponse
   | Strk20WalletPreparationResponse
   | Strk20WalletStateResponse
   | SupportDiagnosticsResponse

@@ -110,7 +110,7 @@ describe("official STRK20 SDK read retries", () => {
     expect(pauses).toEqual([[1, 2_000]]);
   });
 
-  test("retries a throttled subaccount discovery before deriving its commitment", async () => {
+  test("retries a throttled shadow account discovery before deriving its commitment", async () => {
     let attempts = 0;
     const pauses: (readonly [number, number | undefined])[] = [];
     const sdk = runtime(() => ({
@@ -132,7 +132,7 @@ describe("official STRK20 SDK read retries", () => {
       sdk,
     });
 
-    await expect(service.subaccountCommitment({ ...context, dappName: "vesu" })).resolves.toBe(
+    await expect(service.shadowAccountCommitment({ ...context, dappName: "vesu" })).resolves.toBe(
       "0x456",
     );
     expect(attempts).toBe(2);

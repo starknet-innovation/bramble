@@ -319,3 +319,45 @@ describe("swap with a lost reply", () => {
     expect(sent.filter((type) => type === "wallet.swapPrepare")).toHaveLength(1);
   });
 });
+
+// Errors audit F2: only a refusal made before signing re-quotes. Anything else
+// may be on chain, so the screen says so and never arms a second swap.
+describe("swap rejections that are not a refusal before signing", () => {
+  const UNKNOWN = "The swap may not have gone through. Check Activity before trying again.";
+  const cases: readonly (readonly [string, unknown, string])[] = [
+    ["an unrecognised reply", { ok: true }, UNKNOWN],
+    ["the client's fallback", { error: "swap failed" }, UNKNOWN],
+    ["the router's catch-all", { error: "wallet request failed" }, UNKNOWN],
+    [
+      "a bookkeeping failure that surfaced as a plain error",
+      { error: "vault storage limit reached" },
+      `This wallet is full, so this change wasn't saved. ${UNKNOWN}`,
+    ],
+  ];
+  for (const [name, reply, note] of cases) {
+    test(name, async () => {
+      const { app, sent } = mountSwap(null, undefined, async () => reply);
+      await runSwap(app);
+      await flush();
+      expect(onReceipt(app)).toBe(true);
+      expect(title(app)).toBe("Status unknown");
+      expect(app.querySelector("#swap-success-note")?.textContent).toBe(note);
+      expect(visible(app, "#swap-view-activity")).toBe(true);
+      expect(visible(app, "#swap-edit")).toBe(false);
+      expect(app.querySelector("#swap-result")?.textContent ?? "").toBe("");
+      // No fresh quote, so no second swap of the same amount is armed.
+      expect(sent.filter((type) => type === "wallet.swapQuote")).toHaveLength(1);
+      expect(sent.filter((type) => type === "wallet.swapPrepare")).toHaveLength(1);
+    });
+  }
+
+  test("a refusal before signing still returns to edit with a fresh quote", async () => {
+    const { app, sent } = mountSwap("preconfirmed", undefined, async () => ({
+      error: "swap preparation not found",
+    }));
+    await runSwap(app);
+    expect(visible(app, "#swap-edit")).toBe(true);
+    expect(onReceipt(app)).toBe(false);
+    expect(sent.filter((type) => type === "wallet.swapQuote")).toHaveLength(2);
+  });
+});

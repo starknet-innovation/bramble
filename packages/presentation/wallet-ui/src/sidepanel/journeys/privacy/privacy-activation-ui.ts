@@ -12,8 +12,10 @@
 
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
+import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import { awaitDeployment, type DeploymentPollScope } from "../../shell/shell-bindings";
 
 const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
@@ -74,7 +76,7 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
         if (!deployed) {
           showToast(
             `Deployment ${response.slice(0, 10)}… is still settling. Register once it lands.`,
-            "error",
+            "warning",
             button,
           );
           return;
@@ -84,8 +86,17 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
       },
       (error: unknown) => {
         DEPLOYMENT_FEES.delete(button);
-        showToast(errorDetails(error, "Deployment failed"), "error", button);
-        buttonBusy(button, false);
+        const details = errorDetails(error, "Deployment failed");
+        // Only the reviewed submit can send anything. Its control is re-armed
+        // only for a refusal known to come before anything was sent; anything
+        // else may be on chain, so it is amber and the control stays down
+        // (errors audit F4, C3). The fee estimate before it is a read.
+        if (reviewedFee && !knownNotSent(error)) {
+          showToast(outcomeUnknownReason(error, "The deployment"), "warning", button, details);
+          return;
+        }
+        showToast(details, failureTone(error), button);
+        if (!isOutcomeUnknown(error)) buttonBusy(button, false);
       },
     );
   });

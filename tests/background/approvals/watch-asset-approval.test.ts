@@ -342,6 +342,14 @@ describe("watch-asset spoof handling (audit 171)", () => {
     expect(preferences.hiddenTokens ?? []).toContain(stored.id);
   });
 
+  test("hides a bridged-suffix token that spoofs a curated ticker (issue 645)", async () => {
+    const preferences = await approveWatch(SPOOF, "eth.e");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, SPOOF));
+    if (!stored) throw new Error("token not stored");
+    expect(stored.symbol).toBe("ETH.e");
+    expect(preferences.hiddenTokens ?? []).toContain(stored.id);
+  });
+
   test("keeps a non-colliding token visible", async () => {
     const preferences = await approveWatch(PLAIN, "PLAIN");
     const stored = preferences.tokens.find((token) => sameFelt(token.address, PLAIN));

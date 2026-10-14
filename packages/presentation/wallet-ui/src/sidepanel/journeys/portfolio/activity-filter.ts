@@ -8,6 +8,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activity";
+import { shortAddress } from "@bramble/transactions/verify-decode";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { canonicalAddress, canonicalFelt } from "@bramble/wallet-model/networks";
 import { formatUtcDate } from "../../shared/timestamp";
@@ -69,20 +70,20 @@ export type ActivityFilterOptions = {
 };
 
 /**
- * The identity a row's token is grouped, filtered, sorted and totalled by. An
- * entry records only a symbol, so the tracked token it resolves to (exactly one
- * tracked token on the network with that symbol) is keyed by its canonical
- * address: two tokens that share a symbol are never one token. A symbol that
- * resolves to no single tracked token keeps a `symbol:` key of its own, which
- * can never equal an address key. `""` when the row names no token.
+ * The identity a row's token is grouped, filtered, sorted and totalled by: its
+ * canonical address, so two tokens that share a symbol are never one token. A
+ * row records that address (issue 643); a legacy row with only a symbol takes
+ * the address of the one tracked token on its network with that symbol, and
+ * otherwise keeps a `symbol:` key of its own, which can never equal an address
+ * key. `""` when the row names no token.
  */
 export const activityTokenKey = (
-  entry: Pick<ActivityEntry, "networkId" | "token">,
+  entry: Pick<ActivityEntry, "networkId" | "token" | "tokenAddress">,
   pricing?: ActivityPricing,
 ): string => {
   const symbol = entry.token?.trim();
   if (!symbol) return "";
-  const address = activityTrackedToken(entry, pricing)?.address;
+  const address = entry.tokenAddress ?? activityTrackedToken(entry, pricing)?.address;
   const canonical = address ? canonicalFelt(address) : null;
   return canonical ?? `symbol:${symbol.toLowerCase()}`;
 };
@@ -118,12 +119,22 @@ export const activityFilterOptions = (
     const label = entry.token?.trim();
     if (key && label && !tokens.has(key)) tokens.set(key, label);
   }
+  // Two contracts can share a ticker (issue 643). Where labels collide, each
+  // option keyed by an address names it ("USDC · 0x053c…68a8"); unique labels
+  // and older symbol-keyed rows read as before.
+  const labelCounts = new Map<string, number>();
+  for (const label of tokens.values()) labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+  const optionLabel = (key: string, label: string): string => {
+    if ((labelCounts.get(label) ?? 0) < 2 || key.startsWith("symbol:")) return label;
+    return `${label} · ${shortAddress(canonicalAddress(key) ?? key)}`;
+  };
   return {
     actions: [...actions].sort(byText),
     statuses: STATUS_ORDER.filter((status) => statuses.has(status)),
     tokens: [...tokens]
       .map(([key, label]) => ({ key, label }))
-      .sort((left, right) => byText(left.label, right.label) || byText(left.key, right.key)),
+      .sort((left, right) => byText(left.label, right.label) || byText(left.key, right.key))
+      .map(({ key, label }) => ({ key, label: optionLabel(key, label) })),
   };
 };
 
@@ -275,14 +286,14 @@ const numericAmount = (amount: string | undefined): number | null => {
  * identity ({@link activityTokenKey}, ordered by symbol) and each token's rows
  * order by recorded amount descending, then most recent first. A token-less row
  * sorts last, and an entry with no numeric amount sorts last within its token
- * rather than being dropped. Without `pricing`, tokens are told apart by symbol
- * alone.
+ * rather than being dropped. Without `pricing`, a legacy row without an address
+ * is told apart by symbol alone.
  */
 export const activityAmountComparator =
   (pricing?: ActivityPricing) =>
   (
-    left: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token">,
-    right: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token">,
+    left: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token" | "tokenAddress">,
+    right: Pick<ActivityEntry, "amount" | "networkId" | "submittedAt" | "token" | "tokenAddress">,
   ): number => {
     const leftKey = activityTokenKey(left, pricing);
     const rightKey = activityTokenKey(right, pricing);

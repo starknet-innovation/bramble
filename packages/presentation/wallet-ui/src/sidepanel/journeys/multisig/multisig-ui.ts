@@ -9,6 +9,7 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { UNDEPLOYED_REMOVAL_PROMPT } from "../../runtime/friendly-error-copy-multisig";
+import { failureTone } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
@@ -46,7 +47,11 @@ const run = (
     },
     (error: unknown) => {
       setResult(deps, resultId, errorLine(error, "That request didn't go through"));
-      showToast(errorDetails(error, "Ready multisig request failed"), "error", button ?? deps.app);
+      showToast(
+        errorDetails(error, "Ready multisig request failed"),
+        failureTone(error),
+        button ?? deps.app,
+      );
       buttonBusy(button, false);
     },
   );

@@ -120,17 +120,38 @@ type Strk20WithdrawPreparation = BasePreparation & {
 };
 
 /**
+ * Frozen one-time sweep of a recorded shadow account (#443, PR 5), always
+ * routed through the private relay: one OPEN transfer per token the account
+ * holds, to this account, then a `shadow_account_invoke` with no calls that
+ * collects every balance. `actions` keep the site's label; the origin-bound
+ * separator is derived at submission from the recorded `origin`. The digest
+ * commits the scope, nonce, and anonymizer with the batch.
+ */
+export type Strk20ShadowSweepPreparation = BasePreparation & {
+  readonly actions: readonly Strk20Action[];
+  readonly anonymizer: string;
+  readonly kind: "shadow-sweep";
+  readonly label: string;
+  readonly nonce: string;
+  readonly origin: string;
+  readonly plan: Strk20SubmissionPlan;
+  readonly recipient: string;
+};
+
+/**
  * Frozen protected payload consumed at most once by the background.
  */
 export type Strk20WalletPreparation =
   | Strk20DepositPreparation
   | Strk20RegistrationPreparation
+  | Strk20ShadowSweepPreparation
   | Strk20TransferPreparation
   | Strk20WithdrawPreparation;
 
 type UnsignedStrk20WalletPreparation =
   | Omit<Strk20DepositPreparation, "context" | "id">
   | Omit<Strk20RegistrationPreparation, "context" | "id">
+  | Omit<Strk20ShadowSweepPreparation, "context" | "id">
   | Omit<Strk20TransferPreparation, "context" | "id">
   | Omit<Strk20WithdrawPreparation, "context" | "id">;
 
@@ -141,7 +162,7 @@ export type Strk20WalletPreparationReview = {
   readonly amount?: string;
   readonly authorization?: PaymasterAuthorizationReview;
   readonly id: string;
-  readonly kind: "deposit" | "register" | "transfer" | "withdraw";
+  readonly kind: "deposit" | "register" | "shadow-sweep" | "transfer" | "withdraw";
   readonly networkFee?: FeeEstimate;
   readonly payloadDigest: string;
   readonly poolAddress: string;
@@ -170,45 +191,59 @@ export type Strk20WalletPreparationReview = {
 export const strk20WalletPreparationPayload = (
   preparation: UnsignedStrk20WalletPreparation,
 ): unknown =>
-  preparation.kind === "register"
+  preparation.kind === "shadow-sweep"
     ? {
+        actions: preparation.actions,
+        anonymizer: preparation.anonymizer,
         kind: preparation.kind,
-        allowanceGrants: preparation.allowanceGrants,
-        calls: preparation.calls,
-        networkFee: preparation.networkFee,
+        label: preparation.label,
+        nonce: preparation.nonce,
+        origin: preparation.origin,
+        plan: preparation.plan,
         poolAddress: preparation.poolAddress,
-        poolFeeFri: preparation.poolFeeFri,
-        proof: preparation.proof,
+        recipient: preparation.recipient,
         summaries: preparation.summaries,
         token: preparation.token,
       }
-    : preparation.kind === "deposit"
+    : preparation.kind === "register"
       ? {
-          actions: preparation.actions,
-          allowanceGrants: preparation.allowanceGrants,
-          amount: preparation.amount,
-          amountRaw: preparation.amountRaw,
-          calls: preparation.calls,
           kind: preparation.kind,
+          allowanceGrants: preparation.allowanceGrants,
+          calls: preparation.calls,
           networkFee: preparation.networkFee,
-          plan: preparation.plan,
           poolAddress: preparation.poolAddress,
+          poolFeeFri: preparation.poolFeeFri,
           proof: preparation.proof,
-          recipient: preparation.recipient,
           summaries: preparation.summaries,
           token: preparation.token,
         }
-      : {
-          actions: preparation.actions,
-          amount: preparation.amount,
-          amountRaw: preparation.amountRaw,
-          kind: preparation.kind,
-          plan: preparation.plan,
-          poolAddress: preparation.poolAddress,
-          recipient: preparation.recipient,
-          summaries: preparation.summaries,
-          token: preparation.token,
-        };
+      : preparation.kind === "deposit"
+        ? {
+            actions: preparation.actions,
+            allowanceGrants: preparation.allowanceGrants,
+            amount: preparation.amount,
+            amountRaw: preparation.amountRaw,
+            calls: preparation.calls,
+            kind: preparation.kind,
+            networkFee: preparation.networkFee,
+            plan: preparation.plan,
+            poolAddress: preparation.poolAddress,
+            proof: preparation.proof,
+            recipient: preparation.recipient,
+            summaries: preparation.summaries,
+            token: preparation.token,
+          }
+        : {
+            actions: preparation.actions,
+            amount: preparation.amount,
+            amountRaw: preparation.amountRaw,
+            kind: preparation.kind,
+            plan: preparation.plan,
+            poolAddress: preparation.poolAddress,
+            recipient: preparation.recipient,
+            summaries: preparation.summaries,
+            token: preparation.token,
+          };
 
 const reviewedNetworkFee = (
   preparation: Strk20WalletPreparation,
@@ -231,7 +266,9 @@ const relayFeeReview = (
 };
 
 const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparationReview => ({
-  ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
+  ...(preparation.kind === "register" || preparation.kind === "shadow-sweep"
+    ? {}
+    : { amount: preparation.amount }),
   ...(preparation.kind !== "register" &&
   preparation.plan.mode !== "account" &&
   preparation.plan.authorization
