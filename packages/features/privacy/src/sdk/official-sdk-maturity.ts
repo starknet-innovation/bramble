@@ -129,7 +129,6 @@ export type Strk20MaturityRuntime = {
     provider: RpcProvider,
     scope: Strk20MaturityScope,
     transactionHash: string,
-    proofBaseBlock?: number,
   ) => Promise<void>;
   /**
    * Prepares and broadcasts one write for `scope`, serialized per scope. The
@@ -144,9 +143,9 @@ export type Strk20MaturityRuntime = {
    * provably unsent. Anything else must pass `relay`.
    *
    * `proofBaseBlockOf` names the base block of the proof `prepared` carries
-   * ({@link strk20ProofBaseBlock}). It is recorded on the claim so the claim
-   * can be released once the pool's proof window has closed; without it a
-   * claim nothing else resolves is stranded until the browser session ends.
+   * ({@link strk20ProofBaseBlock}). It is recorded on the claim and its
+   * journaled identity, so a signed write whose nonce stays unspent can be
+   * released once the pool refuses that proof in every later block.
    */
   readonly submitAccepted: <P, T extends { readonly transactionHash: string }>(
     provider: RpcProvider,
@@ -238,7 +237,7 @@ export const createStrk20MaturityRuntime = ({
     try {
       return await acceptedBlock(provider, scope, record.transactionHash);
     } catch (error) {
-      return priorWaitFailure(store, provider, scope, record, error);
+      return priorWaitFailure(store, scope, record.transactionHash, error);
     }
   };
 
@@ -288,16 +287,11 @@ export const createStrk20MaturityRuntime = ({
     provider: RpcProvider,
     scope: Strk20MaturityScope,
     transactionHash: string,
-    proofBaseBlock?: number,
   ): Promise<void> => {
     if (!isNonZeroStarkFieldElement(transactionHash)) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
-    await store.write(scope, {
-      ...(proofBaseBlock === undefined ? {} : { proofBaseBlock }),
-      state: "submitted",
-      transactionHash,
-    });
+    await store.write(scope, { state: "submitted", transactionHash });
     try {
       await acceptedBlock(provider, scope, transactionHash);
     } catch (error) {
@@ -348,9 +342,7 @@ export const createStrk20MaturityRuntime = ({
       // returned an accepted hash, a later journal/receipt failure may leave
       // the scope conservatively closed, but it must not rewrite the broadcast
       // into a retryable failure and risk a duplicate economic action.
-      await recordSubmission(provider, scope, result.transactionHash, proofBaseBlock).catch(
-        () => undefined,
-      );
+      await recordSubmission(provider, scope, result.transactionHash).catch(() => undefined);
       return result;
     });
 

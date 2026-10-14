@@ -1,12 +1,17 @@
 /**
- * The pool's proof window releases what nothing else can (mc-wallet #661
- * review M1, L1, L3). The pool applies a proof only in a block at most
- * `get_proof_validity_blocks()` past its base block, so once the settled block
- * (tip minus 10) is past base + validity, a relay claim or a signed write
- * whose nonce is unspent can no longer change pool state and is released. A
- * marker that names no base block and that nothing else resolves refuses with
- * the stranded sentence, which names the browser restart instead of a check
- * that cannot succeed.
+ * What the review rounds of mc-wallet #661 settled (M1, L1, L3, and the
+ * second review's counterexamples).
+ *
+ * - A signed write whose nonce is still unspent at the tip is released once
+ *   the pool would refuse its proof in every later block: the settled block
+ *   is past base + `get_proof_validity_blocks()`. The tip-nonce read is what
+ *   keeps a window LOWERED after the write applied from hiding that inclusion.
+ * - A relay claim (or one with no recorded route) that names no hash has
+ *   nothing the chain can be asked about, and the pool window cannot bound it
+ *   for the same reason, so it is stranded: the refusal names the restart.
+ * - A prior write whose receipt wait fails keeps the "may still be in
+ *   progress" refusal and is never released by the window (L1).
+ * - A conditional release that finds the scope already clean proceeds (L3).
  */
 
 import { describe, expect, test } from "bun:test";
@@ -35,6 +40,7 @@ const signed = { nonce: "0x5", senderAddress: "0xdef", transactionHash: "0x456" 
 const BASE = 100;
 const CLOSED_TIP = 561;
 const OPEN_TIP = 560;
+const stuck: Strk20MaturityRecord = { ...signed, proofBaseBlock: BASE, state: "submitting" };
 
 const notFound = (): Error =>
   Object.assign(new Error("RPC: starknet_getTransactionStatus"), { baseError: { code: 29 } });
@@ -42,12 +48,15 @@ const notFound = (): Error =>
 type Script = {
   readonly tip?: number;
   readonly validity?: "fail" | string;
-  readonly nonce?: string;
+  // Sender nonce at the settled block, then at the tip.
+  readonly settledNonce?: string;
+  readonly tipNonce?: string;
   readonly status?: "not-found" | "pending" | "transport";
 };
 
 const node = (script: Script = {}) => {
   const reads: string[] = [];
+  const tip = script.tip ?? CLOSED_TIP;
   const provider = {
     callContract: async (call: { entrypoint: string; contractAddress: string }) => {
       reads.push(`call:${call.entrypoint}@${call.contractAddress}`);
@@ -56,11 +65,11 @@ const node = (script: Script = {}) => {
     },
     getBlockNumber: async () => {
       reads.push("block");
-      return script.tip ?? CLOSED_TIP;
+      return tip;
     },
-    getNonceForAddress: async () => {
-      reads.push("nonce");
-      return script.nonce ?? "0x5";
+    getNonceForAddress: async (_address: string, block: unknown) => {
+      reads.push(`nonce@${String(block)}`);
+      return block === tip ? (script.tipNonce ?? "0x5") : (script.settledNonce ?? "0x5");
     },
     getTransactionStatus: async () => {
       reads.push("status");
@@ -84,152 +93,131 @@ const seeded = async (record: Strk20MaturityRecord): Promise<Strk20MaturityStore
 const runtimeFor = (store: Strk20MaturityStore) =>
   createStrk20MaturityRuntime({ pause: async () => undefined, store });
 
-const refusal = async (store: Strk20MaturityStore, script: Script): Promise<string> => {
-  const rejected = await runtimeFor(store)
+const outcome = (store: Strk20MaturityStore, script: Script): Promise<string> =>
+  runtimeFor(store)
     .provingBlock(node(script).provider, scope)
     .then(
       () => "resolved",
       (error: unknown) => (error instanceof Error ? error.message : String(error)),
     );
-  return rejected;
-};
 
-describe("a relay claim (M1a)", () => {
-  const relay: Strk20MaturityRecord = { proofBaseBlock: BASE, route: "relay", state: "submitting" };
-
-  test("is released once a settled block is past its proof window", async () => {
-    const store = await seeded(relay);
+describe("a signed write the node does not know, nonce unspent", () => {
+  test("is released once the pool refuses its proof in every later block", async () => {
+    const store = await seeded(stuck);
     const { provider, reads } = node({ tip: CLOSED_TIP });
 
     await expect(runtimeFor(store).provingBlock(provider, scope)).resolves.toBe(CLOSED_TIP - 10);
     expect(await store.read(scope)).toBeNull();
     expect(reads).toContain("call:get_proof_validity_blocks@0x123");
+    expect(reads).toContain(`nonce@${CLOSED_TIP}`);
   });
 
-  test("stays closed, and checkable, while the window is open", async () => {
-    const store = await seeded(relay);
-    expect(await refusal(store, { tip: OPEN_TIP })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
-    expect(await store.read(scope)).toEqual(relay);
+  test("stays checkable while the window is open", async () => {
+    const store = await seeded(stuck);
+    expect(await outcome(store, { tip: OPEN_TIP })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+    expect(await store.read(scope)).toEqual(stuck);
   });
 
-  test("stays closed when the pool's window cannot be read or is not a u64", async () => {
+  test("is kept when the tip shows its nonce spent: it may have applied while the window allowed", async () => {
+    // Review round 2: a window lowered after the write applied would make it
+    // look expired. The tip nonce shows the inclusion.
+    const store = await seeded(stuck);
+    expect(await outcome(store, { tip: CLOSED_TIP, tipNonce: "0x6" })).toBe(
+      STRK20_PRIOR_WRITE_UNRESOLVED,
+    );
+    expect(await store.read(scope)).toEqual(stuck);
+  });
+
+  test("is kept when the pool's window cannot be read or is not a u64", async () => {
     for (const validity of ["fail", `0x${"f".repeat(17)}`]) {
-      const store = await seeded(relay);
-      expect(await refusal(store, { validity })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
-      expect(await store.read(scope)).toEqual(relay);
+      const store = await seeded(stuck);
+      expect(await outcome(store, { validity })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+      expect(await store.read(scope)).toEqual(stuck);
     }
   });
 
-  test("with no proof base block is stranded and names the restart", async () => {
-    for (const marker of [
-      { route: "relay", state: "submitting" },
-      { state: "submitting" },
-    ] as const) {
-      const store = await seeded(marker);
-      expect(await refusal(store, {})).toBe(STRK20_PRIOR_WRITE_STRANDED);
-      expect(await store.read(scope)).toEqual(marker);
-    }
+  test("with no proof base block stays checkable rather than stranded", async () => {
+    // Another transaction can still spend its nonce, which resolves it.
+    const legacy: Strk20MaturityRecord = { ...signed, state: "submitting" };
+    const store = await seeded(legacy);
+    expect(await outcome(store, {})).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+    expect(await store.read(scope)).toEqual(legacy);
   });
 
-  test("owned by a live send stays closed even with its window closed", async () => {
+  test("whose status read failed is never released by the window", async () => {
+    const store = await seeded(stuck);
+    expect(await outcome(store, { status: "transport" })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+    expect(await store.read(scope)).toEqual(stuck);
+  });
+
+  test("owned by a live send is never released by the window", async () => {
     const store = memoryStrk20MaturityStore();
     const runtime = runtimeFor(store);
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    let entered: (() => void) | undefined;
-    const broadcasting = new Promise<void>((resolve) => {
-      entered = resolve;
+    let journaled: (() => void) | undefined;
+    const signedNow = new Promise<void>((resolve) => {
+      journaled = resolve;
     });
     const send = runtime.submitAccepted(
       node().provider,
       scope,
-      "relay",
+      "account",
       async () => "prepared",
-      async () => {
-        entered?.();
+      async (_prepared, journal) => {
+        await journal(signed);
+        journaled?.();
         await gate;
         throw new IndeterminateRpcWriteError("lost");
       },
       () => BASE,
     );
-    await broadcasting;
+    await signedNow;
 
     await expect(runtime.provingBlock(node().provider, scope)).rejects.toThrow(
       STRK20_PRIOR_WRITE_UNRESOLVED,
     );
+    expect(await store.read(scope)).toEqual(stuck);
     release?.();
     await expect(send).rejects.toThrow("lost");
-    expect(await store.read(scope)).toEqual(relay);
-  });
-
-  test("never releases a newer claim proved at another block", async () => {
-    const backing = await seeded(relay);
-    const newer: Strk20MaturityRecord = {
-      proofBaseBlock: 540,
-      route: "relay",
-      state: "submitting",
-    };
-    const store: Strk20MaturityStore = {
-      ...backing,
-      releaseUnsignedProvedAt: async (target, block) => {
-        await backing.write(target, newer);
-        return backing.releaseUnsignedProvedAt(target, block);
-      },
-    };
-    expect(await refusal(store, {})).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
-    expect(await backing.read(scope)).toEqual(newer);
+    expect(await store.read(scope)).toEqual(stuck);
   });
 });
 
-describe("a signed write the chain cannot settle (M1)", () => {
-  const stuck: Strk20MaturityRecord = { ...signed, proofBaseBlock: BASE, state: "submitting" };
-
-  test("with its nonce unspent is released once its proof window has closed", async () => {
-    const store = await seeded(stuck);
-    expect(await refusal(store, { tip: CLOSED_TIP })).toBe("resolved");
-    expect(await store.read(scope)).toBeNull();
-  });
-
-  test("with its nonce unspent stays checkable while the window is open", async () => {
-    const store = await seeded(stuck);
-    expect(await refusal(store, { tip: OPEN_TIP })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
-    expect(await store.read(scope)).toEqual(stuck);
-  });
-
-  test("with no proof base block and an unspent nonce is stranded", async () => {
-    const legacy: Strk20MaturityRecord = { ...signed, state: "submitting" };
-    const store = await seeded(legacy);
-    expect(await refusal(store, {})).toBe(STRK20_PRIOR_WRITE_STRANDED);
-    expect(await store.read(scope)).toEqual(legacy);
-  });
-
-  test("whose status read failed stays checkable rather than stranded", async () => {
-    const legacy: Strk20MaturityRecord = { ...signed, state: "submitting" };
-    const store = await seeded(legacy);
-    expect(await refusal(store, { status: "transport" })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+describe("a relay claim with no hash", () => {
+  test("is stranded even when its proof window has closed", async () => {
+    // Review round 2: a window lowered after the relayed write applied would
+    // make it look expired while it sits past the next proof's block.
+    for (const marker of [
+      { proofBaseBlock: BASE, route: "relay", state: "submitting" },
+      { route: "relay", state: "submitting" },
+      { state: "submitting" },
+    ] as const) {
+      const store = await seeded(marker);
+      const { provider, reads } = node({ tip: CLOSED_TIP });
+      await expect(runtimeFor(store).provingBlock(provider, scope)).rejects.toThrow(
+        STRK20_PRIOR_WRITE_STRANDED,
+      );
+      expect(await store.read(scope)).toEqual(marker);
+      expect(reads).toEqual([]);
+    }
   });
 });
 
 describe("a pending earlier write that misses its receipt (L1)", () => {
   test("keeps the may-still-be-in-progress refusal, not a generic one", async () => {
-    const store = await seeded({ ...signed, state: "submitting" });
-    expect(await refusal(store, { status: "pending", tip: OPEN_TIP })).toBe(
-      STRK20_PRIOR_WRITE_UNRESOLVED,
-    );
-    expect(await store.read(scope)).toEqual({ ...signed, state: "submitting" });
+    const store = await seeded(stuck);
+    expect(await outcome(store, { status: "pending" })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+    expect(await store.read(scope)).toEqual(stuck);
   });
 
-  test("a submitted write that never confirms is released after its proof window", async () => {
-    const store = await seeded({
-      proofBaseBlock: BASE,
-      state: "submitted",
-      transactionHash: "0x456",
-    });
-    expect(await refusal(store, { tip: OPEN_TIP })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
-    expect(await refusal(store, { tip: CLOSED_TIP })).toBe("resolved");
-    expect(await store.read(scope)).toBeNull();
+  test("a submitted write that never confirms keeps that refusal and its marker", async () => {
+    const submitted: Strk20MaturityRecord = { state: "submitted", transactionHash: "0x456" };
+    const store = await seeded(submitted);
+    expect(await outcome(store, { tip: CLOSED_TIP })).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+    expect(await store.read(scope)).toEqual(submitted);
   });
 });
 
@@ -244,7 +232,7 @@ describe("two checks at once (L3)", () => {
         return backing.releaseUnsigned(target);
       },
     };
-    expect(await refusal(store, {})).toBe("resolved");
+    expect(await outcome(store, {})).toBe("resolved");
   });
 
   test("still refuses when a different marker took its place", async () => {
@@ -256,7 +244,19 @@ describe("two checks at once (L3)", () => {
         return backing.releaseUnsigned(target);
       },
     };
-    expect(await refusal(store, {})).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+    expect(await outcome(store, {})).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
+  });
+
+  test("proceeds when another check already released an expired signed write", async () => {
+    const backing = await seeded(stuck);
+    const store: Strk20MaturityStore = {
+      ...backing,
+      replaceIfCurrentHash: async (target, hash, record) => {
+        await backing.write(target, null);
+        return backing.replaceIfCurrentHash(target, hash, record);
+      },
+    };
+    expect(await outcome(store, {})).toBe("resolved");
   });
 });
 
@@ -264,16 +264,14 @@ describe("recording the proof base block", () => {
   test("reads the base block from the pool's proof-facts layout", () => {
     expect(strk20ProofBaseBlock(["0x1", "0x2", "0x3", "0x4", "0x64", "0xabc"])).toBe(100);
     expect(strk20ProofBaseBlock(["0x1"])).toBeNull();
-    expect(strk20ProofBaseBlock(["0x1", "0x2", "0x3", "0x4", "100"])).toBe(100);
     expect(strk20ProofBaseBlock(["0x1", "0x2", "0x3", "0x4", "-1"])).toBeNull();
     expect(strk20ProofBaseBlock(["0x1", "0x2", "0x3", "0x4", `0x${"f".repeat(20)}`])).toBeNull();
   });
 
-  test("keeps it on the claim, the journaled identity, and the submitted record", async () => {
+  test("keeps it on the claim and on the journaled identity", async () => {
     const store = memoryStrk20MaturityStore();
-    const runtime = runtimeFor(store);
     const seen: unknown[] = [];
-    await runtime.submitAccepted(
+    await runtimeFor(store).submitAccepted(
       node().provider,
       scope,
       "account",

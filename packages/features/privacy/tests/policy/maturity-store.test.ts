@@ -223,29 +223,29 @@ describe("STRK20 maturity store", () => {
     expect(await store.read(scope)).toBeNull();
   });
 
-  test("round-trips a proof base block and releases an unsigned claim only at that block", async () => {
+  test("round-trips a proof base block on submitting rows only", async () => {
     const backing = createMemoryStore();
     const store = createStrk20MaturityStore(backing);
-    const relay = { proofBaseBlock: 100, route: "relay" as const, state: "submitting" as const };
-    await store.write(scope, relay);
-    expect(await store.read(scope)).toEqual(relay);
-    const submitted = {
-      proofBaseBlock: 100,
-      state: "submitted" as const,
-      transactionHash: "0x456",
-    };
-    await store.write(scope, submitted);
-    expect(await store.read(scope)).toEqual(submitted);
-    expect(await store.releaseUnsignedProvedAt(scope, 100)).toBe(false);
-
-    await store.write(scope, relay);
-    expect(await store.releaseUnsignedProvedAt(scope, 99)).toBe(false);
-    expect(await store.read(scope)).toEqual(relay);
-    expect(await store.releaseUnsignedProvedAt(scope, 100)).toBe(true);
-    expect(await store.read(scope)).toBeNull();
-
-    for (const proofBaseBlock of [-1, 1.5, "100"]) {
-      await backing.set("bramble:strk20-maturity", [{ ...scope, ...relay, proofBaseBlock }]);
+    for (const record of [
+      { proofBaseBlock: 100, route: "relay" as const, state: "submitting" as const },
+      {
+        nonce: "0x1",
+        proofBaseBlock: 100,
+        senderAddress: "0xabc",
+        state: "submitting" as const,
+        transactionHash: "0x456",
+      },
+    ]) {
+      await store.write(scope, record);
+      expect(await store.read(scope)).toEqual(record);
+    }
+    for (const row of [
+      { ...scope, proofBaseBlock: -1, route: "relay", state: "submitting" },
+      { ...scope, proofBaseBlock: 1.5, route: "relay", state: "submitting" },
+      { ...scope, proofBaseBlock: "100", route: "relay", state: "submitting" },
+      { ...scope, proofBaseBlock: 100, state: "submitted", transactionHash: "0x456" },
+    ]) {
+      await backing.set("bramble:strk20-maturity", [row]);
       expect(await store.read(scope)).toBeNull();
     }
   });

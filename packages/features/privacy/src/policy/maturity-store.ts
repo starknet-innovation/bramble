@@ -7,7 +7,6 @@
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   isUnsignedAccountClaim,
-  isUnsignedClaimProvedAt,
   maturityRecordNamesHash,
   type Strk20MaturityRecord,
   type Strk20MaturityScope,
@@ -73,6 +72,7 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isBlockNumberOrAbsent(value["proofBaseBlock"]) &&
   ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
     (value["state"] === "submitted" &&
+      value["proofBaseBlock"] === undefined &&
       value["route"] === undefined &&
       value["senderAddress"] === undefined &&
       value["nonce"] === undefined &&
@@ -98,8 +98,9 @@ const readScope = async (
   if (!entry) {
     return null;
   }
-  const proved = entry.proofBaseBlock === undefined ? {} : { proofBaseBlock: entry.proofBaseBlock };
   if (entry.state === "submitting") {
+    const proved =
+      entry.proofBaseBlock === undefined ? {} : { proofBaseBlock: entry.proofBaseBlock };
     return entry.transactionHash === undefined
       ? {
           ...proved,
@@ -116,7 +117,6 @@ const readScope = async (
   }
   return {
     ...(entry.acceptedBlock === undefined ? {} : { acceptedBlock: entry.acceptedBlock }),
-    ...proved,
     state: "submitted",
     transactionHash: entry.transactionHash,
   };
@@ -152,13 +152,6 @@ export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityS
           return false;
         }
         await writeScope(store, scope, record);
-        return true;
-      },
-      async releaseUnsignedProvedAt(scope, proofBaseBlock) {
-        if (!isUnsignedClaimProvedAt(await readScope(store, scope), proofBaseBlock)) {
-          return false;
-        }
-        await writeScope(store, scope, null);
         return true;
       },
       async releaseUnsigned(scope) {
