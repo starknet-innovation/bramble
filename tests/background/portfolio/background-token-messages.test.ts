@@ -183,7 +183,9 @@ describe("background token messages", () => {
     expect(response).toMatchObject({ ok: true });
     const suggestions = (response as { suggestions: readonly { symbol: string }[] }).suggestions;
     expect(suggestions).toHaveLength(1);
-    expect(suggestions[0]?.symbol).toBe("USDC");
+    // Native USDC is tracked by default (issue 663), so the first untracked
+    // curated token is bridged USDC.e.
+    expect(suggestions[0]?.symbol).toBe("USDC.e");
   });
 
   test("reports a network failure instead of an empty scan result", async () => {

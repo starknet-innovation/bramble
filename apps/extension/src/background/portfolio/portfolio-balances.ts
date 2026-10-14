@@ -8,9 +8,12 @@
  * path only: fee guards, privacy spend checks, onboarding and Ledger keep the
  * fail-closed `getTokenBalances` mode.
  */
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { TokenBalance } from "@bramble/starknet/rpc";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
+import { curatedProbe, trackHeldCuratedTokens, untrackedCuratedTokens } from "./held-tokens";
 
 /*
  * Orders the read balances by the requested tokens and fills each token the
@@ -51,3 +54,51 @@ export const readPortfolioBalances = async (
     await runtimeRpc.getTokenBalances({ ...input, isolateTokenFailures: true }),
     previous,
   );
+
+/**
+ * Reads the active account's portfolio and tracks the curated tokens it holds
+ * (issue 663). When a probe is due (`curatedProbe`: the first read after an
+ * unlock or an account or network switch, then every ten minutes or on a
+ * user's refresh), the one read also covers every untracked curated token for
+ * the network — the registry's few entries, whichever the account holds. A
+ * curated token with a non-zero balance is tracked through
+ * `trackHeldCuratedTokens` and returned with the rest; the others are read and
+ * dropped. Failure behaviour is {@link readPortfolioBalances}'s; a failed read
+ * records no probe, so the next one probes again.
+ */
+export const readAccountPortfolio = async (
+  deps: {
+    readonly preferencesStore: WalletPreferencesStore;
+    readonly runtimeRpc: Pick<RuntimeRpc, "getTokenBalances">;
+  },
+  input: {
+    readonly accountAddress: string;
+    readonly forced: boolean;
+    readonly networkId: StarknetNetworkId;
+    readonly now: number;
+    readonly preferences: WalletPreferences;
+    readonly rpcUrls: readonly string[];
+    readonly scope: string;
+  },
+  previous: readonly TokenBalance[] | null,
+): Promise<readonly TokenBalance[]> => {
+  const tracked = input.preferences.tokens.filter((token) => token.networkId === input.networkId);
+  const probe = curatedProbe(deps.preferencesStore, input.scope, input.now, input.forced);
+  const curated = probe.due ? untrackedCuratedTokens(input.preferences, input.networkId) : [];
+  const read = await deps.runtimeRpc.getTokenBalances({
+    accountAddress: input.accountAddress,
+    isolateTokenFailures: true,
+    rpcUrls: input.rpcUrls,
+    tokens: [...tracked, ...curated],
+  });
+  if (probe.due) probe.ran();
+  const held = curated.filter((token) =>
+    read.some((balance) => balance.id === token.id && BigInt(balance.balance) > 0n),
+  );
+  const added = await trackHeldCuratedTokens(
+    deps.preferencesStore,
+    input.networkId,
+    held.map((token) => token.address),
+  );
+  return withCarriedBalances([...tracked, ...added], read, previous);
+};

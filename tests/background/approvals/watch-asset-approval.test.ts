@@ -426,13 +426,15 @@ describe("watch-asset tokens are not trusted by the call reviewer (audit 171)", 
   });
 
   test("a curated token watched by a dapp stays trusted", async () => {
-    const REAL_USDC = "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+    // Bridged USDC.e: native USDC is already tracked on a new wallet (issue
+    // 663), so watching it would raise no card.
+    const REAL_USDC_E = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
     const { codes, summary } = await watchAndReview({
-      address: REAL_USDC,
-      metadata: { decimals: 6, name: "USD Coin", symbol: "USDC" },
+      address: REAL_USDC_E,
+      metadata: { decimals: 6, name: "Bridged USDC", symbol: "USDC.e" },
       networkId: "SN_MAIN",
     });
     expect(codes).not.toContain("unknown-contract");
-    expect(summary).toContain("1000 USDC");
+    expect(summary).toContain("1000 USDC.e");
   });
 });
