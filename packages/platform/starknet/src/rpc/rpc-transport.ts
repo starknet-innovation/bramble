@@ -41,23 +41,61 @@ export const RPC_BODY_LIMIT_BYTES = 32 * 1024 * 1024;
 export const RPC_REFUSED_MESSAGE =
   "The RPC endpoint refused this request (rate limit or gateway rejection). Nothing was submitted - wait a moment and try again.";
 
+/**
+ * The three JSON-RPC methods that put a transaction on the wire. A failure on
+ * one of them may have happened after a node accepted the transaction, so the
+ * transport and the write guard in `./provider` both key off this one list.
+ */
+export const BROADCAST_RPC_METHODS: ReadonlySet<string> = new Set([
+  "starknet_addDeclareTransaction",
+  "starknet_addDeployAccountTransaction",
+  "starknet_addInvokeTransaction",
+]);
+
 const REFUSAL_BODY_LIMIT_BYTES = 1024;
 const RPC_RATE_LIMIT_CODE = -32_005;
 
-const endpointRefusal = (text: string, status: number): boolean => {
-  if (status === 429) return true;
-  if (text.length > REFUSAL_BODY_LIMIT_BYTES) return false;
+// Reads the JSON-RPC method from the request body starknet.js sends. Anything
+// unreadable is not a known broadcast and keeps the read classification.
+const isBroadcastRequest = (init: RequestInit | undefined): boolean => {
+  const body = init?.body;
+  if (typeof body !== "string") return false;
   try {
-    const parsed: unknown = JSON.parse(text);
-    if (!isRecord(parsed)) return false;
-    const error = parsed["error"];
-    return typeof error === "string" || (isRecord(error) && error["code"] === RPC_RATE_LIMIT_CODE);
+    const parsed: unknown = JSON.parse(body);
+    return (
+      isRecord(parsed) &&
+      typeof parsed["method"] === "string" &&
+      BROADCAST_RPC_METHODS.has(parsed["method"])
+    );
   } catch {
     return false;
   }
 };
 
-const boundedRpcResponse = async (response: Response, deadline: AbortSignal): Promise<Response> => {
+// A read may treat any small gateway-shaped `error` string as a refusal and
+// fail over. A broadcast may not: a proxy 502/504 with `{"error": "..."}` can
+// follow a node that already accepted the transaction, and calling that
+// "nothing was submitted" invites a resend under a new nonce. For a broadcast,
+// only the node's own rate-limit code (or HTTP 429, handled before the body is
+// read) proves the request was turned away; everything else stays ambiguous.
+const endpointRefusal = (text: string, broadcast: boolean): boolean => {
+  if (text.length > REFUSAL_BODY_LIMIT_BYTES) return false;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isRecord(parsed)) return false;
+    const error = parsed["error"];
+    if (isRecord(error) && error["code"] === RPC_RATE_LIMIT_CODE) return true;
+    return !broadcast && typeof error === "string";
+  } catch {
+    return false;
+  }
+};
+
+const boundedRpcResponse = async (
+  response: Response,
+  deadline: AbortSignal,
+  broadcast: boolean,
+): Promise<Response> => {
   if (response.status === 429) {
     void response.body?.cancel().catch(() => undefined);
     throw new RpcRefusedError(RPC_REFUSED_MESSAGE, response.headers.get("retry-after"));
@@ -68,7 +106,7 @@ const boundedRpcResponse = async (response: Response, deadline: AbortSignal): Pr
       throw error instanceof WalletError ? new RpcTransportError(error.message) : error;
     },
   );
-  if (endpointRefusal(text, response.status)) {
+  if (endpointRefusal(text, broadcast)) {
     throw new RpcRefusedError(RPC_REFUSED_MESSAGE, response.headers.get("retry-after"));
   }
   return new Response(text, {
@@ -104,6 +142,7 @@ export const timedRpcFetch =
       const response = await boundedRpcResponse(
         await baseFetch(input, { ...init, signal }),
         deadline,
+        isBroadcastRequest(init),
       );
       recordRpcDiagnostic(endpoint, "ok", now() - startedAt);
       return response;
