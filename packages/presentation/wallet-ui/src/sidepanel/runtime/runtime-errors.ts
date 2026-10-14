@@ -8,7 +8,14 @@
  * unrecognised response. Defined once because every panel client needs exactly
  * this, and three private copies of a two-line helper is how the fallback
  * wording, and then the narrowing, quietly drift apart.
+ *
+ * Every refusal's text also loses its endpoints here. The background reveals a
+ * thrown error's message to its own pages, and on the public routes that text
+ * is a node's or gateway's own words, which can echo a configured RPC URL and
+ * the API key in it; the panel shows such text and lets the user copy it.
  */
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { redactEndpoints } from "@bramble/core/service-url";
 import { INDETERMINATE_RPC_WRITE_MESSAGE } from "@bramble/starknet/provider";
 import { readPrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import {
@@ -20,16 +27,45 @@ import { friendlyError } from "./friendly-error";
 import { REQUEST_UNKNOWN } from "./friendly-error-copy";
 
 /**
+ * The text of a refused reply with its endpoints redacted, or `fallback` when
+ * the reply is not a recognised error response. For a panel reader that keeps
+ * the refusal as text (a balances line) or builds its own Error; everything
+ * else goes through {@link responseError}.
+ */
+export const refusalText = (response: unknown, fallback: string): string =>
+  isErrorResponse(response) ? redactEndpoints(response.error) : fallback;
+
+// Every key a refusal shape below may carry.
+const REFUSAL_KEYS = ["error", "privacyBlocker", "submissionUnknown", "transactionHash"];
+
+// The typed readers below validate the reply's exact shape, so its `error` is
+// redacted in a copy of the reply rather than after an Error is built. Only a
+// reply whose every key is a known own data property is read or copied here; an
+// accessor or an unknown key is left untouched, and the readers refuse it too,
+// so it ends in the caller's fallback.
+const redactedReply = (response: unknown): unknown =>
+  isRecord(response) &&
+  hasOnlyKnownKeys(response, REFUSAL_KEYS) &&
+  typeof response["error"] === "string"
+    ? { ...response, error: redactEndpoints(response["error"]) }
+    : response;
+
+/**
  * Builds the Error a panel client rejects with. `fallback` is used whenever the
  * reply is not a recognised error response — including when it is a success
  * shape the caller's guard refused. A strictly validated "submission status
  * unknown" reply becomes a `SubmissionUnknownError`, so callers can tell a
- * write that may have landed from one that certainly did not.
+ * write that may have landed from one that certainly did not. Whatever the
+ * shape, the message carries no endpoint ({@link refusalText}).
  */
-export const responseError = (response: unknown, fallback: string): Error =>
-  readSubmissionUnknownError(response) ??
-  readPrivacyBlockerError(response) ??
-  new Error(isErrorResponse(response) ? response.error : fallback);
+export const responseError = (response: unknown, fallback: string): Error => {
+  const reply = redactedReply(response);
+  return (
+    readSubmissionUnknownError(reply) ??
+    readPrivacyBlockerError(reply) ??
+    new Error(refusalText(reply, fallback))
+  );
+};
 
 /**
  * A lost reply to a write names no action ({@link lostReplySend} cannot know

@@ -13,7 +13,7 @@ import { button } from "@bramble/ui-kit/controls";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
-import { flowHeader, flowScreen, formatFri } from "../../shared/parts";
+import { flowHeader, flowScreen, formatFri, inlineCopyButton } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { formatFeeEstimate, reviewPanel } from "../../shared/review-render";
 import type {
@@ -227,12 +227,17 @@ const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failur
   // A submission whose reply was lost is a warning, not a failure: it may still
   // be on chain, so it leads with Activity rather than the Try again a failure
   // offers (issue 382). The mark switches to the "!" the send receipt uses.
+  // Either way the sentence is the friendly one, and the control beside it
+  // copies the complete diagnostic for support, as an error toast's does.
   const warning = journey.severity === "warning";
   return `
   <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive" data-severity="${journey.severity}">
     <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /><path class="privacy-unknown-mark" d="M28 17v13m0 8v1" /></svg></span>
     <h2>${warning ? "Status unknown" : "Private transaction not completed"}</h2>
-    <p>${escapeHtml(journey.error)}</p>
+    <span class="privacy-outcome-reason">
+      <p>${escapeHtml(journey.error)}</p>
+      ${inlineCopyButton(journey.errorDetails || journey.error, "Copy error details", { id: "privacy-failure-copy-error" })}
+    </span>
     ${
       warning
         ? ""

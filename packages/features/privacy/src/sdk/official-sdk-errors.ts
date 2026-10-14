@@ -5,6 +5,7 @@
 import { WalletError } from "@bramble/core/errors";
 import { isRecord } from "@bramble/core/json";
 import { friendlyNetworkError } from "@bramble/core/network-error";
+import { redactEndpoints } from "@bramble/core/service-url";
 import { isTransportRpcError } from "@bramble/starknet/provider";
 import {
   STRK20_INSUFFICIENT_BALANCE,
@@ -156,9 +157,7 @@ const SCREENING_REASONS: ReadonlySet<string> = new Set(["screening_policy_unavai
  * Input is bounded before scanning and output is bounded again before display.
  */
 export const sanitizeStrk20Detail = (text: string): string =>
-  text
-    .slice(0, DETAIL_SCAN_LIMIT)
-    .replace(/(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[endpoint]")
+  redactEndpoints(text.slice(0, DETAIL_SCAN_LIMIT))
     .replace(/0x[0-9a-f]{8,}/gi, "[value]")
     .replace(/(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{28,}/g, (token) =>
       SCREENING_REASONS.has(token) ? token : "[value]",

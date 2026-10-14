@@ -348,7 +348,12 @@ describe("submitRejection (shared by the public and pool routes)", () => {
     expect(rejection.state.error).toBe(
       "The transaction was not sent. Insufficient private balance",
     );
-    expect(rejection.toast).toBe("Transaction was not sent");
+    // The toast's headline is fixed; its copy control carries the cause.
+    expect(rejection.toast).toEqual({
+      details: "Insufficient private balance",
+      message: "Transaction was not sent",
+    });
+    expect(rejection.state.errorDetails).toBe("Insufficient private balance");
     expect(rejection.state.reviewedKey).toBeNull();
     expect(rejection.follow).toBe(false);
   });

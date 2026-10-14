@@ -314,7 +314,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     const rejection = submitRejection(transferState, error);
     transferState = rejection.state;
     repaintActiveTransfer?.();
-    if (rejection.toast) showToast(rejection.toast, "error", form);
+    if (rejection.toast) showToast(rejection.toast.message, "error", form, rejection.toast.details);
     if (rejection.follow) void confirmSubmitted(epoch);
   };
 
@@ -421,7 +421,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = friendlyReviewError(error);
-            showToast(message, "error", form);
+            showToast(message, "error", form, errorDetails(error, "Transfer review failed"));
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             returnActiveTransferToDetails?.();
           },
