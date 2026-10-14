@@ -17,11 +17,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { errorDetails } from "../../shared/dom";
 import { reviewFeeBlocked } from "../../shared/review-render";
-import {
-  knownNotSent,
-  outcomeUnknownReason,
-  priorWriteUnresolved,
-} from "../../shared/submit-outcome";
+import { knownNotSent, outcomeUnknownReason, priorWriteRefusal } from "../../shared/submit-outcome";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
 import { shieldStrkFunding, transferRoute } from "./transfer-route";
@@ -223,7 +219,7 @@ export const confirmedState = <Review>(
         ...state,
         error: outcome.message,
         review: null,
-        priorWriteUnresolved: false,
+        priorWrite: null,
         reviewedKey: null,
         stage: "failed",
         submissionUnknown: false,
@@ -247,7 +243,7 @@ export const submitRejection = (
 ): SubmitRejection => {
   const cleared: TransferState<TransferReview> = {
     ...state,
-    priorWriteUnresolved: false,
+    priorWrite: null,
     privatePreparation: null,
     progress: null,
     review: null,
@@ -271,13 +267,14 @@ export const submitRejection = (
   // title says; the sentence keeps the earlier write's may-be-in-flight fact,
   // and the receipt offers Activity and Check again, which prepares afresh and
   // so re-runs the background's resolution (mc-wallet issue 661).
-  if (priorWriteUnresolved(error)) {
+  const priorWrite = priorWriteRefusal(error);
+  if (priorWrite !== null) {
     return {
       follow: false,
       state: {
         ...cleared,
         error: friendlyError(errorDetails(error, "")).message,
-        priorWriteUnresolved: true,
+        priorWrite,
         stage: "failed",
         submissionUnknown: false,
       },

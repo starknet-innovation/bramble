@@ -26,6 +26,7 @@ import {
   type WaitScheduler,
   withinStrk20WaitBudget,
 } from "./official-sdk-budget";
+
 import {
   PROVING_BLOCK_DEPTH,
   priorWaitFailure,
@@ -134,6 +135,7 @@ export type Strk20MaturityRuntime = {
    * signs through `journal` (the invoke's `onSigned` hook), because an
    * `account` claim that never gained a signed identity is later released as
    * provably unsent. Anything else must pass `relay`.
+
    */
   readonly submitAccepted: <P, T extends { readonly transactionHash: string }>(
     provider: RpcProvider,

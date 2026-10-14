@@ -17,6 +17,15 @@ import { STRK20_SERVICE_UNAVAILABLE } from "./fee-policy";
 export const STRK20_PRIOR_WRITE_UNRESOLVED = `${STRK20_SERVICE_UNAVAILABLE}: an earlier private transaction from this account may still be in progress`;
 
 /**
+ * The same refusal for an earlier write that no later check can resolve: its
+ * marker is an unsigned relay claim (or one with no recorded route), so it
+ * names nothing the chain can be asked about. Only ending the browser session
+ * clears the session-held marker, so this sentence says so instead of
+ * offering a check that cannot succeed.
+ */
+export const STRK20_PRIOR_WRITE_STRANDED = `${STRK20_SERVICE_UNAVAILABLE}: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover`;
+
+/**
  * Account/network/pool scope whose latest privacy write must mature before a
  * later proof can use historical state.
  */

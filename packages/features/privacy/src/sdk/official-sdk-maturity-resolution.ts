@@ -15,11 +15,14 @@
  *   spent past it in a block PROVING_BLOCK_DEPTH deep, and which a second
  *   lookup after that still misses: a nonce is spent once, so it cannot land.
  * A write the node reports accepted or reverted is settled through the
- * receipt wait like any submitted write. Everything else stays closed: a
- * pending or pre-confirmed write, a hash the node does not know while its
- * nonce is unspent (a signed V3 invoke has no expiry, so whoever holds it can
- * still have it included at that nonce), a relay claim with no hash, a claim
- * with no recorded route, and any failed or malformed read.
+ * receipt wait like any submitted write. Everything else stays closed with
+ * STRK20_PRIOR_WRITE_UNRESOLVED, which a later check can clear: a pending or
+ * pre-confirmed write, a hash the node does not know while its nonce is
+ * unspent (a signed V3 invoke has no expiry of its own, and the pool's proof
+ * window is governance-set, so neither bounds when it can land), a write
+ * whose receipt wait failed, and any failed or malformed read. A relay claim
+ * (or a claim with no recorded route) that names no hash has nothing the
+ * chain can be asked about; it refuses with STRK20_PRIOR_WRITE_STRANDED.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -28,6 +31,8 @@ import { classifyTransactionStatus } from "@bramble/starknet/rpc";
 import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import {
+  maturityRecordNamesHash,
+  STRK20_PRIOR_WRITE_STRANDED,
   STRK20_PRIOR_WRITE_UNRESOLVED,
   type Strk20MaturityRecord,
   type Strk20MaturityScope,
@@ -120,24 +125,39 @@ type SubmittingRecord = Extract<Strk20MaturityRecord, { readonly state: "submitt
 /** A prior write being followed to its receipt. */
 export type SubmittedRecord = Extract<Strk20MaturityRecord, { readonly state: "submitted" }>;
 
+// After a conditional release the store refused, the scope may simply be
+// clean already (another check released it first): proceed then, and refuse
+// only while some marker is still there.
+const clearedMeanwhile = async (
+  store: Strk20MaturityStore,
+  scope: Strk20MaturityScope,
+): Promise<null> => {
+  if ((await store.read(scope)) !== null) {
+    throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+  }
+  return null;
+};
+
 // Replaces a stuck marker only while the store still names it. The comparison
 // is inside the store's mutation, not a read followed by a later write: a send
-// that started meanwhile has written its own marker, which must survive.
+// that started meanwhile has written its own marker, which must survive. A
+// scope another check already cleared proceeds (L3).
 const replaceStuck = async (
   store: Strk20MaturityStore,
   scope: Strk20MaturityScope,
   transactionHash: string,
   next: SubmittedRecord | null,
-): Promise<void> => {
-  if (!(await store.replaceIfCurrentHash(scope, transactionHash, next))) {
-    throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
-  }
-};
+): Promise<SubmittedRecord | null> =>
+  (await store.replaceIfCurrentHash(scope, transactionHash, next))
+    ? next
+    : clearedMeanwhile(store, scope);
 
 /**
  * Maps a failed receipt wait on the scope's prior write. A proven rejection
- * releases the marker; a marker replaced during the wait keeps its own
- * status-unknown refusal; anything else is the generic service error.
+ * releases the marker. While the marker still names the write, any other
+ * failure keeps the "may still be in progress" refusal a later check can
+ * clear. A marker replaced during the wait keeps its own refusal; anything
+ * else is the generic service error.
  */
 export const priorWaitFailure = async (
   store: Strk20MaturityStore,
@@ -147,11 +167,15 @@ export const priorWaitFailure = async (
 ): Promise<never> => {
   if (error instanceof RejectedPrivacyTransaction) {
     await store.replaceIfCurrentHash(scope, transactionHash, null);
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
   if (error instanceof WalletError && error.message === STRK20_PRIOR_WRITE_UNRESOLVED) {
     throw error;
   }
-  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  if (!maturityRecordNamesHash(await store.read(scope), transactionHash)) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
 };
 
 const settledRecord = (
@@ -171,27 +195,34 @@ const settledRecord = (
   }
 };
 
-// An unsigned marker. Only an `account` claim that no running send owns
-// proves nothing left the wallet; it is cleared through the store's
-// conditional release, which leaves a marker a send journaled meanwhile in
-// place. A relay claim, a claim with no recorded route, and a claim a live
-// send may still sign all stay closed.
+// An unsigned marker. An `account` claim that no running send owns proves
+// nothing left the wallet and is cleared through the store's conditional
+// release, which leaves a marker a send journaled meanwhile in place. A claim
+// a live send may still sign stays closed. Any other unsigned claim (a relay
+// claim, or one with no recorded route) has nothing the chain can be asked
+// about: the relay may hold or have sent its proof, and the pool's proof
+// window cannot bound it, because the governor can change that window after
+// the write applied (review round 2). It is stranded.
 const releaseUnsigned = async (
   store: Strk20MaturityStore,
   scope: Strk20MaturityScope,
   marker: SubmittingRecord,
   ownedByLiveSend: boolean,
 ): Promise<null> => {
-  if (marker.route !== "account" || ownedByLiveSend || !(await store.releaseUnsigned(scope))) {
+  if (ownedByLiveSend) {
     throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
   }
-  return null;
+  if (marker.route !== "account") {
+    throw new WalletError(STRK20_PRIOR_WRITE_STRANDED);
+  }
+  return (await store.releaseUnsigned(scope)) ? null : clearedMeanwhile(store, scope);
 };
 
 /**
  * Settles a `submitting` marker: the submitted write to follow, null once the
- * write provably cannot land, or STRK20_PRIOR_WRITE_UNRESOLVED while it stays closed. The
- * full release rule is in this module's header.
+ * write provably cannot land, or a refusal while it stays closed
+ * (STRK20_PRIOR_WRITE_UNRESOLVED, or STRK20_PRIOR_WRITE_STRANDED when no later
+ * check can resolve it). The full release rule is in this module's header.
  *
  * `ownedByLiveSend` must be read synchronously right before the call, from the
  * runtime's record of sends between their claim and their settled broadcast.
@@ -213,13 +244,20 @@ export const settleSubmitting = async (
     return releaseUnsigned(store, scope, marker, ownedByLiveSend);
   }
   const outcome = await resolveSigned(provider, marker);
+  // Unknown stays checkable: the write may still settle, or another
+  // transaction may spend its nonce. Nothing else bounds it: the pool's proof
+  // window is governance-set and can change between the reads that would
+  // compare against it (review round 2).
   if (outcome === "unknown") {
     throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
   }
   if (outcome === "inFlight") {
     return { state: "submitted", transactionHash: marker.transactionHash };
   }
-  const next = settledRecord(outcome, marker.transactionHash);
-  await replaceStuck(store, scope, marker.transactionHash, next);
-  return next;
+  return replaceStuck(
+    store,
+    scope,
+    marker.transactionHash,
+    settledRecord(outcome, marker.transactionHash),
+  );
 };

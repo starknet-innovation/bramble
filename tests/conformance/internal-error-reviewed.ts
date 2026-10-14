@@ -286,6 +286,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
   ],
   [
+    "strk20 services unavailable: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover",
+    "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+  ],
+  [
     "invalid argent account class hash",
     "This account runs a release this wallet doesn't recognize. Use it in Ready.",
   ],

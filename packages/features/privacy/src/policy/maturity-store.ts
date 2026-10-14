@@ -47,6 +47,9 @@ const isSubmittingIdentity = (value: Record<string, unknown>): boolean =>
       typeof value["nonce"] === "string" &&
       isStarkFieldElement(value["nonce"])));
 
+const isBlockNumberOrAbsent = (value: unknown): boolean =>
+  value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
+
 const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
@@ -55,6 +58,10 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
     "networkId",
     "nonce",
     "poolAddress",
+    // Written by an interim build of mc-wallet 661 and no longer read. It is
+    // tolerated, whatever its value, and dropped on read, so a marker that
+    // build wrote is never mistaken for a malformed row and a clean scope.
+    "proofBaseBlock",
     "route",
     "senderAddress",
     "state",
@@ -72,10 +79,7 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
       value["nonce"] === undefined &&
       typeof value["transactionHash"] === "string" &&
       isNonZeroStarkFieldElement(value["transactionHash"]) &&
-      (value["acceptedBlock"] === undefined ||
-        (typeof value["acceptedBlock"] === "number" &&
-          Number.isSafeInteger(value["acceptedBlock"]) &&
-          value["acceptedBlock"] >= 0))));
+      isBlockNumberOrAbsent(value["acceptedBlock"])));
 
 const sameScope = (entry: StoredMaturity, scope: Strk20MaturityScope): boolean =>
   entry.accountId === scope.accountId &&

@@ -222,4 +222,40 @@ describe("STRK20 maturity store", () => {
     expect(await store.releaseUnsigned(scope)).toBe(true);
     expect(await store.read(scope)).toBeNull();
   });
+
+  test("reads a row an interim build wrote with a proof base block, dropping only that field", async () => {
+    // Review round 3: dropping such a row would read as a clean scope.
+    const backing = createMemoryStore();
+    const store = createStrk20MaturityStore(backing);
+    for (const [row, expected] of [
+      [
+        { ...scope, proofBaseBlock: 100, route: "relay", state: "submitting" },
+        { route: "relay", state: "submitting" },
+      ],
+      [
+        {
+          ...scope,
+          nonce: "0x1",
+          proofBaseBlock: -1,
+          senderAddress: "0xabc",
+          state: "submitting",
+          transactionHash: "0x456",
+        },
+        { nonce: "0x1", senderAddress: "0xabc", state: "submitting", transactionHash: "0x456" },
+      ],
+      [
+        {
+          ...scope,
+          acceptedBlock: 7,
+          proofBaseBlock: "x",
+          state: "submitted",
+          transactionHash: "0x456",
+        },
+        { acceptedBlock: 7, state: "submitted", transactionHash: "0x456" },
+      ],
+    ] as const) {
+      await backing.set("bramble:strk20-maturity", [row]);
+      expect(await store.read(scope)).toEqual(expected);
+    }
+  });
 });

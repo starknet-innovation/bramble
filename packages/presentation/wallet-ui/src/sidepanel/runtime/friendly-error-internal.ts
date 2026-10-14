@@ -133,6 +133,12 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
     "strk20 services unavailable: an earlier private transaction from this account may still be in progress",
     "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
   ],
+  // The same, for an earlier write no later check can resolve: only ending the
+  // browser session clears its marker, so the sentence says that instead.
+  [
+    "strk20 services unavailable: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover",
+    "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+  ],
   // The account's deploy class is not one this wallet derives: the same fact
   // the deployed-account checks already tell the reader.
   ["invalid argent account class hash", UNRECOGNIZED_RELEASE.ready],
