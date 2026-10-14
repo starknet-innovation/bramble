@@ -440,6 +440,7 @@ describe("token and preference wrappers", () => {
       ],
       ready: true,
       rpc: [{ count: 3, endpoint: "wallet-gateway", latencyMs: 42, outcome: "ok" }],
+      storage: [{ count: 1, outcome: "trimmed", store: "activity" }],
     } as const;
     await expect(runtimeReturning({ diagnostics, ok: true }).loadDiagnostics()).resolves.toEqual(
       diagnostics,

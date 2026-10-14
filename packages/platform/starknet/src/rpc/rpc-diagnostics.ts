@@ -56,6 +56,22 @@ export type PrivacyDiagnosticRow = {
   readonly phase: string;
 };
 
+/** Local stores whose write outcomes a diagnostic export counts. */
+export type StorageDiagnosticStore = "activity";
+
+/**
+ * Fixed outcomes of one local store write: rows were evicted so the value fits
+ * its storage budget, or the write itself failed. Error text is never kept.
+ */
+export type StorageOutcome = "trimmed" | "write-failed";
+
+/** One identifier-free aggregate of local store writes. */
+export type StorageDiagnosticRow = {
+  readonly count: number;
+  readonly outcome: StorageOutcome;
+  readonly store: StorageDiagnosticStore;
+};
+
 // A phase label longer than this is not one of the fixed labels; it is
 // dropped rather than aggregated under a name the export was not designed for.
 const MAX_PHASE_LABEL = 64;
@@ -63,6 +79,7 @@ const MAX_PHASE_LABEL = 64;
 const rows = new Map<string, RpcDiagnosticRow>();
 const explorerRows = new Map<string, ExplorerDiagnosticRow>();
 const privacyRows = new Map<string, PrivacyDiagnosticRow>();
+const storageRows = new Map<string, StorageDiagnosticRow>();
 let enabled = false;
 
 /** Enables or clears process-local reliability counters. No diagnostic is transmitted. */
@@ -72,6 +89,7 @@ export const setReliabilityDiagnosticsEnabled = (next: boolean): void => {
     rows.clear();
     explorerRows.clear();
     privacyRows.clear();
+    storageRows.clear();
   }
 };
 
@@ -164,4 +182,24 @@ export const privacyDiagnosticsSnapshot = (): readonly PrivacyDiagnosticRow[] =>
     `${left.kind}:${left.phase}:${left.outcome}`.localeCompare(
       `${right.kind}:${right.phase}:${right.outcome}`,
     ),
+  );
+
+/**
+ * Counts one local store write that trimmed rows or failed. Callers that
+ * absorb a write failure so it cannot replace a chain outcome still leave this
+ * trace; off unless the user enabled reliability diagnostics.
+ */
+export const recordStorageDiagnostic = (
+  store: StorageDiagnosticStore,
+  outcome: StorageOutcome,
+): void => {
+  if (!enabled) return;
+  const key = `${store}:${outcome}`;
+  storageRows.set(key, { count: (storageRows.get(key)?.count ?? 0) + 1, outcome, store });
+};
+
+/** Returns local store write aggregates; no network call is included. */
+export const storageDiagnosticsSnapshot = (): readonly StorageDiagnosticRow[] =>
+  [...storageRows.values()].sort((left, right) =>
+    `${left.store}:${left.outcome}`.localeCompare(`${right.store}:${right.outcome}`),
   );

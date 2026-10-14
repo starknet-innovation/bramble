@@ -8,6 +8,8 @@ import {
   privacyDiagnosticsSnapshot,
   type RpcDiagnosticRow,
   rpcDiagnosticsSnapshot,
+  type StorageDiagnosticRow,
+  storageDiagnosticsSnapshot,
 } from "@bramble/starknet/rpc-diagnostics";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { statusResponse } from "../runtime/runtime-state";
@@ -29,6 +31,8 @@ type SupportDiagnostics = {
   readonly privacy: readonly PrivacyDiagnosticRow[];
   readonly ready: boolean;
   readonly rpc: readonly RpcDiagnosticRow[];
+  /** Local store writes that trimmed rows to fit their budget, or failed. */
+  readonly storage: readonly StorageDiagnosticRow[];
 };
 
 /** Successful diagnostic response returned only to a trusted extension page. */
@@ -58,6 +62,7 @@ export const supportDiagnosticsResponse = async (
       privacy: privacyDiagnosticsSnapshot(),
       ready: status.ready,
       rpc: rpcDiagnosticsSnapshot(),
+      storage: storageDiagnosticsSnapshot(),
     },
     ok: true,
   };
