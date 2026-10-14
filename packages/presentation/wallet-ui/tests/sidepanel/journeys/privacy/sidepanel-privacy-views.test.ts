@@ -170,6 +170,7 @@ describe("privacy journey templates", () => {
 
     const failed = privacyFlow(status, preferences, {
       error: "<prover unavailable>",
+      errorDetails: 'strk20 services unavailable (proving/proof-rejected): "<prover>" & co',
       severity: "danger",
       stage: "failure",
       tokenId: token.id,
@@ -180,11 +181,18 @@ describe("privacy journey templates", () => {
     expect(failed).toContain('class="send-failure-mark"');
     expect(failed).toContain('id="privacy-retry"');
     expect(failed).toContain('data-severity="danger"');
+    // The full diagnostic rides on the copy control, escaped as an attribute,
+    // while the sentence stays the friendly one.
+    expect(failed).toContain('aria-label="Copy error details"');
+    expect(failed).toContain(
+      'data-copy="strk20 services unavailable (proving/proof-rejected): &quot;&lt;prover&gt;&quot; &amp; co"',
+    );
 
     // A submission whose reply was lost is a warning, not a failure: no red
     // cross and no blind Try again, only Activity (issue 382).
     const unknown = privacyFlow(status, preferences, {
       error: "<worker lost>",
+      errorDetails: "",
       severity: "warning",
       stage: "failure",
       tokenId: token.id,
@@ -194,6 +202,9 @@ describe("privacy journey templates", () => {
     expect(unknown).not.toContain('id="privacy-retry"');
     expect(unknown).toContain('data-view="activity"');
     expect(unknown).toContain('class="privacy-unknown-mark"');
+    // A warning keeps the copy control too; with no separate diagnostic it
+    // copies the sentence rather than rendering a control that copies nothing.
+    expect(unknown).toContain('data-copy="&lt;worker lost&gt;"');
 
     expect(privacyFlow(status, preferences, { stage: "idle" })).toContain(
       "Choose an asset to begin",

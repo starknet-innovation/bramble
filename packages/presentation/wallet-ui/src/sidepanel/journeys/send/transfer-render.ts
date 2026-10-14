@@ -177,7 +177,7 @@ const applyFailureReceipt = (
   form: HTMLFormElement,
   state: Pick<
     TransferState<TransferReview>,
-    "error" | "priorWrite" | "submissionUnknown" | "transactionHash"
+    "error" | "errorDetails" | "priorWrite" | "submissionUnknown" | "transactionHash"
   >,
 ): void => {
   const submitted = Boolean(state.transactionHash);
@@ -210,11 +210,13 @@ const applyFailureReceipt = (
       ? TRANSFER_SENT_FAILURE_REASON
       : "The transaction was not sent. Your balance is unchanged.");
   setText(form, "send-failure-copy", reason);
-  // What is worth taking to support is the reason, not the identifier the
-  // transaction never got. The hash, when there is one, copies from its own
-  // row above.
+  // What is worth taking to support is the cause, not the identifier the
+  // transaction never got: the complete diagnostic the rejected call carried,
+  // as an error toast's copy control holds, or the reason itself when the
+  // failure had no call behind it. The hash, when there is one, copies from its
+  // own row above.
   const copyError = form.querySelector<HTMLElement>("#send-failure-copy-error");
-  copyError?.setAttribute("data-copy", reason);
+  copyError?.setAttribute("data-copy", state.errorDetails || reason);
   // Bound through the row: `bindCopyButtons` scans descendants, so handing it
   // the control itself finds nothing.
   bindCopyButtons(copyError?.parentElement ?? null);

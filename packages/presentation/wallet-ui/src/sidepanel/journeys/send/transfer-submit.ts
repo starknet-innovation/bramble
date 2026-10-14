@@ -197,11 +197,13 @@ export const preparedState = (
 /**
  * What a rejected confirm does to the Send state: the next state, whether to
  * follow a captured hash through confirmation, and the toast to show (if any).
+ * A toast carries the rejected call's complete diagnostic as `details`, so its
+ * copy control hands support the cause rather than the toast's own headline.
  */
 export type SubmitRejection = {
   readonly follow: boolean;
   readonly state: TransferState<TransferReview>;
-  readonly toast: string | null;
+  readonly toast: { readonly details: string; readonly message: string } | null;
 };
 
 /**
@@ -218,12 +220,17 @@ export const confirmedState = <Review>(
     : {
         ...state,
         error: outcome.message,
+        // No rejected call lies behind a chain rejection, so the receipt copies
+        // the reason itself — never a diagnostic left over from an earlier try.
+        errorDetails: "",
         review: null,
         priorWrite: null,
         reviewedKey: null,
         stage: "failed",
         submissionUnknown: false,
       };
+
+const NOT_SENT_TOAST = "Transaction was not sent";
 
 /**
  * Settles a rejected submit (public) or execute (pool route).
@@ -235,14 +242,17 @@ export const confirmedState = <Review>(
  * unreviewed message — may already be on chain (errors audit F1). A
  * {@link SubmissionUnknownError} with a captured hash is followed like any
  * submitted transaction; every other unknown outcome says so and offers
- * Activity instead of a re-send.
+ * Activity instead of a re-send. Every failed branch keeps the complete
+ * diagnostic beside its sentence, for the receipt's copy control.
  */
 export const submitRejection = (
   state: TransferState<TransferReview>,
   error: unknown,
 ): SubmitRejection => {
+  const details = errorDetails(error, "");
   const cleared: TransferState<TransferReview> = {
     ...state,
+    errorDetails: details,
     priorWrite: null,
     privatePreparation: null,
     progress: null,
@@ -273,7 +283,7 @@ export const submitRejection = (
       follow: false,
       state: {
         ...cleared,
-        error: friendlyError(errorDetails(error, "")).message,
+        error: friendlyError(details).message,
         priorWrite,
         stage: "failed",
         submissionUnknown: false,
@@ -286,11 +296,11 @@ export const submitRejection = (
       follow: false,
       state: {
         ...cleared,
-        error: `The transaction was not sent. ${friendlyError(errorDetails(error, "")).message}`,
+        error: `The transaction was not sent. ${friendlyError(details).message}`,
         stage: "failed",
         submissionUnknown: false,
       },
-      toast: "Transaction was not sent",
+      toast: { details: details || NOT_SENT_TOAST, message: NOT_SENT_TOAST },
     };
   }
   const pooled = state.fields !== null && transferRoute(state.fields).id !== "public-public";

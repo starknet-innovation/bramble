@@ -118,6 +118,14 @@ export type TransferFields = {
  */
 export type TransferState<Review> = {
   readonly error: string;
+  /**
+   * The complete diagnostic behind `error` on a `failed` stage, for the
+   * receipt's copy control: the rejected call's own message (`errorDetails`),
+   * which a pool route's background has already reduced to wallet-authored,
+   * sanitized text. Empty or absent when no error lies behind the failure (a
+   * chain rejection), in which case the control copies the reason shown.
+   */
+  readonly errorDetails?: string;
   readonly fields: TransferFields | null;
   readonly privatePreparation: PrivacyPreparation | null;
   /**

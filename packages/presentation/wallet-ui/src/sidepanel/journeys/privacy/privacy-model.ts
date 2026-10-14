@@ -170,7 +170,15 @@ export type PrivacyJourneyState =
       readonly tokenId: string;
     }
   | {
+      /** The reader-facing sentence the failure screen shows. */
       readonly error: string;
+      /**
+       * The complete diagnostic behind `error`, kept for the screen's explicit
+       * copy control so it can be sent to support: the background's message,
+       * which it built through `errorText` (wallet-authored text only, with a
+       * STRK20 stage error already passed through `sanitizeStrk20Detail`).
+       */
+      readonly errorDetails: string;
       readonly severity: PrivacyOutcomeSeverity;
       readonly stage: "failure";
       readonly tokenId: string;

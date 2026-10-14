@@ -6,7 +6,9 @@
  * by the same submitRejection as a public send. A lost relay reply, or a worker
  * lost after the job may have broadcast, reaches the journey as a
  * SubmissionUnknownError: the receipt says the status is unknown, hides Try
- * again, and nothing is executed twice.
+ * again, and nothing is executed twice. A STRK20 stage error lands on the same
+ * receipt, and its copy control keeps the stage and category the sentence
+ * drops, so the failure can be sent to support.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account } from "@bramble/testkit/sidepanel";
@@ -17,6 +19,11 @@ import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/
 import { PRIVATE_EXECUTION_UNKNOWN } from "../../../../src/sidepanel/journeys/privacy/privacy-preparation-job";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import {
+  captureClipboard,
+  panelStageError,
+  SUBMISSION_STAGE_DETAILS,
+} from "../../../support/failure-copy-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
   flush,
@@ -163,4 +170,30 @@ describe("private route outcome unknown", () => {
       expect(executions).toBe(1);
     });
   }
+});
+
+describe("private route failure copy", () => {
+  test("the receipt copies the stage error's (stage/category): detail", async () => {
+    const copied = captureClipboard();
+    const { app } = open(shieldIntent, {
+      async executePrivacyPreparation() {
+        throw panelStageError("submission");
+      },
+    });
+    typeAmount(app, "1");
+    submit(app);
+    await flush();
+    submit(app);
+    await flush();
+    await flush();
+    // Not a known pre-submit refusal, so it may be on chain: status unknown,
+    // in a sentence without the pipeline's label.
+    expect(text(app, "#send-failure-title")).toBe("Status unknown");
+    expect(text(app, "#send-failure-copy")).not.toContain("(submission/execution-reverted)");
+    app
+      .querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy error details"]')
+      ?.click();
+    await flush();
+    expect(copied).toEqual([SUBMISSION_STAGE_DETAILS]);
+  });
 });

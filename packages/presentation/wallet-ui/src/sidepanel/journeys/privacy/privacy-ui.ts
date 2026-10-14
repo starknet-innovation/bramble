@@ -7,7 +7,7 @@ import {
   PRIVACY_DEPLOY_REQUIRED,
   PRIVACY_FUNDS_REQUIRED,
 } from "@bramble/wallet-protocol/privacy-blocker";
-import { buttonBusy, errorLine, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { accountDisplayName } from "../../shared/parts";
 import type { SendIntent } from "../send/send-model";
 import { applyPrivacyProgress, runActivation, showPreparing } from "./privacy-activation-run";
@@ -429,6 +429,7 @@ const bindConfirmation = (
         }
         deps.setJourney({
           error: errorLine(error, "Private transaction failed"),
+          errorDetails: errorDetails(error, "Private transaction failed"),
           severity: privacyOutcomeSeverity(error),
           stage: "failure",
           tokenId: journey.tokenId,
