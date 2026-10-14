@@ -31,6 +31,34 @@ import {
  * `snoozeApproval` (optional; the takeover's "Not now") parks a pending
  * request in the Activity list for this panel session without deciding it.
  */
+
+// What the panel says while a decision runs and when it lands. Closing a
+// notice answers the site like Deny, but there was nothing to deny: no live
+// line, and the toast says only that it closed.
+const decisionWords = (
+  action: "approve" | "deny",
+  notice: boolean,
+): {
+  readonly done: string;
+  readonly line: string;
+  readonly pending: string;
+  readonly title: string;
+} => {
+  if (notice) return { done: "Closed", line: "", pending: "", title: "" };
+  return action === "approve"
+    ? {
+        done: "Request approved",
+        line: "The reviewed request is locked while the wallet signs and submits it.",
+        pending: "Approved. Signing and broadcasting…",
+        title: "Authorizing request",
+      }
+    : {
+        done: "Request denied",
+        line: "The wallet is returning control to the requesting site.",
+        pending: "Rejecting request…",
+        title: "Denying request",
+      };
+};
 export type BindingContext = {
   readonly app: Element | null;
   readonly render: (status: WalletStatus) => Promise<void>;
@@ -314,17 +342,16 @@ export const bindApprovals = ({
       if (approvalCard) {
         approvalCard.dataset["state"] = "working";
       }
-      if (live) {
+      const notice = approvalCard?.hasAttribute("data-approval-notice") === true;
+      if (live && !notice) {
         live.hidden = false;
       }
+      const words = decisionWords(action, notice);
       if (liveTitle) {
-        liveTitle.textContent = action === "approve" ? "Authorizing request" : "Denying request";
+        liveTitle.textContent = words.title;
       }
       if (liveCopy) {
-        liveCopy.textContent =
-          action === "approve"
-            ? "The reviewed request is locked while the wallet signs and submits it."
-            : "The wallet is returning control to the requesting site.";
+        liveCopy.textContent = words.line;
       }
       app
         ?.querySelectorAll<HTMLButtonElement>("[data-approval-id], [data-approval-later]")
@@ -334,8 +361,7 @@ export const bindApprovals = ({
           }
         });
       if (result) {
-        result.textContent =
-          action === "approve" ? "Approved. Signing and broadcasting…" : "Rejecting request…";
+        result.textContent = words.pending;
       }
       // The fee this card painted, read back off the control that was clicked
       // rather than from any later status refresh, so the figure the user saw is
@@ -353,11 +379,7 @@ export const bindApprovals = ({
           // resolved: a snapshot taken up to the pacer's hold earlier could
           // repaint over a newer refresh (a request queued in the meantime).
           paced.settle(() => {
-            showToast(
-              action === "approve" ? "Request approved" : "Request denied",
-              "success",
-              button,
-            );
+            showToast(words.done, "success", button);
             void wallet
               .loadStatus()
               .then(render)

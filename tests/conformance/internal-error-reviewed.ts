@@ -150,6 +150,34 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ],
   ["enter an amount to shield", "Enter an amount to shield."],
   [
+    "shadow account anonymizer changed",
+    "This shadow account was made under a different anonymizer, so it can't be checked or swept here. Nothing was sent.",
+  ],
+  [
+    "shadow account holds no tracked token",
+    "This shadow account holds none of your tracked tokens. Nothing was sent.",
+  ],
+  [
+    "shadow account scope not recorded",
+    "Bramble has no record of this shadow account. Nothing was sent.",
+  ],
+  [
+    "shadow account records unavailable",
+    "Couldn't read your shadow account records. Nothing was sent.",
+  ],
+  [
+    "shadow account record limit reached",
+    "Bramble can't record another shadow account. Nothing was sent.",
+  ],
+  ["invalid shadow account record", "This shadow account record isn't valid. Nothing was sent."],
+  [
+    "shadow sweep batch breaks a batch rule",
+    "Couldn't build the sweep: two tracked tokens share one address. Nothing was sent.",
+  ],
+  ["shadow accounts unavailable", "Couldn't load shadow accounts. Try again."],
+  ["shadow account balances unavailable", "Couldn't check balances. Try again."],
+  ["shadow account sweep preparation failed", "Couldn't prepare the sweep. Nothing was sent."],
+  [
     "argent multisig intent nonce is no longer current",
     "This transaction is out of date. Create a new one.",
   ],
@@ -457,9 +485,6 @@ export const REVIEWED_PLUMBING_SNAPSHOT: readonly string[] = [
   "request failed",
   "response was not json",
   "shadow accounts screen is not bound",
-  "shadow_account_balances_unavailable",
-  "shadow_account_sweep_unavailable",
-  "shadow_accounts_unavailable",
   "starkscan balance input must contain one indexed network",
   "starkscan request failed",
   "storage key must be namespaced",

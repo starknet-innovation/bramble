@@ -371,9 +371,10 @@ const strk20DisclosureCard = (
 // A site's private request on a network with no private services for it. The
 // site is answered only when the user closes this, so it cannot probe what the
 // wallet has set up. One fixed line and a Close control; nothing the site sent
-// is shown, and there is nothing to approve — Close works locked too.
+// is shown, and there is nothing to approve — Close works locked too, and the
+// panel says it closed rather than narrating a denial (data-approval-notice).
 const strk20UnavailableCard = (approval: PendingApproval): string => `
-  <li class="request-card">
+  <li class="request-card" data-approval-notice>
     <div class="request-copy">
       <p>${escapeHtml(
         approval.notice === "record-limit"

@@ -91,6 +91,16 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
   "supplied class hash does not match the starknet contract class",
   "account deployment parameters do not match the stored address",
   "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an nft instead; revoke it from the dapp",
+  // Shadow-account record, read, and sweep-preparation refusals: each is raised
+  // before a proof is prepared (records are written before the proof).
+  "invalid shadow account record",
+  "shadow account anonymizer changed",
+  "shadow account holds no tracked token",
+  "shadow account record limit reached",
+  "shadow account records unavailable",
+  "shadow account scope not recorded",
+  "shadow sweep batch breaks a batch rule",
+  "shadow_account_sweep_unavailable",
   // Endpoint refusals raised before the broadcast.
   "the rpc endpoint refused this request (rate limit or gateway rejection). nothing was submitted - wait a moment and try again.",
   WRONG_CHAIN_MESSAGE.toLowerCase(),

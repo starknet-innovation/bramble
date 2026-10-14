@@ -93,7 +93,7 @@ describe("shadow account approval card", () => {
 
   // The same notice holds a request whose shadow-account record cannot be
   // written, or whose review could not be prepared: each gets its own line
-  // (PROPOSED copy), never the not-set-up line, which would be false.
+  // (approved copy), never the not-set-up line, which would be false.
   for (const [notice, line] of [
     ["record-limit", SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE],
     ["request-failed", PRIVATE_REQUEST_FAILED_NOTICE],

@@ -283,11 +283,6 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
   ["strk20 signer does not deploy accounts", "unreachable: as above"],
   ["unreachable strk20 retry state", "unreachable: the retry loop's exhaustive guard"],
   // --- Fallback codes and UI wiring -----------------------------------------
-  // A shadow-accounts screen fallback for a rejection that carried no message
-  // of its own; it names nothing the reader can act on.
-  ["shadow_account_balances_unavailable", "fallback code for a message-less rejection"],
-  ["shadow_account_sweep_unavailable", "fallback code for a message-less rejection"],
-  ["shadow_accounts_unavailable", "fallback code for a message-less rejection"],
   ["shadow accounts screen is not bound", "UI wiring guard: no document to render into"],
   // The cache write is best effort: the fetched list stays live and the
   // failure is caught where it is raised (phishing-feed.ts).

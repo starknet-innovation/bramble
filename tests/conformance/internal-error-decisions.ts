@@ -67,17 +67,10 @@ export const PRIVATE_FACTS: ReadonlySet<string> = new Set([
   "strk20 private submission unavailable: x",
 ]);
 
-// Shadow-account facts (issue 443), pending reviewed copy that keeps each one
-// (proposed in the errors audit F7 report). Owned with the shadow-account
-// screens; none is plumbing.
+// Shadow-account facts (issue 443), pending reviewed copy that keeps each one.
+// Owned with the shadow-account screens; none is plumbing. (The record and
+// sweep refusals have reviewed copy in the privacy table.)
 export const SHADOW_PENDING_COPY: ReadonlySet<string> = new Set([
-  "invalid shadow account record",
-  "shadow account anonymizer changed",
-  "shadow account holds no tracked token",
-  "shadow account record limit reached",
-  "shadow account records unavailable",
-  "shadow account scope not recorded",
-  "shadow sweep batch breaks a batch rule",
   "strk20 services unavailable: could not list shadow accounts (x)",
 ]);
 

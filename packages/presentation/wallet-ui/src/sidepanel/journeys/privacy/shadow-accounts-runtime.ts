@@ -11,8 +11,8 @@ import { isStrk20DappName } from "@bramble/wallet-protocol/strk20";
 import { responseError } from "../../runtime/runtime-errors";
 import { type PrivacyPreparation, readPrivacyPreparation } from "./privacy-runtime";
 
-// Stable error codes for an unrecognised answer. Each needs reviewed copy in the
-// friendly-error table before it reads well; until then it shows as the code.
+// Stable error codes for an unrecognised answer, each with reviewed copy in the
+// friendly-error privacy table.
 const SHADOW_ACCOUNTS_UNAVAILABLE = "shadow_accounts_unavailable";
 const SHADOW_ACCOUNT_BALANCES_UNAVAILABLE = "shadow_account_balances_unavailable";
 const SHADOW_ACCOUNT_SWEEP_UNAVAILABLE = "shadow_account_sweep_unavailable";

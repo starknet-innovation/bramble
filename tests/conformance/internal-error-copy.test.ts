@@ -300,7 +300,10 @@ describe("internal error copy (issue 652)", () => {
   });
 
   test("every scanned message without a space is a Ledger code read as its catalog sentence", () => {
-    const words = [...raws].filter((raw) => !/\s/.test(raw) && !isReviewedPlumbing(raw));
+    // A panel fallback code with reviewed copy is in the copy table.
+    const words = [...raws].filter(
+      (raw) => !/\s/.test(raw) && !isReviewedPlumbing(raw) && !ERROR_COPY.has(raw.toLowerCase()),
+    );
     expect(words.length).toBeGreaterThan(0);
     for (const raw of words) {
       expect(isLedgerRejectionCode(raw), raw).toBe(true);
