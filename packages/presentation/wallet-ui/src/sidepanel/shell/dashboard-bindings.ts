@@ -26,12 +26,6 @@ import {
   takeAddressBookLabelFocus,
 } from "./address-draft";
 
-/**
- * Shared context: the app root, the runtime client, and a full re-render.
- * `snoozeApproval` (optional; the takeover's "Not now") parks a pending
- * request in the Activity list for this panel session without deciding it.
- */
-
 // Approval kinds whose approval signs and submits a transaction (stamped on the
 // approve control as data-approval-kind): only their unknown outcome says the
 // approval may not have gone through (copy review bf08).
@@ -64,6 +58,12 @@ const decisionWords = (
         title: "Denying request",
       };
 };
+
+/**
+ * Shared context: the app root, the runtime client, and a full re-render.
+ * `snoozeApproval` (optional; the takeover's "Not now") parks a pending
+ * request in the Activity list for this panel session without deciding it.
+ */
 export type BindingContext = {
   readonly app: Element | null;
   readonly render: (status: WalletStatus) => Promise<void>;

@@ -32,7 +32,8 @@ import {
   SHADOW_PENDING_COPY,
   UI_FALLBACKS,
 } from "./internal-error-decisions";
-import { REVIEWED_PLUMBING_SNAPSHOT, SENSITIVE_COPY_REVIEWED } from "./internal-error-reviewed";
+import { REVIEWED_PLUMBING_SNAPSHOT } from "./internal-error-plumbing-snapshot";
+import { SENSITIVE_COPY_REVIEWED } from "./internal-error-reviewed";
 import { PANEL_ERROR_SOURCES, thrownMessages } from "./internal-error-scan";
 
 // Constructor first arguments the scan reads as messages but are not: the
