@@ -83,8 +83,14 @@ describe("ledgerSignScreen", () => {
     });
     expect(html).toContain("Signing on your Ledger didn&#39;t finish");
     expect(html).not.toContain("The transaction has not been signed or broadcast.");
+    // The device did its part: the title and line say the wallet didn't finish
+    // (copy review bf09), not that the Ledger needs attention.
+    expect(html).toContain("<h2>Signing didn&#39;t finish</h2>");
+    expect(html).toContain("Your Ledger signed; the wallet didn&#39;t finish.");
+    expect(html).not.toContain("Ledger needs attention");
     const device = render({ code: "rejected-on-device", kind: "error", message: "x" });
     expect(device).toContain("The transaction has not been signed or broadcast.");
+    expect(device).toContain("Ledger needs attention");
   });
 
   test("device phase renders escaped device choices", () => {

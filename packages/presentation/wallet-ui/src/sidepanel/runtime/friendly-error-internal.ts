@@ -23,6 +23,7 @@
  */
 
 import { ledgerMessage } from "@bramble/ledger-protocol/errors";
+import { RPC_REFUSED_MESSAGE } from "@bramble/starknet/rpc-transport";
 import {
   BACKUP_UNREADABLE,
   KEY_IMPORT_FAILED,
@@ -96,6 +97,15 @@ const PLUMBING_COPY: readonly (readonly [string, string])[] = [
   ["no account selected", "Select an account first."],
   ["clipboard unavailable", "Couldn't copy. Copy it manually."],
   ["qr payload too long", "That's too long for a QR code."],
+  // Persistent: corrupt settings storage, or a downgrade past a renamed key.
+  // "Try again" cannot fix it, so the sentence points at the backup.
+  ["invalid stored preferences", "Couldn't read your saved settings. Restore them from a backup."],
+  // The endpoint refused before anything was submitted; the sentence keeps that
+  // fact, which the generic rate-limit line dropped.
+  [
+    RPC_REFUSED_MESSAGE.toLowerCase(),
+    "The RPC endpoint refused this request (rate limit or gateway). Nothing was submitted. Wait a moment and try again.",
+  ],
 ];
 
 /**

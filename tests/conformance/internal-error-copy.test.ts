@@ -190,10 +190,6 @@ const KEPT_VISIBLE = new Set([
   "RPC returned a non-felt Starknet name address",
   "Storage access denied",
   "Encrypted store scope is required",
-  // Persistent: corrupt settings storage, or a downgrade past a renamed key.
-  // "Try again" cannot fix it, so the generic fallback would mislead and no
-  // reviewed sentence fits yet (errors audit F10).
-  "Invalid stored preferences",
   // A field the reader types (multisig deploy form); shown so it names itself.
   "Invalid Argent multisig salt",
   // The KMS result-field checks: the field can be a public key or a signature.
