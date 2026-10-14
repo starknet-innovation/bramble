@@ -16,6 +16,8 @@ import {
   normalizeStoredServiceUrl,
   normalizeStoredWebSocketServiceUrl,
 } from "@bramble/core/service-url";
+import { isStrk20NetworkConfig } from "@bramble/privacy/config";
+import { isStarknetNetworkId } from "@bramble/wallet-model/networks";
 
 // Returns the carried value, or `undefined` to drop it (see
 // normalizeStoredServiceUrl); anything this build cannot read comes back as is.
@@ -23,13 +25,19 @@ type Carry = (value: unknown) => unknown;
 
 // A network-keyed map. A dropped endpoint leaves its network unset, which
 // selects the built-in endpoint or, for STRK20 routing, disables the network.
+// Only an entry under a network id is dropped: under any other key the value
+// stays, so the validator still rejects the key rather than see it vanish.
 // Rebuilt with `Object.fromEntries`, which defines own properties, so a key such
-// as `__proto__` survives for the validator to reject instead of vanishing.
+// as `__proto__` survives for the validator to reject too.
 const carryMap = (map: unknown, carry: Carry): unknown => {
   if (!isRecord(map)) {
     return map;
   }
-  const entries = Object.keys(map).map((key) => [key, map[key], carry(map[key])] as const);
+  const entries = Object.keys(map).map((key) => {
+    const carried = carry(map[key]);
+    const kept = carried === undefined && !isStarknetNetworkId(key) ? map[key] : carried;
+    return [key, map[key], kept] as const;
+  });
   if (entries.every(([, value, carried]) => carried === value)) {
     return map;
   }
@@ -54,48 +62,45 @@ const pinnedFallback = (before: unknown, after: unknown, fallback: unknown): unk
     : { ...fallback, ...Object.fromEntries(unset.map((network) => [network, false])) };
 };
 
-// One endpoint field of a record, or `undefined` when it cannot be carried.
-const carryField = (
-  record: Record<string, unknown>,
-  field: string,
-): Record<string, unknown> | undefined => {
-  if (record[field] === undefined) {
-    return record;
-  }
-  const carried = normalizeStoredServiceUrl(record[field]);
-  if (carried === undefined) {
-    return undefined;
-  }
-  return carried === record[field] ? record : { ...record, [field]: carried };
-};
-
 const STRK20_ENDPOINT_FIELDS = ["discoveryUrl", "ohttpRelayUrl", "proverUrl"];
+
+// Stands in for an endpoint that cannot be carried while the rest of its
+// configuration is checked. It is canonical, so only another defect fails.
+const DROPPED_ENDPOINT = "https://dropped.invalid";
 
 // A STRK20 configuration whose endpoint cannot be carried is dropped whole,
 // which disables privacy on that network until the user enters services again.
 // Falling back to the bundled routing instead would send private traffic to
-// services the user did not choose.
+// services the user did not choose. It is dropped only when nothing else in it
+// is invalid; otherwise it stays as stored, so the drop never hides a defect
+// from the validator.
 const carryStrk20Config = (config: unknown): unknown => {
   if (!isRecord(config)) {
     return config;
   }
+  let dropped = false;
+  const carryField = (record: Record<string, unknown>, field: string) => {
+    if (record[field] === undefined) {
+      return record;
+    }
+    const carried = normalizeStoredServiceUrl(record[field]);
+    dropped ||= carried === undefined;
+    const value = carried ?? DROPPED_ENDPOINT;
+    return value === record[field] ? record : { ...record, [field]: value };
+  };
   let next: Record<string, unknown> = config;
   for (const field of STRK20_ENDPOINT_FIELDS) {
-    const carried = carryField(next, field);
-    if (carried === undefined) {
-      return undefined;
-    }
-    next = carried;
+    next = carryField(next, field);
   }
   const paymaster = next["paymaster"];
-  if (!isRecord(paymaster)) {
+  if (isRecord(paymaster)) {
+    const carried = carryField(paymaster, "url");
+    next = carried === paymaster ? next : { ...next, paymaster: carried };
+  }
+  if (!dropped) {
     return next;
   }
-  const carried = carryField(paymaster, "url");
-  if (carried === undefined) {
-    return undefined;
-  }
-  return carried === paymaster ? next : { ...next, paymaster: carried };
+  return isStrk20NetworkConfig(next) ? undefined : config;
 };
 
 // A custom network keeps at most its first RPC URL once compacted; an RPC URL

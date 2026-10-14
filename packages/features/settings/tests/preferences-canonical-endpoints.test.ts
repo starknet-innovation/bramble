@@ -253,6 +253,38 @@ describe("stored endpoints are carried to the canonical spelling", () => {
     }
   });
 
+  // Dropping an endpoint must not drop the defect around it: an invalid key or
+  // an otherwise invalid configuration still fails (#674 review).
+  test("an endpoint with no canonical spelling is dropped only from a valid entry", async () => {
+    const UNCARRIED = "https://rpc.example/v1?key=a`b";
+    const routing = { discoveryUrl: discovery.raw, poolAddress: POOL, proverUrl: UNCARRIED };
+    for (const fields of [
+      { rpcOverrides: { BAD: UNCARRIED } },
+      { explorerApiUrls: { BAD: OUTGROWN } },
+      { strk20Networks: { BAD: routing } },
+      { strk20Networks: { SN_MAIN: { ...routing, poolAddress: "0x0" } } },
+      { strk20Networks: { SN_MAIN: { ...routing, apiKey: "secret" } } },
+      {
+        strk20Networks: {
+          SN_MAIN: {
+            ...routing,
+            proverUrl: prover.raw,
+            paymaster: { feeToken: "", url: OUTGROWN },
+          },
+        },
+      },
+    ]) {
+      const { preferences } = await storedWith(fields);
+      await expect(preferences.read()).rejects.toThrow("Invalid stored preferences");
+      await expect(
+        createPreferencesStore({ store: createMemoryStore() }).importPreferences({
+          ...defaultWalletPreferences(),
+          ...fields,
+        }),
+      ).rejects.toThrow("Invalid preferences backup");
+    }
+  });
+
   test("an endpoint the earlier rule refused still fails closed", async () => {
     for (const fields of [
       { rpcOverrides: { SN_MAIN: "http://rpc.example/v1" } },
