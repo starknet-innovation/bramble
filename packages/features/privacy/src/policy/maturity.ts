@@ -65,14 +65,9 @@ export type Strk20SubmissionRoute = "account" | "relay";
  * waiting for the browser session to end. Until then it carries the route the
  * write takes; a claim without a route (written before routes were recorded)
  * is treated like a `relay` claim and is never released as unsent.
- *
- * `proofBaseBlock` is the base block its proof names. The pool applies a proof
- * only in a block at most `get_proof_validity_blocks()` past that base, which
- * bounds where a signed write whose nonce is still unspent can land.
  */
 export type Strk20MaturityRecord =
   | ({
-      readonly proofBaseBlock?: number;
       readonly state: "submitting";
     } & (
       | (Strk20SignedSubmission & { readonly route?: never })

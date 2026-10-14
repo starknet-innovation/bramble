@@ -14,24 +14,15 @@
  * - a signed write the node does not know, whose sender nonce is already
  *   spent past it in a block PROVING_BLOCK_DEPTH deep, and which a second
  *   lookup after that still misses: a nonce is spent once, so it cannot land.
- * - a signed write the node does not know, whose nonce is still unspent at
- *   the tip, that no running send owns, and whose proof the pool would refuse
- *   in every later block: its claim names the base block N its proof facts
- *   carry, and the pool applies a proof only while the block number is at
- *   most N + `get_proof_validity_blocks()` (V) (`PROOF_EXPIRED`). The
- *   unspent nonce at the tip proves no block so far included it, and a
- *   settled block (tip minus PROVING_BLOCK_DEPTH) past N + V proves no later
- *   block can, unless the pool's governor RAISES V or the pool is upgraded
- *   afterwards. That is the one stated assumption of this rule.
  * A write the node reports accepted or reverted is settled through the
  * receipt wait like any submitted write. Everything else stays closed with
  * STRK20_PRIOR_WRITE_UNRESOLVED, which a later check can clear: a pending or
- * pre-confirmed write, a signed write inside its proof window, a write whose
- * receipt wait failed, and any failed or malformed read. A relay claim (or a
- * claim with no recorded route) that names no hash has nothing the chain can
- * be asked about. The pool window cannot bound it: a governor that LOWERS V
- * after the relayed write applied would make it look expired while it sits
- * past the next proof's block. It refuses with STRK20_PRIOR_WRITE_STRANDED.
+ * pre-confirmed write, a hash the node does not know while its nonce is
+ * unspent (a signed V3 invoke has no expiry of its own, and the pool's proof
+ * window is governance-set, so neither bounds when it can land), a write
+ * whose receipt wait failed, and any failed or malformed read. A relay claim
+ * (or a claim with no recorded route) that names no hash has nothing the
+ * chain can be asked about; it refuses with STRK20_PRIOR_WRITE_STRANDED.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -57,11 +48,8 @@ export const PROVING_BLOCK_DEPTH = 10;
 export class RejectedPrivacyTransaction extends Error {}
 
 // `inFlight` is a pending or pre-confirmed write: it reached the network but
-// can still vanish, so its signed identity must outlive the lookup. `unproven`
-// is a hash the node does not know while the sender's nonce is unspent: the
-// chain answered, and nothing it said proves the write dropped. `unknown` is a
-// read that failed or could not be trusted, which a later check may get past.
-type SignedOutcome = "dropped" | "inFlight" | "landed" | "rejected" | "unknown" | "unproven";
+// can still vanish, so its signed identity must outlive the lookup.
+type SignedOutcome = "dropped" | "inFlight" | "landed" | "rejected" | "unknown";
 
 // A nonce answer is an untrusted RPC value. Only a string that canonicalizes
 // to a field element can prove the sender's nonce moved; a decimal or an
@@ -73,21 +61,6 @@ const chainNonce = (value: unknown): bigint | null => {
   }
   const felt = canonicalFelt(value);
   return felt !== null && isStarkFieldElement(felt) ? BigInt(felt) : null;
-};
-
-// `ProofFacts` serialize as proof_version, program_variant,
-// virtual_program_hash, starknet_os_output_version, base_block_number, … (the
-// pool's `ProofFacts` struct; the SDK's `utils/proof-facts.ts` index [4]).
-const PROOF_FACTS_BASE_BLOCK = 4;
-
-/**
- * The base block a proof's facts name, or null when they cannot be read as a
- * u64 safe integer. The pool enforces its proof window against these exact
- * facts, so the value read here is the one that bounds the write's inclusion.
- */
-export const strk20ProofBaseBlock = (proofFacts: readonly string[]): number | null => {
-  const value = chainNonce(proofFacts[PROOF_FACTS_BASE_BLOCK]);
-  return value !== null && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null;
 };
 
 // What the chain says about a write whose send lost its answer. A status the
@@ -138,11 +111,8 @@ const resolveSigned = async (
       return "unknown";
     }
     const spent = chainNonce(await provider.getNonceForAddress(signed.senderAddress, settled));
-    if (spent === null) {
+    if (spent === null || spent <= BigInt(signed.nonce)) {
       return "unknown";
-    }
-    if (spent <= BigInt(signed.nonce)) {
-      return "unproven";
     }
   } catch {
     return "unknown";
@@ -154,67 +124,6 @@ type SubmittingRecord = Extract<Strk20MaturityRecord, { readonly state: "submitt
 
 /** A prior write being followed to its receipt. */
 export type SubmittedRecord = Extract<Strk20MaturityRecord, { readonly state: "submitted" }>;
-
-// Replaces a stuck marker only while the store still names it. The comparison
-// is inside the store's mutation, not a read followed by a later write: a send
-// that started meanwhile has written its own marker, which must survive.
-const replaceStuck = async (
-  store: Strk20MaturityStore,
-  scope: Strk20MaturityScope,
-  transactionHash: string,
-  next: SubmittedRecord | null,
-): Promise<void> => {
-  if (!(await store.replaceIfCurrentHash(scope, transactionHash, next))) {
-    throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
-  }
-};
-
-// The pool's proof window, in blocks, as an untrusted u64 answer.
-const proofValidityBlocks = async (
-  provider: RpcProvider,
-  scope: Strk20MaturityScope,
-): Promise<bigint | null> => {
-  const answer = await provider.callContract({
-    calldata: [],
-    contractAddress: scope.poolAddress,
-    entrypoint: "get_proof_validity_blocks",
-  });
-  const value = chainNonce(Array.isArray(answer) ? answer[0] : undefined);
-  return value !== null && value < 1n << 64n ? value : null;
-};
-
-// True only when a signed write provably never applied and never can: the
-// sender's nonce read at the tip is still not past the write's nonce, so no
-// block up to the tip included it, and the settled block (tip minus
-// PROVING_BLOCK_DEPTH, a reorg margin) is already past base + validity, so
-// the pool refuses its proof in every later block (`PROOF_EXPIRED`). Reading
-// the nonce at the tip, rather than trusting the window alone, means a
-// governor LOWERING the window cannot hide an inclusion the window once
-// allowed. Any failed or malformed read answers false.
-const signedWriteExpired = async (
-  provider: RpcProvider,
-  scope: Strk20MaturityScope,
-  signed: Strk20SignedSubmission,
-  proofBaseBlock: number | undefined,
-): Promise<boolean> => {
-  if (proofBaseBlock === undefined) {
-    return false;
-  }
-  try {
-    const tip = await provider.getBlockNumber();
-    const validity = await proofValidityBlocks(provider, scope);
-    const nonce = chainNonce(await provider.getNonceForAddress(signed.senderAddress, tip));
-    return (
-      Number.isSafeInteger(tip) &&
-      validity !== null &&
-      nonce !== null &&
-      nonce <= BigInt(signed.nonce) &&
-      BigInt(tip - PROVING_BLOCK_DEPTH) > BigInt(proofBaseBlock) + validity
-    );
-  } catch {
-    return false;
-  }
-};
 
 // After a conditional release the store refused, the scope may simply be
 // clean already (another check released it first): proceed then, and refuse
@@ -228,6 +137,20 @@ const clearedMeanwhile = async (
   }
   return null;
 };
+
+// Replaces a stuck marker only while the store still names it. The comparison
+// is inside the store's mutation, not a read followed by a later write: a send
+// that started meanwhile has written its own marker, which must survive. A
+// scope another check already cleared proceeds (L3).
+const replaceStuck = async (
+  store: Strk20MaturityStore,
+  scope: Strk20MaturityScope,
+  transactionHash: string,
+  next: SubmittedRecord | null,
+): Promise<SubmittedRecord | null> =>
+  (await store.replaceIfCurrentHash(scope, transactionHash, next))
+    ? next
+    : clearedMeanwhile(store, scope);
 
 /**
  * Maps a failed receipt wait on the scope's prior write. A proven rejection
@@ -256,7 +179,7 @@ export const priorWaitFailure = async (
 };
 
 const settledRecord = (
-  outcome: Exclude<SignedOutcome, "inFlight" | "unknown" | "unproven">,
+  outcome: Exclude<SignedOutcome, "inFlight" | "unknown">,
   transactionHash: string,
 ): SubmittedRecord | null => {
   switch (outcome) {
@@ -295,32 +218,6 @@ const releaseUnsigned = async (
   return (await store.releaseUnsigned(scope)) ? null : clearedMeanwhile(store, scope);
 };
 
-// A signed write the chain could not settle: the node does not know its hash
-// while its nonce is unspent (`unproven`), or a read failed (`unknown`). An
-// `unproven` write no running send owns is released once it provably never
-// applied and never can (`signedWriteExpired`). Everything else stays
-// checkable: the write may still settle, or another transaction may spend its
-// nonce.
-const releaseUnsettled = async (
-  store: Strk20MaturityStore,
-  provider: RpcProvider,
-  scope: Strk20MaturityScope,
-  marker: SubmittingRecord & Strk20SignedSubmission,
-  outcome: "unknown" | "unproven",
-  ownedByLiveSend: boolean,
-): Promise<null> => {
-  if (
-    outcome === "unproven" &&
-    !ownedByLiveSend &&
-    (await signedWriteExpired(provider, scope, marker, marker.proofBaseBlock))
-  ) {
-    return (await store.replaceIfCurrentHash(scope, marker.transactionHash, null))
-      ? null
-      : clearedMeanwhile(store, scope);
-  }
-  throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
-};
-
 /**
  * Settles a `submitting` marker: the submitted write to follow, null once the
  * write provably cannot land, or a refusal while it stays closed
@@ -347,13 +244,20 @@ export const settleSubmitting = async (
     return releaseUnsigned(store, scope, marker, ownedByLiveSend);
   }
   const outcome = await resolveSigned(provider, marker);
-  if (outcome === "unknown" || outcome === "unproven") {
-    return releaseUnsettled(store, provider, scope, marker, outcome, ownedByLiveSend);
+  // Unknown stays checkable: the write may still settle, or another
+  // transaction may spend its nonce. Nothing else bounds it: the pool's proof
+  // window is governance-set and can change between the reads that would
+  // compare against it (review round 2).
+  if (outcome === "unknown") {
+    throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
   }
   if (outcome === "inFlight") {
     return { state: "submitted", transactionHash: marker.transactionHash };
   }
-  const next = settledRecord(outcome, marker.transactionHash);
-  await replaceStuck(store, scope, marker.transactionHash, next);
-  return next;
+  return replaceStuck(
+    store,
+    scope,
+    marker.transactionHash,
+    settledRecord(outcome, marker.transactionHash),
+  );
 };

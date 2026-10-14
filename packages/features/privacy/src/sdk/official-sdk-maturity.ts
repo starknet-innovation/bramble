@@ -27,8 +27,6 @@ import {
   withinStrk20WaitBudget,
 } from "./official-sdk-budget";
 
-export { strk20ProofBaseBlock } from "./official-sdk-maturity-resolution";
-
 import {
   PROVING_BLOCK_DEPTH,
   priorWaitFailure,
@@ -67,17 +65,13 @@ const canonicalSigned = (signed: Strk20SignedSubmission): Strk20SignedSubmission
 // Journals a signed write for `scope`. A malformed identity is refused, which
 // aborts the send before anything leaves.
 const journalFor =
-  (
-    store: Strk20MaturityStore,
-    scope: Strk20MaturityScope,
-    proved: { readonly proofBaseBlock?: number },
-  ): Strk20SubmissionJournal =>
+  (store: Strk20MaturityStore, scope: Strk20MaturityScope): Strk20SubmissionJournal =>
   async (signed) => {
     const identity = canonicalSigned(signed);
     if (!identity) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
-    await store.write(scope, { ...identity, ...proved, state: "submitting" });
+    await store.write(scope, { ...identity, state: "submitting" });
   };
 
 type MaturityRuntimeOptions = {
@@ -141,11 +135,7 @@ export type Strk20MaturityRuntime = {
    * signs through `journal` (the invoke's `onSigned` hook), because an
    * `account` claim that never gained a signed identity is later released as
    * provably unsent. Anything else must pass `relay`.
-   *
-   * `proofBaseBlockOf` names the base block of the proof `prepared` carries
-   * ({@link strk20ProofBaseBlock}). It is recorded on the claim and its
-   * journaled identity, so a signed write whose nonce stays unspent can be
-   * released once the pool refuses that proof in every later block.
+
    */
   readonly submitAccepted: <P, T extends { readonly transactionHash: string }>(
     provider: RpcProvider,
@@ -153,7 +143,6 @@ export type Strk20MaturityRuntime = {
     route: Strk20SubmissionRoute,
     prepare: () => Promise<P>,
     broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
-    proofBaseBlockOf?: (prepared: P) => number | null,
   ) => Promise<T>;
 };
 
@@ -307,14 +296,11 @@ export const createStrk20MaturityRuntime = ({
     route: Strk20SubmissionRoute,
     prepare: () => Promise<P>,
     broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
-    proofBaseBlockOf?: (prepared: P) => number | null,
   ): Promise<T> =>
     serializeSubmission(scope, async () => {
       const prepared = await prepare();
       const previous = await store.read(scope);
       const key = scopeKey(scope);
-      const proofBaseBlock = proofBaseBlockOf?.(prepared) ?? undefined;
-      const proved = proofBaseBlock === undefined ? {} : { proofBaseBlock };
       // Marked live before the claim is queued, so a resolution that reads the
       // flag afterwards can never queue a release ahead of this claim.
       liveSends.add(key);
@@ -326,15 +312,13 @@ export const createStrk20MaturityRuntime = ({
       // closed rather than risk proving against state a landed write invalidates.
       // The scope stays live until that restore has landed.
       const result = await (async (): Promise<T> => {
-        await store.write(scope, { ...proved, route, state: "submitting" });
-        return broadcast(prepared, journalFor(store, scope, proved)).catch(
-          async (error: unknown) => {
-            if (!(error instanceof IndeterminateRpcWriteError) && !isTransportRpcError(error)) {
-              await store.write(scope, previous);
-            }
-            throw error;
-          },
-        );
+        await store.write(scope, { route, state: "submitting" });
+        return broadcast(prepared, journalFor(store, scope)).catch(async (error: unknown) => {
+          if (!(error instanceof IndeterminateRpcWriteError) && !isTransportRpcError(error)) {
+            await store.write(scope, previous);
+          }
+          throw error;
+        });
       })().finally(() => {
         liveSends.delete(key);
       });

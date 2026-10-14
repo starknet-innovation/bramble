@@ -58,6 +58,9 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
     "networkId",
     "nonce",
     "poolAddress",
+    // Written by an interim build of mc-wallet 661 and no longer read. It is
+    // tolerated, whatever its value, and dropped on read, so a marker that
+    // build wrote is never mistaken for a malformed row and a clean scope.
     "proofBaseBlock",
     "route",
     "senderAddress",
@@ -69,10 +72,8 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   typeof value["poolAddress"] === "string" &&
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
-  isBlockNumberOrAbsent(value["proofBaseBlock"]) &&
   ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
     (value["state"] === "submitted" &&
-      value["proofBaseBlock"] === undefined &&
       value["route"] === undefined &&
       value["senderAddress"] === undefined &&
       value["nonce"] === undefined &&
@@ -99,17 +100,10 @@ const readScope = async (
     return null;
   }
   if (entry.state === "submitting") {
-    const proved =
-      entry.proofBaseBlock === undefined ? {} : { proofBaseBlock: entry.proofBaseBlock };
     return entry.transactionHash === undefined
-      ? {
-          ...proved,
-          ...(entry.route === undefined ? {} : { route: entry.route }),
-          state: "submitting",
-        }
+      ? { ...(entry.route === undefined ? {} : { route: entry.route }), state: "submitting" }
       : {
           nonce: entry.nonce,
-          ...proved,
           senderAddress: entry.senderAddress,
           state: "submitting",
           transactionHash: entry.transactionHash,
