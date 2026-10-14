@@ -188,6 +188,12 @@ const releaseBuildFailures = (source: string): string[] => {
   );
   requireText(
     failures,
+    build,
+    "persist-credentials: false",
+    "self-hosted release builds must not leave the checkout token in .git/config",
+  );
+  requireText(
+    failures,
     publish,
     "runs-on: ubuntu-latest",
     "GitHub Release publication must use a hosted runner",
@@ -329,6 +335,12 @@ const nightlyFailures = (source: string): string[] => {
   );
   requireText(
     failures,
+    nightly,
+    "persist-credentials: false",
+    "self-hosted nightly execution must not leave the checkout token in .git/config",
+  );
+  requireText(
+    failures,
     report,
     "runs-on: ubuntu-latest",
     "nightly issue reporting must use a hosted runner",
@@ -378,6 +390,12 @@ const releaseIntegrationFailures = (source: string): string[] => {
     integration,
     "\n          ref:",
     "self-hosted release integration must not pass caller-controlled refs to checkout",
+  );
+  requireText(
+    failures,
+    integration,
+    "persist-credentials: false",
+    "self-hosted release integration must not leave the checkout token in .git/config",
   );
   return failures;
 };

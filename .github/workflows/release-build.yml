@@ -41,10 +41,13 @@ jobs:
       # fetch-depth: 0 so the notes step can diff against the previous tag and
       # fall back to the commit range. Checkout starts from the trusted caller
       # revision; the next step verifies and detaches onto the release commit.
+      # Every later git step is local, so the token is not left in .git/config
+      # while dependency and vendoring code runs (supply audit F3).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
       - name: Check out immutable release commit
         env:
           RELEASE_COMMIT: ${{ inputs.commit_sha }}

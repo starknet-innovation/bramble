@@ -109,17 +109,28 @@ jobs:
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      # The token is not left in .git/config while dependency and vendoring code
+      # runs (supply audit F3). The one fetch below that needs it gets it through
+      # its own environment for that command only.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Check out resolved release commit
         env:
           REVISION: ${{ needs.resolve.outputs.revision }}
+          FETCH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Nightly revision must be a full lowercase SHA-1."
             exit 1
           fi
-          git fetch --no-tags --depth=1 origin "$REVISION"
+          basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$basic"
+          GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic" \
+            git fetch --no-tags --depth=1 origin "$REVISION"
           if [ "$(git rev-parse FETCH_HEAD)" != "$REVISION" ]; then
             echo "::error::Fetched nightly revision does not match the resolved commit."
             exit 1
