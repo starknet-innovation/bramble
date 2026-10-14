@@ -5,19 +5,19 @@ import { chromeStoreUrl } from "../site";
 
 const features = [
   [
-    "Shielded by default.",
-    "Your keys stay on your machine. Self-custody, with a seed phrase you own and nobody else can read.",
+    "Shield what you hold.",
+    "Move funds into a private balance when you want to. Amounts and recipients stay off the public record.",
   ],
   [
     "Super fast transactions.",
-    "Starknet's fastest moving wallet. Requests confirm in a breath, and fees stay small enough to forget.",
+    "Starknet's fastest moving wallet. Requests confirm in a breath, with minimal protocol fees.",
   ],
   [
     "Every request in plain words.",
     "Read what a call actually does before you sign it. Contracts, amounts and recipients, spelled out.",
   ],
   [
-    "Hold, send, stake.",
+    "Hold, send, shield.",
     "STRK, ETH, USDC and the tokens you collect along the way, all in one balance you can act on.",
   ],
 ] as const;
@@ -53,7 +53,9 @@ export const HomePage = () => {
             </p>
             <div className="hero-actions">
               <Button asChild className="button-large">
-                <a href="#download">Download now</a>
+                <a href={chromeStoreUrl} rel="noreferrer" target="_blank">
+                  Download now
+                </a>
               </Button>
               <Button asChild className="button-large button-ink">
                 <a href="/docs/">Read the docs</a>

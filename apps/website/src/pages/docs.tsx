@@ -114,10 +114,26 @@ export const DocsPage = () => (
           <section id="privacy">
             <h2>Private balances</h2>
             <p>
-              Private balances are activated explicitly. Shielding starts from a public deposit
-              review; private actions use the configured Starknet privacy services and the wallet’s
-              chain- and pool-scoped viewing identity. Service failures stay separate from public
-              wallet balances and transactions.
+              A private balance keeps a token off the public record. Shielding moves public value
+              into Starknet’s STRK20 privacy pool, where it is held as encrypted notes: you can
+              hold, send, and receive it without the amount or the other party appearing on-chain.
+              You activate it explicitly, from a public deposit review, and it stays separate from
+              your ordinary wallet balance.
+            </p>
+            <p>
+              A private balance is unlocked by a viewing key, derived from your account — it is what
+              reveals your shielded balance and history. Activating a private balance registers a
+              public commitment to that key on-chain; it never reveals the key or your balance.
+              Bramble never shows, exports, or logs the viewing key — treat it like your recovery
+              phrase and never share it.
+            </p>
+            <p>
+              STRK20 is Starknet’s privacy standard, not Bramble’s own. For how it works, what it
+              protects, and how it handles compliance, see{" "}
+              <a href="https://strk20.starknet.io/" rel="noreferrer" target="_blank">
+                the Starknet privacy hub
+              </a>
+              .
             </p>
           </section>
 
