@@ -15,6 +15,7 @@ import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transf
 import { bindTransferExits } from "./transfer-exits-ui";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
+  acceptsTransferSubmit,
   friendlyReviewError,
   initialTransferState,
   isTransferInFlight,
@@ -150,14 +151,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     repaint();
     composeFee.refresh();
   };
-  // Leaving the review discards it. `reviewedKey` is what the submit handler
-  // reads to tell "show me the review" from "I have read it, send it", so a
-  // return to the amount step that kept it made the next Review send button
-  // submit immediately. Every path out of review goes through here, including
-  // out of a review still being prepared: the epoch bump discards its result
-  // when it lands. That is safe because nothing is signed or sent before the
-  // confirm — the background finishes the proof it started, which cannot be
-  // interrupted, and simply never executes it.
+  // Leaving the review discards it: `reviewedKey` tells "show me the review"
+  // from "send it", so keeping it made the next Review press submit at once.
+  // Every path out of review comes here; the epoch bump discards a review still
+  // being prepared, which is safe because nothing is signed before the confirm.
   const editDetails = (): void => {
     transferEpoch += 1;
     transferState = {
@@ -320,6 +317,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (!acceptsTransferSubmit(transferState.stage)) return;
     const fields = transferFields(form);
     const recipientError = recipientFieldError(fields.recipient);
     const visibleAmount = form.querySelector<HTMLInputElement>("#send-amount-input");
@@ -346,10 +344,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     // review and the final confirm, because both arrive through this handler.
     const gate = route().blocked;
     if (gate) {
-      // A final confirm can reach this branch after the state behind the review
-      // changed (balance refresh, registration loss, relay removal). Invalidate
-      // every reviewed artifact and its async epoch before returning to edit;
-      // if the gate later clears, the next click must build a fresh review.
+      // A confirm can land here after the state behind the review changed:
+      // drop every reviewed artifact and its epoch, so a later click re-reviews.
       transferEpoch += 1;
       transferState = {
         ...initialTransferState<Review>(),
@@ -361,10 +357,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       return;
     }
     const key = transferKey(fields);
-    // A preparation already running for exactly these fields is not restarted.
-    // The button and the amount step are locked while it runs, so a second
-    // submit can only arrive programmatically — but a second proof for the
-    // same send would be a minute of wasted work and a discarded first result.
+    // A preparation already running for exactly these fields is not restarted:
+    // a second proof for the same send is a minute of wasted work.
     if (
       transferState.stage === "reviewing" &&
       transferState.fields !== null &&
@@ -481,7 +475,13 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       .then(
         (transactionHash) => {
           if (epoch !== transferEpoch) return;
-          transferState = { ...transferState, stage: "confirming", transactionHash };
+          // The review is spent: like the private route, drop its key (audit L5).
+          transferState = {
+            ...transferState,
+            reviewedKey: null,
+            stage: "confirming",
+            transactionHash,
+          };
           repaintActiveTransfer?.();
           if (requiresDeployment) {
             void watchDeployment(

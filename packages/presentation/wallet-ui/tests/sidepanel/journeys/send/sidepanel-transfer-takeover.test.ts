@@ -96,4 +96,37 @@ describe("a takeover while a send is signing", () => {
     expect(app.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(true);
   });
+
+  // Audit L5: the state machine's own guard. The Confirm button is disabled
+  // and the inputs hidden once a send is past the confirm, but a submit that
+  // arrives anyway (programmatic, or a repaint race) must not sign again,
+  // neither while signing nor once the hash is back.
+  test("ignores a second submit while the send is signing or submitted", async () => {
+    let calls = 0;
+    const { settle, submitTransfer } = deferredSubmit();
+    const { app, deps } = mount({
+      submitTransfer: async () => {
+        calls += 1;
+        return submitTransfer();
+      },
+    });
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+    submit(app);
+    await flush();
+    submit(app);
+    await flush();
+    expect(calls).toBe(1);
+
+    app.querySelector<HTMLFormElement>("#transfer-form")?.requestSubmit();
+    await flush();
+    expect(calls).toBe(1);
+
+    settle("0xdeadbeef");
+    await flush();
+    app.querySelector<HTMLFormElement>("#transfer-form")?.requestSubmit();
+    await flush();
+    expect(calls).toBe(1);
+  });
 });
