@@ -163,21 +163,25 @@ export const DEFAULT_TOKENS: readonly DefaultToken[] = [
 
 /**
  * Circle-native USDC on Starknet mainnet (what users hold since the
- * bridged→native migration), 6 decimals. Not a display default; probed only
- * during recovery discovery (see {@link RECOVERY_PROBE_TOKENS}).
+ * bridged→native migration), 6 decimals. Tracked by default on new wallets
+ * (see {@link DEFAULT_TRACKED_TOKENS}) but not a built-in: it is not in
+ * {@link DEFAULT_TOKENS}, so the user can still remove it and no fee guard
+ * depends on it.
  */
 export const USDC_TOKEN_ADDRESS =
   "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
 
 /**
- * Tokens the first-run recovery scan probes to decide an undeployed account has
- * been used. A superset of {@link DEFAULT_TOKENS}: the display defaults plus the
- * high-value ERC20s an account can hold with no ETH or STRK (native USDC on
- * mainnet), which the ETH/STRK-only probe would otherwise read as empty and
- * skip. Discovery-only — never the user's displayed token set, so adding a token
- * here widens detection without changing what every wallet shows by default.
+ * The token set a new wallet starts tracking (mc-wallet issue 663): the
+ * built-in {@link DEFAULT_TOKENS} plus native USDC on mainnet, the token users
+ * most often receive with no ETH or STRK beside it. Only USDC is added, and
+ * only on mainnet; it stays removable because {@link isDefaultToken} still
+ * names the built-ins alone. Existing wallets are not rewritten: a held USDC
+ * balance is tracked by the curated held-token scan instead. The first-run
+ * recovery scan probes this same set, so an account funded only in native
+ * USDC still reads as used.
  */
-export const RECOVERY_PROBE_TOKENS: readonly DefaultToken[] = [
+export const DEFAULT_TRACKED_TOKENS: readonly DefaultToken[] = [
   ...DEFAULT_TOKENS,
   {
     address: USDC_TOKEN_ADDRESS,
@@ -324,6 +328,20 @@ export const isDefaultToken = (token: {
   readonly networkId: string;
 }): boolean =>
   DEFAULT_TOKENS.some(
+    (known) => known.networkId === token.networkId && sameFelt(known.address, token.address),
+  );
+
+/**
+ * Whether a token is one a new wallet starts tracking ({@link DEFAULT_TRACKED_TOKENS}),
+ * matched like {@link isDefaultToken}. Such a token does not count against the
+ * added-token cap, since the user did not add it; unlike a built-in it can be
+ * removed.
+ */
+export const isDefaultTrackedToken = (token: {
+  readonly address: string;
+  readonly networkId: string;
+}): boolean =>
+  DEFAULT_TRACKED_TOKENS.some(
     (known) => known.networkId === token.networkId && sameFelt(known.address, token.address),
   );
 

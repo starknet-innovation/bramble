@@ -58,6 +58,12 @@ export type WalletPreferences = {
   readonly hiddenAccountIds?: readonly string[];
   readonly hiddenTokens?: readonly string[];
   readonly nftIndexerUrl?: string;
+  /**
+   * Tokens the user removed, as `networkId:address`, so the curated held-token
+   * scan never tracks one again (issue 663). Bounded; adding the token again
+   * lifts the entry. Absent on preferences written before the field existed.
+   */
+  readonly removedTokens?: readonly string[];
   readonly nfts?: readonly WatchedNft[];
   /** Custom relay replacing the reviewed Nostr defaults for explicit multisig handoffs. */
   readonly nostrRelayUrl?: string;

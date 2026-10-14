@@ -29,7 +29,13 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
+import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
 import { createApprovalContext } from "../approvals/approval-context";
+import {
+  privateReadTokens,
+  trackPrivatelyHeldTokens,
+  untrackedCuratedTokens,
+} from "../portfolio/held-tokens";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -166,15 +172,28 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
         : (await hasPendingRegistration(deps, context))
           ? "pending"
           : "unregistered";
-    const balances =
+    // Curated tokens are read too and tracked when privately held (issue 663);
+    // the entries returned still name tracked tokens alone.
+    const networkId = context.accountContext.account.networkId;
+    const tracked = context.preferences.tokens.filter((token) => token.networkId === networkId);
+    const curated = untrackedCuratedTokens(context.preferences, networkId);
+    const discovered =
       registration === "registered"
         ? await readStrk20Balances(strk20ServiceForRuntime(deps.runtimeRpc), {
             ...context.accountContext,
-            tokens: context.preferences.tokens
-              .filter((token) => token.networkId === context.accountContext.account.networkId)
-              .map((token) => token.address),
+            tokens: privateReadTokens(tracked, curated, STRK20_LIMITS.balances),
           })
         : [];
+    const trackedTokens = await trackPrivatelyHeldTokens(
+      deps.preferencesStore,
+      networkId,
+      tracked,
+      curated,
+      discovered,
+    );
+    const balances = discovered.filter((entry) =>
+      trackedTokens.some((token) => sameFelt(token.address, entry.token)),
+    );
     // The fee is a hard input to every pool route. Returning a successful state
     // without it leaves Send in an endless "Checking" state, so an unavailable
     // reader or a failed read rejects this request and reaches the UI's retry.
@@ -201,11 +220,7 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
       strk20State: {
         accountId: context.accountContext.account.id,
         balances: balances.map((entry) => {
-          const token = context.preferences.tokens.find(
-            (candidate) =>
-              candidate.networkId === context.accountContext.account.networkId &&
-              sameFelt(candidate.address, entry.token),
-          );
+          const token = trackedTokens.find((candidate) => sameFelt(candidate.address, entry.token));
           const feeCeiling = feeCeilings.get(entry.token);
           return {
             balance: entry.balance,

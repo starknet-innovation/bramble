@@ -2,6 +2,7 @@
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { accountLabel } from "../../shared/parts";
 import { formatFeeEstimate } from "../../shared/review-render";
+import { FEE_FUNDING_SHORTFALL } from "../../shell/deploy-errors";
 
 /**
  * Background error emitted when a one-time deployment review is stale.
@@ -30,7 +31,7 @@ export const deploymentFailureToast = (
   if (raw === EXPIRED_DEPLOYMENT_REVIEW) {
     return "The fee review expired. Review the deployment again before confirming.";
   }
-  if (/exceed balance|insufficient.*balance|address needs STRK/i.test(raw)) {
+  if (FEE_FUNDING_SHORTFALL.test(raw)) {
     return `Fund ${accountLabel(review.address)} with at least ${formatFeeEstimate(review.fee)}, then review the deployment again.`;
   }
   return raw;

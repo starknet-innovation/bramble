@@ -28,7 +28,7 @@ const scope = {
 };
 const signed = { nonce: "0x5", senderAddress: "0xdef", transactionHash: "0x456" };
 const stuck: Strk20MaturityRecord = { ...signed, state: "submitting" };
-const STATUS_UNKNOWN = "close every browser window and reopen the browser to recover";
+const STATUS_UNKNOWN = "may still be in progress";
 
 const notFound = (): Error =>
   Object.assign(new Error("RPC: starknet_getTransactionStatus"), { baseError: { code: 29 } });
@@ -112,6 +112,7 @@ describe("journaling a signed privacy write", () => {
       runtime.submitAccepted(
         node({}).provider,
         scope,
+        "account",
         async () => "prepared",
         async (_prepared, journal) => {
           await journal({ nonce: "0x05", senderAddress: "0x0DEF", transactionHash: "0x0456" });
@@ -131,6 +132,7 @@ describe("journaling a signed privacy write", () => {
       .submitAccepted(
         node({}).provider,
         scope,
+        "account",
         async () => "prepared",
         async (_prepared, journal) => {
           await journal({ ...signed, transactionHash: "0x0" });
@@ -290,6 +292,7 @@ describe("resolving a stuck privacy write", () => {
         await backing.write(scope, newer);
         return false;
       },
+      releaseUnsigned: () => backing.releaseUnsigned(scope),
       write: async (target, record) => {
         writes.push(record);
         await backing.write(target, record);

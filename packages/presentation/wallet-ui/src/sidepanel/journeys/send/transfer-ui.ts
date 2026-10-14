@@ -390,7 +390,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         void preparing.then(
           (preparation) => {
             if (epoch !== transferEpoch) return;
-            transferState = preparedState(preparation, fields, key);
+            transferState = preparedState(preparation, fields, key, deps.publicBalances?.());
             repaintActiveTransfer?.();
           },
           (error: unknown) => {

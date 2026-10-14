@@ -153,7 +153,11 @@ describe("wallet.removeToken recovery (Sherlock audit 134)", () => {
       harnessExtensionSender,
     )) as BalancesResponse;
     expect(response.stale).toBe(false);
-    expect(response.balances.map((balance) => balance.symbol).sort()).toEqual(["ETH", "STRK"]);
+    expect(response.balances.map((balance) => balance.symbol).sort()).toEqual([
+      "ETH",
+      "STRK",
+      "USDC",
+    ]);
   });
 
   test("a removed token does not come back from the last snapshot", async () => {
@@ -175,7 +179,11 @@ describe("wallet.removeToken recovery (Sherlock audit 134)", () => {
     )) as BalancesResponse;
     expect(second.stale).toBe(false);
     expect(balanceOf(second, BAD)).toBeUndefined();
-    expect(second.balances.map((balance) => balance.symbol).sort()).toEqual(["ETH", "STRK"]);
+    expect(second.balances.map((balance) => balance.symbol).sort()).toEqual([
+      "ETH",
+      "STRK",
+      "USDC",
+    ]);
   });
 
   test("refuses a built-in token and keeps it tracked", async () => {

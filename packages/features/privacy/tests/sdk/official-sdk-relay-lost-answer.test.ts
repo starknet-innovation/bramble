@@ -66,11 +66,11 @@ describe("a relay broadcast whose answer the gateway lost", () => {
       await expect(
         service.submitActions({ ...relayContext, actions: [...actions], plan }),
       ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
-      expect(await maturityStore.read(scope)).toEqual({ state: "submitting" });
+      expect(await maturityStore.read(scope)).toEqual({ route: "relay", state: "submitting" });
 
       await expect(
         service.submitActions({ ...relayContext, actions: [...actions], plan }),
-      ).rejects.toThrow("submission status is unknown");
+      ).rejects.toThrow("may still be in progress");
       expect(broadcasts()).toBe(1);
     });
   }

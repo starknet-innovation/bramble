@@ -8,6 +8,10 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  STRK20_PRIOR_WRITE_STRANDED,
+  STRK20_PRIOR_WRITE_UNRESOLVED,
+} from "@bramble/privacy/maturity";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { ActivityStatus } from "@bramble/transactions/activity";
@@ -21,6 +25,7 @@ import {
   type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
 import { createSidepanelRuntime } from "../../../../src/sidepanel/runtime/runtime";
+import { knownNotSent, priorWriteRefusal } from "../../../../src/sidepanel/shared/submit-outcome";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x5eed";
@@ -189,6 +194,93 @@ describe("a lost broadcast reply on Send", () => {
   });
 });
 
+describe("a refusal over an earlier private write that may still land (#661)", () => {
+  const SHOWN =
+    "An earlier private transaction from this account may still be in progress. Check Activity, then check again.";
+
+  test("says this one was not sent, keeps the earlier one's fact, and offers Check again", async () => {
+    const { app, calls, form, navigated } = mount(async (call) => {
+      if (call === 1) throw new Error(STRK20_PRIOR_WRITE_UNRESOLVED);
+      return HASH;
+    }, "accepted");
+    await reviewAndConfirm(form);
+
+    const title = app.querySelector("#send-failure-title")?.textContent ?? "";
+    const copy = app.querySelector("#send-failure-copy")?.textContent ?? "";
+    expect(title).toBe("Transaction not sent");
+    expect(copy).toBe(SHOWN);
+    expect(app.querySelector("#send-failure")?.hasAttribute("data-severity")).toBe(false);
+    expect(visible(app, "#send-retry")).toBe(true);
+    expect(app.querySelector("#send-retry")?.textContent).toBe("Check again");
+    expect(visible(app, "#send-failure-activity")).toBe(true);
+    app.querySelector<HTMLButtonElement>("#send-failure-activity")?.click();
+    expect(navigated).toEqual(["activity"]);
+
+    app.querySelector<HTMLButtonElement>("#send-retry")?.click();
+    await flush();
+    expect(calls).toEqual(["review", "submit", "review"]);
+    expect(form.dataset["stage"]).toBe("review");
+  });
+
+  test("a stranded earlier write names the browser restart and offers no retry", async () => {
+    const { app, form } = mount(async () => {
+      throw new Error(STRK20_PRIOR_WRITE_STRANDED);
+    }, "pending");
+    await reviewAndConfirm(form);
+
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction not sent");
+    expect(app.querySelector("#send-failure-copy")?.textContent).toBe(
+      "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+    );
+    expect(visible(app, "#send-retry")).toBe(false);
+    expect(visible(app, "#send-failure-activity")).toBe(true);
+  });
+
+  test("a later determinate failure goes back to Try again without Activity", async () => {
+    const { app, form } = mount(async (call) => {
+      if (call === 1) throw new Error(STRK20_PRIOR_WRITE_UNRESOLVED);
+      throw new Error(FEE_ROSE);
+    }, "pending");
+    await reviewAndConfirm(form);
+    app.querySelector<HTMLButtonElement>("#send-retry")?.click();
+    await flush();
+    form.requestSubmit();
+    await flush();
+
+    expect(app.querySelector("#send-retry")?.textContent).toBe("Try again");
+    expect(visible(app, "#send-failure-activity")).toBe(false);
+  });
+
+  test("a later lost reply on the same screen hides Try again again", async () => {
+    const { app, form } = mount(async (call) => {
+      if (call === 1) throw new Error(STRK20_PRIOR_WRITE_UNRESOLVED);
+      throw new SubmissionUnknownError("Transaction submission status is unknown.", null);
+    }, "pending");
+    await reviewAndConfirm(form);
+    app.querySelector<HTMLButtonElement>("#send-retry")?.click();
+    await flush();
+    form.requestSubmit();
+    await flush();
+
+    expect(app.querySelector("#send-failure-copy")?.textContent).toBe(
+      "Transaction submission status is unknown.",
+    );
+    expect(visible(app, "#send-retry")).toBe(false);
+  });
+
+  test("a typed unknown outcome carrying the same words is never treated as one", () => {
+    expect(priorWriteRefusal(new Error(STRK20_PRIOR_WRITE_UNRESOLVED))).toBe("unresolved");
+    expect(priorWriteRefusal(new Error(STRK20_PRIOR_WRITE_STRANDED))).toBe("stranded");
+    expect(
+      priorWriteRefusal(new SubmissionUnknownError(STRK20_PRIOR_WRITE_UNRESOLVED, null)),
+    ).toBeNull();
+    expect(priorWriteRefusal(new Error("strk20 services unavailable"))).toBeNull();
+    // Other surfaces read it as not sent: it was refused before it was claimed.
+    expect(knownNotSent(new Error(STRK20_PRIOR_WRITE_UNRESOLVED))).toBe(true);
+    expect(knownNotSent(new Error(STRK20_PRIOR_WRITE_STRANDED))).toBe(true);
+  });
+});
+
 describe("Try again after a failure", () => {
   test("re-reviews a determinate submit failure before signing again", async () => {
     const { app, calls, form } = mount(async (call) => {
@@ -240,6 +332,15 @@ describe("submitRejection (shared by the public and pool routes)", () => {
     expect(rejection.state.reviewedKey).toBeNull();
     expect(rejection.state.review).toBeNull();
     expect(rejection.state.privatePreparation).toBeNull();
+  });
+
+  test("never carries an earlier prior-write refusal's Try again into a lost reply", () => {
+    const rejection = submitRejection(
+      { ...state, priorWrite: "unresolved" },
+      new SubmissionUnknownError("Transaction submission status is unknown.", null),
+    );
+    expect(rejection.state.submissionUnknown).toBe(true);
+    expect(rejection.state.priorWrite).toBeNull();
   });
 
   test("keeps 'not sent' for a pre-submit refusal, still dropping the review", () => {

@@ -14,6 +14,10 @@
  */
 
 import { isLedgerRejectionCode, type LedgerRejectionCode } from "@bramble/ledger-protocol/errors";
+import {
+  STRK20_PRIOR_WRITE_STRANDED,
+  STRK20_PRIOR_WRITE_UNRESOLVED,
+} from "@bramble/privacy/maturity";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
@@ -34,6 +38,10 @@ import { errorDetails } from "./dom";
  * the conformance test), so it can never sit beside "may not have gone through".
  */
 export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
+  // An earlier private write may still land, so this one was refused while
+  // its proving block was chosen, before it claimed the pool (issue 661).
+  STRK20_PRIOR_WRITE_UNRESOLVED,
+  STRK20_PRIOR_WRITE_STRANDED,
   // The gate: nothing was built.
   "wallet locked",
   "no account for selected network",
@@ -154,6 +162,23 @@ export const knownNotSent = (error: unknown): boolean => {
   if (isLedgerRejectionCode(raw)) return PRE_SIGNATURE_LEDGER_CODES.has(raw);
   const normalized = raw.toLowerCase();
   return KNOWN_NOT_SENT.has(normalized) || PARSE_REFUSAL.test(normalized);
+};
+
+/**
+ * The privacy runtime's refusal over an EARLIER write that may still land:
+ * `unresolved` when a later check can clear it, `stranded` when only ending
+ * the browser session can. Either way the refused attempt sent nothing (both
+ * are {@link knownNotSent}). Null for anything else, a typed unknown outcome
+ * included.
+ */
+export type PriorWriteRefusal = "stranded" | "unresolved";
+
+/** Classifies a rejection as a {@link PriorWriteRefusal}, or null. */
+export const priorWriteRefusal = (error: unknown): PriorWriteRefusal | null => {
+  if (!(error instanceof Error) || error instanceof SubmissionUnknownError) return null;
+  const raw = error.message.trim();
+  if (raw === STRK20_PRIOR_WRITE_UNRESOLVED) return "unresolved";
+  return raw === STRK20_PRIOR_WRITE_STRANDED ? "stranded" : null;
 };
 
 // Sentences that carry nothing beyond "it didn't work": beside an unknown

@@ -15,7 +15,7 @@ import { isAccountId } from "@bramble/wallet-model/accounts";
 import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
 import {
   DEFAULT_NETWORK,
-  DEFAULT_TOKENS,
+  DEFAULT_TRACKED_TOKENS,
   isStarknetNetworkId,
   STRK_TOKEN_ADDRESS,
 } from "@bramble/wallet-model/networks";
@@ -68,14 +68,14 @@ export type {
 export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
 /** Custom-network count bound, re-exported with the store that applies it. */
 export { MAX_CUSTOM_NETWORKS } from "./preferences-custom-networks";
-/** Added-token count bound and the recovery-scan probe set, re-exported with the store they belong to. */
-export { MAX_ADDED_TOKENS_PER_NETWORK, recoveryProbeTokens } from "./preferences-tokens";
+/** Added-token bound, recovery-scan probe set and removal check, re-exported with their store. */
+export {
+  MAX_ADDED_TOKENS_PER_NETWORK,
+  recoveryProbeTokens,
+  wasTokenRemoved,
+} from "./preferences-tokens";
 /** Re-exported store schema and capability types. */
-export type {
-  TokenSource,
-  WalletPreferences,
-  WalletPreferencesStore,
-} from "./preferences-types";
+export type { TokenSource, WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /**
  * Browser storage key for non-secret wallet preferences.
@@ -136,7 +136,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   schemaVersion: 1,
   strk20Networks: DEFAULT_STRK20_NETWORKS,
   theme: "dark",
-  tokens: DEFAULT_TOKENS.map(withTokenId),
+  tokens: DEFAULT_TRACKED_TOKENS.map(withTokenId),
 });
 
 const RETIRED_STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";

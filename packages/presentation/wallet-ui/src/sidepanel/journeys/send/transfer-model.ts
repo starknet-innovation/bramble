@@ -136,6 +136,15 @@ export type TransferState<Review> = {
    * unknown and offers Activity instead of Try again.
    */
   readonly submissionUnknown: boolean;
+  /**
+   * Set on a `failed` stage refused because an EARLIER private write may still
+   * land: this attempt was not sent, and the receipt offers Activity. When the
+   * refusal is `unresolved` it also offers Check again, which prepares afresh
+   * and so re-runs the background's resolution of that write; a `stranded`
+   * one offers no retry, since only ending the browser session clears it
+   * (mc-wallet issue 661).
+   */
+  readonly priorWrite?: "stranded" | "unresolved" | null;
   readonly transactionHash: string | null;
 };
 

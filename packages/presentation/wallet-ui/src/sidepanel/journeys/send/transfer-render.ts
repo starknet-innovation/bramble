@@ -175,7 +175,10 @@ const applySuccessReceipt = (
 // a re-send could pay twice (audit 173).
 const applyFailureReceipt = (
   form: HTMLFormElement,
-  state: Pick<TransferState<TransferReview>, "error" | "submissionUnknown" | "transactionHash">,
+  state: Pick<
+    TransferState<TransferReview>,
+    "error" | "priorWrite" | "submissionUnknown" | "transactionHash"
+  >,
 ): void => {
   const submitted = Boolean(state.transactionHash);
   const unknown = state.submissionUnknown && !submitted;
@@ -191,8 +194,16 @@ const applyFailureReceipt = (
   const section = form.querySelector<HTMLElement>("#send-failure");
   if (unknown) section?.setAttribute("data-severity", "warning");
   else section?.removeAttribute("data-severity");
-  form.querySelector("#send-retry")?.toggleAttribute("hidden", unknown);
-  form.querySelector("#send-failure-activity")?.toggleAttribute("hidden", !unknown);
+  // A refusal over an earlier write that may still land: this attempt was not
+  // sent, and Activity shows the earlier one. Check again re-runs the check
+  // when a check can clear it; a stranded one offers no retry at all.
+  const priorWrite = !unknown && !submitted ? (state.priorWrite ?? null) : null;
+  const retry = form.querySelector("#send-retry");
+  retry?.toggleAttribute("hidden", unknown || priorWrite === "stranded");
+  if (retry) retry.textContent = priorWrite === "unresolved" ? "Check again" : "Try again";
+  form
+    .querySelector("#send-failure-activity")
+    ?.toggleAttribute("hidden", !unknown && priorWrite === null);
   const reason =
     state.error ||
     (submitted

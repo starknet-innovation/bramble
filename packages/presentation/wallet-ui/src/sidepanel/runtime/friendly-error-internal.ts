@@ -126,11 +126,18 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
   ["the account changed since this request was reviewed", REVIEW_MOVED],
   // A private-balance refusal, in the words the wallet already gives sites.
   ["insufficient private balance", "Insufficient private balance"],
-  // The STRK20 write's outcome is unknown and the recovery instruction is the
-  // fact the reader needs: shown as written until reviewed copy keeps both.
+  // An earlier STRK20 write may still land, so this one was refused before it
+  // was sent (mc-wallet issue 661). Activity shows the earlier one; checking
+  // again re-runs the background's resolution of it.
   [
-    "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
-    "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
+    "strk20 services unavailable: an earlier private transaction from this account may still be in progress",
+    "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+  ],
+  // The same, for an earlier write no later check can resolve: only ending the
+  // browser session clears its marker, so the sentence says that instead.
+  [
+    "strk20 services unavailable: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover",
+    "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
   ],
   // The account's deploy class is not one this wallet derives: the same fact
   // the deployed-account checks already tell the reader.

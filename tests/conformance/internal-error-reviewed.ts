@@ -282,8 +282,12 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ["invalid private key", "Couldn't import that account. Check what you pasted and try again."],
   ["insufficient private balance", "Insufficient private balance"],
   [
-    "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
-    "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
+    "strk20 services unavailable: an earlier private transaction from this account may still be in progress",
+    "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+  ],
+  [
+    "strk20 services unavailable: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover",
+    "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
   ],
   [
     "invalid argent account class hash",
