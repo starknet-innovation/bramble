@@ -55,7 +55,7 @@ export type {
 } from "./runtime-types";
 
 import { createAccountRuntimeClient } from "./runtime-accounts";
-import { lostReplySend, responseError } from "./runtime-errors";
+import { lostReplySend, relabelLostReply, responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
@@ -104,24 +104,33 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
      * was displaying; it travels only with an approval, and the background
      * refuses rather than substituting if its own copy has moved since — which
      * is what stops a stale card consenting to an unseen fee. A card that
-     * showed no fee sends none and the submission stays unbound.
+     * showed no fee sends none and the submission stays unbound. `transaction`
+     * marks a card whose approval signs and submits a transaction: only that
+     * decision's unknown outcome says the approval may not have gone through
+     * (a Deny, a connection, or a network switch keeps the generic sentence).
      */
     async decideApproval(
       id: string,
       approved: boolean,
       reviewedFee?: PendingApproval["fee"],
       reviewedAccountId?: string,
+      transaction = false,
     ): Promise<void> {
+      const ownCode = approved && transaction;
       const response = await sendMessage({
         id,
         ...(approved && reviewedAccountId ? { reviewedAccountId } : {}),
         ...(approved && reviewedFee ? { reviewedFee } : {}),
         type: approved ? "wallet.approveOrigin" : "wallet.denyOrigin",
+      }).catch((error: unknown) => {
+        throw ownCode ? relabelLostReply(error, "transaction approval failed") : error;
       });
       if (isApprovalDecisionResponse(response)) {
         return;
       }
-      throw responseError(response, "approval failed");
+      throw ownCode
+        ? responseError(response, "transaction approval failed")
+        : responseError(response, "approval failed");
     },
     async retryApprovalFee(id: string): Promise<void> {
       const response = await sendMessage({ id, type: "wallet.retryApprovalFee" });
@@ -188,16 +197,20 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       return allowanceListingFrom(response);
     },
     async revokeAllowance(id: string, reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
+      // Its own code, apart from Connected sites' "revoke failed": only this
+      // revoke is a transaction, so only its unknown outcome points at Activity.
       const response = await sendMessage({
         id,
         ...(reviewedFee ? { reviewedFee } : {}),
         type: "wallet.revokeAllowance",
+      }).catch((error: unknown) => {
+        throw relabelLostReply(error, "allowance revoke failed");
       });
       if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
-      throw responseError(response, "revoke failed");
+      throw responseError(response, "allowance revoke failed");
     },
     async reviewTransfer(
       accountId: string,

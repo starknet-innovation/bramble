@@ -75,6 +75,7 @@ const decisionRow = (
 ): string =>
   `<div class="button-row">${denyButton(approval, denyLabel)}${button({
     attributes: {
+      "data-approval-kind": approval.kind,
       "data-approval-action": "approve",
       ...(reviewedFee
         ? {

@@ -32,6 +32,11 @@ import {
  * request in the Activity list for this panel session without deciding it.
  */
 
+// Approval kinds whose approval signs and submits a transaction (stamped on the
+// approve control as data-approval-kind): only their unknown outcome says the
+// approval may not have gone through (copy review bf08).
+const TRANSACTION_APPROVALS: ReadonlySet<string> = new Set(["declare", "invoke", "strk20-invoke"]);
+
 // What the panel says while a decision runs and when it lands. Closing a
 // notice answers the site like Deny, but there was nothing to deny: no live
 // line, and the toast says only that it closed.
@@ -373,34 +378,37 @@ export const bindApprovals = ({
       // Likewise the account a connection card named: read off the clicked
       // control, so the account the user saw is the one the decision reports.
       const reviewedAccountId = button.dataset["approvalAccount"];
-      void wallet.decideApproval(id, action === "approve", reviewedFee, reviewedAccountId).then(
-        () => {
-          // The status is read when the outcome paints, not when the decision
-          // resolved: a snapshot taken up to the pacer's hold earlier could
-          // repaint over a newer refresh (a request queued in the meantime).
-          paced.settle(() => {
-            showToast(words.done, "success", button);
-            void wallet
-              .loadStatus()
-              .then(render)
-              .catch(() => undefined);
-          });
-        },
-        (error: unknown) => {
-          // The background atomically consumes an approval before execution.
-          // Repaint after any executor error so stale controls cannot decide the
-          // already-removed id and surface a misleading "approval not found".
-          paced.settle(() => {
-            showFailure(error, button);
-            void wallet
-              .loadStatus()
-              .then(render, () => {
-                deciding.delete(id);
-              })
-              .catch(() => undefined);
-          });
-        },
-      );
+      const transaction = TRANSACTION_APPROVALS.has(button.dataset["approvalKind"] ?? "");
+      void wallet
+        .decideApproval(id, action === "approve", reviewedFee, reviewedAccountId, transaction)
+        .then(
+          () => {
+            // The status is read when the outcome paints, not when the decision
+            // resolved: a snapshot taken up to the pacer's hold earlier could
+            // repaint over a newer refresh (a request queued in the meantime).
+            paced.settle(() => {
+              showToast(words.done, "success", button);
+              void wallet
+                .loadStatus()
+                .then(render)
+                .catch(() => undefined);
+            });
+          },
+          (error: unknown) => {
+            // The background atomically consumes an approval before execution.
+            // Repaint after any executor error so stale controls cannot decide the
+            // already-removed id and surface a misleading "approval not found".
+            paced.settle(() => {
+              showFailure(error, button);
+              void wallet
+                .loadStatus()
+                .then(render, () => {
+                  deciding.delete(id);
+                })
+                .catch(() => undefined);
+            });
+          },
+        );
     });
   });
   // Fee-estimate retry on a queued invoke card: asks the background to

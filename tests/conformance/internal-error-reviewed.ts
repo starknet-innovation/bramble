@@ -40,6 +40,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "That didn't complete. If it was a transaction, check Activity before trying again.",
   ],
   [
+    "transaction approval failed",
+    "The approval may not have gone through. Check Activity before trying again.",
+  ],
+  [
     "approval execution failed",
     "That didn't complete. If it was a transaction, check Activity before trying again.",
   ],
@@ -80,6 +84,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "Couldn't estimate the network fee, so nothing was signed. Try again.",
   ],
   ["allowance not found", "That allowance is no longer on-chain. Refresh the list."],
+  [
+    "allowance revoke failed",
+    "The revoke may not have gone through. Check Activity before trying again.",
+  ],
   [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",
