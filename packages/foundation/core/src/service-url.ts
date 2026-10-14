@@ -43,6 +43,20 @@ export const trimTrailingSlashes = (value: string): string => {
   return value.slice(0, end);
 };
 
+// The characters {@link redactEndpoints} ends a URL at: any whitespace (the
+// Unicode set, so a no-break or ideographic space counts) and the quote, angle
+// bracket and backtick a URL cannot carry unescaped.
+const REDACTION_BREAK = /[\s"<>`]/u;
+
+/**
+ * True when an endpoint holds a character {@link redactEndpoints} would end the
+ * URL at. Such an endpoint could leave part of an API key visible in a redacted
+ * error, so it is refused when entered. Stored records are not re-validated with
+ * it: tightening the stored rule could make a settings record that loads today
+ * unreadable.
+ */
+export const hasRedactionBreak = (value: string): boolean => REDACTION_BREAK.test(value);
+
 /**
  * Checks a user-configured service endpoint without performing network access.
  */
@@ -53,6 +67,18 @@ export const isServiceUrl = (value: unknown): value is string => isUrlFor(value,
  */
 export const isWebSocketServiceUrl = (value: unknown): value is string =>
   isUrlFor(value, "wss:", "ws:");
+
+/**
+ * Checks an endpoint as it is entered (settings, a dapp's chain request): an
+ * {@link isServiceUrl} that {@link redactEndpoints} can redact whole, so it holds
+ * no {@link hasRedactionBreak} character.
+ */
+export const isEnteredServiceUrl = (value: unknown): value is string =>
+  isServiceUrl(value) && !hasRedactionBreak(value);
+
+/** The entered-endpoint rule of {@link isEnteredServiceUrl} for a WebSocket endpoint. */
+export const isEnteredWebSocketServiceUrl = (value: unknown): value is string =>
+  isWebSocketServiceUrl(value) && !hasRedactionBreak(value);
 
 /**
  * Checks a chain descriptor's endpoint list: non-empty, every entry a

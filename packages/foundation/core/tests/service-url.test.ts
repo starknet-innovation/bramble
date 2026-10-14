@@ -3,7 +3,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  hasRedactionBreak,
   isBoundedServiceUrlList,
+  isEnteredServiceUrl,
+  isEnteredWebSocketServiceUrl,
   isServiceUrl,
   isWebSocketServiceUrl,
   normalizeHostname,
@@ -53,6 +56,30 @@ describe("service URLs", () => {
     expect(isBoundedServiceUrlList(urls(5), 4)).toBe(false);
     expect(isBoundedServiceUrlList([], 4)).toBe(false);
     expect(isBoundedServiceUrlList(["ftp://rpc.example"], 4)).toBe(false);
+  });
+});
+
+describe("entered endpoints", () => {
+  test("refuse every character the redactor ends a URL at", () => {
+    for (const brk of [
+      " ",
+      String.fromCharCode(0xa0),
+      String.fromCharCode(0x3000),
+      "\t",
+      '"',
+      "<",
+      ">",
+      "`",
+    ]) {
+      const url = `https://rpc.example/key${brk}secret`;
+      expect(hasRedactionBreak(url)).toBe(true);
+      expect(isEnteredServiceUrl(url)).toBe(false);
+      expect(isEnteredWebSocketServiceUrl(`wss://relay.example/key${brk}secret`)).toBe(false);
+      // Past any break but a tab (which the redactor spans), the tail would show.
+      if (brk !== "\t") expect(redactEndpoints(`failed: ${url}`)).toContain("secret");
+    }
+    expect(isEnteredServiceUrl("https://rpc.example/v1/key")).toBe(true);
+    expect(isEnteredWebSocketServiceUrl("wss://relay.example/path")).toBe(true);
   });
 });
 
