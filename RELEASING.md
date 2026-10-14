@@ -334,6 +334,19 @@ window) is a dashboard-only option and is intentionally not automated.
 - **User impact:** users on the bad version keep it until the corrected version
   passes review and their browser auto-updates the extension.
 
+### Never roll back; roll forward
+
+Upgrades are one-way. Once a user unlocks a new version, the wallet migrates
+their vault and preferences, and an older build can't open them: v0.10.5, for
+example, refuses a v0.10.6 vault as an unsupported schema. Storage stays
+intact, and reinstalling the current version reopens it.
+
+So never republish, re-tag or attach an older version, on any channel. To pull
+a bad release, ship a patch with a higher version (vX.Y.Z+1) that contains the
+fix or the last good code. The Chrome Web Store refuses a lower version, but
+AMO and self-hosted zips don't, so this rule is the only guard there. User-facing
+recovery docs are tracked in #670.
+
 ## 9. Where automation hooks in
 
 - `.github/workflows/auto-release.yml` — automatic release-on-merge: derive the
