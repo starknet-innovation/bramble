@@ -66,9 +66,12 @@ type SdkBundle = PrivacySdkRuntime & {
 // wherever the bundle exists: locally after vendor:privacy, and in
 // release-validation, whose `bun run check` follows vendor:privacy and whose
 // check:privacy fails if the bundle is missing.
-const SDK_BUNDLE = "../../../vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js";
-const sdkBuilt = existsSync(resolve(import.meta.dir, SDK_BUNDLE));
-const sdk = (sdkBuilt ? await import(SDK_BUNDLE) : null) as unknown as SdkBundle;
+const sdkBuilt = existsSync(
+  resolve(import.meta.dir, "../../../vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js"),
+);
+const sdk = (sdkBuilt
+  ? await import("../../../vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js")
+  : null) as unknown as SdkBundle;
 
 const VIEWING_KEY = "0x55";
 const ANONYMIZER = "0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
