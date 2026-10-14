@@ -282,7 +282,6 @@ const handleWatchAsset: ProviderOpsHandler = async (deps, message, sender) => {
     },
     input,
   );
-  if (approval === true) return { ok: true, watched: true };
   return approval ? deps.waiters.register(approval.id) : { error: "invalid watch asset metadata" };
 };
 

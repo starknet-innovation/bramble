@@ -315,13 +315,12 @@ match — fail-closed, and unreachable in practice because both account pickers 
 the active network and `switchActiveNetwork` re-selects the target network's account.
 
 `wallet_watchAsset` (SNIP-compatible ERC20, `options.address`) fetches the token's on-chain
-`name`/`symbol`/`decimals` via RPC (falling back to the caller's options), then queues a
-`watch-asset` approval rendered in the side panel. Approving calls `preferencesStore.upsertToken`;
-denying leaves the token untracked. Like `wallet_requestAccounts`, this uses the queue-and-pending
-model rather than a persistent open promise: an already-tracked asset resolves `true` immediately,
-otherwise the current call rejects with `approval pending` and the dapp receives `true` on a repeat
-call after approval. Holding the dapp promise open across the side-panel decision within a single
-service-worker lifetime is a possible future enhancement.
+`name`/`symbol`/`decimals` via RPC, then queues a `watch-asset` approval rendered in the side
+panel, and holds the dapp's call until the user decides or the approval expires. Approving calls
+`preferencesStore.upsertToken`; denying leaves the token untracked. A token the wallet already
+tracks is never answered at once: the per-origin cap is checked before preferences are read, the
+same metadata read runs, and the request is held on a close-only "already tracked" notice whose
+Close answers `true` (audit M1), so a page cannot list the tracked tokens.
 
 ## Connected Sites & Site Reputation
 

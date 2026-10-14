@@ -106,6 +106,12 @@ export const APPROVAL_SUMMARY_MAX_LENGTH = 300;
  */
 export type PendingApproval = {
   readonly actionReviews?: readonly Strk20Action[];
+  /**
+   * `watch-asset` only: the wallet already tracks this token, so the card is a
+   * close-only notice and Close answers the site as an approval would. The
+   * site learns nothing until the user closes it (audit M1).
+   */
+  readonly alreadyTracked?: true;
   readonly blocked?: boolean;
   /** Exact, display-only invoke calls retained beside decoded summaries. */
   readonly callReviews?: readonly ProviderInvokeCall[];

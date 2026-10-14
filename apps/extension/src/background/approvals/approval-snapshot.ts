@@ -46,9 +46,12 @@ export type InvokeFeeReview = {
  */
 export type ApprovalRequest = PendingApproval & ApprovalPayload;
 
-// A notice's wallet-chosen reason, absent for every other kind.
-const noticeSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> =>
-  approval.notice === undefined ? {} : { notice: approval.notice };
+// A notice's wallet-chosen reason, and a watch-asset card's already-tracked
+// mark (audit M1); both absent for every other approval.
+const noticeSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.alreadyTracked === true ? { alreadyTracked: true } : {}),
+  ...(approval.notice === undefined ? {} : { notice: approval.notice }),
+});
 
 // Copies an invoke entry's fee review onto its snapshot without materializing
 // absent fields, so non-invoke snapshots stay byte-identical to before.

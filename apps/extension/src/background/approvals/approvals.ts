@@ -259,7 +259,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       const existing = queued().find(
         (approval) => approval.kind === "connect" && approval.origin === origin,
       );
@@ -277,7 +276,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       const existing = queued().find(
         (approval) =>
           approval.kind === "add-chain" &&
@@ -299,7 +297,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       return enqueue({
         context: { ...context },
         declaration: {
@@ -341,7 +338,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       return enqueue({
         context: { ...context },
         ...(review ? { flags: review.flags.map((flag) => ({ ...flag })) } : {}),
@@ -399,7 +395,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       return enqueue(
         {
           ...(shadowAccountAnonymizer === undefined ? {} : { shadowAccountAnonymizer }),
@@ -437,7 +432,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       const existing = queued().find(
         (approval) =>
           approval.kind === "switch-chain" &&
@@ -456,11 +450,10 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [summary],
       });
     },
-    requestWatchAsset({ origin, token }) {
+    requestWatchAsset({ alreadyTracked, origin, token }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       const existing = queued().find(
         (approval) =>
           approval.kind === "watch-asset" &&
@@ -471,7 +464,13 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       if (existing) {
         return approvalSnapshot(existing);
       }
-      return enqueue({ id: crypto.randomUUID(), kind: "watch-asset", origin, token: { ...token } });
+      return enqueue({
+        ...(alreadyTracked === true ? { alreadyTracked } : {}),
+        id: crypto.randomUUID(),
+        kind: "watch-asset",
+        origin,
+        token: { ...token },
+      });
     },
     updateFee({ id, revision }, update) {
       const approval = entry(id);

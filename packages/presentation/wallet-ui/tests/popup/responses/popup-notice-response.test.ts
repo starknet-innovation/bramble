@@ -57,4 +57,27 @@ describe("private-services notice response", () => {
       }),
     ).toBe(false);
   });
+
+  test("admits the already-tracked mark only as true, and only on a watch-asset card", () => {
+    const card = {
+      id: approvalId,
+      kind: "watch-asset",
+      origin: "https://example.com",
+      token: { address: "0x1", decimals: 18, name: "Token", networkId: "SN_MAIN", symbol: "TKN" },
+    };
+    expect(
+      isPendingApprovalsResponse({ ok: true, pending: [{ ...card, alreadyTracked: true }] }),
+    ).toBe(true);
+    expect(
+      isPendingApprovalsResponse({ ok: true, pending: [{ ...card, alreadyTracked: false }] }),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [
+          { alreadyTracked: true, id: approvalId, kind: "connect", origin: "https://example.com" },
+        ],
+      }),
+    ).toBe(false);
+  });
 });

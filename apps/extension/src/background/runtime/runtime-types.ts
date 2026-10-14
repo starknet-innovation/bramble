@@ -158,8 +158,8 @@ type PermissionsResponse = {
 };
 
 /**
- * Watch-asset outcome returned when the requested token is already tracked and
- * no approval prompt is needed.
+ * Watch-asset outcome returned once the user approves the card, or closes the
+ * already-tracked notice (audit M1). Never returned before the user acts.
  */
 type WatchAssetResponse = {
   readonly ok: true;

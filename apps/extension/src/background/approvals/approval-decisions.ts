@@ -11,16 +11,13 @@
  * decision instead of substituting its own figure.
  */
 
-import { WalletError } from "@bramble/core/errors";
 import type { MultisigStore } from "@bramble/multisig/repository";
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
-import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { sameFeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
-import { withTokenId } from "@bramble/wallet-model/preferences";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
@@ -50,6 +47,7 @@ import { settleClaimError, validateClaimContext } from "./approval-claim-context
 import { pendingFeeRefusal } from "./approval-fee-refusal";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
+import { applyWatchAssetApproval, WATCH_ASSET_TRACKED_RESPONSE } from "./approval-watch-asset";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue } from "./approvals";
 import { DROPPED_APPROVAL_RESPONSE, type SignatureWaiters } from "./signature-waiters";
 
@@ -85,38 +83,8 @@ type ApproveApplier = (
   decision: ApproveDecision,
 ) => Promise<ApplyResult>;
 
-// The store treats an address already tracked on the network as watched
-// without writing (a second origin's card for the same token) and refuses past
-// its added-token cap; that refusal reaches the dapp and the panel as is.
-const applyWatchAsset: ApproveApplier = async (deps, { approval }) => {
-  if (!approval.token) {
-    return reject(NOT_FOUND);
-  }
-  // Recorded as dapp-supplied (audit 171): its metadata came from the site, so
-  // the call reviewer does not trust it unless it matches a curated token.
-  let stored: Awaited<ReturnType<WalletPreferencesStore["upsertToken"]>>;
-  try {
-    stored = await deps.preferencesStore.upsertToken(approval.token, "dapp");
-  } catch (error) {
-    if (error instanceof WalletError) {
-      return reject({ error: error.message });
-    }
-    throw error;
-  }
-  // Same rule as wallet.addToken: a dapp-suggested token that borrows a known
-  // ticker or carries malformed metadata is stored hidden. Only when the card
-  // wrote its own record: an address already tracked under another id is left
-  // as it is, and a hide flag for the card's id would point at nothing.
-  const tokenId = withTokenId(approval.token).id;
-  if (isLikelySpam(approval.token) && stored.tokens.some((token) => token.id === tokenId)) {
-    await deps.preferencesStore.setTokenHidden({ hidden: true, tokenId });
-  }
-  return {
-    respond: (listPending) => ({ ok: true, pending: listPending() }),
-    settle: { ok: true, watched: true },
-    status: "settle",
-  };
-};
+const applyWatchAsset: ApproveApplier = (deps, { approval }) =>
+  applyWatchAssetApproval(deps.preferencesStore, approval);
 
 const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (!payload) {
@@ -468,11 +436,15 @@ const applyDenyDecision = async (
   // only now, after the user saw the notice (#443).
   const noticeRefusal =
     denied.kind === "strk20-unavailable" ? claim?.payload?.noticeRefusal : undefined;
+  // Closing an already-tracked notice is likewise when the site learns the
+  // token is tracked, and only then (audit M1).
   deps.waiters.settle(
     input.id,
-    noticeRefusal === undefined
-      ? { error: denied.kind === "connect" ? "connection rejected" : "request rejected" }
-      : { error: noticeRefusal },
+    denied.kind === "watch-asset" && denied.alreadyTracked === true
+      ? WATCH_ASSET_TRACKED_RESPONSE
+      : noticeRefusal === undefined
+        ? { error: denied.kind === "connect" ? "connection rejected" : "request rejected" }
+        : { error: noticeRefusal },
   );
   return { ok: true, pending: deps.approvals.list() };
 };
