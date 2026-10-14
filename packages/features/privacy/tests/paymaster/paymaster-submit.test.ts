@@ -282,6 +282,15 @@ describe("STRK20 paymaster submission boundary", () => {
       async () => new Response(JSON.stringify({ error: "upstream_unavailable" }), { status: 502 }),
       async () => new Response("unavailable", { status: 503 }),
       async () => new Response(JSON.stringify({ error: "upstream_timeout" }), { status: 504 }),
+      // Audit M1: Chrome reports a connection reset or an empty reply after the
+      // request was written as the same `TypeError` as a DNS failure, so no
+      // transport rejection proves the relay never received the broadcast.
+      async () => {
+        throw new TypeError("Failed to fetch");
+      },
+      async () => {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      },
     ];
     for (const http of lost) {
       const rejected = await submitWith(http);
@@ -307,11 +316,6 @@ describe("STRK20 paymaster submission boundary", () => {
           }),
           { status: 200 },
         ),
-      // No exchange took place at all: DNS, a refused connection, a refused
-      // redirect. Nothing was broadcast.
-      async () => {
-        throw new TypeError("Failed to fetch");
-      },
     ];
     for (const http of stated) {
       const rejected = await submitWith(http);
