@@ -10,6 +10,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { INVOKE_NOT_JOURNALED, REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
+import {
+  PRIVACY_PUBLIC_BALANCE_UNCONFIRMED,
+  privacyShortfall,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { friendlyError } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error";
 import {
@@ -74,5 +78,20 @@ describe("known-not-sent refusals", () => {
     expect(knownNotSent(new Error("chain-failed"))).toBe(false);
     expect(knownNotSent(new Error("unexpected-device-error"))).toBe(false);
     expect(knownNotSent("wallet locked")).toBe(false);
+  });
+
+  // Audit L2: a private action refused for a balance it read before signing
+  // sent nothing, so it must not read as "outcome unknown".
+  test("a privacy balance refusal raised before signing is known not sent", () => {
+    for (const raw of [
+      privacyShortfall("ETH", "private"),
+      privacyShortfall("USDC", "public"),
+      PRIVACY_PUBLIC_BALANCE_UNCONFIRMED,
+    ]) {
+      expect(knownNotSent(new Error(raw))).toBe(true);
+    }
+    // Only the exact refusal shape: a longer sentence is not one.
+    expect(knownNotSent(new Error("Not enough signatures yet."))).toBe(false);
+    expect(knownNotSent(new Error("Not enough ETH after the transaction was sent"))).toBe(false);
   });
 });

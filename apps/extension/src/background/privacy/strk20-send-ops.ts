@@ -25,6 +25,7 @@ import {
   isNonZeroStarkFieldElement,
   sameFelt,
 } from "@bramble/wallet-model/networks";
+import { privacyShortfall } from "@bramble/wallet-protocol/privacy-blocker";
 import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
 import { createApprovalContext } from "../approvals/approval-context";
 import { observedAccountContext } from "../runtime/runtime-state";
@@ -117,7 +118,7 @@ const transferPreparation = async (
       tokens: [context.token.address],
     });
     if (amountRaw > BigInt(privateBalance?.balance ?? "0x0")) {
-      return { error: `Not enough private ${context.token.symbol}` };
+      return { error: privacyShortfall(context.token.symbol, "private") };
     }
     const actions = [
       {
@@ -197,7 +198,7 @@ const withdrawPreparation = async (
       tokens: [context.token.address],
     });
     if (amountRaw > BigInt(privateBalance?.balance ?? "0x0")) {
-      return { error: `Not enough private ${context.token.symbol}` };
+      return { error: privacyShortfall(context.token.symbol, "private") };
     }
     const actions = [
       {

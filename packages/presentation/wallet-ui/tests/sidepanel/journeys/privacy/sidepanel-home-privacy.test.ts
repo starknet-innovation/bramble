@@ -171,6 +171,19 @@ describe("unified portfolio scope", () => {
     expect(row).not.toContain("shield-confirm");
   });
 
+  // Audit M5: a token held privately whose public balance was never read (a
+  // failed read with no snapshot, or one just auto-tracked) must not read as
+  // "0 public": the split line is skipped and the public line shows "—".
+  test("an unknown public balance is never shown as zero", () => {
+    const html = homeTabs({ balances: [] }, preferences, {}, {}, "usd", privateState());
+    const row = html.slice(html.indexOf("token-unified"));
+
+    expect(row).toContain("Private balance");
+    expect(row).not.toContain("token-split");
+    expect(row).not.toContain("0.00 public");
+    expect(row).toMatch(/Public balance<\/span>\s*<span class="token-breakdown-value">—<\/span>/);
+  });
+
   test("an unregistered account greys the private line into the activation entry", () => {
     const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", {
       error: null,

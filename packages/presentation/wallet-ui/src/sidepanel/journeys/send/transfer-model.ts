@@ -84,6 +84,15 @@ export const isTransferInFlight = (stage: TransferStage): boolean =>
   stage === "authorizing" || stage === "broadcasting" || stage === "confirming";
 
 /**
+ * Whether the Send form may act on a submit. Not once a send is past the
+ * confirm: a second submit there would sign the reviewed transfer again. The
+ * screen also hides and disables those controls; this is the state machine's
+ * own guard for a submit that arrives anyway (audit L5).
+ */
+export const acceptsTransferSubmit = (stage: TransferStage): boolean =>
+  !isTransferInFlight(stage) && stage !== "pending" && stage !== "submitted";
+
+/**
  * User-visible transaction fields frozen at review.
  */
 export type TransferFields = {

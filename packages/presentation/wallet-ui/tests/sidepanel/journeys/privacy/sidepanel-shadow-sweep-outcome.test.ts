@@ -2,7 +2,7 @@
  * A shadow sweep whose outcome is unknown is not a failure (errors audit F4).
  * The worker may have broadcast it, so the toast is amber and Confirm gives way
  * to the outcome line instead of being offered again. A known refusal stays
- * red and leaves Confirm usable.
+ * red and returns to Sweep, which prepares and reviews the sweep again.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
@@ -95,11 +95,24 @@ describe("a shadow sweep's failure", () => {
     expect(app.textContent).toContain(PRIVATE_EXECUTION_UNKNOWN);
   });
 
-  test("a known refusal stays red and leaves Confirm usable", async () => {
-    const app = await sweepWith(new Error("Privacy preparation not found"));
-    expect(document.querySelector(".toast")?.classList.contains("error")).toBe(true);
-    expect(confirmButton(app)?.disabled).toBe(false);
-  });
+  // Audit L6: a preparation is single-use, so after "preparation changed" or
+  // "not found" its Confirm was a dead end. Nothing was sent, so the row goes
+  // back to Sweep, which prepares a fresh review.
+  for (const refusal of ["Privacy preparation not found", "Privacy preparation changed"]) {
+    test(`"${refusal}" stays red and returns to Sweep for a fresh review`, async () => {
+      const app = await sweepWith(new Error(refusal));
+      expect(document.querySelector(".toast")?.classList.contains("error")).toBe(true);
+      expect(confirmButton(app)).toBeUndefined();
+      expect(app.querySelector(".review-calls")).toBeNull();
+      const sweep = [...app.querySelectorAll("button")].find(
+        (node) => node.textContent === "Sweep",
+      );
+      expect(sweep?.disabled).toBe(false);
+      sweep?.click();
+      await settle();
+      expect(confirmButton(app)?.disabled).toBe(false);
+    });
+  }
   // Errors audit C3: re-armed only for a refusal known to come before anything
   // was sent, as on Send, NFT and swap. An error the panel cannot place may be
   // on chain, so it reads as an unknown outcome too.

@@ -19,7 +19,11 @@ import {
   STRK20_PRIOR_WRITE_UNRESOLVED,
 } from "@bramble/privacy/maturity";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
-import { PrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  isPrivacyShortfall,
+  PRIVACY_PUBLIC_BALANCE_UNCONFIRMED,
+  PrivacyBlockerError,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { friendlyError } from "../runtime/friendly-error";
 import {
@@ -63,6 +67,8 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
   "the recipient has not activated private balances",
   "insufficient private balance",
   "strk20 privacy leak",
+  // The public balance a shield or registration spends, read before signing.
+  PRIVACY_PUBLIC_BALANCE_UNCONFIRMED.toLowerCase(),
   // The shared poisoned-recipient refusal (verify.ts).
   "the recipient closely mimics an address you saved or paid but is a different account. re-check every character before sending.",
   // Fee ceilings and fee reviews, checked before signing.
@@ -153,7 +159,8 @@ const PARSE_REFUSAL = /^invalid .+ request$/;
  * Whether a rejected submission is known not to have been sent. Closed: a
  * {@link SubmissionUnknownError} never is, a curated privacy prerequisite (any
  * kind but `service`) always is, and otherwise only the exact messages above,
- * the router's input-parse refusals, and the pre-signature Ledger codes are.
+ * the router's input-parse refusals, a privacy balance shortfall, and the
+ * pre-signature Ledger codes are.
  */
 export const knownNotSent = (error: unknown): boolean => {
   if (!(error instanceof Error) || error instanceof SubmissionUnknownError) return false;
@@ -161,7 +168,12 @@ export const knownNotSent = (error: unknown): boolean => {
   const raw = error.message.trim();
   if (isLedgerRejectionCode(raw)) return PRE_SIGNATURE_LEDGER_CODES.has(raw);
   const normalized = raw.toLowerCase();
-  return KNOWN_NOT_SENT.has(normalized) || PARSE_REFUSAL.test(normalized);
+  return (
+    KNOWN_NOT_SENT.has(normalized) ||
+    PARSE_REFUSAL.test(normalized) ||
+    // A balance shortfall a private action refused before signing (audit L2).
+    isPrivacyShortfall(raw)
+  );
 };
 
 /**

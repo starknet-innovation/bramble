@@ -343,7 +343,8 @@ const tokensPanel = (
             .map((token) =>
               unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
                 private: privateBreakdownFor(privacy, token.id, deployment, fundedForFees),
-                publicFormatted: publicById.get(token.id)?.formatted ?? "0",
+                // A public balance never read is unknown, not zero (audit M5).
+                publicFormatted: publicById.get(token.id)?.formatted || null,
               }),
             )
             .join("")}</ul>`;

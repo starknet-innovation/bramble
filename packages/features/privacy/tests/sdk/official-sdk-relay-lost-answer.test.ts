@@ -33,7 +33,7 @@ const plan: Strk20SubmissionPlan = {
 const scope = { accountId: account.id, networkId: account.networkId, poolAddress };
 const actions = [{ amount: "0x1", recipient: "0x999", token, type: "withdraw" }] as const;
 
-const relayService = (answer: () => Response) => {
+const relayService = (answer: () => Response | Promise<Response>) => {
   let broadcasts = 0;
   const maturityStore = memoryStrk20MaturityStore();
   const service = createOfficialStrk20Service({
@@ -74,6 +74,24 @@ describe("a relay broadcast whose answer the gateway lost", () => {
       expect(broadcasts()).toBe(1);
     });
   }
+
+  test("a dropped connection holds the scope and refuses a second broadcast (audit M1)", async () => {
+    // A connection reset or an empty reply after the request was written
+    // rejects fetch with a TypeError; the relay may already have forwarded it.
+    const { broadcasts, maturityStore, service } = relayService(() =>
+      Promise.reject(new TypeError("Failed to fetch")),
+    );
+
+    await expect(
+      service.submitActions({ ...relayContext, actions: [...actions], plan }),
+    ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect(await maturityStore.read(scope)).toEqual({ route: "relay", state: "submitting" });
+
+    await expect(
+      service.submitActions({ ...relayContext, actions: [...actions], plan }),
+    ).rejects.toThrow("may still be in progress");
+    expect(broadcasts()).toBe(1);
+  });
 
   test("a 4xx refusal hands the scope back", async () => {
     const { maturityStore, service } = relayService(
