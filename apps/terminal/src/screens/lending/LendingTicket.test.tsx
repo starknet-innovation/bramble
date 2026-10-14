@@ -184,12 +184,14 @@ describe("LendingTicket wallet handoff", () => {
     );
   });
 
-  // Issue 652: a quoting diagnostic is the terminal's plumbing and reads as the
-  // screen's own failure sentence; a route mismatch is a security fact and is
-  // shown with its fact.
+  // Issue 652: a quoting diagnostic reads as its reviewed sentence; a route
+  // mismatch is a security fact and its reviewed sentence keeps the fact.
   it.each([
-    ["Could not quote Vesu wind route", "Vesu request failed."],
-    ["Ekubo Multiply route amount mismatch", "Ekubo Multiply route amount mismatch"],
+    ["Could not quote Vesu wind route", "Couldn't get a Multiply quote. Try again."],
+    [
+      "Ekubo Multiply route amount mismatch",
+      "The swap route doesn't match the Multiply amount, so nothing was sent. Get a fresh quote.",
+    ],
   ])("shows %s as %s", async (thrown, shown) => {
     mocks.quoteIncrease.mockRejectedValueOnce(new WalletError(thrown));
     render(

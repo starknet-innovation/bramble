@@ -71,6 +71,26 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
   "argent multisig deployment address needs strk before deployment",
   "argent multisig deployment must exactly match a fresh fee review",
   "switch to the deployment network first",
+  // Key, signature, hash, chain, class, and deployment-parameter checks that
+  // fail before the result is returned to be broadcast, and the revoke that is
+  // refused before it is built (issue 652 copy review).
+  "invalid message hash",
+  "invalid transaction hash",
+  "typed data cannot be hashed",
+  "typed data produced an invalid hash",
+  "typed data chain does not match the active network",
+  "signature public key does not match the account",
+  "krusty kms signature key mismatch",
+  "krusty kms public-key probe did not verify",
+  "ledger signature verification failed",
+  "rpc endpoint chain id does not match the account network",
+  "argent account class hash does not match the pinned release",
+  "argent multisig class hash does not match the pinned release",
+  "deployed argent multisig class does not match the pinned release",
+  "declared argent multisig class does not match the stable pin",
+  "supplied class hash does not match the starknet contract class",
+  "account deployment parameters do not match the stored address",
+  "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an nft instead; revoke it from the dapp",
   // Endpoint refusals raised before the broadcast.
   "the rpc endpoint refused this request (rate limit or gateway rejection). nothing was submitted - wait a moment and try again.",
   WRONG_CHAIN_MESSAGE.toLowerCase(),

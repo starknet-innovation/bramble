@@ -189,7 +189,9 @@ describe("the lowercase backstop", () => {
   test("keeps the revoke safety refusal's fact", () => {
     const raw =
       "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an NFT instead; revoke it from the dapp";
-    expect(friendlyError(raw).message).toBe(raw);
+    expect(friendlyError(raw).message).toBe(
+      "Couldn't confirm that contract is a token, so the revoke wasn't sent. Revoke it from the site that asked.",
+    );
   });
 });
 

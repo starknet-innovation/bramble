@@ -156,29 +156,11 @@ const GUARDED_FACTS = new Set([
 // Developer wording still shown as written, pending reviewed copy (see the
 // issue 652 copy proposal). Each needs a sentence; none hides a fact.
 const PENDING_COPY = new Set([
-  "Argent multisig batches cannot contain account self-calls",
   "Argent multisig internal upgrade callbacks cannot be called directly",
   "Argent multisig public signer configuration is unavailable",
-  "Argent multisig removal signers must be unique",
   "Argent multisig signer configuration changed on-chain",
   "Argent multisig signer configuration is unavailable",
   "Argent multisig signer GUIDs must be unique",
-  "Argent multisig signer is already configured",
-  "Argent multisig signer is not configured",
-  "Argent multisig signers must be unique",
-  "Argent multisig threshold is unchanged",
-  "Clipboard unavailable",
-  "Conflicting Argent multisig signer events",
-  "Imported Argent multisig has no counterfactual deployment parameters",
-  "Ledger account index out of range",
-  "Ledger STRK20 viewing key unavailable",
-  "Ledger STRK20 viewing-key limit reached",
-  "Local funding is unavailable",
-  "No account selected",
-  "Only Starknet signers are supported in Argent multisig management",
-  "QR payload too long",
-  "Signing key unavailable",
-  "Transfer calldata is unavailable",
 ]);
 
 // Developer wording kept visible on purpose (issue 652 review): it may carry a

@@ -7,7 +7,7 @@ import {
   LockKeyhole,
   Radio,
 } from "lucide-react";
-import { userErrorMessage } from "../../protocols/support/user-error";
+import { loadFailedMessage, userErrorMessage } from "../../protocols/support/user-error";
 import { useMemo, useState, type ReactNode } from "react";
 import { avnuTokenArtwork } from "../../assets/avnu-token-assets";
 import { ErrorBanner, SkeletonRows, TokenIcon } from "../../components/index";
@@ -59,7 +59,7 @@ export const LendingPositions = ({
     );
   }
   if (resource.error !== null && resource.data === null) {
-    return <ErrorBanner message={`Couldn't load positions: ${resource.error}`} />;
+    return <ErrorBanner message={loadFailedMessage("positions", resource.error)} />;
   }
   if (resource.isLoading && resource.data === null) return <SkeletonRows rows={7} />;
   const positions = resource.data ?? [];
@@ -237,7 +237,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
   };
 
   if (resource.error !== null && vaults.length === 0) {
-    return <ErrorBanner message={`Couldn't load vaults: ${resource.error}`} />;
+    return <ErrorBanner message={loadFailedMessage("vaults", resource.error)} />;
   }
   if (resource.isLoading && vaults.length === 0) return <SkeletonRows rows={5} />;
   return (

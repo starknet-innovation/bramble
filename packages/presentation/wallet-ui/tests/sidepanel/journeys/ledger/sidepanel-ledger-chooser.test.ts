@@ -159,7 +159,7 @@ describe("add-account chooser routing", () => {
     for (const [raw, shown] of [
       ["Krusty KMS returned invalid class hash JSON", "Couldn't add that account. Try again."],
       ["Unlock session changed during vault creation", "Couldn't add that account. Try again."],
-      ["Invalid account public key", "Invalid account public key"],
+      ["Invalid account public key", "That public key isn't valid, so the account wasn't added."],
     ] as const) {
       const h = onboardHarness({ addHd: () => Promise.reject(new Error(raw)) });
       const controller = createLedgerOnboardController(h.deps);

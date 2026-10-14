@@ -22,13 +22,81 @@
  * Pure data and predicates; no DOM, clock, or network access.
  */
 
+import { ledgerMessage } from "@bramble/ledger-protocol/errors";
 import {
   BACKUP_UNREADABLE,
   KEY_IMPORT_FAILED,
+  PREPARATION_MISMATCH,
   REVIEW_MOVED,
   SEED_IMPORT_FAILED,
   UNRECOGNIZED_RELEASE,
+  VAULT_UNVERIFIED,
+  WRONG_CHAIN_ENDPOINT,
 } from "./friendly-error-shared";
+
+// A failed key, signature, hash, chain, class, or storage-integrity check
+// (issue 652 copy review). Each sentence keeps the check that failed and says
+// what did not happen; the raw diagnostic stays behind the toast's copy control.
+const SIGNATURE_KEY_MISMATCH =
+  "The signature doesn't match this account's key, so nothing was submitted.";
+const HASH_FAILED = "Couldn't compute this request's hash, so nothing was signed.";
+const CLASS_UNEXPECTED =
+  "This contract doesn't match the version Bramble expects, so nothing was submitted.";
+const SECURITY_CHECK_COPY: readonly (readonly [string, string])[] = [
+  [
+    "invalid ledger public key",
+    "Your Ledger returned a public key Bramble can't use. Nothing was added.",
+  ],
+  ["invalid account public key", "That public key isn't valid, so the account wasn't added."],
+  ["krusty kms signature key mismatch", SIGNATURE_KEY_MISMATCH],
+  [
+    "krusty kms public-key probe did not verify",
+    "Bramble couldn't verify its signing key. Nothing was signed.",
+  ],
+  ["ledger signature verification failed", ledgerMessage("signature-verify-failed")],
+  ["signature public key does not match the account", SIGNATURE_KEY_MISMATCH],
+  [
+    "typed data chain does not match the active network",
+    "This message is for a different network than the one you're on. Nothing was signed.",
+  ],
+  ["rpc endpoint chain id does not match the account network", WRONG_CHAIN_ENDPOINT],
+  ["invalid message hash", HASH_FAILED],
+  ["invalid transaction hash", HASH_FAILED],
+  ["typed data produced an invalid hash", HASH_FAILED],
+  ["typed data cannot be hashed", HASH_FAILED],
+  ["invalid swap preparation commitment", PREPARATION_MISMATCH],
+  ["invalid privacy preparation commitment", PREPARATION_MISMATCH],
+  ["argent account class hash does not match the pinned release", CLASS_UNEXPECTED],
+  ["argent multisig class hash does not match the pinned release", CLASS_UNEXPECTED],
+  ["deployed argent multisig class does not match the pinned release", CLASS_UNEXPECTED],
+  ["declared argent multisig class does not match the stable pin", CLASS_UNEXPECTED],
+  ["supplied class hash does not match the starknet contract class", CLASS_UNEXPECTED],
+  [
+    "account deployment parameters do not match the stored address",
+    "These deployment details don't match this account's address. Nothing was submitted.",
+  ],
+  ["vault migration verification failed", VAULT_UNVERIFIED],
+];
+
+// Developer wording with no fact at stake (issue 652 copy review).
+const PREPARE_FAILED = "Couldn't prepare this transaction. Try again.";
+const PLUMBING_COPY: readonly (readonly [string, string])[] = [
+  [
+    "ledger strk20 viewing key unavailable",
+    "Couldn't read the private-balance key from your Ledger. Try again.",
+  ],
+  [
+    "ledger strk20 viewing-key limit reached",
+    "This Ledger has reached the number of private accounts Bramble can keep.",
+  ],
+  ["ledger account index out of range", "That Ledger account number isn't supported."],
+  ["local funding is unavailable", PREPARE_FAILED],
+  ["transfer calldata is unavailable", PREPARE_FAILED],
+  ["signing key unavailable", PREPARE_FAILED],
+  ["no account selected", "Select an account first."],
+  ["clipboard unavailable", "Couldn't copy. Copy it manually."],
+  ["qr payload too long", "That's too long for a QR code."],
+];
 
 /**
  * Background diagnostics a reader can act on, mapped to sentences the wallet
@@ -66,13 +134,13 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
     "Couldn't estimate the network fee for this swap, so nothing was prepared. The quote may have moved, or the account may not hold enough to cover the swap and its fee. Try again, or reduce the amount.",
   ],
   // A security refusal: the revoke was not sent because the contract could not
-  // be confirmed as a token. Shown as written until reviewed copy replaces it
-  // (proposal: "Couldn't confirm that contract is a token, so the revoke wasn't
-  // sent. Revoke it from the site that asked.").
+  // be confirmed as a token.
   [
     "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an nft instead; revoke it from the dapp",
-    "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an NFT instead; revoke it from the dapp",
+    "Couldn't confirm that contract is a token, so the revoke wasn't sent. Revoke it from the site that asked.",
   ],
+  ...SECURITY_CHECK_COPY,
+  ...PLUMBING_COPY,
 ];
 
 /**

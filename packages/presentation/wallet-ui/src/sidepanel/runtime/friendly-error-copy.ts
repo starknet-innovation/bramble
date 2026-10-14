@@ -38,6 +38,8 @@ import {
   SUBMISSION_UNKNOWN,
   SWAP_ROUTE_UNSAFE,
   UNRECOGNIZED_RELEASE,
+  VAULT_UNVERIFIED,
+  WRONG_CHAIN_ENDPOINT,
 } from "./friendly-error-shared";
 
 /** Shown when a request was malformed rather than refused. */
@@ -222,14 +224,8 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["incorrect passphrase", "That passphrase is wrong."],
   // A vault the background cannot verify shows the recovery gate; these reach
   // the user only if its state changed between the status read and the submit.
-  [
-    "encrypted store commit state missing",
-    "Bramble cannot verify this wallet. Close and reopen Bramble.",
-  ],
-  [
-    "encrypted store rollback detected",
-    "Bramble cannot verify this wallet. Close and reopen Bramble.",
-  ],
+  ["encrypted store commit state missing", VAULT_UNVERIFIED],
+  ["encrypted store rollback detected", VAULT_UNVERIFIED],
   [
     "encrypted store is not awaiting recovery",
     "This wallet no longer needs Unlock anyway. Close and reopen Bramble.",
@@ -337,10 +333,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["name resolution network changed", "The network changed. Try again."],
   ["unsupported chain", "This wallet doesn't support that network."],
   ["unsupported api version", "That endpoint speaks an API version this wallet can't use."],
-  [
-    WRONG_CHAIN_MESSAGE.toLowerCase(),
-    "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",
-  ],
+  [WRONG_CHAIN_MESSAGE.toLowerCase(), WRONG_CHAIN_ENDPOINT],
   ["switch to the deployment network first", "Switch to that account's network to deploy it."],
   [
     "switch to the participant account network first",

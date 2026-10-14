@@ -84,6 +84,24 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "Changing signers needs the current signer set. Refresh and try again.",
   ],
   ["signer account lookup unavailable", "Couldn't look up that signer. Try again."],
+  // Signer-change guards (issue 652 copy review), in the multisig's own words.
+  ["argent multisig signer is already configured", "That signer is already on this multisig."],
+  ["argent multisig signer is not configured", "That signer isn't on this multisig."],
+  ["argent multisig threshold is unchanged", "The threshold is already set to that."],
+  ["argent multisig signers must be unique", "Each signer can only be added once."],
+  ["argent multisig removal signers must be unique", "Each signer can only be removed once."],
+  [
+    "argent multisig batches cannot contain account self-calls",
+    "A call to the multisig itself can't be batched with other calls.",
+  ],
+  [
+    "only starknet signers are supported in argent multisig management",
+    "Only Starknet signers can be managed on this multisig.",
+  ],
+  [
+    "conflicting argent multisig signer events",
+    "Couldn't read this multisig's signer history. Try again.",
+  ],
   ["resolve multisig signer account failed", "Couldn't resolve that signer account. Try again."],
 
   // Deployment.
@@ -109,6 +127,10 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   [
     "signer set, threshold, and salt do not reproduce the watched multisig address",
     "These signers and threshold don't produce the watched address. Check them.",
+  ],
+  [
+    "imported argent multisig has no counterfactual deployment parameters",
+    "This multisig was imported without its deployment details, so it can't be deployed from here.",
   ],
   [
     "stable argent multisig 0.2 class is not declared on this network",

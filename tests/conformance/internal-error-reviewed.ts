@@ -191,6 +191,18 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "Changing signers needs the current signer set. Refresh and try again.",
   ],
   ["signer account lookup unavailable", "Couldn't look up that signer. Try again."],
+  ["argent multisig signer is already configured", "That signer is already on this multisig."],
+  ["argent multisig signer is not configured", "That signer isn't on this multisig."],
+  ["argent multisig signers must be unique", "Each signer can only be added once."],
+  ["argent multisig removal signers must be unique", "Each signer can only be removed once."],
+  [
+    "only starknet signers are supported in argent multisig management",
+    "Only Starknet signers can be managed on this multisig.",
+  ],
+  [
+    "conflicting argent multisig signer events",
+    "Couldn't read this multisig's signer history. Try again.",
+  ],
   ["resolve multisig signer account failed", "Couldn't resolve that signer account. Try again."],
   [
     "argent multisig deployment review address mismatch",
@@ -251,8 +263,89 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ],
   [
     "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an nft instead; revoke it from the dapp",
-    "this wallet could not confirm that contract is a token, so it will not send a revoke that could approve an NFT instead; revoke it from the dapp",
+    "Couldn't confirm that contract is a token, so the revoke wasn't sent. Revoke it from the site that asked.",
   ],
+  [
+    "invalid ledger public key",
+    "Your Ledger returned a public key Bramble can't use. Nothing was added.",
+  ],
+  ["invalid account public key", "That public key isn't valid, so the account wasn't added."],
+  [
+    "krusty kms signature key mismatch",
+    "The signature doesn't match this account's key, so nothing was submitted.",
+  ],
+  [
+    "krusty kms public-key probe did not verify",
+    "Bramble couldn't verify its signing key. Nothing was signed.",
+  ],
+  [
+    "ledger signature verification failed",
+    "Couldn't verify the signature from your Ledger, so nothing was submitted. Try again.",
+  ],
+  [
+    "signature public key does not match the account",
+    "The signature doesn't match this account's key, so nothing was submitted.",
+  ],
+  [
+    "typed data chain does not match the active network",
+    "This message is for a different network than the one you're on. Nothing was signed.",
+  ],
+  [
+    "rpc endpoint chain id does not match the account network",
+    "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",
+  ],
+  ["invalid message hash", "Couldn't compute this request's hash, so nothing was signed."],
+  ["invalid transaction hash", "Couldn't compute this request's hash, so nothing was signed."],
+  [
+    "typed data produced an invalid hash",
+    "Couldn't compute this request's hash, so nothing was signed.",
+  ],
+  ["typed data cannot be hashed", "Couldn't compute this request's hash, so nothing was signed."],
+  [
+    "invalid swap preparation commitment",
+    "This review no longer matches what was prepared. Review it again.",
+  ],
+  [
+    "invalid privacy preparation commitment",
+    "This review no longer matches what was prepared. Review it again.",
+  ],
+  [
+    "argent account class hash does not match the pinned release",
+    "This contract doesn't match the version Bramble expects, so nothing was submitted.",
+  ],
+  [
+    "argent multisig class hash does not match the pinned release",
+    "This contract doesn't match the version Bramble expects, so nothing was submitted.",
+  ],
+  [
+    "deployed argent multisig class does not match the pinned release",
+    "This contract doesn't match the version Bramble expects, so nothing was submitted.",
+  ],
+  [
+    "declared argent multisig class does not match the stable pin",
+    "This contract doesn't match the version Bramble expects, so nothing was submitted.",
+  ],
+  [
+    "supplied class hash does not match the starknet contract class",
+    "This contract doesn't match the version Bramble expects, so nothing was submitted.",
+  ],
+  [
+    "account deployment parameters do not match the stored address",
+    "These deployment details don't match this account's address. Nothing was submitted.",
+  ],
+  [
+    "vault migration verification failed",
+    "Bramble cannot verify this wallet. Close and reopen Bramble.",
+  ],
+  [
+    "ledger strk20 viewing key unavailable",
+    "Couldn't read the private-balance key from your Ledger. Try again.",
+  ],
+  [
+    "ledger strk20 viewing-key limit reached",
+    "This Ledger has reached the number of private accounts Bramble can keep.",
+  ],
+  ["signing key unavailable", "Couldn't prepare this transaction. Try again."],
 ];
 
 /** Every REVIEWED_PLUMBING key: the messages the panel may hide. */
