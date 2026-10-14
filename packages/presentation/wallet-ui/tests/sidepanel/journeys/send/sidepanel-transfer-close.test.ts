@@ -129,8 +129,8 @@ describe("closing Send", () => {
     });
   }
 
-  // Review follow-up to M2: an account switch or a remount also rebinds Send, and
-  // must not reset a send that is still going out either.
+  // Review follow-up to M2: an account switch also rebinds Send, and must not
+  // reset a send that is still going out either.
   const signingSend = async () => {
     let settle: (hash: string) => void = () => undefined;
     const pending = new Promise<string>((resolve) => {
@@ -162,17 +162,20 @@ describe("closing Send", () => {
     expect(app.querySelector("#send-success-hash")?.getAttribute("title")).toBe("0xdeadbeef");
   });
 
-  test("keeps a signing send when Send remounts in a new panel root", async () => {
+  // A different root is a different host (UI Lab mounts one per story): its own
+  // wallet owns its sends, so another root's send must neither show nor land there.
+  test("starts a new panel root fresh while another root's send is signing", async () => {
     const { deps, settle } = await signingSend();
     const root = document.createElement("div");
     paint(root, sendFlow(status, account, preferences));
     document.body.append(root);
     bindTransfer({ ...deps, app: root });
 
-    expect(root.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(true);
-    expect(root.querySelector("#send-working")?.hasAttribute("hidden")).toBe(false);
+    expect(root.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(false);
+    expect(root.querySelector("#send-working")?.hasAttribute("hidden")).toBe(true);
     settle("0xdeadbeef");
     await flush();
-    expect(root.querySelector("#send-success-hash")?.getAttribute("title")).toBe("0xdeadbeef");
+    expect(root.querySelector("#send-success-hash")?.getAttribute("title")).not.toBe("0xdeadbeef");
+    expect(root.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(false);
   });
 });

@@ -98,9 +98,9 @@ export const markTransferLedgerAuthorized = (): void => {
   repaintActiveTransfer?.();
 };
 
-// Starts over unless a send is in flight, which still goes out (Sherlock 164, M2).
-const resetUnlessInFlight = (): void => {
-  if (isTransferInFlight(transferState.stage)) return;
+// Starts over, unless kept for a send in flight, which still goes out (Sherlock 164, M2).
+const resetTransfer = (keepInFlight = true): void => {
+  if (keepInFlight && isTransferInFlight(transferState.stage)) return;
   transferEpoch += 1;
   transferState = initialTransferState();
 };
@@ -115,14 +115,15 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const { app, back, navigate, render, wallet } = deps;
   const form = app?.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
-    resetUnlessInFlight();
+    resetTransfer();
     repaintActiveTransfer = null;
     returnActiveTransferToDetails = null;
     transferApp = app;
     return;
   }
+  // A new root is a new host with its own wallet: never carry a send into it.
   if (transferApp !== app) {
-    resetUnlessInFlight();
+    resetTransfer(false);
     transferApp = app;
   }
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
@@ -132,7 +133,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     if (completionTarget === "multisig-deploy" && back) back();
     else navigate?.(completionTarget);
   };
-  if (transferState.fields && transferState.fields.accountId !== accountId) resetUnlessInFlight();
+  if (transferState.fields && transferState.fields.accountId !== accountId) resetTransfer();
   // A shortcut arrives with the recipient, the asset, and both buckets already
   // in the form, so the recipient step has nothing left to ask: open on the
   // amount. Only on a fresh journey, or a repaint would drag the user back here
@@ -173,10 +174,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   // background still broadcasts it, so its outcome must show on return (audit
   // M2; the rule `bindTransfer` applies to a takeover, Sherlock 164).
   const exit = (): void => {
-    if (transferState.transactionHash === null && !isTransferInFlight(transferState.stage)) {
-      transferEpoch += 1;
-      transferState = initialTransferState();
-    }
+    if (transferState.transactionHash === null) resetTransfer();
     if (transferState.transactionHash && completionTarget === "multisig-deploy") {
       complete();
       return;
