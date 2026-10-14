@@ -98,11 +98,15 @@ describe("Ledger device rejections", () => {
 });
 
 describe("STRK20 (review F1, F2)", () => {
-  test("an unknown submission status keeps its recovery instruction", () => {
+  test("an unresolved earlier write keeps its may-be-in-flight fact and the recovery step", () => {
     const raw =
-      "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover";
-    expect(friendlyError(raw).message).toBe(raw);
-    expect(friendlyError(raw, ADD_ACCOUNT).message).toBe(raw);
+      "strk20 services unavailable: an earlier private transaction from this account may still be in progress";
+    expect(friendlyError(raw).message).toBe(
+      "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+    );
+    expect(friendlyError(raw, ADD_ACCOUNT).message).toBe(
+      "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+    );
   });
 
   test("a revert, rejected proof, failed validation, or nonce stays visible", () => {
@@ -261,8 +265,10 @@ describe("STRK20 categories with a reviewed sentence", () => {
 
   test("an unknown submission status and a privacy-leak refusal keep their words", () => {
     const unknown =
-      "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover";
-    expect(friendlyError(unknown).message).toBe(unknown);
+      "strk20 services unavailable: an earlier private transaction from this account may still be in progress";
+    expect(friendlyError(unknown).message).toBe(
+      "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+    );
     expect(
       friendlyError("strk20 privacy leak (proving/service-unavailable): USER_LINKAGE").message,
     ).toBe("The operation would leak private information");

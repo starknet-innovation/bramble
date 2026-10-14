@@ -15,7 +15,11 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { errorDetails } from "../../shared/dom";
 import { reviewFeeBlocked } from "../../shared/review-render";
-import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
+import {
+  knownNotSent,
+  outcomeUnknownReason,
+  priorWriteUnresolved,
+} from "../../shared/submit-outcome";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
 import { transferRoute } from "./transfer-route";
@@ -200,6 +204,7 @@ export const confirmedState = <Review>(
         ...state,
         error: outcome.message,
         review: null,
+        priorWriteUnresolved: false,
         reviewedKey: null,
         stage: "failed",
         submissionUnknown: false,
@@ -223,6 +228,7 @@ export const submitRejection = (
 ): SubmitRejection => {
   const cleared: TransferState<TransferReview> = {
     ...state,
+    priorWriteUnresolved: false,
     privatePreparation: null,
     progress: null,
     review: null,
@@ -237,6 +243,24 @@ export const submitRejection = (
         stage: "confirming",
         submissionUnknown: false,
         transactionHash: error.transactionHash,
+      },
+      toast: null,
+    };
+  }
+  // The background refused before this attempt claimed the pool, because an
+  // EARLIER private write may still land. This attempt was not sent, which the
+  // title says; the sentence keeps the earlier write's may-be-in-flight fact,
+  // and the receipt offers Activity and Check again, which prepares afresh and
+  // so re-runs the background's resolution (mc-wallet issue 661).
+  if (priorWriteUnresolved(error)) {
+    return {
+      follow: false,
+      state: {
+        ...cleared,
+        error: friendlyError(errorDetails(error, "")).message,
+        priorWriteUnresolved: true,
+        stage: "failed",
+        submissionUnknown: false,
       },
       toast: null,
     };
