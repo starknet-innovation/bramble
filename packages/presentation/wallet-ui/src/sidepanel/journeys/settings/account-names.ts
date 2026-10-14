@@ -110,7 +110,7 @@ export const accountNamesSection = (
   );
   return `<section class="section">
     <p class="eyebrow">Account names</p>
-    <p class="hint">A name is shown instead of the address everywhere in the wallet. Leave one empty to go back to its generated name.</p>
+    <p class="hint">Leave a name empty to use the generated one.</p>
     ${
       networkAccounts.length === 0
         ? noAccountEmpty(status)
@@ -153,7 +153,7 @@ export const hiddenAccountsSection = (
   }
   return `<section class="section">
     <p class="eyebrow">Hidden accounts</p>
-    <p class="hint">Hidden accounts stay in this wallet. Each one is out of the drawer and the send pickers until you show it again.</p>
+    <p class="hint">Hidden accounts stay in the wallet, out of the drawer and send pickers.</p>
     <div class="account-name-list">
       ${hiddenAccounts
         .map((stored) => {

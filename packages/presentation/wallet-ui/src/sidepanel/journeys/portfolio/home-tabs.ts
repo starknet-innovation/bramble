@@ -121,8 +121,7 @@ export const unifiedHomeBalances = (
  */
 const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
   pending: "Broadcast accepted. It can't be fee-bumped, replaced, or cancelled.",
-  preconfirmed:
-    "Pre-confirmed by the block proposer: the result is known, the block is not final. The wallet keeps checking and will tell you if it does not settle.",
+  preconfirmed: "Pre-confirmed, not final yet. Bramble tells you if it doesn't settle.",
 };
 
 /**

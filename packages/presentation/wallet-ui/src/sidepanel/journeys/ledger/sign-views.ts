@@ -94,7 +94,7 @@ const phaseBody = (view: LedgerSignView): string => {
     return `<p>Checking for a Ledger already connected to this browser.</p>${cancelButton()}`;
   }
   if (phase.kind === "connect") {
-    return `<p>Connect your Ledger, unlock it, and open the Starknet app. Your transaction stays safely paused until the device is ready.</p>
+    return `<p>Connect and unlock your Ledger, then open the Starknet app.</p>
       <div class="ledger-phase-actions">
         ${button({
           attributes: { "data-ledger-connect": true },
@@ -105,19 +105,19 @@ const phaseBody = (view: LedgerSignView): string => {
       </div>`;
   }
   if (phase.kind === "connecting") {
-    return `<p>Complete the secure device chooser in the Ledger tab. This transaction resumes automatically after connection.</p>${cancelButton()}`;
+    return `<p>Choose your Ledger in the Ledger tab.</p>${cancelButton()}`;
   }
   if (phase.kind === "checking") {
-    return `<p>Reading the Starknet app version and checking that the device is ready to sign.</p>${cancelButton()}`;
+    return cancelButton();
   }
   if (phase.kind === "verifying") {
-    return `<p>Matching the device public key to this wallet account. A different Ledger fails closed before signing.</p>${cancelButton()}`;
+    return `<p>Checking this is the right Ledger.</p>${cancelButton()}`;
   }
   if (phase.kind === "confirming") {
-    return `<p>Approve the request on your Ledger. The wallet verifies the returned signature before it can be used.</p>${cancelButton()}`;
+    return `<p>Approve the request on your Ledger.</p>${cancelButton()}`;
   }
   if (phase.kind === "submitting") {
-    return "<p>Signature received. Bramble is completing its final verification and returning it to the transaction.</p>";
+    return "";
   }
   if (phase.kind === "devices") {
     return `<p>More than one Ledger is connected. Choose the device that holds this account.</p>
