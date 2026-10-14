@@ -14,12 +14,25 @@
  * - a signed write the node does not know, whose sender nonce is already
  *   spent past it in a block PROVING_BLOCK_DEPTH deep, and which a second
  *   lookup after that still misses: a nonce is spent once, so it cannot land.
+ * - any marker that names its proof's base block N, is not owned by a live
+ *   send, and whose window has closed: the pool applies a proof only in a
+ *   block at most `get_proof_validity_blocks()` (V) past its base
+ *   (`PROOF_EXPIRED`), so once the settled block (tip minus
+ *   PROVING_BLOCK_DEPTH) is past N + V, the write either never applied or
+ *   applied in a block the next proof's state already contains. This holds
+ *   for relay claims and for a signed write whose nonce is still unspent,
+ *   neither of which anything else can prove. It assumes the pool's governor
+ *   does not raise V afterwards.
  * A write the node reports accepted or reverted is settled through the
  * receipt wait like any submitted write. Everything else stays closed: a
  * pending or pre-confirmed write, a hash the node does not know while its
- * nonce is unspent (a signed V3 invoke has no expiry, so whoever holds it can
- * still have it included at that nonce), a relay claim with no hash, a claim
- * with no recorded route, and any failed or malformed read.
+ * nonce is unspent and its proof window is open (a signed V3 invoke has no
+ * expiry of its own), a relay claim inside its proof window, and any failed
+ * or malformed read. Those refuse with STRK20_PRIOR_WRITE_UNRESOLVED, which a
+ * later check can clear. A marker with no proof base block (a claim from
+ * before blocks were recorded, or a proof whose facts could not be read)
+ * that nothing else resolves refuses with STRK20_PRIOR_WRITE_STRANDED, which
+ * names the only remaining way out: ending the browser session.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -28,6 +41,8 @@ import { classifyTransactionStatus } from "@bramble/starknet/rpc";
 import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import {
+  maturityRecordNamesHash,
+  STRK20_PRIOR_WRITE_STRANDED,
   STRK20_PRIOR_WRITE_UNRESOLVED,
   type Strk20MaturityRecord,
   type Strk20MaturityScope,
@@ -43,8 +58,11 @@ export const PROVING_BLOCK_DEPTH = 10;
 export class RejectedPrivacyTransaction extends Error {}
 
 // `inFlight` is a pending or pre-confirmed write: it reached the network but
-// can still vanish, so its signed identity must outlive the lookup.
-type SignedOutcome = "dropped" | "inFlight" | "landed" | "rejected" | "unknown";
+// can still vanish, so its signed identity must outlive the lookup. `unproven`
+// is a hash the node does not know while the sender's nonce is unspent: the
+// chain answered, and nothing it said proves the write dropped. `unknown` is a
+// read that failed or could not be trusted, which a later check may get past.
+type SignedOutcome = "dropped" | "inFlight" | "landed" | "rejected" | "unknown" | "unproven";
 
 // A nonce answer is an untrusted RPC value. Only a string that canonicalizes
 // to a field element can prove the sender's nonce moved; a decimal or an
@@ -56,6 +74,21 @@ const chainNonce = (value: unknown): bigint | null => {
   }
   const felt = canonicalFelt(value);
   return felt !== null && isStarkFieldElement(felt) ? BigInt(felt) : null;
+};
+
+// `ProofFacts` serialize as proof_version, program_variant,
+// virtual_program_hash, starknet_os_output_version, base_block_number, … (the
+// pool's `ProofFacts` struct; the SDK's `utils/proof-facts.ts` index [4]).
+const PROOF_FACTS_BASE_BLOCK = 4;
+
+/**
+ * The base block a proof's facts name, or null when they cannot be read as a
+ * u64 safe integer. The pool enforces its proof window against these exact
+ * facts, so the value read here is the one that bounds the write's inclusion.
+ */
+export const strk20ProofBaseBlock = (proofFacts: readonly string[]): number | null => {
+  const value = chainNonce(proofFacts[PROOF_FACTS_BASE_BLOCK]);
+  return value !== null && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null;
 };
 
 // What the chain says about a write whose send lost its answer. A status the
@@ -106,8 +139,11 @@ const resolveSigned = async (
       return "unknown";
     }
     const spent = chainNonce(await provider.getNonceForAddress(signed.senderAddress, settled));
-    if (spent === null || spent <= BigInt(signed.nonce)) {
+    if (spent === null) {
       return "unknown";
+    }
+    if (spent <= BigInt(signed.nonce)) {
+      return "unproven";
     }
   } catch {
     return "unknown";
@@ -134,33 +170,104 @@ const replaceStuck = async (
   }
 };
 
+// The pool's proof window, in blocks, as an untrusted u64 answer.
+const proofValidityBlocks = async (
+  provider: RpcProvider,
+  scope: Strk20MaturityScope,
+): Promise<bigint | null> => {
+  const answer = await provider.callContract({
+    calldata: [],
+    contractAddress: scope.poolAddress,
+    entrypoint: "get_proof_validity_blocks",
+  });
+  const value = chainNonce(Array.isArray(answer) ? answer[0] : undefined);
+  return value !== null && value < 1n << 64n ? value : null;
+};
+
+// True once a write proved at `proofBaseBlock` can no longer be applied by the
+// pool in any block past the settled one (see the module header). Any failed
+// or malformed read answers false.
+const proofWindowClosed = async (
+  provider: RpcProvider,
+  scope: Strk20MaturityScope,
+  proofBaseBlock: number | undefined,
+): Promise<boolean> => {
+  if (proofBaseBlock === undefined) {
+    return false;
+  }
+  try {
+    const settled = (await provider.getBlockNumber()) - PROVING_BLOCK_DEPTH;
+    const validity = await proofValidityBlocks(provider, scope);
+    return (
+      Number.isSafeInteger(settled) &&
+      validity !== null &&
+      BigInt(settled) > BigInt(proofBaseBlock) + validity
+    );
+  } catch {
+    return false;
+  }
+};
+
+// After a conditional release the store refused, the scope may simply be
+// clean already (another check released it first): proceed then, and refuse
+// only while some marker is still there.
+const clearedMeanwhile = async (
+  store: Strk20MaturityStore,
+  scope: Strk20MaturityScope,
+): Promise<null> => {
+  if ((await store.read(scope)) !== null) {
+    throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+  }
+  return null;
+};
+
 /**
  * Maps a failed receipt wait on the scope's prior write. A proven rejection
- * releases the marker; a marker replaced during the wait keeps its own
- * status-unknown refusal; anything else is the generic service error.
+ * releases the marker. While the marker still names the write, a write whose
+ * proof window has closed is released (undefined: no floor), and any other
+ * failure keeps the "may still be in progress" refusal a later check can
+ * clear. A marker replaced during the wait keeps its own refusal; anything
+ * else is the generic service error.
  */
 export const priorWaitFailure = async (
   store: Strk20MaturityStore,
+  provider: RpcProvider,
   scope: Strk20MaturityScope,
-  transactionHash: string,
+  record: SubmittedRecord,
   error: unknown,
-): Promise<never> => {
+): Promise<undefined> => {
+  const { transactionHash } = record;
   if (error instanceof RejectedPrivacyTransaction) {
     await store.replaceIfCurrentHash(scope, transactionHash, null);
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
   if (error instanceof WalletError && error.message === STRK20_PRIOR_WRITE_UNRESOLVED) {
     throw error;
   }
-  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  if (!maturityRecordNamesHash(await store.read(scope), transactionHash)) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  if (await proofWindowClosed(provider, scope, record.proofBaseBlock)) {
+    if (await store.replaceIfCurrentHash(scope, transactionHash, null)) {
+      return undefined;
+    }
+    return (await clearedMeanwhile(store, scope)) ?? undefined;
+  }
+  throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
 };
 
 const settledRecord = (
-  outcome: Exclude<SignedOutcome, "inFlight" | "unknown">,
+  outcome: Exclude<SignedOutcome, "inFlight" | "unknown" | "unproven">,
   transactionHash: string,
+  proofBaseBlock: number | undefined,
 ): SubmittedRecord | null => {
   switch (outcome) {
     case "landed":
-      return { state: "submitted", transactionHash };
+      return {
+        ...(proofBaseBlock === undefined ? {} : { proofBaseBlock }),
+        state: "submitted",
+        transactionHash,
+      };
     case "dropped":
     case "rejected":
       return null;
@@ -171,27 +278,64 @@ const settledRecord = (
   }
 };
 
-// An unsigned marker. Only an `account` claim that no running send owns
-// proves nothing left the wallet; it is cleared through the store's
+// An unsigned marker. An `account` claim that no running send owns proves
+// nothing left the wallet; any other claim no running send owns is released
+// once its proof window has closed. Both clear through the store's
 // conditional release, which leaves a marker a send journaled meanwhile in
-// place. A relay claim, a claim with no recorded route, and a claim a live
-// send may still sign all stay closed.
+// place. A claim a live send may still sign stays closed, and a claim with no
+// proof base block that nothing else resolves is stranded.
 const releaseUnsigned = async (
   store: Strk20MaturityStore,
+  provider: RpcProvider,
   scope: Strk20MaturityScope,
   marker: SubmittingRecord,
   ownedByLiveSend: boolean,
 ): Promise<null> => {
-  if (marker.route !== "account" || ownedByLiveSend || !(await store.releaseUnsigned(scope))) {
+  if (ownedByLiveSend) {
     throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
   }
-  return null;
+  if (marker.route === "account") {
+    return (await store.releaseUnsigned(scope)) ? null : clearedMeanwhile(store, scope);
+  }
+  const { proofBaseBlock } = marker;
+  if (proofBaseBlock === undefined) {
+    throw new WalletError(STRK20_PRIOR_WRITE_STRANDED);
+  }
+  if (!(await proofWindowClosed(provider, scope, proofBaseBlock))) {
+    throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+  }
+  return (await store.releaseUnsignedProvedAt(scope, proofBaseBlock))
+    ? null
+    : clearedMeanwhile(store, scope);
+};
+
+// A signed write the chain could not settle. It is released once its proof
+// window has closed. Until then a failed read can be retried; an unspent nonce
+// with no proof base block never resolves on its own, so it is stranded.
+const releaseUnsettled = async (
+  store: Strk20MaturityStore,
+  provider: RpcProvider,
+  scope: Strk20MaturityScope,
+  marker: SubmittingRecord & { readonly transactionHash: string },
+  outcome: "unknown" | "unproven",
+): Promise<null> => {
+  if (await proofWindowClosed(provider, scope, marker.proofBaseBlock)) {
+    return (await store.replaceIfCurrentHash(scope, marker.transactionHash, null))
+      ? null
+      : clearedMeanwhile(store, scope);
+  }
+  throw new WalletError(
+    outcome === "unproven" && marker.proofBaseBlock === undefined
+      ? STRK20_PRIOR_WRITE_STRANDED
+      : STRK20_PRIOR_WRITE_UNRESOLVED,
+  );
 };
 
 /**
  * Settles a `submitting` marker: the submitted write to follow, null once the
- * write provably cannot land, or STRK20_PRIOR_WRITE_UNRESOLVED while it stays closed. The
- * full release rule is in this module's header.
+ * write provably cannot land, or a refusal while it stays closed
+ * (STRK20_PRIOR_WRITE_UNRESOLVED, or STRK20_PRIOR_WRITE_STRANDED when no later
+ * check can resolve it). The full release rule is in this module's header.
  *
  * `ownedByLiveSend` must be read synchronously right before the call, from the
  * runtime's record of sends between their claim and their settled broadcast.
@@ -210,16 +354,20 @@ export const settleSubmitting = async (
   ownedByLiveSend: boolean,
 ): Promise<SubmittedRecord | null> => {
   if (marker.transactionHash === undefined) {
-    return releaseUnsigned(store, scope, marker, ownedByLiveSend);
+    return releaseUnsigned(store, provider, scope, marker, ownedByLiveSend);
   }
   const outcome = await resolveSigned(provider, marker);
-  if (outcome === "unknown") {
-    throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+  if (outcome === "unknown" || outcome === "unproven") {
+    return releaseUnsettled(store, provider, scope, marker, outcome);
   }
   if (outcome === "inFlight") {
-    return { state: "submitted", transactionHash: marker.transactionHash };
+    return {
+      ...(marker.proofBaseBlock === undefined ? {} : { proofBaseBlock: marker.proofBaseBlock }),
+      state: "submitted",
+      transactionHash: marker.transactionHash,
+    };
   }
-  const next = settledRecord(outcome, marker.transactionHash);
+  const next = settledRecord(outcome, marker.transactionHash, marker.proofBaseBlock);
   await replaceStuck(store, scope, marker.transactionHash, next);
   return next;
 };

@@ -109,6 +109,14 @@ describe("STRK20 (review F1, F2)", () => {
     );
   });
 
+  test("an earlier write no check can resolve names the browser restart", () => {
+    const raw =
+      "strk20 services unavailable: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover";
+    expect(friendlyError(raw).message).toBe(
+      "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+    );
+  });
+
   test("a revert, rejected proof, failed validation, or nonce stays visible", () => {
     // The fact stays, in the reader's words (copy review bf01-bf05); the shared
     // "services unavailable" head, which would say the services were down when

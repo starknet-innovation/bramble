@@ -293,6 +293,7 @@ describe("resolving a stuck privacy write", () => {
         return false;
       },
       releaseUnsigned: () => backing.releaseUnsigned(scope),
+      releaseUnsignedProvedAt: (target, block) => backing.releaseUnsignedProvedAt(target, block),
       write: async (target, record) => {
         writes.push(record);
         await backing.write(target, record);

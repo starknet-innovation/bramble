@@ -33,7 +33,7 @@ const plan: Strk20SubmissionPlan = {
 const scope = { accountId: account.id, networkId: account.networkId, poolAddress };
 const actions = [{ amount: "0x1", recipient: "0x999", token, type: "withdraw" }] as const;
 
-const relayService = (answer: () => Response) => {
+const relayService = (answer: () => Response, proofFacts?: readonly string[]) => {
   let broadcasts = 0;
   const maturityStore = memoryStrk20MaturityStore();
   const service = createOfficialStrk20Service({
@@ -50,7 +50,18 @@ const relayService = (answer: () => Response) => {
     sdk: runtime(() => ({
       build: () => builder(),
       discoverNotes: async () => ({ notes: new Map() }),
-      executeWithInvocation: async () => executeResult(),
+      executeWithInvocation: async () => {
+        const result = executeResult();
+        return proofFacts === undefined
+          ? result
+          : {
+              ...result,
+              callAndProof: {
+                ...result.callAndProof,
+                proof: { ...result.callAndProof.proof, proofFacts: [...proofFacts] },
+              },
+            };
+      },
     })),
   });
   return { broadcasts: () => broadcasts, maturityStore, service };
@@ -84,5 +95,21 @@ describe("a relay broadcast whose answer the gateway lost", () => {
       service.submitActions({ ...relayContext, actions: [...actions], plan }),
     ).rejects.not.toBeInstanceOf(IndeterminateRpcWriteError);
     expect(await maturityStore.read(scope)).toBeNull();
+  });
+
+  test("records the proof's base block on the claim, so its window can release it", async () => {
+    const { maturityStore, service } = relayService(
+      () => new Response(JSON.stringify({ error: "upstream_unavailable" }), { status: 502 }),
+      ["0x1", "0x2", "0x3", "0x4", "0x64", "0x5", "0x6", "0x1", "0x7"],
+    );
+
+    await expect(
+      service.submitActions({ ...relayContext, actions: [...actions], plan }),
+    ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect(await maturityStore.read(scope)).toEqual({
+      proofBaseBlock: 100,
+      route: "relay",
+      state: "submitting",
+    });
   });
 });

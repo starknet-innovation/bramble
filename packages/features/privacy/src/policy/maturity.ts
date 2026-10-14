@@ -17,6 +17,15 @@ import { STRK20_SERVICE_UNAVAILABLE } from "./fee-policy";
 export const STRK20_PRIOR_WRITE_UNRESOLVED = `${STRK20_SERVICE_UNAVAILABLE}: an earlier private transaction from this account may still be in progress`;
 
 /**
+ * The same refusal for an earlier write that no later check can resolve: its
+ * marker names no proof base block, so the proof-expiry rule cannot apply,
+ * and nothing on chain can prove it dropped. Only ending the browser session
+ * clears the session-held marker, so this sentence says so instead of
+ * offering a check that cannot succeed.
+ */
+export const STRK20_PRIOR_WRITE_STRANDED = `${STRK20_SERVICE_UNAVAILABLE}: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover`;
+
+/**
  * Account/network/pool scope whose latest privacy write must mature before a
  * later proof can use historical state.
  */
@@ -56,9 +65,15 @@ export type Strk20SubmissionRoute = "account" | "relay";
  * waiting for the browser session to end. Until then it carries the route the
  * write takes; a claim without a route (written before routes were recorded)
  * is treated like a `relay` claim and is never released as unsent.
+ *
+ * `proofBaseBlock` is the base block its proof names. The pool applies a proof
+ * only in a block at most `get_proof_validity_blocks()` past that base, so once
+ * a settled block is beyond that window the write can no longer change pool
+ * state, whatever its route or hash says.
  */
 export type Strk20MaturityRecord =
   | ({
+      readonly proofBaseBlock?: number;
       readonly state: "submitting";
     } & (
       | (Strk20SignedSubmission & { readonly route?: never })
@@ -71,6 +86,7 @@ export type Strk20MaturityRecord =
     ))
   | {
       readonly acceptedBlock?: number;
+      readonly proofBaseBlock?: number;
       readonly state: "submitted";
       readonly transactionHash: string;
     };
@@ -117,6 +133,15 @@ export type Strk20MaturityStore = {
    * so a marker a newer send journaled first is never cleared.
    */
   readonly releaseUnsigned: (scope: Strk20MaturityScope) => Promise<boolean>;
+  /**
+   * Clears the scope only while its marker is a `submitting` claim that names
+   * no signed write and was proved at `proofBaseBlock`, and returns whether it
+   * did. Same serialized compare-and-clear as {@link releaseUnsigned}.
+   */
+  readonly releaseUnsignedProvedAt: (
+    scope: Strk20MaturityScope,
+    proofBaseBlock: number,
+  ) => Promise<boolean>;
   readonly write: (
     scope: Strk20MaturityScope,
     record: Strk20MaturityRecord | null,
@@ -134,6 +159,18 @@ export const isUnsignedAccountClaim = (record: Strk20MaturityRecord | null): boo
   record?.state === "submitting" &&
   record.transactionHash === undefined &&
   record.route === "account";
+
+/**
+ * True for a `submitting` claim that names no signed write and was proved at
+ * `proofBaseBlock`, whatever its route.
+ */
+export const isUnsignedClaimProvedAt = (
+  record: Strk20MaturityRecord | null,
+  proofBaseBlock: number,
+): boolean =>
+  record?.state === "submitting" &&
+  record.transactionHash === undefined &&
+  record.proofBaseBlock === proofBaseBlock;
 
 const scopeKey = (scope: Strk20MaturityScope): string =>
   `${scope.accountId}|${scope.networkId}|${scope.poolAddress}`;
@@ -164,6 +201,13 @@ export const memoryStrk20MaturityStore = (): Strk20MaturityStore => {
     },
     async releaseUnsigned(scope) {
       if (!isUnsignedAccountClaim(records.get(scopeKey(scope)) ?? null)) {
+        return false;
+      }
+      put(scope, null);
+      return true;
+    },
+    async releaseUnsignedProvedAt(scope, proofBaseBlock) {
+      if (!isUnsignedClaimProvedAt(records.get(scopeKey(scope)) ?? null, proofBaseBlock)) {
         return false;
       }
       put(scope, null);

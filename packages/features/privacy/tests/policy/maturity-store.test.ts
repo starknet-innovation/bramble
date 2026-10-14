@@ -222,4 +222,31 @@ describe("STRK20 maturity store", () => {
     expect(await store.releaseUnsigned(scope)).toBe(true);
     expect(await store.read(scope)).toBeNull();
   });
+
+  test("round-trips a proof base block and releases an unsigned claim only at that block", async () => {
+    const backing = createMemoryStore();
+    const store = createStrk20MaturityStore(backing);
+    const relay = { proofBaseBlock: 100, route: "relay" as const, state: "submitting" as const };
+    await store.write(scope, relay);
+    expect(await store.read(scope)).toEqual(relay);
+    const submitted = {
+      proofBaseBlock: 100,
+      state: "submitted" as const,
+      transactionHash: "0x456",
+    };
+    await store.write(scope, submitted);
+    expect(await store.read(scope)).toEqual(submitted);
+    expect(await store.releaseUnsignedProvedAt(scope, 100)).toBe(false);
+
+    await store.write(scope, relay);
+    expect(await store.releaseUnsignedProvedAt(scope, 99)).toBe(false);
+    expect(await store.read(scope)).toEqual(relay);
+    expect(await store.releaseUnsignedProvedAt(scope, 100)).toBe(true);
+    expect(await store.read(scope)).toBeNull();
+
+    for (const proofBaseBlock of [-1, 1.5, "100"]) {
+      await backing.set("bramble:strk20-maturity", [{ ...scope, ...relay, proofBaseBlock }]);
+      expect(await store.read(scope)).toBeNull();
+    }
+  });
 });

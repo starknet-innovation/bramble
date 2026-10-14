@@ -37,7 +37,11 @@ import {
 } from "./official-sdk-budget";
 import { strk20RegistrationBuilderFor } from "./official-sdk-builder";
 import { mapStrk20StageError } from "./official-sdk-errors";
-import { createStrk20MaturityRuntime, type Strk20SubmissionJournal } from "./official-sdk-maturity";
+import {
+  createStrk20MaturityRuntime,
+  type Strk20SubmissionJournal,
+  strk20ProofBaseBlock,
+} from "./official-sdk-maturity";
 import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
 import { strk20ReadMethods } from "./official-sdk-reads";
 import type { ServiceRetryPause } from "./official-sdk-retry";
@@ -125,7 +129,12 @@ export const createOfficialStrk20Service = ({
       historicalState,
       waits,
     );
-  const submission = <P, T extends { readonly transactionHash: string }>(
+  // Every privacy write carries the proof it submits; its base block bounds
+  // where the pool can still apply it, and is recorded on the claim.
+  const submission = <
+    P extends { readonly proof: { readonly proof_facts: readonly string[] } },
+    T extends { readonly transactionHash: string },
+  >(
     input: Strk20AccountContext,
     route: Strk20SubmissionRoute,
     prepare: (provider: RpcProvider, scope: Strk20MaturityScope) => Promise<P>,
@@ -144,6 +153,7 @@ export const createOfficialStrk20Service = ({
       route,
       () => prepare(provider, scope),
       broadcast,
+      (prepared) => strk20ProofBaseBlock(prepared.proof.proof_facts),
     );
   };
   const publicBatch = (

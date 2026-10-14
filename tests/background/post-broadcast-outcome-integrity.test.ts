@@ -112,8 +112,9 @@ describe("post-broadcast outcome integrity", () => {
     const source = await Bun.file(
       "packages/features/privacy/src/sdk/official-sdk-maturity.ts",
     ).text();
-    expect(source).toContain(
-      "await recordSubmission(provider, scope, result.transactionHash).catch(() => undefined)",
+    // The proof's base block rides along (mc-wallet 661); the swallow is the pin.
+    expect(source).toMatch(
+      /await recordSubmission\(provider, scope, result\.transactionHash, proofBaseBlock\)\.catch\(\s*\(\) => undefined,?\s*\)/,
     );
   });
 });

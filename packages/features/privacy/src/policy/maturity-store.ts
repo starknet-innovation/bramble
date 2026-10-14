@@ -7,6 +7,7 @@
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   isUnsignedAccountClaim,
+  isUnsignedClaimProvedAt,
   maturityRecordNamesHash,
   type Strk20MaturityRecord,
   type Strk20MaturityScope,
@@ -47,6 +48,9 @@ const isSubmittingIdentity = (value: Record<string, unknown>): boolean =>
       typeof value["nonce"] === "string" &&
       isStarkFieldElement(value["nonce"])));
 
+const isBlockNumberOrAbsent = (value: unknown): boolean =>
+  value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
+
 const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
@@ -55,6 +59,7 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
     "networkId",
     "nonce",
     "poolAddress",
+    "proofBaseBlock",
     "route",
     "senderAddress",
     "state",
@@ -65,6 +70,7 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   typeof value["poolAddress"] === "string" &&
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
+  isBlockNumberOrAbsent(value["proofBaseBlock"]) &&
   ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
     (value["state"] === "submitted" &&
       value["route"] === undefined &&
@@ -72,10 +78,7 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
       value["nonce"] === undefined &&
       typeof value["transactionHash"] === "string" &&
       isNonZeroStarkFieldElement(value["transactionHash"]) &&
-      (value["acceptedBlock"] === undefined ||
-        (typeof value["acceptedBlock"] === "number" &&
-          Number.isSafeInteger(value["acceptedBlock"]) &&
-          value["acceptedBlock"] >= 0))));
+      isBlockNumberOrAbsent(value["acceptedBlock"])));
 
 const sameScope = (entry: StoredMaturity, scope: Strk20MaturityScope): boolean =>
   entry.accountId === scope.accountId &&
@@ -95,11 +98,17 @@ const readScope = async (
   if (!entry) {
     return null;
   }
+  const proved = entry.proofBaseBlock === undefined ? {} : { proofBaseBlock: entry.proofBaseBlock };
   if (entry.state === "submitting") {
     return entry.transactionHash === undefined
-      ? { ...(entry.route === undefined ? {} : { route: entry.route }), state: "submitting" }
+      ? {
+          ...proved,
+          ...(entry.route === undefined ? {} : { route: entry.route }),
+          state: "submitting",
+        }
       : {
           nonce: entry.nonce,
+          ...proved,
           senderAddress: entry.senderAddress,
           state: "submitting",
           transactionHash: entry.transactionHash,
@@ -107,6 +116,7 @@ const readScope = async (
   }
   return {
     ...(entry.acceptedBlock === undefined ? {} : { acceptedBlock: entry.acceptedBlock }),
+    ...proved,
     state: "submitted",
     transactionHash: entry.transactionHash,
   };
@@ -142,6 +152,13 @@ export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityS
           return false;
         }
         await writeScope(store, scope, record);
+        return true;
+      },
+      async releaseUnsignedProvedAt(scope, proofBaseBlock) {
+        if (!isUnsignedClaimProvedAt(await readScope(store, scope), proofBaseBlock)) {
+          return false;
+        }
+        await writeScope(store, scope, null);
         return true;
       },
       async releaseUnsigned(scope) {
