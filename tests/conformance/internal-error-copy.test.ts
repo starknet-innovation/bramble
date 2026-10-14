@@ -289,7 +289,7 @@ describe("internal error copy (issue 652)", () => {
     // Constants, templates and replies are read, not only `new Error("…")`.
     expect(
       raws.has(
-        "strk20 services unavailable: submission status is unknown; close every browser window and reopen the browser to recover",
+        "strk20 services unavailable: an earlier private transaction from this account may still be in progress",
       ),
     ).toBe(true);
     expect(raws.has("strk20 privacy leak")).toBe(true);

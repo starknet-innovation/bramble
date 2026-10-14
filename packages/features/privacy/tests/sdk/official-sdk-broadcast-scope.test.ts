@@ -29,6 +29,8 @@ const scope = {
   poolAddress,
 };
 
+const signedWrite = { nonce: "0x5", senderAddress: "0xdef", transactionHash: "0x456" };
+
 const depositRequest = {
   ...context,
   actions: [{ amount: "0x1", token, type: "deposit" }],
@@ -54,8 +56,10 @@ describe("official STRK20 SDK broadcast scope", () => {
       sdk: depositSdk(),
       // Exactly what `withRpcWrite` throws once the write is in flight and the
       // response is lost; the minting itself is covered in starknet-rpc.test.ts.
-      async submitInvoke() {
+      // A write that can be in flight was signed, so it journaled first.
+      async submitInvoke(input) {
         broadcasts += 1;
+        await input.onSigned?.(signedWrite);
         throw new IndeterminateRpcWriteError(
           "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
         );
@@ -69,11 +73,42 @@ describe("official STRK20 SDK broadcast scope", () => {
     expect((rejection as Error).message).toBe(
       "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
     );
-    expect(await maturityStore.read(scope)).toEqual({ state: "submitting" });
+    expect(await maturityStore.read(scope)).toEqual({ ...signedWrite, state: "submitting" });
     await expect(service.submitActions(depositRequest)).rejects.toThrow(
       "strk20 services unavailable",
     );
     expect(broadcasts).toBe(1);
+  });
+
+  test("lets the next action proceed when the lost account-mode send was never signed", async () => {
+    const maturityStore = memoryStrk20MaturityStore();
+    let broadcasts = 0;
+    const service = createOfficialStrk20Service({
+      maturityStore,
+      providerFor,
+      sdk: depositSdk(),
+      // A transport failure before the invoke is signed (estimation, the nonce
+      // read): the journal never ran, so nothing can be on its way.
+      async submitInvoke() {
+        broadcasts += 1;
+        if (broadcasts === 1) {
+          throw new IndeterminateRpcWriteError(
+            "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+          );
+        }
+        return { calls: [], transactionHash: "0x777" };
+      },
+    });
+
+    await expect(service.submitActions(depositRequest)).rejects.toBeInstanceOf(
+      IndeterminateRpcWriteError,
+    );
+    expect(await maturityStore.read(scope)).toEqual({ route: "account", state: "submitting" });
+
+    await expect(service.submitActions(depositRequest)).resolves.toMatchObject({
+      transactionHash: "0x777",
+    });
+    expect(broadcasts).toBe(2);
   });
 
   test("frees the scope when every endpoint fails the pre-broadcast chain-id probe", async () => {

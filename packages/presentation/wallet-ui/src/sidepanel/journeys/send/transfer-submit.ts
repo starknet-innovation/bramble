@@ -8,17 +8,25 @@
  * route rather than once per privacy feature.
  */
 
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import type { TokenBalance } from "../../../popup/responses/responses";
 import { friendlyError } from "../../runtime/friendly-error";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { errorDetails } from "../../shared/dom";
 import { reviewFeeBlocked } from "../../shared/review-render";
-import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
+import {
+  knownNotSent,
+  outcomeUnknownReason,
+  priorWriteUnresolved,
+} from "../../shared/submit-outcome";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
-import { transferRoute } from "./transfer-route";
+import { shieldStrkFunding, transferRoute } from "./transfer-route";
+
+type ShieldStrkFunding = ReturnType<typeof shieldStrkFunding>;
 
 /**
  * Review shape the Send screen renders. Structurally the public review, so the
@@ -90,11 +98,12 @@ export const preparationFailure = (route: SendRoute): string => {
 /**
  * Builds the review a pool route shows from its preparation.
  *
- * `feeAffordability` is `"unknown"` rather than a verdict: a relayed route pays
- * the network fee through the relay and recovers the pool charge from the
- * private balance, and a deposit's own fee lands in the estimate the account
- * route already produces, so the public STRK guard has nothing to say. `unknown`
- * renders no notice.
+ * A relayed route pays the network fee through the relay and recovers the pool
+ * charge from the private balance, so its `feeAffordability` is `"unknown"`
+ * (no notice). A shield pays its network fee, the pool fee, and (for STRK) the
+ * amount from the public STRK balance; with `funding` the review runs the
+ * shared warn-only predicate over all three, so a Max shield whose network fee
+ * the balance cannot cover is flagged before Confirm.
  *
  * `flags` is empty by construction, not by omission. The only recipient flag
  * that can refuse a send — address poisoning — is applied in the background
@@ -104,10 +113,20 @@ export const preparationFailure = (route: SendRoute): string => {
  * statement about a token the route resolved from the wallet's own list. A flag
  * rendered here would therefore be either impossible or noise.
  */
-export const preparedReview = (preparation: PrivacyPreparation): TransferReview =>
+export const preparedReview = (
+  preparation: PrivacyPreparation,
+  funding: ShieldStrkFunding = null,
+): TransferReview =>
   ({
     fee: preparation.networkFee ?? null,
-    feeAffordability: "unknown",
+    feeAffordability:
+      funding && preparation.route === "public-account"
+        ? resolveFeeAffordability({
+            balance: funding.balance,
+            fee: preparation.networkFee ?? null,
+            sendAmount: funding.spent,
+          })
+        : "unknown",
     feeEstimateFailed: preparation.route === "public-account" && !preparation.networkFee,
     flags: [],
     requiresDeployment: false,
@@ -159,8 +178,12 @@ export const preparedState = (
   preparation: PrivacyPreparation,
   fields: TransferFields,
   key: string,
+  publicBalances?: readonly TokenBalance[],
 ): TransferState<TransferReview> => {
-  const review = preparedReview(preparation);
+  const review = preparedReview(
+    preparation,
+    shieldStrkFunding(fields, publicBalances, preparation.poolFeeFri),
+  );
   return {
     error: review.feeEstimateFailed ? FEE_UNAVAILABLE : "",
     fields,
@@ -200,6 +223,7 @@ export const confirmedState = <Review>(
         ...state,
         error: outcome.message,
         review: null,
+        priorWriteUnresolved: false,
         reviewedKey: null,
         stage: "failed",
         submissionUnknown: false,
@@ -223,6 +247,7 @@ export const submitRejection = (
 ): SubmitRejection => {
   const cleared: TransferState<TransferReview> = {
     ...state,
+    priorWriteUnresolved: false,
     privatePreparation: null,
     progress: null,
     review: null,
@@ -237,6 +262,24 @@ export const submitRejection = (
         stage: "confirming",
         submissionUnknown: false,
         transactionHash: error.transactionHash,
+      },
+      toast: null,
+    };
+  }
+  // The background refused before this attempt claimed the pool, because an
+  // EARLIER private write may still land. This attempt was not sent, which the
+  // title says; the sentence keeps the earlier write's may-be-in-flight fact,
+  // and the receipt offers Activity and Check again, which prepares afresh and
+  // so re-runs the background's resolution (mc-wallet issue 661).
+  if (priorWriteUnresolved(error)) {
+    return {
+      follow: false,
+      state: {
+        ...cleared,
+        error: friendlyError(errorDetails(error, "")).message,
+        priorWriteUnresolved: true,
+        stage: "failed",
+        submissionUnknown: false,
       },
       toast: null,
     };

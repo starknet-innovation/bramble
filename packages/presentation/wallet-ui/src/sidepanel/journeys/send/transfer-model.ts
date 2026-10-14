@@ -136,6 +136,13 @@ export type TransferState<Review> = {
    * unknown and offers Activity instead of Try again.
    */
   readonly submissionUnknown: boolean;
+  /**
+   * True on a `failed` stage refused because an EARLIER private write may
+   * still land: this attempt was not sent, and the receipt offers Activity and
+   * Check again, which prepares afresh and so re-runs the background's
+   * resolution of that write (mc-wallet issue 661).
+   */
+  readonly priorWriteUnresolved?: boolean;
   readonly transactionHash: string | null;
 };
 

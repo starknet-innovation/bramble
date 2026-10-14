@@ -165,4 +165,61 @@ describe("STRK20 maturity store", () => {
     expect(await replacing).toBe(false);
     expect(await store.read(scope)).toEqual(newer);
   });
+
+  test("round-trips the route of an unsigned claim and drops an unknown one", async () => {
+    const backing = createMemoryStore();
+    const store = createStrk20MaturityStore(backing);
+    for (const route of ["account", "relay"] as const) {
+      await store.write(scope, { route, state: "submitting" });
+      expect(await store.read(scope)).toEqual({ route, state: "submitting" });
+    }
+    for (const row of [
+      { ...scope, route: "paymaster", state: "submitting" },
+      // A signed write is always the account's and names no route.
+      {
+        ...scope,
+        nonce: "0x1",
+        route: "account",
+        senderAddress: "0xabc",
+        state: "submitting",
+        transactionHash: "0x456",
+      },
+      { ...scope, route: "account", state: "submitted", transactionHash: "0x456" },
+    ]) {
+      await backing.set("bramble:strk20-maturity", [row]);
+      expect(await store.read(scope)).toBeNull();
+    }
+  });
+
+  test("releases only an unsigned account claim, inside the mutation queue", async () => {
+    const store = createStrk20MaturityStore(createMemoryStore());
+    const signed = {
+      nonce: "0x1",
+      senderAddress: "0xabc",
+      state: "submitting" as const,
+      transactionHash: "0x456",
+    };
+    for (const kept of [
+      signed,
+      { route: "relay" as const, state: "submitting" as const },
+      { state: "submitting" as const },
+      { state: "submitted" as const, transactionHash: "0x456" },
+    ]) {
+      await store.write(scope, kept);
+      expect(await store.releaseUnsigned(scope)).toBe(false);
+      expect(await store.read(scope)).toEqual(kept);
+    }
+
+    await store.write(scope, { route: "account", state: "submitting" });
+    // A journal queued first wins: the release then finds a signed write.
+    const journaled = store.write(scope, signed);
+    const released = store.releaseUnsigned(scope);
+    await journaled;
+    expect(await released).toBe(false);
+    expect(await store.read(scope)).toEqual(signed);
+
+    await store.write(scope, { route: "account", state: "submitting" });
+    expect(await store.releaseUnsigned(scope)).toBe(true);
+    expect(await store.read(scope)).toBeNull();
+  });
 });
