@@ -85,16 +85,27 @@ export const isOptionalServiceUrlList = (value: unknown): value is readonly stri
 /** What an endpoint reads as once {@link redactEndpoints} has removed it. */
 export const REDACTED_ENDPOINT = "[endpoint]";
 
-// A scheme, "://", then everything up to the first character a URL cannot
-// carry unescaped (whitespace, a quote, an angle bracket, a backtick), so a key
-// in the path or query never survives as a tail. The schemes the validators
-// above accept (http, https, ws, wss) also match every slash spelling the URL
-// parser normalizes for them — backslashes, extra slashes, none at all — since
-// `isServiceUrl` accepts and stores "https:\\host\key" and "https:host/key" as
-// written, and a configured string can be echoed back that way. The lookbehind
-// starts a match only at the front of a word, which keeps the scan linear.
-const ENDPOINT_PATTERN =
-  /(?<![a-z0-9+.-])(?:[a-z][a-z0-9+.-]*:\/\/|(?:https?|wss?):[\\/]*)[^\s"<>`]+/gi;
+// The URL parser drops ASCII tab, CR and LF anywhere in its input, so
+// `isServiceUrl` accepts "https:\t//host/key" or a tab inside the key and stores
+// the string as written. The pattern lets them appear anywhere in a match.
+const IGNORED = "[\\t\\n\\r]*";
+const spaced = (word: string): string => [...word].join(IGNORED);
+// A URL runs to the first character it cannot carry unescaped — whitespace, a
+// quote, an angle bracket, a backtick — so a key never survives as a tail. A
+// run of ignored characters continues it only when the URL goes on after it.
+const URL_CHAR = '[^\\s"<>`]';
+// Any scheme written "scheme://", which is how every URL leaves the wallet and
+// so how a node or gateway echoes one; or one of the schemes the validators
+// above accept (http, https, ws, wss) in any spelling the parser normalizes for
+// them: ignored characters anywhere, backslashes, extra slashes, or none at
+// all. The lookbehind starts a match only at the front of a word, which keeps
+// the scan linear.
+const ENDPOINT_PATTERN = new RegExp(
+  "(?<![a-z0-9+.-])(?:[a-z][a-z0-9+.-]*://" +
+    `|(?:${spaced("https")}|${spaced("http")}|${spaced("wss")}|${spaced("ws")})${IGNORED}:[\\t\\n\\r\\\\/]*)` +
+    `(?:${URL_CHAR}|[\\t\\n\\r]+(?=${URL_CHAR}))+`,
+  "gi",
+);
 
 /**
  * Replaces every scheme-qualified URL in failure text with
@@ -103,7 +114,9 @@ const ENDPOINT_PATTERN =
  * data, a gateway page quoted in a parse error, an SDK message. Apply it to any
  * such text before a user can see or copy it. Everything else — the method,
  * an RPC code, a revert reason, felts — is kept, so the text stays a useful
- * diagnostic. Pure and total.
+ * diagnostic. Every spelling the validators above accept is matched whole; to
+ * cover the characters the URL parser ignores, a word glued to the end of a URL
+ * by only a tab or line break is redacted with it. Pure, total, and linear.
  */
 export const redactEndpoints = (text: string): string =>
   text.replace(ENDPOINT_PATTERN, REDACTED_ENDPOINT);
