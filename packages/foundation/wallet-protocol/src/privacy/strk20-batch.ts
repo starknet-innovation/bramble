@@ -28,6 +28,24 @@ import { OPEN_AMOUNT, type Strk20Action } from "./strk20";
  */
 export const STRK20_BATCH_REFUSAL_PREFIX = "invalid strk20 action batch: ";
 
+/**
+ * Exclusive bound on nonces `get_shadow_accounts` can list: its `end_nonce` is an exclusive Cairo
+ * `u64`, so 2^64 − 1 cannot be listed (audit F4); callers report it as not listable.
+ */
+export const STRK20_SHADOW_VIEW_NONCE_LIMIT = (1n << 64n) - 1n;
+
+/**
+ * Why a shadow-account nonce at or past {@link STRK20_SHADOW_VIEW_NONCE_LIMIT}
+ * is refused before approval: the wallet could never list, check or sweep the
+ * account it names. Dapp-facing protocol text.
+ */
+export const STRK20_SHADOW_NONCE_UNLISTABLE =
+  "a shadow account nonce must be below 2^64 - 1 (0xffffffffffffffff); the anonymizer's get_shadow_accounts view cannot list a larger one";
+
+/** Whether the range view can list the shadow account at `nonce` (a validated felt). */
+export const isListableShadowNonce = (nonce: string): boolean =>
+  BigInt(nonce) < STRK20_SHADOW_VIEW_NONCE_LIMIT;
+
 /** Why a STRK20 batch is refused before approval. Dapp-facing protocol text. */
 export const STRK20_BATCH_REFUSALS = {
   entryPointSelector:
@@ -40,6 +58,7 @@ export const STRK20_BATCH_REFUSALS = {
   openPerToken: "a shadow_account_invoke settles at most one OPEN transfer per token",
   openWithoutInvoke:
     "an OPEN transfer needs an invoke or shadow_account_invoke action in the same batch to fill it",
+  unlistableNonce: STRK20_SHADOW_NONCE_UNLISTABLE,
 } as const;
 
 const SELECTOR_PATTERN = /^0x/i;
@@ -76,6 +95,9 @@ export const strk20BatchRefusal = (
   ) {
     return "entryPointSelector";
   }
+  if (invoke?.type === "shadow_account_invoke" && !isListableShadowNonce(invoke.nonce)) {
+    return "unlistableNonce";
+  }
   const openIndexes = actions.flatMap((action, index) => (isOpenTransfer(action) ? [index] : []));
   if (openIndexes.length === 0) return null;
   if (invokeIndex === undefined) return "openWithoutInvoke";
@@ -95,3 +117,19 @@ export const strk20BatchRefusalError = (actions: readonly Strk20Action[]): strin
     ? null
     : `${STRK20_BATCH_REFUSAL_PREFIX}${STRK20_BATCH_REFUSALS[refusal]}`;
 };
+
+/**
+ * Prefix of a refused shadow-account commitment request. Mapped like a batch
+ * refusal: INVALID_REQUEST_PAYLOAD (114), with the reason after the prefix as
+ * the error's `data`.
+ */
+export const STRK20_SHADOW_ACCOUNT_REFUSAL_PREFIX = "invalid strk20 shadow account request: ";
+
+/**
+ * The background's error string for a shadow-account commitment whose nonce
+ * the range view could not list, or null when it names none or a listable one.
+ */
+export const strk20ShadowAccountRefusalError = (nonce: string | undefined): string | null =>
+  nonce === undefined || isListableShadowNonce(nonce)
+    ? null
+    : `${STRK20_SHADOW_ACCOUNT_REFUSAL_PREFIX}${STRK20_SHADOW_NONCE_UNLISTABLE}`;

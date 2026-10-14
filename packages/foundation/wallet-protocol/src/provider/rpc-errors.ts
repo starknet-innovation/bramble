@@ -6,7 +6,10 @@
  * string errors; this module is only for the dapp boundary.
  */
 
-import { STRK20_BATCH_REFUSAL_PREFIX } from "../privacy/strk20-batch";
+import {
+  STRK20_BATCH_REFUSAL_PREFIX,
+  STRK20_SHADOW_ACCOUNT_REFUSAL_PREFIX,
+} from "../privacy/strk20-batch";
 
 /**
  * A Starknet wallet JSON-RPC error object as defined by wallet_rpc.json.
@@ -74,11 +77,13 @@ export const apiVersionNotSupported = make(162, "The requested API version is no
  */
 export const unknownError = make(163, "The wallet request failed");
 
-// Malformed inputs. A refused STRK20 batch names its rule as `data`, so the
-// site can tell which one it broke.
+// Malformed inputs. A refused STRK20 batch or shadow-account request names its
+// rule as `data`, so the site can tell which one it broke.
 const invalidPayloadFor = (message: string): WalletRpcError | null => {
-  if (message.startsWith(STRK20_BATCH_REFUSAL_PREFIX)) {
-    return invalidRequestPayload(message.slice(STRK20_BATCH_REFUSAL_PREFIX.length));
+  for (const prefix of [STRK20_BATCH_REFUSAL_PREFIX, STRK20_SHADOW_ACCOUNT_REFUSAL_PREFIX]) {
+    if (message.startsWith(prefix)) {
+      return invalidRequestPayload(message.slice(prefix.length));
+    }
   }
   return /^invalid\b/i.test(message) || /malformed|origin mismatch/i.test(message)
     ? invalidRequestPayload()

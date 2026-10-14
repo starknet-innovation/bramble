@@ -156,10 +156,10 @@ export type Strk20SubmissionResult = {
 };
 
 /**
- * Exclusive bound on nonces `get_shadow_accounts` can list: its `end_nonce` is an exclusive Cairo
- * `u64`, so 2^64 − 1 cannot be listed (audit F4); callers report it as not listable.
+ * Exclusive bound on nonces `get_shadow_accounts` can list, single-sourced with
+ * the pre-approval nonce refusal in the provider protocol (audit F4).
  */
-export const STRK20_SHADOW_VIEW_NONCE_LIMIT = (1n << 64n) - 1n;
+export { STRK20_SHADOW_VIEW_NONCE_LIMIT } from "@bramble/wallet-protocol/strk20-batch";
 
 /**
  * One shadow account as the anonymizer reports it: the nonce, its address (the

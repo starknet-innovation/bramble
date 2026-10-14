@@ -14,7 +14,10 @@ import { SHADOW_INVOKE_ANONYMIZER } from "@bramble/privacy/shadow-account-copy";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
-import { strk20BatchRefusalError } from "@bramble/wallet-protocol/strk20-batch";
+import {
+  strk20BatchRefusalError,
+  strk20ShadowAccountRefusalError,
+} from "@bramble/wallet-protocol/strk20-batch";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
 import { type ApprovalReservation, withApprovalReservation } from "../approvals/approval-limits";
@@ -363,6 +366,12 @@ const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, messa
   const gate = gateOrigin(deps, input.origin, sender);
   if (gate) {
     return gate;
+  }
+  // A nonce the range view cannot list names an account the wallet could never
+  // check or sweep, so it is refused before approval, from the input alone.
+  const refusal = strk20ShadowAccountRefusalError(input.nonce);
+  if (refusal) {
+    return { error: refusal };
   }
   // Admitted on arrival, before anything that depends on what this user has
   // set up: the reservation holds this request's queue slot, and the deadline
