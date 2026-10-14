@@ -10,7 +10,14 @@
  * data: it must never enter preferences, account projections, activity, logs,
  * session storage, or messages beyond the privileged panel's own view of it.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "@bramble/core/json";
+import {
+  hasOnlyKnownKeys,
+  hasUniqueStrings,
+  isJsonWithinBudget,
+  isRecord,
+  JSON_BUDGETS,
+  type JsonBudget,
+} from "@bramble/core/json";
 import { isWalletOrigin } from "@bramble/core/origin";
 import {
   canonicalFelt,
@@ -30,6 +37,20 @@ export const SHADOW_ACCOUNT_RECORD_LIMIT = "shadow account record limit reached"
 
 /** Stable error code: a malformed scope, or one on another account's chain. */
 export const SHADOW_ACCOUNT_RECORD_INVALID = "invalid shadow account record";
+
+/**
+ * The share of the vault's capacity (the provider JSON budget its validators
+ * apply) the scope records may use together: half, so the records can never
+ * push the vault past its budget, and accounts, keys and grants always keep
+ * the other half. Dapps choose nonces, and 128 scopes of 64 full-width nonces
+ * would need about four times the whole budget, so this byte share is the
+ * binding bound; the count caps below only bound validator work (release audit
+ * S1). A record past it is refused, never evicted.
+ */
+export const SHADOW_ACCOUNT_SCOPES_BUDGET: JsonBudget = {
+  ...JSON_BUDGETS.provider,
+  maxBytes: Math.floor(JSON_BUDGETS.provider.maxBytes / 2),
+};
 
 /** Most scope records one vault keeps; a further scope is refused, never evicted. */
 export const MAX_SHADOW_ACCOUNT_SCOPES = 128;
@@ -167,7 +188,8 @@ export const canonicalShadowAccountScope = (
  * Merges one canonical scope into the collection: a new scope is appended, an
  * existing one gains the nonces it did not hold. Returns the same reference
  * when nothing changes (so the caller skips the write), or null when the
- * result would exceed a bound — the caller refuses rather than drop a record.
+ * result would exceed a count bound or {@link SHADOW_ACCOUNT_SCOPES_BUDGET} —
+ * the caller refuses rather than drop a record.
  */
 export const withShadowAccountScope = (
   scopes: readonly ShadowAccountScopeRef[],
@@ -176,7 +198,7 @@ export const withShadowAccountScope = (
   const key = scopeKey(next);
   const existing = scopes.find((scope) => scopeKey(scope) === key);
   if (!existing) {
-    return scopes.length >= MAX_SHADOW_ACCOUNT_SCOPES ? null : [...scopes, next];
+    return scopes.length >= MAX_SHADOW_ACCOUNT_SCOPES ? null : withinShare([...scopes, next]);
   }
   const nonces = [...new Set([...existing.nonces, ...next.nonces])].sort(ascending);
   if (nonces.length === existing.nonces.length) {
@@ -185,8 +207,15 @@ export const withShadowAccountScope = (
   if (nonces.length > MAX_SHADOW_ACCOUNT_NONCES) {
     return null;
   }
-  return scopes.map((scope) => (scopeKey(scope) === key ? { ...scope, nonces } : scope));
+  return withinShare(
+    scopes.map((scope) => (scopeKey(scope) === key ? { ...scope, nonces } : scope)),
+  );
 };
+
+const withinShare = (
+  scopes: readonly ShadowAccountScopeRef[],
+): readonly ShadowAccountScopeRef[] | null =>
+  isJsonWithinBudget(scopes, SHADOW_ACCOUNT_SCOPES_BUDGET) ? scopes : null;
 
 /** The recorded scopes for one account on one chain and pool, in record order. */
 export const shadowAccountScopesFor = (

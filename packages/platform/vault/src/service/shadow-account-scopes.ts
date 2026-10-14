@@ -4,7 +4,7 @@
  * sites an account used privately, so they are written and read only here and
  * returned only to the privileged background.
  */
-import { WalletError } from "@bramble/core/errors";
+import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import {
   canonicalShadowAccountScope,
@@ -18,6 +18,21 @@ import type { EncryptedStore } from "../encrypted-store";
 import type { Vault } from "../schema/schema";
 import { writeVault } from "./service-creation";
 import type { WalletVaultService } from "./service-types";
+import { requireVaultCapacity } from "./vault-capacity";
+
+// Whether the vault with `shadowAccountScopes` would still fit its capacity,
+// answered as the write would answer it but without touching storage.
+const fitsVault = (vault: Vault, shadowAccountScopes: Vault["shadowAccountScopes"]): boolean => {
+  try {
+    requireVaultCapacity({ ...vault, shadowAccountScopes });
+    return true;
+  } catch (error) {
+    if (error instanceof RefusedBeforeWrite) {
+      return false;
+    }
+    throw error;
+  }
+};
 
 /**
  * Builds the record and list methods over the vault's own read and write. The
@@ -37,7 +52,10 @@ export const shadowAccountScopeMethods = (
     if (!scope || !sameFelt(scope.chainId, STARKNET_NETWORKS[account.networkId].chainId)) {
       throw new WalletError(SHADOW_ACCOUNT_RECORD_INVALID);
     }
-    return withShadowAccountScope(vault.shadowAccountScopes, scope) !== null;
+    // Both the record bounds and the vault's own capacity, so a request whose
+    // record the write would refuse is refused before approval (audit S1).
+    const next = withShadowAccountScope(vault.shadowAccountScopes, scope);
+    return next !== null && (next === vault.shadowAccountScopes || fitsVault(vault, next));
   },
   async listShadowAccountScopes(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
