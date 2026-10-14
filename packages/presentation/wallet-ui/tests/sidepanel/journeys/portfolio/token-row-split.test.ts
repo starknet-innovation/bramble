@@ -49,6 +49,15 @@ describe("unifiedBalanceRow split line", () => {
     expect(summary(html)).toContain('<p class="token-split">0.00 public · 0.50 private</p>');
   });
 
+  test("an unknown public balance shows no split line and a dash, never zero", () => {
+    const html = unifiedBalanceRow({ ...token, formatted: "0.5" }, undefined, undefined, "usd", {
+      private: ready("0.5", "0x6f05b59d3b20000"),
+      publicFormatted: null,
+    });
+    expect(html).not.toContain("token-split");
+    expect(html).toMatch(/Public balance<\/span>\s*<span class="token-breakdown-value">—<\/span>/);
+  });
+
   test("a split token shows both amounts grouped and padded like the row", () => {
     const html = unifiedBalanceRow(token, undefined, undefined, "usd", {
       private: ready("1000.25", "0x1"),
