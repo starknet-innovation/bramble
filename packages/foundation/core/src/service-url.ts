@@ -81,3 +81,24 @@ export const isBoundedServiceUrlList = (
  */
 export const isOptionalServiceUrlList = (value: unknown): value is readonly string[] | undefined =>
   value === undefined || isServiceUrlList(value);
+
+/** What an endpoint reads as once {@link redactEndpoints} has removed it. */
+export const REDACTED_ENDPOINT = "[endpoint]";
+
+// A scheme, "://", then everything up to the first character a URL cannot
+// carry unescaped (whitespace, a quote, an angle bracket, a backtick), so a key
+// in the path or query never survives as a tail. The lookbehind starts a match
+// only at the front of a word, which keeps the scan linear.
+const ENDPOINT_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"<>`]+/gi;
+
+/**
+ * Replaces every scheme-qualified URL in failure text with
+ * {@link REDACTED_ENDPOINT}. A configured RPC or service endpoint may carry an
+ * API key in its path or query, and failure text can echo it: a node's error
+ * data, a gateway page quoted in a parse error, an SDK message. Apply it to any
+ * such text before a user can see or copy it. Everything else — the method,
+ * an RPC code, a revert reason, felts — is kept, so the text stays a useful
+ * diagnostic. Pure and total.
+ */
+export const redactEndpoints = (text: string): string =>
+  text.replace(ENDPOINT_PATTERN, REDACTED_ENDPOINT);

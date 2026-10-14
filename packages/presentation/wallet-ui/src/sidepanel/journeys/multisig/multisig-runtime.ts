@@ -19,9 +19,9 @@ import {
   readArgentMultisig,
   readArgentMultisigs,
 } from "../../../popup/responses/multisig-responses";
-import { isBalancesResponse, isErrorResponse } from "../../../popup/responses/responses";
+import { isBalancesResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
-import { lostReplySend, responseError } from "../../runtime/runtime-errors";
+import { lostReplySend, refusalText, responseError } from "../../runtime/runtime-errors";
 
 /**
  * Address and active network required to sync an existing Argent multisig.
@@ -141,9 +141,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
           ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
-      return {
-        error: isErrorResponse(response) ? response.error : "multisig balances unavailable",
-      };
+      return { error: refusalText(response, "multisig balances unavailable") };
     },
     async loadClassStatus(): Promise<boolean | "error"> {
       try {

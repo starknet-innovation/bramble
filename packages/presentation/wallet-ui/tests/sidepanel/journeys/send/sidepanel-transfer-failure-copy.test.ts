@@ -6,6 +6,8 @@
  * "Transaction was not sent", or the raw answer behind "The RPC rejected this
  * request". A failure with no rejected call behind it (a chain rejection)
  * copies the reason shown, never a diagnostic left over from an earlier try.
+ * What is copied never carries an endpoint: a node's error that echoes the RPC
+ * URL and its key arrives with the URL already redacted by the panel client.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { STRK20_PRIOR_WRITE_UNRESOLVED } from "@bramble/privacy/maturity";
@@ -17,6 +19,7 @@ import {
   type TransferReview,
 } from "../../../../src/sidepanel/journeys/send/transfer-submit";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import { createSidepanelRuntime } from "../../../../src/sidepanel/runtime/runtime";
 import { captureClipboard } from "../../../support/failure-copy-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
@@ -135,5 +138,31 @@ describe("the rendered public Send", () => {
     lastToastCopy()?.click();
     await flush();
     expect(copied).toEqual([RAW_RPC]);
+  });
+
+  test("a node error through the real client is copied without its endpoint", async () => {
+    const key = "node-key-123";
+    const runtime = createSidepanelRuntime({
+      sendMessage: async () => ({
+        error: `RPC: starknet_addInvokeTransaction with params {}\n\n 55: Account validation failed: {"url":"https://rpc.example.test/v0_8/${key}"}`,
+      }),
+    });
+    const copied = captureClipboard();
+    const { app, deps } = mount({
+      submitTransfer: (...args: Parameters<typeof runtime.submitTransfer>) =>
+        runtime.submitTransfer(...args),
+    });
+    bindTransfer(deps);
+    await reviewAndConfirm(app);
+
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Status unknown");
+    app
+      .querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy error details"]')
+      ?.click();
+    await flush();
+    expect(copied).toEqual([
+      'RPC: starknet_addInvokeTransaction with params {}\n\n 55: Account validation failed: {"url":"[endpoint]"}',
+    ]);
+    expect(app.textContent).not.toContain(key);
   });
 });

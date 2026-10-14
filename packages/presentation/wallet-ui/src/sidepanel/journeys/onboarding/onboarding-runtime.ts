@@ -7,13 +7,13 @@
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   isCreateAccountResponse,
-  isErrorResponse,
   isGenerateMnemonicResponse,
 } from "../../../popup/responses/responses";
 import { isValidateMnemonicResponse } from "../../../popup/responses/responses-onboarding";
+import { refusalText } from "../../runtime/runtime-errors";
 
 const responseError = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
+  new Error(refusalText(response, fallback));
 
 /**
  * Onboarding-only side panel actions over chrome.runtime messaging.

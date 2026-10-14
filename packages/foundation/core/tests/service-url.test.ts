@@ -7,6 +7,8 @@ import {
   isServiceUrl,
   isWebSocketServiceUrl,
   normalizeHostname,
+  REDACTED_ENDPOINT,
+  redactEndpoints,
   trimTrailingSlashes,
 } from "@bramble/core/service-url";
 
@@ -51,5 +53,41 @@ describe("service URLs", () => {
     expect(isBoundedServiceUrlList(urls(5), 4)).toBe(false);
     expect(isBoundedServiceUrlList([], 4)).toBe(false);
     expect(isBoundedServiceUrlList(["ftp://rpc.example"], 4)).toBe(false);
+  });
+});
+
+describe("redactEndpoints", () => {
+  test("removes every scheme-qualified URL, path and query included", () => {
+    expect(
+      redactEndpoints(
+        "failed at https://rpc.example.test/v0_8/node-key-123?apikey=abc then wss://ws.example.test/k",
+      ),
+    ).toBe(`failed at ${REDACTED_ENDPOINT} then ${REDACTED_ENDPOINT}`);
+  });
+
+  test("stops at a character a URL cannot carry, so quoted JSON stays readable", () => {
+    expect(redactEndpoints('{"url":"https://rpc.example.test/key","code":-32603}')).toBe(
+      '{"url":"[endpoint]","code":-32603}',
+    );
+    expect(redactEndpoints("<a href=https://x.example/key>gateway</a>")).toBe(
+      "<a href=[endpoint]>gateway</a>",
+    );
+  });
+
+  test("keeps the diagnostic around it: method, code, felts, plain words", () => {
+    const text =
+      "RPC: starknet_addInvokeTransaction with params {} 55: Account validation failed: 0x0123456789abcdef";
+    expect(redactEndpoints(text)).toBe(text);
+    expect(redactEndpoints("no endpoint configured: rpc://")).toBe(
+      "no endpoint configured: rpc://",
+    );
+  });
+
+  test("is idempotent and linear on long input", () => {
+    const once = redactEndpoints("at https://rpc.example.test/key");
+    expect(redactEndpoints(once)).toBe(once);
+    const started = performance.now();
+    redactEndpoints("a".repeat(200_000));
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });

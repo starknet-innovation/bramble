@@ -15,7 +15,6 @@ import {
   isBalancesResponse,
   isConnectedSitesResponse,
   isCreateAccountResponse,
-  isErrorResponse,
   isFeeReviewResponse,
   isPreferencesResponse,
   isPricesResponse,
@@ -55,7 +54,7 @@ export type {
 } from "./runtime-types";
 
 import { createAccountRuntimeClient } from "./runtime-accounts";
-import { lostReplySend, relabelLostReply, responseError } from "./runtime-errors";
+import { lostReplySend, refusalText, relabelLostReply, responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
@@ -254,7 +253,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
           ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
-      return { error: isErrorResponse(response) ? response.error : "balances unavailable" };
+      return { error: refusalText(response, "balances unavailable") };
     },
     async detectTokens(): Promise<readonly TokenBalance[]> {
       const response = await sendMessage({ type: "wallet.detectTokens" });
