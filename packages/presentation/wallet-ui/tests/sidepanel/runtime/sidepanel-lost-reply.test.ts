@@ -77,6 +77,9 @@ describe("a lost reply on a write call", () => {
     ["a denial", () => wallet.decideApproval("id", false)],
     ["a transaction denial", () => wallet.decideApproval("id", false, undefined, undefined, true)],
     ["a site revoke", () => wallet.revokeOrigin("https://example.com")],
+    // The first allowance-revoke call only estimates the fee; nothing can have
+    // been submitted, so it must not say the revoke may not have gone through.
+    ["an allowance revoke fee estimate", () => wallet.revokeAllowance("id")],
     ["a send", () => wallet.submitTransfer("a", "t", "0x1", "1")],
     ["a saved setting", () => wallet.setDisplay({ theme: "dark" })],
     ["a swap", () => createSwapClient(lost).execute("prep")],
@@ -124,7 +127,11 @@ describe("unrecognised replies to a write", () => {
     const wallet = createSidepanelRuntime({ sendMessage: async () => ({ unexpected: true }) });
     const message = async (run: () => Promise<unknown>): Promise<string> =>
       ((await rejection(run)) as Error).message;
-    expect(await message(() => wallet.revokeAllowance("id"))).toBe("allowance revoke failed");
+    expect(
+      await message(() => wallet.revokeAllowance("id", { overallFee: "1", unit: "FRI" })),
+    ).toBe("allowance revoke failed");
+    // The fee estimate submits nothing, so it keeps the generic code.
+    expect(await message(() => wallet.revokeAllowance("id"))).toBe("revoke failed");
     expect(await message(() => wallet.revokeOrigin("https://example.com"))).toBe("revoke failed");
     expect(await message(() => wallet.decideApproval("id", true, undefined, undefined, true))).toBe(
       "transaction approval failed",

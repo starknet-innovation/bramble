@@ -197,20 +197,23 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       return allowanceListingFrom(response);
     },
     async revokeAllowance(id: string, reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
-      // Its own code, apart from Connected sites' "revoke failed": only this
-      // revoke is a transaction, so only its unknown outcome points at Activity.
+      // Only the call that carries the reviewed fee submits the revoke, so only
+      // its unknown outcome gets the revoke's own "may not have gone through"
+      // code. The first call only estimates the fee; it keeps the generic codes,
+      // the same ones Connected sites' revoke uses.
+      const code = reviewedFee ? "allowance revoke failed" : "revoke failed";
       const response = await sendMessage({
         id,
         ...(reviewedFee ? { reviewedFee } : {}),
         type: "wallet.revokeAllowance",
       }).catch((error: unknown) => {
-        throw relabelLostReply(error, "allowance revoke failed");
+        throw reviewedFee ? relabelLostReply(error, code) : error;
       });
       if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
-      throw responseError(response, "allowance revoke failed");
+      throw responseError(response, code);
     },
     async reviewTransfer(
       accountId: string,
