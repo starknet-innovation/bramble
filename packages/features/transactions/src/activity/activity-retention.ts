@@ -3,6 +3,7 @@
  * by array position: `record` appends while `replaceScope` writes a scope
  * newest-first, so the stored order says nothing about age (Sherlock 203).
  */
+import { isJsonWithinBudget, type JsonBudget } from "@bramble/core/json";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import {
   type ActivityEntry,
@@ -106,3 +107,51 @@ export const scopeSnapshot = (
     .filter((entry) => isActivityEntry(entry) && matchesScope(entry, scope))
     .sort(newestFirst)
     .slice(0, MAX_ENTRIES_PER_SCOPE);
+
+// A row still owed to the user — a transaction under observation, or a
+// failure notice not yet shown — is evicted only after every other row.
+const isOwed = (entry: ActivityEntry): boolean =>
+  isUnresolvedActivityStatus(entry.status) || entry.failureNotice === "pending";
+
+const evictionOrder = (left: ActivityEntry, right: ActivityEntry): number =>
+  isOwed(left) === isOwed(right) ? left.submittedAt - right.submittedAt : isOwed(left) ? 1 : -1;
+
+/**
+ * The log trimmed to what its storage key admits. The row caps above bound the
+ * row count, not the bytes: rows vary in size and gained fields over releases,
+ * so a log within the caps can still exceed `budget`, and every later write
+ * would then fail (release audit N1). Rows are evicted oldest settled first;
+ * a row still observing a transaction or owing a failure notice goes only once
+ * every settled row has, and `kept` (the row just recorded) never does. Returns
+ * `entries` itself when it already fits. A log that still cannot fit is
+ * returned as trimmed as it gets, so the store's own budget check refuses it.
+ */
+export const withinByteBudget = (
+  entries: readonly ActivityEntry[],
+  budget: JsonBudget,
+  kept?: ActivityEntry,
+): readonly ActivityEntry[] => {
+  // Not the type guard itself: a failed guard would narrow `entries` away.
+  const fits = (rows: readonly ActivityEntry[]): boolean => isJsonWithinBudget(rows, budget);
+  if (fits(entries)) {
+    return entries;
+  }
+  const evictable = entries.filter((entry) => entry !== kept).sort(evictionOrder);
+  const without = (count: number): readonly ActivityEntry[] => {
+    const evicted = new Set(evictable.slice(0, count));
+    return entries.filter((entry) => !evicted.has(entry));
+  };
+  // Evicting more rows never grows the log, so the fewest evictions that fit
+  // is found by bisection rather than one re-measure per row.
+  let low = 1;
+  let high = evictable.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (fits(without(middle))) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+  return without(high);
+};

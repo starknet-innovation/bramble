@@ -22,6 +22,10 @@ const diagnostics = () => ({
   ],
   ready: true,
   rpc: [{ count: 3, endpoint: "wallet-gateway", latencyMs: 42, outcome: "ok" }],
+  storage: [
+    { count: 2, outcome: "trimmed", store: "activity" },
+    { count: 1, outcome: "write-failed", store: "activity" },
+  ],
 });
 
 describe("isSupportDiagnosticsResponse", () => {
@@ -53,6 +57,24 @@ describe("isSupportDiagnosticsResponse", () => {
       expect(
         isSupportDiagnosticsResponse({
           diagnostics: { ...diagnostics(), privacy: [row] },
+          ok: true,
+        }),
+      ).toBe(false);
+    }
+  });
+
+  test("requires the storage lane and refuses a row outside its fixed labels", () => {
+    const { storage: _storage, ...withoutStorage } = diagnostics();
+    expect(isSupportDiagnosticsResponse({ diagnostics: withoutStorage, ok: true })).toBe(false);
+    for (const row of [
+      { count: 1, outcome: "full", store: "activity" },
+      { count: 1, outcome: "trimmed", store: "vault" },
+      { count: 1.5, outcome: "trimmed", store: "activity" },
+      { count: 1, key: "bramble:activity", outcome: "trimmed", store: "activity" },
+    ]) {
+      expect(
+        isSupportDiagnosticsResponse({
+          diagnostics: { ...diagnostics(), storage: [row] },
           ok: true,
         }),
       ).toBe(false);
