@@ -19,6 +19,7 @@ import type { TransferFields, TransferStage } from "./transfer-model";
 import { poolFeeText } from "./transfer-review-routes";
 import {
   resolveTransferRoute,
+  shieldLeavesNoStrkForGas,
   type TransferRouteContext,
   transferPoolFeeAmount,
   transferRoute,
@@ -30,10 +31,15 @@ export const COMPOSE_FEE_DEBOUNCE_MS = 400;
 
 // Copy used when the network fee could not be read. Named, never a made-up figure.
 const FEE_UNAVAILABLE = "Estimated fee unavailable";
+// A STRK shield at Max holds back the pool fee only: its network fee is not
+// known until the deposit is proved, and it is paid from the same STRK.
+const SHIELD_GAS_NOTE = "Leave enough STRK for the network fee.";
 
 /** The composed send an Amount-screen estimate applies to. */
 export type ComposeFeeTarget = {
   readonly fields: TransferFields;
+  /** A STRK shield whose amount leaves no public STRK for its network fee. */
+  readonly leavesNoGas: boolean;
   /** The pool fee in the token that pays it, as the route gate reserves it. */
   readonly poolFee: string | null;
   readonly route: SendRoute;
@@ -60,6 +66,7 @@ export const composeFeeTarget = (context: TransferRouteContext): ComposeFeeTarge
   }
   return {
     fields,
+    leavesNoGas: shieldLeavesNoStrkForGas(context),
     poolFee: transferPoolFeeAmount(context),
     route: transferRoute(fields),
   };
@@ -100,6 +107,9 @@ export const composeFeeLines = (
     target.poolFee !== null
   ) {
     lines.push(poolFeeText(target.route.feeBucket, target.poolFee));
+  }
+  if (target.leavesNoGas) {
+    lines.push(SHIELD_GAS_NOTE);
   }
   // Only a plain public transfer's network fee can be estimated before the route
   // prepares; every other route's gas is sponsored or priced at review.

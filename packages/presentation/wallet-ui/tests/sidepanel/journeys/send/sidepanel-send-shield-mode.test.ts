@@ -231,6 +231,34 @@ describe("a shield shortcut", () => {
     expect(text(app, "#send-review-button")).toBe("Review send");
   });
 
+  test("warns in review when the public STRK cannot cover the pool and network fees", async () => {
+    const { app } = open(shieldIntent, {
+      async preparePrivacyDeposit() {
+        return {
+          id: `sha256:${"d".repeat(64)}`,
+          kind: "deposit",
+          // The 50 STRK balance covers the network fee but not the pool fee too.
+          networkFee: { overallFee: "50000000000000000000", unit: "FRI" },
+          payloadDigest: `sha256:${"d".repeat(64)}`,
+          poolAddress: "0xabc",
+          poolFeeFri: "0x3e8",
+          route: "public-account",
+          summaries: ["Shield 1 ETH"],
+          symbol: "ETH",
+          tokenId: publicBalance.id,
+        };
+      },
+    });
+    typeAmount(app, "1");
+    submit(app);
+    await flush();
+
+    expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("review");
+    expect(app.textContent).toContain(
+      "This account's STRK balance is less than this transaction needs",
+    );
+  });
+
   test("fails a shield closed when its fee could not be estimated", async () => {
     let executions = 0;
     const deposits: unknown[][] = [];
