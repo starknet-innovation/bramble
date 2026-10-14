@@ -4,7 +4,13 @@
  * who added a token (audit 171) and the removal (audit 134).
  */
 import { WalletError } from "@bramble/core/errors";
-import { isDefaultToken, RECOVERY_PROBE_TOKENS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  canonicalFelt,
+  DEFAULT_TRACKED_TOKENS,
+  isDefaultToken,
+  isDefaultTrackedToken,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import {
   isTokenConfig,
   isTokenId,
@@ -14,10 +20,35 @@ import {
 import type { TokenSource, WalletPreferences } from "./preferences-types";
 
 /**
+ * Most removals remembered (issue 663). Only a curated token can be tracked
+ * without the user, so the list only has to outlast the curated registry; the
+ * oldest entry is dropped beyond this.
+ */
+const MAX_REMOVED_TOKENS = 64;
+
+// One spelling per network and contract, whatever symbol the record carried:
+// the held-token scan matches a curated entry by address, not by id.
+const removedTokenKey = (networkId: string, address: string): string =>
+  `${networkId}:${canonicalFelt(address) ?? address}`;
+
+/**
+ * Whether the user removed this network's token at `address` and has not
+ * added it again. The curated held-token scan reads this so it never tracks a
+ * token the user took off the list (issue 663). Absent on preferences written
+ * before the field existed, which reads as "never removed".
+ */
+export const wasTokenRemoved = (
+  preferences: Pick<WalletPreferences, "removedTokens">,
+  networkId: string,
+  address: string,
+): boolean => (preferences.removedTokens ?? []).includes(removedTokenKey(networkId, address));
+
+/**
  * Removes one tracked token and its hidden flag (Sherlock audit 134). This is the
- * user's way out of a token a dapp added through `wallet_watchAsset`. Throws
- * {@link WalletError} for a malformed or unknown id, and for a built-in default
- * token, which fee guards and onboarding read.
+ * user's way out of a token a dapp added through `wallet_watchAsset`. The
+ * removal is remembered (see {@link wasTokenRemoved}) so the held-token scan
+ * does not add it back. Throws {@link WalletError} for a malformed or unknown
+ * id, and for a built-in default token, which fee guards and onboarding read.
  */
 export const withoutToken = (
   preferences: WalletPreferences,
@@ -34,11 +65,17 @@ export const withoutToken = (
     throw new WalletError("Built-in tokens can't be removed");
   }
   const tokens = preferences.tokens.filter((stored) => stored.id !== tokenId);
+  const key = removedTokenKey(token.networkId, token.address);
+  const removedTokens = [
+    ...(preferences.removedTokens ?? []).filter((stored) => stored !== key),
+    key,
+  ].slice(-MAX_REMOVED_TOKENS);
   return preferences.hiddenTokens === undefined
-    ? { ...preferences, tokens }
+    ? { ...preferences, removedTokens, tokens }
     : {
         ...preferences,
         hiddenTokens: preferences.hiddenTokens.filter((stored) => stored !== tokenId),
+        removedTokens,
         tokens,
       };
 };
@@ -54,14 +91,15 @@ export const MAX_ADDED_TOKENS_PER_NETWORK = 50;
 const capMessage = `You can track up to ${MAX_ADDED_TOKENS_PER_NETWORK} added tokens on a network. Remove one first.`;
 
 // Refuses one more added token on a network already at the cap. Replacing a
-// tracked address or a built-in default never counts against it.
+// tracked address or a token the wallet seeds (a built-in or native USDC)
+// never counts against it.
 const requireRoomFor = (
   onNetwork: readonly TokenConfig[],
   token: TokenConfig,
   tracked: boolean,
 ): void => {
-  const added = onNetwork.filter((stored) => !isDefaultToken(stored)).length;
-  if (!tracked && !isDefaultToken(token) && added >= MAX_ADDED_TOKENS_PER_NETWORK) {
+  const added = onNetwork.filter((stored) => !isDefaultTrackedToken(stored)).length;
+  if (!tracked && !isDefaultTrackedToken(token) && added >= MAX_ADDED_TOKENS_PER_NETWORK) {
     throw new WalletError(capMessage);
   }
 };
@@ -74,6 +112,17 @@ const carriedHiddenTokens = (
 ): readonly string[] => {
   const others = hiddenTokens.filter((id) => id !== replaced);
   return hiddenTokens.includes(replaced) ? [...new Set([...others, successor])] : others;
+};
+
+// Adding a token again, by the user or an approved dapp card, lifts its
+// removal: the held-token scan may track it from then on.
+const liftedRemoval = (
+  preferences: WalletPreferences,
+  token: TokenConfig,
+): Pick<WalletPreferences, "removedTokens"> => {
+  if (preferences.removedTokens === undefined) return {};
+  const key = removedTokenKey(token.networkId, token.address);
+  return { removedTokens: preferences.removedTokens.filter((stored) => stored !== key) };
 };
 
 /**
@@ -113,6 +162,7 @@ export const withUpsertedToken = (
   const next: WalletPreferences = {
     ...preferences,
     dappTokenIds: source === "dapp" ? [...others, nextToken.id] : others,
+    ...liftedRemoval(preferences, nextToken),
     tokens: [...tokens, nextToken],
   };
   return replaced === undefined || preferences.hiddenTokens === undefined
@@ -126,10 +176,10 @@ export const withUpsertedToken = (
 /**
  * Token configs the first-run recovery scan probes for balances to decide an
  * undeployed account has been used. Broader than the display defaults (see
- * {@link RECOVERY_PROBE_TOKENS}) so an account funded only in a high-value ERC20
+ * {@link DEFAULT_TRACKED_TOKENS}) so an account funded only in a high-value ERC20
  * such as native USDC is still discovered; the ids are assigned the same way the
  * default display tokens get theirs, so the two never disagree about a token.
  * Read-only activity signal — this list is never persisted or shown.
  */
 export const recoveryProbeTokens = (): readonly TokenConfig[] =>
-  RECOVERY_PROBE_TOKENS.map(withTokenId);
+  DEFAULT_TRACKED_TOKENS.map(withTokenId);

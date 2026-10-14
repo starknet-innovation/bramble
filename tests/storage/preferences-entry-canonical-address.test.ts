@@ -95,8 +95,8 @@ describe("the store cannot mint a numerically-equal second record", () => {
     const next = await store.upsertToken(ethRecord(ETH_MINIMAL), "user");
 
     const mainnet = next.tokens.filter((token) => token.networkId === "SN_MAIN");
-    // Two seeded Mainnet tokens (ETH, STRK) — not three.
-    expect(mainnet).toHaveLength(2);
+    // Three seeded Mainnet tokens (ETH, STRK, native USDC; issue 663) — not four.
+    expect(mainnet).toHaveLength(3);
     const numeric = mainnet.map((token) => BigInt(token.address));
     expect(new Set(numeric).size).toBe(numeric.length);
     expect(mainnet.find((token) => token.symbol === "ETH")?.address).toBe(ETH_PADDED);
@@ -141,7 +141,8 @@ describe("an already-duplicated vault is repaired on read", () => {
     const preferences = await store.read();
 
     const mainnet = preferences.tokens.filter((token) => token.networkId === "SN_MAIN");
-    expect(mainnet).toHaveLength(2);
+    // The seeded ETH, STRK and native USDC, with the duplicate ETH collapsed.
+    expect(mainnet).toHaveLength(3);
     const numeric = mainnet.map((token) => BigInt(token.address));
     expect(new Set(numeric).size).toBe(numeric.length);
     // The surviving record is the seeded one, and the hide the user applied to

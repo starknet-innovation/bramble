@@ -67,9 +67,10 @@ const fetchTokenMetadata = async (
 /**
  * Parses ERC20 metadata into a storable token record, or null when the symbol
  * is unsupported. Parse-don't-validate: a caller with a record has a token
- * whose symbol already passed the on-chain symbol grammar.
+ * whose symbol already passed the on-chain symbol grammar. Shared by the manual
+ * Add and the curated held-token scan, so both apply one grammar.
  */
-const buildTokenRecord = (
+export const buildTokenRecord = (
   address: string,
   networkId: StarknetNetworkId,
   metadata: TokenMetadata,

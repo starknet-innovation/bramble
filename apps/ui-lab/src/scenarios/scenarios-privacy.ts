@@ -235,8 +235,7 @@ export const privacyScenario: WalletScenario = {
       content: () => privacyDashboard(privateReady),
       id: "private-portfolio",
       label: "Private portfolio",
-      narrative:
-        "The same token list now displays account-scoped private note totals instead of public balances.",
+      narrative: "Each row shows the combined total, with its public and private split beneath it.",
       state: { disclosure: "on", privateAssets: 1, registration: "ready" },
     },
     {

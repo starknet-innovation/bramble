@@ -19,7 +19,7 @@ import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { type BalanceSnapshotStore, cachedBalances } from "../portfolio/balance-snapshots";
 import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
-import { readPortfolioBalances } from "../portfolio/portfolio-balances";
+import { readAccountPortfolio } from "../portfolio/portfolio-balances";
 import {
   readBalancesInput,
   readFeeReviewInput,
@@ -183,6 +183,7 @@ const handleGetBalances: WalletOpsHandler = async (deps, message) => {
   }
   const preferences = await deps.preferencesStore.read();
   const network = STARKNET_NETWORKS[context.networkId];
+  const now = (deps.now ?? systemClock)();
   const snapshot = await cachedBalances(
     deps.balanceSnapshots,
     {
@@ -190,15 +191,19 @@ const handleGetBalances: WalletOpsHandler = async (deps, message) => {
       cachedOnly: input.cached,
       force: input.refresh,
       networkId: network.id,
-      now: (deps.now ?? systemClock)(),
+      now,
     },
     (previous) =>
-      readPortfolioBalances(
-        deps.runtimeRpc,
+      readAccountPortfolio(
+        deps,
         {
           accountAddress: context.account.address,
+          forced: input.refresh,
+          networkId: network.id,
+          now,
+          preferences,
           rpcUrls: networkRpcUrls(network, preferences),
-          tokens: preferences.tokens.filter((token) => token.networkId === network.id),
+          scope: `${deps.session.generation()}:${context.account.id}`,
         },
         previous,
       ),

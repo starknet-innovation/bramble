@@ -16,7 +16,6 @@ import {
   buttonBusy,
   errorDetails,
   errorLine,
-  errorMessage,
   renderFragment,
   scopedStatus,
   showToast,
@@ -28,6 +27,7 @@ import {
 } from "../shared/outcome-receipt";
 import { formatFeeEstimate, reviewCostNote } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
+import { deployErrorLine, deployToastText } from "./deploy-errors";
 import {
   type DeployJourney,
   deployJourney,
@@ -314,12 +314,14 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     toast = true,
   ): void => {
     delete journey.fee;
-    const message = errorMessage(error, fallback);
-    if (stage === "quote") journey.quoteNote = errorLine(error, fallback);
+    // The reader's sentence, never the raw RPC dump (issue 662); the toast
+    // keeps the raw diagnostic behind its copy control.
+    const message = deployErrorLine(error, fallback);
+    if (stage === "quote") journey.quoteNote = message;
     // A deployment whose reply was lost may be on chain: amber, not "failed".
     if (toast) {
       showToast(
-        message,
+        deployToastText(error, fallback),
         isOutcomeUnknown(error) ? "warning" : "error",
         target.isConnected ? target : app,
         errorDetails(error, fallback),
@@ -429,7 +431,12 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         if (rebound()) {
           // Amber when the reply was lost: the deployment may be on chain.
           const tone = isOutcomeUnknown(error) ? "warning" : "error";
-          showToast(errorDetails(error, "Deployment failed"), tone, deps.app);
+          showToast(
+            deployToastText(error, "Deployment failed"),
+            tone,
+            deps.app,
+            errorDetails(error, "Deployment failed"),
+          );
           return;
         }
         failed(error, "Deployment failed", reviewedFee ? "submit" : "quote");

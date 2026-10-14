@@ -154,6 +154,8 @@ describe("unified portfolio scope", () => {
 
     // Summary shows the combined amount; the dropdown shows the split.
     expect(row).toContain(">1.75<");
+    // The collapsed summary carries the split too (issue 664).
+    expect(row).toContain('<p class="token-split">1.25 public · 0.50 private</p>');
     expect(row).toContain("Public balance");
     expect(row).toContain("1.25 ETH");
     expect(row).toContain("Private balance");

@@ -79,6 +79,14 @@ const reviewFeeHtml = (review: TransferReview): string =>
   reviewFeeSection(review, { id: "review-retry-fee" });
 
 /**
+ * The note that an undeployed account's first send also submits its
+ * deployment. Shared with the deploy screen, which shows it so a reader knows
+ * deploying by hand is optional (issue 662).
+ */
+export const FIRST_SEND_DEPLOYS =
+  "This account is not deployed yet; the first send also submits its deployment.";
+
+/**
  * Renders only the warnings a review raised: the note that a name-resolved
  * recipient is not saved yet, risk flags, and the note that a first send also
  * deploys the account. Returns `""` when there is nothing to warn about, so the
@@ -90,9 +98,7 @@ export const reviewRisksHtml = (review: TransferReview, newResolvedRecipient = f
   const messages = [
     ...(newResolvedRecipient ? [NEW_RECIPIENT_WARNING] : []),
     ...riskFlagMessages(review.flags),
-    ...(review.requiresDeployment
-      ? ["This account is not deployed yet; the first send also submits its deployment."]
-      : []),
+    ...(review.requiresDeployment ? [FIRST_SEND_DEPLOYS] : []),
   ];
   return messages.length === 0 ? "" : reviewPanel(messages, "");
 };
@@ -104,12 +110,7 @@ export const reviewRisksHtml = (review: TransferReview, newResolvedRecipient = f
  */
 const reviewDetailsHtml = (review: TransferReview): string =>
   `${reviewCallsList(review.summaries)}${reviewPanel(
-    [
-      ...riskFlagMessages(review.flags),
-      ...(review.requiresDeployment
-        ? ["This account is not deployed yet; the first send also submits its deployment."]
-        : []),
-    ],
+    [...riskFlagMessages(review.flags), ...(review.requiresDeployment ? [FIRST_SEND_DEPLOYS] : [])],
     "No additional wallet warnings were detected. Verify the recipient and decoded action before confirming.",
   )}`;
 

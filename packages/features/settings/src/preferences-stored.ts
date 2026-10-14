@@ -67,6 +67,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nfts",
   "nostrRelayUrl",
   "productAnalytics",
+  "removedTokens",
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
@@ -89,7 +90,8 @@ const hasValidIdKeyedEntries = (value: Record<string, unknown>): boolean =>
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenAccountIds"] === undefined || isHiddenAccountIds(value["hiddenAccountIds"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
-  (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"]));
+  (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"])) &&
+  (value["removedTokens"] === undefined || isHiddenTokens(value["removedTokens"]));
 // Optional display and routing preferences written from the settings screens.
 const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["approvalSurface"] === undefined ||

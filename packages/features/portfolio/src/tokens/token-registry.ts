@@ -13,6 +13,7 @@ import {
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
   sameFelt,
+  USDC_TOKEN_ADDRESS,
 } from "@bramble/wallet-model/networks";
 import { type TokenConfig, withTokenId } from "@bramble/wallet-model/preferences";
 
@@ -50,7 +51,7 @@ const MAINNET_TOKENS: readonly RegistryToken[] = [
     symbol: "STRK",
   },
   {
-    address: "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+    address: USDC_TOKEN_ADDRESS,
     decimals: 6,
     name: "USD Coin",
     networkId: "SN_MAIN",

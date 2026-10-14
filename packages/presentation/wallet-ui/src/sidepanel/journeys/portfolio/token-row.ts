@@ -154,8 +154,27 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
 };
 
 /**
+ * The collapsed row's split line, e.g. "12.00 public · 5.00 private".
+ */
+export const TOKEN_SPLIT_LINE = (publicAmount: string, privateAmount: string): string =>
+  `${publicAmount} public · ${privateAmount} private`;
+
+// Shown only when part of the total is private: a public-only row's amount is
+// already its public balance, and a second line saying so is noise. Amounts use
+// the row's own column format; the caller escapes nothing, this does.
+const splitLine = (publicFormatted: string, breakdown: PrivateBreakdown): string => {
+  if (breakdown.kind !== "ready" || BigInt(breakdown.balance) === 0n) return "";
+  const line = TOKEN_SPLIT_LINE(
+    compactAmount(publicFormatted, PORTFOLIO_FRACTION_PLACES),
+    compactAmount(breakdown.formatted, PORTFOLIO_FRACTION_PLACES),
+  );
+  return `<p class="token-split">${escapeHtml(line)}</p>`;
+};
+
+/**
  * Renders one unified token row: the summary shows the combined public plus
- * private amount, and expanding it disloses the public/private split, the
+ * private amount — with a public/private split line beneath it when part of it
+ * is private — and expanding it discloses the split per bucket, the
  * shield/unshield entry, and the asset-screen link. The private line doubles as
  * the registration entry when the account is not registered with the privacy
  * pool, in which case there is nothing to shield yet and no entry is offered.
@@ -178,6 +197,7 @@ export const unifiedBalanceRow = (
         <div class="token-copy">
           <strong>${escapeHtml(token.symbol)}</strong>
           <p data-live-key="token:${escapeHtml(token.id)}:balance" data-live-value="${escapeHtml(token.formatted)}">${escapeHtml(compactAmount(token.formatted, PORTFOLIO_FRACTION_PLACES))}</p>
+          ${splitLine(breakdown.publicFormatted, breakdown.private)}
         </div>
         <div class="token-side">
           <span class="token-amount" data-live-key="token:${escapeHtml(token.id)}:fiat" data-live-value="${fiat === null ? "unknown" : fiat}">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>

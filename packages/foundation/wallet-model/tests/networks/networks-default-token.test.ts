@@ -6,8 +6,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_TOKENS,
+  DEFAULT_TRACKED_TOKENS,
   isDefaultToken,
-  RECOVERY_PROBE_TOKENS,
+  isDefaultTrackedToken,
   sameFelt,
   USDC_TOKEN_ADDRESS,
 } from "@bramble/wallet-model/networks";
@@ -32,25 +33,59 @@ describe("isDefaultToken", () => {
   });
 });
 
-describe("RECOVERY_PROBE_TOKENS", () => {
+describe("DEFAULT_TRACKED_TOKENS as the recovery probe", () => {
   test("is a superset of the display defaults", () => {
     for (const token of DEFAULT_TOKENS) {
       expect(
-        RECOVERY_PROBE_TOKENS.some(
+        DEFAULT_TRACKED_TOKENS.some(
           (probe) => probe.networkId === token.networkId && sameFelt(probe.address, token.address),
         ),
       ).toBe(true);
     }
   });
 
-  test("adds native USDC on mainnet as a discovery-only activity signal", () => {
-    const usdc = RECOVERY_PROBE_TOKENS.find(
+  test("adds native USDC on mainnet as an activity signal", () => {
+    const usdc = DEFAULT_TRACKED_TOKENS.find(
       (token) => token.networkId === "SN_MAIN" && token.symbol === "USDC",
     );
     expect(usdc).toBeDefined();
     expect(sameFelt(usdc?.address ?? "", USDC_TOKEN_ADDRESS)).toBe(true);
     expect(usdc?.decimals).toBe(6);
-    // Widening discovery must not change what every wallet shows by default.
+    // USDC is tracked on new wallets (issue 663) but is not a built-in.
+    expect(isDefaultToken({ address: USDC_TOKEN_ADDRESS, networkId: "SN_MAIN" })).toBe(false);
+  });
+});
+
+describe("DEFAULT_TRACKED_TOKENS (issue 663)", () => {
+  test("is the built-ins plus native USDC on mainnet only", () => {
+    const extra = DEFAULT_TRACKED_TOKENS.filter(
+      (token) =>
+        !DEFAULT_TOKENS.some(
+          (known) => known.networkId === token.networkId && sameFelt(known.address, token.address),
+        ),
+    );
+    expect(extra).toEqual([
+      {
+        address: USDC_TOKEN_ADDRESS,
+        decimals: 6,
+        name: "USD Coin",
+        networkId: "SN_MAIN",
+        symbol: "USDC",
+      },
+    ]);
+  });
+
+  test("names native Circle USDC, not bridged USDC.e", () => {
+    expect(USDC_TOKEN_ADDRESS).toBe(
+      "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+    );
+  });
+
+  test("USDC is seeded but removable, and only on mainnet", () => {
+    expect(isDefaultTrackedToken({ address: USDC_TOKEN_ADDRESS, networkId: "SN_MAIN" })).toBe(true);
+    expect(isDefaultTrackedToken({ address: USDC_TOKEN_ADDRESS, networkId: "SN_SEPOLIA" })).toBe(
+      false,
+    );
     expect(isDefaultToken({ address: USDC_TOKEN_ADDRESS, networkId: "SN_MAIN" })).toBe(false);
   });
 });
