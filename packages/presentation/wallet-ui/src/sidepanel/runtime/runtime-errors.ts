@@ -14,7 +14,7 @@
  * is a node's or gateway's own words, which can echo a configured RPC URL and
  * the API key in it; the panel shows such text and lets the user copy it.
  */
-import { isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { redactEndpoints } from "@bramble/core/service-url";
 import { INDETERMINATE_RPC_WRITE_MESSAGE } from "@bramble/starknet/provider";
 import { readPrivacyBlockerError } from "@bramble/wallet-protocol/privacy-blocker";
@@ -35,10 +35,18 @@ import { REQUEST_UNKNOWN } from "./friendly-error-copy";
 export const refusalText = (response: unknown, fallback: string): string =>
   isErrorResponse(response) ? redactEndpoints(response.error) : fallback;
 
+// Every key a refusal shape below may carry.
+const REFUSAL_KEYS = ["error", "privacyBlocker", "submissionUnknown", "transactionHash"];
+
 // The typed readers below validate the reply's exact shape, so its `error` is
-// redacted in a copy of the reply rather than after an Error is built.
+// redacted in a copy of the reply rather than after an Error is built. Only a
+// reply whose every key is a known own data property is read or copied here; an
+// accessor or an unknown key is left untouched, and the readers refuse it too,
+// so it ends in the caller's fallback.
 const redactedReply = (response: unknown): unknown =>
-  isRecord(response) && typeof response["error"] === "string"
+  isRecord(response) &&
+  hasOnlyKnownKeys(response, REFUSAL_KEYS) &&
+  typeof response["error"] === "string"
     ? { ...response, error: redactEndpoints(response["error"]) }
     : response;
 

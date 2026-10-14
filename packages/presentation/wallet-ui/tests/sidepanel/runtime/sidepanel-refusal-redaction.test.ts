@@ -61,6 +61,22 @@ describe("responseError", () => {
     expect((error as PrivacyBlockerError).kind).toBe("service");
   });
 
+  test("a reply with an accessor is never read or copied, only refused", () => {
+    let reads = 0;
+    for (const key of ["error", "transactionHash"]) {
+      const reply: Record<string, unknown> = { error: RAW, submissionUnknown: true };
+      Object.defineProperty(reply, key, {
+        enumerable: true,
+        get() {
+          reads += 1;
+          throw new Error(`getter ran: ${ENDPOINT}`);
+        },
+      });
+      expect(responseError(reply, "fallback").message).toBe("fallback");
+    }
+    expect(reads).toBe(0);
+  });
+
   test("an unrecognised reply still falls back, untouched", () => {
     expect(responseError({ error: RAW, extra: true }, "fallback").message).toBe("fallback");
     expect(refusalText(undefined, "fallback")).toBe("fallback");
