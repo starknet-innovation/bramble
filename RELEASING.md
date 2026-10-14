@@ -108,9 +108,10 @@ bun run package:extension  # writes artifacts/bramble-<version>.zip (+ .sha256)
 ```
 
 `scripts/package-extension.ts` produces a **reproducible** zip (normalized
-mtimes, pinned file set) plus a matching `.sha256`. The bytes on the Release
-page, in the Chrome Web Store, and in the CI `bramble-extension` artifact are
-therefore identical for a given commit.
+mtimes, pinned file set) plus a matching `.sha256`, so a rebuild of the same
+commit on the same toolchain should give the same bytes. No workflow compares
+the Release zip with the CI `bramble-extension` artifact: the release build's
+checksum step only checks the zip against the `.sha256` it wrote itself.
 
 Verify the checksum before trusting a zip:
 

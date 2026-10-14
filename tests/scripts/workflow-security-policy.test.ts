@@ -265,6 +265,14 @@ describe("workflow security policy", () => {
       replacement: `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n          ref: ${GITHUB_EXPRESSION} needs.resolve.outputs.branch }}\n      - name: Check out resolved release commit`,
       failure: "self-hosted nightly execution must not pass configured refs to checkout",
     },
+    {
+      name: "rejects a release checksum step that claims identity with the CI artifact",
+      workflow: "release-build.yml",
+      search: "      # Self-consistency only:",
+      replacement:
+        "      # Confirm the released zip is byte-identical to the CI artifact.\n      # Self-consistency only:",
+      failure: "release builds must not claim a byte-identical artifact they never compare against",
+    },
     // Supply audit F3: the self-hosted jobs run dependency and vendoring code,
     // so the checkout token must not stay in .git/config while they do.
     {

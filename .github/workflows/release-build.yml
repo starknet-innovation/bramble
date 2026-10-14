@@ -88,9 +88,11 @@ jobs:
       - run: bun test tests/conformance/version-single-source.test.ts
       - run: bun run build
       - run: bun run package:extension
-      # Confirm the released zip is byte-identical to what its checksum records
-      # (and therefore to the CI artifact at the same commit).
-      - name: Verify checksum
+      # Self-consistency only: the .sha256 was written by package:extension in
+      # this job, so this confirms the pair attached to the Release agree. It
+      # does not compare against the CI artifact or prove a reproducible build
+      # (supply audit F2); release.yml re-checks the pair after download.
+      - name: Verify checksum file
         working-directory: artifacts
         run: sha256sum -c ./*.zip.sha256
       # Release notes (issue #60): prefer the CHANGELOG.md section maintained on
