@@ -8,7 +8,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account } from "@bramble/testkit/sidepanel";
+import { account, secondAccount } from "@bramble/testkit/sidepanel";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
 import { accountLabel } from "../../../../src/sidepanel/shared/parts";
@@ -128,4 +128,51 @@ describe("closing Send", () => {
       expect(app.querySelector("#send-success-hash")?.getAttribute("title")).toBe("0xdeadbeef");
     });
   }
+
+  // Review follow-up to M2: an account switch or a remount also rebinds Send, and
+  // must not reset a send that is still going out either.
+  const signingSend = async () => {
+    let settle: (hash: string) => void = () => undefined;
+    const pending = new Promise<string>((resolve) => {
+      settle = resolve;
+    });
+    const mounted = mount({ submitTransfer: async () => pending });
+    bindTransfer(mounted.deps);
+    setField(mounted.app, "recipient", RECIPIENT);
+    setField(mounted.app, "amount", "1");
+    submit(mounted.app);
+    await flush();
+    submit(mounted.app);
+    await flush();
+    expect(mounted.app.querySelector("#send-working")?.hasAttribute("hidden")).toBe(false);
+    return { ...mounted, settle: (hash: string) => settle(hash) };
+  };
+
+  test("keeps a signing send across a switch to another account and back", async () => {
+    const { app, deps, settle } = await signingSend();
+    paint(app, sendFlow(status, secondAccount, preferences));
+    bindTransfer(deps);
+    paint(app, sendFlow(status, account, preferences));
+    bindTransfer(deps);
+
+    expect(app.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(true);
+    expect(app.querySelector("#send-working")?.hasAttribute("hidden")).toBe(false);
+    settle("0xdeadbeef");
+    await flush();
+    expect(app.querySelector("#send-success-hash")?.getAttribute("title")).toBe("0xdeadbeef");
+  });
+
+  test("keeps a signing send when Send remounts in a new panel root", async () => {
+    const { deps, settle } = await signingSend();
+    const root = document.createElement("div");
+    paint(root, sendFlow(status, account, preferences));
+    document.body.append(root);
+    bindTransfer({ ...deps, app: root });
+
+    expect(root.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(true);
+    expect(root.querySelector("#send-working")?.hasAttribute("hidden")).toBe(false);
+    settle("0xdeadbeef");
+    await flush();
+    expect(root.querySelector("#send-success-hash")?.getAttribute("title")).toBe("0xdeadbeef");
+  });
 });

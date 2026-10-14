@@ -98,6 +98,13 @@ export const markTransferLedgerAuthorized = (): void => {
   repaintActiveTransfer?.();
 };
 
+// Starts over unless a send is in flight, which still goes out (Sherlock 164, M2).
+const resetUnlessInFlight = (): void => {
+  if (isTransferInFlight(transferState.stage)) return;
+  transferEpoch += 1;
+  transferState = initialTransferState();
+};
+
 /**
  * Binds the recipient-first Send journey and observes the submitted hash until
  * Starknet reports a pre-confirmation, acceptance, rejection, reversion, or a
@@ -108,18 +115,14 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const { app, back, navigate, render, wallet } = deps;
   const form = app?.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
-    if (!isTransferInFlight(transferState.stage)) {
-      transferEpoch += 1;
-      transferState = initialTransferState();
-    }
+    resetUnlessInFlight();
     repaintActiveTransfer = null;
     returnActiveTransferToDetails = null;
     transferApp = app;
     return;
   }
   if (transferApp !== app) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
+    resetUnlessInFlight();
     transferApp = app;
   }
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
@@ -129,10 +132,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     if (completionTarget === "multisig-deploy" && back) back();
     else navigate?.(completionTarget);
   };
-  if (transferState.fields && transferState.fields.accountId !== accountId) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
-  }
+  if (transferState.fields && transferState.fields.accountId !== accountId) resetUnlessInFlight();
   // A shortcut arrives with the recipient, the asset, and both buckets already
   // in the form, so the recipient step has nothing left to ask: open on the
   // amount. Only on a fresh journey, or a repaint would drag the user back here
