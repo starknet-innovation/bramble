@@ -74,6 +74,8 @@ export const PRIVACY_STYLES = `
     gap: ${SPACE.xs};
   }
   .token-breakdown-label .icon { height: 12px; width: 12px; }
+  /* The collapsed row's public · private split, under the combined amount. */
+  .token-copy p.token-split { color: var(--bramble-muted); font-variant-numeric: tabular-nums; }
   .token-breakdown-value { font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.medium}; }
   button.token-breakdown-register {
     background: transparent;
