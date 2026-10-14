@@ -31,7 +31,11 @@ import {
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
-import { multisigIntentActions, multisigIntentOutcome } from "./multisig-intent-actions";
+import {
+  multisigIntentActions,
+  multisigIntentOutcome,
+  STALE_INTENT_LABEL,
+} from "./multisig-intent-actions";
 import { type CompactIntentList, intentDeleteButton } from "./multisig-intent-list";
 import { configReviewFor, configReviewView, exactCalls } from "./multisig-intent-review";
 import {
@@ -211,7 +215,7 @@ const intentCard = (
   return `<article class="allowance-row multisig-intent" data-ms-intent="${escapeHtml(intent.id)}">
     <header class="decision-head">
       <span class="decision-seal">${icon("users")}</span>
-      <span><p class="decision-label">${isReplacement ? "Fee-updated transaction" : intent.state === "stale" ? "Not submitted" : "Reviewed transaction"}</p><h2>${escapeHtml(intent.summary)}</h2></span>
+      <span><p class="decision-label">${isReplacement ? "Fee-updated transaction" : intent.state === "stale" ? STALE_INTENT_LABEL : "Reviewed transaction"}</p><h2>${escapeHtml(intent.summary)}</h2></span>
     </header>
     ${reviewCallsList(
       transactionReview.calls.map((call) => call.summary),
@@ -344,8 +348,8 @@ const compactIntentList = (
             ? "Ready to submit"
             : intent.state === "stale"
               ? intent.signatures.length === intent.configSnapshot.threshold
-                ? "Not submitted · ready to retry"
-                : "Not submitted · needs review"
+                ? `${STALE_INTENT_LABEL} · ready to retry`
+                : `${STALE_INTENT_LABEL} · needs review`
               : "Awaiting signatures"
       } · ${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
     })),
