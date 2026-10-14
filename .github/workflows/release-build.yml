@@ -41,10 +41,13 @@ jobs:
       # fetch-depth: 0 so the notes step can diff against the previous tag and
       # fall back to the commit range. Checkout starts from the trusted caller
       # revision; the next step verifies and detaches onto the release commit.
+      # Every later git step is local, so the token is not left in .git/config
+      # while dependency and vendoring code runs (supply audit F3).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
       - name: Check out immutable release commit
         env:
           RELEASE_COMMIT: ${{ inputs.commit_sha }}
@@ -85,9 +88,11 @@ jobs:
       - run: bun test tests/conformance/version-single-source.test.ts
       - run: bun run build
       - run: bun run package:extension
-      # Confirm the released zip is byte-identical to what its checksum records
-      # (and therefore to the CI artifact at the same commit).
-      - name: Verify checksum
+      # Self-consistency only: the .sha256 was written by package:extension in
+      # this job, so this confirms the pair attached to the Release agree. It
+      # does not compare against the CI artifact or prove a reproducible build
+      # (supply audit F2); release.yml re-checks the pair after download.
+      - name: Verify checksum file
         working-directory: artifacts
         run: sha256sum -c ./*.zip.sha256
       # Release notes (issue #60): prefer the CHANGELOG.md section maintained on

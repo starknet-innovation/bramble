@@ -234,10 +234,18 @@ describe("watch-asset approval lifecycle", () => {
     expect(
       preferences.tokens.some((token) => token.address === USDC && token.symbol === "USDC"),
     ).toBe(true);
-    // The token is already tracked, so a repeat request resolves immediately.
+    // The token is already tracked, so a repeat request is held on a
+    // close-only notice and resolves only when the user closes it (audit M1).
+    const repeat = handler(
+      { asset: { address: USDC }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
+    const noticeId = await pendingId(handler);
     await expect(
-      handler({ asset: { address: USDC }, origin, type: "wallet.watchAsset" }, contentSender),
-    ).resolves.toEqual({ ok: true, watched: true });
+      handler({ id: noticeId, type: "wallet.denyOrigin" }, extensionSender),
+    ).resolves.toEqual({ ok: true, pending: [] });
+    await expect(repeat).resolves.toEqual({ ok: true, watched: true });
   });
 
   test("denying leaves the token untracked", async () => {

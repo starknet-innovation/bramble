@@ -8,6 +8,7 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
+  STRK20_SERVICE_UNAVAILABLE,
   summarizeStrk20Plan,
 } from "@bramble/privacy/service";
 import { SHADOW_INVOKE_ANONYMIZER } from "@bramble/privacy/shadow-account-copy";
@@ -113,51 +114,65 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
     if ("error" in resolved) {
       return resolved;
     }
+    // Nothing about this account's setup is answered at once (audit L1): a
+    // Ledger account, a network without private services, or a fee the public
+    // balance cannot cover each hold the request on a notice, and the site
+    // gets the refusal only when the user closes it.
     if (resolved.account.derivation.kind === "ledger") {
-      return { error: "Private balances are not available for Ledger accounts" };
+      return holdStrk20Notice(
+        deps,
+        input.origin,
+        "Private balances are not available for Ledger accounts",
+        "request-failed",
+        admission,
+      );
     }
     const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
     const token = resolved.preferences.tokens.find(
       (candidate) => candidate.networkId === resolved.account.networkId,
     );
-    if (!config || !token) {
-      return { error: "strk20 services unavailable" };
+    const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    if (!config || !token || !service.poolFee) {
+      return holdStrk20Notice(deps, input.origin, STRK20_SERVICE_UNAVAILABLE, undefined, admission);
     }
+    let poolFeeFri: string;
     try {
       const accountContext = strk20AccountContext(deps, resolved);
-      const service = strk20ServiceForRuntime(deps.runtimeRpc);
-      if (!service.poolFee) {
-        return { error: "strk20 services unavailable" };
-      }
-      const poolFeeFri = await service.poolFee(accountContext);
+      poolFeeFri = await service.poolFee(accountContext);
       await assertPublicPoolSpendAffordable(
         deps,
         { accountContext, preferences: resolved.preferences, token },
         poolFeeFri,
       );
-      return queueStrk20Disclosure(deps, resolved, {
-        admission,
-        holdFailures: false,
-        kind: "strk20-register",
-        origin: input.origin,
-        request: {
-          poolAddress: config.poolAddress,
-          poolFeeFri,
-          token: token.address,
-          type: "register",
-        },
-        summaries: [
-          "Activate private balances for this account",
-          `Privacy pool ${config.poolAddress}`,
-          `Registration preflight token ${token.address}`,
-          `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee`,
-          "Publishes a viewing-key commitment, never the viewing key",
-          "Opens this account's own private channel",
-        ],
-      });
     } catch (error) {
-      return { error: strk20ErrorMessage(error) };
+      return holdStrk20Notice(
+        deps,
+        input.origin,
+        strk20ErrorMessage(error),
+        "request-failed",
+        admission,
+      );
     }
+    return queueStrk20Disclosure(deps, resolved, {
+      admission,
+      holdFailures: true,
+      kind: "strk20-register",
+      origin: input.origin,
+      request: {
+        poolAddress: config.poolAddress,
+        poolFeeFri,
+        token: token.address,
+        type: "register",
+      },
+      summaries: [
+        "Activate private balances for this account",
+        `Privacy pool ${config.poolAddress}`,
+        `Registration preflight token ${token.address}`,
+        `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee`,
+        "Publishes a viewing-key commitment, never the viewing key",
+        "Opens this account's own private channel",
+      ],
+    });
   });
 };
 

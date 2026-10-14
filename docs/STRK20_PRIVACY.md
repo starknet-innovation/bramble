@@ -133,7 +133,10 @@ device.
    unconfigured network look the same to the site.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
    and shadow-account commitments each create a dedicated approval. Registration uses the explicitly
-   Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
+   Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC.
+   A registration that cannot reach its card — a Ledger account, a network without private
+   services, or a public balance below the pool fee — is held on the same close-only notice, and the
+   site receives the refusal only on Close (audit L1). The
    queue retains the exact private request and
    exposes display-safe summaries plus the exact action parameters and an account/network/payload
    digest. Invoke calldata, shadow-account call targets and entry points, nonce, and collect policy
