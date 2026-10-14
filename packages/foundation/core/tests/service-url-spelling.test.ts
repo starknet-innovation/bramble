@@ -5,13 +5,16 @@
  * backslashes, missing or extra slashes, tab, CR and LF anywhere, and
  * whitespace, quotes, angle brackets and backticks it percent-encodes. Stored
  * as entered and echoed by an error, such a spelling could leave the tail of an
- * API key outside `redactEndpoints` (mc-wallet #672 review). Each test here pins
- * one side of the rule: refused when entered, carried to the canonical spelling
- * when an earlier build stored it, and removed whole by the redactor once it is
- * canonical.
+ * API key outside `redactEndpoints` (mc-wallet #672 review). The canonical
+ * spelling is the parser's serialization, which is what a request sends. Each
+ * test here pins one side of the rule: refused when entered, carried to the
+ * canonical spelling when an earlier build stored it (or dropped when there is
+ * none), and removed whole by the redactor once it is canonical.
  */
 import { describe, expect, test } from "bun:test";
 import {
+  canonicalServiceUrl,
+  canonicalWebSocketServiceUrl,
   isServiceUrl,
   isServiceUrlList,
   isWebSocketServiceUrl,
@@ -49,17 +52,24 @@ const SPELLINGS: readonly (readonly [string, string])[] = [
   [`${BASE}/node>key-123`, `${BASE}/node%3Ekey-123`],
   [`${BASE}/node\`key-123`, `${BASE}/node%60key-123`],
   [`${BASE}?key=node key-123`, `${BASE}?key=node%20key-123`],
-  // The parser keeps a backtick in a query and a quote or backtick in a host;
-  // the canonical spelling encodes them too, for the same request.
-  [`${BASE}?key=node\`key-123`, `${BASE}?key=node%60key-123`],
-  [`https://rpc"node.example/${KEY}`, `https://rpc%22node.example/${KEY}`],
   [`http:\\\\localhost:8787\\${KEY}`, `http://localhost:8787/${KEY}`],
+];
+
+// Spellings whose serialization keeps a character the redactor stops at: the
+// parser leaves a backtick in a query and a quote or backtick in a host.
+// Encoding one would change the bytes a request sends, so there is no
+// canonical spelling (#674 review).
+const UNCANONICAL = [
+  `${BASE}?key=node\`key-123`,
+  `https://rpc"node.example/${KEY}`,
+  `https://rpc\`node.example/${KEY}`,
 ];
 
 describe("canonical endpoint spelling", () => {
   test("refuses every raw spelling and carries it to the canonical one", () => {
     for (const [raw, canonical] of SPELLINGS) {
       expect(isServiceUrl(raw)).toBe(false);
+      expect(canonicalServiceUrl(raw)).toBe(canonical);
       expect(normalizeStoredServiceUrl(raw)).toBe(canonical);
       expect(isServiceUrl(canonical)).toBe(true);
       expect(normalizeStoredServiceUrl(canonical)).toBe(canonical);
@@ -76,6 +86,15 @@ describe("canonical endpoint spelling", () => {
       if (/[\s"<>`]/u.test(raw.replaceAll(/[\t\r\n]/g, ""))) {
         expect(redactEndpoints(`failed at ${raw} now`)).toContain("key-123");
       }
+    }
+  });
+
+  test("has no canonical spelling where the parser keeps a redaction break", () => {
+    for (const raw of UNCANONICAL) {
+      expect(isServiceUrl(raw)).toBe(false);
+      expect(canonicalServiceUrl(raw)).toBeNull();
+      // The earlier rule accepted it, so a stored one is dropped, not fatal.
+      expect(normalizeStoredServiceUrl(raw)).toBeUndefined();
     }
   });
 
@@ -103,6 +122,7 @@ describe("canonical endpoint spelling", () => {
   test("applies the same rule to WebSocket relays", () => {
     expect(isWebSocketServiceUrl("wss://relay.primal.net")).toBe(true);
     expect(isWebSocketServiceUrl("WSS://Relay.Example")).toBe(false);
+    expect(canonicalWebSocketServiceUrl("WSS://Relay.Example")).toBe("wss://relay.example");
     expect(normalizeStoredWebSocketServiceUrl("WSS://Relay.Example")).toBe("wss://relay.example");
     expect(normalizeStoredWebSocketServiceUrl("wss:\\\\relay.example\\k ey")).toBe(
       "wss://relay.example/k%20ey",

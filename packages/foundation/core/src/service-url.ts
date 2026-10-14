@@ -56,15 +56,15 @@ const endsWithSeparator = (value: string): boolean => {
 
 // The characters {@link redactEndpoints} ends a URL at. The parser
 // percent-encodes them in a path, and all but the backtick in a query; a host
-// may still hold a quote or a backtick. Encoding what is left changes no
-// request: the parser decodes a host, and a server reads %60 in a query as a
-// backtick.
-const REDACTION_BREAKS = /[\s"<>`]/gu;
+// may still hold a quote or a backtick.
+const REDACTION_BREAK = /[\s"<>`]/u;
 
-// The parser's serialization, with two changes. A bare origin keeps the form it
-// was written in, because the parser adds a slash ("https://rpc.example" would
+// The parser's serialization, which is what a request sends, so a canonical
+// spelling never changes the request. A bare origin keeps the form it was
+// written in, because the parser adds a slash ("https://rpc.example" would
 // become ".../"), and that would break equality with a bundled default or an
-// existing list entry. And every redaction break left is percent-encoded.
+// existing list entry. A serialization that still holds a redaction break has
+// no canonical spelling: encoding the break would change the bytes sent.
 const canonicalFor = (
   value: unknown,
   secureProtocol: string,
@@ -75,10 +75,10 @@ const canonicalFor = (
   if (url === null) return null;
   const href = url.href;
   const bare = url.pathname === "/" && href.endsWith("/") && !endsWithSeparator(value);
-  const canonical = (bare ? href.slice(0, -1) : href).replace(REDACTION_BREAKS, (char) =>
-    encodeURIComponent(char),
-  );
-  return canonical.length <= MAX_SERVICE_URL_LENGTH ? canonical : null;
+  const canonical = bare ? href.slice(0, -1) : href;
+  return canonical.length <= MAX_SERVICE_URL_LENGTH && !REDACTION_BREAK.test(canonical)
+    ? canonical
+    : null;
 };
 
 const isCanonicalFor = (
@@ -118,14 +118,15 @@ export const trimTrailingSlashes = (value: string): string => {
 /**
  * Checks a service endpoint without performing network access: HTTPS, or HTTP
  * on a loopback host, with no credentials or fragment, written in its canonical
- * spelling. That spelling is the URL parser's serialization (a bare origin may
- * keep or drop its trailing slash) with no character {@link redactEndpoints}
- * ends a URL at. The parser would otherwise accept a raw spelling it only fixes
- * when it serializes: backslashes, missing or extra slashes, tab, CR and LF
- * anywhere, and whitespace, quotes, angle brackets and backticks it
- * percent-encodes. Such a spelling, if stored and echoed, could leave the tail
- * of an API key outside a redaction. A record an earlier build stored is
- * brought to this rule by {@link normalizeStoredServiceUrl}.
+ * spelling. That spelling is the URL parser's serialization, which is what a
+ * request sends (a bare origin may keep or drop its trailing slash), and it
+ * holds no character {@link redactEndpoints} ends a URL at. The parser would
+ * otherwise accept a raw spelling it only fixes when it serializes:
+ * backslashes, missing or extra slashes, tab, CR and LF anywhere, and
+ * whitespace, quotes, angle brackets and backticks it percent-encodes. Such a
+ * spelling, if stored and echoed, could leave the tail of an API key outside a
+ * redaction. A record an earlier build stored is brought to this rule by
+ * {@link normalizeStoredServiceUrl}.
  */
 export const isServiceUrl = (value: unknown): value is string =>
   isCanonicalFor(value, "https:", "http:");
@@ -138,15 +139,31 @@ export const isWebSocketServiceUrl = (value: unknown): value is string =>
   isCanonicalFor(value, "wss:", "ws:");
 
 /**
+ * Returns the canonical spelling {@link isServiceUrl} accepts for an endpoint a
+ * person typed, so a URL that differs only in case, a default port, slashes or
+ * dot segments can be saved as the request it makes. Returns `null` when the
+ * endpoint is not an allowed service URL, is over the length cap, or would
+ * still hold a character the redactor ends a URL at (a backtick in a query, a
+ * quote or backtick in a host). Never performs network access.
+ */
+export const canonicalServiceUrl = (value: unknown): string | null =>
+  canonicalFor(value, "https:", "http:");
+
+/** The {@link canonicalServiceUrl} spelling for a WebSocket endpoint. */
+export const canonicalWebSocketServiceUrl = (value: unknown): string | null =>
+  canonicalFor(value, "wss:", "ws:");
+
+/**
  * Brings an endpoint an earlier build stored to the rule of
  * {@link isServiceUrl}. Those builds stored the spelling as entered, so a
  * preferences record could hold one this build refuses. Returns the canonical
  * spelling, which makes the same request. Returns `undefined` when the earlier
- * rule accepted the endpoint but its canonical spelling is over the
- * 2,048-character cap, which only a long run of characters the parser
- * percent-encodes can cause. The caller drops such an endpoint rather than fail
- * the whole record. Anything else is returned unchanged for the record's
- * validator to reject, because the earlier rule refused it too. Pure and total.
+ * rule accepted the endpoint but it has no canonical spelling: it is over the
+ * 2,048-character cap once percent-encoded, or its serialization keeps a
+ * character the redactor ends a URL at, which encoding would change on the
+ * wire. The caller drops such an endpoint rather than fail the whole record.
+ * Anything else is returned unchanged for the record's validator to reject,
+ * because the earlier rule refused it too. Pure and total.
  */
 export const normalizeStoredServiceUrl = (value: unknown): unknown =>
   normalizeStoredFor(value, "https:", "http:");

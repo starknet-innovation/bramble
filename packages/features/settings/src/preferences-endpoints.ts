@@ -8,7 +8,8 @@
  * An error echoing one could leave part of an API key outside a redaction.
  * `isServiceUrl` now requires the canonical spelling, so an old record would
  * fail the whole read with `Invalid stored preferences`. Each endpoint is
- * rewritten to the spelling that makes the same request instead.
+ * rewritten to the parser's serialization instead, which is the request it
+ * already made.
  */
 import { isRecord } from "@bramble/core/json";
 import {
@@ -22,20 +23,35 @@ type Carry = (value: unknown) => unknown;
 
 // A network-keyed map. A dropped endpoint leaves its network unset, which
 // selects the built-in endpoint or, for STRK20 routing, disables the network.
+// Rebuilt with `Object.fromEntries`, which defines own properties, so a key such
+// as `__proto__` survives for the validator to reject instead of vanishing.
 const carryMap = (map: unknown, carry: Carry): unknown => {
   if (!isRecord(map)) {
     return map;
   }
-  let changed = false;
-  const next: Record<string, unknown> = {};
-  for (const key of Object.keys(map)) {
-    const carried = carry(map[key]);
-    changed ||= carried !== map[key];
-    if (carried !== undefined) {
-      next[key] = carried;
-    }
+  const entries = Object.keys(map).map((key) => [key, map[key], carry(map[key])] as const);
+  if (entries.every(([, value, carried]) => carried === value)) {
+    return map;
   }
-  return changed ? next : map;
+  return Object.fromEntries(
+    entries.flatMap(([key, , carried]) => (carried === undefined ? [] : [[key, carried]])),
+  );
+};
+
+// A network whose RPC override was dropped falls back to the built-in RPCs,
+// where the explorer-fallback default is on (`explorerFallbackAllowed`). With
+// the override that default was off, so it is pinned off: dropping an endpoint
+// must not switch on a third-party address disclosure the user never allowed.
+const pinnedFallback = (before: unknown, after: unknown, fallback: unknown): unknown => {
+  if (!isRecord(before) || !isRecord(after) || !(fallback === undefined || isRecord(fallback))) {
+    return fallback;
+  }
+  const unset = Object.keys(before).filter(
+    (network) => !Object.hasOwn(after, network) && fallback?.[network] === undefined,
+  );
+  return unset.length === 0
+    ? fallback
+    : { ...fallback, ...Object.fromEntries(unset.map((network) => [network, false])) };
 };
 
 // One endpoint field of a record, or `undefined` when it cannot be carried.
@@ -123,10 +139,11 @@ const ENDPOINT_FIELDS: ReadonlyArray<readonly [string, Carry]> = [
 /**
  * Returns a stored preferences record with every endpoint in its canonical
  * spelling, or the same reference when nothing changes. An endpoint is dropped
- * only when an earlier build's rule accepted it but its canonical spelling is
- * over the length cap; a dropped single endpoint falls back to the built-in
- * one. Deterministic and total: a field this build cannot read is left as is
- * for `isWalletPreferences` to reject, so this never widens what validates.
+ * only when an earlier build's rule accepted it but it has no canonical
+ * spelling; a dropped single endpoint falls back to the built-in one, with the
+ * explorer fallback kept off for a network that loses its RPC override.
+ * Deterministic and total: a field this build cannot read is left as is for
+ * `isWalletPreferences` to reject, so this never widens what validates.
  * Preferences hold no secret material, and nothing here logs a value.
  */
 export const withCanonicalEndpoints = (
@@ -148,5 +165,13 @@ export const withCanonicalEndpoints = (
       next[field] = carried;
     }
   }
-  return next ?? record;
+  if (next === undefined) {
+    return record;
+  }
+  const fallback = pinnedFallback(
+    record["rpcOverrides"],
+    next["rpcOverrides"],
+    record["explorerFallback"],
+  );
+  return fallback === record["explorerFallback"] ? next : { ...next, explorerFallback: fallback };
 };

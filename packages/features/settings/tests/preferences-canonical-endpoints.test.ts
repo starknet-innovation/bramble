@@ -199,8 +199,10 @@ describe("stored endpoints are carried to the canonical spelling", () => {
       },
     });
     const read = await preferences.read();
-    // The built-in RPC and relays apply where the override was dropped.
+    // The built-in RPC and relays apply where the override was dropped, and the
+    // explorer fallback stays off there, as it was with the override.
     expect(read.rpcOverrides).toEqual({ SN_SEPOLIA: rpc.canonical });
+    expect(read.explorerFallback).toEqual({ SN_MAIN: false });
     expect(read.nostrRelayUrl).toBeUndefined();
     // The network stays listed by chain id, without the RPC URL.
     expect(read.customNetworks).toEqual([
@@ -215,6 +217,40 @@ describe("stored endpoints are carried to the canonical spelling", () => {
         proverUrl: prover.canonical,
       },
     });
+  });
+
+  // The parser keeps a backtick in a query, and encoding it would change the
+  // bytes sent, so such an endpoint has no canonical spelling (#674 review).
+  test("an endpoint whose query keeps a backtick is dropped, keeping an explicit choice", async () => {
+    const { preferences } = await storedWith({
+      explorerApiUrls: { SN_MAIN: "https://explorer.example/v1?key=a`b" },
+      explorerFallback: { SN_SEPOLIA: true },
+      rpcOverrides: {
+        SN_MAIN: "https://rpc.example/v1?key=a`b",
+        SN_SEPOLIA: "https://rpc.example/v1?key=a`b",
+      },
+    });
+    const read = await preferences.read();
+    expect(read.rpcOverrides).toEqual({});
+    expect(read.explorerApiUrls).toEqual({});
+    expect(read.explorerFallback).toEqual({ SN_MAIN: false, SN_SEPOLIA: true });
+  });
+
+  // A map is rebuilt with own properties, so a `__proto__` key reaches the
+  // validator instead of vanishing through the prototype setter (#674 review).
+  test("a map with a __proto__ key still fails closed once rebuilt", async () => {
+    const hostile = JSON.parse(
+      `{"__proto__": "https://evil.example", "SN_MAIN": ${JSON.stringify(rpc.raw)}}`,
+    );
+    expect(Object.hasOwn(hostile, "__proto__")).toBe(true);
+    for (const field of ["rpcOverrides", "explorerApiUrls"]) {
+      const { preferences } = await storedWith({ [field]: hostile });
+      await expect(preferences.read()).rejects.toThrow("Invalid stored preferences");
+      const backup = { ...defaultWalletPreferences(), [field]: hostile };
+      await expect(
+        createPreferencesStore({ store: createMemoryStore() }).importPreferences(backup),
+      ).rejects.toThrow("Invalid preferences backup");
+    }
   });
 
   test("an endpoint the earlier rule refused still fails closed", async () => {
