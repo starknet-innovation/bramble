@@ -3,7 +3,8 @@
  * outside the encrypted vault; the clock stays injectable for tests.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import type { KeyValueStore } from "@bramble/store/kv";
+import { recordStorageDiagnostic } from "@bramble/starknet/rpc-diagnostics";
+import { type KeyValueStore, storageBudgetFor } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@bramble/transactions/alerts";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
@@ -18,7 +19,12 @@ import {
   matchesScope,
   monotonicActivityStatus,
 } from "./activity-entry";
-import { entriesAfterRecord, scopeSnapshot, withinScopeLimit } from "./activity-retention";
+import {
+  entriesAfterRecord,
+  scopeSnapshot,
+  withinByteBudget,
+  withinScopeLimit,
+} from "./activity-retention";
 
 export { activityToCsv } from "./activity-csv";
 export {
@@ -122,6 +128,29 @@ const readHistorySyncs = async (store: KeyValueStore): Promise<readonly Activity
 const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry[]> => {
   const stored = await store.get(ACTIVITY_STORE_KEY);
   return Array.isArray(stored) ? stored.filter(isActivityEntry) : [];
+};
+
+// Every write of the log goes through here: it is trimmed to its storage
+// budget first, so a log that outgrew it (a v0.10.5 log read by a release with
+// larger rows) becomes writable again instead of refusing every write. A
+// trimmed or failed write is counted in the opt-in diagnostics, because most
+// callers absorb the failure so it cannot replace a chain outcome.
+const writeEntries = async (
+  store: KeyValueStore,
+  entries: readonly ActivityEntry[],
+  kept?: ActivityEntry,
+): Promise<readonly ActivityEntry[]> => {
+  const fitted = withinByteBudget(entries, storageBudgetFor(ACTIVITY_STORE_KEY), kept);
+  if (fitted !== entries) {
+    recordStorageDiagnostic("activity", "trimmed");
+  }
+  try {
+    await store.set(ACTIVITY_STORE_KEY, fitted);
+  } catch (error) {
+    recordStorageDiagnostic("activity", "write-failed");
+    throw error;
+  }
+  return fitted;
 };
 
 const outcomeForHash = (
@@ -230,7 +259,7 @@ export const createActivityLog = ({
           return;
         }
         const entries = await readEntries(store);
-        await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
+        await writeEntries(store, entriesAfterRecord(entries, next), next);
       },
       async markHistorySynced(scope, syncedAt, unavailable) {
         const next = { ...scope, syncedAt, unavailable };
@@ -242,28 +271,32 @@ export const createActivityLog = ({
       },
       async replaceScope(entries, scope) {
         const scoped = scopeSnapshot(entries, scope);
-        await store.set(
-          ACTIVITY_STORE_KEY,
-          withinScopeLimit(
-            [
-              ...(await readEntries(store)).filter((entry) => !matchesScope(entry, scope)),
-              ...scoped,
-            ],
-            scope,
+        const stored = new Set(
+          await writeEntries(
+            store,
+            withinScopeLimit(
+              [
+                ...(await readEntries(store)).filter((entry) => !matchesScope(entry, scope)),
+                ...scoped,
+              ],
+              scope,
+            ),
           ),
         );
-        return scoped;
+        return scoped.filter((entry) => stored.has(entry));
       },
       async takeFailureNotices(scope) {
         const { delivered, next } = drainFailureNotices(await readEntries(store), scope);
         if (delivered.length > 0) {
-          await store.set(ACTIVITY_STORE_KEY, next);
+          await writeEntries(store, next);
         }
         return delivered;
       },
       async updateStatuses(outcomes, scope) {
-        const updated = reconciled(await readEntries(store), outcomes, scope);
-        await store.set(ACTIVITY_STORE_KEY, updated);
+        const updated = await writeEntries(
+          store,
+          reconciled(await readEntries(store), outcomes, scope),
+        );
         return [...activityForScope(updated, scope)].sort((a, b) => b.submittedAt - a.submittedAt);
       },
     },

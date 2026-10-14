@@ -385,6 +385,26 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).not.toContain(`<code>${address}</code>`);
   });
 
+  test("an already-tracked watch-asset is a close-only notice (audit M1)", () => {
+    const address = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+    const html = approvalCard(
+      {
+        alreadyTracked: true,
+        id: ID,
+        kind: "watch-asset",
+        origin: ORIGIN,
+        token: { address, decimals: 6, name: "USD Coin", networkId: "SN_MAIN", symbol: "USDC" },
+      },
+      status,
+    );
+    expect(html).toContain("data-approval-notice");
+    expect(html).toContain("Already in this wallet");
+    expect(html).toContain("<strong>USDC</strong>");
+    expect(html).toContain('data-approval-action="deny"');
+    expect(html).toContain("Close");
+    expect(html).not.toContain('data-approval-action="approve"');
+  });
+
   test("technical details name the signing account by address, truncated and copyable", () => {
     const html = approvalCard(
       {

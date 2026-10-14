@@ -212,7 +212,9 @@ describe("Send confirmation outcomes", () => {
     expect(reason.length).toBeGreaterThan(0);
     // What is worth taking to support is the reason, not the identifier — this
     // control used to copy the hash, which a failure usually does not have.
-    app.querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy the error"]')?.click();
+    app
+      .querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy error details"]')
+      ?.click();
     await flush();
     expect(copied).toEqual([reason]);
     // A chain rejection does have a hash, so its row stays.

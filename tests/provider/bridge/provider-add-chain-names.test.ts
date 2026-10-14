@@ -65,3 +65,14 @@ describe("site-chosen network names", () => {
     expect(isPrintableName("")).toBe(false);
   });
 });
+
+describe("site-sent chain endpoints", () => {
+  test("refuses an endpoint the redactor could not remove whole", () => {
+    for (const brk of [" ", String.fromCharCode(0xa0), String.fromCharCode(0x3000), '"', "`"]) {
+      const url = `https://rpc.example/key${brk}secret`;
+      expect(readProviderChain({ ...base, rpc_urls: [url] })).toBeNull();
+      expect(readProviderChain({ ...base, block_explorer_url: [url] })).toBeNull();
+    }
+    expect(readProviderChain({ ...base, rpc_urls: ["https://rpc.example/key"] })).not.toBeNull();
+  });
+});

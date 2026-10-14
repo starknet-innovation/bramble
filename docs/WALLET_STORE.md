@@ -88,7 +88,8 @@ until extension removal, while session data is cleared when an extension is upda
 1 MiB with strings charged at six bytes per character) on read as on write, so that budget is the
 vault's one capacity. It is shared by accounts, signing keys, imported phrases, retained secrets and
 connected sites, so it is not an account count: a vault of derived accounts alone holds about 243
-(pinned in `vault-capacity.test.ts`). `writeVault` refuses the first vault past it with
+(pinned in `vault-capacity.test.ts`). STRK20 shadow-account scope records may use at most half of it
+(`SHADOW_ACCOUNT_SCOPES_BUDGET`), so they can never leave the rest of the vault unwritable. `writeVault` refuses the first vault past it with
 `Vault storage limit reached` before any storage is touched. Every storage area validates writes
 against `JSON_BUDGETS.storage`, which is derived to admit the base64 envelope of anything the provider
 budget admits, so storage never refuses a vault its validators accepted; the store still checks the

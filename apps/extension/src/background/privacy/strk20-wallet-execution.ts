@@ -32,6 +32,7 @@ import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { activityToken } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { privacyShortfall } from "@bramble/wallet-protocol/privacy-blocker";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { approvalPayloadMatchesContext } from "../approvals/approval-context";
@@ -192,7 +193,7 @@ const submitPreparedPrivateBatch = async (
     tokens: [context.token.address],
   });
   if (BigInt(privateBalance?.balance ?? "0x0") < BigInt(preparation.amountRaw)) {
-    throw new WalletError(`Not enough private ${preparation.token.symbol}`);
+    throw new WalletError(privacyShortfall(preparation.token.symbol, "private"));
   }
   return submitStrk20Actions(service, {
     ...context.accountContext,

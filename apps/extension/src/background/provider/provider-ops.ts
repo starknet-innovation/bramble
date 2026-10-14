@@ -6,6 +6,7 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
@@ -17,6 +18,7 @@ import {
   verifyCalls,
 } from "@bramble/transactions/verify";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
@@ -48,7 +50,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import {
   readGetPermissionsInput,
   readRetryApprovalFeeInput,
@@ -282,7 +284,6 @@ const handleWatchAsset: ProviderOpsHandler = async (deps, message, sender) => {
     },
     input,
   );
-  if (approval === true) return { ok: true, watched: true };
   return approval ? deps.waiters.register(approval.id) : { error: "invalid watch asset metadata" };
 };
 
@@ -373,6 +374,20 @@ export const handleProviderOps = async (
   return handler ? handler(deps, message, sender) : null;
 };
 
+// A lost public-lane reply may be on chain: pending row + typed unknown (audit M4).
+const invokeFailureResponse = async (
+  error: unknown,
+  hasProof: boolean,
+  signedHash: string | undefined,
+  recordPending: (hash: string) => Promise<void>,
+): Promise<RuntimeResponse> => {
+  if (!(error instanceof IndeterminateRpcWriteError) || hasProof) {
+    return { error: invokeFailureMessage(error, hasProof) };
+  }
+  if (signedHash !== undefined) await afterBroadcast(() => recordPending(signedHash));
+  return submissionUnknownResponse(error.message, signedHash);
+};
+
 /**
  * Executes a user-approved invoke: re-resolves the currently active account for
  * the origin (a locked wallet or a revoked grant fails safely), submits the held
@@ -428,6 +443,17 @@ export const executeInvokeApproval = async (
   // approval, not of the lane, so it is decided once here rather than at each.
   const ceiling = approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {};
   const strk20 = runtimeRpc.strk20 ?? unavailableStrk20Service;
+  const activityFor = (hash: string) => ({
+    accountId: account.id,
+    hash,
+    kind: "invoke" as const,
+    networkId: account.networkId,
+    summary:
+      approval.payload.activitySummary ??
+      `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
+  });
+  // The public lane's hash as signed, captured before it is sent (audit M4).
+  let signedHash: string | undefined;
   try {
     const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
     // One protected-account boundary for both lanes. The signing thunk and the
@@ -448,6 +474,9 @@ export const executeInvokeApproval = async (
           calls,
           ...ceiling,
           isAuthorized: authorized.isCurrent,
+          onSigned: async (signed) => {
+            signedHash = signed.transactionHash;
+          },
           rpcUrls,
           signHash: context.signHash,
         });
@@ -459,17 +488,11 @@ export const executeInvokeApproval = async (
       store: allowanceStore,
       transactionHash: result.transactionHash,
     });
-    await recordSubmittedActivity(activity, {
-      accountId: account.id,
-      hash: result.transactionHash,
-      kind: "invoke",
-      networkId: account.networkId,
-      summary:
-        approval.payload.activitySummary ??
-        `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
-    });
+    await recordSubmittedActivity(activity, activityFor(result.transactionHash));
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return { error: invokeFailureMessage(error, approval.payload.proof !== undefined) };
+    return invokeFailureResponse(error, approval.payload.proof !== undefined, signedHash, (hash) =>
+      recordSubmittedActivity(activity, activityFor(hash)),
+    );
   }
 };

@@ -175,6 +175,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, [
       "actionReviews",
+      "alreadyTracked",
       "blocked",
       "callReviews",
       "context",
@@ -245,8 +246,9 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   }
   const tokenValid =
     value["kind"] === "watch-asset"
-      ? isWatchAssetToken(value["token"])
-      : value["token"] === undefined;
+      ? isWatchAssetToken(value["token"]) &&
+        (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
+      : value["token"] === undefined && value["alreadyTracked"] === undefined;
   // The fee review travels only on invoke prompts and must be internally
   // consistent, mirroring `resolveReviewFee`: an undeployed account has no
   // estimate and no failure; a failed estimate carries no amount. Inconsistent

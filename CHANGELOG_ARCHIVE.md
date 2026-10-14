@@ -1,7 +1,156 @@
 # Changelog archive
 
-Release notes before v0.7.2 are archived here. Current release notes remain in
+Release notes before v0.9.0 are archived here. Current release notes remain in
 [CHANGELOG.md](CHANGELOG.md).
+
+## [0.8.0] - 2026-08-05
+
+Safer dApp account boundaries, explicit STRK20 privacy, faster and more truthful
+transaction status, and opt-in support for fully on-chain animated collectibles.
+
+### Added
+- An explicit multisig confirmation review that shows the exact decoded effect,
+  signer, network, mode, and estimated fee before hardware or software signing.
+- Atomic confirm-and-execute for the signer that reaches quorum, while retaining
+  a deliberate confirmation-only choice.
+- A background transaction monitor that recognizes Starknet pre-confirmation,
+  finality, and L1 acceptance, then reconciles submitted activity without
+  blocking the send flow on slow polling.
+- Account-scoped transaction alerts for late rejection, reversion, and expiry,
+  with bounded delivery and visible status updates in the popup and side panel.
+- Explicit playback for self-contained on-chain NFT animations on collectible
+  detail screens, including static fallbacks for gallery views.
+- Account- and network-scoped STRK20 registration, private balance disclosure,
+  shielding, transfer, withdrawal, and invoke journeys through the pinned
+  official Starknet Privacy SDK.
+- A mainnet Terminal privacy workspace for pool inspection, private portfolio
+  actions, and reviewed AVNU private swaps through bounded server gateways.
+
+### Changed
+- Connected dApps now resolve a grant to at most the active account. Switching
+  outside a site's approved accounts disconnects it and requires deliberate
+  reapproval instead of silently exposing or signing with a stale account.
+- Account creation, import, Ledger creation, and manual account selection now
+  notify connected pages of active-account changes consistently.
+- Submitted activity advances monotonically through pre-confirmed, accepted,
+  rejected, reverted, expired, and L1-confirmed states; terminal observations
+  cannot regress when providers disagree or respond out of order.
+- Mainnet status reads prefer the Starknet Foundation v0.10 endpoint with a
+  Cartridge fallback and bounded concurrency.
+- dApp invoke requests now take over the wallet before fee RPC work completes,
+  show an explicit estimating state, and share Send's unit-aware fee and
+  affordability review.
+
+### Fixed
+- Multisig confirmation sheets keep focus contained, keep their final action
+  visible at compact side-panel heights, and expose a working fee-estimate retry.
+- Impossible confirmation counts no longer qualify for atomic execution, and
+  concurrent extension surfaces cannot broadcast the same proposal action twice.
+- Late transaction failures are delivered only to the matching unlocked
+  account and network, preventing activity or alerts from bleeding between
+  account scopes.
+- Reconnecting after an account switch no longer returns the previously active
+  address, and a stale network-switch approval cannot reconnect an origin that
+  is no longer authorized.
+- Fully on-chain collectibles without a static image no longer stop at an empty
+  placeholder when their supported animation is opened deliberately.
+
+### Security
+- Multisig action messages require an exact confirmation mode and reject unknown
+  fields; the reviewed fee and submitted call batch are derived from that same
+  typed request. Durable pre-broadcast claims fail closed on unresolved duplicate
+  intent without blocking a valid later confirm/revoke state transition.
+- Untrusted animation HTML runs in a manifest sandbox with an egress-denying
+  CSP and a second opaque-origin iframe sandbox. Browser regression tests prove
+  it cannot access extension APIs or parent DOM state, beacon the network, load
+  remote images, or escape isolation through self-navigation.
+- Transaction approvals remain bound to the exact account shown at review time
+  and fail closed if active-account or origin-grant state changes before
+  execution.
+- STRK20 disclosures require explicit consent; prepared operations are
+  one-time, kind- and digest-bound, and discovery/proving use OHTTP through
+  bounded gateways without embedding private upstream URLs or credentials.
+- Review-time invoke fee estimation skips account validation, so it cannot
+  exercise Krusty or open a Ledger signing prompt before approval.
+- Status reconciliation is fail-closed, concurrency-bounded, and capped to five
+  sanitized alerts per drain, limiting provider-induced resource use and UI
+  flooding.
+- The final release head passes the repository's 95% coverage floor, extension
+  browser E2E suite, reproducible packaging, and high-severity dependency audit.
+
+## [0.7.2] - 2026-07-28
+
+A focused interaction-design and security release: clearer onboarding and
+account management, deliberate transaction progress, practical multisig
+workflows, and an expanded review lab backed by hardened provider and release
+boundaries.
+
+### Added
+- A unified Add account chooser, shared by the account drawer and Manage
+  accounts, with explicit Standard, Ledger, private-key import, and Multisig
+  signer models. Multisig setup then separates creating a new shared account
+  from adding an existing deployed account where the active account is already
+  a signer.
+- A complete Multisig portfolio and operations journey: shared balances and
+  collectibles, proposal-first major actions, guided token-transfer proposals,
+  address-book and wallet-account signer selection, quorum review, deployment,
+  proposal tracking, and independent scan/copy/local-decoder verification.
+- Recipient-first sending with address-book selection, searchable token
+  selection, token/fiat amount switching, a network-aware summary, decoded
+  action accordion, and explicit review before submission.
+- Deterministic account identity artwork, a fourth Portfolio quick action, an
+  Bramble Terminal handoff, and production Starknet marks wherever a destination
+  network is displayed.
+- Storybook checkpoints for the unified account chooser and Multisig
+  create/add-existing gateway, extending the organized wallet journeys and
+  deterministic design-review coverage.
+
+### Changed
+- The wallet now uses an intentionally monochrome interaction system so
+  hierarchy, focus, motion, and state remain legible without pervasive accent
+  color. Green and red remain reserved for success and failure.
+- Full-browser onboarding follows a stable staged flow with slower,
+  counter-rotating icon orbits, smoother transitions, Mainnet defaults, and
+  reduced-motion behavior.
+- Portfolio surfaces use larger balances, four consistent major actions,
+  simplified Tokens/Collectibles navigation, a compact overflow menu, and a
+  cleaner icon-only wallet dock.
+- Send and Ledger transaction progress now advances through visible review,
+  hardware authorization, broadcast, confirmation, success, and failure states
+  with calmer liveness motion and direction-aware transitions.
+- Multisig proposals aggregate recipient, token, amount, source, network, and
+  decoded effects into focused stages while keeping raw contract calldata in an
+  explicit advanced path.
+
+### Fixed
+- Activity state is partitioned by network and account so switching wallets
+  cannot show another account's history.
+- Add account no longer derives a Standard account immediately from the drawer;
+  both entry points require the same visible account-model choice.
+- Hover, focus, selected, and disabled states retain readable contrast, and
+  native-looking select controls no longer escape the wallet design system.
+- Onboarding orbit icons stay separated at normal playback speeds, surface
+  presets retain side-panel spacing, and waiting animations no longer pulse too
+  aggressively.
+- Destination-network rows use the canonical Starknet token mark rather than a
+  generic placeholder.
+
+### Security
+- All open CodeQL findings are addressed without suppressions: dapp provider
+  requests and results use an exhaustive, single-sourced method set instead of
+  page-controlled computed dispatch.
+- Bounded JSON normalization preserves hostile keys such as `__proto__` only as
+  own data properties on null-prototype records, and changelog regex inputs are
+  escaped literally.
+- AVNU asset synchronization accepts only signature-checked PNG, JPEG, and WebP
+  downloads; remotely supplied SVG is no longer treated as safely sanitizable
+  with regular expressions.
+- Release and nightly workflows resolve immutable commit SHAs before
+  self-hosted execution, validate tag-to-commit correspondence, and detach onto
+  the verified revision.
+- The repository-wide coverage gate remains enforced above 95%, with new tests
+  covering account routing, settings and address-book bindings, approval
+  behavior, NFT views, network marks, and navigation primitives.
 
 ## [0.7.1] - 2026-07-27
 

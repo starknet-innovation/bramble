@@ -43,6 +43,20 @@ export const trimTrailingSlashes = (value: string): string => {
   return value.slice(0, end);
 };
 
+// The characters {@link redactEndpoints} ends a URL at: any whitespace (the
+// Unicode set, so a no-break or ideographic space counts) and the quote, angle
+// bracket and backtick a URL cannot carry unescaped.
+const REDACTION_BREAK = /[\s"<>`]/u;
+
+/**
+ * True when an endpoint holds a character {@link redactEndpoints} would end the
+ * URL at. Such an endpoint could leave part of an API key visible in a redacted
+ * error, so it is refused when entered. Stored records are not re-validated with
+ * it: tightening the stored rule could make a settings record that loads today
+ * unreadable.
+ */
+export const hasRedactionBreak = (value: string): boolean => REDACTION_BREAK.test(value);
+
 /**
  * Checks a user-configured service endpoint without performing network access.
  */
@@ -53,6 +67,18 @@ export const isServiceUrl = (value: unknown): value is string => isUrlFor(value,
  */
 export const isWebSocketServiceUrl = (value: unknown): value is string =>
   isUrlFor(value, "wss:", "ws:");
+
+/**
+ * Checks an endpoint as it is entered (settings, a dapp's chain request): an
+ * {@link isServiceUrl} that {@link redactEndpoints} can redact whole, so it holds
+ * no {@link hasRedactionBreak} character.
+ */
+export const isEnteredServiceUrl = (value: unknown): value is string =>
+  isServiceUrl(value) && !hasRedactionBreak(value);
+
+/** The entered-endpoint rule of {@link isEnteredServiceUrl} for a WebSocket endpoint. */
+export const isEnteredWebSocketServiceUrl = (value: unknown): value is string =>
+  isWebSocketServiceUrl(value) && !hasRedactionBreak(value);
 
 /**
  * Checks a chain descriptor's endpoint list: non-empty, every entry a
@@ -81,3 +107,42 @@ export const isBoundedServiceUrlList = (
  */
 export const isOptionalServiceUrlList = (value: unknown): value is readonly string[] | undefined =>
   value === undefined || isServiceUrlList(value);
+
+/** What an endpoint reads as once {@link redactEndpoints} has removed it. */
+export const REDACTED_ENDPOINT = "[endpoint]";
+
+// The URL parser drops ASCII tab, CR and LF anywhere in its input, so
+// `isServiceUrl` accepts "https:\t//host/key" or a tab inside the key and stores
+// the string as written. The pattern lets them appear anywhere in a match.
+const IGNORED = "[\\t\\n\\r]*";
+const spaced = (word: string): string => [...word].join(IGNORED);
+// A URL runs to the first character it cannot carry unescaped — whitespace, a
+// quote, an angle bracket, a backtick — so a key never survives as a tail. A
+// run of ignored characters continues it only when the URL goes on after it.
+const URL_CHAR = '[^\\s"<>`]';
+// Any scheme written "scheme://", which is how every URL leaves the wallet and
+// so how a node or gateway echoes one; or one of the schemes the validators
+// above accept (http, https, ws, wss) in any spelling the parser normalizes for
+// them: ignored characters anywhere, backslashes, extra slashes, or none at
+// all. The lookbehind starts a match only at the front of a word, which keeps
+// the scan linear.
+const ENDPOINT_PATTERN = new RegExp(
+  "(?<![a-z0-9+.-])(?:[a-z][a-z0-9+.-]*://" +
+    `|(?:${spaced("https")}|${spaced("http")}|${spaced("wss")}|${spaced("ws")})${IGNORED}:[\\t\\n\\r\\\\/]*)` +
+    `(?:${URL_CHAR}|[\\t\\n\\r]+(?=${URL_CHAR}))+`,
+  "gi",
+);
+
+/**
+ * Replaces every scheme-qualified URL in failure text with
+ * {@link REDACTED_ENDPOINT}. A configured RPC or service endpoint may carry an
+ * API key in its path or query, and failure text can echo it: a node's error
+ * data, a gateway page quoted in a parse error, an SDK message. Apply it to any
+ * such text before a user can see or copy it. Everything else — the method,
+ * an RPC code, a revert reason, felts — is kept, so the text stays a useful
+ * diagnostic. Every spelling the validators above accept is matched whole; to
+ * cover the characters the URL parser ignores, a word glued to the end of a URL
+ * by only a tab or line break is redacted with it. Pure, total, and linear.
+ */
+export const redactEndpoints = (text: string): string =>
+  text.replace(ENDPOINT_PATTERN, REDACTED_ENDPOINT);

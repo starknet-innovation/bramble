@@ -87,8 +87,13 @@ describe("Argent multisig fee refresh", () => {
     );
 
     expect(home.match(/data-ms-open-intent=/g)).toHaveLength(1);
-    expect(home).toContain("Not submitted · ready to retry");
-    expect(detail).toContain("Nothing was sent");
+    expect(home).toContain("Out of date · ready to retry");
+    // Audit M3: a stale card cannot tell a fee rejection from a nonce a
+    // co-signer used, so it never claims nothing went out.
+    expect(detail).toContain("This may already have been sent by another signer.");
+    expect(detail).not.toContain("Nothing was sent");
+    expect(detail).not.toContain("Not submitted");
+    expect(home).not.toContain("Not submitted");
     expect(detail).toContain("Continue the fee-updated transaction and collect 1 fresh approval");
     expect(detail).toContain(
       "retry this version with its existing 1 approval if network fees fall",
@@ -140,7 +145,8 @@ describe("Argent multisig fee refresh", () => {
       { openIntent: (...args) => opened.push(args) },
     );
 
-    expect(app.textContent).toContain("Nothing was sent");
+    expect(app.textContent).toContain("This may already have been sent by another signer.");
+    expect(app.textContent).not.toContain("Nothing was sent");
     expect(app.textContent).toContain("Update network fee");
     app.querySelector<HTMLButtonElement>("[data-ms-refresh-intent]")?.click();
     await flushMultisigUi();
@@ -358,5 +364,47 @@ describe("Argent multisig fee refresh", () => {
       "Reached 1 of 2 co-signers. Share again to retry the remaining delivery.",
     );
     expect(share?.disabled).toBe(false);
+  });
+
+  // Audit M3: a stale version short of its approvals can still be completed and
+  // sent from a co-signer's copy, and an imported stale package is stale because
+  // its nonce moved, so neither may say it was not sent.
+  test("never says a short-signed or imported stale version was not sent", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const stale = { ...fixture.intent, state: "stale" as const };
+    const detail = multisigDetailFlow(
+      fixture.status,
+      fixture.status.accounts[0] ?? null,
+      fixture.view,
+      [stale],
+      false,
+      defaultWalletPreferences(),
+      "multisig-detail",
+      undefined,
+      stale.id,
+    );
+    expect(detail).toContain(
+      "This may already have been sent by another signer. This version is out of date",
+    );
+    expect(detail).not.toContain("Nothing was sent");
+    expect(detail).not.toContain("Not submitted");
+
+    const client = await makeMultisigUiClient({
+      importIntent: async () => ({ intent: stale }),
+    });
+    const app = mountMultisigUi(
+      `<form id="multisig-track-form">
+        <textarea name="intentPackage">${JSON.stringify(fixture.intentPackage)}</textarea>
+        <button type="submit">Import</button>
+      </form>`,
+      client,
+      fixture.status,
+      { openIntent: () => undefined },
+    );
+    app.querySelector<HTMLFormElement>("#multisig-track-form")?.requestSubmit();
+    await flushMultisigUi();
+    const page = app.ownerDocument.body.textContent ?? "";
+    expect(page).toContain("Signed attempt restored. This may already have been sent");
+    expect(page).not.toContain("not submitted");
   });
 });

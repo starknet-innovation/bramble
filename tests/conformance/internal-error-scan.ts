@@ -61,6 +61,8 @@ const REFUSAL_SOURCES = [
   "apps/extension/src/background/transactions/swap-build-policy.ts",
   "apps/extension/src/background/approvals/approval-limits.ts",
   "packages/foundation/wallet-model/src/swap/avnu-route.ts",
+  // `privacyShortfall`, the balance refusal private actions raise before signing.
+  "packages/foundation/wallet-protocol/src/privacy/privacy-blocker.ts",
 ];
 const RETURNED = /(?:\breturn|[?:])\s*(["`])((?:(?!\1)[^\\]|\\.){3,400})\1/g;
 // `const NAME = "…"` / `` const NAME = `…` `` string constants.

@@ -8,10 +8,12 @@
  * mark until a reading settles it; one still pending keeps the mark.
  */
 import { describe, expect, test } from "bun:test";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { type ActivityStatus, memoryActivityLog } from "@bramble/transactions/activity";
 import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { readSubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -88,7 +90,11 @@ const REVOKE_HASH = "0x1002";
 type TrackedReading = { readonly amount: string; readonly id: string };
 type Listing = { readonly allowances: readonly { readonly id: string; revoking?: true }[] };
 
-const makeHarness = () => {
+type InvokeInput = Parameters<
+  NonNullable<NonNullable<Parameters<typeof makeRuntimeRpc>[0]>["submitInvokeTransaction"]>
+>[0];
+
+const makeHarness = (lostRevoke?: (input: InvokeInput) => Promise<never>) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const allowanceStore = memoryAllowanceStore();
@@ -106,6 +112,7 @@ const makeHarness = () => {
         return node.read(input.pairs.map((pair) => pair.id));
       },
       async submitInvokeTransaction(input) {
+        if (lostRevoke && hashes.length === 1) return lostRevoke(input);
         return { calls: input.calls, transactionHash: hashes.shift() ?? "0x1fff" };
       },
     }),
@@ -266,5 +273,51 @@ describe("issue 647: a revoke settles on its own transaction's outcome", () => {
     // Still "250" when the next read fails.
     harness.node.read = async () => [];
     expect((await harness.list()).allowances).toMatchObject([{ amount: "250", id }]);
+  });
+});
+
+// Audit L3: a revoke whose reply was lost may already be on chain. It keeps
+// its pending row and revoke mark under the signed hash, so the manager shows
+// it on its way and Activity has something to settle, and the panel is told
+// the outcome is unknown.
+describe("a revoke with a lost reply", () => {
+  test("records the signed hash as pending and answers status unknown", async () => {
+    const harness = makeHarness(async (input) => {
+      await input.onSigned?.({
+        nonce: "0x1",
+        senderAddress: account.address,
+        transactionHash: REVOKE_HASH,
+      });
+      throw new IndeterminateRpcWriteError("Transaction submission status is unknown.");
+    });
+    const { handler, list } = harness;
+    const held = handler(
+      {
+        calls: [
+          { calldata: [SPENDER, "1000", "0"], contractAddress: TOKEN, entrypoint: "approve" },
+        ],
+        origin: "https://dapp.example",
+        type: "wallet.addInvokeTransaction",
+      },
+      contentSender,
+    );
+    await flushHeld();
+    const approval = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, approval);
+    await handler({ id: approval, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await held;
+    const id = (await list()).allowances[0]?.id ?? "";
+
+    const response = await handler(
+      { id, reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.revokeAllowance" },
+      extensionSender,
+    );
+
+    expect(readSubmissionUnknownError(response)?.transactionHash).toBe(REVOKE_HASH);
+    const rows = await harness.activity.list();
+    expect(rows.find((row) => row.hash === REVOKE_HASH)?.status).toBe("pending");
+    expect(await harness.allowanceStore.list()).toMatchObject([
+      { id, revokeHash: REVOKE_HASH, revoking: true },
+    ]);
   });
 });

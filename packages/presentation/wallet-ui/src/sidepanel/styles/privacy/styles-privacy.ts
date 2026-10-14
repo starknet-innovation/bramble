@@ -181,6 +181,17 @@ export const PRIVACY_STYLES = `
   .privacy-review-title p,
   .privacy-working > p,
   .privacy-outcome > p { color: var(--bramble-muted); margin: 0 auto; max-width: 32ch; }
+  /* The failure sentence with its copy control trailing it, as on the send
+     receipt (.send-outcome-reason), so the diagnostic sits beside its line. */
+  .privacy-outcome-reason {
+    align-items: start;
+    display: inline-flex;
+    gap: ${SPACE.xs};
+    justify-content: center;
+    margin: 0 auto;
+    min-width: 0;
+  }
+  .privacy-outcome-reason p { color: var(--bramble-muted); margin: 0; max-width: 32ch; min-width: 0; }
   .privacy-facts,
   .privacy-task-list {
     display: grid;

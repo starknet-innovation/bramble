@@ -84,6 +84,15 @@ export const isTransferInFlight = (stage: TransferStage): boolean =>
   stage === "authorizing" || stage === "broadcasting" || stage === "confirming";
 
 /**
+ * Whether the Send form may act on a submit. Not once a send is past the
+ * confirm: a second submit there would sign the reviewed transfer again. The
+ * screen also hides and disables those controls; this is the state machine's
+ * own guard for a submit that arrives anyway (audit L5).
+ */
+export const acceptsTransferSubmit = (stage: TransferStage): boolean =>
+  !isTransferInFlight(stage) && stage !== "pending" && stage !== "submitted";
+
+/**
  * User-visible transaction fields frozen at review.
  */
 export type TransferFields = {
@@ -118,6 +127,14 @@ export type TransferFields = {
  */
 export type TransferState<Review> = {
   readonly error: string;
+  /**
+   * The complete diagnostic behind `error` on a `failed` stage, for the
+   * receipt's copy control: the rejected call's own message (`errorDetails`),
+   * which a pool route's background has already reduced to wallet-authored,
+   * sanitized text. Empty or absent when no error lies behind the failure (a
+   * chain rejection), in which case the control copies the reason shown.
+   */
+  readonly errorDetails?: string;
   readonly fields: TransferFields | null;
   readonly privatePreparation: PrivacyPreparation | null;
   /**

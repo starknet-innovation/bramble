@@ -11,7 +11,7 @@ import {
   isRecord,
   type Json,
 } from "@bramble/core/json";
-import { isBoundedServiceUrlList } from "@bramble/core/service-url";
+import { hasRedactionBreak, isBoundedServiceUrlList } from "@bramble/core/service-url";
 import { isCanonicalChainId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { isOptionalApiVersion } from "../provider/versions";
 
@@ -36,8 +36,9 @@ export type ProviderChain = {
  */
 export const MAX_CHAIN_URLS = 4;
 
+// Entered by a dapp, so every entry must also redact whole (`hasRedactionBreak`).
 const isChainUrlList = (value: unknown): value is readonly string[] =>
-  isBoundedServiceUrlList(value, MAX_CHAIN_URLS);
+  isBoundedServiceUrlList(value, MAX_CHAIN_URLS) && !value.some(hasRedactionBreak);
 
 const isOptionalChainUrlList = (value: unknown): value is readonly string[] | undefined =>
   value === undefined || isChainUrlList(value);

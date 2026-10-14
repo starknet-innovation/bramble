@@ -379,7 +379,7 @@ export const HomeStaleIntent: LabStory = {
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body).toHaveTextContent("Needs attention");
-    await expect(body?.querySelector(".multisig-intent-list")).toHaveTextContent("Not submitted");
+    await expect(body?.querySelector(".multisig-intent-list")).toHaveTextContent("Out of date");
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
 };
@@ -486,7 +486,7 @@ export const IntentNoLocalSigner: LabStory = {
 };
 export const IntentStale: LabStory = {
   args: { checkpointId: "intent-stale", scenarioId: "multisig" },
-  name: "Not submitted · retry or update",
+  name: "Out of date · retry or update",
   play: async ({ canvasElement }) => {
     await assertCheckpointReady(canvasElement);
     const body =
@@ -499,7 +499,7 @@ export const IntentStale: LabStory = {
       "Try unchanged fee again",
     );
     await expect(body?.querySelector(".multisig-intent-action > :first-child")).toHaveTextContent(
-      "Nothing was sent",
+      "This may already have been sent by another signer.",
     );
     await expect(body?.querySelector(".multisig-intent-action > :nth-child(2)")).toHaveAttribute(
       "data-ms-refresh-intent",

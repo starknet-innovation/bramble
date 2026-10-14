@@ -20,6 +20,7 @@
  * ../starknet/verify-decode).
  */
 
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { buildErc20ApproveCall } from "@bramble/starknet/rpc";
 import {
   type AllowanceNotice,
@@ -46,6 +47,7 @@ import {
   STARKNET_NETWORKS,
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import { readTypeOnlyInput } from "../routing/message-inputs";
@@ -56,7 +58,7 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import { requiredFeeReview } from "../transactions/fee-review";
 import { readRevokeAllowanceInput } from "./allowance-inputs";
 import { allowanceOwner, recordApproveAllowances } from "./allowance-recording";
@@ -314,6 +316,70 @@ const handleListAllowances: AllowanceOpsHandler = async (deps, message) => {
   };
 };
 
+type RevokeSubmission = {
+  readonly account: AccountRef;
+  readonly call: ReturnType<typeof buildErc20ApproveCall>;
+  readonly isAuthorized: () => boolean;
+  readonly reviewedFee: NonNullable<
+    Parameters<WalletOpsDeps["runtimeRpc"]["submitInvokeTransaction"]>[0]["reviewedFee"]
+  >;
+  readonly rpcUrls: readonly string[];
+  readonly signHash: ReturnType<typeof signerForContext>;
+  readonly summary: string;
+  readonly trusted: ApprovedAssets;
+};
+
+// Sends the reviewed revoke and files its revoke mark and activity line. The
+// revoke as signed is captured before it is sent, so a lost reply still leaves
+// a pending row and mark to settle on, and the panel is told the outcome is
+// unknown (audit L3).
+const submitRevoke = async (
+  deps: WalletOpsDeps,
+  revoke: RevokeSubmission,
+): Promise<RuntimeResponse> => {
+  // Written before the activity line: the log is what makes a residual grant
+  // visible and revokable, so it must not depend on a second store's write
+  // succeeding.
+  const recordRevoke = async (transactionHash: string): Promise<void> => {
+    await recordApproveAllowances({
+      assets: revoke.trusted,
+      calls: [revoke.call],
+      owner: allowanceOwner(revoke.account),
+      store: deps.allowanceStore,
+      transactionHash,
+    });
+    await recordSubmittedActivity(deps.activity, {
+      accountId: revoke.account.id,
+      hash: transactionHash,
+      kind: "invoke",
+      networkId: revoke.account.networkId,
+      summary: revoke.summary,
+    });
+  };
+  let signedHash: string | undefined;
+  let transactionHash: string;
+  try {
+    ({ transactionHash } = await deps.runtimeRpc.submitInvokeTransaction({
+      account: revoke.account,
+      calls: [revoke.call],
+      isAuthorized: revoke.isAuthorized,
+      onSigned: async (signed) => {
+        signedHash = signed.transactionHash;
+      },
+      reviewedFee: revoke.reviewedFee,
+      rpcUrls: revoke.rpcUrls,
+      signHash: revoke.signHash,
+    }));
+  } catch (error) {
+    if (!(error instanceof IndeterminateRpcWriteError)) throw error;
+    const pending = signedHash;
+    if (pending !== undefined) await afterBroadcast(() => recordRevoke(pending));
+    return submissionUnknownResponse(error.message, pending);
+  }
+  await recordRevoke(transactionHash);
+  return { ok: true, transactionHash };
+};
+
 const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
   const input = readRevokeAllowanceInput(message);
   if (!input) {
@@ -371,32 +437,16 @@ const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
       }),
     );
   }
-  const result = await deps.runtimeRpc.submitInvokeTransaction({
+  return submitRevoke(deps, {
     account: context.account,
-    calls: [call],
+    call,
     isAuthorized: authorized.isCurrent,
     reviewedFee: input.reviewedFee,
     rpcUrls,
     signHash,
-  });
-  // Written before the activity line: the log is what makes a residual grant
-  // visible and revokable, so it must not depend on a second store's write
-  // succeeding.
-  await recordApproveAllowances({
-    assets: trusted,
-    calls: [call],
-    owner: allowanceOwner(context.account),
-    store: deps.allowanceStore,
-    transactionHash: result.transactionHash,
-  });
-  await recordSubmittedActivity(deps.activity, {
-    accountId: context.account.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: context.networkId,
     summary: report.calls[0]?.summary ?? "Revoke approval",
+    trusted,
   });
-  return { ok: true, transactionHash: result.transactionHash };
 };
 
 /**

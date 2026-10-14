@@ -1,5 +1,6 @@
 /** Typed extension message handling for the background service worker. */
 import { WalletError } from "@bramble/core/errors";
+import { redactEndpoints } from "@bramble/core/service-url";
 import { activeAccountSecrets } from "@bramble/vault/service";
 import { handleWalletOps, type WalletOpsDeps } from "../accounts/wallet-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -438,11 +439,18 @@ const handleRuntimeMessage = async (
   return response ?? { error: "unsupported message" };
 };
 
+// The wallet's own pages see a thrown error's message; a page sender never
+// does. On the public routes that message can be a node's or gateway's own
+// text, which may echo the configured RPC URL and its key, so endpoints are
+// redacted before it leaves (the panel redacts every refusal again on receipt).
 const runtimeErrorResponse = (
   error: unknown,
   revealError: boolean,
 ): { readonly error: string } => ({
-  error: revealError && error instanceof Error ? error.message : "wallet request failed",
+  error:
+    revealError && error instanceof Error
+      ? redactEndpoints(error.message)
+      : "wallet request failed",
 });
 
 /** Creates the trusted background runtime message dispatcher. */

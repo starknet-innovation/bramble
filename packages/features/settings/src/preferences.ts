@@ -1,10 +1,11 @@
 /** Plain wallet preferences kept outside the encrypted vault. */
 import { WalletError } from "@bramble/core/errors";
 import { isJson } from "@bramble/core/json";
+import { isEnteredServiceUrl } from "@bramble/core/service-url";
 import { isWatchedNft, withNftId } from "@bramble/portfolio/watched-nft";
 import {
   DEFAULT_STRK20_NETWORKS,
-  isStrk20NetworkConfig,
+  isEnteredStrk20NetworkConfig,
   STRK20_MAINNET_POOL,
   type Strk20NetworkConfig,
 } from "@bramble/privacy/config";
@@ -12,7 +13,6 @@ import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountId } from "@bramble/wallet-model/accounts";
-import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
 import {
   DEFAULT_NETWORK,
   DEFAULT_TRACKED_TOKENS,
@@ -411,7 +411,7 @@ export const createPreferencesStore = ({
           throw new WalletError("Invalid Starknet network");
         }
         const trimmed = rpcUrl.trim();
-        if (trimmed.length > 0 && !isCustomRpcUrl(trimmed)) {
+        if (trimmed.length > 0 && !isEnteredServiceUrl(trimmed)) {
           throw new WalletError("Invalid RPC endpoint");
         }
         const preferences = await read();
@@ -427,7 +427,7 @@ export const createPreferencesStore = ({
       },
       async setNftIndexerUrl({ url }) {
         const trimmed = url.trim();
-        if (trimmed.length > 0 && !isCustomRpcUrl(trimmed)) {
+        if (trimmed.length > 0 && !isEnteredServiceUrl(trimmed)) {
           throw new WalletError("Invalid indexer endpoint");
         }
         const preferences = await read();
@@ -448,7 +448,7 @@ export const createPreferencesStore = ({
       async setStrk20NetworkConfig({ config, networkId }) {
         if (
           !isStarknetNetworkId(networkId) ||
-          (config !== null && !isStrk20NetworkConfig(config))
+          (config !== null && !isEnteredStrk20NetworkConfig(config))
         ) {
           throw new WalletError("Invalid STRK20 network configuration");
         }

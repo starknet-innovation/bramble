@@ -1,6 +1,6 @@
 /** Atomic explorer endpoint and disclosure-preference mutation. */
 import { WalletError } from "@bramble/core/errors";
-import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
+import { isEnteredServiceUrl } from "@bramble/core/service-url";
 import { isStarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { WalletPreferences } from "./preferences-types";
 
@@ -13,7 +13,8 @@ export const withExplorerSettings = (
   const explorerApiUrls = { ...preferences.explorerApiUrls };
   if (input.apiUrl !== undefined) {
     const apiUrl = input.apiUrl.trim();
-    if (apiUrl && !isCustomRpcUrl(apiUrl)) throw new WalletError("Invalid explorer API endpoint");
+    if (apiUrl && !isEnteredServiceUrl(apiUrl))
+      throw new WalletError("Invalid explorer API endpoint");
     if (apiUrl) explorerApiUrls[input.networkId] = apiUrl;
     else delete explorerApiUrls[input.networkId];
   }

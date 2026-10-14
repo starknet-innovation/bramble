@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import {
   PRIVACY_FUNDS_REQUIRED,
   PrivacyBlockerError,
@@ -196,6 +197,31 @@ describe("privacy deployment gate", () => {
     await tick();
     const last = journeys.at(-1);
     expect(last?.stage === "blocked" ? last.blocker.kind : null).toBe("ledger");
+  });
+
+  // Audit L4: a read that holds no STRK reading (STRK untracked, or not read
+  // yet) is unknown, so the deploy screen must not say "add STRK" over it.
+  test("does not treat a missing STRK reading as an empty STRK balance", () => {
+    const strk = {
+      address: STRK_TOKEN_ADDRESS,
+      decimals: 18,
+      id: `SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`,
+      name: "Starknet Token",
+      networkId: "SN_MAIN" as const,
+      symbol: "STRK",
+    };
+    expect(strkAvailableForFees({ balances: [] })).toBeNull();
+    expect(
+      strkAvailableForFees({ balances: [{ ...strk, balance: "0", formatted: "" }] }),
+    ).toBeNull();
+    expect(strkAvailableForFees({ balances: [{ ...strk, balance: "0", formatted: "0" }] })).toBe(
+      false,
+    );
+    expect(
+      strkAvailableForFees({
+        balances: [{ ...strk, balance: "5", formatted: "0.000000000000000005" }],
+      }),
+    ).toBe(true);
   });
 
   test("does not treat a failed balance load as an empty STRK balance", () => {

@@ -181,6 +181,11 @@ export type ApprovalQueue = {
     readonly summary: string;
   }) => PendingApproval;
   readonly requestWatchAsset: (input: {
+    /**
+     * The wallet already tracks this token: queue a close-only notice whose
+     * Close answers the site as an approval would (audit M1).
+     */
+    readonly alreadyTracked?: true;
     readonly origin: string;
     readonly token: WatchAssetToken;
   }) => PendingApproval;

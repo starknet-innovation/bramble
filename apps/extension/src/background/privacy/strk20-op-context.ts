@@ -15,8 +15,10 @@ import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet
 import { withTokenId } from "@bramble/wallet-model/preferences";
 import {
   PRIVACY_DEPLOY_REQUIRED,
+  PRIVACY_PUBLIC_BALANCE_UNCONFIRMED,
   PrivacyBlockerError,
   type PrivacyBlockerKind,
+  privacyShortfall,
 } from "@bramble/wallet-protocol/privacy-blocker";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
@@ -138,7 +140,7 @@ export const assertPublicPoolSpendAffordable = async (
   const balanceOf = (address: string): bigint => {
     const entry = balances.find((balance) => sameFelt(balance.address, address));
     if (!entry || !/^\d+$/.test(entry.balance)) {
-      throw new WalletError("Could not confirm the public balance required by this transaction");
+      throw new WalletError(PRIVACY_PUBLIC_BALANCE_UNCONFIRMED);
     }
     return BigInt(entry.balance);
   };
@@ -150,7 +152,7 @@ export const assertPublicPoolSpendAffordable = async (
     return;
   }
   if (depositAmountRaw !== undefined && balanceOf(context.token.address) < amount) {
-    throw new WalletError(`Not enough ${context.token.symbol}`);
+    throw new WalletError(privacyShortfall(context.token.symbol, "public"));
   }
   if (balanceOf(STRK_TOKEN_ADDRESS) < fee) {
     throw new PrivacyBlockerError("fund", "Not enough STRK for the pool fee");

@@ -220,7 +220,7 @@ const failureStage = (): string => `
       <h2 id="send-failure-title">${escapeHtml(TRANSFER_FAILURE_TITLE)}</h2>
       <span class="send-outcome-reason">
         <p id="send-failure-copy">The transaction was not sent. Your balance is unchanged.</p>
-        ${inlineCopyButton("", "Copy the error", { id: "send-failure-copy-error" })}
+        ${inlineCopyButton("", "Copy error details", { id: "send-failure-copy-error" })}
       </span>
       ${outcomeHashRow("send-failure-hash")}
     </div>

@@ -87,8 +87,14 @@ const bindSweep = (
                 showToast(line, "warning", row, details);
                 return;
               }
-              buttonBusy(confirm, false);
-              showToast(details, "error", confirm);
+              // Nothing was sent, but a preparation is single-use and may be
+              // spent or stale ("preparation changed"), so its Confirm can be a
+              // dead end. Go back to Sweep: a new preparation and review
+              // (audit L6).
+              confirm.remove();
+              review.replaceWith(sweep);
+              buttonBusy(sweep, false);
+              showToast(details, "error", sweep);
             },
           );
         });

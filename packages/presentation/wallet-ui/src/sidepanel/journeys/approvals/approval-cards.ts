@@ -5,7 +5,6 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
@@ -37,59 +36,15 @@ import {
   signRequestView,
   signRequestWarnings,
 } from "../../shared/sign-request";
-import { tokenGlyph } from "../portfolio/token-row";
 import { invokeCallReview, strk20ActionReview } from "./approval-call-parameters";
+import { decisionRow, denyButton, requestIdentity } from "./approval-card-parts";
 import {
   declarationDetails,
   declarationFeeUnavailable,
   declarationReviewedFee,
   declarationWarnings,
 } from "./approval-declaration-review";
-
-const denyButton = (approval: PendingApproval, label = "Deny"): string =>
-  button({
-    attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
-    icon: "x",
-    label,
-    tone: "danger",
-    variant: "secondary",
-  });
-
-// Shared approve/deny controls (one long template line so it is not re-wrapped);
-// `approve` is disabled when the wallet is locked or the origin is blocked.
-// `reviewedFee`, when the card priced the request, is stamped onto the approve
-// control so the click reports the figure THIS paint showed. The background
-// binds the submission to that echo and refuses if its own copy has moved
-// since, which is how a card left open behind a re-estimate on another wallet
-// surface cannot approve a ceiling the user never read.
-// Deny leads Approve in DOM and reading order: the safe choice is reached
-// first by keyboard and eye, and a gesture begun on the previous screen lands
-// on it rather than on consent (spec item 15).
-const decisionRow = (
-  approval: PendingApproval,
-  label: string,
-  locked: boolean,
-  reviewedFee?: PendingApproval["fee"],
-  reviewed: Readonly<Record<string, string>> = {},
-  denyLabel = "Deny",
-): string =>
-  `<div class="button-row">${denyButton(approval, denyLabel)}${button({
-    attributes: {
-      "data-approval-kind": approval.kind,
-      "data-approval-action": "approve",
-      ...(reviewedFee
-        ? {
-            "data-approval-fee": reviewedFee.overallFee,
-            "data-approval-fee-unit": reviewedFee.unit,
-          }
-        : {}),
-      "data-approval-id": approval.id,
-      ...reviewed,
-    },
-    disabled: locked || approval.blocked === true,
-    icon: "check",
-    label,
-  })}</div>`;
+import { watchAssetCard } from "./approval-watch-asset-card";
 
 // Used when the card cannot describe what approving would commit to: the
 // approve control is absent rather than merely disabled, so a partial view can
@@ -166,17 +121,6 @@ const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[
   );
 };
 
-const requestIdentity = (origin: string, kind: string): string => {
-  let host = origin;
-  try {
-    host = new URL(origin).host || origin;
-  } catch {
-    // The full escaped value remains visible if an invalid origin reaches this
-    // presentation boundary; approval validation still fails closed upstream.
-  }
-  return `<p class="eyebrow">${kind}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>Request from</span><strong title="${escapeHtml(origin)}">${escapeHtml(host)}</strong></div></div>`;
-};
-
 const approvalCalls = (approval: PendingApproval): string =>
   reviewCallsList(approval.summaries ?? [], approval.reviewAssets ?? []);
 
@@ -222,40 +166,6 @@ const connectCard = (
 
 // Fixed copy per spam reason (audit 171): the card the user decides on says why
 // the token looks wrong, and that the wallet will store it hidden.
-const SPAM_WARNINGS: Readonly<Record<SpamReason, string>> = {
-  "absurd-decimals": "This token reports an implausible number of decimals.",
-  "empty-name": "This token has no name.",
-  "symbol-spoof": "This token uses the ticker of a different, known token contract.",
-};
-
-const watchAssetWarnings = (token: NonNullable<PendingApproval["token"]>): readonly string[] => {
-  const reasons = tokenSpamReasons(token);
-  return reasons.length === 0
-    ? []
-    : [
-        ...reasons.map((reason) => SPAM_WARNINGS[reason]),
-        "If added, it stays hidden until you show it.",
-      ];
-};
-
-const watchAssetCard = (approval: PendingApproval): string => {
-  const token = approval.token;
-  if (!token) {
-    return "";
-  }
-  return `
-  <li class="request-card">
-    <div class="request-copy">
-      ${requestIdentity(approval.origin, "Add token request")}
-      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
-      ${reviewOutcome("Add this token contract to the wallet's tracked asset list.")}
-    </div>
-    ${reviewPanel([...watchAssetWarnings(token), ...(approval.insights ?? [])])}
-    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Add token", false)}
-  </li>`;
-};
-
 // Everything is inlined into the template (template contents are not re-wrapped)
 // so the decoded calls and combined risk-flag/insight warnings stay compact.
 // The fee section renders through the shared `reviewFeeSection` — the same

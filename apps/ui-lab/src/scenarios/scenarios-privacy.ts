@@ -260,6 +260,8 @@ export const privacyScenario: WalletScenario = {
           privateReady,
           {
             error: "The prover could not complete this proof. No transaction was submitted.",
+            errorDetails:
+              "strk20 services unavailable (proving/proof-rejected): proving job failed",
             severity: "danger",
             stage: "failure",
             tokenId: ETH_TOKEN.id,
@@ -278,6 +280,8 @@ export const privacyScenario: WalletScenario = {
           privateReady,
           {
             error:
+              "The wallet's background worker stopped while sending this private transaction, so its status is unknown. Check Activity before trying again.",
+            errorDetails:
               "The wallet's background worker stopped while sending this private transaction, so its status is unknown. Check Activity before trying again.",
             severity: "warning",
             stage: "failure",

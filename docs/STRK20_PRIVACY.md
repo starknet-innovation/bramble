@@ -133,7 +133,10 @@ device.
    unconfigured network look the same to the site.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
    and shadow-account commitments each create a dedicated approval. Registration uses the explicitly
-   Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
+   Bramble-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC.
+   A registration that cannot reach its card — a Ledger account, a network without private
+   services, or a public balance below the pool fee — is held on the same close-only notice, and the
+   site receives the refusal only on Close (audit L1). The
    queue retains the exact private request and
    exposes display-safe summaries plus the exact action parameters and an account/network/payload
    digest. Invoke calldata, shadow-account call targets and entry points, nonce, and collect policy
@@ -217,8 +220,10 @@ the exact nonces used. A scope is recorded when its commitment is shared (a site
 precomputed address before the account is deployed), when a submittable proof names it, and before
 a shadow invoke is submitted. Recording happens first and fails closed: a request whose record cannot
 be written does not run. The record reveals which sites someone used privately. It is bounded to 128
-scopes and 64 nonces per scope; past a bound the request is refused rather than a record dropped.
-The bound is checked before a card is queued, so the user is not asked to approve a request the
+scopes, 64 nonces per scope, and half of the vault's capacity in all (`SHADOW_ACCOUNT_SCOPES_BUDGET`,
+derived from the provider JSON budget), so records can never fill the vault and block its other
+writes; past a bound the request is refused rather than a record dropped. The bounds and the vault's
+own capacity are checked before a card is queued, so the user is not asked to approve a request the
 record would refuse (the record after approval still re-checks). Such a request is held on the same
 close-only notice as a network with no anonymizer, with its own line, so the site learns nothing
 until the user sees it: Close returns the record refusal, and expiry returns `USER_REFUSED_OP`. There is no way yet to remove

@@ -48,6 +48,20 @@ const removeVerified = async (store: EncryptedStore): Promise<void> => {
   }
 };
 
+// A staging copy an earlier, interrupted migration left behind whose commit
+// record is lost or disagrees cannot be verified, so it is no recovery copy:
+// the primary has just been read and verified. A write over it would refuse
+// ("commit state missing"), failing every unlock while the UI offers no
+// recovery, since recovery reflects only the primary (release audit S2). It is
+// removed first; the primary is not touched. A verifiable copy is simply
+// overwritten by the write that follows.
+const removeUnverifiableStage = async (staging: EncryptedStore): Promise<void> => {
+  const health = await staging.health();
+  if (health !== "absent" && health !== "ok") {
+    await removeVerified(staging);
+  }
+};
+
 const recoverStagedVault = async (
   stores: VaultMigrationStores,
   vaultPassphrase: string,
@@ -111,6 +125,7 @@ export const readMigratedVault = async (
     return vault;
   }
 
+  await removeUnverifiableStage(stores.staging);
   await stores.staging.write(vault, vaultPassphrase);
   await readVerified(stores.staging, vaultPassphrase, vault);
   await stores.primary.write(vault, vaultPassphrase);

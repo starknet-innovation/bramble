@@ -161,9 +161,11 @@ export const TOKEN_SPLIT_LINE = (publicAmount: string, privateAmount: string): s
 
 // Shown only when part of the total is private: a public-only row's amount is
 // already its public balance, and a second line saying so is noise. Amounts use
-// the row's own column format; the caller escapes nothing, this does.
-const splitLine = (publicFormatted: string, breakdown: PrivateBreakdown): string => {
-  if (breakdown.kind !== "ready" || BigInt(breakdown.balance) === 0n) return "";
+// the row's own column format; the caller escapes nothing, this does. An
+// unknown public balance has no split to state, so no line (audit M5).
+const splitLine = (publicFormatted: string | null, breakdown: PrivateBreakdown): string => {
+  if (publicFormatted === null || breakdown.kind !== "ready" || BigInt(breakdown.balance) === 0n)
+    return "";
   const line = TOKEN_SPLIT_LINE(
     compactAmount(publicFormatted, PORTFOLIO_FRACTION_PLACES),
     compactAmount(breakdown.formatted, PORTFOLIO_FRACTION_PLACES),
@@ -186,7 +188,8 @@ export const unifiedBalanceRow = (
   currency: DisplayCurrency,
   breakdown: {
     readonly private: PrivateBreakdown;
-    readonly publicFormatted: string;
+    /** Null when the public balance is unknown: shown as "—", never as zero. */
+    readonly publicFormatted: string | null;
   },
 ): string => {
   const fiat = tokenFiatValue(token.formatted, price);
@@ -207,7 +210,7 @@ export const unifiedBalanceRow = (
       <div class="token-breakdown">
         <div class="token-breakdown-row">
           <span class="token-breakdown-label">Public balance</span>
-          <span class="token-breakdown-value">${escapeHtml(compactAmount(breakdown.publicFormatted, PORTFOLIO_FRACTION_PLACES))} ${escapeHtml(token.symbol)}</span>
+          <span class="token-breakdown-value">${breakdown.publicFormatted === null ? "—" : `${escapeHtml(compactAmount(breakdown.publicFormatted, PORTFOLIO_FRACTION_PLACES))} ${escapeHtml(token.symbol)}`}</span>
         </div>
         ${privateBreakdownLine(token, breakdown.private)}
         <button class="token-breakdown-more" data-token-detail="${escapeHtml(token.id)}" type="button">See more about ${escapeHtml(token.symbol)}${icon("chevronRight")}</button>

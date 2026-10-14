@@ -15,6 +15,7 @@ import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transf
 import { bindTransferExits } from "./transfer-exits-ui";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
+  acceptsTransferSubmit,
   friendlyReviewError,
   initialTransferState,
   isTransferInFlight,
@@ -97,6 +98,13 @@ export const markTransferLedgerAuthorized = (): void => {
   repaintActiveTransfer?.();
 };
 
+// Starts over, unless kept for a send in flight, which still goes out (Sherlock 164, M2).
+const resetTransfer = (keepInFlight = true): void => {
+  if (keepInFlight && isTransferInFlight(transferState.stage)) return;
+  transferEpoch += 1;
+  transferState = initialTransferState();
+};
+
 /**
  * Binds the recipient-first Send journey and observes the submitted hash until
  * Starknet reports a pre-confirmation, acceptance, rejection, reversion, or a
@@ -107,18 +115,15 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const { app, back, navigate, render, wallet } = deps;
   const form = app?.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
-    if (!isTransferInFlight(transferState.stage)) {
-      transferEpoch += 1;
-      transferState = initialTransferState();
-    }
+    resetTransfer();
     repaintActiveTransfer = null;
     returnActiveTransferToDetails = null;
     transferApp = app;
     return;
   }
+  // A new root is a new host with its own wallet: never carry a send into it.
   if (transferApp !== app) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
+    resetTransfer(false);
     transferApp = app;
   }
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
@@ -128,10 +133,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     if (completionTarget === "multisig-deploy" && back) back();
     else navigate?.(completionTarget);
   };
-  if (transferState.fields && transferState.fields.accountId !== accountId) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
-  }
+  if (transferState.fields && transferState.fields.accountId !== accountId) resetTransfer();
   // A shortcut arrives with the recipient, the asset, and both buckets already
   // in the form, so the recipient step has nothing left to ask: open on the
   // amount. Only on a fresh journey, or a repaint would drag the user back here
@@ -150,14 +152,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     repaint();
     composeFee.refresh();
   };
-  // Leaving the review discards it. `reviewedKey` is what the submit handler
-  // reads to tell "show me the review" from "I have read it, send it", so a
-  // return to the amount step that kept it made the next Review send button
-  // submit immediately. Every path out of review goes through here, including
-  // out of a review still being prepared: the epoch bump discards its result
-  // when it lands. That is safe because nothing is signed or sent before the
-  // confirm — the background finishes the proof it started, which cannot be
-  // interrupted, and simply never executes it.
+  // Leaving the review discards it: `reviewedKey` tells "show me the review"
+  // from "send it", so keeping it made the next Review press submit at once.
+  // Every path out of review comes here; the epoch bump discards a review still
+  // being prepared, which is safe because nothing is signed before the confirm.
   const editDetails = (): void => {
     transferEpoch += 1;
     transferState = {
@@ -171,15 +169,12 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     goTo("details");
     form.querySelector<HTMLInputElement>("#send-amount-input")?.focus();
   };
-  // Closing Send abandons what was composed. Without this, the module-level
-  // journey survived the close and the next visit resumed mid-flow — a cancelled
-  // shield reopened as a half-filled shield. A submitted transaction is kept, so
-  // its receipt or pending screen is still reachable on return.
+  // Closing Send abandons what was composed, so a cancelled shield does not
+  // reopen half-filled. A send past the confirm is kept, hash or not: the
+  // background still broadcasts it, so its outcome must show on return (audit
+  // M2; the rule `bindTransfer` applies to a takeover, Sherlock 164).
   const exit = (): void => {
-    if (transferState.transactionHash === null) {
-      transferEpoch += 1;
-      transferState = initialTransferState();
-    }
+    if (transferState.transactionHash === null) resetTransfer();
     if (transferState.transactionHash && completionTarget === "multisig-deploy") {
       complete();
       return;
@@ -314,12 +309,13 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     const rejection = submitRejection(transferState, error);
     transferState = rejection.state;
     repaintActiveTransfer?.();
-    if (rejection.toast) showToast(rejection.toast, "error", form);
+    if (rejection.toast) showToast(rejection.toast.message, "error", form, rejection.toast.details);
     if (rejection.follow) void confirmSubmitted(epoch);
   };
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (!acceptsTransferSubmit(transferState.stage)) return;
     const fields = transferFields(form);
     const recipientError = recipientFieldError(fields.recipient);
     const visibleAmount = form.querySelector<HTMLInputElement>("#send-amount-input");
@@ -346,10 +342,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     // review and the final confirm, because both arrive through this handler.
     const gate = route().blocked;
     if (gate) {
-      // A final confirm can reach this branch after the state behind the review
-      // changed (balance refresh, registration loss, relay removal). Invalidate
-      // every reviewed artifact and its async epoch before returning to edit;
-      // if the gate later clears, the next click must build a fresh review.
+      // A confirm can land here after the state behind the review changed:
+      // drop every reviewed artifact and its epoch, so a later click re-reviews.
       transferEpoch += 1;
       transferState = {
         ...initialTransferState<Review>(),
@@ -361,10 +355,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       return;
     }
     const key = transferKey(fields);
-    // A preparation already running for exactly these fields is not restarted.
-    // The button and the amount step are locked while it runs, so a second
-    // submit can only arrive programmatically — but a second proof for the
-    // same send would be a minute of wasted work and a discarded first result.
+    // A preparation already running for exactly these fields is not restarted:
+    // a second proof for the same send is a minute of wasted work.
     if (
       transferState.stage === "reviewing" &&
       transferState.fields !== null &&
@@ -421,7 +413,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = friendlyReviewError(error);
-            showToast(message, "error", form);
+            showToast(message, "error", form, errorDetails(error, "Transfer review failed"));
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             returnActiveTransferToDetails?.();
           },
@@ -481,7 +473,13 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       .then(
         (transactionHash) => {
           if (epoch !== transferEpoch) return;
-          transferState = { ...transferState, stage: "confirming", transactionHash };
+          // The review is spent: like the private route, drop its key (audit L5).
+          transferState = {
+            ...transferState,
+            reviewedKey: null,
+            stage: "confirming",
+            transactionHash,
+          };
           repaintActiveTransfer?.();
           if (requiresDeployment) {
             void watchDeployment(

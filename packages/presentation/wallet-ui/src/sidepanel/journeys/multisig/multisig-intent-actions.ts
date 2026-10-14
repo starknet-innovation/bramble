@@ -7,6 +7,16 @@ import { selectField, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";
 
+/**
+ * What a stale multisig card can truthfully say about whether it went out: the
+ * nonce it was signed for may have been used by a co-signer, for this version or
+ * their own fee-updated one, so "nothing was sent" is never claimed here.
+ */
+export const STALE_INTENT_MAY_HAVE_BEEN_SENT = "This may already have been sent by another signer.";
+
+/** Short label for a stale multisig version; it says nothing about whether it was sent. */
+export const STALE_INTENT_LABEL = "Out of date";
+
 type SignerOption = { readonly label: string; readonly value: string };
 type IntentAction = {
   readonly canSign: boolean;
@@ -49,11 +59,15 @@ const intentAction = (
     const freshApprovals = `${intent.configSnapshot.threshold} fresh approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
     return {
       canSign: false,
+      // A stale card cannot tell this wallet's own fee rejection (nonce
+      // unchanged) from a nonce a co-signer used, possibly for this very
+      // transaction or a fee-updated version of it (Sherlock 177), so it never
+      // says nothing was sent (audit M3).
       note: retryable
         ? hasReplacement
-          ? `Nothing was sent. Network fees rose above this signed transaction's limit. Continue the fee-updated transaction and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
-          : `Nothing was sent. Network fees rose above this signed transaction's limit. Update the network fee and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
-        : "Nothing was sent. This version is out of date — create a new transaction to continue.",
+          ? `${STALE_INTENT_MAY_HAVE_BEEN_SENT} Continue the fee-updated transaction and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
+          : `${STALE_INTENT_MAY_HAVE_BEEN_SENT} Update the network fee and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
+        : `${STALE_INTENT_MAY_HAVE_BEEN_SENT} This version is out of date — create a new transaction to continue.`,
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-ms-refresh-intent": intent.id },

@@ -40,6 +40,26 @@ export const SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE =
  */
 export const PRIVATE_REQUEST_FAILED_NOTICE = "Couldn't prepare this private request.";
 
+/**
+ * Refusal when the public balance a shield or registration spends could not be
+ * read. Raised only before anything is signed, so the panel lists it as known
+ * not sent (audit L2).
+ */
+export const PRIVACY_PUBLIC_BALANCE_UNCONFIRMED =
+  "Could not confirm the public balance required by this transaction";
+
+/**
+ * Refusal when the balance a private action spends, public or private, cannot
+ * cover it. Every caller raises it before anything is signed; build it only
+ * through this function so {@link isPrivacyShortfall} recognises exactly it.
+ */
+export const privacyShortfall = (symbol: string, bucket: "private" | "public"): string =>
+  bucket === "private" ? `Not enough private ${symbol}` : `Not enough ${symbol}`;
+
+/** Whether `message` is a {@link privacyShortfall} refusal, which sent nothing. */
+export const isPrivacyShortfall = (message: string): boolean =>
+  /^Not enough (?:private )?[^\s]+$/.test(message);
+
 /** Curated wallet refusal; carries its action independently of display wording. */
 export class PrivacyBlockerError extends WalletError {
   public constructor(

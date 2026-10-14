@@ -654,8 +654,8 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
   ),
   checkpoint(
     "intent-stale",
-    "Not submitted · retry or update",
-    "A fee-rejected attempt says nothing was sent, makes the existing fee update the recommended next step, and keeps the exact signed retry available as a fallback.",
+    "Out of date · retry or update",
+    "A stale attempt says a co-signer may already have sent it, makes the existing fee update the recommended next step, and keeps the exact signed retry available as a fallback.",
     {
       multisigIntents: [argentStaleIntent, argentReplacementIntent],
       selectedMultisigIntentId: argentStaleIntent.id,

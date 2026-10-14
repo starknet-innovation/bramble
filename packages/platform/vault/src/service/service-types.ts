@@ -342,7 +342,8 @@ export type WalletVaultService = {
   readonly recordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<void>;
   /**
    * Whether {@link recordShadowAccountScope} would accept `input` now: false
-   * when a scope or nonce bound would refuse it, without writing anything.
+   * when a scope, nonce or byte bound would refuse it, or the vault would no
+   * longer fit its capacity, without writing anything.
    * Lets a request be refused before the user is asked to approve it; the
    * record itself still re-checks and fails closed. Throws on a malformed
    * scope. Background-only.
