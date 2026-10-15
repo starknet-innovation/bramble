@@ -127,6 +127,7 @@ const SHARED_KEYS = [
   "content_scripts",
   "host_permissions",
   "optional_host_permissions",
+  "options_ui",
   "web_accessible_resources",
 ] as const;
 
