@@ -5,7 +5,9 @@ import {
   argentMultisigOperationId,
   memoryMultisigStore,
 } from "@bramble/multisig/repository";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { walletPaidRecipients } from "@bramble/transactions/paid-recipients";
+import { readSubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,
@@ -138,5 +140,28 @@ describe("Argent multisig submit recovery", () => {
     expect(harness.submitCount()).toBe(0);
     const [row] = await harness.activity.list();
     expect(row).toMatchObject({ counterparty: "0x1", origin: "wallet" });
+  });
+
+  // #681: a lost reply may have broadcast the signed package, so its exact
+  // hash is journaled as pending and the panel is told the outcome is unknown.
+  test("journals a lost-reply submit as pending under its signed hash", async () => {
+    const harness = await makeMultisigHarness({
+      async submitPrepared() {
+        throw new IndeterminateRpcWriteError("submission outcome unknown");
+      },
+    });
+    const intent = await readyIntent(harness);
+    const response = await harness.handler(
+      { intentId: intent.id, type: "wallet.submitArgentMultisigIntent" },
+      harnessExtensionSender,
+    );
+
+    expect(readSubmissionUnknownError(response)?.transactionHash).toBe(
+      intent.prepared.transactionHash,
+    );
+    const rows = await harness.activity.list();
+    expect(rows.map((row) => [row.hash, row.status, row.summary])).toEqual([
+      [intent.prepared.transactionHash, "pending", intent.summary],
+    ]);
   });
 });

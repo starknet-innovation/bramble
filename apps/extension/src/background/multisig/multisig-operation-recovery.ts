@@ -33,6 +33,34 @@ export const recordSubmittedIntentActivity = (
   });
 
 /**
+ * Files a broadcast, or possibly broadcast, intent under `transactionHash`: its
+ * grants first, then its activity line, as every submitting path does (see
+ * ../portfolio/allowance-recording). Best-effort: a failed read or write leaves
+ * a local row missing and never reaches the caller, whose reply carries the
+ * hash either way.
+ */
+export const recordBroadcastIntent = async (
+  deps: Pick<MultisigOpsDeps, "activity" | "allowanceStore" | "preferencesStore">,
+  intent: ArgentMultisigSigningIntent,
+  record: ArgentMultisigRecord,
+  transactionHash: string,
+): Promise<void> => {
+  await deps.preferencesStore
+    .read()
+    .then((preferences) =>
+      recordApproveAllowances({
+        assets: verificationContext(record, preferences),
+        calls: normalizedArgentMultisigCalls(intent.prepared.calls),
+        owner: allowanceOwner(record),
+        store: deps.allowanceStore,
+        transactionHash,
+      }),
+    )
+    .catch(() => {});
+  await recordSubmittedIntentActivity(deps, intent, record.networkId, transactionHash);
+};
+
+/**
  * Outcome of checking an exact deterministic submit hash.
  */
 export type ArgentSubmitResolution =
