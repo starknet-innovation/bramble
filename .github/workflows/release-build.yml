@@ -87,11 +87,12 @@ jobs:
       # Keep asserting the separate wallet-API/spec version axis too.
       - run: bun test tests/conformance/version-single-source.test.ts
       # Both browser targets come from this one tagged commit, so the zip sent to
-      # addons.mozilla.org is the release, not a rebuild of a PR head. The
-      # Chromium zip keeps its `bramble-<version>.zip` name; the Gecko sibling is
-      # `bramble-firefox-<version>.zip`, and the Chrome Web Store job selects by
-      # that prefix, so the Firefox package can never be what reaches CWS.
-      - run: bun run build:all
+      # addons.mozilla.org is the release, not a rebuild of a PR head. Each
+      # package step runs its own target's build, so no separate build step is
+      # needed. The Chromium zip keeps its `bramble-<version>.zip` name; the
+      # Gecko sibling is `bramble-firefox-<version>.zip`, and the Chrome Web
+      # Store job selects by that prefix, so the Firefox package can never be
+      # what reaches CWS.
       - run: bun run package:extension
       - run: bun run package:extension:firefox
       # Mozilla's own validator, the one AMO runs at submission. A release whose
