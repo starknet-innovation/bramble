@@ -15,6 +15,7 @@ import {
   executeResult,
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
+  RELAY_CALLDATA,
   sdkRuntime as runtime,
   STRK20_SDK_TOKEN as token,
 } from "../support/official-sdk";
@@ -61,7 +62,11 @@ describe("official STRK20 SDK adapter", () => {
         simulate: true,
       }),
     ).resolves.toEqual({
-      call: { calldata: ["0x1"], contract_address: poolAddress, entry_point: "apply_actions" },
+      call: {
+        calldata: [...RELAY_CALLDATA],
+        contract_address: poolAddress,
+        entry_point: "apply_actions",
+      },
       proof: { data: "", output: [], proof_facts: [] },
     });
   });
@@ -300,7 +305,11 @@ describe("official STRK20 SDK adapter", () => {
         simulate: false,
       }),
     ).resolves.toEqual({
-      call: { calldata: ["0x1"], contract_address: poolAddress, entry_point: "apply_actions" },
+      call: {
+        calldata: [...RELAY_CALLDATA],
+        contract_address: poolAddress,
+        entry_point: "apply_actions",
+      },
       proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
     });
     await expect(service.shadowAccountCommitment({ ...context, dappName: "vesu" })).resolves.toBe(

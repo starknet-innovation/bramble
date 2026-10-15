@@ -11,6 +11,14 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+### Fixed
+- A private transaction whose relay reply was lost no longer needs a browser
+  restart, which used to unlock the account without cancelling anything. The
+  pause now survives restarts and lifts once the chain shows the relayed
+  transaction can no longer apply. Settings → Unlock private transactions
+  lifts it on purpose, after stating that the earlier transaction could still
+  go through (#668).
+
 ## [0.10.6] - 2026-10-14
 
 Shadow accounts for STRK20 sites, a recovery screen for a wallet that cannot

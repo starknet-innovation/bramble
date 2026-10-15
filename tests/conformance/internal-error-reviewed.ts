@@ -119,6 +119,7 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "Private services aren't set up for this network.",
   ],
   ["private balances are already active", "Private balances are already active."],
+  ["private unlock failed", "Couldn't unlock private transactions. Try again."],
   [
     "private balances are not available for ledger accounts",
     "Private balances aren't available for Ledger accounts.",
@@ -286,8 +287,8 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
   ],
   [
-    "strk20 services unavailable: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover",
-    "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+    "strk20 services unavailable: an earlier private transaction from this account may still be in progress, and no check can confirm it",
+    "An earlier private transaction from this account may still be in progress, and no check can confirm it. To continue anyway, open Settings → Unlock private transactions.",
   ],
   [
     "invalid argent account class hash",

@@ -54,6 +54,7 @@ const poolNoticeAction = (ctx: {
 import type { SendIntent } from "../../journeys/send/send-model";
 import { sendFlow } from "../../journeys/send/send-views";
 import { advancedNetworkFlow, networkFlow } from "../../journeys/settings/network-views";
+import { privacyUnlockFlow } from "../../journeys/settings/privacy-unlock";
 import {
   appearanceFlow,
   backupExportFlow,
@@ -400,6 +401,8 @@ export const simpleFlowScreen = (
       return appearanceFlow(ctx.status, ctx.preferences);
     case "request-settings":
       return requestSettingsFlow(ctx.status, ctx.preferences);
+    case "privacy-unlock":
+      return privacyUnlockFlow(ctx.status);
     case "backup-export":
       return backupExportFlow(ctx.status);
     case "backup-restore":

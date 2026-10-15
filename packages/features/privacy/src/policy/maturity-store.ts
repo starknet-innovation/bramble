@@ -1,21 +1,27 @@
 /**
- * Trusted browser-session persistence for the latest STRK20 write per
- * account/network/pool. It contains only public transaction metadata and
- * survives MV3 service-worker restarts, but clears when the browser exits.
+ * Persistence for the latest STRK20 write per account/network/pool, in the
+ * extension's local storage, so a `submitting` marker survives service-worker
+ * restarts and browser restarts alike (mc-wallet #668). A browser restart used
+ * to clear it without cancelling anything, so a relayed proof could still land
+ * after the user retried. It holds public transaction metadata and, for a
+ * relay claim, the pool storage slots its call writes once; no key material.
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
+  isRelayClaimWithSlots,
   isUnsignedAccountClaim,
   maturityRecordNamesHash,
   type Strk20MaturityRecord,
   type Strk20MaturityScope,
   type Strk20MaturityStore,
 } from "@bramble/privacy/maturity";
+import { MAX_RELAY_CLAIM_SLOTS } from "@bramble/privacy/relay-claim-slots";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -33,19 +39,36 @@ type StoredMaturity = Strk20MaturityRecord & Strk20MaturityScope;
 // dropped like any other malformed entry.
 // An unsigned claim may name its route; a signed one is always the account's
 // and names none. An unknown route is malformed rather than read as either.
+// Only an unsigned `relay` claim may carry `WriteOnce` slots.
 const isSubmittingIdentity = (value: Record<string, unknown>): boolean =>
   value["acceptedBlock"] === undefined &&
   ((value["transactionHash"] === undefined &&
     value["senderAddress"] === undefined &&
     value["nonce"] === undefined &&
-    (value["route"] === undefined || value["route"] === "account" || value["route"] === "relay")) ||
+    (value["route"] === undefined || value["route"] === "account" || value["route"] === "relay") &&
+    (value["writeOnceSlots"] === undefined ||
+      (value["route"] === "relay" && isWriteOnceSlots(value["writeOnceSlots"])))) ||
     (value["route"] === undefined &&
+      value["writeOnceSlots"] === undefined &&
       typeof value["transactionHash"] === "string" &&
       isNonZeroStarkFieldElement(value["transactionHash"]) &&
       typeof value["senderAddress"] === "string" &&
       isNonZeroStarkFieldElement(value["senderAddress"]) &&
       typeof value["nonce"] === "string" &&
       isStarkFieldElement(value["nonce"])));
+
+// Sorted, distinct, canonical non-zero felts, as `relayClaimSlots` returns them.
+const isWriteOnceSlots = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.length <= MAX_RELAY_CLAIM_SLOTS &&
+  value.every(
+    (slot: unknown, index) =>
+      typeof slot === "string" &&
+      canonicalFelt(slot) === slot &&
+      isNonZeroStarkFieldElement(slot) &&
+      (index === 0 || (value[index - 1] as string) < slot),
+  );
 
 const isBlockNumberOrAbsent = (value: unknown): boolean =>
   value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
@@ -66,6 +89,7 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
     "senderAddress",
     "state",
     "transactionHash",
+    "writeOnceSlots",
   ]) &&
   typeof value["networkId"] === "string" &&
   isStarknetNetworkId(value["networkId"]) &&
@@ -75,6 +99,7 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
     (value["state"] === "submitted" &&
       value["route"] === undefined &&
+      value["writeOnceSlots"] === undefined &&
       value["senderAddress"] === undefined &&
       value["nonce"] === undefined &&
       typeof value["transactionHash"] === "string" &&
@@ -101,7 +126,13 @@ const readScope = async (
   }
   if (entry.state === "submitting") {
     return entry.transactionHash === undefined
-      ? { ...(entry.route === undefined ? {} : { route: entry.route }), state: "submitting" }
+      ? {
+          ...(entry.route === undefined ? {} : { route: entry.route }),
+          ...(entry.writeOnceSlots === undefined
+            ? {}
+            : { writeOnceSlots: [...entry.writeOnceSlots] }),
+          state: "submitting",
+        }
       : {
           nonce: entry.nonce,
           senderAddress: entry.senderAddress,
@@ -116,6 +147,16 @@ const readScope = async (
   };
 };
 
+// Evicts the oldest `submitted` records past MAX_RECORDS, never a
+// `submitting` marker: dropping one would read as a clean scope and reopen
+// proving while an earlier write may still land.
+const bounded = (entries: readonly StoredMaturity[]): readonly StoredMaturity[] => {
+  let excess = entries.length - MAX_RECORDS;
+  return excess <= 0
+    ? entries
+    : entries.filter((entry) => entry.state === "submitting" || excess-- <= 0);
+};
+
 const writeScope = async (
   store: KeyValueStore,
   scope: Strk20MaturityScope,
@@ -123,19 +164,58 @@ const writeScope = async (
 ): Promise<void> => {
   const retained = (await readAll(store)).filter((entry) => !sameScope(entry, scope));
   const next = record ? [...retained, { ...scope, ...record }] : retained;
-  await store.set(STORE_KEY, next.slice(-MAX_RECORDS));
+  await store.set(STORE_KEY, [...bounded(next)]);
+};
+
+const clearIf = async (
+  store: KeyValueStore,
+  scope: Strk20MaturityScope,
+  matches: (record: Strk20MaturityRecord | null) => boolean,
+): Promise<boolean> => {
+  if (!matches(await readScope(store, scope))) {
+    return false;
+  }
+  await writeScope(store, scope, null);
+  return true;
+};
+
+// Builds before v0.10.7 kept markers in session storage. Each one still held
+// there is carried over for a scope the durable store has no marker for, then
+// the session copy is removed, so the browser restart that used to clear it
+// can no longer drop a write that may still land.
+const carryLegacyMarkers = async (store: KeyValueStore, legacy: KeyValueStore): Promise<void> => {
+  const carried = await readAll(legacy);
+  if (carried.length > 0) {
+    const current = await readAll(store);
+    const missing = carried.filter((entry) => !current.some((kept) => sameScope(kept, entry)));
+    if (missing.length > 0) {
+      await store.set(STORE_KEY, [...bounded([...current, ...missing])]);
+    }
+  }
+  await legacy.remove(STORE_KEY);
 };
 
 /**
- * Creates the session-backed maturity store.
+ * Creates the durable maturity store over `store` (the extension's local
+ * storage in production). When `legacy` (the session storage earlier builds
+ * used) is given, its markers are carried over before any operation runs:
+ * every call, `read` included, waits for that, so no read can miss a marker
+ * still held in session storage. A failed carry rejects every call, so the
+ * privacy runtime fails closed rather than proving over an unread marker.
  *
- * `read` stays outside the mutation queue. `replaceIfCurrentHash` and
- * `releaseUnsigned` do not: the comparison and the write are one queued
- * mutation, so a resolution that observed an older marker cannot overwrite a
- * newer send that queued first.
+ * `read` stays outside the mutation queue. The conditional updates do not:
+ * each comparison and its write are one queued mutation, so a resolution that
+ * observed an older marker cannot overwrite a newer send that queued first.
  */
-export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityStore =>
-  serializeStoreMutations<Strk20MaturityStore>(
+export const createStrk20MaturityStore = (
+  store: KeyValueStore,
+  legacy?: KeyValueStore,
+): Strk20MaturityStore => {
+  const ready = legacy ? carryLegacyMarkers(store, legacy) : Promise.resolve();
+  // Kept handled so an early failure is not reported as unhandled; every
+  // operation below still awaits `ready` and rethrows it.
+  ready.catch(() => undefined);
+  const serialized = serializeStoreMutations<Strk20MaturityStore>(
     {
       read(scope) {
         return readScope(store, scope);
@@ -148,12 +228,14 @@ export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityS
         await writeScope(store, scope, record);
         return true;
       },
-      async releaseUnsigned(scope) {
-        if (!isUnsignedAccountClaim(await readScope(store, scope))) {
-          return false;
-        }
-        await writeScope(store, scope, null);
-        return true;
+      releaseUnsigned(scope) {
+        return clearIf(store, scope, isUnsignedAccountClaim);
+      },
+      releaseRelayClaim(scope, writeOnceSlots) {
+        return clearIf(store, scope, (record) => isRelayClaimWithSlots(record, writeOnceSlots));
+      },
+      releaseSubmitting(scope) {
+        return clearIf(store, scope, (record) => record?.state === "submitting");
       },
       write(scope, record) {
         return writeScope(store, scope, record);
@@ -161,3 +243,18 @@ export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityS
     },
     ["read"],
   );
+  const afterCarry =
+    <A extends readonly unknown[], R>(operation: (...args: A) => Promise<R>) =>
+    async (...args: A): Promise<R> => {
+      await ready;
+      return operation(...args);
+    };
+  return {
+    read: afterCarry(serialized.read),
+    releaseRelayClaim: afterCarry(serialized.releaseRelayClaim),
+    releaseSubmitting: afterCarry(serialized.releaseSubmitting),
+    releaseUnsigned: afterCarry(serialized.releaseUnsigned),
+    replaceIfCurrentHash: afterCarry(serialized.replaceIfCurrentHash),
+    write: afterCarry(serialized.write),
+  };
+};

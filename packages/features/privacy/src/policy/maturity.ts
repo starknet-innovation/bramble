@@ -18,12 +18,12 @@ export const STRK20_PRIOR_WRITE_UNRESOLVED = `${STRK20_SERVICE_UNAVAILABLE}: an 
 
 /**
  * The same refusal for an earlier write that no later check can resolve: its
- * marker is an unsigned relay claim (or one with no recorded route), so it
- * names nothing the chain can be asked about. Only ending the browser session
- * clears the session-held marker, so this sentence says so instead of
- * offering a check that cannot succeed.
+ * marker is a relay claim that recorded no `WriteOnce` slots (written before
+ * slots were recorded, or with no recorded route), so it names nothing the
+ * chain can be asked about. Settings → Privacy offers to unlock the scope
+ * anyway, stating that the earlier write could still land (mc-wallet #668).
  */
-export const STRK20_PRIOR_WRITE_STRANDED = `${STRK20_SERVICE_UNAVAILABLE}: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover`;
+export const STRK20_PRIOR_WRITE_STRANDED = `${STRK20_SERVICE_UNAVAILABLE}: an earlier private transaction from this account may still be in progress, and no check can confirm it`;
 
 /**
  * Account/network/pool scope whose latest privacy write must mature before a
@@ -62,26 +62,36 @@ export type Strk20SubmissionRoute = "account" | "relay";
  * broadcast boundary so an indeterminate post-broadcast failure cannot be
  * mistaken for a clean scope. It carries the signed identity once the write is
  * signed, which lets a later action resolve the outcome on-chain instead of
- * waiting for the browser session to end. Until then it carries the route the
- * write takes; a claim without a route (written before routes were recorded)
- * is treated like a `relay` claim and is never released as unsent.
+ * waiting on an answer that was lost. Until then it carries the route the
+ * write takes, and a `relay` claim also carries the `WriteOnce` slots its call
+ * writes; a claim without a route (written before routes were recorded) is
+ * treated like a `relay` claim and is never released as unsent.
  */
 export type Strk20MaturityRecord =
   | ({
       readonly state: "submitting";
     } & (
-      | (Strk20SignedSubmission & { readonly route?: never })
+      | (Strk20SignedSubmission & {
+          readonly route?: never;
+          readonly writeOnceSlots?: never;
+        })
       | {
           readonly nonce?: never;
           readonly route?: Strk20SubmissionRoute;
           readonly senderAddress?: never;
           readonly transactionHash?: never;
+          /**
+           * A `relay` claim's `WriteOnce` slots (see `relay-claim-slots.ts`).
+           * Once any reads non-zero, the relayed call can never apply.
+           */
+          readonly writeOnceSlots?: readonly string[];
         }
     ))
   | {
       readonly acceptedBlock?: number;
       readonly state: "submitted";
       readonly transactionHash: string;
+      readonly writeOnceSlots?: never;
     };
 
 /**
@@ -126,6 +136,21 @@ export type Strk20MaturityStore = {
    * so a marker a newer send journaled first is never cleared.
    */
   readonly releaseUnsigned: (scope: Strk20MaturityScope) => Promise<boolean>;
+  /**
+   * Clears the scope only while its marker is the `relay` claim that recorded
+   * exactly `writeOnceSlots`, and returns whether it did. Serialized like the
+   * other conditional updates, so a newer send's marker is never cleared.
+   */
+  readonly releaseRelayClaim: (
+    scope: Strk20MaturityScope,
+    writeOnceSlots: readonly string[],
+  ) => Promise<boolean>;
+  /**
+   * The user's "Unlock anyway": clears the scope while its marker is still
+   * `submitting`, whatever it names, and returns whether it did. The earlier
+   * write may still land; only an explicit, informed user action calls this.
+   */
+  readonly releaseSubmitting: (scope: Strk20MaturityScope) => Promise<boolean>;
   readonly write: (
     scope: Strk20MaturityScope,
     record: Strk20MaturityRecord | null,
@@ -144,6 +169,23 @@ export const isUnsignedAccountClaim = (record: Strk20MaturityRecord | null): boo
   record.transactionHash === undefined &&
   record.route === "account";
 
+/**
+ * True for a `submitting` relay claim that recorded exactly `writeOnceSlots`
+ * (both sorted, canonical). A claim with other slots, or none, does not match.
+ */
+export const isRelayClaimWithSlots = (
+  record: Strk20MaturityRecord | null,
+  writeOnceSlots: readonly string[],
+): boolean => {
+  if (record?.state !== "submitting" || record.route !== "relay") return false;
+  const recorded = record.writeOnceSlots;
+  return (
+    recorded !== undefined &&
+    recorded.length === writeOnceSlots.length &&
+    recorded.every((slot, index) => sameFelt(slot, writeOnceSlots[index] ?? ""))
+  );
+};
+
 const scopeKey = (scope: Strk20MaturityScope): string =>
   `${scope.accountId}|${scope.networkId}|${scope.poolAddress}`;
 
@@ -155,7 +197,12 @@ export const memoryStrk20MaturityStore = (): Strk20MaturityStore => {
   const put = (scope: Strk20MaturityScope, record: Strk20MaturityRecord | null): void => {
     const key = scopeKey(scope);
     if (record) {
-      records.set(key, { ...record });
+      records.set(
+        key,
+        record.writeOnceSlots
+          ? { ...record, writeOnceSlots: [...record.writeOnceSlots] }
+          : { ...record },
+      );
     } else {
       records.delete(key);
     }
@@ -173,6 +220,20 @@ export const memoryStrk20MaturityStore = (): Strk20MaturityStore => {
     },
     async releaseUnsigned(scope) {
       if (!isUnsignedAccountClaim(records.get(scopeKey(scope)) ?? null)) {
+        return false;
+      }
+      put(scope, null);
+      return true;
+    },
+    async releaseRelayClaim(scope, writeOnceSlots) {
+      if (!isRelayClaimWithSlots(records.get(scopeKey(scope)) ?? null, writeOnceSlots)) {
+        return false;
+      }
+      put(scope, null);
+      return true;
+    },
+    async releaseSubmitting(scope) {
+      if (records.get(scopeKey(scope))?.state !== "submitting") {
         return false;
       }
       put(scope, null);

@@ -111,9 +111,9 @@ describe("STRK20 (review F1, F2)", () => {
 
   test("an earlier write no check can resolve names the browser restart", () => {
     const raw =
-      "strk20 services unavailable: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover";
+      "strk20 services unavailable: an earlier private transaction from this account may still be in progress, and no check can confirm it";
     expect(friendlyError(raw).message).toBe(
-      "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+      "An earlier private transaction from this account may still be in progress, and no check can confirm it. To continue anyway, open Settings → Unlock private transactions.",
     );
   });
 

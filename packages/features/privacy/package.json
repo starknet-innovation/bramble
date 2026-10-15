@@ -24,6 +24,7 @@
     "./paymaster": "./src/paymaster/paymaster.ts",
     "./paymaster-typed-data": "./src/paymaster/paymaster-typed-data.ts",
     "./phases": "./src/policy/phases.ts",
+    "./relay-claim-slots": "./src/policy/relay-claim-slots.ts",
     "./service": "./src/service.ts",
     "./shadow-account-copy": "./src/policy/shadow-account-copy.ts",
     "./shadow-account-refusals": "./src/policy/shadow-account-refusals.ts"

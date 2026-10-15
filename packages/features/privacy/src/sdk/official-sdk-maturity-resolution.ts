@@ -20,9 +20,20 @@
  * pre-confirmed write, a hash the node does not know while its nonce is
  * unspent (a signed V3 invoke has no expiry of its own, and the pool's proof
  * window is governance-set, so neither bounds when it can land), a write
- * whose receipt wait failed, and any failed or malformed read. A relay claim
- * (or a claim with no recorded route) that names no hash has nothing the
- * chain can be asked about; it refuses with STRK20_PRIOR_WRITE_STRANDED.
+ * whose receipt wait failed, and any failed or malformed read.
+ *
+ * A `relay` claim names no hash, because the relay builds the transaction. It
+ * records instead the pool storage slots its `apply_actions` call writes once
+ * (`relay-claim-slots.ts`). The pool reverts the whole call when any of those
+ * slots is already non-zero, so once one reads non-zero in a block
+ * PROVING_BLOCK_DEPTH deep the call can never apply, whoever holds it: the
+ * claim is released, and the next proof targets a block past that one. While
+ * every slot still reads zero it stays closed with
+ * STRK20_PRIOR_WRITE_UNRESOLVED. A relay claim with no slots (written by an
+ * earlier build), or a claim with no recorded route, has nothing the chain can
+ * be asked about; it refuses with STRK20_PRIOR_WRITE_STRANDED. Either refusal
+ * can be ended only by a new check or by the user's informed "Unlock anyway"
+ * (mc-wallet #668).
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -122,6 +133,42 @@ const resolveSigned = async (
 
 type SubmittingRecord = Extract<Strk20MaturityRecord, { readonly state: "submitting" }>;
 
+/**
+ * A relay claim released because one of its `WriteOnce` slots was already
+ * set at `acceptedBlock`: the next proof must target a later block, so state
+ * the relayed call may have written is included.
+ */
+export type ReleasedRelayFloor = {
+  readonly acceptedBlock: number;
+  readonly state: "released";
+};
+
+// The block PROVING_BLOCK_DEPTH below the tip if any of `slots` is non-zero in
+// it at the pool, else null. Storage values are untrusted RPC answers: only a
+// canonical field element counts, and any failed or malformed read throws, so
+// the caller keeps the claim closed.
+const spentSlotBlock = async (
+  provider: RpcProvider,
+  poolAddress: string,
+  slots: readonly string[],
+): Promise<number | null> => {
+  const settled = (await provider.getBlockNumber()) - PROVING_BLOCK_DEPTH;
+  if (!Number.isSafeInteger(settled) || settled < 0) {
+    throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+  }
+  for (const slot of slots) {
+    const raw: unknown = await provider.getStorageAt(poolAddress, slot, settled);
+    const value = typeof raw === "string" ? canonicalFelt(raw) : null;
+    if (value === null || !isStarkFieldElement(value)) {
+      throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+    }
+    if (BigInt(value) !== 0n) {
+      return settled;
+    }
+  }
+  return null;
+};
+
 /** A prior write being followed to its receipt. */
 export type SubmittedRecord = Extract<Strk20MaturityRecord, { readonly state: "submitted" }>;
 
@@ -198,19 +245,36 @@ const settledRecord = (
 // An unsigned marker. An `account` claim that no running send owns proves
 // nothing left the wallet and is cleared through the store's conditional
 // release, which leaves a marker a send journaled meanwhile in place. A claim
-// a live send may still sign stays closed. Any other unsigned claim (a relay
-// claim, or one with no recorded route) has nothing the chain can be asked
-// about: the relay may hold or have sent its proof, and the pool's proof
-// window cannot bound it, because the governor can change that window after
-// the write applied (review round 2). It is stranded.
+// a live send may still sign or relay stays closed. A `relay` claim with
+// recorded slots is released only once the chain shows one of them set (see
+// the module header). Any other unsigned claim (a relay claim with no slots,
+// or one with no recorded route) has nothing the chain can be asked about:
+// the relay may hold or have sent its proof, and the pool's proof window
+// cannot bound it, because the governor can change that window after the
+// write applied (review round 2). It is stranded.
 const releaseUnsigned = async (
   store: Strk20MaturityStore,
+  provider: RpcProvider,
   scope: Strk20MaturityScope,
   marker: SubmittingRecord,
   ownedByLiveSend: boolean,
-): Promise<null> => {
+): Promise<ReleasedRelayFloor | null> => {
   if (ownedByLiveSend) {
     throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+  }
+  if (marker.route === "relay" && marker.writeOnceSlots !== undefined) {
+    let block: number | null;
+    try {
+      block = await spentSlotBlock(provider, scope.poolAddress, marker.writeOnceSlots);
+    } catch {
+      throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+    }
+    if (block === null) {
+      throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+    }
+    return (await store.releaseRelayClaim(scope, marker.writeOnceSlots))
+      ? { acceptedBlock: block, state: "released" }
+      : clearedMeanwhile(store, scope);
   }
   if (marker.route !== "account") {
     throw new WalletError(STRK20_PRIOR_WRITE_STRANDED);
@@ -220,7 +284,8 @@ const releaseUnsigned = async (
 
 /**
  * Settles a `submitting` marker: the submitted write to follow, null once the
- * write provably cannot land, or a refusal while it stays closed
+ * write provably cannot land, a {@link ReleasedRelayFloor} once a relay claim's
+ * call provably cannot apply, or a refusal while it stays closed
  * (STRK20_PRIOR_WRITE_UNRESOLVED, or STRK20_PRIOR_WRITE_STRANDED when no later
  * check can resolve it). The full release rule is in this module's header.
  *
@@ -239,9 +304,9 @@ export const settleSubmitting = async (
   scope: Strk20MaturityScope,
   marker: SubmittingRecord,
   ownedByLiveSend: boolean,
-): Promise<SubmittedRecord | null> => {
+): Promise<SubmittedRecord | ReleasedRelayFloor | null> => {
   if (marker.transactionHash === undefined) {
-    return releaseUnsigned(store, scope, marker, ownedByLiveSend);
+    return releaseUnsigned(store, provider, scope, marker, ownedByLiveSend);
   }
   const outcome = await resolveSigned(provider, marker);
   // Unknown stays checkable: the write may still settle, or another

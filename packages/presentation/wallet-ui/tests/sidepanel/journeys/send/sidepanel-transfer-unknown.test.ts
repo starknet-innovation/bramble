@@ -230,7 +230,7 @@ describe("a refusal over an earlier private write that may still land (#661)", (
 
     expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction not sent");
     expect(app.querySelector("#send-failure-copy")?.textContent).toBe(
-      "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+      "An earlier private transaction from this account may still be in progress, and no check can confirm it. To continue anyway, open Settings → Unlock private transactions.",
     );
     expect(visible(app, "#send-retry")).toBe(false);
     expect(visible(app, "#send-failure-activity")).toBe(true);
