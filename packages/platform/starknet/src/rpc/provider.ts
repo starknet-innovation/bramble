@@ -12,6 +12,7 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { RpcProvider, type RpcProviderOptions } from "starknet";
+import { preserveRpcRefusals } from "./rpc-refusal-boundary";
 import {
   BROADCAST_RPC_METHODS,
   RpcRefusedError,
@@ -159,19 +160,24 @@ export const matchingAcceptedRpcWriteHash = (value: unknown, signedHash: unknown
  *
  * Every provider also gets {@link timedRpcFetch} by default, so no wallet RPC
  * call can park behind starknet.js's unbounded transport. A caller that needs a
- * tighter deadline passes its own `baseFetch` and overrides it.
+ * tighter deadline passes its own `baseFetch` and overrides it. Its channel
+ * keeps the transport's typed {@link RpcRefusedError} through starknet.js's
+ * error rewrap ({@link preserveRpcRefusals}), so a refused broadcast stays a
+ * refusal and a refused read keeps its `Retry-After`.
  */
 export const createRpcProvider = (
   nodeUrl: string,
   options: Omit<RpcProviderOptions, "nodeUrl" | "specVersion"> = {},
   makeProvider: RpcProviderFactory = createStarknetProvider,
 ): RpcProvider =>
-  makeProvider({
-    baseFetch: timedRpcFetch(),
-    ...options,
-    nodeUrl,
-    specVersion: STARKNET_RPC_SPEC_VERSION,
-  });
+  preserveRpcRefusals(
+    makeProvider({
+      baseFetch: timedRpcFetch(),
+      ...options,
+      nodeUrl,
+      specVersion: STARKNET_RPC_SPEC_VERSION,
+    }),
+  );
 
 /**
  * Checks whether an RPC failure is transport-level (node unreachable or
