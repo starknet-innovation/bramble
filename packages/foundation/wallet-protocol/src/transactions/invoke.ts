@@ -17,7 +17,7 @@ export type ProviderInvokeCall = {
 };
 
 /**
- * Parsed invoke request, including optional STRK20 proof material.
+ * Parsed invoke request, including an optional SNIP-36 proof (the Wallet API types it STRK20_PROOF).
  */
 export type ProviderInvokeRequest = {
   readonly calls: readonly ProviderInvokeCall[];
