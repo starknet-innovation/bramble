@@ -232,7 +232,8 @@ export const readOriginRequestInput = (
 export { readRequestAccountsInput } from "../accounts/request-accounts-input";
 
 /**
- * Parses dapp invoke transaction requests from content-script traffic.
+ * Parses dapp invoke transaction requests from content-script traffic. A proof
+ * must be submittable: a simulate-mode (all-empty) proof is refused here.
  */
 export const readAddInvokeTransactionInput = (
   message: unknown,
@@ -257,7 +258,7 @@ export const readAddInvokeTransactionInput = (
   const proof = message["proof"];
   return origin &&
     calls.every((call): call is Call => call !== null) &&
-    (proof === undefined || isStrk20Proof(proof))
+    (proof === undefined || (isStrk20Proof(proof) && proof.data.length > 0))
     ? { calls, origin, ...(proof === undefined ? {} : { proof }) }
     : null;
 };
