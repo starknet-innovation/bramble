@@ -103,8 +103,10 @@ version **must be strictly greater** than the currently published one.
 ```sh
 bun install --frozen-lockfile
 bun run vendor:argent      # verifies the pinned official Argent release
-bun run build              # writes dist/
-bun run package:extension  # writes artifacts/bramble-<version>.zip (+ .sha256)
+bun run build:all                   # writes dist/ and dist-firefox/
+bun run package:extension           # writes artifacts/bramble-<version>.zip (+ .sha256)
+bun run package:extension:firefox   # writes artifacts/bramble-firefox-<version>.zip (+ .sha256)
+bun run check:firefox               # AMO's validator over dist-firefox/
 ```
 
 `scripts/package-extension.ts` produces a **reproducible** zip (normalized
@@ -146,11 +148,13 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
    idempotent, so a re-run never double-cuts);
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
-   as CI does, runs `vendor:argent`/`build`/`package:extension`, re-asserts the
-   tag ↔ version gate, verifies the `.zip` matches its `.sha256`, and uploads the
-   `bramble-release` artifact. A separate hosted job that never checks out
-   wallet source creates the **GitHub Release** with the zip + `.sha256`
-   attached.
+   as CI does, runs `vendor:argent`/`build:all`, packages both browser targets,
+   runs AMO's validator (`check:firefox`) over the Gecko build, re-asserts the
+   tag ↔ version gate, verifies each `.zip` matches its `.sha256`, and uploads
+   the `bramble-release` artifact. A separate hosted job that never checks out
+   wallet source creates the **GitHub Release** with both zips and their
+   `.sha256` files attached: `bramble-<version>.zip` for Chromium and
+   `bramble-firefox-<version>.zip` for addons.mozilla.org.
 
 Release notes come from the matching `CHANGELOG.md` section (issue #60) — kept
 current on the release branch via `bun run changelog` — falling back to a
@@ -171,7 +175,8 @@ A tag that does not match `v*` triggers nothing.
 ### Cutting a release (manual fallback)
 
 Run steps 1-2 locally, then create the Release by hand (Releases → Draft a new
-release), attaching `artifacts/bramble-<version>.zip` and its `.sha256`.
+release), attaching `artifacts/bramble-<version>.zip`,
+`artifacts/bramble-firefox-<version>.zip`, and their `.sha256` files.
 
 Creating the release via the GitHub UI is also supported: the release step is
 create-or-upload, so it attaches the built assets to an existing (UI-created)
