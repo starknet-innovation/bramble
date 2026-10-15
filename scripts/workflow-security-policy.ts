@@ -200,6 +200,16 @@ const releaseBuildFailures = (source: string): string[] => {
     "byte-identical",
     "release builds must not claim a byte-identical artifact they never compare against",
   );
+  // v0.10.6 shipped with only the Chromium zip (#684): AMO needs the Gecko
+  // package built from the tagged commit, and validated before it is published.
+  for (const step of ["bun run package:extension:firefox", "bun run check:firefox"]) {
+    requireText(
+      failures,
+      build,
+      `- run: ${step}`,
+      "release builds must package and validate the Firefox target",
+    );
+  }
   requireText(
     failures,
     publish,
