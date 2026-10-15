@@ -5,6 +5,7 @@ import { sameAddress } from "../support/networks";
 import type { Strk20Action } from "../support/strk20-schemas";
 
 import { checkPrivateSwapCalldata } from "./private-swap-intent";
+import { boundedFetch } from "../support/bounded-network";
 
 const FELT = /^0x[0-9a-fA-F]{1,64}$/;
 const STARK_FIELD_PRIME = 0x800000000000011000000000000000000000000000000000000000000000001n;
@@ -43,14 +44,18 @@ const isNonZeroFelt = (value: unknown): value is string =>
   BigInt(value) > 0n &&
   BigInt(value) < STARK_FIELD_PRIME;
 
+/** Private-swap proving and submission can legitimately take minutes. */
+const PRIVATE_SWAP_DEADLINE_MS = 120_000;
+
 const post = async (action: "fee" | "plan" | "submit", body: unknown): Promise<unknown> => {
-  const response = await fetch(`/api/private-swap/${action}`, {
+  const response = await boundedFetch(`/api/private-swap/${action}`, {
     body: JSON.stringify(body),
+    deadlineMs: PRIVATE_SWAP_DEADLINE_MS,
     headers: { "content-type": "application/json" },
     method: "POST",
-    signal: AbortSignal.timeout(120_000),
   });
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new Error("Private swap service is unavailable.");
   }
   return response.json();
@@ -90,6 +95,15 @@ const actionsMatchPlan = (
   );
 };
 
+// Private swaps stay off until a reviewed executor is pinned in
+// `PRIVATE_SWAP_EXECUTOR` (#269); every client entry refuses before any request.
+const reviewedExecutor = (): string => {
+  if (PRIVATE_SWAP_EXECUTOR === null) {
+    throw new Error("Private swaps are unavailable while executor verification is pending.");
+  }
+  return PRIVATE_SWAP_EXECUTOR;
+};
+
 /**
  * Builds an AVNU private route on the server, where the pinned SDK and
  * paymaster credential stay out of the browser bundle. Every returned action is
@@ -101,9 +115,7 @@ export const fetchPrivateSwapPlan = async (input: {
   readonly sellToken: string;
   readonly takerAddress: string;
 }): Promise<PrivateSwapPlan> => {
-  if (PRIVATE_SWAP_EXECUTOR === null) {
-    throw new Error("Private swaps are unavailable while executor verification is pending.");
-  }
+  const executor = reviewedExecutor();
   const value = await post("plan", {
     ...input,
     feeMode: { poolFeeToken: PRIVATE_SWAP_FEE_TOKEN, tip: "normal" },
@@ -114,7 +126,7 @@ export const fetchPrivateSwapPlan = async (input: {
     !Array.isArray(value["actions"]) ||
     !isNonZeroFelt(value["buyAmount"]) ||
     !isNonZeroFelt(value["executor"]) ||
-    !sameAddress(value["executor"], PRIVATE_SWAP_EXECUTOR) ||
+    !sameAddress(value["executor"], executor) ||
     !isRecord(value["fee"]) ||
     !hasOnlyKeys(value["fee"], ["amount", "recipient", "token"]) ||
     !isNonZeroFelt(value["fee"]["amount"]) ||
@@ -165,6 +177,7 @@ export const submitPrivateSwapProof = async (
   callAndProof: PrivateCallAndProof,
   feeMode: PrivateFeeMode,
 ): Promise<string> => {
+  reviewedExecutor();
   const value = await post("submit", {
     callAndProof: {
       call: {

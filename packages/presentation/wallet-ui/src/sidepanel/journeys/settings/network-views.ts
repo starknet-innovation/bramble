@@ -173,7 +173,7 @@ export const advancedNetworkFlow = (
       ${contextHelp(
         "advanced-endpoint-privacy",
         "What an endpoint can learn",
-        "An RPC, indexer, prover, or relay can observe the requests sent to it, including account or transaction context needed for that service. Configure only infrastructure you trust; clearing a field restores the wallet default or disables the optional integration.",
+        "Each service sees the requests sent to it. Use only ones you trust. Clear a field to restore the default.",
       )}
       <div class="disclosure-stack">
         ${endpointDisclosure(
@@ -258,7 +258,7 @@ export const advancedNetworkFlow = (
             name: "reliabilityDiagnostics",
             text: "Keep anonymous RPC and explorer reliability counters on this device",
           })}
-          <p class="hint">No addresses, sites, transaction data, endpoint URLs, or raw errors are collected. Nothing is uploaded; you choose whether to export it.</p>
+          <p class="hint">Stays on this device until you export it.</p>
           ${button({ attributes: { id: "diagnostics-export" }, icon: "receive", label: "Download diagnostics" })}`,
         )}
       </div>

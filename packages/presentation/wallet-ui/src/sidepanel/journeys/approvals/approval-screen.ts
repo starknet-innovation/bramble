@@ -15,6 +15,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -42,6 +43,7 @@ export const approvalTakeover = (
   actionable: readonly PendingApproval[],
   status: WalletStatus,
   pausedView: WalletView,
+  preferences: WalletPreferences | null = null,
 ): string => {
   const first = actionable[0];
   if (!first) {
@@ -60,12 +62,12 @@ export const approvalTakeover = (
     </div>
     <span class="takeover-network"><span class="dot"></span>${escapeHtml(status.network)}</span>
   </header>
-  <main class="screen flow approval-takeover" id="wallet-screen-approval-takeover" aria-labelledby="approval-title" tabindex="-1">
+  <section class="screen flow approval-takeover" id="wallet-screen-approval-takeover" aria-labelledby="approval-title" tabindex="-1">
     <section class="takeover-continuity" role="note" aria-label="Paused wallet task">
       <span class="takeover-continuity-mark">${icon("shield")}</span>
       <span><strong>${escapeHtml(pausedTask)} paused</strong></span>
     </section>
-    <ul class="request-list">${approvalCard(first, status)}</ul>
+    <ul class="request-list">${approvalCard(first, status, preferences)}</ul>
     <section class="approval-live" id="approval-live" role="status" aria-live="polite" hidden>
       <span class="approval-live-mark">${liquidDots("approval", true)}${liquidDotsFilter("approval")}</span>
       <div>
@@ -83,5 +85,5 @@ export const approvalTakeover = (
       })}
     </div>
     <p id="approval-result" role="status"></p>
-  </main>`;
+  </section>`;
 };

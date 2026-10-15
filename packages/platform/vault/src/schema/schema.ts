@@ -10,7 +10,6 @@ import {
   canonicalLegacyAccountRef,
   isAccountId,
   isAccountRef,
-  isImportedSeedId,
   isLegacyAccountRef,
   isLegacyV6AccountRef,
   isLegacyV8AccountRef,
@@ -21,8 +20,15 @@ import {
 } from "@bramble/wallet-model/accounts";
 import { canonicalFelt, isStarkPrivateKey } from "@bramble/wallet-model/networks";
 import { isMnemonicText } from "@bramble/wallet-model/passphrase";
+import {
+  hasValidShadowAccountScopes,
+  type ShadowAccountScopeRef,
+} from "../accounts/shadow-account-scopes";
+import { hasValidSeedBindings, type ImportedSeedRef } from "./schema-seeds";
 import type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
 
+/** Re-exports the imported-seed record type from its size-budget split. */
+export type { ImportedSeedRef } from "./schema-seeds";
 /** Re-exports the legacy type surface from its size-budget split. */
 export type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
 
@@ -35,7 +41,9 @@ import {
 /**
  * Current vault schema version accepted by validators and writers.
  *
- * Version 10 admits Braavos accounts, and Argent accounts at any release they
+ * Version 12 keeps an encrypted record of the shadow-account scopes each account
+ * used (#443), so stuck shadow-account funds stay recoverable. Version 11 admits
+ * accounts derived with Ready's ETH-seeded scheme. Version 10 admits Braavos accounts, and Argent accounts at any release they
  * could have been deployed with rather than only the one this wallet creates;
  * every earlier version stays pinned to that release and holds no Braavos.
  * Version 9 admits Ready's `argentx` Ledger path scheme beside Bramble's
@@ -46,7 +54,7 @@ import {
  * identities. Version 4 introduced optional account secrets separated from
  * public {@link AccountRef} metadata.
  */
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 /**
  * Current encrypted vault schema. Optional account secrets are deliberately
@@ -90,15 +98,6 @@ export type VaultV7 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
 };
 
 /**
- * One imported recovery phrase retained beside the founding phrase, inside the
- * encrypted vault only; `id` is the handle HD derivations reference.
- */
-export type ImportedSeedRef = {
-  readonly id: string;
-  readonly mnemonic: string;
-};
-
-/**
  * Legacy encrypted vault schema. Version 8 retains imported seeds so accounts
  * recovered from another wallet's phrase stay re-derivable and revealable; its
  * Ledger derivations may only follow Bramble's `LedgerW` scheme.
@@ -123,16 +122,27 @@ export type VaultV9 = Omit<VaultV8, "schemaVersion"> & { readonly schemaVersion:
 export type VaultV10 = Omit<VaultV9, "schemaVersion"> & { readonly schemaVersion: 10 };
 
 /**
- * Current encrypted vault schema. Version 11 admits accounts derived with
- * Ready's ETH-seeded scheme (`argentx-bip44`, issue 505); the record shape is
- * unchanged, only the derivation kinds a record may hold have widened.
+ * Schema-v11 vault, accepted only by the adjacent v12 migration. Version 11
+ * admits accounts derived with Ready's ETH-seeded scheme (`argentx-bip44`,
+ * issue 505); the record shape is unchanged from v10.
  */
 export type VaultV11 = Omit<VaultV10, "schemaVersion"> & { readonly schemaVersion: 11 };
 
 /**
+ * Current encrypted vault schema. Version 12 adds the shadow-account scope
+ * records (#443): which sites, labels, and exact nonces each account drove a
+ * shadow account through, so the wallet can find and sweep funds a site left.
+ * They reveal which sites someone used privately and so live only here.
+ */
+export type VaultV12 = Omit<VaultV11, "schemaVersion"> & {
+  readonly schemaVersion: 12;
+  readonly shadowAccountScopes: readonly ShadowAccountScopeRef[];
+};
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV11;
+export type Vault = VaultV12;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -161,7 +171,7 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV11 => ({
+export const emptyVault = (): VaultV12 => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
@@ -169,6 +179,7 @@ export const emptyVault = (): VaultV11 => ({
   mnemonic: null,
   originGrants: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
+  shadowAccountScopes: [],
   signingKeys: [],
 });
 
@@ -389,38 +400,6 @@ export const isVaultV7 = (value: unknown): value is VaultV7 =>
 
 const V8_KEYS = [...V4_KEYS, "importedSeeds"] as const;
 
-const isImportedSeedRef = (value: unknown): value is ImportedSeedRef =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["id", "mnemonic"]) &&
-  isImportedSeedId(value["id"]) &&
-  isMnemonicText(value["mnemonic"]);
-
-// Every HD account naming a seedId must reference a retained imported seed, so
-// a reveal or re-derivation can never dangle (founding-phrase accounts carry
-// none — see the VaultV3 mutation-boundary phrase rules).
-const hasValidSeedBindings = (value: Record<string, unknown>): boolean => {
-  const seeds = value["importedSeeds"];
-  if (!Array.isArray(seeds) || !seeds.every(isImportedSeedRef)) {
-    return false;
-  }
-  if (!hasUniqueStrings(seeds.map((seed) => seed.id))) {
-    return false;
-  }
-  const accounts = value["accounts"];
-  return (
-    Array.isArray(accounts) &&
-    accounts.every((account) => {
-      const seedId =
-        isAccountRef(account) &&
-        (account.derivation.kind === "starknet-bip44" ||
-          account.derivation.kind === "argentx-bip44")
-          ? account.derivation.seedId
-          : undefined;
-      return seedId === undefined || seeds.some((seed) => seed.id === seedId);
-    })
-  );
-};
-
 /**
  * Validates legacy schema-v8 vaults for the adjacent v9 migration. Ledger
  * derivations are pinned to Bramble's `LedgerW` scheme; a v8 record naming
@@ -467,15 +446,38 @@ export const isVaultV10 = (value: unknown): value is VaultV10 =>
   hasValidSeedBindings(value);
 
 /**
- * Validates the current schema-v11 vault and all internal references, admitting
- * accounts derived with Ready's ETH-seeded scheme alongside everything v10 held.
+ * Validates schema-v11 vaults and all internal references, admitting accounts
+ * derived with Ready's ETH-seeded scheme alongside everything v10 held. Also
+ * the body of the v12 validator, which adds only the scope records.
  */
 export const isVaultV11 = (value: unknown): value is VaultV11 =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, V8_KEYS) &&
-  value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
+  value["schemaVersion"] === 11 &&
   isRetainedMnemonic(value["mnemonic"]) &&
   hasValidVaultReferences(value, { accounts: "current", canonical: true, ledgerAllowed: true }) &&
   hasValidCurrentVaultReferences(value, { accounts: "current", canonical: true }) &&
   hasValidSeedBindings(value);
+
+const V12_KEYS = [...V8_KEYS, "shadowAccountScopes"] as const;
+
+/**
+ * Validates the current schema-v12 vault: everything v11 holds, plus
+ * shadow-account scope records that are well formed, canonical, distinct, and
+ * bound to a retained account on its own chain.
+ */
+export const isVaultV12 = (value: unknown): value is VaultV12 => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, V12_KEYS) ||
+    value["schemaVersion"] !== CURRENT_SCHEMA_VERSION
+  ) {
+    return false;
+  }
+  const { shadowAccountScopes, ...rest } = value;
+  return (
+    isVaultV11({ ...rest, schemaVersion: 11 }) &&
+    hasValidShadowAccountScopes(rest["accounts"] as VaultV11["accounts"], shadowAccountScopes)
+  );
+};

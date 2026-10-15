@@ -5,7 +5,8 @@
  * extension-page messages.
  */
 
-import { isTokenName, isTokenSymbol } from "@bramble/core/json";
+import { isTokenName, isTokenSymbol, normalizeTokenSymbol } from "@bramble/core/json";
+import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import type { PriceService } from "@bramble/portfolio/prices";
 import { isLikelySpam, knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import type { TokenConfig, WalletPreferencesStore } from "@bramble/settings/preferences";
@@ -58,9 +59,7 @@ const fetchTokenMetadata = async (
     return await runtimeRpc.getTokenMetadata({ address, rpcUrls });
   } catch (error) {
     return {
-      error: isTransportRpcError(error)
-        ? "Couldn't reach the network, try again"
-        : "could not read token metadata",
+      error: isTransportRpcError(error) ? NETWORK_RETRY_MESSAGE : "could not read token metadata",
     };
   }
 };
@@ -68,14 +67,15 @@ const fetchTokenMetadata = async (
 /**
  * Parses ERC20 metadata into a storable token record, or null when the symbol
  * is unsupported. Parse-don't-validate: a caller with a record has a token
- * whose symbol already passed the on-chain symbol grammar.
+ * whose symbol already passed the on-chain symbol grammar. Shared by the manual
+ * Add and the curated held-token scan, so both apply one grammar.
  */
-const buildTokenRecord = (
+export const buildTokenRecord = (
   address: string,
   networkId: StarknetNetworkId,
   metadata: TokenMetadata,
 ): TokenRecord | null => {
-  const symbol = metadata.symbol.trim().toUpperCase();
+  const symbol = normalizeTokenSymbol(metadata.symbol);
   if (!isTokenSymbol(symbol)) {
     return null;
   }
@@ -173,9 +173,7 @@ const handleDetectTokens: TokenHandler = async (deps, message) => {
     return { ok: true, suggestions: balances.filter((balance) => balance.balance !== "0") };
   } catch (error) {
     return {
-      error: isTransportRpcError(error)
-        ? "Couldn't reach the network, try again"
-        : "Token scan failed, try again",
+      error: isTransportRpcError(error) ? NETWORK_RETRY_MESSAGE : "Token scan failed, try again",
     };
   }
 };

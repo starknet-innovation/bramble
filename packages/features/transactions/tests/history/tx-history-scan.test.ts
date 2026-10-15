@@ -160,13 +160,16 @@ describe("collectTransactionHistory", () => {
       }),
       scanArgs,
     );
-    // Two filters per token: outgoing constrains from (key 1) to the account,
-    // incoming leaves from open and constrains to (key 2). The account is
-    // canonicalized so the node matches the felt regardless of pasted spelling.
+    // A one-event probe learns the token's Transfer layout. This token indexes
+    // from and to, so two filters follow: outgoing constrains from (key 1) to
+    // the account, incoming leaves from open and constrains to (key 2). The
+    // account is canonicalized so the node matches the felt regardless of
+    // pasted spelling.
     const canonicalAccount = `0x${BigInt(ACCOUNT).toString(16)}`;
-    expect(filters).toHaveLength(2);
-    expect(filters[0]?.keys).toEqual([[TRANSFER_EVENT_KEY], [canonicalAccount]]);
-    expect(filters[1]?.keys).toEqual([[TRANSFER_EVENT_KEY], [], [canonicalAccount]]);
+    expect(filters).toHaveLength(3);
+    expect(filters[0]).toMatchObject({ chunk_size: 1, keys: [[TRANSFER_EVENT_KEY]] });
+    expect(filters[1]?.keys).toEqual([[TRANSFER_EVENT_KEY], [canonicalAccount]]);
+    expect(filters[2]?.keys).toEqual([[TRANSFER_EVENT_KEY], [], [canonicalAccount]]);
     for (const filter of filters) {
       expect(filter.address).toBe(ETH_ADDRESS);
     }

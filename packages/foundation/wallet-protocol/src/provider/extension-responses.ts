@@ -6,9 +6,19 @@
 
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { VaultRecovery } from "@bramble/wallet-model/vault-recovery";
 import type { Strk20Action, Strk20WithdrawAction } from "../privacy/strk20";
 import type { FeeEstimate } from "../transactions/fee-estimate";
 import type { ProviderInvokeCall } from "../transactions/invoke";
+
+/**
+ * Why a site's private request is held on a close-only notice rather than
+ * reaching a card: the shadow-account record table cannot take its scope
+ * (`record-limit`), or preparing the reviewed request failed before a card
+ * could be built (`request-failed`). Either answer, given at once, would tell
+ * the site something about the user's setup, so it waits for Close.
+ */
+export type Strk20NoticeReason = "record-limit" | "request-failed";
 
 /**
  * Every approval kind that may cross the background-to-UI boundary.
@@ -23,7 +33,8 @@ export type ApprovalKind =
   | "strk20-invoke"
   | "strk20-prepare"
   | "strk20-register"
-  | "strk20-subaccount"
+  | "strk20-shadow-account"
+  | "strk20-unavailable"
   | "switch-chain"
   | "watch-asset";
 
@@ -83,10 +94,24 @@ export type ApprovalReviewAsset = {
 };
 
 /**
+ * The longest summary line an approval may carry. The panel refuses an
+ * approval with a longer or empty line, so the background refuses to queue one
+ * (Sherlock 187): the site gets an error at once instead of a request that
+ * waits with nothing on screen until it expires.
+ */
+export const APPROVAL_SUMMARY_MAX_LENGTH = 300;
+
+/**
  * One display-only approval snapshot returned by the background.
  */
 export type PendingApproval = {
   readonly actionReviews?: readonly Strk20Action[];
+  /**
+   * `watch-asset` only: the wallet already tracks this token, so the card is a
+   * close-only notice and Close answers the site as an approval would. The
+   * site learns nothing until the user closes it (audit M1).
+   */
+  readonly alreadyTracked?: true;
   readonly blocked?: boolean;
   /** Exact, display-only invoke calls retained beside decoded summaries. */
   readonly callReviews?: readonly ProviderInvokeCall[];
@@ -112,6 +137,12 @@ export type PendingApproval = {
   readonly id: string;
   readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
+  /**
+   * `strk20-unavailable` only: why the private request is held on a notice.
+   * Absent means the network has no private services for it. Wallet-chosen,
+   * never site text; the panel maps it to a fixed line.
+   */
+  readonly notice?: Strk20NoticeReason;
   readonly origin: string;
   readonly relayFeeAction?: Strk20WithdrawAction;
   readonly reviewAssets?: readonly ApprovalReviewAsset[];
@@ -147,4 +178,6 @@ export type WalletStatus = {
   readonly networkId: StarknetNetworkId;
   readonly networks: readonly NetworkOption[];
   readonly ready: boolean;
+  /** Present only when a stored vault cannot be unlocked normally. */
+  readonly recovery?: VaultRecovery;
 };

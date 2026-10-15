@@ -46,12 +46,11 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
    create the wallet until the words match.
 4. Set a **vault passphrase** of at least **12 characters**. This encrypts the
    wallet on *this* device; it is not your recovery phrase.
-5. Review and explicitly select the derived account. Bramble supports both
-   account models; **OpenZeppelin Account** is the recommended default and
-   **Argent Account** remains available. Setup defaults to Starknet Mainnet, so
-   tick the **real-funds acknowledgement**.
-6. Press **Add selected account**, then open the side-panel wallet from the
-   completion screen.
+5. Review the derived account. Bramble supports both account models;
+   **OpenZeppelin Account** is the recommended default and **Argent Account**
+   remains available. Setup defaults to Starknet Mainnet.
+6. Press **Finish setup**, then open the side-panel wallet from the completion
+   screen.
 
 ### Restore an existing wallet
 
@@ -59,14 +58,26 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
 2. Enter the 12 or 24 words individually, or paste the complete phrase into the
    first field.
 3. Set and confirm a vault passphrase of at least 12 characters.
-4. Review and select the derived account, accept the Mainnet real-funds
-   acknowledgement, and press **Add selected account**. Invalid recovery data
-   fails closed and remains on the current step for correction.
+4. Select the accounts to restore and press **Restore selected accounts**.
+   Invalid recovery data fails closed and remains on the current step for
+   correction.
 
 ### Unlocking later
 
 When a wallet already exists, opening the panel shows the **"Welcome back"**
 unlock screen. Enter your vault passphrase to reach the dashboard.
+
+If Bramble cannot confirm that the stored wallet is the latest copy, it shows
+**"Check this wallet"** or, when it has a newer copy on record, **"This wallet is
+out of date"** instead. Restoring a browser or computer backup causes this; if you
+did not, someone may have changed this browser's data. **Unlock anyway** opens the
+stored copy with your password and disconnects every site, so a connection you had
+removed cannot come back. Accounts you added after that copy was saved are missing
+and can be added again. If the stored wallet is damaged (**"This wallet cannot be
+opened"**), or you would rather start over, reinstall Bramble and restore from your
+recovery phrase: accounts imported from a private key must be imported again, and a
+multisig must be re-added by its address, where any pending transactions and
+co-signer wallet cards are lost.
 
 ### Set up with a Ledger
 
@@ -190,8 +201,16 @@ An amount shown as **"at least N"** is one the wallet can only bound from below:
 part of the allowance was granted somewhere else (or has aged out of the log) and
 no on-chain reading was available, so the spender's true reach is N or more.
 
-Two limits are worth knowing. Approvals for tokens you do not track and never
-approved here may not appear, so this view is not a complete chain index. And
+After you revoke, the row stays, marked "Revoke sent", until the chain reads the
+allowance as zero: a revoke that fails leaves the approval live, and it stays
+listed so you can try again.
+
+Three limits are worth knowing. Approvals for tokens you do not track and never
+approved here may not appear, so this view is not a complete chain index; when
+the on-chain search for a tracked token stops before reaching all of its
+approvals, or a watched multisig cannot be read, the screen says the list may be
+incomplete. The wallet keeps 50 approvals per account and, when full, forgets
+the smallest first, and the screen says so when that limit is reached. And
 **NFT collection approvals are not token allowances**: `set_approval_for_all`,
 which lets a marketplace move every item you own in a collection, is flagged
 loudly on the review screen before you sign but is not listed or revokable here —
@@ -209,8 +228,8 @@ periodically limits how much a compromised dApp contract can move.
 - Bramble never asks for your recovery phrase to "verify" or "sync" anything
   after setup. Any site or message that does is a scam.
 - The **vault passphrase** unlocks the wallet on one device only. Losing it means
-  re-restoring from the recovery phrase; losing the recovery phrase means the
-  funds are unrecoverable.
+  reinstalling Bramble and restoring from the recovery phrase; losing the recovery
+  phrase means the funds are unrecoverable.
 
 ### Recognising phishing
 
@@ -230,7 +249,7 @@ keys.
 ### FAQ
 
 - **I closed the panel mid-setup — did I lose anything?** No. If you had not
-  pressed **Add selected account** successfully, no wallet was written. Reopen
+  pressed **Finish setup** successfully, no wallet was written. Reopen
   and start again; no draft phrase or passphrase is kept.
 - **Why is my new account "not deployed"?** Deployment is a separate on-chain
   step from the dashboard, done when you choose — creating the wallet does not

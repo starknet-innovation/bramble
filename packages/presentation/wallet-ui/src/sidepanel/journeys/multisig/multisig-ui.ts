@@ -8,12 +8,16 @@ import {
   STRK_TOKEN_ADDRESS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { UNDEPLOYED_REMOVAL_PROMPT } from "../../runtime/friendly-error-copy-multisig";
+import { failureTone } from "../../runtime/runtime-errors";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
+import { STALE_INTENT_MAY_HAVE_BEEN_SENT } from "./multisig-intent-actions";
 import { bindMultisigIntentCards } from "./multisig-intent-ui";
 import { parseArgentMultisigIntentPackage } from "./multisig-model";
+import { armResendConfirmation, resendConfirmed } from "./multisig-resend-confirm";
 import { bindMultisigSignerManagement } from "./multisig-signer-management-ui";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
@@ -44,7 +48,11 @@ const run = (
     },
     (error: unknown) => {
       setResult(deps, resultId, errorLine(error, "That request didn't go through"));
-      showToast(errorMessage(error, "Ready multisig request failed"), "error", button ?? deps.app);
+      showToast(
+        errorDetails(error, "Ready multisig request failed"),
+        failureTone(error),
+        button ?? deps.app,
+      );
       buttonBusy(button, false);
     },
   );
@@ -89,10 +97,27 @@ const bindAdd = (deps: MultisigUiDeps): void => {
         deps.openDetail(view.record.id, "multisig-home");
       })
       .catch((error: unknown) => {
-        showToast(errorMessage(error, "Sync Ready multisig failed"), "error", button ?? deps.app);
+        showToast(errorDetails(error, "Sync Ready multisig failed"), "error", button ?? deps.app);
         buttonBusy(button, false);
       });
   });
+};
+
+// The second press a removal needs, by why the background asked for it: an
+// undeployed multisig whose setup only this wallet holds (Sherlock 214), or
+// saved transactions and history that go with it.
+const removalConfirmation = (
+  message: string,
+): { readonly label: string; readonly prompt: string } | null => {
+  if (/undeployed/i.test(message)) {
+    return { label: "Remove anyway", prompt: UNDEPLOYED_REMOVAL_PROMPT };
+  }
+  return /history|terminal|intent/i.test(message)
+    ? {
+        label: "Confirm removal and delete terminal history",
+        prompt: "Review the warning and click again to delete terminal history",
+      }
+    : null;
 };
 
 const bindList = (deps: MultisigUiDeps): void => {
@@ -116,14 +141,14 @@ const bindList = (deps: MultisigUiDeps): void => {
         try {
           await deps.multisig.removeMultisig(id, confirmedRemovals.has(button));
         } catch (error) {
-          if (
-            !confirmedRemovals.has(button) &&
-            error instanceof Error &&
-            /history|terminal|intent/i.test(error.message)
-          ) {
+          const confirmation =
+            !confirmedRemovals.has(button) && error instanceof Error
+              ? removalConfirmation(error.message)
+              : null;
+          if (confirmation) {
             confirmedRemovals.add(button);
-            button.lastChild?.replaceWith("Confirm removal and delete terminal history");
-            throw new Error("Review the warning and click again to delete terminal history");
+            button.lastChild?.replaceWith(confirmation.label);
+            throw new Error(confirmation.prompt);
           }
           throw error;
         }
@@ -298,7 +323,9 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
       if (!multisigId) return;
       setPreparing(true);
       void Promise.resolve()
-        .then(() => deps.multisig.prepareIntent(multisigId, [preparedCall(form)]))
+        .then(() =>
+          deps.multisig.prepareIntent(multisigId, [preparedCall(form)], resendConfirmed(button)),
+        )
         .then(
           (result) => {
             showToast("Transaction ready for multisig review", "success", button ?? deps.app);
@@ -306,11 +333,12 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
           },
           (error: unknown) => {
             showToast(
-              errorMessage(error, "Prepare Ready multisig transaction failed"),
+              errorDetails(error, "Prepare Ready multisig transaction failed"),
               "error",
               button ?? deps.app,
             );
             setPreparing(false);
+            armResendConfirmation(button, error);
           },
         );
     });
@@ -333,7 +361,7 @@ const bindImport = (deps: MultisigUiDeps): void => {
       const result = await deps.multisig.importIntent(intentPackage);
       deps.openIntent(result.intent.accountId, result.intent.id);
       return result.intent.state === "stale"
-        ? "Signed attempt restored — it was not submitted"
+        ? `Signed attempt restored. ${STALE_INTENT_MAY_HAVE_BEEN_SENT}`
         : "Intent verified and ready to review";
     });
   });

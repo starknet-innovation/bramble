@@ -53,7 +53,7 @@ describe("Starkscan client boundary", () => {
     expect(rpcDiagnosticsSnapshot()).toEqual([]);
   });
 
-  test("builds authenticated routes and parses complete token holdings", async () => {
+  test("builds authenticated routes and parses a token balance", async () => {
     const requests: Array<{ init: RequestInit; url: string }> = [];
     const client = createStarkscanClient({
       apiKey: "test-key",
@@ -61,39 +61,19 @@ describe("Starkscan client boundary", () => {
       async http(url, init) {
         requests.push({ init, url });
         return jsonResponse({
+          balanceRaw: "1023561579571385199213",
+          blockTag: "latest",
           chainId: "SN_MAIN",
           ownerAddress: ACCOUNT,
-          items: [
-            {
-              tokenAddress: TOKEN,
-              normalizedTokenAddress: TOKEN,
-              indexedBalanceRaw: "1023561579571385199213",
-              symbol: "STRK",
-              name: "Starknet Token",
-              decimals: 18,
-            },
-          ],
-          exact: true,
-          truncated: false,
-          completeness: {
-            exact: true,
-            truncated: false,
-            complete: true,
-            reasonCode: "complete",
-            reason: "Complete snapshot.",
-            lagBlocks: 0,
-            capped: false,
-            cap: null,
-          },
+          tokenAddress: TOKEN,
         });
       },
     });
 
-    const holdings = await client.getTokenHoldings("SN_MAIN", ACCOUNT, { limit: 25 });
-    expect(holdings.items[0]?.symbol).toBe("STRK");
-    expect(holdings.completeness.complete).toBe(true);
+    const balance = await client.getTokenBalance("SN_MAIN", TOKEN, ACCOUNT);
+    expect(balance.balanceRaw).toBe("1023561579571385199213");
     expect(requests[0]?.url).toBe(
-      `https://api.starkscan.test/v1/SN_MAIN/address/${ACCOUNT}/token-holdings?limit=25`,
+      `https://api.starkscan.test/v1/SN_MAIN/token/${TOKEN}/balance-of/${ACCOUNT}?block_tag=latest`,
     );
     expect(new Headers(requests[0]?.init.headers).get("X-Starkscan-Api-Key")).toBe("test-key");
   });

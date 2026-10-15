@@ -10,6 +10,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
+import { recoveryGate } from "./gate-recovery-view";
 import { onboardingWizard } from "./onboarding-views";
 
 const gateBrand = (): string => `<div class="gate-brand">${BRAMBLE_MARK}</div>`;
@@ -24,12 +25,30 @@ export const onboarding = (status: WalletStatus, ledgerAvailable = true): string
   onboardingWizard(status, ledgerAvailable);
 
 /**
- * Unlock screen for an existing but locked vault.
+ * Unlock screen for an existing but locked vault, or the recovery gate when
+ * the background reports the vault cannot be verified.
  */
 export const locked = (status: WalletStatus, pending: readonly PendingApproval[] = []): string => {
+  if (status.recovery) {
+    return recoveryGate(
+      status,
+      status.recovery,
+      gateBrand(),
+      textField({
+        autocomplete: "current-password",
+        label: "Password",
+        labelHidden: true,
+        minlength: MIN_VAULT_PASSPHRASE_LENGTH,
+        name: "vaultPassphrase",
+        placeholder: "Enter your password",
+        required: true,
+        type: "password",
+      }),
+    );
+  }
   const request = pending[0];
   return `
-  <main class="screen flow gate">
+  <section class="screen flow gate">
     ${gateBrand()}
     <div class="gate-head">
       <h1>Welcome back</h1>
@@ -48,11 +67,11 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
     <form id="unlock-form" class="gate-form">
       ${textField({
         autocomplete: "current-password",
-        label: "Vault passphrase",
+        label: "Password",
         labelHidden: true,
         minlength: MIN_VAULT_PASSPHRASE_LENGTH,
         name: "vaultPassphrase",
-        placeholder: "Enter your passphrase",
+        placeholder: "Enter your password",
         required: true,
         type: "password",
       })}
@@ -65,5 +84,5 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
         })}
       </div>
     </form>
-  </main>`;
+  </section>`;
 };

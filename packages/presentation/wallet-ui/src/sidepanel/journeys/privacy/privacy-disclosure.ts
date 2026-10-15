@@ -7,7 +7,7 @@
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { errorMessage, showToast } from "../../shared/dom";
+import { errorDetails, errorLine, showToast } from "../../shared/dom";
 import type { SendIntent } from "../send/send-model";
 import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
 import { privacyBlockerFor } from "./privacy-model";
@@ -161,7 +161,7 @@ export const loadPrivacyDisclosure = (
       return true;
     } catch (error) {
       if (deps.disclosure() === pending && scopeMatches(deps, scope)) {
-        const message = errorMessage(error, "Private balances unavailable");
+        const message = errorLine(error, "Private balances unavailable");
         deps.setDisclosure({
           error: message,
           blockerKind: privacyBlockerFor(error).kind,
@@ -169,7 +169,13 @@ export const loadPrivacyDisclosure = (
           value: null,
         });
         deps.paint();
-        if (!record.silent) showToast(message, "error", deps.app);
+        if (!record.silent)
+          showToast(
+            message,
+            "error",
+            deps.app,
+            errorDetails(error, "Private balances unavailable"),
+          );
       }
       return false;
     } finally {

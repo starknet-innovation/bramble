@@ -8,6 +8,13 @@ import { OUTCOME_UNKNOWN, SAVE_FAILED, SUBMISSION_UNKNOWN } from "./friendly-err
 const MULTISIG_DEPLOY_PREPARE = "Couldn't prepare the deployment. Try again.";
 const MULTISIG_BALANCES = "Couldn't load multisig balances. Check your connection and try again.";
 
+/**
+ * The second-press prompt before removing an undeployed multisig, whose setup
+ * this wallet alone holds (Sherlock 214).
+ */
+export const UNDEPLOYED_REMOVAL_PROMPT =
+  "This multisig isn't deployed. Removing it deletes the setup needed to deploy it. Press again to remove it.";
+
 /** Multisig and co-signer entries merged into ERROR_COPY. */
 export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   // --- Multisig ------------------------------------------------------------
@@ -24,6 +31,15 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   [
     "argent multisig intent nonce is no longer current",
     "This transaction is out of date. Create a new one.",
+  ],
+  // An earlier, stale version of these calls was found on chain (Sherlock
+  // 177): building them again would pay twice.
+  ["argent multisig intent was already sent", "This transaction was already sent."],
+  // A stale version of these calls at another nonce isn't on chain, but
+  // co-signers may have sent their own version of it (Sherlock 177).
+  [
+    "confirm resending calls an earlier argent multisig intent may have sent",
+    "This may already have been sent by another signer. Press again to send it anyway.",
   ],
   ["argent multisig intent not found", "That transaction is no longer saved."],
   ["conflicting argent multisig intent id", "That transaction id is already in use."],
@@ -68,6 +84,24 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "Changing signers needs the current signer set. Refresh and try again.",
   ],
   ["signer account lookup unavailable", "Couldn't look up that signer. Try again."],
+  // Signer-change guards (issue 652 copy review), in the multisig's own words.
+  ["argent multisig signer is already configured", "That signer is already on this multisig."],
+  ["argent multisig signer is not configured", "That signer isn't on this multisig."],
+  ["argent multisig threshold is unchanged", "The threshold is already set to that."],
+  ["argent multisig signers must be unique", "Each signer can only be added once."],
+  ["argent multisig removal signers must be unique", "Each signer can only be removed once."],
+  [
+    "argent multisig batches cannot contain account self-calls",
+    "A call to the multisig itself can't be batched with other calls.",
+  ],
+  [
+    "only starknet signers are supported in argent multisig management",
+    "Only Starknet signers can be managed on this multisig.",
+  ],
+  [
+    "conflicting argent multisig signer events",
+    "Couldn't read this multisig's signer history. Try again.",
+  ],
   ["resolve multisig signer account failed", "Couldn't resolve that signer account. Try again."],
 
   // Deployment.
@@ -93,6 +127,10 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   [
     "signer set, threshold, and salt do not reproduce the watched multisig address",
     "These signers and threshold don't produce the watched address. Check them.",
+  ],
+  [
+    "imported argent multisig has no counterfactual deployment parameters",
+    "This multisig was imported without its deployment details, so it can't be deployed from here.",
   ],
   [
     "stable argent multisig 0.2 class is not declared on this network",
@@ -139,6 +177,7 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "confirm removal of terminal argent multisig history",
     "Press again to delete this multisig's history.",
   ],
+  ["confirm removal of an undeployed argent multisig", UNDEPLOYED_REMOVAL_PROMPT],
 
   // Co-signer coordination over the relay. The fallback is always the same:
   // copy the package and send it yourself.

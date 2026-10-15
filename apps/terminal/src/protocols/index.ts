@@ -5,6 +5,7 @@
  */
 export { buildSwapCalls as buildAvnuSwapCalls, quoteSwap as quoteAvnuSwap } from "./avnu/avnu";
 export * from "./constants";
+export { DEFAULT_SLIPPAGE_BPS } from "./support/slippage";
 export { buildSwapCalls as buildEkuboSwapCalls, quoteSwap as quoteEkuboSwap } from "./ekubo/ekubo";
 export * from "./types";
 export {
@@ -12,7 +13,17 @@ export {
   buildVesuVaultClaimCalls,
   buildVesuVaultDepositCalls,
   buildVesuVaultRedeemCalls,
+  VESU_VAULT_DEPOSITS_PAUSED,
 } from "./vesu/vesu-actions";
+export {
+  recheckVesuLendingQuote,
+  registeredVesuVToken,
+  verifyVesuMultiplyPool,
+} from "./vesu/vesu-anchors";
+export {
+  recheckVesuMultiplyQuote,
+  type VesuMultiplyAnchoredQuote,
+} from "./vesu/vesu-multiply-anchor";
 export {
   buildVesuMultiplyCloseCalls,
   buildVesuMultiplyIncreaseCalls,

@@ -26,6 +26,7 @@ const ready = (overrides: Partial<SendRouteInput> = {}): SendRouteInput => ({
   convertedFeeCeilingRaw: null,
   destination: "private",
   feeTokenAddress: STRK_TOKEN_ADDRESS,
+  feeTokenDecimals: 18,
   feeTokenSymbol: "STRK",
   poolFeeFri: SIX_STRK,
   recipient: RECIPIENT,
@@ -37,6 +38,7 @@ const ready = (overrides: Partial<SendRouteInput> = {}): SendRouteInput => ({
   sourceFeeBalanceRaw: 100n * SIX_STRK,
   sourceTokenBalanceRaw: 100n * SIX_STRK,
   tokenAddress: STRK_TOKEN_ADDRESS,
+  tokenDecimals: 18,
   tokenSymbol: "STRK",
   ...overrides,
 });
@@ -209,7 +211,7 @@ describe("gates", () => {
     // the amount is not enough.
     expect(blockerFor({ amountRaw: 100n * SIX_STRK })).toEqual({
       pending: false,
-      reason: "Not enough private STRK for this amount plus the pool fee",
+      reason: "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.",
     });
     // Exactly balance-minus-fee is sendable.
     expect(resolveSendRoute(ready({ amountRaw: 99n * SIX_STRK })).route?.id).toBe(
@@ -224,16 +226,16 @@ describe("gates", () => {
       "private-private",
     );
     expect(blockerFor({ ...eth, amountRaw: 101n * SIX_STRK }).reason).toBe(
-      "Not enough private ETH",
+      "Not enough private ETH. You need at least 606 ETH.",
     );
     expect(blockerFor({ ...eth, sourceFeeBalanceRaw: 0n }).reason).toBe(
-      "Not enough private STRK to cover the pool fee",
+      "Not enough private STRK to cover the pool fee. Keep 6 STRK for the fee.",
     );
   });
 
   test("names a private shortfall as private", () => {
     expect(blockerFor({ amountRaw: 200n * SIX_STRK, destination: "public" }).reason).toBe(
-      "Not enough private STRK for this amount plus the pool fee",
+      "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.",
     );
     expect(
       blockerFor({
@@ -242,7 +244,7 @@ describe("gates", () => {
         tokenAddress: ETH,
         tokenSymbol: "ETH",
       }).reason,
-    ).toBe("Not enough private STRK to cover the pool fee");
+    ).toBe("Not enough private STRK to cover the pool fee. Keep 6 STRK for the fee.");
   });
 });
 

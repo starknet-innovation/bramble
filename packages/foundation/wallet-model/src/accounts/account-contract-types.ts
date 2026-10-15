@@ -60,6 +60,25 @@ export const isCreatableAccountContractType = (
 ): value is CreatableAccountContractType => value === "argent" || value === "openzeppelin";
 
 /**
+ * Families a Ledger device can hold an account in. Broader than
+ * {@link CreatableAccountContractType}: besides the OpenZeppelin accounts this
+ * wallet creates on a device and the Argent accounts restored from Ready, a
+ * Braavos account can be owned by a Ledger key — Braavos derives it at Ready's
+ * `argentx` path — so a device request naming Braavos restores an account that
+ * already exists rather than being malformed.
+ */
+export type LedgerAccountContractType = AccountContractType;
+
+/**
+ * Validates, at an untrusted message boundary, a family a Ledger device may hold
+ * an account in. Equal to {@link isAccountContractType}: every single-signer
+ * family can be owned by a device key. Which path derives which family is
+ * enforced where the device is enumerated, not here.
+ */
+export const isLedgerAccountContractType = (value: unknown): value is LedgerAccountContractType =>
+  isAccountContractType(value);
+
+/**
  * Which account records a schema era could have written.
  *
  * `current` admits Braavos and any class an Argent account can be deployed

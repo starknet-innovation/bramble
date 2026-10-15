@@ -20,8 +20,9 @@ import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { isProviderDeclare, type ProviderDeclare } from "@bramble/wallet-protocol/declare";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
+import { withApprovalReservation } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import type { PendingApproval } from "../approvals/approval-snapshot";
 import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
@@ -221,6 +222,12 @@ const retryDeclarationFee = async (
   }
   const revision = deps.approvals.beginFeeEstimate(input.id);
   if (!revision) return { error: "approval not found" };
+  // Withdraw the reviewed fee while the estimate is redone, so nothing can be
+  // approved against it. The withdrawn shape is a failed estimate, the one
+  // fee-less shape the panel accepts: an "estimating" shape (no fee, no
+  // failure) is dropped by the panel's validator, which hid the card, and an
+  // early return below would have left it hidden (Sherlock 241). A failed
+  // estimate keeps the card on screen with its retry control.
   if (
     !approval.declaration ||
     !deps.approvals.updateFee(revision, {
@@ -230,7 +237,7 @@ const retryDeclarationFee = async (
         deploymentFee: null,
         deploymentFeeEstimateFailed: false,
         fee: null,
-        feeEstimateFailed: false,
+        feeEstimateFailed: true,
       },
       kind: "declare",
     })
@@ -266,6 +273,56 @@ const retryDeclarationFee = async (
   return { ok: true };
 };
 
+// Everything a declare does between admission and the queue: the session and
+// vault reads, the class hash and both fee estimates. It runs under the
+// origin's admission reservation, released in the same step that queues the
+// approval.
+const queueDeclare = async (
+  deps: DeclareOpsDeps,
+  input: NonNullable<ReturnType<typeof readAddDeclareTransactionInput>>,
+  release: () => void,
+): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
+  const { approvals, preferencesStore, session, wallet } = deps;
+  // Captured before the first read and re-checked after every await, so a
+  // lock that lands mid-request admits no card under the unlock the user just
+  // revoked (Sherlock 166).
+  const authorized = captureSessionAuthorization(session);
+  const passphrase = session.peekPassphrase();
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const preferences = await preferencesStore.read();
+  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  if (!account) {
+    return { error: "origin not connected" };
+  }
+  const context = await createApprovalContext(account, { declare: input.declare });
+  const declaration = await declarationReview(
+    deps,
+    account,
+    input.declare,
+    preferences,
+    passphrase,
+  );
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  const approval = approvals.requestDeclare({
+    context,
+    declare: input.declare,
+    declaration,
+    origin: input.origin,
+    summaries: declareSummaries(input.declare),
+  });
+  release();
+  notifyApprovalsChanged();
+  return { approval };
+};
+
 /**
  * Handles a dapp declare message; returns null for other message types.
  */
@@ -281,7 +338,7 @@ export const handleDeclareOps = async (
   if (messageType !== "wallet.addDeclareTransaction") {
     return null;
   }
-  const { approvals, extension, preferencesStore, session, waiters, wallet } = deps;
+  const { approvals, extension, waiters } = deps;
   const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
   const input = readAddDeclareTransactionInput(message);
   if (!input) {
@@ -297,26 +354,15 @@ export const handleDeclareOps = async (
   // a vault read, then a declaration review that hashes the contract class and
   // estimates two fees. An origin already holding its share of the queue is
   // refused at admission regardless, so it is refused here instead of after.
-  requireApprovalAdmission(approvals, input.origin);
-  const passphrase = session.peekPassphrase();
-  if (!passphrase) {
-    return { error: "wallet locked" };
-  }
-  const preferences = await preferencesStore.read();
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
-  const approval = approvals.requestDeclare({
-    context: await createApprovalContext(account, { declare: input.declare }),
-    declare: input.declare,
-    declaration: await declarationReview(deps, account, input.declare, preferences, passphrase),
-    origin: input.origin,
-    summaries: declareSummaries(input.declare),
-  });
-  notifyApprovalsChanged();
-  return waiters.register(approval.id);
+  // The reservation counts this request against the caps while that work
+  // runs, so concurrent requests cannot all start it (Sherlock 151).
+  const queued = await withApprovalReservation(approvals, input.origin, (release) =>
+    queueDeclare(deps, input, release),
+  );
+  // Registered once the reservation is released: the queued approval now
+  // counts against the caps itself, and the held response settles only when
+  // the user decides.
+  return "approval" in queued ? waiters.register(queued.approval.id) : queued;
 };
 
 /**

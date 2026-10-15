@@ -15,6 +15,7 @@ import {
 } from "../journeys/onboarding/onboarding-surface";
 import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
 import { bindUnlock } from "../journeys/onboarding/unlock-ui";
+import { resetActivityViewState } from "../journeys/portfolio/activity-view-state";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
 import type { SendIntent } from "../journeys/send/send-model";
@@ -182,7 +183,7 @@ export const startWalletUi = async (
     });
     bindDrawerFolders({ ...drawerFolders, app, render, wallet });
     bindReveal({ app, wallet });
-    transfer.bindActivity({ app, render, wallet });
+    transfer.bindActivity({ app, render, repaint: paint, wallet });
     transfer.bindTransfer({
       app,
       back: goBack,
@@ -383,6 +384,7 @@ export const startWalletUi = async (
     if (scopeChanged) {
       privacy.reset();
       sendIntent = null;
+      resetActivityViewState();
     }
     if (scopeChanged === "network" && selectedMultisigId !== null) {
       selectedMultisigId = null;
@@ -403,6 +405,8 @@ export const startWalletUi = async (
     cache.preferences = nextPreferences;
     if (!status.hasVault || status.locked) {
       privacy.reset();
+      ledgerSign.dismiss();
+      resetActivityViewState();
       Object.assign(cache, emptyRenderCache(), {
         pending: cache.pending,
         preferences: cache.preferences,
@@ -432,6 +436,15 @@ export const startWalletUi = async (
       paint,
     });
   };
+  // Navigation renders fire and forget. A failed status read or a render that
+  // throws must not become an unhandled rejection; the refresh lifecycle's
+  // next tick renders again (Sherlock 239).
+  const renderLatest = (): void => {
+    void wallet
+      .loadStatus()
+      .then(render)
+      .catch(() => undefined);
+  };
   const navigate = (view: WalletView): void => {
     if (isParkedCollectibleView(view)) {
       return;
@@ -443,7 +456,7 @@ export const startWalletUi = async (
     if (view !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
-    void wallet.loadStatus().then(render);
+    renderLatest();
   };
   const goBack = (): void => {
     const popped = popView(viewHistory);
@@ -453,9 +466,9 @@ export const startWalletUi = async (
     if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
-    void wallet.loadStatus().then(render);
+    renderLatest();
   };
   applyTheme();
   startRefreshLifecycle({ mutationRuntime, render, runtime, wallet });
-  void render(await wallet.loadStatus());
+  void render(await wallet.loadStatus()).catch(() => undefined);
 };

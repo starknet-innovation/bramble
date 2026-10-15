@@ -6,7 +6,7 @@
 import { WalletError } from "@bramble/core/errors";
 import type { EncryptedStore } from "../encrypted-store";
 import { migrateVault } from "./migrations";
-import { isVaultV11, type Vault } from "./schema";
+import { isVaultV12, type Vault } from "./schema";
 
 /**
  * Browser storage key for the primary encrypted wallet vault.
@@ -35,7 +35,7 @@ const readVerified = async (
   expected: Vault,
 ): Promise<Vault> => {
   const candidate = await store.read(vaultPassphrase);
-  if (!isVaultV11(candidate) || !sameVault(candidate, expected)) {
+  if (!isVaultV12(candidate) || !sameVault(candidate, expected)) {
     throw new WalletError("Vault migration verification failed");
   }
   return candidate;
@@ -48,6 +48,20 @@ const removeVerified = async (store: EncryptedStore): Promise<void> => {
   }
 };
 
+// A staging copy an earlier, interrupted migration left behind whose commit
+// record is lost or disagrees cannot be verified, so it is no recovery copy:
+// the primary has just been read and verified. A write over it would refuse
+// ("commit state missing"), failing every unlock while the UI offers no
+// recovery, since recovery reflects only the primary (release audit S2). It is
+// removed first; the primary is not touched. A verifiable copy is simply
+// overwritten by the write that follows.
+const removeUnverifiableStage = async (staging: EncryptedStore): Promise<void> => {
+  const health = await staging.health();
+  if (health !== "absent" && health !== "ok") {
+    await removeVerified(staging);
+  }
+};
+
 const recoverStagedVault = async (
   stores: VaultMigrationStores,
   vaultPassphrase: string,
@@ -56,10 +70,18 @@ const recoverStagedVault = async (
     return null;
   }
   const staged = await stores.staging.read(vaultPassphrase);
-  if (!isVaultV11(staged)) {
+  if (!isVaultV12(staged)) {
     return null;
   }
-  await stores.primary.write(staged, vaultPassphrase);
+  // The staged copy verified against its own records, so it is the current
+  // vault even when the primary cannot be verified; a plain write would refuse
+  // to replace that primary, and the user would be stuck with neither.
+  const primaryHealth = await stores.primary.health();
+  if (primaryHealth === "rollback" || primaryHealth === "unverified") {
+    await stores.primary.replaceUnverified(staged, vaultPassphrase);
+  } else {
+    await stores.primary.write(staged, vaultPassphrase);
+  }
   await readVerified(stores.primary, vaultPassphrase, staged);
   await removeVerified(stores.staging);
   return staged;
@@ -96,13 +118,14 @@ export const readMigratedVault = async (
   if (stored === undefined) {
     return vault;
   }
-  if (isVaultV11(stored)) {
+  if (isVaultV12(stored)) {
     if (await stores.staging.exists()) {
       await removeVerified(stores.staging);
     }
     return vault;
   }
 
+  await removeUnverifiableStage(stores.staging);
   await stores.staging.write(vault, vaultPassphrase);
   await readVerified(stores.staging, vaultPassphrase, vault);
   await stores.primary.write(vault, vaultPassphrase);

@@ -463,6 +463,33 @@ export const assetsScenario: WalletScenario = {
       narrative: "The empty state accurately scopes what the wallet scans.",
       state: { outstanding: 0 },
     },
+    {
+      content: () =>
+        walletDashboard({
+          allowanceNotices: ["scan-incomplete", "multisig-unread", "retention-full"],
+          allowances,
+          preferences: journeyPreferences,
+          view: "allowances",
+        }),
+      id: "allowances-partial",
+      label: "Partial allowance listing",
+      narrative:
+        "A scan that stopped early, an unread multisig, and a full log are each stated above the list.",
+      state: { notices: 3 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          allowances: [],
+          allowancesUnavailable: true,
+          preferences: journeyPreferences,
+          view: "allowances",
+        }),
+      id: "allowances-unavailable",
+      label: "Allowances not loaded",
+      narrative: "A failed listing says so instead of claiming nothing is outstanding.",
+      state: { loaded: false },
+    },
   ],
   description:
     "Receive, token management/detail, contacts, and ERC20 allowance review across ready and degraded states.",

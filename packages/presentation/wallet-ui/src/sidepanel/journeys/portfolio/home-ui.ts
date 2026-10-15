@@ -10,7 +10,7 @@ import { resolveSpring } from "@bramble/ui-kit/spring";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { prefersReducedMotion, projectMomentum } from "../../shared/motion";
 import { bindRecoverAccount } from "./recovery-ui";
 
@@ -250,7 +250,7 @@ const bindDrawer = (deps: HomeUiDeps): void => {
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Account switch failed"), "error", button);
+          showToast(errorDetails(error, "Account switch failed"), "error", button);
           buttonBusy(button, false);
         },
       );

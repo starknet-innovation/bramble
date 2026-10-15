@@ -19,7 +19,9 @@ import type {
 import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
+import type { VaultRecovery } from "@bramble/wallet-model/vault-recovery";
 import type { AccountDerivationInput } from "../accounts/accounts";
+import type { ShadowAccountScopeRef } from "../accounts/shadow-account-scopes";
 import type { NostrApplicationData } from "../kms-port";
 import type { Vault } from "../schema/schema";
 import type { RecoverVaultAccountsInput } from "./recovery";
@@ -27,8 +29,12 @@ import type { RecoverVaultAccountsInput } from "./recovery";
 /** Atomic recovery input re-exported for privileged runtime boundaries. */
 export type { RecoverVaultAccountsInput } from "./recovery";
 
+/** Why a stored vault cannot be unlocked normally; see `@bramble/wallet-model/vault-recovery`. */
+export type { VaultRecovery };
+
 /**
- * Public wallet status shown to popup and provider callers.
+ * Public wallet status shown to popup and provider callers. `recovery` is
+ * present only when a stored vault cannot be unlocked normally.
  */
 export type WalletStatus = {
   readonly accountCount: number;
@@ -36,6 +42,7 @@ export type WalletStatus = {
   readonly hasVault: boolean;
   readonly locked: boolean;
   readonly ready: boolean;
+  readonly recovery?: VaultRecovery;
 };
 
 /**
@@ -292,6 +299,20 @@ export type WalletVaultService = {
     vaultPassphrase: string,
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /**
+   * Drops the in-memory grant projection `getGrantedAccounts` answers from.
+   * Called when the wallet locks, beside the derived-key caches; the next
+   * read after unlock repopulates it.
+   */
+  readonly clearGrantCache: () => void;
+  /**
+   * Accepts a vault whose status reports `unverified` or `rollback` after the
+   * user consented to a possibly older copy: decrypts it with the passphrase,
+   * removes every origin grant and retained Ledger viewing key a rollback could
+   * have restored, and writes it back under fresh freshness records. Throws for
+   * any other vault, and for a wrong passphrase.
+   */
+  readonly recoverUnverifiedVault: (vaultPassphrase: string) => Promise<void>;
   /** Restores a confirmed bounded set in one encrypted-vault commit. */
   /**
    * Imports selected accounts from another recovery phrase into the unlocked
@@ -313,4 +334,36 @@ export type WalletVaultService = {
    * secrets. This is intentionally absent from extension message surfaces.
    */
   readonly storeLedgerStrk20ViewingKey: (input: StoreLedgerStrk20ViewingKeyInput) => Promise<void>;
+  /**
+   * Records, inside the encrypted vault only, that an account used a
+   * shadow-account scope and which exact nonces (#443). Merges into an existing
+   * record; refuses rather than evicts at the bound. Background-only.
+   */
+  readonly recordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<void>;
+  /**
+   * Whether {@link recordShadowAccountScope} would accept `input` now: false
+   * when a scope, nonce or byte bound would refuse it, or the vault would no
+   * longer fit its capacity, without writing anything.
+   * Lets a request be refused before the user is asked to approve it; the
+   * record itself still re-checks and fails closed. Throws on a malformed
+   * scope. Background-only.
+   */
+  readonly canRecordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<boolean>;
+  /** Lists one account's recorded scopes on one chain and pool. Background-only. */
+  readonly listShadowAccountScopes: (
+    input: ListShadowAccountScopesInput,
+  ) => Promise<readonly ShadowAccountScopeRef[]>;
+};
+
+/** One shadow-account scope to record, with the nonces used under it. */
+export type RecordShadowAccountScopeInput = ShadowAccountScopeRef & {
+  readonly vaultPassphrase: string;
+};
+
+/** The account, chain, and pool whose recorded scopes are listed. */
+export type ListShadowAccountScopesInput = {
+  readonly accountId: string;
+  readonly chainId: string;
+  readonly poolAddress: string;
+  readonly vaultPassphrase: string;
 };

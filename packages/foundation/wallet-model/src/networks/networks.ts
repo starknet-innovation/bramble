@@ -107,6 +107,13 @@ export const STRK_TOKEN_ADDRESS =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 
 /**
+ * STRK's fixed 18-decimal scale. The pool charges its fee in STRK on every
+ * supported network, so fee arithmetic names this constant rather than
+ * re-deriving the scale from a token entry or a bare literal.
+ */
+export const STRK_TOKEN_DECIMALS = 18;
+
+/**
  * Default ERC20 tokens queried on each configured network.
  */
 export const DEFAULT_TOKENS: readonly DefaultToken[] = [
@@ -119,7 +126,7 @@ export const DEFAULT_TOKENS: readonly DefaultToken[] = [
   },
   {
     address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
+    decimals: STRK_TOKEN_DECIMALS,
     name: "Starknet Token",
     networkId: "SN_MAIN",
     symbol: "STRK",
@@ -133,7 +140,7 @@ export const DEFAULT_TOKENS: readonly DefaultToken[] = [
   },
   {
     address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
+    decimals: STRK_TOKEN_DECIMALS,
     name: "Sepolia Starknet Token",
     networkId: "SN_SEPOLIA",
     symbol: "STRK",
@@ -147,10 +154,41 @@ export const DEFAULT_TOKENS: readonly DefaultToken[] = [
   },
   {
     address: STRK_TOKEN_ADDRESS,
-    decimals: 18,
+    decimals: STRK_TOKEN_DECIMALS,
     name: "Devnet Starknet Token",
     networkId: "SN_DEVNET",
     symbol: "STRK",
+  },
+];
+
+/**
+ * Circle-native USDC on Starknet mainnet (what users hold since the
+ * bridged→native migration), 6 decimals. Tracked by default on new wallets
+ * (see {@link DEFAULT_TRACKED_TOKENS}) but not a built-in: it is not in
+ * {@link DEFAULT_TOKENS}, so the user can still remove it and no fee guard
+ * depends on it.
+ */
+export const USDC_TOKEN_ADDRESS =
+  "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+
+/**
+ * The token set a new wallet starts tracking (mc-wallet issue 663): the
+ * built-in {@link DEFAULT_TOKENS} plus native USDC on mainnet, the token users
+ * most often receive with no ETH or STRK beside it. Only USDC is added, and
+ * only on mainnet; it stays removable because {@link isDefaultToken} still
+ * names the built-ins alone. Existing wallets are not rewritten: a held USDC
+ * balance is tracked by the curated held-token scan instead. The first-run
+ * recovery scan probes this same set, so an account funded only in native
+ * USDC still reads as used.
+ */
+export const DEFAULT_TRACKED_TOKENS: readonly DefaultToken[] = [
+  ...DEFAULT_TOKENS,
+  {
+    address: USDC_TOKEN_ADDRESS,
+    decimals: 6,
+    name: "USD Coin",
+    networkId: "SN_MAIN",
+    symbol: "USDC",
   },
 ];
 
@@ -290,6 +328,20 @@ export const isDefaultToken = (token: {
   readonly networkId: string;
 }): boolean =>
   DEFAULT_TOKENS.some(
+    (known) => known.networkId === token.networkId && sameFelt(known.address, token.address),
+  );
+
+/**
+ * Whether a token is one a new wallet starts tracking ({@link DEFAULT_TRACKED_TOKENS}),
+ * matched like {@link isDefaultToken}. Such a token does not count against the
+ * added-token cap, since the user did not add it; unlike a built-in it can be
+ * removed.
+ */
+export const isDefaultTrackedToken = (token: {
+  readonly address: string;
+  readonly networkId: string;
+}): boolean =>
+  DEFAULT_TRACKED_TOKENS.some(
     (known) => known.networkId === token.networkId && sameFelt(known.address, token.address),
   );
 

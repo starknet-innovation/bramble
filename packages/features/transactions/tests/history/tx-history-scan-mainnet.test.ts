@@ -109,6 +109,7 @@ describe("scanTransactionHistory against real mainnet payloads", () => {
         accountId: `SN_MAIN:${ACCOUNT}`,
         amount: "0.311133446749725792",
         counterparty: SEQUENCER,
+        direction: "out",
         hash: "0x7241fdec0a3dba34a765ee1713788762c436422a5e18b24300142a9a3a8a363",
         kind: "transfer",
         networkId: "SN_MAIN",
@@ -116,11 +117,14 @@ describe("scanTransactionHistory against real mainnet payloads", () => {
         submittedAt: 1_788_832_699_000,
         summary: "Sent 0.311133446749725792 STRK to 0x1176…f3d8",
         token: "STRK",
+        tokenAddress: "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
       },
     ]);
-    // One height read, one outgoing and one incoming filter, one header read.
+    // One height read, the layout probe, one outgoing and one incoming filter,
+    // one header read.
     expect(calls).toEqual([
       "starknet_blockNumber",
+      "starknet_getEvents",
       "starknet_getEvents",
       "starknet_getEvents",
       "starknet_getBlockWithTxHashes",

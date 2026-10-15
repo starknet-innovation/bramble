@@ -10,7 +10,7 @@ import {
   isVaultV7,
   isVaultV8,
   isVaultV9,
-  isVaultV11,
+  isVaultV12,
 } from "@bramble/vault/schema";
 import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
@@ -67,7 +67,8 @@ const legacyV7 = {
 const currentVault = {
   ...legacyV7,
   importedSeeds: [],
-  schemaVersion: CURRENT_SCHEMA_VERSION as 11,
+  schemaVersion: CURRENT_SCHEMA_VERSION as 12,
+  shadowAccountScopes: [],
 };
 
 describe("migrateVault", () => {
@@ -88,6 +89,7 @@ describe("migrateVault", () => {
       mnemonic: null,
       originGrants: [],
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      shadowAccountScopes: [],
       signingKeys: [],
     });
   });
@@ -100,7 +102,7 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV11(migrated)).toBe(true);
+    expect(isVaultV12(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
       accounts: legacyVault.accounts.map((account) => ({
@@ -111,6 +113,7 @@ describe("migrateVault", () => {
       importedSeeds: [],
       mnemonic: null,
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      shadowAccountScopes: [],
     });
     expect(migrated).not.toBe(legacyVault);
   });
@@ -129,7 +132,7 @@ describe("migrateVault", () => {
       currentVault,
     ]) {
       const migrated = migrateVault(source);
-      expect(isVaultV11(migrated)).toBe(true);
+      expect(isVaultV12(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });
@@ -153,7 +156,7 @@ describe("migrateVault", () => {
       signingKeys: [{ accountId: aliasedId, privateKey: "0x0456" }],
     });
 
-    expect(isVaultV11(migrated)).toBe(true);
+    expect(isVaultV12(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({
       accountContractType: "openzeppelin",
       address: "0x123",
@@ -183,15 +186,20 @@ describe("migrateVault", () => {
     });
 
     expect(isVaultV6({ ...legacyV6, accounts: [argent] })).toBe(true);
-    expect(isVaultV11(migrated)).toBe(true);
+    expect(isVaultV12(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({ deploymentSalt: argent.publicKeyX });
 
     // The adjacent v7→v8 step retains the founding phrase and every account,
     // adding only the empty imported-seeds collection; v8→v9 then re-stamps.
     const fromV7 = migrateVault(legacyV7);
     expect(isVaultV7(legacyV7)).toBe(true);
-    expect(isVaultV11(fromV7)).toBe(true);
-    expect(fromV7).toEqual({ ...legacyV7, importedSeeds: [], schemaVersion: 11 });
+    expect(isVaultV12(fromV7)).toBe(true);
+    expect(fromV7).toEqual({
+      ...legacyV7,
+      importedSeeds: [],
+      schemaVersion: 12,
+      shadowAccountScopes: [],
+    });
   });
 
   test("refuses a schema-v6 vault that claims an Argent class that era never wrote", () => {
@@ -245,7 +253,11 @@ describe("migrateVault", () => {
     // The v8→v9 and v9→v10 steps each rewrite nothing but the version stamp.
     const bramble = ledgerVaultV8("LedgerW");
     expect(isVaultV8(bramble)).toBe(true);
-    expect(migrateVault(bramble)).toEqual({ ...bramble, schemaVersion: 11 });
+    expect(migrateVault(bramble)).toEqual({
+      ...bramble,
+      schemaVersion: 12,
+      shadowAccountScopes: [],
+    });
     expect(isVaultV9({ ...bramble, schemaVersion: 9 })).toBe(true);
 
     // A v8 payload could never have held a Ready-path account: the legacy
@@ -280,6 +292,7 @@ describe("migrateVault", () => {
         mnemonic: null,
         originGrants: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,
+        shadowAccountScopes: [],
         signingKeys: [],
       });
     } finally {

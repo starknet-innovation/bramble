@@ -212,7 +212,9 @@ describe("Send confirmation outcomes", () => {
     expect(reason.length).toBeGreaterThan(0);
     // What is worth taking to support is the reason, not the identifier — this
     // control used to copy the hash, which a failure usually does not have.
-    app.querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy the error"]')?.click();
+    app
+      .querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy error details"]')
+      ?.click();
     await flush();
     expect(copied).toEqual([reason]);
     // A chain rejection does have a hash, so its row stays.
@@ -286,7 +288,9 @@ describe("Send confirmation outcomes", () => {
 
   test("a failure before anything was submitted still says it was not sent", async () => {
     const { app, form } = mountOutcome("accepted", preferences, async () => {
-      throw new Error("The network fee could not be estimated");
+      throw new Error(
+        "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.",
+      );
     });
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("failed");

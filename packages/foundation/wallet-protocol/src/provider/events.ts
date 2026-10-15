@@ -82,6 +82,18 @@ export const readProviderEvent = (value: unknown): ProviderEvent | null => {
 };
 
 /**
+ * Whether a page event should reach the dapp, given the chain id the page
+ * already holds. A `networkChanged` naming that same chain is dropped: the
+ * wallet announces the active network after account switches and unlocks,
+ * which usually leave it where it was, and dapps commonly reset on the event
+ * (Sherlock 188, 215). Every other event passes.
+ */
+export const isPageEventNews = (
+  event: ProviderEvent,
+  currentChainId: string | undefined,
+): boolean => event.event !== "networkChanged" || event.data !== currentChainId;
+
+/**
  * Checks background wallet event broadcasts before reacting to them.
  */
 export const isWalletEventMessage = (value: unknown): value is WalletEventMessage => {
@@ -98,12 +110,29 @@ export const isWalletEventMessage = (value: unknown): value is WalletEventMessag
   );
 };
 
+// The provider methods whose result is the page's account list. Only their
+// answers may move what the bridge believes a page has seen: any other
+// method's string array (a list of supported spec versions, say) is not an
+// account list, and reading it as one let an unconnected page receive
+// accountsChanged on the next wallet broadcast (Sherlock 149).
+const ACCOUNT_METHODS: ReadonlySet<string> = new Set([
+  "mc_accounts",
+  "mc_requestAccounts",
+  "wallet_requestAccounts",
+]);
+
 /**
  * Extracts the address list a payload reveals to the page, when it does.
+ * `method` is the provider method the payload answers; only an
+ * account-returning method's payload counts, whatever its shape.
  */
-export const addressesFromPayload = (payload: {
-  readonly result?: unknown;
-}): readonly string[] | null => {
+export const addressesFromPayload = (
+  payload: { readonly result?: unknown },
+  method: string,
+): readonly string[] | null => {
+  if (!ACCOUNT_METHODS.has(method)) {
+    return null;
+  }
   if (isAddressList(payload.result)) {
     return payload.result;
   }

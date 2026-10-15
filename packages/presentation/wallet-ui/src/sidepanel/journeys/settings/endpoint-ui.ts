@@ -9,7 +9,7 @@ import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { HostPermissionApi } from "../../runtime/runtime-global";
-import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 
 /**
  * Dependencies the endpoint bindings close over.
@@ -77,7 +77,7 @@ const bindEndpointForm = (
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, fail), "error", form, errorDetails(error, fail));
+          showToast(errorDetails(error, fail), "error", form, errorDetails(error, fail));
           if (result) {
             result.textContent = errorLine(error, fail);
           }
@@ -99,7 +99,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
     const ohttpEnabled = data.get("ohttpEnabled") === "on";
     const proverUrl = field("proverUrl");
     const poolAddress = field("poolAddress");
-    const subaccountAnonymizerAddress = field("subaccountAnonymizerAddress");
+    const shadowAccountAnonymizerAddress = field("shadowAccountAnonymizerAddress");
     const ohttpRelayUrl = field("ohttpRelayUrl");
     const paymasterUrl = field("paymasterUrl");
     const feeToken = field("feeToken");
@@ -107,7 +107,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
       discoveryUrl,
       proverUrl,
       poolAddress,
-      subaccountAnonymizerAddress,
+      shadowAccountAnonymizerAddress,
       ohttpRelayUrl,
       paymasterUrl,
       feeToken,
@@ -119,7 +119,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
           ...(ohttpEnabled ? { ohttpEnabled: true } : {}),
           poolAddress,
           proverUrl,
-          ...(subaccountAnonymizerAddress ? { subaccountAnonymizerAddress } : {}),
+          ...(shadowAccountAnonymizerAddress ? { shadowAccountAnonymizerAddress } : {}),
           ...(ohttpRelayUrl ? { ohttpRelayUrl } : {}),
           ...(paymasterUrl || feeToken ? { paymaster: { feeToken, url: paymasterUrl } } : {}),
         };
@@ -137,7 +137,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
         },
         (error: unknown) => {
           const fallback = "Privacy service configuration failed";
-          showToast(errorMessage(error, fallback), "error", form, errorDetails(error, fallback));
+          showToast(errorDetails(error, fallback), "error", form, errorDetails(error, fallback));
           if (result) {
             result.textContent = errorLine(error, fallback);
           }
@@ -174,7 +174,7 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
         },
         (error: unknown) => {
           const fallback = "Explorer fallback update failed";
-          showToast(errorMessage(error, fallback), "error", form, errorDetails(error, fallback));
+          showToast(errorDetails(error, fallback), "error", form, errorDetails(error, fallback));
           if (result) {
             result.textContent = errorLine(error, fallback);
           }

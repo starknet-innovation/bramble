@@ -39,10 +39,15 @@ const mockApi = (
   quote: unknown = apiQuote,
   chainId = STARKNET_NETWORKS.SN_MAIN.chainId,
 ) => {
+  const respondJson = (body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
   const fetch = vi
     .fn()
-    .mockResolvedValueOnce({ ok: true, json: async () => [quote] })
-    .mockResolvedValueOnce({ ok: true, json: async () => ({ calls: [call], chainId }) });
+    .mockResolvedValueOnce(respondJson([quote]))
+    .mockResolvedValueOnce(respondJson({ calls: [call], chainId }));
   vi.stubGlobal("fetch", fetch);
   return fetch;
 };

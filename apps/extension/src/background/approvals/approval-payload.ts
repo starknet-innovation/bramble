@@ -29,7 +29,17 @@ export type ApprovalPayload = {
   readonly chainId?: string;
   readonly declare?: ProviderDeclare;
   readonly networkId?: StarknetNetworkId;
+  /**
+   * The refusal a `strk20-unavailable` notice delivers to the site once the
+   * user closes it — the same error the request would have got at once.
+   */
+  readonly noticeRefusal?: string;
   readonly proof?: Strk20Proof;
+  /**
+   * The shadow-account anonymizer a `strk20-invoke` card named, present exactly
+   * when its batch holds a `shadow_account_invoke`.
+   */
+  readonly shadowAccountAnonymizer?: string;
   readonly strk20Request?: Strk20DisclosureRequest;
   readonly strk20Plan?: Strk20SubmissionPlan;
   readonly typedData?: unknown;
@@ -59,6 +69,9 @@ const readStrk20Invoke: PayloadReader = (approval) =>
     ? null
     : {
         actions: cloneApprovalValue(approval.actions),
+        ...(approval.shadowAccountAnonymizer === undefined
+          ? {}
+          : { shadowAccountAnonymizer: approval.shadowAccountAnonymizer }),
         strk20Plan: cloneApprovalValue(approval.strk20Plan),
       };
 
@@ -93,7 +106,9 @@ const READERS: Readonly<Record<ApprovalKind, PayloadReader>> = {
   "strk20-invoke": readStrk20Invoke,
   "strk20-prepare": readStrk20Disclosure,
   "strk20-register": readStrk20Disclosure,
-  "strk20-subaccount": readStrk20Disclosure,
+  "strk20-shadow-account": readStrk20Disclosure,
+  "strk20-unavailable": (approval) =>
+    approval.noticeRefusal === undefined ? null : { noticeRefusal: approval.noticeRefusal },
   "switch-chain": readSwitch,
   "watch-asset": empty,
 };

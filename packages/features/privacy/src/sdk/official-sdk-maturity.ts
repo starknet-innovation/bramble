@@ -5,12 +5,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import {
-  IndeterminateRpcWriteError,
-  isTransactionNotFoundError,
-  isTransportRpcError,
-} from "@bramble/starknet/provider";
-import { classifyTransactionStatus } from "@bramble/starknet/rpc";
+import { IndeterminateRpcWriteError, isTransportRpcError } from "@bramble/starknet/provider";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -19,10 +14,11 @@ import {
 import type { RpcProvider } from "starknet";
 import {
   memoryStrk20MaturityStore,
-  type Strk20MaturityRecord,
+  STRK20_PRIOR_WRITE_UNRESOLVED,
   type Strk20MaturityScope,
   type Strk20MaturityStore,
   type Strk20SignedSubmission,
+  type Strk20SubmissionRoute,
 } from "../policy/maturity";
 import { STRK20_SERVICE_UNAVAILABLE } from "../service";
 import {
@@ -31,14 +27,16 @@ import {
   withinStrk20WaitBudget,
 } from "./official-sdk-budget";
 
-const PROVING_BLOCK_DEPTH = 10;
+import {
+  PROVING_BLOCK_DEPTH,
+  priorWaitFailure,
+  RejectedPrivacyTransaction,
+  settleSubmitting,
+} from "./official-sdk-maturity-resolution";
+
 const MAX_MATURITY_POLLS = 120;
 const ACCEPTANCE_RETRIES = 240;
 const ACCEPTANCE_LIFECYCLE_RETRIES = 120;
-
-class RejectedPrivacyTransaction extends Error {}
-
-const STATUS_UNKNOWN = `${STRK20_SERVICE_UNAVAILABLE}: submission status is unknown; close every browser window and reopen the browser to recover`;
 
 /**
  * Persists the signed identity of a privacy write before it is sent. Handed to
@@ -64,79 +62,6 @@ const canonicalSigned = (signed: Strk20SignedSubmission): Strk20SignedSubmission
     : null;
 };
 
-type SignedOutcome = "dropped" | "landed" | "rejected" | "unknown";
-
-// A nonce answer is an untrusted RPC value. Only a string that canonicalizes
-// to a field element can prove the sender's nonce moved; a decimal or an
-// integer past the field is not a nonce, and treating it as one could release
-// a write that may still land.
-const chainNonce = (value: unknown): bigint | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const felt = canonicalFelt(value);
-  return felt !== null && isStarkFieldElement(felt) ? BigInt(felt) : null;
-};
-
-// What the chain says about a write whose send lost its answer. A status the
-// node answers is followed like any submitted write, except REJECTED: the
-// sequencer refused that hash, it will not be included, and its nonce was not
-// spent, so the signed marker is released instead of being replaced by a
-// submitted record that no longer carries the nonce. "Not found" alone is
-// noise — a hash can be unknown to one node for a moment, or to one backend
-// behind a balancer — so the write counts as dropped only when the sender's
-// nonce was already spent past it in a block PROVING_BLOCK_DEPTH deep, and the
-// node, asked again after that, still does not know the hash. A nonce is spent
-// once, so such a write can never land. Everything else, including any failed
-// read or a nonce that is not a field element, stays unknown and closed.
-const resolveSigned = async (
-  provider: RpcProvider,
-  signed: Strk20SignedSubmission,
-): Promise<SignedOutcome> => {
-  const lookUp = async (): Promise<SignedOutcome> => {
-    try {
-      const status = classifyTransactionStatus(
-        await provider.getTransactionStatus(signed.transactionHash),
-      ).status;
-      switch (status) {
-        case "rejected":
-          return "rejected";
-        case "accepted":
-        case "pending":
-        case "preconfirmed":
-        case "reverted":
-          return "landed";
-        default: {
-          const unreachable: never = status;
-          return unreachable;
-        }
-      }
-    } catch (error) {
-      return isTransactionNotFoundError(error) ? "dropped" : "unknown";
-    }
-  };
-  const first = await lookUp();
-  if (first !== "dropped") {
-    return first;
-  }
-  try {
-    const settled = (await provider.getBlockNumber()) - PROVING_BLOCK_DEPTH;
-    if (!Number.isSafeInteger(settled) || settled < 0) {
-      return "unknown";
-    }
-    const spent = chainNonce(await provider.getNonceForAddress(signed.senderAddress, settled));
-    if (spent === null || spent <= BigInt(signed.nonce)) {
-      return "unknown";
-    }
-  } catch {
-    return "unknown";
-  }
-  return lookUp();
-};
-
-type SubmittingRecord = Extract<Strk20MaturityRecord, { readonly state: "submitting" }>;
-type SubmittedRecord = Extract<Strk20MaturityRecord, { readonly state: "submitted" }>;
-
 // Journals a signed write for `scope`. A malformed identity is refused, which
 // aborts the send before anything leaves.
 const journalFor =
@@ -148,77 +73,6 @@ const journalFor =
     }
     await store.write(scope, { ...identity, state: "submitting" });
   };
-
-// Replaces a stuck marker only while the store still names it. The comparison
-// is inside the store's mutation, not a read followed by a later write: a send
-// that started meanwhile has written its own marker, which must survive.
-const replaceStuck = async (
-  store: Strk20MaturityStore,
-  scope: Strk20MaturityScope,
-  transactionHash: string,
-  next: SubmittedRecord | null,
-): Promise<void> => {
-  if (!(await store.replaceIfCurrentHash(scope, transactionHash, next))) {
-    throw new WalletError(STATUS_UNKNOWN);
-  }
-};
-
-// Maps a failed receipt wait on the scope's prior write. A proven rejection
-// releases the marker; a marker replaced during the wait keeps its own
-// status-unknown refusal; anything else is the generic service error.
-const priorWaitFailure = async (
-  store: Strk20MaturityStore,
-  scope: Strk20MaturityScope,
-  transactionHash: string,
-  error: unknown,
-): Promise<never> => {
-  if (error instanceof RejectedPrivacyTransaction) {
-    await store.replaceIfCurrentHash(scope, transactionHash, null);
-  }
-  if (error instanceof WalletError && error.message === STATUS_UNKNOWN) {
-    throw error;
-  }
-  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-};
-
-const settledRecord = (
-  outcome: Exclude<SignedOutcome, "unknown">,
-  transactionHash: string,
-): SubmittedRecord | null => {
-  switch (outcome) {
-    case "landed":
-      return { state: "submitted", transactionHash };
-    case "dropped":
-    case "rejected":
-      return null;
-    default: {
-      const unreachable: never = outcome;
-      return unreachable;
-    }
-  }
-};
-
-// Settles a `submitting` marker on-chain: the submitted write to follow, null
-// once the write provably cannot land, or STATUS_UNKNOWN while it stays
-// closed. A marker without a signed identity (a relay send, or one that failed
-// before signing) names nothing the chain can be asked about.
-const settleSubmitting = async (
-  store: Strk20MaturityStore,
-  provider: RpcProvider,
-  scope: Strk20MaturityScope,
-  marker: SubmittingRecord,
-): Promise<SubmittedRecord | null> => {
-  if (marker.transactionHash === undefined) {
-    throw new WalletError(STATUS_UNKNOWN);
-  }
-  const outcome = await resolveSigned(provider, marker);
-  if (outcome === "unknown") {
-    throw new WalletError(STATUS_UNKNOWN);
-  }
-  const next = settledRecord(outcome, marker.transactionHash);
-  await replaceStuck(store, scope, marker.transactionHash, next);
-  return next;
-};
 
 type MaturityRuntimeOptions = {
   /**
@@ -276,10 +130,17 @@ export type Strk20MaturityRuntime = {
    * signs its own transaction should pass `journal` on as the invoke's
    * `onSigned` hook, so a send whose answer is lost can later be resolved
    * on-chain rather than only by ending the browser session.
+   *
+   * `route` is recorded on the claim. Pass `account` only when `broadcast`
+   * signs through `journal` (the invoke's `onSigned` hook), because an
+   * `account` claim that never gained a signed identity is later released as
+   * provably unsent. Anything else must pass `relay`.
+
    */
   readonly submitAccepted: <P, T extends { readonly transactionHash: string }>(
     provider: RpcProvider,
     scope: Strk20MaturityScope,
+    route: Strk20SubmissionRoute,
     prepare: () => Promise<P>,
     broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
   ) => Promise<T>;
@@ -296,6 +157,11 @@ export const createStrk20MaturityRuntime = ({
   waitForAccepted = defaultWaitForAccepted,
 }: MaturityRuntimeOptions = {}): Strk20MaturityRuntime => {
   const submissionTails = new Map<string, Promise<void>>();
+  // Scopes whose send is between its `submitting` claim and its settled
+  // broadcast in this worker. Such a claim may still be signed, so it is never
+  // released as unsent. The background builds one runtime per worker, and a
+  // send cannot outlive the worker that runs it.
+  const liveSends = new Set<string>();
   const scopeKey = (scope: Strk20MaturityScope): string =>
     `${scope.accountId}|${scope.networkId}|${canonicalFelt(scope.poolAddress) ?? scope.poolAddress}`;
   const serializeSubmission = <T>(
@@ -337,7 +203,7 @@ export const createStrk20MaturityRuntime = ({
       transactionHash,
     });
     if (!recorded) {
-      throw new WalletError(STATUS_UNKNOWN);
+      throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
     }
     return block;
   };
@@ -349,7 +215,7 @@ export const createStrk20MaturityRuntime = ({
     const stored = await store.read(scope);
     const record =
       stored?.state === "submitting"
-        ? await settleSubmitting(store, provider, scope, stored)
+        ? await settleSubmitting(store, provider, scope, stored, liveSends.has(scopeKey(scope)))
         : stored;
     if (!record) {
       return undefined;
@@ -427,25 +293,34 @@ export const createStrk20MaturityRuntime = ({
   const submitPreparedAccepted = <P, T extends { readonly transactionHash: string }>(
     provider: RpcProvider,
     scope: Strk20MaturityScope,
+    route: Strk20SubmissionRoute,
     prepare: () => Promise<P>,
     broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
   ): Promise<T> =>
     serializeSubmission(scope, async () => {
       const prepared = await prepare();
       const previous = await store.read(scope);
-      await store.write(scope, { state: "submitting" });
-      const journal = journalFor(store, scope);
+      const key = scopeKey(scope);
+      // Marked live before the claim is queued, so a resolution that reads the
+      // flag afterwards can never queue a release ahead of this claim.
+      liveSends.add(key);
       // A structured RPC rejection is determinate: the sequencer refused the
       // transaction, so no write is in flight and the scope must be released or
       // every later attempt on it fails with a stale `submitting` guard.
       // Transport and unknown failures stay indeterminate — the transaction may
       // have been accepted after the response was lost — so those keep the scope
       // closed rather than risk proving against state a landed write invalidates.
-      const result = await broadcast(prepared, journal).catch(async (error: unknown) => {
-        if (!(error instanceof IndeterminateRpcWriteError) && !isTransportRpcError(error)) {
-          await store.write(scope, previous);
-        }
-        throw error;
+      // The scope stays live until that restore has landed.
+      const result = await (async (): Promise<T> => {
+        await store.write(scope, { route, state: "submitting" });
+        return broadcast(prepared, journalFor(store, scope)).catch(async (error: unknown) => {
+          if (!(error instanceof IndeterminateRpcWriteError) && !isTransportRpcError(error)) {
+            await store.write(scope, previous);
+          }
+          throw error;
+        });
+      })().finally(() => {
+        liveSends.delete(key);
       });
       // The pre-broadcast `submitting` claim is already durable. Once the RPC
       // returned an accepted hash, a later journal/receipt failure may leave

@@ -81,10 +81,11 @@ describe("createApprovalQueue", () => {
     }
 
     expect(queue.request("https://app-0.example")).toEqual(first);
-    const overflow = queue.request("https://overflow.example");
+    // Every origin holds one prompt, so none is displaced for a newcomer
+    // (Sherlock 128): the new origin is refused and the first prompt stays.
+    expect(() => queue.request("https://overflow.example")).toThrow("Too many pending approvals");
     expect(queue.list()).toHaveLength(MAX_PENDING_APPROVALS);
-    expect(queue.get(first.id)).toBeNull();
-    expect(queue.get(overflow.id)).toEqual(overflow);
+    expect(queue.get(first.id)).toEqual(first);
   });
 
   test("queues watch-asset prompts per origin and token", () => {
@@ -237,8 +238,8 @@ describe("createApprovalQueue payload discrimination", () => {
       },
     },
     {
-      kind: "strk20-subaccount",
-      request: { dappName: "Example", nonce: "0x1", type: "subaccount" },
+      kind: "strk20-shadow-account",
+      request: { anonymizer: "0x4", dappName: "Example", nonce: "0x1", type: "shadowAccount" },
     },
   ] as const) {
     test(`reconstructs a deep-cloned ${input.kind} request`, () => {
@@ -398,7 +399,7 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
         context: CONTEXT,
         kind: "strk20-balances",
         origin: ORIGIN,
-        request: { dappName: "Example", type: "subaccount" },
+        request: { anonymizer: "0x4", dappName: "Example", type: "shadowAccount" },
         summaries: ["Share"],
       }),
     ).toThrow("Invalid STRK20 approval");

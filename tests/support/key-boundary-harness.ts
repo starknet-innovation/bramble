@@ -19,6 +19,7 @@
 
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { memoryMultisigStore } from "@bramble/multisig/repository";
+import { DEFAULT_STRK20_NETWORKS } from "@bramble/privacy/config";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import { createMemoryStore } from "@bramble/store/kv";
@@ -369,6 +370,14 @@ const seedStores = async (stores: {
     tokenId: "1",
   });
   const withGroup = await stores.preferencesStore.createGroup({ icon: "folder", name: "Trading" });
+  // The opt-in SDK shadow account module, so the commitment entry reaches the
+  // viewing key instead of stopping at the pre-approval anonymizer check.
+  const mainnet = DEFAULT_STRK20_NETWORKS.SN_MAIN;
+  if (!mainnet) throw new Error("key-boundary harness needs the bundled Mainnet STRK20 config");
+  await stores.preferencesStore.setStrk20NetworkConfig({
+    config: { ...mainnet, shadowAccountAnonymizerAddress: "0x2" },
+    networkId: "SN_MAIN",
+  });
   const addressBookId = contacts.addressBook.at(-1)?.id;
   const groupId = withGroup.groups?.at(-1)?.id;
   const nftId = withNft.nfts?.at(-1)?.id;

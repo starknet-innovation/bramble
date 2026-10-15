@@ -6,7 +6,8 @@
  * Acceptance stays with `isVaultPassphrase` in the callers; nothing here
  * keeps the value.
  */
-import { estimatePassphraseStrength, isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { estimatePassphraseStrength } from "@bramble/wallet-model/passphrase-strength";
 
 /**
  * Elements of one `.password-requirement` block: the container that carries

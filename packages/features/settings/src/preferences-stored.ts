@@ -47,6 +47,7 @@ import {
 } from "@bramble/wallet-model/preferences";
 import { type AccountGroups, isAccountGroups } from "./groups";
 import { compactStoredCustomNetworks } from "./preferences-custom-networks";
+import { dropRetiredStrk20RoutingKeys } from "./preferences-strk20-routing";
 import type { WalletPreferences } from "./preferences-types";
 
 const PREFERENCE_KEYS: readonly string[] = [
@@ -66,6 +67,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nfts",
   "nostrRelayUrl",
   "productAnalytics",
+  "removedTokens",
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
@@ -88,7 +90,8 @@ const hasValidIdKeyedEntries = (value: Record<string, unknown>): boolean =>
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenAccountIds"] === undefined || isHiddenAccountIds(value["hiddenAccountIds"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
-  (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"]));
+  (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"])) &&
+  (value["removedTokens"] === undefined || isHiddenTokens(value["removedTokens"]));
 // Optional display and routing preferences written from the settings screens.
 const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["approvalSurface"] === undefined ||
@@ -291,6 +294,7 @@ const normalizedAccountGroups = (value: unknown): unknown =>
  * rename so a token hidden (or dapp-supplied) before the collapse stays so.
  * Stored custom networks are shrunk to their bounded shape (Sherlock audit
  * 153), so a record a dapp filled is written back small on the next mutation.
+ * A pre-0.10.4 STRK20 anonymizer key is dropped from the routing map (#443).
  *
  * Deterministic and total: a non-record value, or a collection this build
  * cannot read, is returned untouched for {@link isWalletPreferences} to reject.
@@ -307,12 +311,15 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
   const hasAccountAliases = value["accountLabels"] !== undefined || value["groups"] !== undefined;
   const customNetworks = compactStoredCustomNetworks(value["customNetworks"]);
   const networksChanged = customNetworks !== value["customNetworks"];
-  if (!tokens && !addressBook && !hasAccountAliases && !networksChanged) {
+  const strk20Networks = dropRetiredStrk20RoutingKeys(value["strk20Networks"]);
+  const routingChanged = strk20Networks !== value["strk20Networks"];
+  if (!tokens && !addressBook && !hasAccountAliases && !networksChanged && !routingChanged) {
     return value;
   }
   return {
     ...value,
     ...(networksChanged ? { customNetworks } : {}),
+    ...(routingChanged ? { strk20Networks } : {}),
     ...(value["accountLabels"] === undefined
       ? {}
       : { accountLabels: normalizedAccountLabels(value["accountLabels"]) }),

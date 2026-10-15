@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bramble: Starknet Wallet",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "description": "Self-custodial Starknet wallet with private balances, Ledger and multisig support.",
   "author": "Starknet Holdings",
   "homepage_url": "https://bramble.fi",
@@ -24,7 +24,7 @@
     "type": "module"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:; frame-src 'self';",
+    "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none';",
     "sandbox": "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; frame-src blob:; base-uri 'none'; form-action 'none'"
   },
   "sandbox": {

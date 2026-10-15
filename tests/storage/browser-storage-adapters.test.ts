@@ -11,6 +11,7 @@
  * accounts.
  */
 import { afterEach, describe, expect, test } from "bun:test";
+import { JSON_BUDGETS } from "@bramble/core/json";
 import {
   createBrowserLocalStore,
   createBrowserSessionStore,
@@ -110,5 +111,31 @@ describe("createBrowserSessionStore", () => {
 
     await store.remove("bramble:session");
     expect(await store.get("bramble:session")).toBeUndefined();
+  });
+});
+
+// Only the vault envelope keys get the larger at-rest budget (Sherlock 261):
+// every other key stays on the provider budget, so no other value can grow
+// toward the browser's shared storage quota.
+describe("browser local store write budget", () => {
+  test("admits a ciphertext-sized value under the vault key only", async () => {
+    const written: Record<string, unknown> = {};
+    globalWithChrome.chrome = {
+      storage: {
+        local: {
+          get: async (key: string) => ({ [key]: written[key] }),
+          remove: async () => undefined,
+          set: async (items: Record<string, unknown>) => void Object.assign(written, items),
+        },
+      },
+    };
+    const store = createBrowserLocalStore();
+    const ciphertextSized = "A".repeat(JSON_BUDGETS.provider.maxStringLength + 1);
+    await store.set("bramble:vault", { ciphertext: ciphertextSized });
+    expect(written["bramble:vault"]).toEqual({ ciphertext: ciphertextSized });
+    await expect(store.set("bramble:preferences", { blob: ciphertextSized })).rejects.toThrow(
+      "Invalid JSON value",
+    );
+    expect(written["bramble:preferences"]).toBeUndefined();
   });
 });

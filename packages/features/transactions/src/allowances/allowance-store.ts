@@ -23,13 +23,27 @@ import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/jso
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
-
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
-  type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
+import {
+  type AllowanceRanking,
+  type AllowanceRankToken,
+  keepLargest,
+  rankingFor,
+  trimToTotal,
+} from "./allowance-retention";
+import {
+  entriesAfterSettle,
+  isCanonicalHash,
+  type RevokeOutcome,
+  recordedEntry,
+} from "./allowance-revoke";
+
+/** Revoke helpers re-exported from their split module. */
+export { allowanceTarget, type RevokeOutcome } from "./allowance-revoke";
 
 /**
  * Browser storage key for the allowance log.
@@ -45,8 +59,9 @@ export const ALLOWANCE_STORE_KEY = "bramble:allowances";
  * goes through `assertJsonValue` in `kv.ts` and a value over that bounded-JSON
  * budget is rejected — the caller in `allowance-ops` swallows the rejection, so
  * an unbounded log would silently stop tracking newly granted allowances. A log
- * of maximum-size records saturates the budget at 300 entries; both bounds are
- * set below that with margin and pinned by `allowance-store-budget.test.ts`.
+ * of maximum-size records (a lower bound with a pending revoke's hash) saturates
+ * the budget at about 250 entries; both bounds are set below that with margin
+ * and pinned by `allowance-store-budget.test.ts`.
  * Consume these instead of re-deriving either literal.
  *
  * The total bound is spent fairly rather than by global age: see
@@ -70,66 +85,33 @@ const MAX_AMOUNT_DIGITS = 78;
 // MAX_AMOUNT_DIGITS, so a saturated total still validates as a stored amount.
 const UINT_256_MAX = (1n << 256n) - 1n;
 
-/**
- * Fields describing one allowance the user granted through this wallet.
- *
- * `lowerBound` marks an amount the wallet knows is AT LEAST this large but
- * cannot state exactly: an `increase_allowance` applied on top of a base this
- * wallet never saw (granted on the dapp's own site, or evicted by the retention
- * cap) is the increment plus an unknown base. Absent means the amount is the
- * exact standing allowance. Only `true` is representable, so "exact" has one
- * spelling; the manager renders a lower bound as "at least N" rather than
- * claiming a spender's reach is smaller than it is.
- *
- * A lower bound of ZERO is therefore the weakest honest statement the log can
- * make — "this pair is approved for an amount this wallet cannot bound" — and
- * is deliberately NOT a removal: a decrease applied to an unseen base leaves an
- * allowance the user must still be able to see and revoke.
- */
-export type AllowanceInput = {
-  readonly accountId: string;
-  readonly amount: string;
-  readonly lowerBound?: true;
-  readonly networkId: StarknetNetworkId;
-  readonly spender: string;
-  readonly token: string;
-};
+/** The record types, re-exported from their split module. */
+export type {
+  AllowanceDelta,
+  AllowanceInput,
+  AllowanceOwner,
+  AllowanceRecord,
+} from "./allowance-record";
 
-/**
- * A relative allowance change: ERC20's `increase_allowance` adds to the standing
- * allowance and `decrease_allowance` subtracts from it, so neither can be stored
- * without the current total. Applied by {@link AllowanceStore.applyDelta}.
- */
-export type AllowanceDelta = {
-  readonly direction: "add" | "subtract";
-  readonly input: AllowanceInput;
-};
-
-/**
- * The account an allowance belongs to: the scope every id, retention bound, and
- * manager query is keyed by. Named separately from `AllowanceInput` because the
- * owner is not always a vault account — a multisig execution grants from the
- * multisig contract's own scope (`ArgentMultisigRecord.id`, which shares the
- * `<networkId>:<address>` shape), not from the signer that broadcast it.
- */
-export type AllowanceOwner = Pick<AllowanceInput, "accountId" | "networkId">;
-
-/**
- * One tracked allowance with a deterministic id derived from its account,
- * token, and spender.
- */
-export type AllowanceRecord = AllowanceInput & { readonly id: string };
+import type {
+  AllowanceDelta,
+  AllowanceInput,
+  AllowanceOwner,
+  AllowanceRecord,
+} from "./allowance-record";
 
 /**
  * Allowance log surface used by background message handling. `record` upserts by
- * id and treats an exact zero amount as a removal, so revoking cleans up the
- * entry; `applyDelta` upserts RELATIVE to the tracked total in one serialized
+ * id and keeps a grant an exact zero would revoke, marked `revoking`, because
+ * a revoke is recorded when submitted and may still revert; `settleRevocations`
+ * settles it on a zero reading or on its own transaction's outcome. `applyDelta` upserts RELATIVE to the tracked total in one serialized
  * read-modify-write, which is the only concurrency-safe way to apply an
  * `increase_allowance` (composing `list` + `record` at a caller loses one of two
  * concurrent grants, because `list` is a concurrent read by design).
  * Retention follows `ALLOWANCE_LIMITS`: a per-account-and-network cap so one
  * account never evicts another's records, plus a total cap that keeps the
- * persisted log inside the storage boundary's bounded-JSON budget. Both writers
+ * persisted log inside the storage boundary's bounded-JSON budget; at either
+ * cap the least risky allowances go first (./allowance-retention). Both writers
  * ignore an entry whose token or spender is not a felt rather than throwing, and
  * a subtraction that lands on zero without an exact base is kept as a
  * zero-valued lower bound rather than deleted — see {@link AllowanceInput}.
@@ -137,8 +119,25 @@ export type AllowanceRecord = AllowanceInput & { readonly id: string };
 export type AllowanceStore = {
   readonly applyDelta: (delta: AllowanceDelta) => Promise<void>;
   readonly list: () => Promise<readonly AllowanceRecord[]>;
-  readonly record: (entry: AllowanceInput) => Promise<void>;
+  /**
+   * Upserts one allowance. `transactionHash` is the transaction that carried
+   * it, retained only when the entry marks a tracked grant `revoking`.
+   */
+  readonly record: (entry: AllowanceInput, transactionHash?: string) => Promise<void>;
   readonly remove: (id: string) => Promise<void>;
+  /**
+   * Drops pending revokes and zero lower bounds that a live chain reading
+   * states are zero, and settles a pending revoke on its own transaction's
+   * outcome: a failed one clears the mark; an accepted one whose reading this
+   * round is non-zero takes that reading as its exact amount and stays marked.
+   * An outcome never deletes a record; only a zero reading does. Any other reading, and
+   * any other record, is left alone. Readings are untrusted; only an exact "0"
+   * acts. Outcomes come from the wallet's own activity reconciliation.
+   */
+  readonly settleRevocations: (
+    readings: readonly { readonly amount: string; readonly id: string }[],
+    outcomes?: readonly RevokeOutcome[],
+  ) => Promise<void>;
 };
 
 const isAmount = (value: unknown): value is string =>
@@ -184,6 +183,7 @@ export const hasValidAllowanceFields = (value: Record<string, unknown>): boolean
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   isAmount(value["amount"]) &&
   (value["lowerBound"] === undefined || value["lowerBound"] === true) &&
+  (value["revoking"] === undefined || value["revoking"] === true) &&
   typeof value["id"] === "string" &&
   typeof value["spender"] === "string" &&
   isNonZeroStarkFieldElement(value["spender"]) &&
@@ -202,43 +202,14 @@ export const isAllowanceRecord = (value: unknown): value is AllowanceRecord =>
     "id",
     "lowerBound",
     "networkId",
+    "revokeHash",
+    "revoking",
     "spender",
     "token",
   ]) &&
-  hasValidAllowanceFields(value);
-
-/**
- * Recovers the token and spender an allowance id targets, scoped to a specific
- * account. Returns null unless the id is exactly `<accountId>:<token>:<spender>`
- * with both a non-zero token and spender felt — so an id belonging to another
- * account, or a malformed one, is rejected. Lets a revoke resolve its target
- * from the id alone, covering externally discovered allowances that were never
- * written to the local store.
- */
-export const allowanceTarget = (
-  id: string,
-  accountId: string,
-): { readonly spender: string; readonly token: string } | null => {
-  const prefix = `${accountId}:`;
-  if (!id.startsWith(prefix)) {
-    return null;
-  }
-  const parts = id.slice(prefix.length).split(":");
-  if (parts.length !== 2) {
-    return null;
-  }
-  const token = canonicalFelt(parts[0] ?? "");
-  const spender = canonicalFelt(parts[1] ?? "");
-  if (
-    !token ||
-    !spender ||
-    !isNonZeroStarkFieldElement(token) ||
-    !isNonZeroStarkFieldElement(spender)
-  ) {
-    return null;
-  }
-  return { spender, token };
-};
+  hasValidAllowanceFields(value) &&
+  (value["revokeHash"] === undefined ||
+    (value["revoking"] === true && isCanonicalHash(value["revokeHash"])));
 
 const toRecord = (entry: AllowanceInput): AllowanceRecord | null => {
   const token = canonicalFelt(entry.token);
@@ -269,88 +240,39 @@ const readEntries = async (store: KeyValueStore): Promise<readonly AllowanceReco
 const sameScope = (stored: AllowanceRecord, next: AllowanceRecord): boolean =>
   allowanceScope(stored) === allowanceScope(next);
 
-// How many entries each scope may keep once the log as a whole has to fit in
-// `limit`. Each round levels down every scope currently holding the most, so the
-// scopes that caused the overflow pay for it and the survivors end up within one
-// entry of an equal share — a scope is never emptied while another still holds a
-// full quota. Levelling the whole tallest row (rather than picking one scope by
-// name) is what keeps it fair: a tie broken by a fixed rule would send every
-// eviction to the same unlucky account until it was empty.
-const scopeBudgets = (
-  counts: ReadonlyMap<string, number>,
-  limit: number,
-): ReadonlyMap<string, number> => {
-  const budgets = new Map(counts);
-  let total = [...budgets.values()].reduce((sum, count) => sum + count, 0);
-  while (total > limit) {
-    const tallest = Math.max(...budgets.values());
-    for (const [scope, count] of budgets) {
-      if (count === tallest && total > limit) {
-        budgets.set(scope, count - 1);
-        total -= 1;
-      }
-    }
-  }
-  return budgets;
-};
-
-// Fits the log inside the total cap while leaving one slot for the incoming
-// entry, evicting the oldest records of the fullest scopes rather than the
-// oldest records overall.
-//
-// Global age was the trap the per-scope cap only half-closed: with the log
-// full, one account granting allowances all afternoon evicts another account's
-// records one per write until that account reports "no allowances" while still
-// holding live unlimited approvals — the exact false negative this bound exists
-// to prevent, reached at four saturated scopes instead of one. Recency of WRITE
-// is not evidence of liveness, so it may decide which of a scope's own records
-// goes, never which scope goes hungry.
-const trimToTotal = (entries: readonly AllowanceRecord[]): readonly AllowanceRecord[] => {
-  if (entries.length < MAX_ENTRIES_TOTAL) {
-    return entries;
-  }
-  const counts = new Map<string, number>();
-  for (const stored of entries) {
-    counts.set(allowanceScope(stored), (counts.get(allowanceScope(stored)) ?? 0) + 1);
-  }
-  const budgets = scopeBudgets(counts, MAX_ENTRIES_TOTAL - 1);
-  const remaining = new Map(budgets);
-  const kept: AllowanceRecord[] = [];
-  // Newest first, so the slots a scope keeps are its most recent records and
-  // the ones it gives up are its oldest.
-  for (const stored of [...entries].reverse()) {
-    const scope = allowanceScope(stored);
-    const budget = remaining.get(scope) ?? 0;
-    if (budget > 0) {
-      remaining.set(scope, budget - 1);
-      kept.push(stored);
-    }
-  }
-  return kept.reverse();
-};
-
 // Upserts one allowance, trimming the writing account's own network scope before
 // the whole log. A trim that was only global would let a busy account silently
 // drop allowances the user can no longer see or revoke; a trim that was only
 // per-scope would let enough scopes grow the log past the storage boundary's
-// JSON budget, after which every write is rejected and nothing is tracked.
+// JSON budget, after which every write is rejected and nothing is tracked. Both
+// trims drop the smallest allowances first (./allowance-retention), and the
+// incoming entry competes like any other: an approval smaller than every one a
+// full scope already holds is the one not kept.
+//
 const entriesAfterRecord = (
   entries: readonly AllowanceRecord[],
   next: AllowanceRecord,
+  transactionHash: string | undefined,
+  ranking: AllowanceRanking,
 ): readonly AllowanceRecord[] => {
-  const kept = entries.filter((stored) => stored.id !== next.id);
-  // A zero EXACT amount is a revocation — `approve(spender, 0)` states the
-  // standing allowance outright — so the entry goes. A zero LOWER BOUND states
-  // nothing at all about what remains, and dropping it would erase the only
-  // record of a pair the user can still be exposed to and can still revoke.
-  if (next.amount === "0" && !next.lowerBound) {
-    return kept;
+  const recorded = recordedEntry(entries, next, transactionHash);
+  if (!recorded) {
+    return entries;
   }
-  const retained = new Set(
-    kept.filter((stored) => sameScope(stored, next)).slice(-(MAX_ENTRIES_PER_SCOPE - 1)),
+  const withNext = [...entries.filter((stored) => stored.id !== next.id), recorded];
+  const scopeKept = new Set(
+    keepLargest(
+      withNext.filter((stored) => sameScope(stored, recorded)),
+      MAX_ENTRIES_PER_SCOPE,
+      ranking,
+    ),
   );
-  const scoped = kept.filter((stored) => !sameScope(stored, next) || retained.has(stored));
-  return [...trimToTotal(scoped), next];
+  return trimToTotal(
+    withNext.filter((stored) => !sameScope(stored, recorded) || scopeKept.has(stored)),
+    MAX_ENTRIES_TOTAL,
+    allowanceScope,
+    ranking,
+  );
 };
 
 // Applies one relative change to what the log already tracks for the same
@@ -398,26 +320,41 @@ const appliedDeltaInput = (
 const entriesAfterDelta = (
   entries: readonly AllowanceRecord[],
   delta: AllowanceDelta,
+  ranking: AllowanceRanking,
 ): readonly AllowanceRecord[] | null => {
   const id = allowanceId(delta.input);
   const tracked = id === null ? undefined : entries.find((stored) => stored.id === id);
   const applied = appliedDeltaInput(tracked, delta);
   const next = applied ? toRecord(applied) : null;
-  return next ? entriesAfterRecord(entries, next) : null;
+  return next ? entriesAfterRecord(entries, next, delta.transactionHash, ranking) : null;
 };
+
+/**
+ * What a log reads beyond its storage. `trackedTokens` lists the tokens the
+ * wallet trusts, read on every write so eviction ranks amounts in whole tokens
+ * (see ./allowance-retention); without it, or when it fails, every record
+ * ranks as untracked and the write still goes through.
+ */
+export type AllowanceStoreOptions = {
+  readonly trackedTokens?: () => Promise<readonly AllowanceRankToken[]>;
+};
+
+const rankingSource =
+  (trackedTokens: AllowanceStoreOptions["trackedTokens"]) => async (): Promise<AllowanceRanking> =>
+    rankingFor(trackedTokens ? await trackedTokens().catch(() => []) : []);
 
 /**
  * Creates the persistent allowance log.
  */
 export const createAllowanceStore = ({
   store,
-}: {
-  readonly store: KeyValueStore;
-}): AllowanceStore =>
-  serializeStoreMutations<AllowanceStore>(
+  trackedTokens,
+}: AllowanceStoreOptions & { readonly store: KeyValueStore }): AllowanceStore => {
+  const ranking = rankingSource(trackedTokens);
+  return serializeStoreMutations<AllowanceStore>(
     {
       async applyDelta(delta) {
-        const entries = entriesAfterDelta(await readEntries(store), delta);
+        const entries = entriesAfterDelta(await readEntries(store), delta, await ranking());
         if (entries) {
           await store.set(ALLOWANCE_STORE_KEY, [...entries]);
         }
@@ -425,30 +362,49 @@ export const createAllowanceStore = ({
       async list() {
         return [...(await readEntries(store))].reverse();
       },
-      async record(entry) {
+      async record(entry, transactionHash) {
         const next = toRecord(entry);
         if (!next) {
           return;
         }
-        const entries = entriesAfterRecord(await readEntries(store), next);
+        const entries = entriesAfterRecord(
+          await readEntries(store),
+          next,
+          transactionHash,
+          await ranking(),
+        );
         await store.set(ALLOWANCE_STORE_KEY, [...entries]);
       },
       async remove(id) {
         const kept = (await readEntries(store)).filter((stored) => stored.id !== id);
         await store.set(ALLOWANCE_STORE_KEY, [...kept]);
       },
+      async settleRevocations(readings, outcomes = []) {
+        const settled = entriesAfterSettle(await readEntries(store), readings, outcomes);
+        if (settled) {
+          await store.set(ALLOWANCE_STORE_KEY, [...settled]);
+        }
+      },
     },
     ["list"],
   );
+};
 
 /**
  * In-memory allowance log used as the test and fallback default.
  */
-export const memoryAllowanceStore = (): AllowanceStore => {
+export const memoryAllowanceStore = ({
+  trackedTokens,
+}: AllowanceStoreOptions = {}): AllowanceStore => {
+  const ranking = rankingSource(trackedTokens);
   let entries: AllowanceRecord[] = [];
   return {
+    // Each write awaits its ranking BEFORE reading `entries`, then reads and
+    // replaces it with no await in between, so concurrent writes never apply
+    // to a snapshot another write has already replaced.
     async applyDelta(delta) {
-      const next = entriesAfterDelta(entries, delta);
+      const rank = await ranking();
+      const next = entriesAfterDelta(entries, delta, rank);
       if (next) {
         entries = [...next];
       }
@@ -456,15 +412,19 @@ export const memoryAllowanceStore = (): AllowanceStore => {
     async list() {
       return [...entries].reverse();
     },
-    async record(entry) {
+    async record(entry, transactionHash) {
       const next = toRecord(entry);
       if (!next) {
         return;
       }
-      entries = [...entriesAfterRecord(entries, next)];
+      const rank = await ranking();
+      entries = [...entriesAfterRecord(entries, next, transactionHash, rank)];
     },
     async remove(id) {
       entries = entries.filter((stored) => stored.id !== id);
+    },
+    async settleRevocations(readings, outcomes = []) {
+      entries = [...(entriesAfterSettle(entries, readings, outcomes) ?? entries)];
     },
   };
 };

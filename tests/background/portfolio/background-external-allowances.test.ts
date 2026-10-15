@@ -102,9 +102,12 @@ const makeHarness = (
       // Faithful to the real scan: it can only answer about the tokens it was
       // handed, which is `preferences.tokens` for the active network.
       async getExternalAllowances(input) {
-        return input.tokens.some((token) => BigInt(token) === BigInt(TOKEN))
-          ? [{ amount: "5000", spender: SPENDER, token: TOKEN }]
-          : [];
+        return {
+          allowances: input.tokens.some((token) => BigInt(token) === BigInt(TOKEN))
+            ? [{ amount: "5000", spender: SPENDER, token: TOKEN }]
+            : [],
+          complete: true,
+        };
       },
       async getTrackedAllowances(input) {
         trackedReads.push(input);
@@ -163,6 +166,7 @@ const recordDelta = (
     calls: [{ calldata: [SPENDER, amount, "0x0"], contractAddress: token, entrypoint }],
     owner: allowanceOwner(account),
     store: allowanceStore,
+    transactionHash: "0x7ab",
   });
 
 const recordIncrease = (
@@ -353,6 +357,7 @@ describe("NFT collection approvals are not ERC20 allowances", () => {
         ],
         owner: allowanceOwner(account),
         store: allowanceStore,
+        transactionHash: "0x7ab",
       });
     return { allowanceStore, fileApprove, handler, invokeCalls };
   };

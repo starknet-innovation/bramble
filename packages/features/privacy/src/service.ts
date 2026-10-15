@@ -49,9 +49,12 @@ export type {
 } from "./policy/submission-plan";
 export {
   formatStrk20PoolFee,
+  type Strk20AssetLookup,
   type Strk20FeeAsset,
+  type Strk20ShadowAccountReview,
   strk20CallToInvoke,
   summarizeStrk20Action,
+  summarizeStrk20Batch,
   summarizeStrk20Plan,
 } from "./policy/summaries";
 
@@ -153,6 +156,23 @@ export type Strk20SubmissionResult = {
 };
 
 /**
+ * Exclusive bound on nonces `get_shadow_accounts` can list, single-sourced with
+ * the pre-approval nonce refusal in the provider protocol (audit F4).
+ */
+export { STRK20_SHADOW_VIEW_NONCE_LIMIT } from "@bramble/wallet-protocol/strk20-batch";
+
+/**
+ * One shadow account as the anonymizer reports it: the nonce, its address (the
+ * deployed one, or the address the primer deploy would derive), and whether it
+ * is deployed yet.
+ */
+export type Strk20ShadowAccountInfo = {
+  readonly address: string;
+  readonly deployed: boolean;
+  readonly nonce: string;
+};
+
+/**
  * Injectable official-SDK adapter. Implementations must validate every SDK and
  * service response, target the configured pool, and fail closed.
  */
@@ -185,7 +205,21 @@ export type Strk20Service = {
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
-  readonly subaccountCommitment: (
+  /**
+   * Lists the shadow accounts of one origin-bound scope at the requested
+   * nonces through the configured anonymizer's `get_shadow_accounts` view,
+   * including undeployed ones (which may already hold funds). Derives the
+   * partial commitment from the viewing key, then sends it to the RPC node:
+   * the read links these addresses at the provider, so callers run it only on
+   * the user's request. Absent implementations fail closed at the caller.
+   */
+  readonly shadowAccounts?: (
+    input: Strk20AccountContext & {
+      readonly dappName: string;
+      readonly nonces: readonly bigint[];
+    },
+  ) => Promise<readonly Strk20ShadowAccountInfo[]>;
+  readonly shadowAccountCommitment: (
     input: Strk20AccountContext & { readonly dappName: string; readonly nonce?: string },
   ) => Promise<string>;
   readonly submitActions: (
@@ -236,7 +270,7 @@ export const unavailableStrk20Service: Strk20Service = {
   async registrationStatus() {
     return unavailable();
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return unavailable();
   },
   async submitActions() {
@@ -278,6 +312,19 @@ const assertNoPrivacyLeak = (actions: readonly Strk20Action[]): void => {
     if (withdrawals.has(token)) {
       throw new WalletError(STRK20_PRIVACY_LEAK);
     }
+  }
+};
+
+// The relay's fee is a public withdrawal spliced into the batch after the
+// caller's actions are checked, so the same deposit/withdrawal pairing must be
+// refused on the combined set: a fee in a token the batch also deposits links
+// the deposit to the private spend on chain (Sherlock 189).
+const assertRelayFeeUnlinked = (
+  actions: readonly Strk20Action[],
+  plan: Strk20SubmissionPlan,
+): void => {
+  if (plan.mode !== "account") {
+    assertNoPrivacyLeak([...actions, plan.feeAction]);
   }
 };
 
@@ -336,7 +383,9 @@ export const quoteStrk20Plan = async (
     }
     return { mode: "account", poolFeeFri: canonicalStrk20PoolFee(await service.poolFee(input)) };
   }
-  return service.quoteActions(input);
+  const plan = await service.quoteActions(input);
+  assertRelayFeeUnlinked(input.actions, plan);
+  return plan;
 };
 
 /**
@@ -365,6 +414,7 @@ export const submitStrk20Actions = async (
   },
 ): Promise<Strk20SubmissionResult> => {
   await assertActionBatch(service, input);
+  assertRelayFeeUnlinked(input.actions, input.plan);
   if (input.plan.mode === "account" && !isDepositOnly(input.actions)) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
   }

@@ -6,23 +6,15 @@ import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
-  type AccountSignabilityResponse,
   type ActivityResponse,
-  type AllowancesResponse,
-  type ClassHashVerificationResponse,
+  type AllowanceListing,
+  allowanceListingFrom,
   type ConnectedSitesResponse,
-  type DeploymentStatusResponse,
-  isAccountSignabilityResponse,
   isActivityResponse,
-  isAllowancesResponse,
   isApprovalDecisionResponse,
   isBalancesResponse,
-  isClassHashVerificationResponse,
   isConnectedSitesResponse,
   isCreateAccountResponse,
-  isDeploymentStatusResponse,
-  isDetectTokensResponse,
-  isErrorResponse,
   isFeeReviewResponse,
   isPreferencesResponse,
   isPricesResponse,
@@ -35,6 +27,7 @@ import {
   isWalletStatus,
   type PendingApproval,
   type RevealSecretsResponse,
+  readDetectedTokens,
   readPendingApprovals,
   type TokenBalance,
   type TransferReviewResponse,
@@ -44,6 +37,7 @@ import { createNftRuntimeClient } from "../journeys/collectibles/nft-runtime";
 import { createLedgerRuntimeClient } from "../journeys/ledger/runtime-client";
 import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding-runtime";
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
+import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
 
 /**
@@ -60,8 +54,9 @@ export type {
 } from "./runtime-types";
 
 import { createAccountRuntimeClient } from "./runtime-accounts";
-import { responseError } from "./runtime-errors";
+import { lostReplySend, refusalText, relabelLostReply, responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
+import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
 import { unavailableStatus } from "./runtime-status";
 
@@ -74,15 +69,17 @@ export type SidepanelWallet = ReturnType<typeof createSidepanelRuntime>;
  * Creates side panel actions over chrome.runtime messaging.
  */
 export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
-  const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  const sendMessage = lostReplySend(runtime);
 
   return {
     ...createLedgerRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
     ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
+    ...createShadowAccountsRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
+    ...createLookupRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {
@@ -101,46 +98,38 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "deployment failed");
     },
-    async loadDeploymentStatus(): Promise<DeploymentStatusResponse | null> {
-      const response = await sendMessage({ type: "wallet.deploymentStatus" });
-      return isDeploymentStatusResponse(response) ? response : null;
-    },
-    /** Active-account signability for the Home read-only flag; null on a malformed reply. */
-    async loadAccountSignability(): Promise<AccountSignabilityResponse | null> {
-      const response = await sendMessage({ type: "wallet.accountSignability" });
-      return isAccountSignabilityResponse(response) ? response : null;
-    },
-    async loadClassHashVerification(): Promise<ClassHashVerificationResponse | null> {
-      // Return the whole response (with its `accountId`), not just the verdict,
-      // so the caller can drop a verification that resolved for an account the
-      // user has since switched away from — a stale/foreign verdict must never
-      // be shown under a different account's class hash.
-      const response = await sendMessage({ type: "wallet.verifyClassHash" });
-      return isClassHashVerificationResponse(response) ? response : null;
-    },
     /**
      * Settles a pending approval. `reviewedFee` is the figure the deciding card
      * was displaying; it travels only with an approval, and the background
      * refuses rather than substituting if its own copy has moved since — which
      * is what stops a stale card consenting to an unseen fee. A card that
-     * showed no fee sends none and the submission stays unbound.
+     * showed no fee sends none and the submission stays unbound. `transaction`
+     * marks a card whose approval signs and submits a transaction: only that
+     * decision's unknown outcome says the approval may not have gone through
+     * (a Deny, a connection, or a network switch keeps the generic sentence).
      */
     async decideApproval(
       id: string,
       approved: boolean,
       reviewedFee?: PendingApproval["fee"],
       reviewedAccountId?: string,
+      transaction = false,
     ): Promise<void> {
+      const ownCode = approved && transaction;
       const response = await sendMessage({
         id,
         ...(approved && reviewedAccountId ? { reviewedAccountId } : {}),
         ...(approved && reviewedFee ? { reviewedFee } : {}),
         type: approved ? "wallet.approveOrigin" : "wallet.denyOrigin",
+      }).catch((error: unknown) => {
+        throw ownCode ? relabelLostReply(error, "transaction approval failed") : error;
       });
       if (isApprovalDecisionResponse(response)) {
         return;
       }
-      throw responseError(response, "approval failed");
+      throw ownCode
+        ? responseError(response, "transaction approval failed")
+        : responseError(response, "approval failed");
     },
     async retryApprovalFee(id: string): Promise<void> {
       const response = await sendMessage({ id, type: "wallet.retryApprovalFee" });
@@ -151,7 +140,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     async connectedSites(): Promise<ConnectedSitesResponse["sites"]> {
       const response = await sendMessage({ type: "wallet.connectedSites" });
-      return isConnectedSitesResponse(response) ? response.sites : [];
+      if (isConnectedSitesResponse(response)) return response.sites;
+      throw responseError(response, "connected sites unavailable");
     },
     async revokeOrigin(origin: string): Promise<ConnectedSitesResponse["sites"]> {
       const response = await sendMessage({ origin, type: "wallet.revokeOrigin" });
@@ -201,21 +191,28 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({ type: "wallet.transactionAlerts" });
       return isTransactionAlertsResponse(response) ? response.alerts : [];
     },
-    async loadAllowances(): Promise<AllowancesResponse["allowances"]> {
-      const response = await sendMessage({ type: "wallet.allowances" });
-      return isAllowancesResponse(response) ? response.allowances : [];
+    async loadAllowances(): Promise<AllowanceListing> {
+      const response = await sendMessage({ type: "wallet.allowances" }).catch(() => null);
+      return allowanceListingFrom(response);
     },
     async revokeAllowance(id: string, reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
+      // Only the call that carries the reviewed fee submits the revoke, so only
+      // its unknown outcome gets the revoke's own "may not have gone through"
+      // code. The first call only estimates the fee; it keeps the generic codes,
+      // the same ones Connected sites' revoke uses.
+      const code = reviewedFee ? "allowance revoke failed" : "revoke failed";
       const response = await sendMessage({
         id,
         ...(reviewedFee ? { reviewedFee } : {}),
         type: "wallet.revokeAllowance",
+      }).catch((error: unknown) => {
+        throw reviewedFee ? relabelLostReply(error, code) : error;
       });
       if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
-      throw responseError(response, "revoke failed");
+      throw responseError(response, code);
     },
     async reviewTransfer(
       accountId: string,
@@ -256,13 +253,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
           ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
-      return { error: isErrorResponse(response) ? response.error : "balances unavailable" };
+      return { error: refusalText(response, "balances unavailable") };
     },
     async detectTokens(): Promise<readonly TokenBalance[]> {
       const response = await sendMessage({ type: "wallet.detectTokens" });
-      if (isDetectTokensResponse(response)) {
-        return response.suggestions;
-      }
+      const suggestions = readDetectedTokens(response);
+      if (suggestions) return suggestions;
       throw responseError(response, "token detection failed");
     },
     async loadPrices(cached = false): Promise<{
@@ -483,6 +479,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     async unlockVault(vaultPassphrase: string): Promise<WalletStatus> {
       const response = await sendMessage({ type: "wallet.unlock", vaultPassphrase });
+      if (isWalletStatus(response)) {
+        return response;
+      }
+      throw responseError(response, "Incorrect passphrase");
+    },
+    async unlockUnverifiedVault(vaultPassphrase: string): Promise<WalletStatus> {
+      const response = await sendMessage({ type: "wallet.unlockUnverified", vaultPassphrase });
       if (isWalletStatus(response)) {
         return response;
       }

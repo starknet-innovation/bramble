@@ -1,6 +1,6 @@
 /**
  * Receive shows the plain Starknet address first — as a visible string and as
- * the default QR payload — and offers the Bramble contact card as a second
+ * the default QR payload — and offers the wallet card as a second
  * choice only once it is complete. A slow or failed coordination-key
  * derivation therefore never blocks receiving, and a partial card is never
  * offered (spec item 3). Receive also carries the account's contract
@@ -111,7 +111,7 @@ describe("Receive address and wallet card", () => {
     expect(option(app, "card").disabled).toBe(false);
 
     option(app, "card").click();
-    expect(qrLabel(app)).toBe("QR code for wallet contact card");
+    expect(qrLabel(app)).toBe("QR code for wallet card");
     expect(app.querySelector<HTMLElement>("[data-receive-qr]")?.dataset["qrPayload"]).toBe("card");
     expect(option(app, "card").getAttribute("aria-pressed")).toBe("true");
     expect(option(app, "address").getAttribute("aria-pressed")).toBe("false");

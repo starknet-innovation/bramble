@@ -106,7 +106,7 @@ const mount = (options: MountOptions = {}): Handle => {
       {},
       [],
       null,
-      [],
+      { entries: [], notices: [], unavailable: false },
       null,
       {},
       [],

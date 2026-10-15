@@ -15,7 +15,11 @@ import { num, typedData } from "starknet";
 import { submitStrk20PaymasterPlan } from "../paymaster/paymaster";
 import { quoteStrk20RelayPlan } from "../paymaster/relay-quote";
 import type { Strk20FeeReference } from "../policy/fee-policy";
-import type { Strk20MaturityScope, Strk20MaturityStore } from "../policy/maturity";
+import type {
+  Strk20MaturityScope,
+  Strk20MaturityStore,
+  Strk20SubmissionRoute,
+} from "../policy/maturity";
 import { reportStrk20Phase } from "../policy/phases";
 import {
   type PreparedStrk20AccountSubmission,
@@ -38,6 +42,7 @@ import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official
 import { strk20ReadMethods } from "./official-sdk-reads";
 import type { ServiceRetryPause } from "./official-sdk-retry";
 import type { PrivacySdkRuntime } from "./official-sdk-runtime";
+import { strk20ShadowAccountReads } from "./official-sdk-shadow-accounts";
 import {
   approveCalls,
   RELAY_PAYS_POOL_FEE,
@@ -122,6 +127,7 @@ export const createOfficialStrk20Service = ({
     );
   const submission = <P, T extends { readonly transactionHash: string }>(
     input: Strk20AccountContext,
+    route: Strk20SubmissionRoute,
     prepare: (provider: RpcProvider, scope: Strk20MaturityScope) => Promise<P>,
     broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
   ): Promise<T> => {
@@ -132,7 +138,13 @@ export const createOfficialStrk20Service = ({
     }
     const provider = providerFor(nodeUrl);
     const scope = maturityScope(input, config.poolAddress);
-    return maturity.submitAccepted(provider, scope, () => prepare(provider, scope), broadcast);
+    return maturity.submitAccepted(
+      provider,
+      scope,
+      route,
+      () => prepare(provider, scope),
+      broadcast,
+    );
   };
   const publicBatch = (
     poolAddress: string,
@@ -151,6 +163,7 @@ export const createOfficialStrk20Service = ({
   };
   return {
     ...strk20ReadMethods({ pauseForServiceRetry, providerFor, sdk, waits }),
+    ...strk20ShadowAccountReads({ pauseForServiceRetry, providerFor, sdk }),
     async prepare(input) {
       return prepare(input);
     },
@@ -206,6 +219,7 @@ export const createOfficialStrk20Service = ({
       );
       return submission(
         input,
+        "account",
         async () =>
           prepare(
             { ...input, actions: [], simulate: false },
@@ -297,6 +311,7 @@ export const createOfficialStrk20Service = ({
         );
         return submission(
           input,
+          "account",
           async () => prepare({ ...input, simulate: false }, input.beforeProof),
           // The account-mode broadcast ran unmapped, so a pool rejection of the
           // shielding deposit reached the message boundary as a raw starknet.js
@@ -345,6 +360,7 @@ export const createOfficialStrk20Service = ({
       }
       return submission(
         input,
+        "relay",
         async () =>
           prepare(
             { ...input, actions: [...input.actions, privatePlan.feeAction], simulate: false },
@@ -415,6 +431,7 @@ export const createOfficialStrk20Service = ({
       }
       return submission(
         input,
+        "account",
         async (provider, scope) => {
           reportStrk20Phase(input.onPhase, "waiting for pool maturity");
           await maturity.provingBlock(provider, scope);

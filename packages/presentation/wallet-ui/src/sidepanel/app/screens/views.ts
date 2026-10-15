@@ -14,16 +14,16 @@ import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
-import type {
-  ConnectedSite,
-  DiscoveredNft,
-  PendingApproval,
-  SignabilityVerdict,
-  TokenBalance,
-  WalletStatus,
+import {
+  type AllowanceListing,
+  type DiscoveredNft,
+  EMPTY_ALLOWANCE_LISTING,
+  type PendingApproval,
+  type SignabilityVerdict,
+  type TokenBalance,
+  type WalletStatus,
 } from "../../../popup/responses/responses";
 import { actionableApprovals, approvalTakeover } from "../../journeys/approvals/approval-screen";
 import { nftSendFlow } from "../../journeys/collectibles/nft-send-view";
@@ -47,6 +47,7 @@ import {
   multisigProposeFlow,
   multisigsFlow,
 } from "../../journeys/multisig/multisig-views";
+import { activityContacts } from "../../journeys/portfolio/activity-filter";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
 import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
 import { tokenCatalogFlow } from "../../journeys/portfolio/token-catalog-view";
@@ -72,6 +73,7 @@ import { accountDrawer } from "../../shell/account-drawer";
 import { INITIAL_COLLAPSED_FOLDERS } from "../../shell/drawer-folders";
 import { walletDock, walletHeader } from "../../shell/wallet-shell";
 import { backupFlow, simpleFlowScreen } from "./flows";
+import type { ConnectedSitesState } from "./support-flows";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
@@ -274,11 +276,11 @@ export const dashboard = (
   balances: BalanceState,
   deployment: boolean | null = null,
   transactions: readonly ActivityEntry[] = [],
-  connectedSites: readonly ConnectedSite[] = [],
+  connectedSites: ConnectedSitesState = [],
   prices: Readonly<Record<string, number>> = {},
   chart: readonly number[] = [],
   selectedTokenId: string | null = null,
-  allowances: readonly AllowanceView[] = [],
+  allowances: AllowanceListing = EMPTY_ALLOWANCE_LISTING,
   selectedNftId: string | null = null,
   changes: Readonly<Record<string, number>> = {},
   multisigs: readonly ArgentMultisigView[] = [],
@@ -350,10 +352,10 @@ export const dashboard = (
   // explicitly snooze it back to Activity after seeing it.
   const actionable = actionableApprovals(pending, snoozedApprovalIds);
   if (actionable.length > 0) {
-    return approvalTakeover(actionable, status, activeView);
+    return approvalTakeover(actionable, status, activeView, preferences);
   }
   if (activeView === "requests") {
-    return requestsFlow(pending, status);
+    return requestsFlow(pending, status, preferences);
   }
   const simpleFlow = simpleFlowScreen(activeView, {
     account,
@@ -365,6 +367,7 @@ export const dashboard = (
     currency,
     deployment,
     expandedGroupId,
+    fundedForFees,
     multisigs,
     preferences,
     prices,
@@ -443,6 +446,7 @@ export const dashboard = (
               tokens: preferences?.tokens ?? [],
             },
             todayKey,
+            activityContacts(preferences, status.networkId, status.accounts),
           )
         : activeView === "settings"
           ? settingsScreen(status, preferences)

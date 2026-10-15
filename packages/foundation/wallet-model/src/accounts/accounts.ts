@@ -38,6 +38,8 @@ export {
   type CreatableAccountContractType,
   isAccountContractType,
   isCreatableAccountContractType,
+  isLedgerAccountContractType,
+  type LedgerAccountContractType,
 } from "./account-contract-types";
 
 // Path schemes a Ledger derivation may name: both at the current vault schema,
@@ -59,7 +61,7 @@ export const OPENZEPPELIN_ACCOUNT_CLASS_HASH =
 // account class hash lives; re-exported here so the many callers that import it
 // from this module are unaffected. The table cannot import from this module, or
 // the validators below that consult it would form a dependency cycle.
-export { ARGENT_ACCOUNT_CLASS_HASH } from "./account-families";
+export { ARGENT_ACCOUNT_CLASS_HASH, BRAAVOS_DEPLOYMENT_CLASS_HASH } from "./account-families";
 
 // Derivation provenance lives in ./derivations; re-exported here so the
 // "./accounts" subpath keeps its surface.
@@ -110,8 +112,9 @@ export type ArgentXAccountRef = AccountRefCore & {
 /**
  * Ledger account metadata containing no locally held signing key.
  *
- * A device account is only ever OpenZeppelin (created here) or Argent (detected
- * from Ready); Braavos is refused at the message boundary by
+ * A device account is OpenZeppelin (created here), Argent (created here or
+ * restored from Ready), or Braavos (restored — Braavos owns it with a Ledger key
+ * at Ready's `argentx` path). The family is bounded at the message boundary by
  * {@link isLedgerAccountContractType} rather than in this type, so the guard is
  * one runtime check instead of a narrowing threaded through every caller.
  */

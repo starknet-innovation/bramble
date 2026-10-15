@@ -137,7 +137,7 @@ describe("handleApprovalDecision missing-payload guards", () => {
     { kind: "strk20-balances", payload: {} },
     { kind: "strk20-invoke", payload: {} },
     { kind: "strk20-prepare", payload: {} },
-    { kind: "strk20-subaccount", payload: {} },
+    { kind: "strk20-shadow-account", payload: {} },
     { kind: "sign-typed-data", payload: {} },
     { kind: "switch-chain", payload: {} },
     { kind: "add-chain", payload: {} },
@@ -241,8 +241,8 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
       },
     },
     {
-      kind: "strk20-subaccount",
-      request: { dappName: "Example", type: "subaccount" },
+      kind: "strk20-shadow-account",
+      request: { anonymizer: "0x4", dappName: "Example", type: "shadowAccount" },
     },
   ] as const) {
     test(`${input.kind} approval passes a locked-context error through`, async () => {

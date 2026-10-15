@@ -22,10 +22,25 @@
  * like it was generated rather than written.
  */
 
+import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
-import { SAVE_FAILED, SUBMISSION_UNKNOWN } from "./friendly-error-shared";
+import { PRIVACY_ERROR_COPY } from "./friendly-error-copy-privacy";
+import { INTERNAL_ERROR_COPY } from "./friendly-error-internal";
+import {
+  ADD_ACCOUNT_FAILED,
+  BACKUP_UNREADABLE,
+  KEY_IMPORT_FAILED,
+  REVIEW_MOVED,
+  SAVE_FAILED,
+  SEED_IMPORT_FAILED,
+  SUBMISSION_UNKNOWN,
+  SWAP_ROUTE_UNSAFE,
+  UNRECOGNIZED_RELEASE,
+  VAULT_UNVERIFIED,
+  WRONG_CHAIN_ENDPOINT,
+} from "./friendly-error-shared";
 
 /** Shown when a request was malformed rather than refused. */
 export const GENERIC_VALIDATION =
@@ -47,20 +62,21 @@ export const RATE_LIMITED = "This service is rate limiting requests. Wait a mome
 
 // Shared endings. A failure the reader cannot diagnose gets the same sentence
 // wherever it comes from, so the wallet sounds like one writer.
-const REQUEST_FAILED = "That request didn't go through. Try again.";
-const REVIEW_MOVED = "This changed while you were reviewing it. Review it again.";
+/** A request that certainly did not complete, where trying again is safe. */
+export const REQUEST_FAILED = "That request didn't go through. Try again.";
 const FEE_MOVED = "The fee changed while you were reviewing. Check it and submit again.";
-const SWAP_ROUTE_UNSAFE = "Couldn't prepare a safe route for this swap. Get a fresh quote.";
 const REFUSED = "The wallet refused that request.";
 // Catch-alls around a submission. The wallet doesn't know whether the
 // transaction left the device, so the copy must not claim it failed or invite
 // a retry that could send it twice.
 // The router's own catch-all can wrap a submission, so it says the same.
-const REQUEST_UNKNOWN =
+/** The catch-all that may wrap a submission; never claims failure. */
+export const REQUEST_UNKNOWN =
   "That didn't complete. If it was a transaction, check Activity before trying again.";
+/** The device signed but the wallet's half of the signing did not finish. */
+export const LEDGER_SIGN_UNFINISHED =
+  "Signing on your Ledger didn't finish. Check Activity before trying again.";
 const LEDGER_RETRY = "Couldn't reach your Ledger. Reconnect the device and try again.";
-const ACTIVATE_FIRST = "Activate private balances first.";
-const DEPLOY_FIRST = "Deploy this account first.";
 
 /**
  * Raw diagnostic (lowercased) to the sentence a reader sees.
@@ -76,6 +92,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["network error", NETWORK_UNREACHABLE],
   ["load failed", NETWORK_UNREACHABLE],
   ["wallet lock incomplete", "Couldn't lock the wallet. Try again."],
+  // The browser's own words when a read got no reply. A write that loses its
+  // reply never reaches here: the client types it as outcome unknown
+  // (runtime-errors.ts `lostReplySend`).
+  ["the message port closed before a response was received.", REQUEST_FAILED],
+  ["could not establish connection. receiving end does not exist.", REQUEST_FAILED],
 
   // --- Accounts this wallet can watch but not sign for ----------------------
   // The recovery scan labels these rows view-only up front (issue 542); this
@@ -94,7 +115,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ],
   [
     "deployed argent account class is not a release this wallet recognizes",
-    "This account runs a release this wallet doesn't recognize. Use it in Ready.",
+    UNRECOGNIZED_RELEASE.ready,
   ],
   [
     "deployed argent account class expects an authorization format this wallet does not produce",
@@ -110,7 +131,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ],
   [
     "deployed braavos account class is not a release this wallet recognizes",
-    "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
+    UNRECOGNIZED_RELEASE.braavos,
   ],
   [
     "braavos account returned a malformed signer list",
@@ -119,7 +140,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["rpc returned an invalid account class hash", "Couldn't read this account. Try again."],
   [
     "braavos account class hash is not a release this wallet recognizes",
-    "This account runs a release this wallet doesn't recognize. Use it in Braavos.",
+    UNRECOGNIZED_RELEASE.braavos,
   ],
   [
     "this wallet does not deploy braavos accounts",
@@ -137,10 +158,16 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["origin not connected", "That site isn't connected to this wallet."],
   ["request rejected", "That request was rejected."],
   ["dapps cannot call the wallet account contract itself", "A site can't call your own account."],
-  ["approval failed", REQUEST_FAILED],
+  // The panel's fallback for an unrecognised reply to an approval decision,
+  // which may have signed and submitted (errors audit F3). A Deny, connection,
+  // or network switch keeps the generic sentence; an approved transaction has
+  // its own code (copy review bf08).
+  ["approval failed", REQUEST_UNKNOWN],
+  ["transaction approval failed", SUBMISSION_UNKNOWN("The approval")],
   ["approval execution failed", REQUEST_UNKNOWN],
   ["wallet request failed", REQUEST_UNKNOWN],
   ["approval not found", "That request has expired. Ask the site to send it again."],
+  ["approval no longer pending", "That request was already answered or has expired."],
   [
     "no pending ledger sign for id",
     "That signing request is no longer pending. Check Activity before starting again.",
@@ -167,9 +194,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["explorer fallback update failed", SAVE_FAILED],
   ["privacy service configuration failed", SAVE_FAILED],
   ["token visibility update failed", SAVE_FAILED],
+  ["account visibility update failed", SAVE_FAILED],
   ["preferences unavailable", "Couldn't load your settings. Try again."],
   ["diagnostic export failed", "Couldn't export diagnostics. Try again."],
-  ["backup import failed", "Couldn't read that backup file. Check the file and try again."],
+  ["backup import failed", BACKUP_UNREADABLE],
 
   // --- Folders (the UI word; the code still says group) --------------------
   ["group create failed", "Couldn't create that folder. Try again."],
@@ -181,16 +209,31 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // --- Address book --------------------------------------------------------
   ["address save failed", "Couldn't save that address. Try again."],
   ["address removal failed", "Couldn't remove that address. Try again."],
+  // Sherlock 258: a saved contact's keys change only by removing it first.
+  [
+    "contact keys changed",
+    "This contact is saved with different keys. Remove it first if you mean to replace them.",
+  ],
 
   // --- Accounts ------------------------------------------------------------
   ["account switch failed", "Couldn't switch accounts. Try again."],
-  ["add account failed", "Couldn't add that account. Try again."],
-  ["import account failed", "Couldn't import that account. Check what you pasted and try again."],
+  ["add account failed", ADD_ACCOUNT_FAILED],
+  ["account import failed", "Couldn't add those accounts. Try again."],
+  ["import account failed", KEY_IMPORT_FAILED],
   ["create key vault failed", "Couldn't create your wallet. Try again."],
-  ["seed import failed", "Couldn't import that recovery phrase. Check the words and try again."],
+  ["seed import failed", SEED_IMPORT_FAILED],
   ["mnemonic validation unavailable", "Couldn't check that recovery phrase. Try again."],
   ["reveal failed", "Couldn't reveal that. Re-enter your passphrase and try again."],
   ["incorrect passphrase", "That passphrase is wrong."],
+  // A vault the background cannot verify shows the recovery gate; these reach
+  // the user only if its state changed between the status read and the submit.
+  ["encrypted store commit state missing", VAULT_UNVERIFIED],
+  ["encrypted store rollback detected", VAULT_UNVERIFIED],
+  [
+    "encrypted store is not awaiting recovery",
+    "This wallet no longer needs Unlock anyway. Close and reopen Bramble.",
+  ],
+  ["vault storage limit reached", "This wallet is full, so this change wasn't saved."],
   [
     "account discovery unavailable",
     "Couldn't search for accounts. Check your connection and try again.",
@@ -204,6 +247,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   [
     "this wallet has no recovery phrase to scan",
     "This wallet was set up without a recovery phrase, so there is nothing to search for.",
+  ],
+  [
+    "no recovery phrase stored for this wallet",
+    "This wallet was set up without a recovery phrase. Import an existing account instead.",
   ],
   [
     "account recovery unavailable",
@@ -283,12 +330,13 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Networks and endpoints ----------------------------------------------
   ["network switch failed", "Couldn't switch networks. Try again."],
+  // Starknet name lookups. The recipient step shows its own note and
+  // drops these replies, so they are mapped only so no raw diagnostic can leak.
+  ["name resolution unavailable", "Starknet names are not available on this network."],
+  ["name resolution network changed", "The network changed. Try again."],
   ["unsupported chain", "This wallet doesn't support that network."],
   ["unsupported api version", "That endpoint speaks an API version this wallet can't use."],
-  [
-    WRONG_CHAIN_MESSAGE.toLowerCase(),
-    "That endpoint reports a different Starknet chain, so nothing was submitted. Check the endpoint under Network → Advanced.",
-  ],
+  [WRONG_CHAIN_MESSAGE.toLowerCase(), WRONG_CHAIN_ENDPOINT],
   ["switch to the deployment network first", "Switch to that account's network to deploy it."],
   [
     "switch to the participant account network first",
@@ -300,7 +348,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["balances unavailable", "Couldn't load balances. Check your connection and try again."],
   ["activity scope unavailable", "Couldn't load activity for this account. Try again."],
   ["add token failed", "Couldn't add that token. Check the contract address and try again."],
+  ["remove token failed", "Couldn't remove that token. Try again."],
   ["token detection failed", "Couldn't scan for tokens. Check your connection and try again."],
+  ["connected sites unavailable", "Couldn't load connected sites."],
   ["token list unavailable", "Couldn't load the token list. Check your connection and try again."],
   ["token unavailable", "That token isn't available on this network."],
   ["token unavailable on this network", "That token isn't available on this network."],
@@ -322,7 +372,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Allowances ----------------------------------------------------------
   ["allowance not found", "That allowance is no longer on-chain. Refresh the list."],
-  ["revoke failed", "The revoke didn't go through. Try again."],
+  // An unrecognised reply to a revoke may have run (errors audit F3). Connected
+  // sites' revoke is not a transaction, so it keeps the generic sentence; the
+  // on-chain allowance revoke has its own code (copy review bf07).
+  ["revoke failed", REQUEST_UNKNOWN],
+  ["allowance revoke failed", SUBMISSION_UNKNOWN("The revoke")],
   [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",
@@ -364,9 +418,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "No route found for this pair right now. Try a different amount or pair.",
   ],
   ["swap build returned a route the wallet could not decode", SWAP_ROUTE_UNSAFE],
-  ["swap build returned more than one swap call", SWAP_ROUTE_UNSAFE],
-  ["swap build returned no swap call", SWAP_ROUTE_UNSAFE],
-  ["swap build returned too many calls", SWAP_ROUTE_UNSAFE],
+  // Each names the call-shape check that stopped the build: shown as written
+  // (issue 652 review, R2-1), listed so the coverage check records the decision.
+  ["swap build returned more than one swap call", "swap build returned more than one swap call"],
+  ["swap build returned no swap call", "swap build returned no swap call"],
+  ["swap build returned too many calls", "swap build returned too many calls"],
   [
     "swap build touched an unexpected token approval",
     "Blocked for safety: the swap asked to approve the wrong token. Nothing was signed.",
@@ -384,60 +440,13 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["add ledger account failed", LEDGER_RETRY],
   ["create ledger wallet failed", LEDGER_RETRY],
   ["derive ledger accounts failed", LEDGER_RETRY],
-  [
-    "complete ledger sign failed",
-    "Signing on your Ledger didn't finish. Check Activity before trying again.",
-  ],
+  // The background stores a Braavos Ledger account only when it is already in
+  // use (issue 644): no account to retry, or a chain read to retry.
+  ["braavos ledger account not found", "No Braavos account found for this key."],
+  ["braavos ledger account status unavailable", NETWORK_RETRY_MESSAGE],
+  ["complete ledger sign failed", LEDGER_SIGN_UNFINISHED],
 
-  // --- Private balances ----------------------------------------------------
-  ["private balances unavailable", "Couldn't load private balances. Try again."],
-  ["strk20 services unavailable", "Private balances are unavailable right now. Try again shortly."],
-  ["private balances are already active", "Private balances are already active."],
-  [
-    "private balances are not available for ledger accounts",
-    "Private balances aren't available for Ledger accounts.",
-  ],
-  [
-    "private balances are not configured for this network",
-    "Private balances aren't set up on this network.",
-  ],
-  ["activate private balances before sending privately", ACTIVATE_FIRST],
-  ["activate private balances before unshielding", ACTIVATE_FIRST],
-  ["deploy this account before activating private balances", DEPLOY_FIRST],
-  ["deploy this account before submitting a public private deposit", DEPLOY_FIRST],
-  ["track a token before activating private balances", "Track a token first."],
-  [
-    "registration requires a network-fee approval",
-    "Approve the network fee to finish going private.",
-  ],
-  [
-    "a registration is already on its way for this account",
-    "A registration is already on its way for this account.",
-  ],
-  ["privacy activation preparation failed", "Couldn't prepare activation. Try again."],
-  [
-    "private pool fee is unavailable. retry the registration.",
-    "Couldn't read the pool fee. Try again.",
-  ],
-  ["shielding preparation failed", "Couldn't prepare shielding. Try again."],
-  ["shielding route unavailable", "No shielding route right now. Try again shortly."],
-  ["unshielding preparation failed", "Couldn't prepare unshielding. Try again."],
-  ["private send preparation failed", "Couldn't prepare this private send. Try again."],
-  ["private transaction failed", SUBMISSION_UNKNOWN("The private transaction")],
-  [
-    "private sends to the sending account are not supported",
-    "You can't send privately to the same account.",
-  ],
-  [
-    "the recipient has not activated private balances",
-    "That recipient hasn't activated private balances.",
-  ],
-  ["enter an amount to shield", "Enter an amount to shield."],
-  ["enter an amount to unshield", "Enter an amount to unshield."],
-  [
-    "the previous submission did not reach starknet. try again.",
-    "The last submission didn't reach Starknet. Try again.",
-  ],
-
+  ...PRIVACY_ERROR_COPY,
   ...MULTISIG_ERROR_COPY,
+  ...INTERNAL_ERROR_COPY,
 ]);

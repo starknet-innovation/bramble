@@ -8,7 +8,7 @@
  */
 
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { bindRecoveryWordEntry } from "./recovery-word-state";
 
 type WordAssist = {
@@ -129,9 +129,14 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
         }
         const message = errorMessage(error, "Could not check this recovery phrase");
         if (recoveryResult) {
-          recoveryResult.textContent = message;
+          recoveryResult.textContent = errorLine(error, "Could not check this recovery phrase");
         }
-        showToast(message, "error", recoveryContinue);
+        showToast(
+          message,
+          "error",
+          recoveryContinue,
+          errorDetails(error, "Could not check this recovery phrase"),
+        );
         buttonBusy(recoveryContinue, false);
       },
     );

@@ -33,6 +33,12 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Split from friendly-error-copy.ts by the size budget: same contract — its
   // lookup keys quote diagnostics that name secret-material fields verbatim.
   "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy-multisig.ts",
+  // Classifies diagnostics the background threw ("Invalid mnemonic", "…signature
+  // key mismatch") by their words; matched here, never read, logged, or persisted.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal.ts",
+  // Decides whether a rejected send is known not sent; it names the Ledger
+  // catalog code "signature-verify-failed" as a lookup key and reads no secret.
+  "packages/presentation/wallet-ui/src/sidepanel/shared/submit-outcome.ts",
   "apps/extension/src/background/ledger/account-hash-signer.ts",
   "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Privileged first-run boundary: the phrase is validated through Krusty and
@@ -77,6 +83,12 @@ export const SECRET_MATERIAL_FILES = new Set([
   // vault credential straight to the protected signer wiring. Same boundary,
   // same rule — never logged, persisted, or returned across a message.
   "apps/extension/src/background/privacy/strk20-approval-execution.ts",
+  // Records used shadow-account scopes (#443): hands the unlocked vault
+  // credential straight to the vault's record method. Never logged or returned.
+  "apps/extension/src/background/privacy/strk20-shadow-scopes.ts",
+  // Shadow accounts view (#443): reads the account's scope records with the
+  // unlocked vault credential, like the other privileged privacy journeys.
+  "apps/extension/src/background/privacy/strk20-shadow-ops.ts",
   // Queues approvals only. Since the execution half moved out, its sole match
   // is the `./signature-waiters` import path; no secret material transits here.
   "apps/extension/src/background/privacy/strk20-ops.ts",
@@ -96,6 +108,8 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/foundation/wallet-model/src/accounts/signing.ts",
   // Pure length policy only; carries no passphrase value across a boundary.
   "packages/foundation/wallet-model/src/preferences/passphrase.ts",
+  // Setup meter only: scores the typed value in the UI and keeps nothing.
+  "packages/foundation/wallet-model/src/preferences/passphrase-strength.ts",
   "packages/testing/testkit/src/fake-kms.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses-ledger.ts",
@@ -196,6 +210,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/vault/src/schema/migrations.ts",
   "packages/platform/vault/src/schema/schema-types.ts",
   "packages/platform/vault/src/schema/schema.ts",
+  // Imported-seed validators split from schema.ts on the size budget; they name
+  // the retained phrase field only to validate it inside the vault.
+  "packages/platform/vault/src/schema/schema-seeds.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
   // Split from accounts.ts by the size budget: same boundary, same rules — the
@@ -218,5 +235,8 @@ export const SECRET_MATERIAL_FILES = new Set([
   // same encrypted-vault/Krusty boundary and never return private material.
   "packages/platform/vault/src/service/nostr.ts",
   "packages/platform/vault/src/service/service.ts",
+  // Shadow-account scope records (#443): reads and writes the encrypted vault
+  // with the caller's vault passphrase, like every other vault service method.
+  "packages/platform/vault/src/service/shadow-account-scopes.ts",
   "packages/platform/vault/src/service/service-types.ts",
 ]);

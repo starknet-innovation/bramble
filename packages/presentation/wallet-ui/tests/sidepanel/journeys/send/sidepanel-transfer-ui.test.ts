@@ -70,7 +70,7 @@ describe("recipientFieldError / friendlyReviewError helpers", () => {
     expect(friendlyReviewError(new Error("invalid transfer review request"))).toBe(
       "Enter a valid Starknet address.",
     );
-    expect(friendlyReviewError(new Error("boom"))).toBe("boom");
+    expect(friendlyReviewError(new Error("boom"))).toBe("Something went wrong. Please try again.");
   });
 });
 
@@ -217,7 +217,9 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(calls.submitTransfer).toHaveLength(0);
-    expect(calls.reviewTransfer).toHaveLength(2);
+    // Three review reads, none of them a send: the preview re-quotes the
+    // re-shown amount step, and each Review click reads once more.
+    expect(calls.reviewTransfer).toHaveLength(3);
     expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
 
     // Only the confirm from the re-shown review sends.
@@ -251,7 +253,7 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(calls.submitTransfer).toHaveLength(0);
-    expect(resultText(app)).toBe("Not enough ETH");
+    expect(resultText(app)).toBe("Not enough ETH. You need at least 1 ETH.");
 
     // Even if a refresh clears the gate, the stale review cannot submit. The
     // next click must produce a new review and only its confirm may send.
@@ -408,7 +410,7 @@ describe("bindTransfer", () => {
     expect(resultText(app)).toBe("Enter a valid Starknet address.");
   });
 
-  test("reports a submit failure after a successful review", async () => {
+  test("reports an unrecognised submit failure as outcome unknown, never as not sent", async () => {
     let submitCount = 0;
     const { app, deps } = mount({
       async submitTransfer() {
@@ -426,7 +428,12 @@ describe("bindTransfer", () => {
     await flush();
     expect(submitCount).toBe(1);
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("failed");
-    expect(app.querySelector("#send-failure-copy")?.textContent).toContain("network exploded");
+    // "network exploded" is no refusal the background makes before signing, so
+    // the transfer may be on chain (errors audit F1).
+    expect(app.querySelector("#send-failure-copy")?.textContent).toBe(
+      "The transfer may not have gone through. Check Activity before trying again.",
+    );
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Status unknown");
     expect(app.querySelector("#send-failure")?.hasAttribute("hidden")).toBe(false);
   });
 

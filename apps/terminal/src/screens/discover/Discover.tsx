@@ -36,6 +36,7 @@ import { ChainActivityFeed } from "../activity/ChainActivityFeed";
 import { DiscoverWalletPanel } from "./DiscoverWalletPanel";
 import { collapseDiscoverTokenRepresentations } from "./discover-data";
 import { dailyChangePct, fmtUsdPrice } from "../perps/perps-data";
+import { loadFailedMessage } from "../../protocols/support/user-error";
 
 type TotalView = "total" | "tokens" | "perps";
 type TokenSort = "marketCap" | "volume" | "change";
@@ -192,7 +193,7 @@ export default function Discover({ onNavigate }: DiscoverProps): ReactNode {
         >
           <div className="listscroll">
             {tokens.error !== null && rankedTokens.length === 0 ? (
-              <ErrorBanner message={`Couldn't load tokens: ${tokens.error}`} />
+              <ErrorBanner message={loadFailedMessage("tokens", tokens.error)} />
             ) : tokens.isLoading && rankedTokens.length === 0 ? (
               <SkeletonRows rows={6} />
             ) : rankedTokens.length === 0 ? (
@@ -255,7 +256,7 @@ export default function Discover({ onNavigate }: DiscoverProps): ReactNode {
         >
           <div className="listscroll">
             {perps.error !== null && rankedPerps.length === 0 ? (
-              <ErrorBanner message={`Couldn't load perps: ${perps.error}`} />
+              <ErrorBanner message={loadFailedMessage("perps", perps.error)} />
             ) : perps.isLoading && rankedPerps.length === 0 ? (
               <SkeletonRows rows={6} />
             ) : rankedPerps.length === 0 ? (

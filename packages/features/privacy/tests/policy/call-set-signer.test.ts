@@ -73,6 +73,42 @@ describe("STRK20 CallSet authorization", () => {
     await expect(signer.signDeployAccountTransaction({} as never)).rejects.toThrow(
       "does not deploy accounts",
     );
-    await expect(signer.signMessage({} as TypedData, "0x999")).rejects.toThrow("account mismatch");
+    await expect(signer.signMessage({} as TypedData, "0x999")).rejects.toThrow(
+      "does not sign messages",
+    );
+  });
+
+  test("never signs a SNIP-12 message, even for its own account (Sherlock 246)", async () => {
+    let signed = 0;
+    const signer = new Strk20CallSetSigner({
+      accountAddress: account,
+      chainId,
+      sign: async () => {
+        signed += 1;
+        return ["0x1", "0x2"];
+      },
+    });
+    const message: TypedData = {
+      domain: { chainId, name: "Any dapp", revision: "1", version: "1" },
+      message: { amount: "1000", to: "0xbeef" },
+      primaryType: "Transfer",
+      types: {
+        StarknetDomain: [
+          { name: "name", type: "shortstring" },
+          { name: "version", type: "shortstring" },
+          { name: "chainId", type: "shortstring" },
+          { name: "revision", type: "shortstring" },
+        ],
+        Transfer: [
+          { name: "to", type: "ContractAddress" },
+          { name: "amount", type: "u128" },
+        ],
+      },
+    };
+
+    await expect(signer.signMessage(message, num.toHex(account))).rejects.toThrow(
+      "does not sign messages",
+    );
+    expect(signed).toBe(0);
   });
 });

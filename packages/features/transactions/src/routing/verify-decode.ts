@@ -56,7 +56,11 @@ export type DecodedCall = {
 /**
  * Re-exported verifier context so callers keep importing it from this module.
  */
-export { type VerificationContext, verificationContext } from "./verification-context";
+export {
+  trustedTokens,
+  type VerificationContext,
+  verificationContext,
+} from "./verification-context";
 
 /**
  * Abbreviates an address for display as `0x1234…abcd`.
@@ -407,7 +411,12 @@ export const DECODED_ENTRYPOINTS: readonly string[] = Object.keys(CALL_DECODERS)
  */
 export const decodeCall = (call: Call, context: VerificationContext): DecodedCall => {
   const calldata = Array.isArray(call.calldata) ? call.calldata : [];
-  const decoder = CALL_DECODERS[call.entrypoint];
+  // Own keys only: the table is a plain object, and an entrypoint a co-signer
+  // or dapp names, such as `toString` or `constructor`, must not resolve
+  // through Object.prototype to a function that is not a decoder (Sherlock 193).
+  const decoder = Object.hasOwn(CALL_DECODERS, call.entrypoint)
+    ? CALL_DECODERS[call.entrypoint]
+    : undefined;
   return decoder?.(call, calldata, context) ?? decodeUnknownCall(call);
 };
 

@@ -20,7 +20,6 @@ import {
   parseStarkscanBlock,
   parseStarkscanContract,
   parseStarkscanEvent,
-  parseStarkscanHoldings,
   parseStarkscanPage,
   parseStarkscanTokenBalance,
   parseStarkscanTransfer,
@@ -36,7 +35,6 @@ import type {
   StarkscanPage,
   StarkscanPageOptions,
   StarkscanTokenBalance,
-  StarkscanTokenHoldings,
   StarkscanTransfer,
 } from "./starkscan-types";
 
@@ -130,11 +128,6 @@ export type StarkscanClient = {
     address: string,
     options?: StarkscanPageOptions,
   ) => Promise<StarkscanPage<StarkscanTransfer>>;
-  readonly getTokenHoldings: (
-    chainId: StarkscanChainId,
-    address: string,
-    options?: StarkscanPageOptions,
-  ) => Promise<StarkscanTokenHoldings>;
   readonly getTokenBalance: (
     chainId: StarkscanChainId,
     tokenAddress: string,
@@ -371,13 +364,6 @@ export const createStarkscanClient = ({
         query,
       );
     },
-    getTokenHoldings: (chainId, address, options) =>
-      request(
-        chainId,
-        `address/${inputAddress(address)}/token-holdings`,
-        parseStarkscanHoldings,
-        pageQuery(options),
-      ),
     getTokenBalance: (chainId, tokenAddress, ownerAddress, blockTag = "latest") => {
       if (blockTag.length === 0 || blockTag.length > 80) {
         throw new StarkscanError("Invalid Starkscan block tag", null);

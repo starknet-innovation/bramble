@@ -29,9 +29,13 @@ export const errorDetails = (error: unknown, fallback: string): string =>
  * friendly form and keeps the raw one behind its copy control. A status line
  * has no copy control and no second chance, so it takes the reader-facing
  * sentence directly — without this it printed "add token failed" in the page.
+ * It classifies the raw diagnostic, as the toast does, so both name the same
+ * cause. It passes no context sentence: a fallback such as "Private transaction
+ * failed" translates to "may not have gone through", which would be false for
+ * a refusal raised before anything was sent (issue 652 review, F2).
  */
 export const errorLine = (error: unknown, fallback: string): string =>
-  friendlyError(errorMessage(error, fallback)).message;
+  friendlyError(errorDetails(error, fallback)).message;
 
 /**
  * Marks a button busy so repeated submits are impossible while work runs.
@@ -67,9 +71,11 @@ export const scopedStatus = (element: Element, message: string): boolean => {
 /**
  * The visual tone a toast is shown with. Exported as the one source of truth so
  * callers that decide a toast's tone type against it rather than re-declaring
- * the literal union.
+ * the literal union. `warning` is for an outcome the wallet cannot establish,
+ * such as a write whose reply was lost: it keeps the error toast's copy control
+ * and duration but never the danger styling, which reads as "failed".
  */
-export type ToastTone = "error" | "success";
+export type ToastTone = "error" | "success" | "warning";
 
 const SUCCESS_TOAST_MS = 3200;
 const ERROR_TOAST_MS = 8000;
@@ -203,7 +209,7 @@ const TOAST_SPRING = resolveSpring("momentum");
 /**
  * Shows a transient toast in the fixed stack at the bottom of the shell.
  * Anatomy is a fixed scannable heuristic: a leading tone chip (green check /
- * red alert) the eye reads before any text, then the message, then every
+ * red alert / amber alert) the eye reads before any text, then the message, then every
  * error's copy control. It springs in with a little momentum, can be swiped
  * away, and error toasts stay longer. `details` lets a compact display line
  * retain the complete diagnostic behind its copy control.
@@ -213,6 +219,32 @@ export const showToast = (
   tone: ToastTone,
   context: Document | Element | null | undefined,
   details: string = message,
+): void =>
+  renderToast(
+    tone === "success" ? message : friendlyError(message).message,
+    tone,
+    context,
+    details,
+  );
+
+/**
+ * Shows a sentence the wallet wrote itself as an error toast, exactly as
+ * written. `showToast` maps an error through `friendlyError`, which rewrites a
+ * message by the words it contains; a wallet-authored notice quoting a
+ * dapp-chosen summary must not be rewritten into unrelated copy, such as a
+ * revert warning shown as a rate-limit message because the summary says 429
+ * (Sherlock 219).
+ */
+export const showNoticeToast = (
+  message: string,
+  context: Document | Element | null | undefined,
+): void => renderToast(message, "error", context, message);
+
+const renderToast = (
+  display: string,
+  tone: ToastTone,
+  context: Document | Element | null | undefined,
+  details: string,
 ): void => {
   const doc = documentFor(context);
   const stackId = "toast-stack";
@@ -224,18 +256,18 @@ export const showToast = (
     doc.body.append(stack);
   }
 
-  const friendly = tone === "error" ? friendlyError(message) : null;
+  const problem = tone !== "success";
   const toast = doc.createElement("div");
   toast.className = `toast ${tone}`;
   const mark = doc.createElement("span");
   mark.className = "toast-icon";
-  mark.innerHTML = icon(tone === "error" ? "alert" : "check");
+  mark.innerHTML = icon(problem ? "alert" : "check");
   toast.append(mark);
   const text = doc.createElement("span");
   text.className = "toast-text";
-  text.textContent = friendly ? friendly.message : message;
+  text.textContent = display;
   toast.append(text);
-  if (tone === "error") {
+  if (problem) {
     toast.append(toastCopyButton(doc, details));
   }
   stack.append(toast);
@@ -248,7 +280,7 @@ export const showToast = (
     { duration: TOAST_SPRING.durationMs, easing: TOAST_SPRING.easing },
   );
   bindToastSwipe(toast);
-  setTimeout(() => dismissToast(toast, 0), tone === "error" ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
+  setTimeout(() => dismissToast(toast, 0), problem ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
 };
 
 // Swaps the button's copy glyph for a check while the confirmation lands,

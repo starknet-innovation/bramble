@@ -23,7 +23,7 @@ import {
 } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
 
 /** One bounded discovery page as the runtime returns it. */
@@ -322,8 +322,17 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     } catch (error) {
       if (generation !== activeGeneration) return;
       const message = errorMessage(error, "Account search paused. Check the network and retry.");
-      if (status) status.textContent = message;
-      showToast(message, "error", deps.form);
+      if (status)
+        status.textContent = errorLine(
+          error,
+          "Account search paused. Check the network and retry.",
+        );
+      showToast(
+        message,
+        "error",
+        deps.form,
+        errorDetails(error, "Account search paused. Check the network and retry."),
+      );
     } finally {
       scanning = false;
       buttonBusy(activeButton, false);
@@ -396,8 +405,8 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       })
       .catch((error: unknown) => {
         const message = errorMessage(error, "Account recovery failed");
-        if (result) result.textContent = message;
-        showToast(message, "error", restore);
+        if (result) result.textContent = errorLine(error, "Account recovery failed");
+        showToast(message, "error", restore, errorDetails(error, "Account recovery failed"));
         buttonBusy(restore, false);
       });
   });

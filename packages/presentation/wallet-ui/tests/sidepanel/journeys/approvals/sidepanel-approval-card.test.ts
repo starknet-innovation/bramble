@@ -55,6 +55,9 @@ describe("invoke approval card (A-H1)", () => {
     expect(html).toContain("0x0005, 0x3e8, 0x0");
     expect(html).toContain(`data-approval-action="approve" data-approval-id="${INVOKE_ID}"`);
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${INVOKE_ID}"`);
+    // Approve carries the kind, so an unknown outcome can say the approval of a
+    // transaction may not have gone through (copy review bf08).
+    expect(html).toContain('data-approval-kind="invoke" data-approval-action="approve"');
   });
 
   test("disables approve while the wallet is locked", () => {
@@ -184,6 +187,18 @@ describe("OutsideExecution sign card (audit 144)", () => {
     expect(html).toContain("Unlimited &lt;b&gt;approval&lt;/b&gt; for 0xabc…");
     expect(html).not.toContain("<i>0xabc</i>");
     expect(html).not.toContain("<b>approval</b>");
+  });
+
+  // A lookalike payee is queued, not refused, so the site cannot read the
+  // address book from the answer; the card can then only deny (Sherlock 140).
+  test("a lookalike payee leaves Deny only, and says why", () => {
+    expect(activity([sign])).toContain('data-approval-action="approve"');
+    const html = activity([
+      { ...sign, flags: [{ code: "address-poisoning", message: "The recipient closely mimics" }] },
+    ]);
+    expect(html).toContain("Bramble won't send this payment.");
+    expect(html).toContain('data-approval-action="deny"');
+    expect(html).not.toContain('data-approval-action="approve"');
   });
 
   test("a plain message lists no calls", () => {

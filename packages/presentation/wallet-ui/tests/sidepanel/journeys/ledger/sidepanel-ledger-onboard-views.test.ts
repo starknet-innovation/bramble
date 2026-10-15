@@ -188,6 +188,33 @@ describe("onboarding views", () => {
     expect(ledgerAccountPicker([], [], undefined, "argentx")).toContain("No accounts read");
   });
 
+  test("an idle Braavos index is listed but not selectable, like an idle Ready one", () => {
+    // Importing a Braavos index with no on-chain activity would deploy a new
+    // Braavos account, and Bramble only creates Bramble accounts.
+    const braavos = (index: number): LedgerAccountRef => {
+      const base = candidateAccount(index, "argent");
+      return {
+        ...base,
+        accountContractType: "braavos",
+        address: base.address.replace("0xe", "0xb"),
+        derivation: {
+          accountIndex: index,
+          eip2645application: "argentx",
+          kind: "ledger",
+          path: ledgerAccountPath(index, "argentx"),
+        },
+        id: base.id.replace(":0xe", ":0xb"),
+      };
+    };
+    const candidates: LedgerCandidate[] = [
+      { account: braavos(1), balance: "3 STRK", deployed: true, duplicate: false, funded: true },
+      { account: braavos(2), balance: "0 STRK", deployed: false, duplicate: false, funded: false },
+    ];
+    const html = ledgerAccountPicker(candidates, [], undefined, "argentx");
+    expect(html).toMatch(new RegExp(`data-ledger-toggle="${braavos(2).id}"[^>]*disabled`));
+    expect(html).not.toMatch(new RegExp(`data-ledger-toggle="${braavos(1).id}"[^>]*disabled`));
+  });
+
   test('"Add selected" is disabled until at least one index is picked', () => {
     const html = ledgerAccountPicker(
       [

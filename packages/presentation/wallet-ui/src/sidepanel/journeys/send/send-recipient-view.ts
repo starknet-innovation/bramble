@@ -149,6 +149,7 @@ export const recipientStage = (
         type: "search",
       })}</span>
     </label>
+    <p class="send-recipient-note" id="send-recipient-note" aria-live="polite" hidden></p>
     <div class="send-recipient-list" data-send-recipient-panel="contacts">
       <div class="send-list-heading">${icon("book")}<strong>Address book</strong></div>
       ${contacts.map(addressBookRow).join("")}

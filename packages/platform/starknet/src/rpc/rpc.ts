@@ -124,6 +124,15 @@ export {
 } from "./rpc-submit";
 export { isTokenBalance, type TokenBalance } from "./token-balance";
 /**
+ * Re-exported receipt-fee reads so callers keep one RPC import path.
+ */
+export {
+  getTransactionFees,
+  isTransactionFee,
+  readReceiptFee,
+  type TransactionFee,
+} from "./transaction-fee";
+/**
  * Re-exported transaction-status reads so callers keep one RPC import path.
  */
 export {

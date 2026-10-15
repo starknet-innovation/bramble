@@ -48,7 +48,13 @@ describe("onboarding gate view", () => {
     expect(html).toContain('name="importKeyRaw"');
     expect(html).toContain('name="importKeySalt"');
     expect(html).toContain('id="key-method-button"');
-    expect(html).toContain('aria-pressed="false"');
+    // The sole derived account is presented, not selected: the row is a static
+    // read-out and the final action is outcome-named.
+    expect(html).toContain('<div class="onboarding-account" id="account-preview">');
+    expect(html).not.toMatch(/onboarding-account[^>]*aria-pressed/);
+    expect(html).toContain(
+      'id="create-wallet-button" type="submit" disabled>Finish setup</button>',
+    );
     expect(html.match(/data-recovery-kind="import"/g)?.length).toBe(24);
   });
 

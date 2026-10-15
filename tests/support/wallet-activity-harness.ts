@@ -10,9 +10,13 @@
  * handler reads the current value, so recorded entries and history-sync stamps
  * are ordered the way they would be in a real session.
  */
+import { createPreferencesStore, type WalletPreferences } from "@bramble/settings/preferences";
 import type { TransactionStatusReport, TransferInput } from "@bramble/starknet/rpc";
 import { createMemoryStore } from "@bramble/store/kv";
 import { type ActivityEntry, createActivityLog } from "@bramble/transactions/activity";
+import type { DiscoveredHistory } from "@bramble/transactions/starkscan-wallet";
+import type { HistoryLane } from "@bramble/transactions/tx-history";
+import type { TransactionHistoryScan } from "@bramble/transactions/tx-history-scan";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
@@ -81,7 +85,13 @@ export const makeHarness = (options?: {
   readonly deployed?: boolean;
   readonly estimateFails?: boolean;
   readonly onChainHistory?: readonly ActivityEntry[];
+  /** The lane the history double reports; defaults to the RPC event scan. */
+  readonly historyLane?: HistoryLane;
   readonly historyThrows?: boolean;
+  /** Sees each history scan request, such as the tokens it covers. */
+  readonly onHistoryScan?: (scan: TransactionHistoryScan) => void;
+  /** Preferences the background reads instead of the defaults. */
+  readonly preferences?: WalletPreferences;
   readonly statusReport?: TransactionStatusReport;
   readonly strkBalance?: string;
   /** Replaces the default successful transfer submission. */
@@ -89,14 +99,18 @@ export const makeHarness = (options?: {
 }) => {
   let historyRequests = 0;
   const history =
-    options?.historyThrows || options?.onChainHistory
+    options?.historyThrows || options?.onChainHistory || options?.onHistoryScan
       ? {
-          async getTransactionHistory(): Promise<readonly ActivityEntry[]> {
+          async getTransactionHistory(scan: TransactionHistoryScan): Promise<DiscoveredHistory> {
             historyRequests += 1;
+            options.onHistoryScan?.(scan);
             if (options.historyThrows) {
               throw new Error("fetch failed");
             }
-            return options.onChainHistory ?? [];
+            return {
+              entries: options.onChainHistory ?? [],
+              lane: options.historyLane ?? "chain-events",
+            };
           },
         }
       : {};
@@ -111,9 +125,18 @@ export const makeHarness = (options?: {
     store: createMemoryStore(),
   });
   const statusRequests: string[][] = [];
+  const preferences = options?.preferences;
   const handler = createMessageHandler(walletStub, testExtension, {
     activity,
     now: () => tick,
+    ...(preferences
+      ? {
+          preferencesStore: {
+            ...createPreferencesStore({ store: createMemoryStore() }),
+            read: async () => preferences,
+          },
+        }
+      : {}),
     runtimeRpc: {
       async estimateAccountDeploymentFee() {
         return reviewedDeploymentFee;

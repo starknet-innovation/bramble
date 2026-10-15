@@ -14,7 +14,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { RecoveryReview } from "../../../popup/responses/responses-recovery";
 import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { buildRecoveryConfirm } from "./recovery-view";
 
 /** How long an armed confirmation stays up before it resets to the flag. */
@@ -82,7 +82,7 @@ export const bindRecoverAccount = (
         : deps.wallet.recoverBraavosAccount(review));
       showToast(submittedCopy(kind, review), "success", body);
     } catch (error) {
-      showToast(errorMessage(error, "Couldn't start recovery. Try again."), "error", body);
+      showToast(errorDetails(error, "Couldn't start recovery. Try again."), "error", body);
     }
     // Whatever happened, the panel is spent: a retry starts from a new review,
     // and the forced refresh re-reads the chain's recovery state.
@@ -99,7 +99,7 @@ export const bindRecoverAccount = (
           : await deps.wallet.reviewBraavosRecovery();
     } catch (error) {
       buttonBusy(button, false);
-      showToast(errorMessage(error, "Couldn't review the recovery. Try again."), "error", button);
+      showToast(errorDetails(error, "Couldn't review the recovery. Try again."), "error", button);
       return;
     }
     // A re-render while the review was in flight has replaced this flag; a

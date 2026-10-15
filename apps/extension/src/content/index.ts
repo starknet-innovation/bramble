@@ -34,7 +34,12 @@ const eventRefresh = createProviderEventRefresh({
       origin: window.location.origin,
       type: "wallet.getGrantedAccounts",
     });
-    return addressesFromPayload(toProviderPayload(result, "wallet_requestAccounts")) ?? [];
+    return (
+      addressesFromPayload(
+        toProviderPayload(result, "wallet_requestAccounts"),
+        "wallet_requestAccounts",
+      ) ?? []
+    );
   },
 });
 
@@ -70,7 +75,7 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
   }
 
   const postToPage = (payload: Parameters<typeof providerResponse>[1]): void => {
-    const known = addressesFromPayload(payload);
+    const known = addressesFromPayload(payload, request.method);
     if (known) {
       eventRefresh.observeAddresses(known);
     }

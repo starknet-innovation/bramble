@@ -1,10 +1,11 @@
 /** Plain wallet preferences kept outside the encrypted vault. */
 import { WalletError } from "@bramble/core/errors";
 import { isJson } from "@bramble/core/json";
+import { isEnteredServiceUrl } from "@bramble/core/service-url";
 import { isWatchedNft, withNftId } from "@bramble/portfolio/watched-nft";
 import {
   DEFAULT_STRK20_NETWORKS,
-  isStrk20NetworkConfig,
+  isEnteredStrk20NetworkConfig,
   STRK20_MAINNET_POOL,
   type Strk20NetworkConfig,
 } from "@bramble/privacy/config";
@@ -12,10 +13,9 @@ import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountId } from "@bramble/wallet-model/accounts";
-import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
 import {
   DEFAULT_NETWORK,
-  DEFAULT_TOKENS,
+  DEFAULT_TRACKED_TOKENS,
   isStarknetNetworkId,
   STRK_TOKEN_ADDRESS,
 } from "@bramble/wallet-model/networks";
@@ -32,6 +32,7 @@ import {
 } from "@bramble/wallet-model/preferences";
 import { normalizeAccountGroups } from "./groups";
 import { withAccountHidden } from "./preferences-accounts";
+import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
 import { withCustomNetwork } from "./preferences-custom-networks";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
@@ -67,14 +68,14 @@ export type {
 export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
 /** Custom-network count bound, re-exported with the store that applies it. */
 export { MAX_CUSTOM_NETWORKS } from "./preferences-custom-networks";
-/** Added-token count bound, re-exported with the store that applies it. */
-export { MAX_ADDED_TOKENS_PER_NETWORK } from "./preferences-tokens";
+/** Added-token bound, recovery-scan probe set and removal check, re-exported with their store. */
+export {
+  MAX_ADDED_TOKENS_PER_NETWORK,
+  recoveryProbeTokens,
+  wasTokenRemoved,
+} from "./preferences-tokens";
 /** Re-exported store schema and capability types. */
-export type {
-  TokenSource,
-  WalletPreferences,
-  WalletPreferencesStore,
-} from "./preferences-types";
+export type { TokenSource, WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /**
  * Browser storage key for non-secret wallet preferences.
@@ -135,7 +136,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   schemaVersion: 1,
   strk20Networks: DEFAULT_STRK20_NETWORKS,
   theme: "dark",
-  tokens: DEFAULT_TOKENS.map(withTokenId),
+  tokens: DEFAULT_TRACKED_TOKENS.map(withTokenId),
 });
 
 const RETIRED_STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
@@ -151,7 +152,7 @@ const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined)
   config.paymaster.url === `${RETIRED_STRK20_GATEWAY_BASE}/paymaster` &&
   config.poolAddress === STRK20_MAINNET_POOL &&
   config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
-  config.subaccountAnonymizerAddress === undefined;
+  config.shadowAccountAnonymizerAddress === undefined;
 
 const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => {
   const current = { ...preferences, productAnalytics: preferences.productAnalytics ?? true };
@@ -385,6 +386,12 @@ export const createPreferencesStore = ({
         }
         const preferences = await read();
         const previous = preferences.addressBook.find((stored) => stored.id === nextEntry.id);
+        // A stored key is replaced only by removing the contact first: the
+        // multisig flow trusts these keys, and a card for a known address must
+        // not swap them under its label (Sherlock 258).
+        if (contactKeysChange(previous, nextEntry)) {
+          throw new WalletError(CONTACT_KEYS_CHANGED);
+        }
         const savedEntry = {
           ...nextEntry,
           ...(nextEntry.nostrPublicKey || !previous?.nostrPublicKey
@@ -404,7 +411,7 @@ export const createPreferencesStore = ({
           throw new WalletError("Invalid Starknet network");
         }
         const trimmed = rpcUrl.trim();
-        if (trimmed.length > 0 && !isCustomRpcUrl(trimmed)) {
+        if (trimmed.length > 0 && !isEnteredServiceUrl(trimmed)) {
           throw new WalletError("Invalid RPC endpoint");
         }
         const preferences = await read();
@@ -420,7 +427,7 @@ export const createPreferencesStore = ({
       },
       async setNftIndexerUrl({ url }) {
         const trimmed = url.trim();
-        if (trimmed.length > 0 && !isCustomRpcUrl(trimmed)) {
+        if (trimmed.length > 0 && !isEnteredServiceUrl(trimmed)) {
           throw new WalletError("Invalid indexer endpoint");
         }
         const preferences = await read();
@@ -441,7 +448,7 @@ export const createPreferencesStore = ({
       async setStrk20NetworkConfig({ config, networkId }) {
         if (
           !isStarknetNetworkId(networkId) ||
-          (config !== null && !isStrk20NetworkConfig(config))
+          (config !== null && !isEnteredStrk20NetworkConfig(config))
         ) {
           throw new WalletError("Invalid STRK20 network configuration");
         }

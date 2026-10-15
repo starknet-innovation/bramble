@@ -50,7 +50,7 @@ const registerRejectedBy = (error: unknown): Strk20Service => ({
   async registrationStatus() {
     return "unregistered";
   },
-  subaccountCommitment: offPath,
+  shadowAccountCommitment: offPath,
   submitActions: offPath,
   async submitPrepared() {
     return mapStrk20StageError("submission", error);

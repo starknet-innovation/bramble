@@ -410,7 +410,7 @@ const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
   wallet_strk20Balances: (result) => okFieldPayload(result, "balances", providerStrk20Balances),
   wallet_strk20PrepareInvoke: (result) =>
     okFieldPayload(result, "callAndProof", providerStrk20CallAndProof),
-  wallet_strk20SubaccountCommitment: (result) =>
+  wallet_strk20ShadowAccountCommitment: (result) =>
     okFieldPayload(result, "commitment", providerStrk20Commitment),
 };
 
@@ -448,8 +448,8 @@ const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
       return RESULT_MAPPERS.wallet_strk20InvokeTransaction;
     case "wallet_strk20PrepareInvoke":
       return RESULT_MAPPERS.wallet_strk20PrepareInvoke;
-    case "wallet_strk20SubaccountCommitment":
-      return RESULT_MAPPERS.wallet_strk20SubaccountCommitment;
+    case "wallet_strk20ShadowAccountCommitment":
+      return RESULT_MAPPERS.wallet_strk20ShadowAccountCommitment;
     case "wallet_switchStarknetChain":
       return RESULT_MAPPERS.wallet_switchStarknetChain;
     case "wallet_watchAsset":

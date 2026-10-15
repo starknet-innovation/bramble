@@ -28,6 +28,12 @@ describe("friendlyError", () => {
     );
   });
 
+  test("names a full vault instead of a JSON error (Sherlock 261)", () => {
+    expect(friendlyError("Vault storage limit reached").message).toBe(
+      "This wallet is full, so this change wasn't saved.",
+    );
+  });
+
   // The raw string names neither cause nor remedy, so the mapping supplies the
   // fix — and stays network-agnostic, since the guard fires on every network.
   test("turns the write-path chain guard into an actionable endpoint hint", () => {
@@ -35,6 +41,14 @@ describe("friendlyError", () => {
     expect(result.message).toContain("nothing was submitted");
     expect(result.message).toContain("Advanced");
     expect(result.message).not.toContain("Devnet");
+  });
+
+  // The refusal wallet.addAccount returns for a vault set up from a Ledger or
+  // a private key names the way that still works (Sherlock 156).
+  test("points a phrase-less wallet's add-account refusal at import", () => {
+    expect(friendlyError("No recovery phrase stored for this wallet").message).toBe(
+      "This wallet was set up without a recovery phrase. Import an existing account instead.",
+    );
   });
 
   // The exact strings argent-recovery.ts and account-recovery.ts throw.
@@ -124,6 +138,19 @@ describe("friendlyError", () => {
     );
   });
 
+  test("reads a node's own rejection as the node's, even when it mentions a timeout", () => {
+    // The node answered, so this is not a connectivity failure (mc-wallet issue
+    // 476); a transport failure with the same words still reads as one.
+    expect(
+      friendlyError(
+        'RPC: starknet_estimateFee with params {"request":[]} 41: Transaction execution timed out',
+      ).message,
+    ).toBe("The RPC rejected this request. Copy the error details for the full response.");
+    expect(friendlyError("request timed out").message).toBe(
+      "Couldn't reach the network. Check your connection or RPC endpoint.",
+    );
+  });
+
   test("collapses raw RPC and API diagnostics to short recovery copy", () => {
     expect(
       friendlyError(
@@ -188,14 +215,18 @@ describe("friendlyError", () => {
       "token visibility update failed",
     ].map((raw) => friendlyError(raw).message);
     expect(new Set(saves).size).toBe(1);
+  });
 
-    const routes = [
+  // Issue 652 review (R2-1): a swap-build safety refusal names the check that
+  // stopped the build, so it is not folded into one route sentence.
+  test("shows each swap-build call-shape refusal as written", () => {
+    for (const raw of [
       "swap build returned no swap call",
       "swap build returned too many calls",
       "swap build returned more than one swap call",
-      "swap build returned a route the wallet could not decode",
-    ].map((raw) => friendlyError(raw).message);
-    expect(new Set(routes).size).toBe(1);
+    ]) {
+      expect(friendlyError(raw).message).toBe(raw);
+    }
   });
 
   // The code says group, the UI says folder. The error layer follows the UI.
@@ -225,6 +256,12 @@ describe("friendlyError", () => {
       expect(message).not.toContain("expired");
       expect(message.toLowerCase()).toContain("check activity");
     }
+  });
+
+  test("tells the reader how to replace a saved contact's keys (Sherlock 258)", () => {
+    expect(friendlyError("Contact keys changed").message).toBe(
+      "This contact is saved with different keys. Remove it first if you mean to replace them.",
+    );
   });
 
   test("falls back to a generic message for empty input", () => {

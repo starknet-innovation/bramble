@@ -5,21 +5,23 @@
  */
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
-
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
-  summarizeStrk20Action,
+  STRK20_SERVICE_UNAVAILABLE,
   summarizeStrk20Plan,
 } from "@bramble/privacy/service";
+import { SHADOW_INVOKE_ANONYMIZER } from "@bramble/privacy/shadow-account-copy";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { ActivityLog } from "@bramble/transactions/activity";
-import { verificationContext } from "@bramble/transactions/verify";
-import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
+import {
+  strk20BatchRefusalError,
+  strk20ShadowAccountRefusalError,
+} from "@bramble/wallet-protocol/strk20-batch";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
+import { type ApprovalReservation, withApprovalReservation } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
@@ -37,20 +39,27 @@ import {
   resolveAccount,
   strk20ErrorMessage,
 } from "./strk20-approval-execution";
-import type {
-  Strk20DisclosureApprovalKind,
-  Strk20DisclosureRequest,
-} from "./strk20-approval-types";
 import { strk20FeeAssetFor } from "./strk20-fee-reference";
+import { holdStrk20Notice, MISSING_ANONYMIZER_REFUSAL } from "./strk20-notice";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
+import {
+  actionTokenAddresses,
+  batchReview,
+  configuredAnonymizer,
+  needsAnonymizer,
+  queueStrk20Disclosure,
+  reviewAssetsFor,
+  strk20BatchSummaryRefusal,
+} from "./strk20-ops-review";
 import {
   readStrk20BalancesMessage,
   readStrk20InvokeMessage,
   readStrk20PrepareMessage,
   readStrk20RegisterMessage,
-  readStrk20SubaccountMessage,
+  readStrk20ShadowAccountMessage,
 } from "./strk20-provider-inputs";
-import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
+import { poisonedStrk20ActionFlags } from "./strk20-recipient-policy";
+import { invokeScopeRecording, shadowRecordRefusal } from "./strk20-shadow-scopes";
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.
@@ -87,56 +96,6 @@ type Strk20OpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-const actionTokenAddresses = (actions: readonly Strk20Action[]): readonly string[] =>
-  actions.flatMap((action) => ("token" in action ? [action.token] : []));
-
-// Card labels come from the same network-scoped, spam- and source-filtered
-// trusted set the call reviewer uses, never raw preferences: a dapp-watched or
-// spoof token must not lend its ticker to a card (audit 171).
-const reviewAssetsFor = (
-  resolved: ResolvedAccount,
-  addresses: readonly string[],
-): readonly { readonly address: string; readonly symbol: string }[] =>
-  verificationContext(resolved.account, resolved.preferences)
-    .tokens.filter((token) => addresses.some((address) => sameFelt(address, token.address)))
-    .map((token) => ({ address: token.address, symbol: token.symbol }));
-
-const queueDisclosure = async (
-  deps: Strk20OpsDeps,
-  resolved: ResolvedAccount,
-  input: {
-    readonly kind: Strk20DisclosureApprovalKind;
-    readonly origin: string;
-    readonly request: Strk20DisclosureRequest;
-    readonly summaries: readonly string[];
-  },
-): Promise<RuntimeResponse> => {
-  try {
-    const payload = { strk20Request: input.request };
-    const approval = deps.approvals.requestStrk20Disclosure({
-      context: await createApprovalContext(resolved.account, payload),
-      kind: input.kind,
-      origin: input.origin,
-      request: input.request,
-      reviewAssets: reviewAssetsFor(
-        resolved,
-        input.request.type === "register"
-          ? [input.request.token]
-          : input.request.type === "balances"
-            ? input.request.tokens
-            : input.request.type === "prepare"
-              ? actionTokenAddresses(input.request.actions)
-              : [],
-      ),
-      summaries: input.summaries,
-    });
-    notifyApprovalsChanged();
-    return deps.waiters.register(approval.id);
-  } catch (error) {
-    return { error: strk20ErrorMessage(error) };
-  }
-};
-
 const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => {
   const input = readStrk20RegisterMessage(message);
   if (!input) {
@@ -146,37 +105,57 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
   if (gate) {
     return gate;
   }
-  // Queue admission first: no privacy approval here deduplicates, so an origin
-  // at its cap is refused whatever this request contains — and refusing it now
-  // costs a map filter instead of a vault read plus a pool quote.
-  requireApprovalAdmission(deps.approvals, input.origin);
-  const resolved = await resolveAccount(deps, input.origin);
-  if ("error" in resolved) {
-    return resolved;
-  }
-  if (resolved.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
-  }
-  const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
-  const token = resolved.preferences.tokens.find(
-    (candidate) => candidate.networkId === resolved.account.networkId,
-  );
-  if (!config || !token) {
-    return { error: "strk20 services unavailable" };
-  }
-  try {
-    const accountContext = strk20AccountContext(deps, resolved);
-    const service = strk20ServiceForRuntime(deps.runtimeRpc);
-    if (!service.poolFee) {
-      return { error: "strk20 services unavailable" };
+  // Admitted on arrival, before anything that depends on what this user has
+  // set up: the reservation holds this request's queue slot, and the deadline
+  // its card or notice expires from, while the work below runs. Over-cap
+  // bursts are therefore refused at once on every path (audit N2, N3).
+  return withApprovalReservation(deps.approvals, input.origin, async (_release, admission) => {
+    const resolved = await resolveAccount(deps, input.origin);
+    if ("error" in resolved) {
+      return resolved;
     }
-    const poolFeeFri = await service.poolFee(accountContext);
-    await assertPublicPoolSpendAffordable(
-      deps,
-      { accountContext, preferences: resolved.preferences, token },
-      poolFeeFri,
+    // Nothing about this account's setup is answered at once (audit L1): a
+    // Ledger account, a network without private services, or a fee the public
+    // balance cannot cover each hold the request on a notice, and the site
+    // gets the refusal only when the user closes it.
+    if (resolved.account.derivation.kind === "ledger") {
+      return holdStrk20Notice(
+        deps,
+        input.origin,
+        "Private balances are not available for Ledger accounts",
+        "request-failed",
+        admission,
+      );
+    }
+    const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
+    const token = resolved.preferences.tokens.find(
+      (candidate) => candidate.networkId === resolved.account.networkId,
     );
-    return queueDisclosure(deps, resolved, {
+    const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    if (!config || !token || !service.poolFee) {
+      return holdStrk20Notice(deps, input.origin, STRK20_SERVICE_UNAVAILABLE, undefined, admission);
+    }
+    let poolFeeFri: string;
+    try {
+      const accountContext = strk20AccountContext(deps, resolved);
+      poolFeeFri = await service.poolFee(accountContext);
+      await assertPublicPoolSpendAffordable(
+        deps,
+        { accountContext, preferences: resolved.preferences, token },
+        poolFeeFri,
+      );
+    } catch (error) {
+      return holdStrk20Notice(
+        deps,
+        input.origin,
+        strk20ErrorMessage(error),
+        "request-failed",
+        admission,
+      );
+    }
+    return queueStrk20Disclosure(deps, resolved, {
+      admission,
+      holdFailures: true,
       kind: "strk20-register",
       origin: input.origin,
       request: {
@@ -194,9 +173,7 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
         "Opens this account's own private channel",
       ],
     });
-  } catch (error) {
-    return { error: strk20ErrorMessage(error) };
-  }
+  });
 };
 
 const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => {
@@ -208,26 +185,51 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
   if (gate) {
     return gate;
   }
-  // Queue admission first: no privacy approval here deduplicates, so an origin
-  // at its cap is refused whatever this request contains — and refusing it now
-  // costs a map filter instead of a vault read plus a pool quote.
-  requireApprovalAdmission(deps.approvals, input.origin);
-  const resolved = await resolveAccount(deps, input.origin);
-  if ("error" in resolved) {
-    return resolved;
-  }
-  return queueDisclosure(deps, resolved, {
-    kind: "strk20-balances",
-    origin: input.origin,
-    request: { tokens: input.tokens, type: "balances" },
-    summaries:
-      input.tokens.length === 0
-        ? ["Share all private token balances"]
-        : [
-            `Share private balances for ${input.tokens.length} token${input.tokens.length === 1 ? "" : "s"}`,
-            ...input.tokens.map((token) => `Token ${token}`),
-          ],
+  // Admitted on arrival, before anything that depends on what this user has
+  // set up: the reservation holds this request's queue slot, and the deadline
+  // its card or notice expires from, while the work below runs. Over-cap
+  // bursts are therefore refused at once on every path (audit N2, N3).
+  return withApprovalReservation(deps.approvals, input.origin, async (_release, admission) => {
+    const resolved = await resolveAccount(deps, input.origin);
+    if ("error" in resolved) {
+      return resolved;
+    }
+    return queueStrk20Disclosure(deps, resolved, {
+      admission,
+      holdFailures: false,
+      kind: "strk20-balances",
+      origin: input.origin,
+      request: { tokens: input.tokens, type: "balances" },
+      summaries:
+        input.tokens.length === 0
+          ? ["Share all private token balances"]
+          : [
+              `Share private balances for ${input.tokens.length} token${input.tokens.length === 1 ? "" : "s"}`,
+              ...input.tokens.map((token) => `Token ${token}`),
+            ],
+    });
   });
+};
+
+// The answer a batch gets before its card, or null to go on. The summary
+// bound is decided from the site's input before anything that depends on what
+// this user has set up, so it is the same for every user (audit N1); a batch
+// that needs the missing anonymizer is held on the notice.
+const batchPrecheck = (
+  deps: Strk20OpsDeps,
+  resolved: ResolvedAccount,
+  origin: string,
+  actions: readonly Strk20Action[],
+  admission: ApprovalReservation,
+): Promise<RuntimeResponse> | RuntimeResponse | null => {
+  const unrenderable = strk20BatchSummaryRefusal(actions, origin, resolved.account.address);
+  if (unrenderable) {
+    return { error: unrenderable };
+  }
+  if (needsAnonymizer(actions) && configuredAnonymizer(resolved) === undefined) {
+    return holdStrk20Notice(deps, origin, MISSING_ANONYMIZER_REFUSAL, undefined, admission);
+  }
+  return null;
 };
 
 const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender) => {
@@ -239,36 +241,114 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   if (gate) {
     return gate;
   }
-  // Queue admission first: no privacy approval here deduplicates, so an origin
-  // at its cap is refused whatever this request contains — and refusing it now
-  // costs a map filter instead of a vault read plus a pool quote.
-  requireApprovalAdmission(deps.approvals, input.origin);
+  // A batch the SDK or pool is known to reject, or whose reviewed call is not
+  // the executed one, is refused before it can reach the user (#443).
+  const refusal = strk20BatchRefusalError(input.actions);
+  if (refusal) {
+    return { error: refusal };
+  }
+  // Admitted on arrival, before anything that depends on what this user has
+  // set up: the reservation holds this request's queue slot, and the deadline
+  // its card or notice expires from, while the work below runs. Over-cap
+  // bursts are therefore refused at once on every path (audit N2, N3).
+  return withApprovalReservation(deps.approvals, input.origin, async (_release, admission) => {
+    const resolved = await resolveAccount(deps, input.origin);
+    if ("error" in resolved) {
+      return resolved;
+    }
+    const early = batchPrecheck(deps, resolved, input.origin, input.actions, admission);
+    if (early) {
+      return early;
+    }
+    // The same recipient policy the wallet's own pool routes apply. A poisoned
+    // payment is queued with the flag, which leaves the card with Deny only,
+    // rather than refused at once: an instant refusal told the site which
+    // addresses the user has saved or paid (Sherlock 140).
+    const flags = poisonedStrk20ActionFlags(resolved.account, resolved.preferences, input.actions);
+    const review = batchReview(resolved, input.origin, input.actions);
+    return queueStrk20Disclosure(deps, resolved, {
+      admission,
+      flags,
+      holdFailures: needsAnonymizer(input.actions),
+      kind: "strk20-prepare",
+      origin: input.origin,
+      request: {
+        actions: input.actions,
+        ...(review.anonymizer === undefined ? {} : { anonymizer: review.anonymizer }),
+        simulate: input.simulate,
+        type: "prepare",
+      },
+      summaries: [
+        ...review.summaries,
+        input.simulate
+          ? "Simulate only — no submittable proof"
+          : "Generate a submittable private proof for this site",
+      ],
+    });
+  });
+};
+
+// The invoke card's work once the request is admitted: the account, the
+// pre-card checks, the record bound and the quote, then the card itself.
+const queueStrk20Invoke = async (
+  deps: Strk20OpsDeps,
+  input: NonNullable<ReturnType<typeof readStrk20InvokeMessage>>,
+  admission: ApprovalReservation,
+): Promise<RuntimeResponse> => {
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
   }
-  // The same recipient policy the wallet's own pool routes apply, before an
-  // approval for a poisoned payment can be queued at all — the site never gets
-  // to put a confirm button in front of the user for it.
-  const refusal = refusePoisonedStrk20Actions(
-    resolved.account,
-    resolved.preferences,
-    input.actions,
-  );
-  if (refusal) {
-    return refusal;
+  const early = batchPrecheck(deps, resolved, input.origin, input.actions, admission);
+  if (early) {
+    return early;
   }
-  return queueDisclosure(deps, resolved, {
-    kind: "strk20-prepare",
-    origin: input.origin,
-    request: { actions: input.actions, simulate: input.simulate, type: "prepare" },
-    summaries: [
-      ...input.actions.map((action) => summarizeStrk20Action(action, resolved.account.address)),
-      input.simulate
-        ? "Simulate only — no submittable proof"
-        : "Generate a submittable private proof for this site",
-    ],
-  });
+  // A private transfer or withdrawal to an address that mimics a saved contact
+  // is the same attack whether the wallet composed it or the site did. It is
+  // queued with the flag, Deny only, rather than refused on arrival, so the
+  // site cannot use the answer to read the address book (Sherlock 140).
+  const flags = poisonedStrk20ActionFlags(resolved.account, resolved.preferences, input.actions);
+  const review = batchReview(resolved, input.origin, input.actions);
+  const recording = invokeScopeRecording(review.anonymizer, input.actions);
+  const unrecordable = await shadowRecordRefusal(deps.wallet, resolved, input.origin, recording);
+  if (unrecordable) {
+    return holdStrk20Notice(deps, input.origin, unrecordable.error, "record-limit", admission);
+  }
+  try {
+    const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
+      ...strk20AccountContext(deps, resolved),
+      actions: input.actions,
+    });
+    const anonymizer =
+      review.anonymizer === undefined ? {} : { shadowAccountAnonymizer: review.anonymizer };
+    const payload = { actions: input.actions, ...anonymizer, strk20Plan: plan };
+    const approval = deps.approvals.requestStrk20Invoke({
+      ...anonymizer,
+      arrivedAt: admission.arrivedAt,
+      actions: input.actions,
+      context: await createApprovalContext(resolved.account, payload),
+      flags,
+      origin: input.origin,
+      plan,
+      reviewAssets: reviewAssetsFor(resolved, [
+        ...actionTokenAddresses(input.actions),
+        ...("feeAction" in plan ? [plan.feeAction.token] : []),
+      ]),
+      summaries: [
+        ...review.summaries,
+        summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
+      ],
+    });
+    admission.release();
+    notifyApprovalsChanged();
+    return deps.waiters.register(approval.id);
+  } catch (error) {
+    // A shadow batch's quote runs only when an anonymizer is configured, so
+    // an instant failure would tell the site one is: it is held instead.
+    return needsAnonymizer(input.actions)
+      ? holdStrk20Notice(deps, input.origin, strk20ErrorMessage(error), "request-failed", admission)
+      : { error: strk20ErrorMessage(error) };
+  }
 };
 
 const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, sender) => {
@@ -280,82 +360,65 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   if (gate) {
     return gate;
   }
-  // Queue admission first: no privacy approval here deduplicates, so an origin
-  // at its cap is refused whatever this request contains — and refusing it now
-  // costs a map filter instead of a vault read plus a pool quote.
-  requireApprovalAdmission(deps.approvals, input.origin);
-  const resolved = await resolveAccount(deps, input.origin);
-  if ("error" in resolved) {
-    return resolved;
-  }
-  // Refused before the plan is even quoted: a private transfer or withdrawal to
-  // an address that mimics a saved contact is the same attack whether the wallet
-  // composed it or the site did.
-  const refusal = refusePoisonedStrk20Actions(
-    resolved.account,
-    resolved.preferences,
-    input.actions,
-  );
+  const refusal = strk20BatchRefusalError(input.actions);
   if (refusal) {
-    return refusal;
+    return { error: refusal };
   }
-  try {
-    const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
-      ...strk20AccountContext(deps, resolved),
-      actions: input.actions,
-    });
-    const payload = { actions: input.actions, strk20Plan: plan };
-    const approval = deps.approvals.requestStrk20Invoke({
-      actions: input.actions,
-      context: await createApprovalContext(resolved.account, payload),
-      origin: input.origin,
-      plan,
-      reviewAssets: reviewAssetsFor(resolved, [
-        ...actionTokenAddresses(input.actions),
-        ...("feeAction" in plan ? [plan.feeAction.token] : []),
-      ]),
-      summaries: [
-        ...input.actions.map((action) => summarizeStrk20Action(action, resolved.account.address)),
-        summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
-      ],
-    });
-    notifyApprovalsChanged();
-    return deps.waiters.register(approval.id);
-  } catch (error) {
-    return { error: strk20ErrorMessage(error) };
-  }
+  // Admitted on arrival, before anything that depends on what this user has
+  // set up: the reservation holds this request's queue slot, and the deadline
+  // its card or notice expires from, while the work below runs. Over-cap
+  // bursts are therefore refused at once on every path (audit N2, N3).
+  return withApprovalReservation(deps.approvals, input.origin, (_release, admission) =>
+    queueStrk20Invoke(deps, input, admission),
+  );
 };
 
-const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readStrk20SubaccountMessage(message);
+const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readStrk20ShadowAccountMessage(message);
   if (!input) {
-    return { error: "invalid strk20 subaccount request" };
+    return { error: "invalid strk20 shadow account request" };
   }
   const gate = gateOrigin(deps, input.origin, sender);
   if (gate) {
     return gate;
   }
-  // Queue admission first: no privacy approval here deduplicates, so an origin
-  // at its cap is refused whatever this request contains — and refusing it now
-  // costs a map filter instead of a vault read plus a pool quote.
-  requireApprovalAdmission(deps.approvals, input.origin);
-  const resolved = await resolveAccount(deps, input.origin);
-  if ("error" in resolved) {
-    return resolved;
+  // A nonce the range view cannot list names an account the wallet could never
+  // check or sweep, so it is refused before approval, from the input alone.
+  const refusal = strk20ShadowAccountRefusalError(input.nonce);
+  if (refusal) {
+    return { error: refusal };
   }
-  return queueDisclosure(deps, resolved, {
-    kind: "strk20-subaccount",
-    origin: input.origin,
-    request: {
-      dappName: input.dappName,
-      ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
-      type: "subaccount",
-    },
-    summaries: [
-      `Share a private sub-account commitment for ${input.origin}`,
-      `Site-chosen scope label ${input.dappName}`,
-      ...(input.nonce === undefined ? [] : [`Nonce ${input.nonce}`]),
-    ],
+  // Admitted on arrival, before anything that depends on what this user has
+  // set up: the reservation holds this request's queue slot, and the deadline
+  // its card or notice expires from, while the work below runs. Over-cap
+  // bursts are therefore refused at once on every path (audit N2, N3).
+  return withApprovalReservation(deps.approvals, input.origin, async (_release, admission) => {
+    const resolved = await resolveAccount(deps, input.origin);
+    if ("error" in resolved) {
+      return resolved;
+    }
+    const anonymizer = configuredAnonymizer(resolved);
+    if (anonymizer === undefined) {
+      return holdStrk20Notice(deps, input.origin, MISSING_ANONYMIZER_REFUSAL, undefined, admission);
+    }
+    return queueStrk20Disclosure(deps, resolved, {
+      admission,
+      holdFailures: true,
+      kind: "strk20-shadow-account",
+      origin: input.origin,
+      request: {
+        anonymizer,
+        dappName: input.dappName,
+        ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
+        type: "shadowAccount",
+      },
+      summaries: [
+        `Share a private shadow account commitment for ${input.origin}`,
+        `Site-chosen scope label ${input.dappName}`,
+        ...(input.nonce === undefined ? [] : [`Nonce ${input.nonce}`]),
+        SHADOW_INVOKE_ANONYMIZER(anonymizer),
+      ],
+    });
   });
 };
 
@@ -365,7 +428,7 @@ const STRK20_OPS_HANDLERS: Readonly<Record<string, Strk20OpsHandler>> = {
   "wallet.strk20InvokeTransaction": handleStrk20InvokeTransaction,
   "wallet.strk20PrepareInvoke": handleStrk20PrepareInvoke,
   "wallet.strk20Register": handleStrk20Register,
-  "wallet.strk20SubaccountCommitment": handleStrk20SubaccountCommitment,
+  "wallet.strk20ShadowAccountCommitment": handleStrk20ShadowAccountCommitment,
 };
 
 /**

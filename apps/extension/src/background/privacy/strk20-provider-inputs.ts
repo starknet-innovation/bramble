@@ -90,7 +90,7 @@ export const readStrk20InvokeMessage = (
 /**
  * Parses a bounded dapp-scoped private identity commitment request.
  */
-export const readStrk20SubaccountMessage = (
+export const readStrk20ShadowAccountMessage = (
   message: unknown,
 ): {
   readonly dappName: string;
@@ -100,7 +100,7 @@ export const readStrk20SubaccountMessage = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["dappName", "nonce", "origin", "type"]) ||
-    message["type"] !== "wallet.strk20SubaccountCommitment" ||
+    message["type"] !== "wallet.strk20ShadowAccountCommitment" ||
     !isStrk20DappName(message["dappName"]) ||
     (message["nonce"] !== undefined && !isStrk20Felt(message["nonce"]))
   ) {

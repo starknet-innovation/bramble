@@ -8,6 +8,7 @@
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { applyOutcomeHash } from "../../shared/outcome-hash";
 import { reviewFeeBlocked } from "../../shared/review-render";
+import { knownRecipientLabel } from "./recipient-rows";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
   TRANSFER_FAILURE_TITLE,
@@ -43,6 +44,7 @@ const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | n
     recipient: fields.recipient,
     source: fields.source,
     recipientLabel: fields.recipientLabel,
+    recipientResolvedFrom: fields.recipientResolvedFrom,
     speed: fields.speed,
     tokenAddress: fields.tokenAddress,
     tokenBalance: fields.tokenBalance,
@@ -66,6 +68,15 @@ const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | n
 // those fields plus that one address, so this stays a pure paint.
 const modeOf = (form: HTMLFormElement, fields: TransferFields | null): TransferMode =>
   fields ? transferModeFor(fields, form.dataset["sender"] ?? "") : "send";
+
+// True when the reviewed recipient came from a Starknet name that matches no
+// listed contact or account, so the review warns before the send. The recipient
+// rows survive a stage switch (stages are toggled, never re-rendered), which is
+// what lets the review ask the same question the recipient step asked.
+const isNewResolvedRecipient = (form: HTMLFormElement, fields: TransferFields | null): boolean =>
+  fields !== null &&
+  fields.recipientResolvedFrom === "stark-name" &&
+  knownRecipientLabel(form, fields.recipient) === undefined;
 
 const WORKING_STAGES: ReadonlySet<TransferStage> = new Set([
   "authorizing",
@@ -164,7 +175,10 @@ const applySuccessReceipt = (
 // a re-send could pay twice (audit 173).
 const applyFailureReceipt = (
   form: HTMLFormElement,
-  state: Pick<TransferState<TransferReview>, "error" | "submissionUnknown" | "transactionHash">,
+  state: Pick<
+    TransferState<TransferReview>,
+    "error" | "errorDetails" | "priorWrite" | "submissionUnknown" | "transactionHash"
+  >,
 ): void => {
   const submitted = Boolean(state.transactionHash);
   const unknown = state.submissionUnknown && !submitted;
@@ -180,23 +194,38 @@ const applyFailureReceipt = (
   const section = form.querySelector<HTMLElement>("#send-failure");
   if (unknown) section?.setAttribute("data-severity", "warning");
   else section?.removeAttribute("data-severity");
-  form.querySelector("#send-retry")?.toggleAttribute("hidden", unknown);
-  form.querySelector("#send-failure-activity")?.toggleAttribute("hidden", !unknown);
+  // A refusal over an earlier write that may still land: this attempt was not
+  // sent, and Activity shows the earlier one. Check again re-runs the check
+  // when a check can clear it; a stranded one offers no retry at all.
+  const priorWrite = !unknown && !submitted ? (state.priorWrite ?? null) : null;
+  const retry = form.querySelector("#send-retry");
+  retry?.toggleAttribute("hidden", unknown || priorWrite === "stranded");
+  if (retry) retry.textContent = priorWrite === "unresolved" ? "Check again" : "Try again";
+  form
+    .querySelector("#send-failure-activity")
+    ?.toggleAttribute("hidden", !unknown && priorWrite === null);
   const reason =
     state.error ||
     (submitted
       ? TRANSFER_SENT_FAILURE_REASON
       : "The transaction was not sent. Your balance is unchanged.");
   setText(form, "send-failure-copy", reason);
-  // What is worth taking to support is the reason, not the identifier the
-  // transaction never got. The hash, when there is one, copies from its own
-  // row above.
+  // What is worth taking to support is the cause, not the identifier the
+  // transaction never got: the complete diagnostic the rejected call carried,
+  // as an error toast's copy control holds, or the reason itself when the
+  // failure had no call behind it. The hash, when there is one, copies from its
+  // own row above.
   const copyError = form.querySelector<HTMLElement>("#send-failure-copy-error");
-  copyError?.setAttribute("data-copy", reason);
+  copyError?.setAttribute("data-copy", state.errorDetails || reason);
   // Bound through the row: `bindCopyButtons` scans descendants, so handing it
   // the control itself finds nothing.
   bindCopyButtons(copyError?.parentElement ?? null);
 };
+
+// The reviewed network label is carried on the form by the first paint, so the
+// summary stays a function of the same account/network state the form holds.
+const reviewedNetworkLabel = (form: HTMLFormElement): string =>
+  form.dataset["sendNetworkLabel"] ?? "";
 
 /**
  * Paints the Send form for one state. `poolFeeFri` is threaded in rather than
@@ -265,7 +294,9 @@ export const applyTransferUi = (
   // here, and a flagged one can no longer hide behind a collapsed disclosure.
   const reviewRisks = form.querySelector<HTMLElement>("#send-review-risks");
   if (reviewRisks) {
-    const risks = state.review ? reviewRisksHtml(state.review) : "";
+    const risks = state.review
+      ? reviewRisksHtml(state.review, isNewResolvedRecipient(form, state.fields))
+      : "";
     reviewRisks.innerHTML = risks;
     reviewRisks.toggleAttribute("hidden", risks === "");
   }
@@ -282,10 +313,15 @@ export const applyTransferUi = (
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {
     reviewSummary.innerHTML = state.fields
-      ? reviewSummaryHtml(state.fields, mode, {
-          address: form.dataset["sender"] ?? "",
-          label: form.dataset["senderLabel"] ?? "",
-        })
+      ? reviewSummaryHtml(
+          state.fields,
+          mode,
+          {
+            address: form.dataset["sender"] ?? "",
+            label: form.dataset["senderLabel"] ?? "",
+          },
+          reviewedNetworkLabel(form),
+        )
       : "";
     // Freshly rendered markup: the shell's copy binding ran before this paint.
     bindCopyButtons(reviewSummary);

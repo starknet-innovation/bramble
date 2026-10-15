@@ -31,6 +31,7 @@ import {
   swapPreparationPayload,
 } from "../../apps/extension/src/background/transactions/swap-preparations";
 import { testExtension } from "../support/background-wallet-stub";
+import { waitForPendingApprovals } from "../support/held";
 import {
   POISONING_CONTACT,
   poisoningAccount,
@@ -294,6 +295,7 @@ describe("NFT send and swap execute use the same trusted set (#163)", () => {
       minBuyAmount: "1",
       reviewedFee: { overallFee: "1", unit: "FRI" as const },
       sellSymbol: "ETH",
+      sellTokenAddress: "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
       summaries: ["Swap"],
     };
     const context = await createApprovalContext(account, swapPreparationPayload(unsigned));
@@ -306,10 +308,10 @@ describe("NFT send and swap execute use the same trusted set (#163)", () => {
 });
 
 describe("dapp invoke uses the same trusted set (#163)", () => {
-  test("a dapp transfer to a lookalike of a paid recipient is refused before queueing", async () => {
+  test("a dapp transfer to a lookalike of a paid recipient is flagged on its approval", async () => {
     const harness = await makeHandler();
     await harness.send(PAID);
-    const response = harness.handler(
+    void harness.handler(
       {
         calls: [
           { calldata: [PAID_TWIN, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
@@ -319,16 +321,13 @@ describe("dapp invoke uses the same trusted set (#163)", () => {
       },
       contentSender,
     );
-    // A request that is not refused is held for the user's approval and never
-    // settles on its own; report that as "queued" instead of hanging the suite.
-    const outcome = await Promise.race([
-      response,
-      new Promise((resolve) => setTimeout(() => resolve("queued"), 500)),
-    ]);
-    expect(outcome).toEqual({ error: expect.stringContaining("closely mimics") });
-    await expect(
-      harness.handler({ type: "wallet.pendingApprovals" }, extensionSender),
-    ).resolves.toMatchObject({ pending: [] });
+    // Queued rather than refused on arrival (Sherlock 140), with the same
+    // trusted set behind the flag that the wallet's own send refuses on.
+    const pending = await waitForPendingApprovals<{
+      readonly flags?: readonly { readonly code: string }[];
+      readonly id: string;
+    }>(harness.handler, extensionSender);
+    expect(pending.at(-1)?.flags?.map((flag) => flag.code)).toContain("address-poisoning");
     expect(harness.submitted).toEqual(["erc20"]);
   });
 });

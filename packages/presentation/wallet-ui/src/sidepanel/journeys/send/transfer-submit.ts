@@ -8,13 +8,21 @@
  * route rather than once per privacy feature.
  */
 
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import type { TokenBalance } from "../../../popup/responses/responses";
+import { friendlyError } from "../../runtime/friendly-error";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { errorMessage } from "../../shared/dom";
+import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
+import { errorDetails } from "../../shared/dom";
 import { reviewFeeBlocked } from "../../shared/review-render";
+import { knownNotSent, outcomeUnknownReason, priorWriteRefusal } from "../../shared/submit-outcome";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
+import { shieldStrkFunding, transferRoute } from "./transfer-route";
+
+type ShieldStrkFunding = ReturnType<typeof shieldStrkFunding>;
 
 /**
  * Review shape the Send screen renders. Structurally the public review, so the
@@ -86,11 +94,12 @@ export const preparationFailure = (route: SendRoute): string => {
 /**
  * Builds the review a pool route shows from its preparation.
  *
- * `feeAffordability` is `"unknown"` rather than a verdict: a relayed route pays
- * the network fee through the relay and recovers the pool charge from the
- * private balance, and a deposit's own fee lands in the estimate the account
- * route already produces, so the public STRK guard has nothing to say. `unknown`
- * renders no notice.
+ * A relayed route pays the network fee through the relay and recovers the pool
+ * charge from the private balance, so its `feeAffordability` is `"unknown"`
+ * (no notice). A shield pays its network fee, the pool fee, and (for STRK) the
+ * amount from the public STRK balance; with `funding` the review runs the
+ * shared warn-only predicate over all three, so a Max shield whose network fee
+ * the balance cannot cover is flagged before Confirm.
  *
  * `flags` is empty by construction, not by omission. The only recipient flag
  * that can refuse a send — address poisoning — is applied in the background
@@ -100,10 +109,20 @@ export const preparationFailure = (route: SendRoute): string => {
  * statement about a token the route resolved from the wallet's own list. A flag
  * rendered here would therefore be either impossible or noise.
  */
-export const preparedReview = (preparation: PrivacyPreparation): TransferReview =>
+export const preparedReview = (
+  preparation: PrivacyPreparation,
+  funding: ShieldStrkFunding = null,
+): TransferReview =>
   ({
     fee: preparation.networkFee ?? null,
-    feeAffordability: "unknown",
+    feeAffordability:
+      funding && preparation.route === "public-account"
+        ? resolveFeeAffordability({
+            balance: funding.balance,
+            fee: preparation.networkFee ?? null,
+            sendAmount: funding.spent,
+          })
+        : "unknown",
     feeEstimateFailed: preparation.route === "public-account" && !preparation.networkFee,
     flags: [],
     requiresDeployment: false,
@@ -155,8 +174,12 @@ export const preparedState = (
   preparation: PrivacyPreparation,
   fields: TransferFields,
   key: string,
+  publicBalances?: readonly TokenBalance[],
 ): TransferState<TransferReview> => {
-  const review = preparedReview(preparation);
+  const review = preparedReview(
+    preparation,
+    shieldStrkFunding(fields, publicBalances, preparation.poolFeeFri),
+  );
   return {
     error: review.feeEstimateFailed ? FEE_UNAVAILABLE : "",
     fields,
@@ -174,62 +197,121 @@ export const preparedState = (
 /**
  * What a rejected confirm does to the Send state: the next state, whether to
  * follow a captured hash through confirmation, and the toast to show (if any).
+ * A toast carries the rejected call's complete diagnostic as `details`, so its
+ * copy control hands support the cause rather than the toast's own headline.
  */
 export type SubmitRejection = {
   readonly follow: boolean;
   readonly state: TransferState<TransferReview>;
-  readonly toast: string | null;
+  readonly toast: { readonly details: string; readonly message: string } | null;
 };
+
+/**
+ * The journey state once a submitted transaction's outcome is known. A
+ * success lands on the receipt; a failure drops the review, so Try again
+ * reviews afresh rather than re-signing the old one (audit 247).
+ */
+export const confirmedState = <Review>(
+  state: TransferState<Review>,
+  outcome: ConfirmationOutcome,
+): TransferState<Review> =>
+  outcome.kind === "succeeded"
+    ? { ...state, error: "", stage: "submitted" }
+    : {
+        ...state,
+        error: outcome.message,
+        // No rejected call lies behind a chain rejection, so the receipt copies
+        // the reason itself — never a diagnostic left over from an earlier try.
+        errorDetails: "",
+        review: null,
+        priorWrite: null,
+        reviewedKey: null,
+        stage: "failed",
+        submissionUnknown: false,
+      };
+
+const NOT_SENT_TOAST = "Transaction was not sent";
 
 /**
  * Settles a rejected submit (public) or execute (pool route).
  *
  * Every branch drops the review and its key, so Try again always runs a fresh
- * review before anything is signed again (audits 173 and 247). A
- * {@link SubmissionUnknownError} is never reported as "not sent": the write may
- * already be on chain. With a captured hash the journey follows it like any
- * submitted transaction; without one the receipt says the status is unknown
- * and offers Activity instead of a re-send.
+ * review before anything is signed again (audits 173 and 247). "Not sent" is
+ * said only for the closed set of pre-submit refusals in `knownNotSent`; any
+ * other rejection — a lost or unrecognised reply, the router's catch-all, an
+ * unreviewed message — may already be on chain (errors audit F1). A
+ * {@link SubmissionUnknownError} with a captured hash is followed like any
+ * submitted transaction; every other unknown outcome says so and offers
+ * Activity instead of a re-send. Every failed branch keeps the complete
+ * diagnostic beside its sentence, for the receipt's copy control.
  */
 export const submitRejection = (
   state: TransferState<TransferReview>,
   error: unknown,
-  fallback: string,
 ): SubmitRejection => {
+  const details = errorDetails(error, "");
   const cleared: TransferState<TransferReview> = {
     ...state,
+    errorDetails: details,
+    priorWrite: null,
     privatePreparation: null,
     progress: null,
     review: null,
     reviewedKey: null,
   };
-  if (error instanceof SubmissionUnknownError) {
-    return error.transactionHash
-      ? {
-          follow: true,
-          state: {
-            ...cleared,
-            error: "",
-            stage: "confirming",
-            submissionUnknown: false,
-            transactionHash: error.transactionHash,
-          },
-          toast: null,
-        }
-      : {
-          follow: false,
-          state: { ...cleared, error: error.message, stage: "failed", submissionUnknown: true },
-          toast: null,
-        };
+  if (error instanceof SubmissionUnknownError && error.transactionHash) {
+    return {
+      follow: true,
+      state: {
+        ...cleared,
+        error: "",
+        stage: "confirming",
+        submissionUnknown: false,
+        transactionHash: error.transactionHash,
+      },
+      toast: null,
+    };
   }
+  // The background refused before this attempt claimed the pool, because an
+  // EARLIER private write may still land. This attempt was not sent, which the
+  // title says; the sentence keeps the earlier write's may-be-in-flight fact,
+  // and the receipt offers Activity and Check again, which prepares afresh and
+  // so re-runs the background's resolution (mc-wallet issue 661).
+  const priorWrite = priorWriteRefusal(error);
+  if (priorWrite !== null) {
+    return {
+      follow: false,
+      state: {
+        ...cleared,
+        error: friendlyError(details).message,
+        priorWrite,
+        stage: "failed",
+        submissionUnknown: false,
+      },
+      toast: null,
+    };
+  }
+  if (knownNotSent(error)) {
+    return {
+      follow: false,
+      state: {
+        ...cleared,
+        error: `The transaction was not sent. ${friendlyError(details).message}`,
+        stage: "failed",
+        submissionUnknown: false,
+      },
+      toast: { details: details || NOT_SENT_TOAST, message: NOT_SENT_TOAST },
+    };
+  }
+  const pooled = state.fields !== null && transferRoute(state.fields).id !== "public-public";
   return {
     follow: false,
     state: {
       ...cleared,
-      error: `The transaction was not sent. ${errorMessage(error, fallback)}`,
+      error: outcomeUnknownReason(error, pooled ? "The private transaction" : "The transfer"),
       stage: "failed",
-      submissionUnknown: false,
+      submissionUnknown: true,
     },
-    toast: "Transaction was not sent",
+    toast: null,
   };
 };

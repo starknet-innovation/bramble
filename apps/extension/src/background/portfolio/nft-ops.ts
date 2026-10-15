@@ -20,7 +20,6 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
@@ -34,6 +33,7 @@ import {
   readTransferNftInput,
 } from "./nft-inputs";
 import { cachedNfts } from "./nft-snapshot-cache";
+import { submitNftTransfer } from "./nft-transfer-submit";
 
 // Bounds how many on-chain ERC721 owner / ERC1155 balance re-proofs run at once
 // during discovery.
@@ -358,26 +358,16 @@ const handleTransferNft = async (
   }
   // Same bind as the ERC20 send: the fee the review step rendered is the
   // ceiling this send may sign under (MCW-V09-119).
-  const result = await deps.runtimeRpc.submitInvokeTransaction({
-    account: context.account,
-    calls: [call],
+  return submitNftTransfer(deps, {
+    call,
+    context,
     isAuthorized: authorized.isCurrent,
+    recipient: input.recipient,
     ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
     reviewedFee: input.reviewedFee,
     rpcUrls,
-    signHash: signerForContext(deps, context),
-  });
-  await recordSubmittedActivity(deps.activity, {
-    accountId: context.account.id,
-    // The NFT's recipient is a payee like an ERC20 send's (audit #163).
-    counterparty: input.recipient,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: context.networkId,
     summary: report.calls[0]?.summary ?? `Send NFT #${input.tokenId}`,
   });
-  await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);
-  return { ok: true, transactionHash: result.transactionHash };
 };
 
 const handleDiscoverNfts = async (

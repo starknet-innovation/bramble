@@ -126,9 +126,13 @@ describe("explorer-first transaction history", () => {
   test("serves history from the explorer without touching the RPC", async () => {
     const trace: string[] = [];
     const explorer = answering(trace);
-    const entries = await historyWith(explorer.client)(historyInput, () => workingRpc(trace));
+    const { entries, lane } = await historyWith(explorer.client)(historyInput, () =>
+      workingRpc(trace),
+    );
 
     expect(entries.map((entry) => entry.hash)).toEqual([EXPLORER_HASH]);
+    // The rows name the explorer, so they cannot settle a pending transaction.
+    expect(lane).toBe("explorer");
     expect(trace).toEqual(["gateway"]);
     expect(explorer.urls).toHaveLength(1);
     expect(explorer.urls[0]).toContain(`address=${ACCOUNT}`);
@@ -137,7 +141,7 @@ describe("explorer-first transaction history", () => {
   test("an empty explorer page is the answer, not a reason to scan", async () => {
     const trace: string[] = [];
     const explorer = answering(trace, { items: [], nextCursor: null });
-    const entries = await historyWith(explorer.client)(historyInput, () => workingRpc(trace));
+    const { entries } = await historyWith(explorer.client)(historyInput, () => workingRpc(trace));
 
     expect(entries).toEqual([]);
     expect(trace).toEqual(["gateway"]);
@@ -147,9 +151,12 @@ describe("explorer-first transaction history", () => {
     resetRpcEndpointCooldownsForTests();
     const trace: string[] = [];
     const explorer = failing(trace);
-    const entries = await historyWith(explorer.client)(historyInput, () => workingRpc(trace));
+    const { entries, lane } = await historyWith(explorer.client)(historyInput, () =>
+      workingRpc(trace),
+    );
 
     expect(entries.map((entry) => entry.hash)).toEqual([RPC_HASH]);
+    expect(lane).toBe("chain-events");
     expect(trace).toEqual(["gateway", "rpc"]);
   });
 
@@ -157,7 +164,7 @@ describe("explorer-first transaction history", () => {
     resetRpcEndpointCooldownsForTests();
     const trace: string[] = [];
     const explorer = answering(trace, { items: "not-a-page" });
-    const entries = await historyWith(explorer.client)(historyInput, () => workingRpc(trace));
+    const { entries } = await historyWith(explorer.client)(historyInput, () => workingRpc(trace));
 
     expect(entries.map((entry) => entry.hash)).toEqual([RPC_HASH]);
     expect(trace).toEqual(["gateway", "rpc"]);
@@ -177,7 +184,7 @@ describe("explorer-first transaction history", () => {
     resetRpcEndpointCooldownsForTests();
     const trace: string[] = [];
     const explorer = answering(trace);
-    const entries = await historyWith(explorer.client, async () => ({
+    const { entries } = await historyWith(explorer.client, async () => ({
       explorerFallback: {},
       rpcOverrides: { SN_MAIN: MY_NODE },
     }))(historyInput, () => workingRpc(trace));
@@ -204,7 +211,7 @@ describe("explorer-first transaction history", () => {
   test("an override user who opts back in gets the explorer first again", async () => {
     const trace: string[] = [];
     const explorer = answering(trace);
-    const entries = await historyWith(explorer.client, async () => ({
+    const { entries } = await historyWith(explorer.client, async () => ({
       explorerFallback: { SN_MAIN: true },
       rpcOverrides: { SN_MAIN: MY_NODE },
     }))(historyInput, () => workingRpc(trace));
@@ -217,7 +224,7 @@ describe("explorer-first transaction history", () => {
     resetRpcEndpointCooldownsForTests();
     const trace: string[] = [];
     const explorer = answering(trace);
-    const entries = await historyWith(explorer.client, async () => {
+    const { entries } = await historyWith(explorer.client, async () => {
       throw new Error("preferences unavailable");
     })(historyInput, () => workingRpc(trace));
 
@@ -230,7 +237,7 @@ describe("explorer-first transaction history", () => {
     resetRpcEndpointCooldownsForTests();
     const trace: string[] = [];
     const explorer = answering(trace);
-    const entries = await historyWith(explorer.client)(
+    const { entries } = await historyWith(explorer.client)(
       {
         ...historyInput,
         accountId: `SN_DEVNET:${ACCOUNT}`,
@@ -250,7 +257,7 @@ describe("explorer-first transaction history", () => {
     const bundled = answering(trace);
     const configured = answering(trace);
     const selections: string[] = [];
-    const entries = await createExplorerFirstHistory({
+    const { entries } = await createExplorerFirstHistory({
       client: bundled.client,
       clientFor: (networkId, current) => {
         selections.push(`${networkId}:${current.explorerApiUrls?.[networkId]}`);

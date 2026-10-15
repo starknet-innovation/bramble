@@ -139,12 +139,19 @@ const networkFeeHtml = (
   );
 };
 
-// The pool's per-batch charge, always named separately and always attributed to
-// the balance it leaves. Keeping it off the "Estimated fee" line is what stops a
-// protocol charge reading as network gas or as the relay's price.
+/**
+ * The pool's per-batch charge as one sentence, shared by the review's Cost box
+ * and the Send Amount screen so the two can never word the same charge
+ * differently. `amount` is already formatted with its token. Always named
+ * separately and always attributed to the balance it leaves: keeping it off the "Estimated fee" line is what stops a protocol
+ * charge reading as network gas or as the relay's price.
+ */
+export const poolFeeText = (feeBucket: string, amount: string): string =>
+  `Pool fee: ${amount} from your ${feeBucket} balance`;
+
 const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
   route.poolFeeRequired && route.feeBucket !== "none" && poolFeeFri !== undefined
-    ? feeLine("Pool fee", `${formatFri(poolFeeFri)} from your ${route.feeBucket} balance`)
+    ? `<p class="review-fee">${escapeHtml(poolFeeText(route.feeBucket, formatFri(poolFeeFri)))}</p>`
     : "";
 
 /**

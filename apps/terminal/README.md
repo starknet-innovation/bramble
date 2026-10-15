@@ -72,8 +72,13 @@ STRK20_PROVER_UPSTREAM=
 STRK20_PAYMASTER_UPSTREAM=https://starknet.paymaster.avnu.fi
 AVNU_PAYMASTER_API_KEY=
 BRAMBLE_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
-TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app,http://localhost:3000
+TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app
 ```
+
+The loopback origins `http://localhost:3000`, `http://localhost:5273` and their
+`127.0.0.1` forms are accepted only when `VERCEL_ENV=development`, which
+`bun run dev:full` sets. Production and preview deployments never accept them,
+even if they are listed in `TERMINAL_ALLOWED_ORIGINS`.
 
 Never prefix upstream URLs or the paymaster key with `VITE_`; Vite variables
 are browser-readable. The public gateway URL is visible by design, while the
@@ -101,8 +106,8 @@ handles private notes according to that dapp's rules, so its contract appears
 as an explicit target in that dapp's reviewed action plan. AVNU private swap
 uses AVNU's private executor, while Vesu or another dapp uses its own audited
 adapter. Core pool operations do not configure one. The wallet's optional
-`subaccountAnonymizerAddress` setting is a separate SDK module used only for
-generic `subaccount_invoke` actions.
+`shadowAccountAnonymizerAddress` setting is a separate SDK module used only for
+generic `shadow_account_invoke` actions.
 
 ## NFT Studio
 
@@ -210,7 +215,7 @@ The terminal reads from these hosts:
 | Perps (WebSocket)          | `wss://api.starknet.extended.exchange`         | `/proxy/extended-ws` in dev|
 | Vesu V2 pools/positions    | `https://api.vesu.xyz`                         | Direct (CORS-enabled)      |
 | Vesu Multiply routes       | `https://prod-api-quoter.ekubo.org`            | Direct (CORS-enabled)      |
-| Indexed holdings/activity  | `https://starkscan.co/v1/SN_MAIN`              | `/proxy/starkscan` in dev  |
+| Indexed activity           | `https://starkscan.co/v1/SN_MAIN`              | `/proxy/starkscan` in dev  |
 | Starknet RPC               | `https://mainnet.nodes.starknet.org/rpc/v0_10` | Direct (CORS-enabled)      |
 
 Ekubo and Cartridge allow browser origins. AVNU market data is routed through
@@ -254,7 +259,7 @@ The data layer stays within public API limits by:
 - Polls at calm intervals — prices every 60s, token universe every 120s, chart
   history per-timeframe (60s intraday → 30m for yearly), spot fills every 5s,
   perps stats every 20s,
-  Starkscan chain activity every 5s, indexed holdings every 30s, Vesu markets
+  Starkscan chain activity every 5s, RPC balances every 30s, Vesu markets
   every 60s, positions/redemptions every 30s, and vaults every 120s.
 - Backs off exponentially on `429`/`5xx`, honoring `Retry-After` while keeping
   the last-good data on screen. Chart history and pair fills do not blindly
@@ -284,7 +289,7 @@ the `data/extended/parse.ts` functions). It covers:
 - AVNU v3 swap quote/build and an Extended public WebSocket frame
 - verified Vesu V2 pool parsing, an Ekubo exact-output unwind route, and the
   deployed Pool/Multiply ABI entrypoints
-- exact Starkscan token holdings plus recent block and transfer parsing
+- Starkscan recent block and transfer parsing
 - Extended `/info/markets`, `/info/markets/{m}/stats`,
   `/info/candles/{m}/{type}`, `/info/{m}/funding`, `/info/markets/{m}/orderbook`
 - Starknet RPC `starknet_chainId` + a sample `balanceOf`

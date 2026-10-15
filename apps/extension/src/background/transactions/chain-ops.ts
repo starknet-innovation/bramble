@@ -23,8 +23,9 @@ import {
 import type { RpcProvider } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
+import { withApprovalReservation } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import type { PendingApproval } from "../approvals/approval-snapshot";
 import type { ApprovalQueue } from "../approvals/approvals";
 import { promptReconnectForStaleGrant } from "../approvals/reconnect-prompt";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
@@ -32,7 +33,7 @@ import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
   readOriginRequestInput,
-  readSignTypedDataInput,
+  type readSignTypedDataInput,
   readSwitchChainInput,
 } from "../routing/message-inputs";
 import {
@@ -54,7 +55,9 @@ import {
   type UnlockSession,
 } from "../runtime/session";
 import { reviewOutsideExecution } from "./outside-execution-review";
+import { admitSignTypedData } from "./sign-typed-data-admission";
 import { withTrustedRecipients } from "./trusted-recipients";
+import { describeTypedData } from "./typed-data-summary";
 
 /**
  * Dependencies for the provider chain and signing operations.
@@ -91,24 +94,6 @@ export type ChainOpsDeps = {
   readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
-};
-
-/**
- * Builds a short, user-facing summary of a SNIP-12 typed-data request for the
- * approval card (primary type and, when present, the domain name).
- */
-const describeTypedData = (typedData: unknown): string => {
-  if (typeof typedData !== "object" || typedData === null) {
-    return "typed data";
-  }
-  const record = typedData as Record<string, unknown>;
-  const primaryType = typeof record["primaryType"] === "string" ? record["primaryType"] : "message";
-  const domain =
-    typeof record["domain"] === "object" && record["domain"] !== null
-      ? (record["domain"] as Record<string, unknown>)
-      : {};
-  const name = typeof domain["name"] === "string" ? domain["name"] : "";
-  return name ? `${primaryType} · ${name}` : primaryType;
 };
 
 /**
@@ -212,36 +197,42 @@ type ChainOpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extension, preferencesStore, session, waiters, wallet } = deps;
-  const input = readSignTypedDataInput(message);
-  if (!input) {
-    return { error: "invalid sign typed data request" };
-  }
-  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
-    return { error: "sender origin mismatch" };
-  }
-  // A blocklisted origin gets no signing prompt even if it still holds an old
-  // connection grant — the phishing feed is the defense for the post-grant
-  // case. Mirror the sibling dapp surfaces (provider-ops, declare, strk20).
-  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
-    return { error: "origin blocked" };
-  }
-  // Refuse a flooding origin BEFORE the expensive work, not after it. Hashing a
-  // maximum-size SNIP-12 document can monopolize synchronous Pedersen work in
-  // the service worker that also serves the panel, and reading the grants decrypts
-  // the vault — paying both for a request the queue cap will refuse anyway is
-  // how a per-origin cap that bounds memory leaves CPU unbounded.
-  requireApprovalAdmission(approvals, input.origin);
+/**
+ * Everything a dapp typed-data signature request does between admission and
+ * the approval queue: the session and vault reads, the SNIP-12 hash, and the
+ * outside-execution review.
+ *
+ * `summary` is the approval card's one-line description of the request.
+ *
+ * Runs under the origin's admission reservation (Sherlock 151) and calls
+ * `release` in the same synchronous step that queues the approval, so the
+ * queued prompt replaces the reservation. Every refusal is returned as a
+ * response, never thrown; the authorization captured before the first read is
+ * re-checked after every await, so a lock mid-request queues nothing
+ * (Sherlock 166).
+ */
+const queueSignTypedData = async (
+  deps: ChainOpsDeps,
+  input: NonNullable<ReturnType<typeof readSignTypedDataInput>>,
+  summary: string,
+  release: () => void,
+): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
+  const { approvals, preferencesStore, session, wallet } = deps;
   // Read the session only after the message is well-formed and its origin is
   // both claimed truthfully and unblocked: the background must validate type,
-  // origin, and capability before it acts on a message at all.
+  // origin, and capability before it acts on a message at all. The
+  // authorization is re-checked after every await, so a lock that lands
+  // mid-request admits no card (Sherlock 166).
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
   const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     // Mirror provider-ops: a formerly granted origin gets a reconnect prompt
@@ -262,36 +253,71 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   // prompt, so it gets the invoke route's refusals and flags (audit 144),
   // including the standing-allowance totals the invoke route flags against.
   // The trusted set is the invoke route's: contacts plus the user's own
-  // accounts and the recipients this wallet paid (audit 163).
+  // accounts and the recipients this wallet paid (audit 163). A lookalike
+  // recipient is queued with its flag, not refused, so the answer cannot reveal
+  // the address book (Sherlock 140); the signing-time review refuses it.
   const review = reviewOutsideExecution(
     input.typedData,
     account,
     await withTrustedRecipients(deps, preferences, await vaultAccountAddresses(wallet, passphrase)),
     (await deps.allowanceStore?.list().catch(() => [])) ?? [],
+    "queue",
   );
   if (review && "error" in review) {
     return review;
+  }
+  const context = await createApprovalContext(account, { typedData: input.typedData });
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
   }
   // Never auto-sign: queue a per-request approval and hold this response until
   // the user decides in the side panel. The signature is computed and returned
   // through this same channel on approval, so it reaches only the requesting
   // origin and tab.
   const approval = approvals.requestSignTypedData({
-    context: await createApprovalContext(account, { typedData: input.typedData }),
+    context,
     origin: input.origin,
     ...(review ? { review } : {}),
-    summary: describeTypedData(input.typedData),
+    summary,
     typedData: input.typedData,
   });
+  release();
   notifyApprovalsChanged();
-  return waiters.register(approval.id);
+  return { approval };
 };
 
-const handleGetChainId: ChainOpsHandler = async (deps, message) => {
-  // The content bridge sends { origin, type }; chain id is public data so the
-  // origin is not gated, but the message must still be well-formed.
-  if (!readOriginRequestInput(message, "wallet.getChainId")) {
+const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
+  const admitted = admitSignTypedData(deps, message, sender);
+  if ("refusal" in admitted) {
+    return admitted.refusal;
+  }
+  const { input } = admitted;
+  // The reservation counts this request against the caps until it queues, so
+  // concurrent requests cannot all pass admission before any of them does the
+  // expensive work below (Sherlock 151).
+  const queued = await withApprovalReservation(deps.approvals, input.origin, (release) =>
+    queueSignTypedData(deps, input, describeTypedData(input.typedData), release),
+  );
+  // Registered once the reservation is released: the queued approval now
+  // counts against the caps itself, and the held response settles only when
+  // the user decides.
+  return "approval" in queued ? deps.waiters.register(queued.approval.id) : queued;
+};
+
+const handleGetChainId: ChainOpsHandler = async (deps, message, sender) => {
+  // The chain id is public data, but the origin is corroborated and checked
+  // against the blocklist like every other dapp surface, so a blocked origin
+  // learns nothing from this wallet, including which network is active
+  // (Sherlock 165).
+  const input = readOriginRequestInput(message, "wallet.getChainId");
+  if (!input) {
     return { error: "invalid chain id request" };
+  }
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
   }
   const preferences = await deps.preferencesStore.read();
   return { chainId: STARKNET_NETWORKS[preferences.activeNetworkId].chainId, ok: true };
@@ -315,12 +341,14 @@ const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
   if (!networkId) {
     return { error: "unsupported chain" };
   }
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
   // Only an origin that already holds a connection grant may ask to switch the
   // network — and even then it may only ask: the switch never happens without
-  // an explicit user approval. A locked or unconnected site is refused.
-  if (granted.length === 0) {
+  // an explicit user approval. A locked or unconnected site is refused, and a
+  // lock that lands during the grant read counts as locked (Sherlock 166).
+  if (granted.length === 0 || !authorized.isCurrent()) {
     return { error: "origin not connected" };
   }
   const approval = approvals.requestSwitchChain({

@@ -36,13 +36,13 @@ export const ONBOARDING_STYLES = `
   }
   .onboarding-surface #app { min-height: 100vh; }
   .onboarding-surface .shell {
-    --onboarding-canvas-y: clamp(16px, 3vh, 48px);
+    --onboarding-canvas-y: clamp(${SPACE.lg}, 3vh, ${SPACE.xxxl});
     align-items: center;
     justify-content: center;
     margin: 0 auto;
     max-width: none;
     min-height: 100vh;
-    padding: var(--onboarding-canvas-y) clamp(24px, 5vw, 64px);
+    padding: var(--onboarding-canvas-y) clamp(${SPACE.xl}, 5vw, ${SPACE.xxxl});
     width: 100%;
   }
   .onboarding-wizard {
@@ -72,8 +72,9 @@ export const ONBOARDING_STYLES = `
     min-height: inherit;
     outline: none;
     overflow-y: auto;
-    padding: 38px clamp(24px, 7vw, 42px) 30px;
+    padding: ${SPACE.xxl} clamp(${SPACE.xl}, 7vw, ${SPACE.xxl});
     position: relative;
+    scrollbar-gutter: stable;
   }
   .onboarding-wizard > .onboarding-step {
     inset: 0;
@@ -99,7 +100,7 @@ export const ONBOARDING_STYLES = `
     display: grid;
     gap: ${SPACE.sm};
     justify-items: center;
-    margin: 46px auto ${SPACE.md};
+    margin: ${SPACE.xxxl} auto ${SPACE.md};
     max-width: 420px;
     text-align: center;
   }
@@ -257,11 +258,9 @@ export const ONBOARDING_STYLES = `
       transform ${MOTION.liftMs}ms var(--ease-out);
   }
   .onboarding-account-check .icon { height: 17px; width: 17px; }
-  .onboarding-account[aria-pressed="false"] .onboarding-account-check {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  .onboarding-account[aria-pressed="true"] {
+  /* A single account is reviewed, not chosen: the row is a static read-out of
+     the account that will be created, its check always shown. */
+  .onboarding-account {
     background: var(--bramble-soft-press);
     box-shadow: var(--bramble-elev-sm);
   }
@@ -382,7 +381,7 @@ export const ONBOARDING_STYLES = `
     justify-content: center;
     margin: auto;
     min-height: min(660px, calc(100vh - 48px));
-    padding: clamp(32px, 8vw, 68px);
+    padding: clamp(${SPACE.xxl}, 8vw, calc(${SPACE.xxxl} + ${SPACE.lg}));
     text-align: center;
     width: min(100%, 520px);
   }
@@ -444,7 +443,6 @@ export const ONBOARDING_STYLES = `
   }
   @media (hover: hover) and (pointer: fine) {
     button.onboarding-option:not(:disabled):hover,
-    button.onboarding-account:not(:disabled):hover,
     button.onboarding-contract:not(:disabled):hover {
       background: var(--bramble-hover);
       color: var(--bramble-text);
@@ -460,8 +458,8 @@ export const ONBOARDING_STYLES = `
     }
   }
   @media (max-height: 760px) {
-    .onboarding-step { min-height: inherit; padding-bottom: 22px; padding-top: 30px; }
-    .onboarding-step-head { margin-bottom: ${SPACE.sm}; margin-top: 40px; }
+    .onboarding-step { min-height: inherit; padding-bottom: ${SPACE.xl}; padding-top: ${SPACE.xxl}; }
+    .onboarding-step-head { margin-bottom: ${SPACE.sm}; margin-top: ${SPACE.xxl}; }
   }
   @media (max-width: 520px) {
     .onboarding-surface .shell { padding: 0; }

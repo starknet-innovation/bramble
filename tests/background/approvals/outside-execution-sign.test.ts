@@ -1,9 +1,11 @@
 /**
  * OutsideExecution sign-route defences (audit 144): a SNIP-9 signature
  * authorizes calls the site can submit later with no second prompt, so the sign
- * route applies the invoke route's self-call and poisoned-recipient refusals at
- * queue time and again before signing, and carries the risk flags and decoded
- * call summaries onto the card. Plain SNIP-12 messages are unchanged.
+ * route applies the invoke route's self-call refusal at queue time and again
+ * before signing, and carries the risk flags and decoded call summaries onto the
+ * card. A lookalike recipient is queued with its flag rather than refused on
+ * arrival, so the answer cannot reveal the address book (Sherlock 140), and is
+ * refused before signing. Plain SNIP-12 messages are unchanged.
  */
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
@@ -68,7 +70,8 @@ const wallet = {
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin: ORIGIN }],
-      schemaVersion: 11 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
     };
   },
@@ -155,16 +158,19 @@ const HALF_U128 = "0x80000000000000000000000000000000";
 
 describe("OutsideExecution sign route (audit 144)", () => {
   for (const version of ["1", "2"] as const) {
-    test(`refuses a v${version} transfer to a lookalike of the account and queues nothing`, async () => {
-      const { pending, signNow } = setup();
-      const response = await signNow(
-        outside(
-          [{ calldata: [LOOKALIKE, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" }],
-          version,
-        ),
+    test(`queues a v${version} transfer to a lookalike with its flag and refuses it at approval`, async () => {
+      const { handler, queuedFlags, signNow } = setup();
+      const typed = outside(
+        [{ calldata: [LOOKALIKE, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" }],
+        version,
       );
-      expect(response).toEqual({ error: expect.stringContaining("closely mimics") });
-      expect(await pending()).toEqual([]);
+      await expect(signNow(typed)).resolves.toBe("held");
+      expect(await queuedFlags()).toContain("address-poisoning");
+      const [queued] = await waitForPendingApprovals(handler, page);
+      await expect(
+        handler({ id: queued?.id, type: "wallet.approveOrigin" }, page),
+      ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
+      expect(signed).toBe(0);
     });
   }
 
@@ -224,8 +230,8 @@ describe("OutsideExecution sign route (audit 144)", () => {
 
   // The selector-to-name map covers every decoded entrypoint, not only
   // transfer/approve: v1 carries raw selector hashes and decimal calldata.
-  test("refuses a v1 transfer_from to a lookalike, with decimal calldata", async () => {
-    const { pending, signNow } = setup();
+  test("flags a v1 transfer_from to a lookalike, with decimal calldata", async () => {
+    const { queuedFlags, signNow } = setup();
     const typed = outside(
       [
         {
@@ -239,10 +245,8 @@ describe("OutsideExecution sign route (audit 144)", () => {
     for (const call of typed.message.calls) {
       call.calldata = call.calldata.map((felt) => BigInt(felt).toString(10));
     }
-    await expect(signNow(typed)).resolves.toEqual({
-      error: expect.stringContaining("closely mimics"),
-    });
-    expect(await pending()).toEqual([]);
+    await expect(signNow(typed)).resolves.toBe("held");
+    expect(await queuedFlags()).toContain("address-poisoning");
   });
 
   test("flags increase_allowance grants that add up to an unlimited allowance", async () => {

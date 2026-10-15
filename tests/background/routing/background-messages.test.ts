@@ -21,6 +21,7 @@ import {
   account,
   contentSender,
   createWallet,
+  grantedOrigin,
   secondAccount,
   extensionSender as sender,
   testExtension,
@@ -122,7 +123,7 @@ describe("createMessageHandler", () => {
     const handler = createMessageHandler(createWallet(), testExtension, { session });
 
     await expect(
-      handler({ origin: "https://dapp.example", type: "wallet.getChainId" }, contentSender),
+      handler({ origin: grantedOrigin, type: "wallet.getChainId" }, contentSender),
     ).resolves.toEqual({
       chainId: "0x534e5f4d41494e",
       ok: true,

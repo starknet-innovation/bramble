@@ -21,6 +21,7 @@ import {
 } from "@bramble/wallet-model/networks";
 import { type Call, CallData, cairo } from "starknet";
 import { WalletError } from "../support/errors";
+import { boundedFetch } from "../support/bounded-network";
 import { isRecord, isStringArray } from "../support/json";
 import { AVNU_ADDRESSES } from "../constants";
 
@@ -28,13 +29,6 @@ import { AVNU_ADDRESSES } from "../constants";
  * Basis-points denominator (100% = 10_000 bps).
  */
 const BPS_DENOMINATOR = 10_000n;
-
-/**
- * Default swap slippage tolerance (0.1%) applied when a caller omits one, matching
- * the AVNU SDK `SLIPPAGE_PERCENTAGE` default. ⚠️ Product default — confirm against
- * the terminal's chosen tolerance.
- */
-export const DEFAULT_SLIPPAGE_BPS = 10;
 
 /**
  * Number of quotes to request from the aggregator; the terminal only consumes the
@@ -161,9 +155,10 @@ export const buildQuotesUrl = (base: string, request: AvnuQuoteRequest): string 
   return `${base.replace(/\/+$/, "")}/${AVNU_QUOTES_PATH}?${query.toString()}`;
 };
 
-// Fetches `url` and returns the parsed JSON body, throwing `onFailure` on a
-// transport error, a non-ok response, or an unparseable body so callers surface a
-// stable wallet error instead of leaking transport detail.
+// Fetches `url` through the bounded terminal network boundary and returns the
+// parsed JSON body, throwing `onFailure` on a transport error, a non-ok
+// response, an oversized body, a deadline, or an unparseable body so callers
+// surface a stable wallet error instead of leaking transport detail.
 const fetchJson = async (
   url: string,
   init: RequestInit | undefined,
@@ -171,11 +166,12 @@ const fetchJson = async (
 ): Promise<unknown> => {
   let response: Response;
   try {
-    response = await fetch(url, init);
+    response = await boundedFetch(url, init);
   } catch {
     throw new WalletError(onFailure);
   }
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new WalletError(onFailure);
   }
   try {

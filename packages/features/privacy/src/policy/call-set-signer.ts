@@ -5,7 +5,6 @@
  * boundary.
  */
 
-import { sameFelt } from "@bramble/wallet-model/networks";
 import type {
   BigNumberish,
   Call,
@@ -16,7 +15,7 @@ import type {
   SignerInterface,
   TypedData,
 } from "starknet";
-import { CallData, ec, hash, num, shortString, typedData } from "starknet";
+import { CallData, ec, hash, num, shortString } from "starknet";
 
 const poseidon = ec.starkCurve.poseidonHashMany;
 const toFelt = (value: BigNumberish): bigint => num.toBigInt(value);
@@ -68,8 +67,13 @@ type Strk20CallSetSignerOptions = {
 
 /**
  * Minimal signer implementation consumed by the official privacy SDK. Only
- * CallSet transactions and paymaster SNIP-12 messages are supported; unrelated
- * signing methods fail closed.
+ * CallSet transactions are signed; every other signing method fails closed.
+ *
+ * SNIP-12 messages are refused outright (Sherlock 246). The SDK only calls
+ * `signTransaction`, and the relay's paymaster message is signed by the
+ * submission path's own reviewed `signTypedData`, so an arbitrary typed-data
+ * signature from this signer would have no caller to serve and no review in
+ * front of it.
  */
 export class Strk20CallSetSigner implements SignerInterface {
   constructor(private readonly options: Strk20CallSetSignerOptions) {}
@@ -80,11 +84,8 @@ export class Strk20CallSetSigner implements SignerInterface {
     );
   }
 
-  async signMessage(message: TypedData, accountAddress: string): Promise<Signature> {
-    if (!sameFelt(accountAddress, this.options.accountAddress)) {
-      throw new Error("STRK20 signer account mismatch");
-    }
-    return this.options.sign(typedData.getMessageHash(message, accountAddress));
+  async signMessage(_message: TypedData, _accountAddress: string): Promise<Signature> {
+    throw new Error("STRK20 signer does not sign messages");
   }
 
   async getPubKey(): Promise<string> {

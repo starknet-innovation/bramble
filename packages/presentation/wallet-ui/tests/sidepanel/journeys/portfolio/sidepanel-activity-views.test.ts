@@ -108,6 +108,20 @@ describe("activity journey boundaries", () => {
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
   });
 
+  test("keeps the hash link and copy control out of the row's summary", () => {
+    const html = activityScreen(pending, status, [transaction], false);
+    const summaries = [...html.matchAll(/<summary[\s\S]*?<\/summary>/g)].map((match) => match[0]);
+
+    // A summary is one control with one accessible name, so a link or button
+    // inside it may never reach assistive tech (mc-wallet issue 476).
+    expect(summaries.length).toBeGreaterThan(0);
+    for (const summary of summaries) {
+      expect(summary).not.toMatch(/<a\s|<button/);
+    }
+    expect(html).toMatch(/<dt>Transaction<\/dt><dd class="tx-hash-row"><a class="tx-hash"/);
+    expect(html).toContain('aria-label="Copy transaction hash"');
+  });
+
   test("opens the row in place for the rest of the record", () => {
     const html = activityScreen(pending, status, [transaction], false);
 
@@ -133,9 +147,15 @@ describe("activity journey boundaries", () => {
     // A settled row is verb and detail alone; its status and time live on the
     // row's tooltip, so the feed reads like the kit without losing the record.
     expect(html.match(/<span class="tx-meta/g)?.length).toBe(2);
-    expect(html).toContain('<li class="tx-row" data-live-group title="Accepted · 14:05 UTC">');
+    // The row's own filter attributes ride the same tag, so the assertion pins
+    // the tooltip and the dataset without depending on their order.
+    expect(html).toMatch(
+      /<li class="tx-row" data-live-group title="Accepted · 14:05 UTC"[^>]*data-activity-status="accepted"[^>]*>/,
+    );
     expect(html).toContain('<span class="tx-meta preconfirmed">Pre-confirmed</span>');
-    expect(html).toContain('<li class="tx-row" data-live-group title="Pre-confirmed · 14:06 UTC">');
+    expect(html).toMatch(
+      /<li class="tx-row" data-live-group title="Pre-confirmed · 14:06 UTC"[^>]*data-activity-status="preconfirmed"[^>]*>/,
+    );
     expect(html).toContain('<span class="tx-meta pending">Pending</span>');
     // The status and time still reach assistive tech through the summary's own label.
     expect(html).toContain('aria-label="Sent 1 STRK. accepted, 14:05 UTC"');

@@ -47,6 +47,7 @@ import {
   currentConfigFor,
   signerAccountFor,
 } from "./multisig-ops";
+import { refuseResend } from "./multisig-stale-intents";
 
 const preparationContext = async (
   deps: MultisigOpsDeps,
@@ -143,6 +144,8 @@ const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<R
     },
     rpcUrls: resolved.context.rpcUrls,
   });
+  const resent = await refuseResend(deps, resolved.record.id, prepared, input.confirmResend);
+  if (resent) return resent;
   if (!resolved.authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
@@ -453,25 +456,25 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
     broadcastTransactionHash: transactionHash,
     state: "submitted",
   };
-  // Once broadcast returns a hash the claim must never be released: a failed
-  // journal write is unresolved persistence, not permission to broadcast again.
+  // Once broadcast returns a hash the claim is never released: a failed write is no cue to resend.
   await deps.multisigStore
     .setOperationHash(submission.operationId, transactionHash)
     .catch(() => {});
   await deps.multisigStore.upsertIntent(submitted).catch(() => "invalid" as const);
+  const { record } = submission.resolved.context;
   await deps.preferencesStore
     .read()
     .then((preferences) =>
       recordApproveAllowances({
-        assets: verificationContext(submission.resolved.context.record, preferences),
+        assets: verificationContext(record, preferences),
         calls: normalizedArgentMultisigCalls(submission.intent.prepared.calls),
-        owner: allowanceOwner(submission.resolved.context.record),
+        owner: allowanceOwner(record),
         store: deps.allowanceStore,
+        transactionHash,
       }),
     )
     .catch(() => {});
-  const { networkId } = submission.resolved.context.record;
-  await recordSubmittedIntentActivity(deps, submission.intent, networkId, transactionHash);
+  await recordSubmittedIntentActivity(deps, submission.intent, record.networkId, transactionHash);
   return { intent: submitted, ok: true, transactionHash };
 };
 

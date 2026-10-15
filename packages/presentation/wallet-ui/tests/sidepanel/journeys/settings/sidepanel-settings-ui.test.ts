@@ -4,6 +4,7 @@
  * documented without weakening the aggregate coverage gate.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -245,7 +246,15 @@ describe("settings UI bindings", () => {
         importPreferences: async (value) => {
           imported = value;
         },
-        loadPreferences: async () => ({ displayCurrency: "usd" }) as never,
+        // A contact in the stored preferences must not reach the file
+        // (Sherlock 213): a restore never brings it back.
+        loadPreferences: async () => ({
+          ...defaultWalletPreferences(),
+          addressBook: [
+            { address: "0x123", id: "SN_MAIN:0x123", label: "Ada", networkId: "SN_MAIN" },
+          ],
+          displayCurrency: "usd",
+        }),
       },
     );
     const input = app.querySelector<HTMLInputElement>("#backup-file");
@@ -258,7 +267,11 @@ describe("settings UI bindings", () => {
     const revokeObjectUrl = URL.revokeObjectURL;
     const click = HTMLAnchorElement.prototype.click;
     const schedule = globalThis.setTimeout;
-    URL.createObjectURL = () => "blob:wallet-backup";
+    let exported: Blob | null = null;
+    URL.createObjectURL = (blob) => {
+      exported = blob as Blob;
+      return "blob:wallet-backup";
+    };
     URL.revokeObjectURL = (url) => {
       revoked = String(url);
     };
@@ -288,6 +301,9 @@ describe("settings UI bindings", () => {
 
     expect(downloaded).toBe(1);
     expect(revoked).toBe("blob:wallet-backup");
+    const file = JSON.parse(await (exported as unknown as Blob).text()) as Record<string, unknown>;
+    expect(file["addressBook"]).toEqual([]);
+    expect(file["displayCurrency"]).toBe("usd");
     expect(imported).toEqual({ displayCurrency: "eur" });
     expect(calls.render).toBe(1);
   });

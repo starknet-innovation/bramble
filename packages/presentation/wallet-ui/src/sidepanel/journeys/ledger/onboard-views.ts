@@ -332,7 +332,7 @@ const pickerCopy = (
   application === READY_EIP2645_APPLICATION
     ? {
         heading: "Select Ready accounts",
-        lede: "Accounts with activity are preselected. Ready lists Ledger accounts last, so yours may be a few pages in — use Show more.",
+        lede: "Accounts with activity are preselected. Yours may be a few pages in.",
       }
     : {
         heading: "Select accounts",

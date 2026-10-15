@@ -6,6 +6,7 @@
 
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
+  isUnsignedAccountClaim,
   maturityRecordNamesHash,
   type Strk20MaturityRecord,
   type Strk20MaturityScope,
@@ -30,17 +31,24 @@ type StoredMaturity = Strk20MaturityRecord & Strk20MaturityScope;
 // write: hash, sender, and nonce together, each a canonical field element (the
 // nonce may be zero). A partial identity could not resolve anything and is
 // dropped like any other malformed entry.
+// An unsigned claim may name its route; a signed one is always the account's
+// and names none. An unknown route is malformed rather than read as either.
 const isSubmittingIdentity = (value: Record<string, unknown>): boolean =>
   value["acceptedBlock"] === undefined &&
   ((value["transactionHash"] === undefined &&
     value["senderAddress"] === undefined &&
-    value["nonce"] === undefined) ||
-    (typeof value["transactionHash"] === "string" &&
+    value["nonce"] === undefined &&
+    (value["route"] === undefined || value["route"] === "account" || value["route"] === "relay")) ||
+    (value["route"] === undefined &&
+      typeof value["transactionHash"] === "string" &&
       isNonZeroStarkFieldElement(value["transactionHash"]) &&
       typeof value["senderAddress"] === "string" &&
       isNonZeroStarkFieldElement(value["senderAddress"]) &&
       typeof value["nonce"] === "string" &&
       isStarkFieldElement(value["nonce"])));
+
+const isBlockNumberOrAbsent = (value: unknown): boolean =>
+  value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
 
 const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isRecord(value) &&
@@ -50,6 +58,11 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
     "networkId",
     "nonce",
     "poolAddress",
+    // Written by an interim build of mc-wallet 661 and no longer read. It is
+    // tolerated, whatever its value, and dropped on read, so a marker that
+    // build wrote is never mistaken for a malformed row and a clean scope.
+    "proofBaseBlock",
+    "route",
     "senderAddress",
     "state",
     "transactionHash",
@@ -61,14 +74,12 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
   ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
     (value["state"] === "submitted" &&
+      value["route"] === undefined &&
       value["senderAddress"] === undefined &&
       value["nonce"] === undefined &&
       typeof value["transactionHash"] === "string" &&
       isNonZeroStarkFieldElement(value["transactionHash"]) &&
-      (value["acceptedBlock"] === undefined ||
-        (typeof value["acceptedBlock"] === "number" &&
-          Number.isSafeInteger(value["acceptedBlock"]) &&
-          value["acceptedBlock"] >= 0))));
+      isBlockNumberOrAbsent(value["acceptedBlock"])));
 
 const sameScope = (entry: StoredMaturity, scope: Strk20MaturityScope): boolean =>
   entry.accountId === scope.accountId &&
@@ -90,7 +101,7 @@ const readScope = async (
   }
   if (entry.state === "submitting") {
     return entry.transactionHash === undefined
-      ? { state: "submitting" }
+      ? { ...(entry.route === undefined ? {} : { route: entry.route }), state: "submitting" }
       : {
           nonce: entry.nonce,
           senderAddress: entry.senderAddress,
@@ -118,9 +129,10 @@ const writeScope = async (
 /**
  * Creates the session-backed maturity store.
  *
- * `read` stays outside the mutation queue. `replaceIfCurrentHash` does not: the
- * comparison and the write are one queued mutation, so a resolution that
- * observed an older marker cannot overwrite a newer send that queued first.
+ * `read` stays outside the mutation queue. `replaceIfCurrentHash` and
+ * `releaseUnsigned` do not: the comparison and the write are one queued
+ * mutation, so a resolution that observed an older marker cannot overwrite a
+ * newer send that queued first.
  */
 export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityStore =>
   serializeStoreMutations<Strk20MaturityStore>(
@@ -134,6 +146,13 @@ export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityS
           return false;
         }
         await writeScope(store, scope, record);
+        return true;
+      },
+      async releaseUnsigned(scope) {
+        if (!isUnsignedAccountClaim(await readScope(store, scope))) {
+          return false;
+        }
+        await writeScope(store, scope, null);
         return true;
       },
       write(scope, record) {

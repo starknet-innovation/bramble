@@ -35,6 +35,11 @@ export const makeRuntimeRpc = (overrides: Partial<RuntimeRpc> = {}): RuntimeRpc 
   async getTransactionStatuses() {
     return {};
   },
+  async resolveStarkName() {
+    // Benign default: no name resolves, so no suite implies a resolution it did
+    // not set up. Suites that assert resolution override this per test.
+    return { status: "not-found" };
+  },
   async submitAccountDeployment() {
     return { transactionHash: "0x7de" };
   },

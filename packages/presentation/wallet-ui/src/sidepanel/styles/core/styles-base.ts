@@ -46,6 +46,7 @@ export const BASE_STYLES = `
     --bramble-accent-soft: color-mix(in srgb, var(--bramble-accent) 13%, var(--bramble-panel));
     --bramble-positive-soft: color-mix(in srgb, var(--bramble-positive) 13%, var(--bramble-panel));
     --bramble-danger-soft: color-mix(in srgb, var(--bramble-danger) 12%, var(--bramble-panel));
+    --bramble-warning-soft: color-mix(in srgb, var(--bramble-warning) 14%, var(--bramble-panel));
     --bramble-shadow: var(--bramble-elev-lg);
     --bramble-shadow-sm: var(--bramble-elev-sm);
     /* Floating-dock footprint from the panel's bottom edge — the pill (a 44px
@@ -182,7 +183,7 @@ export const BASE_STYLES = `
     display: flex;
     gap: ${SPACE.sm};
     justify-content: space-between;
-    padding: 2px 0 ${SPACE.xs};
+    padding: ${SPACE.xxs} 0 ${SPACE.xs};
   }
   button.account-trigger {
     align-items: center;
@@ -195,7 +196,7 @@ export const BASE_STYLES = `
     justify-content: flex-start;
     min-height: 0;
     min-width: 0;
-    padding: 4px 12px 4px 4px;
+    padding: ${SPACE.xs} ${SPACE.md} ${SPACE.xs} ${SPACE.xs};
     text-align: left;
   }
   @media (hover: hover) and (pointer: fine) {
@@ -311,7 +312,15 @@ export const BASE_STYLES = `
   .read-only-notice .read-only-detail {
     color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; max-width: 32ch; text-align: center;
   }
-  .read-only-notice #recover-account { margin-top: 2px; }
+  .read-only-notice #recover-account { margin-top: ${SPACE.xxs}; }
+
+  /* The 24h figures are price moves, not changes in balance; one quiet caption
+     under either hero says so, and each row carries its own window label. */
+  .hero-note {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    font-weight: 500;
+  }
 
   /* The frequent money actions are equal rounded-square tools. Their common
      shape makes the row instantly scannable; distinctive glyph silhouettes,

@@ -61,6 +61,7 @@ import {
   getNftTokenUri,
   type getTokenBalances,
   getTokenMetadata,
+  getTransactionFees,
   getTransactionStatuses,
   type InvokeInput,
   type NftOwnerInput,
@@ -79,6 +80,7 @@ import {
   type TransactionStatusInput,
   type TransferInput,
 } from "@bramble/starknet/rpc";
+import { type ResolveStarkNameInput, resolveStarkName } from "@bramble/starknet/stark-name";
 import {
   type ExternalAllowanceScan,
   readTrackedAllowances,
@@ -89,11 +91,9 @@ import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions
 import {
   createExplorerFirstHistory,
   createRpcFirstBalances,
+  type DiscoveredHistory,
 } from "@bramble/transactions/starkscan-wallet";
-import type {
-  scanTransactionHistory,
-  TransactionHistoryScan,
-} from "@bramble/transactions/tx-history-scan";
+import type { TransactionHistoryScan } from "@bramble/transactions/tx-history-scan";
 import { canonicalFelt, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { ExplorerLanePreferences } from "@bramble/wallet-model/preferences";
 
@@ -233,12 +233,24 @@ export type RuntimeRpc = {
    * answered and is treated by the handler as "history unavailable", degrading
    * to the local log.
    */
-  readonly getTransactionHistory?: (
-    input: TransactionHistoryScan,
-  ) => ReturnType<typeof scanTransactionHistory>;
+  readonly getTransactionHistory?: (input: TransactionHistoryScan) => Promise<DiscoveredHistory>;
+  /**
+   * Reads the fee each transaction's receipt reports it paid, for the activity
+   * log. Optional so existing RPC stubs stay valid; when absent no fee is
+   * recorded. A hash with no usable receipt fee is absent from the answer.
+   */
+  readonly getTransactionFees?: (
+    input: TransactionStatusInput,
+  ) => ReturnType<typeof getTransactionFees>;
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;
+  /**
+   * Resolves a Starknet ID name (a typed `name.stark`) to an account address on
+   * the active network's endpoints. Optional so existing RPC stubs stay valid;
+   * when absent the name resolution handler reports the surface unavailable.
+   */
+  readonly resolveStarkName?: (input: ResolveStarkNameInput) => ReturnType<typeof resolveStarkName>;
   readonly submitAccountDeployment: (
     input: DeployAccountInput,
   ) => ReturnType<typeof submitAccountDeployment>;
@@ -356,6 +368,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     clientFor: configuredStarkscanClient,
     readPreferences,
   }),
+  getTransactionFees,
   getTransactionStatuses,
   multisig: {
     getConfig: getArgentMultisigConfig,
@@ -367,6 +380,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),
+  resolveStarkName,
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,

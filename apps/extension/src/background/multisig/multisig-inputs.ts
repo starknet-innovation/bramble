@@ -193,21 +193,25 @@ export const readRemoveMultisigInput = (
     : null;
 
 /**
- * Parses preparation of one exact call batch.
+ * Parses preparation of one exact call batch. `confirmResend` is the user's
+ * say-so for calls a stale version may already have sent (Sherlock 177).
  */
 export const readPrepareIntentInput = (
   message: unknown,
 ): {
   readonly calls: readonly ArgentMultisigCall[];
+  readonly confirmResend: boolean;
   readonly multisigId: string;
 } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["calls", "multisigId", "type"]) &&
+  hasOnlyKnownKeys(message, ["calls", "confirmResend", "multisigId", "type"]) &&
+  (message["confirmResend"] === undefined || message["confirmResend"] === true) &&
   message["type"] === "wallet.prepareArgentMultisigIntent" &&
   isAccountId(message["multisigId"]) &&
   isArgentMultisigCalls(message["calls"])
     ? {
         calls: message["calls"],
+        confirmResend: message["confirmResend"] === true,
         multisigId: message["multisigId"],
       }
     : null;
@@ -297,7 +301,9 @@ export const sortedArgentMultisigSignatures = (
 /**
  * Merges a re-import of the same frozen hash without regressing local state.
  * Terminal local outcomes remain authoritative; open intents gain only new,
- * already-validated signer fragments.
+ * already-validated signer fragments. The stored summary is kept: it is local
+ * display text that a token or contact added since would word differently,
+ * and the frozen hash already pins what is signed (Sherlock 178).
  */
 export const mergeImportedArgentMultisigIntent = (
   current: ArgentMultisigSigningIntent,
@@ -315,6 +321,7 @@ export const mergeImportedArgentMultisigIntent = (
     ...incoming,
     signatures: sorted,
     state: sorted.length === incoming.configSnapshot.threshold ? "ready" : "collecting",
+    summary: current.summary,
   };
 };
 

@@ -256,7 +256,7 @@ export const withGatewayAnalyticsFlows = (
   const prepareRegistration = service.prepareRegistration;
   const register = service.register;
   const registrationStatus = service.registrationStatus;
-  const subaccountCommitment = service.subaccountCommitment;
+  const shadowAccountCommitment = service.shadowAccountCommitment;
   const wrapped: Strk20Service = {
     ...service,
     prepare: (input) => withFlow(() => service.prepare(input)),
@@ -275,8 +275,8 @@ export const withGatewayAnalyticsFlows = (
     ...(registrationStatus
       ? { registrationStatus: (input) => withFlow(() => registrationStatus(input)) }
       : {}),
-    ...(subaccountCommitment
-      ? { subaccountCommitment: (input) => withFlow(() => subaccountCommitment(input)) }
+    ...(shadowAccountCommitment
+      ? { shadowAccountCommitment: (input) => withFlow(() => shadowAccountCommitment(input)) }
       : {}),
   };
   nestedFlowServices.set(wrapped, service);

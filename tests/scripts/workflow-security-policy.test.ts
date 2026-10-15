@@ -231,9 +231,8 @@ describe("workflow security policy", () => {
     {
       name: "rejects caller-controlled release checkout refs",
       workflow: "release-build.yml",
-      search:
-        "with:\n          fetch-depth: 0\n          fetch-tags: true\n      - name: Check out immutable release commit",
-      replacement: `with:\n          ref: ${GITHUB_EXPRESSION} inputs.commit_sha }}\n          fetch-depth: 0\n          fetch-tags: true\n      - name: Check out immutable release commit`,
+      search: "with:\n          fetch-depth: 0\n          fetch-tags: true\n",
+      replacement: `with:\n          ref: ${GITHUB_EXPRESSION} inputs.commit_sha }}\n          fetch-depth: 0\n          fetch-tags: true\n`,
       failure: "self-hosted release builds must not pass caller-controlled refs to checkout",
     },
     {
@@ -262,16 +261,40 @@ describe("workflow security policy", () => {
       name: "rejects configured nightly checkout refs",
       workflow: "nightly.yml",
       search:
-        "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - name: Check out resolved release commit",
-      replacement: `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${GITHUB_EXPRESSION} needs.resolve.outputs.branch }}\n      - name: Check out resolved release commit`,
+        "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n      - name: Check out resolved release commit",
+      replacement: `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n          ref: ${GITHUB_EXPRESSION} needs.resolve.outputs.branch }}\n      - name: Check out resolved release commit`,
       failure: "self-hosted nightly execution must not pass configured refs to checkout",
     },
     {
-      name: "rejects pull-request execution with the roadmap token",
-      workflow: "roadmap-project-sync.yml",
-      search: "pull_request_target:",
-      replacement: "pull_request:",
-      failure: "roadmap token verification must execute the trusted base workflow",
+      name: "rejects a release checksum step that claims identity with the CI artifact",
+      workflow: "release-build.yml",
+      search: "      # Self-consistency only:",
+      replacement:
+        "      # Confirm the released zip is byte-identical to the CI artifact.\n      # Self-consistency only:",
+      failure: "release builds must not claim a byte-identical artifact they never compare against",
+    },
+    // Supply audit F3: the self-hosted jobs run dependency and vendoring code,
+    // so the checkout token must not stay in .git/config while they do.
+    {
+      name: "rejects a self-hosted release build that persists the checkout token",
+      workflow: "release-build.yml",
+      search: "          persist-credentials: false\n",
+      replacement: "",
+      failure: "self-hosted release builds must not leave the checkout token in .git/config",
+    },
+    {
+      name: "rejects a self-hosted nightly that persists the checkout token",
+      workflow: "nightly.yml",
+      search: "          persist-credentials: false\n",
+      replacement: "",
+      failure: "self-hosted nightly execution must not leave the checkout token in .git/config",
+    },
+    {
+      name: "rejects self-hosted release integration that persists the checkout token",
+      workflow: "release-integration.yml",
+      search: "          persist-credentials: false\n",
+      replacement: "",
+      failure: "self-hosted release integration must not leave the checkout token in .git/config",
     },
     {
       name: "rejects self-hosted release integration on a pull request",

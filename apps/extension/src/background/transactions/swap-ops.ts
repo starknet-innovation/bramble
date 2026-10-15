@@ -14,9 +14,11 @@
  * response — nothing is signed on a path that could not be fully checked.
  */
 
+import type { PriceService } from "@bramble/portfolio/prices";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
+import { activityToken } from "@bramble/transactions/activity";
 import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
 import { reviewedMinBuyAmount } from "@bramble/transactions/avnu-route";
 import {
@@ -38,10 +40,11 @@ import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "./activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "./activity-recording";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
+import { walletSwapValueDelta } from "./swap-value-check";
 import { withTrustedRecipients } from "./trusted-recipients";
 
 /**
@@ -49,6 +52,8 @@ import { withTrustedRecipients } from "./trusted-recipients";
  * swap service (injected fetch; unavailable default fails closed).
  */
 export type SwapOpsDeps = WalletOpsDeps & {
+  // The wallet's own price feed, for the quote's value check (Sherlock 137).
+  readonly prices?: PriceService;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
 };
@@ -116,7 +121,7 @@ const swapQuoteResponse = async (
   if ("error" in context) {
     return { error: context.error };
   }
-  const { account, buyToken, networkId, sellToken } = context;
+  const { account, buyToken, networkId, preferences, sellToken } = context;
   const sellAmount = sellAmountHex(input.amount, sellToken.decimals);
   if (!sellAmount) {
     return { error: "enter an amount to swap" };
@@ -129,15 +134,26 @@ const swapQuoteResponse = async (
       sellTokenAddress: sellToken.address,
       takerAddress: account.address,
     });
+    const buyAmount = formatTokenAmount(BigInt(quote.buyAmount), buyToken.decimals);
+    const valueDeltaPercent = await walletSwapValueDelta({
+      buyAmount,
+      buyToken,
+      currency: preferences.displayCurrency ?? "usd",
+      networkId,
+      prices: deps.prices,
+      sellAmount: input.amount,
+      sellToken,
+    });
     return {
       ok: true,
       swapQuote: {
-        buyAmount: formatTokenAmount(BigInt(quote.buyAmount), buyToken.decimals),
+        buyAmount,
         buyAmountInUsd: quote.buyAmountInUsd,
         gasFeesInUsd: quote.gasFeesInUsd,
         quoteId: quote.quoteId,
         sellAmount: input.amount,
         sellAmountInUsd: quote.sellAmountInUsd,
+        ...(valueDeltaPercent === undefined ? {} : { valueDeltaPercent }),
       },
     };
   } catch (error) {
@@ -232,6 +248,7 @@ const swapPrepareResponse = async (
       minBuyAmount: minBuyText,
       reviewedFee,
       sellSymbol: sellToken.symbol,
+      sellTokenAddress: sellToken.address,
       summaries: report.calls.map((call, index) =>
         index === routeIndex
           ? `Swap ${input.amount} ${sellToken.symbol} for at least ${minBuyText} ${buyToken.symbol}, paid to ${shortAddress(canonical(account.address))}`
@@ -314,6 +331,7 @@ const swapExecuteResponse = async (
         calls: preparation.calls,
         owner: allowanceOwner(context.account),
         store: deps.allowanceStore,
+        transactionHash: hash,
       });
       await recordSubmittedActivity(deps.activity, {
         accountId: context.account.id,
@@ -322,7 +340,7 @@ const swapExecuteResponse = async (
         kind: "invoke",
         networkId: context.networkId,
         summary: `Swap ${preparation.amount} ${preparation.sellSymbol} for ~${preparation.buyAmount} ${preparation.buySymbol} via avnu`,
-        token: preparation.sellSymbol,
+        ...activityToken({ address: preparation.sellTokenAddress, symbol: preparation.sellSymbol }),
       });
     };
     // The hash of the invoke as signed, captured before it is sent. Only used
@@ -349,12 +367,15 @@ const swapExecuteResponse = async (
       // The swap may already be on chain: record it as pending and tell the
       // panel the outcome is unknown, so it never re-quotes into a blind second
       // swap of the same amount.
-      if (signedHash !== undefined) {
-        await recordSubmitted(signedHash);
+      const pending = signedHash;
+      if (pending !== undefined) {
+        await afterBroadcast(() => recordSubmitted(pending));
       }
       return submissionUnknownResponse(error.message, signedHash);
     }
-    await recordSubmitted(transactionHash);
+    // Outside the catch below: once a hash exists the reply carries it, so the
+    // panel never re-quotes a swap that is already on chain (audit 173).
+    await afterBroadcast(() => recordSubmitted(transactionHash));
     return { ok: true, transactionHash };
   } catch (error) {
     return { error: errorText(error, "swap failed") };

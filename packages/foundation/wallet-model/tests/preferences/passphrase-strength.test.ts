@@ -6,11 +6,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
-  estimatePassphraseStrength,
   isVaultPassphrase,
   MIN_VAULT_PASSPHRASE_LENGTH,
   RECOMMENDED_VAULT_PASSPHRASE_LENGTH,
 } from "@bramble/wallet-model/passphrase";
+import { estimatePassphraseStrength } from "@bramble/wallet-model/passphrase-strength";
 
 describe("estimatePassphraseStrength", () => {
   test("is empty for no input and weak below the minimum length", () => {
@@ -79,5 +79,34 @@ describe("estimatePassphraseStrength", () => {
     expect(estimatePassphraseStrength("aaaaaaaaaaaa").level).toBe("weak");
     expect(estimatePassphraseStrength("Tr0ub4dor&3").level).not.toBe("weak");
     expect(estimatePassphraseStrength("correct horse battery staple").level).not.toBe("weak");
+  });
+
+  test("reads a common password in disguise as weak (Sherlock 152)", () => {
+    // Each of these cleared the floor and estimated fair or strong, because
+    // the estimate credits every character as random. A guesser tries them
+    // first: case, leet, a year or trailing symbols do not hide the word.
+    for (const value of [
+      "Password1",
+      "p@ssw0rd2024",
+      "dragon!!!",
+      "iloveyou2024",
+      "Passw0rd!Passw0rd!",
+      "zxcvbnm123!",
+      "Lkjhgfdsa2024",
+      "1ceman2024!",
+      "123password!",
+      "1etmein!!",
+    ]) {
+      expect(isVaultPassphrase(value)).toBe(true);
+      const reading = estimatePassphraseStrength(value);
+      expect(reading).toEqual({ hint: "Weak", level: "weak", ratio: reading.ratio });
+      expect(reading.ratio).toBeLessThanOrEqual(0.4);
+    }
+  });
+
+  test("leaves random words and random characters where they were", () => {
+    expect(estimatePassphraseStrength("plaza tundra mosaic velvet").level).toBe("strong");
+    expect(estimatePassphraseStrength("k7#Qm2!vX9pL$w4z").level).toBe("strong");
+    expect(estimatePassphraseStrength("correcthorse").level).toBe("fair");
   });
 });

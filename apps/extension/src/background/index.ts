@@ -23,7 +23,6 @@ import {
 } from "@bramble/settings/preferences";
 import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnostics";
 import { createActivityLog, systemClock } from "@bramble/transactions/activity";
-import { createAllowanceStore } from "@bramble/transactions/allowance-store";
 import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
@@ -60,6 +59,7 @@ import { createSignatureWaiters } from "./approvals/signature-waiters";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
+import { createRankedAllowanceStore } from "./portfolio/allowance-log";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
@@ -68,6 +68,7 @@ import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-prep
 import { createMessageHandler } from "./routing/messages";
 import type { BackgroundBrowser } from "./runtime/background-browser";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
+import { schedulePhishingFeedRefresh } from "./runtime/phishing-feed-alarm";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
 import {
   createActiveStateCoordinator,
@@ -129,7 +130,10 @@ const vaultStores: { readonly primary: EncryptedStore; readonly staging: Encrypt
       // runtime has no session storage, which leaves the durable record as the
       // only authority — the behaviour before this shadow existed.
       return {
-        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore),
+        // Only the primary mirrors its commit record into `storage.local`, so a
+        // lost `storage.sync` record does not lock the vault; see
+        // `createEncryptedStore` for why staging must not.
+        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
         staging: createEncryptedStore(
           store,
           VAULT_MIGRATION_STORE_KEY,
@@ -148,6 +152,8 @@ const session = createBackgroundUnlockSession({
     for (const store of [vaultStores?.primary, vaultStores?.staging]) {
       store?.clearKeys();
     }
+    // Declared below; this runs only when the session locks, long after.
+    void wallet.then((service) => service?.clearGrantCache());
   },
 });
 // Storage lockdown is a startup prerequisite, not a best-effort side effect.
@@ -248,7 +254,7 @@ const originHistory = (() => {
 })();
 const allowanceLog = (() => {
   try {
-    return createAllowanceStore({ store: createBrowserLocalStore() });
+    return createRankedAllowanceStore(createBrowserLocalStore(), readPreferences);
   } catch {
     return undefined;
   }
@@ -274,12 +280,10 @@ const swapService = (() => {
 // silently accepting signatures or broadcasts into a volatile registry.
 const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
 const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
-// Live phishing feed: fetched from the configured source under an explicit host
-// permission, cached in local storage, and refreshed on the first worker wake
-// after its TTL. The guard reads the feed's in-memory snapshot on every check,
-// so a refresh takes effect with no re-wiring; the bundled seed list in
-// blocklist.ts is always enforced, so protection never drops below baseline
-// even before the first fetch or when the source is unreachable.
+// Live phishing feed, fetched under an explicit host permission, cached locally,
+// and refreshed on worker start and on a recurring alarm once its TTL lapses.
+// The guard reads its in-memory snapshot on every check; the bundled seed list
+// in blocklist.ts is always enforced, before the first fetch and offline too.
 const phishingFeed = (() => {
   try {
     return createPhishingFeed({ fetch: untrustedFetch, store: createBrowserLocalStore() });
@@ -288,7 +292,11 @@ const phishingFeed = (() => {
   }
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
-void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
+void storageReady
+  .then(() => {
+    if (phishingFeed) schedulePhishingFeedRefresh(extensionApi?.alarms, phishingFeed.refresh);
+  })
+  .catch(() => undefined);
 // Fails closed to the stub service when session storage is unavailable, which
 // is the only thing that can throw here (`createStrk20MaturityStore` itself is
 // pure construction). The reason cannot be logged — the standards check bars

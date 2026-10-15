@@ -30,6 +30,7 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
+import { type ActivityContact, activityRowAttributes } from "./activity-filter";
 import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import {
@@ -120,8 +121,7 @@ export const unifiedHomeBalances = (
  */
 const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
   pending: "Broadcast accepted. It can't be fee-bumped, replaced, or cancelled.",
-  preconfirmed:
-    "Pre-confirmed by the block proposer: the result is known, the block is not final. The wallet keeps checking and will tell you if it does not settle.",
+  preconfirmed: "Pre-confirmed, not final yet. Bramble tells you if it doesn't settle.",
 };
 
 /**
@@ -146,11 +146,17 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * assistive tech), so nothing is announced twice. The visible verb is a classification, so the accessible name keeps
  * the full recorded summary (prefixed by the verb when the summary does not
  * already start with it) — the row never announces less than the record says.
- * A recorded counterparty shows truncated with a quiet copy control that
- * carries the full stored address (the row itself is not a button, so the
- * control nests nowhere). Without `pricing` the fiat delta is simply absent.
+ * The transaction hash, its Starkscan link and its copy control, and a
+ * recorded counterparty with its own copy control, sit in the expanded body:
+ * a `<summary>` is one control with its own accessible name, so links and
+ * buttons inside it may never reach assistive tech (mc-wallet issue 476).
+ * Without `pricing` the fiat delta is simply absent.
  */
-export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing): string => {
+export const transactionRow = (
+  entry: ActivityEntry,
+  pricing?: ActivityPricing,
+  contacts: readonly ActivityContact[] = [],
+): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
   const label = STATUS_LABEL[entry.status] ?? entry.status;
   const row = activityRowModel(entry, pricing);
@@ -176,21 +182,14 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
   const figure = row.amount ?? (row.counterparty ? null : row.detail);
   const heading = figure === null ? row.title : `${row.title} ${figure}`;
   const when = [formatUtcDate(entry.submittedAt), clock].filter((part) => part !== null).join(", ");
+  const attributes = activityRowAttributes(entry, pricing, contacts);
   return `
-  <li class="tx-row" data-live-group title="${escapeHtml(timing)}">
+  <li class="tx-row" data-live-group title="${escapeHtml(timing)}"${attributes.length > 0 ? ` ${attributes}` : ""}>
     <details class="disclosure tx-disclosure" data-disclosure="tx:${escapeHtml(entry.hash)}">
       <summary aria-label="${escapeHtml(heading)}. ${escapeHtml(spoken)}">
         <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-hidden="true" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
         <span class="tx-copy">
           <strong class="tx-title">${escapeHtml(heading)}</strong>
-          <span class="tx-hash-row">
-            ${
-              explorer
-                ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
-                : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
-            }
-            ${inlineCopyButton(entry.hash, "Copy transaction hash")}
-          </span>
         </span>
         ${
           entry.status === "accepted"
@@ -202,6 +201,11 @@ export const transactionRow = (entry: ActivityEntry, pricing?: ActivityPricing):
       </summary>
       <div class="disclosure-body">
         <dl class="request-detail">
+          <div><dt>Transaction</dt><dd class="tx-hash-row">${
+            explorer
+              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
+              : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
+          }${inlineCopyButton(entry.hash, "Copy transaction hash")}</dd></div>
           ${
             row.counterparty
               ? `<div><dt>${escapeHtml(capitalise(row.counterparty.role))}</dt><dd><code title="${escapeHtml(row.counterparty.address)}">${escapeHtml(accountLabel(row.counterparty.address))}</code>${inlineCopyButton(row.counterparty.address, `Copy ${row.counterparty.role} address`)}</dd></div>`
@@ -234,6 +238,7 @@ export const transactionGroups = (
   entries: readonly ActivityEntry[],
   pricing?: ActivityPricing,
   todayKey: number | null = null,
+  contacts: readonly ActivityContact[] = [],
 ): string => {
   const groups: Array<{ readonly key: number | null; readonly label: string; rows: string[] }> = [];
   for (const entry of entries) {
@@ -241,10 +246,10 @@ export const transactionGroups = (
     const key = date === null ? null : utcDayKey(entry.submittedAt);
     const current = groups.at(-1);
     if (current && current.key === key) {
-      current.rows.push(transactionRow(entry, pricing));
+      current.rows.push(transactionRow(entry, pricing, contacts));
     } else {
       const label = key === null || date === null ? "Undated" : dayLabel(key, date, todayKey);
-      groups.push({ key, label, rows: [transactionRow(entry, pricing)] });
+      groups.push({ key, label, rows: [transactionRow(entry, pricing, contacts)] });
     }
   }
   return groups
@@ -254,6 +259,20 @@ export const transactionGroups = (
     )
     .join("");
 };
+
+/**
+ * Renders the feed as one ungrouped list, for the amount sort where a per-day
+ * heading would fight the ordering the user asked for. The caller supplies the
+ * rows already ordered.
+ */
+export const transactionList = (
+  entries: readonly ActivityEntry[],
+  pricing?: ActivityPricing,
+  contacts: readonly ActivityContact[] = [],
+): string =>
+  `<ul class="tx-list tx-list-flat">${entries
+    .map((entry) => transactionRow(entry, pricing, contacts))
+    .join("")}</ul>`;
 
 // Renders the failed-load state with a friendly, actionable line and an
 // in-panel retry that re-runs the balance load (wired in ./index.ts).
@@ -324,7 +343,8 @@ const tokensPanel = (
             .map((token) =>
               unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
                 private: privateBreakdownFor(privacy, token.id, deployment, fundedForFees),
-                publicFormatted: publicById.get(token.id)?.formatted ?? "0",
+                // A public balance never read is unknown, not zero (audit M5).
+                publicFormatted: publicById.get(token.id)?.formatted || null,
               }),
             )
             .join("")}</ul>`;

@@ -16,7 +16,10 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { friendlyError } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error";
-import { ERROR_COPY } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy";
+import {
+  ERROR_COPY,
+  UNEXPECTED_FALLBACK,
+} from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy";
 
 const root = join(import.meta.dir, "../..");
 
@@ -46,7 +49,7 @@ const sourceFiles = (dir: string): string[] => {
   return out;
 };
 
-const ERROR_REPLY = /\{\s*error:\s*"([^"]{3,120})"/g;
+const ERROR_REPLY = /\{\s*error:\s*"([^"]{3,400})"/g;
 // Matched on shape, not on the callee's name: the collectibles client
 // imports responseError as `failure`, and a name-based scan missed five
 // diagnostics for as long as it did.
@@ -92,10 +95,19 @@ describe("error copy coverage", () => {
   // rewrite; occasionally the raw string was already the right sentence, and
   // an entry mapping it to itself records that decision rather than forcing a
   // change nobody wanted.
-  const reviewed = (raw: string): boolean =>
-    ERROR_COPY.has(raw.trim().toLowerCase()) ||
-    friendlyError(raw).message !== raw.trim() ||
-    DEFERRED.has(raw);
+  //
+  // The generic fallback is not a review. The classifier rewrites any
+  // unmapped lowercase diagnostic to "Something went wrong", so counting any
+  // rewrite as reviewed let every new lowercase string pass unread
+  // (mc-wallet issue 476).
+  const reviewed = (raw: string): boolean => {
+    const message = friendlyError(raw).message;
+    return (
+      ERROR_COPY.has(raw.trim().toLowerCase()) ||
+      (message !== raw.trim() && message !== UNEXPECTED_FALLBACK) ||
+      DEFERRED.has(raw)
+    );
+  };
 
   test("no raw diagnostic reaches a reader unreviewed", () => {
     expect([...raws].filter((raw) => !reviewed(raw)).sort()).toEqual([]);

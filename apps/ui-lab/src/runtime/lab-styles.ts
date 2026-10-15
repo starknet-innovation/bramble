@@ -167,6 +167,10 @@ export const LAB_STYLES = `
     z-index: 1;
   }
   .wallet-device[data-surface="sidepanel"] { height: 760px; width: 400px; }
+  /* The browser side panel's minimum width. The device is content-box, so this
+     width is exactly the width the embedded frame lays out at: about 320 CSS
+     px, which is the narrowest the extension gets in Chrome and Brave. */
+  .wallet-device[data-surface="sidepanel-min"] { height: 760px; width: 320px; }
   .wallet-device[data-surface="popup"] { height: 600px; width: 380px; }
   .wallet-device[data-surface="fullpage"] { height: 800px; width: 960px; }
   .wallet-frame {

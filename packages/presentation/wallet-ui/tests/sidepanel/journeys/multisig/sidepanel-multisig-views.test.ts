@@ -387,7 +387,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(detail).not.toContain(accepted.summary);
   });
 
-  test("keeps a rejected fee attempt visible as not submitted", async () => {
+  test("keeps a rejected fee attempt visible as out of date", async () => {
     const fixture = await makeArgentMultisigFixture();
     const stale = { ...fixture.readyIntent, state: "stale" as const };
     const home = multisigDetailFlow(
@@ -401,7 +401,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
 
     expect(home).toContain("Needs attention");
-    expect(home).toContain("Not submitted · ready to retry");
+    expect(home).toContain("Out of date · ready to retry");
     expect(home).toContain(`data-ms-open-intent="${stale.id}"`);
   });
 

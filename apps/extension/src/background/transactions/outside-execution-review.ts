@@ -3,7 +3,8 @@
  * authorizes concrete calls the site may submit later with no second
  * prompt, so it gets the same automatic defences as `wallet_addInvokeTransaction`:
  * the account self-call refusal, the poisoned-recipient refusal, and the risk
- * flags and decoded summaries on the card.
+ * flags and decoded summaries on the card. At queue time a poisoned recipient
+ * is flagged rather than refused, as on the invoke route (Sherlock 140).
  */
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
@@ -43,7 +44,11 @@ export type OutsideExecutionReview = {
  * flags each call on its own amount (refusals never depend on it). Production
  * callers pass preferences enriched by `withTrustedRecipients`, so a lookalike
  * of the user's own accounts or of a recipient this wallet paid is refused here
- * exactly as on the invoke route (audit 163).
+ * exactly as on the invoke route (audit 163). With `stage: "queue"` a lookalike
+ * recipient is not refused: an instant refusal would tell the site which
+ * addresses the user saved or paid (Sherlock 140). Its `address-poisoning` flag
+ * rides on the review instead, the card offers Deny only, and the `"sign"`
+ * stage (the default) still refuses it before any key is used.
  */
 export const reviewOutsideExecution = (
   typedData: unknown,
@@ -51,6 +56,7 @@ export const reviewOutsideExecution = (
   preferences: Pick<WalletPreferences, "addressBook" | "dappTokenIds" | "nfts" | "tokens"> &
     Partial<TrustedRecipientSources>,
   allowances: readonly AllowanceRecord[] = [],
+  stage: "queue" | "sign" = "sign",
 ): OutsideExecutionReview | { readonly error: string } | null => {
   const calls = outsideExecutionCalls(typedData);
   if (calls === null) {
@@ -66,7 +72,8 @@ export const reviewOutsideExecution = (
     standingAllowanceTotals(allowances, allowanceOwner(account), trusted),
   );
   const refusal =
-    refuseOnAccountSelfCall(calls, account.address) ?? refuseOnPoisonedRecipient(report);
+    refuseOnAccountSelfCall(calls, account.address) ??
+    (stage === "sign" ? refuseOnPoisonedRecipient(report) : null);
   if (refusal) {
     return refusal;
   }

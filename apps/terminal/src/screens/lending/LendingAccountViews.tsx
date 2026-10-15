@@ -7,6 +7,7 @@ import {
   LockKeyhole,
   Radio,
 } from "lucide-react";
+import { loadFailedMessage, userErrorMessage } from "../../protocols/support/user-error";
 import { useMemo, useState, type ReactNode } from "react";
 import { avnuTokenArtwork } from "../../assets/avnu-token-assets";
 import { ErrorBanner, SkeletonRows, TokenIcon } from "../../components/index";
@@ -24,6 +25,8 @@ import {
   buildVesuVaultClaimCalls,
   buildVesuVaultDepositCalls,
   buildVesuVaultRedeemCalls,
+  VESU_VAULT_DEPOSITS_ENABLED,
+  VESU_VAULT_DEPOSITS_PAUSED,
 } from "../../protocols/index";
 import { shortenAddress } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
@@ -56,7 +59,7 @@ export const LendingPositions = ({
     );
   }
   if (resource.error !== null && resource.data === null) {
-    return <ErrorBanner message={`Couldn't load positions: ${resource.error}`} />;
+    return <ErrorBanner message={loadFailedMessage("positions", resource.error)} />;
   }
   if (resource.isLoading && resource.data === null) return <SkeletonRows rows={7} />;
   const positions = resource.data ?? [];
@@ -183,7 +186,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
       setMessage("Vault deposit submitted.");
       setAmount("");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Vault request failed.");
+      setMessage(userErrorMessage(cause, "Vault request failed."));
     }
   };
 
@@ -210,7 +213,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
       setRedeemAmount("");
       setMessage("Redemption requested. The queue will refresh shortly.");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Redemption request failed.");
+      setMessage(userErrorMessage(cause, "Redemption request failed."));
     }
   };
 
@@ -229,12 +232,12 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
       });
       setMessage("Redemption claim submitted.");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Redemption claim failed.");
+      setMessage(userErrorMessage(cause, "Redemption claim failed."));
     }
   };
 
   if (resource.error !== null && vaults.length === 0) {
-    return <ErrorBanner message={`Couldn't load vaults: ${resource.error}`} />;
+    return <ErrorBanner message={loadFailedMessage("vaults", resource.error)} />;
   }
   if (resource.isLoading && vaults.length === 0) return <SkeletonRows rows={5} />;
   return (
@@ -284,7 +287,9 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
               </div>
             </label>
             {message !== null ? <p className="lending-ticket-message">{message}</p> : null}
-            <button className="lending-submit" disabled={isConnected && raw === null} onClick={() => void deposit()} type="button">
+            {/* Deposits pay the API-named vault, which nothing verifies yet (Sherlock 169). */}
+            {VESU_VAULT_DEPOSITS_ENABLED ? null : <p className="lending-ticket-message">{VESU_VAULT_DEPOSITS_PAUSED}</p>}
+            <button className="lending-submit" disabled={!VESU_VAULT_DEPOSITS_ENABLED || (isConnected && raw === null)} onClick={() => void deposit()} type="button">
               {isConnected ? "Review deposit" : "Connect wallet"}<ArrowRight size={14} aria-hidden />
             </button>
             <div className="lending-vault-divider" />
@@ -368,7 +373,7 @@ export const LendingRewards = ({ resource, connected, onConnect }: RewardsProps)
       });
       setMessage("Reward claim submitted.");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Reward claim failed.");
+      setMessage(userErrorMessage(cause, "Reward claim failed."));
     }
   };
 

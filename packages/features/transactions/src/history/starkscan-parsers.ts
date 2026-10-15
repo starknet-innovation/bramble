@@ -13,8 +13,6 @@ import type {
   StarkscanContractMetadata,
   StarkscanPage,
   StarkscanTokenBalance,
-  StarkscanTokenHolding,
-  StarkscanTokenHoldings,
   StarkscanTransfer,
 } from "./starkscan-types";
 
@@ -163,50 +161,6 @@ export const parseStarkscanTransfer = (value: unknown): StarkscanTransfer => {
     tokenDecimals: nullableInteger(row["tokenDecimals"]),
     sourceTier,
     actionContext: nullableString(row["actionContext"], 128),
-  };
-};
-
-const parseHolding = (value: unknown): StarkscanTokenHolding => {
-  const row = recordValue(value);
-  return {
-    tokenAddress: feltValue(row["tokenAddress"]),
-    normalizedTokenAddress: feltValue(row["normalizedTokenAddress"]),
-    indexedBalanceRaw: decimalValue(row["indexedBalanceRaw"]),
-    symbol: nullableString(row["symbol"], 64),
-    name: nullableString(row["name"], 128),
-    decimals: nullableInteger(row["decimals"]),
-  };
-};
-
-/**
- * Parses a token-holdings snapshot and its completeness proof.
- */
-export const parseStarkscanHoldings = (value: unknown): StarkscanTokenHoldings => {
-  const row = recordValue(value);
-  const completeness = recordValue(row["completeness"]);
-  const chainId = stringValue(row["chainId"], 16);
-  if (chainId !== "SN_MAIN" && chainId !== "SN_SEPOLIA") {
-    return invalidResponse();
-  }
-  if (!Array.isArray(row["items"]) || row["items"].length > 10_000) {
-    return invalidResponse();
-  }
-  return {
-    chainId,
-    ownerAddress: feltValue(row["ownerAddress"]),
-    items: row["items"].map(parseHolding),
-    exact: booleanValue(row["exact"]),
-    truncated: booleanValue(row["truncated"]),
-    completeness: {
-      exact: booleanValue(completeness["exact"]),
-      truncated: booleanValue(completeness["truncated"]),
-      complete: booleanValue(completeness["complete"]),
-      reasonCode: stringValue(completeness["reasonCode"], 64),
-      reason: stringValue(completeness["reason"], 512),
-      lagBlocks: nullableInteger(completeness["lagBlocks"]),
-      capped: booleanValue(completeness["capped"]),
-      cap: nullableInteger(completeness["cap"]),
-    },
   };
 };
 

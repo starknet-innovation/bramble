@@ -10,6 +10,7 @@ import { useCallback } from "react";
 import { avnuTokenArtwork } from "../../assets/avnu-token-assets";
 import { getJson } from "../core/cache";
 import { AVNU_MARKETS_BASE, EKUBO_BASE } from "../core/endpoints";
+import { isTokenDecimals } from "../../protocols/constants";
 import { STARKNET_NETWORKS } from "../../protocols/support/networks";
 import type { Resource, TokenRow } from "../core/types";
 import { useAsyncResource } from "../core/useAsyncResource";
@@ -21,6 +22,11 @@ const CACHE_MS = 115_000;
 
 const num = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
+
+// A row without a usable precision is dropped: an unusable one throws while
+// the swap panel renders, and a missing one assumed as 18 would scale a
+// six-decimal token's swap amount by 10^12 (Sherlock 155).
+const rowDecimals = (value: unknown): number | null => (isTokenDecimals(value) ? value : null);
 
 const str = (value: unknown): string | null =>
   typeof value === "string" && value.length > 0 ? value : null;
@@ -124,7 +130,8 @@ export const toAvnuRows = (payload: AvnuTokensResponse): readonly TokenRow[] => 
   for (const token of list) {
     const address = str(token.address);
     const symbol = str(token.symbol);
-    if (address === null || symbol === null) {
+    const decimals = rowDecimals(token.decimals);
+    if (address === null || symbol === null || decimals === null) {
       continue;
     }
     const market = token.market ?? {};
@@ -143,7 +150,7 @@ export const toAvnuRows = (payload: AvnuTokensResponse): readonly TokenRow[] => 
       address,
       name: str(token.name) ?? symbol,
       symbol,
-      decimals: typeof token.decimals === "number" ? token.decimals : 18,
+      decimals,
       logoUri: avnuTokenArtwork(address, str(token.logoUri)),
       priceUsd: globalPrice ?? num(starknet.usd) ?? num(market.currentPrice),
       marketCapUsd: num(global.usdMarketCap) ?? num(market.marketCap),
@@ -191,14 +198,15 @@ export const toEkuboRows = (tokensPayload: EkuboTokensResponse): readonly TokenR
   for (const token of tokens) {
     const address = str(token.address) ?? str(token.l2_token_address);
     const symbol = str(token.symbol);
-    if (address === null || symbol === null) {
+    const decimals = rowDecimals(token.decimals);
+    if (address === null || symbol === null || decimals === null) {
       continue;
     }
     rows.push({
       address,
       name: str(token.name) ?? symbol,
       symbol,
-      decimals: typeof token.decimals === "number" ? token.decimals : 18,
+      decimals,
       logoUri: str(token.logo_url),
       priceUsd: num(token.usd_price),
       marketCapUsd: null,

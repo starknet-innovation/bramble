@@ -176,7 +176,7 @@ describe("createPreferencesStore", () => {
       },
       poolAddress: "0x1",
       proverUrl: "https://prover.example/strk20",
-      subaccountAnonymizerAddress: "0x2",
+      shadowAccountAnonymizerAddress: "0x2",
     };
     await preferences.setStrk20NetworkConfig({ config, networkId: "SN_MAIN" });
     await expect(preferences.read()).resolves.toMatchObject({
@@ -196,7 +196,7 @@ describe("createPreferencesStore", () => {
           discoveryUrl: "https://discovery.example",
           poolAddress: "0x1",
           proverUrl: "http://prover.example",
-          subaccountAnonymizerAddress: "0x2",
+          shadowAccountAnonymizerAddress: "0x2",
         },
         networkId: "SN_MAIN",
       }),

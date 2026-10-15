@@ -10,11 +10,12 @@ import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
 import type { RefreshReason } from "../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../runtime/runtime";
+import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import { awaitConfirmation, type ConfirmationOutcome } from "../shared/confirm-submitted";
 import {
   buttonBusy,
+  errorDetails,
   errorLine,
-  errorMessage,
   renderFragment,
   scopedStatus,
   showToast,
@@ -26,10 +27,14 @@ import {
 } from "../shared/outcome-receipt";
 import { formatFeeEstimate, reviewCostNote } from "../shared/review-render";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
-
-const DEPLOYMENT_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
-// Controls whose screen has already asked for a quote, so a repaint does not.
-const QUOTED_DEPLOYMENTS = new WeakSet<HTMLButtonElement>();
+import { deployErrorLine, deployToastText } from "./deploy-errors";
+import {
+  type DeployJourney,
+  deployJourney,
+  firstDeployBinding,
+  isCurrentDeployJourney,
+  leaveDeployScreen,
+} from "./deploy-journey";
 
 /**
  * Services and state setters the shell bindings close over. State lives in the
@@ -68,7 +73,7 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
         void render(status, "action");
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Lock failed"), "error", lockButton);
+        showToast(errorDetails(error, "Lock failed"), "error", lockButton);
         if (result) {
           result.textContent = errorLine(error, "Lock failed");
         }
@@ -220,6 +225,43 @@ const paintDeployReceipt = async (
   );
 };
 
+// Shows the receipt of a deployment already sent and, until the chain has
+// answered, waits for that answer on the screen as it is now. Submitted is not
+// deployed: the receipt opens on the submitted wording and turns into the
+// deployment or its failure once the chain answers. A repaint during the wait
+// lands here again, so the wait carries on over the rebuilt screen; only the
+// first answer is toasted.
+const resumeDeployReceipt = (
+  deps: ShellBindingDeps,
+  journey: DeployJourney,
+  reviewStage: HTMLElement | null | undefined,
+  successStage: HTMLElement | null | undefined,
+): void => {
+  const receipt = journey.receipt;
+  if (!receipt) return;
+  reviewStage?.setAttribute("hidden", "");
+  successStage?.removeAttribute("hidden");
+  void paintDeployReceipt(deps, receipt.outcome, receipt.hash);
+  if (receipt.settled) return;
+  const live = (): boolean => successStage?.isConnected === true && journey.receipt === receipt;
+  void awaitConfirmation({
+    ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
+    hash: receipt.hash,
+    loadActivity: () => deps.wallet.loadActivity(),
+    stillCurrent: live,
+  }).then(async (outcome) => {
+    if (!live() || receipt.settled) return;
+    receipt.outcome = outcome;
+    receipt.settled = true;
+    await paintDeployReceipt(deps, outcome, receipt.hash);
+    // As Send and Swap do, the toast is the chain's answer rather than the
+    // handoff, which the receipt heading already states.
+    if (outcome && successStage) {
+      showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", successStage);
+    }
+  });
+};
+
 /**
  * Binds the account-deployment action.
  *
@@ -237,13 +279,20 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   const reviewPanelRoot = deps.app?.querySelector<HTMLElement>("#deploy-review");
   const reviewStage = deps.app?.querySelector<HTMLElement>("#deploy-review-stage");
   const successStage = deps.app?.querySelector<HTMLElement>("#deploy-success");
-  if (!button) {
+  if (!button || !deps.app) {
+    if (deps.app) leaveDeployScreen(deps.app);
     return;
   }
   const target = button;
+  const app = deps.app;
+  const journey = deployJourney(app, deps.deploymentScope?.() ?? null);
+  // Binds the live screen again when an answer lands after a repaint rebuilt it.
+  const rebind = (): void => {
+    if (isCurrentDeployJourney(app, journey)) bindDeploy(deps);
+  };
 
   const showFee = (estimate: FeeEstimate): void => {
-    DEPLOYMENT_FEES.set(target, estimate);
+    journey.fee = estimate;
     if (reviewPanelRoot) {
       renderFragment(
         reviewPanelRoot,
@@ -256,38 +305,79 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   // A failed submission (RPC, nonce, revert) is not fee information, so it
   // empties the box (the spent quote is gone and Deploy quotes again) and is
   // reported on the status line and toast instead.
-  const failed = (error: unknown, fallback: string, stage: "quote" | "submit"): void => {
-    DEPLOYMENT_FEES.delete(target);
-    const message = errorMessage(error, fallback);
+  // A quote the screen asked for on its own is not toasted: the reader has not
+  // done anything yet, and the Cost box already says why there is no fee.
+  const failed = (
+    error: unknown,
+    fallback: string,
+    stage: "quote" | "submit",
+    toast = true,
+  ): void => {
+    delete journey.fee;
+    // The reader's sentence, never the raw RPC dump (issue 662); the toast
+    // keeps the raw diagnostic behind its copy control.
+    const message = deployErrorLine(error, fallback);
+    if (stage === "quote") journey.quoteNote = message;
+    // A deployment whose reply was lost may be on chain: amber, not "failed".
+    if (toast) {
+      showToast(
+        deployToastText(error, fallback),
+        isOutcomeUnknown(error) ? "warning" : "error",
+        target.isConnected ? target : app,
+        errorDetails(error, fallback),
+      );
+    }
+    // A quote that fails after a repaint is shown on the screen it rebuilt.
+    if (stage === "quote" && !target.isConnected) {
+      rebind();
+      return;
+    }
     if (reviewPanelRoot) {
       renderFragment(reviewPanelRoot, stage === "quote" ? reviewCostNote(message) : "");
     }
-    showToast(message, "error", target);
     scopedStatus(target, message);
     buttonBusy(target, false);
   };
 
-  // Without a fee, the background quotes rather than deploys.
-  const quote = (): void => {
+  // Without a fee, the background quotes rather than deploys. The answer is
+  // applied to the live screen, which a repaint while it was in flight rebuilt.
+  const quote = (toast: boolean): void => {
+    delete journey.quoteNote;
     buttonBusy(target, true);
     scopedStatus(target, "Estimating fee…");
     void deps.wallet.deployAccount().then(
       (response) => {
+        if (typeof response !== "string") journey.fee = response;
+        if (!target.isConnected) {
+          rebind();
+          return;
+        }
         if (typeof response !== "string") showFee(response);
         scopedStatus(target, "");
         buttonBusy(target, false);
       },
-      (error: unknown) => failed(error, "Could not estimate the deployment fee", "quote"),
+      (error: unknown) => failed(error, "Could not estimate the deployment fee", "quote", toast),
     );
   };
 
-  // Quoted once per mounted screen. The binder runs on every paint, and the
-  // repaint that follows the quote would otherwise ask for another.
-  if (!QUOTED_DEPLOYMENTS.has(target) && !target.disabled) {
-    QUOTED_DEPLOYMENTS.add(target);
-    quote();
+  // Quoted once per visit. The binder runs on every paint; a repaint shows the
+  // fee already in hand, or the receipt of a deployment already sent.
+  if (journey.receipt) {
+    resumeDeployReceipt(deps, journey, reviewStage, successStage);
+  } else if (journey.pressed) {
+    buttonBusy(target, true);
+    scopedStatus(target, "Submitting deployment…");
+  } else if (journey.fee) {
+    showFee(journey.fee);
+  } else if (journey.quoteNote !== undefined && reviewPanelRoot) {
+    renderFragment(reviewPanelRoot, reviewCostNote(journey.quoteNote));
+  } else if (!journey.quoted && !target.disabled) {
+    journey.quoted = true;
+    quote(false);
   }
 
+  // A rebind paints the state above on a screen the repaint already bound.
+  if (!firstDeployBinding(target)) return;
   if (deps.app) {
     bindOutcomeReceipt(deps.app, "deploy-success", {
       activity: () => deps.setActiveView("activity"),
@@ -297,49 +387,60 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         successStage?.setAttribute("hidden", "");
         reviewStage?.removeAttribute("hidden");
         if (reviewPanelRoot) renderFragment(reviewPanelRoot, "");
-        quote();
+        delete journey.receipt;
+        quote(true);
       },
     });
   }
   target.addEventListener("click", () => {
+    if (journey.pressed) return;
+    journey.pressed = true;
     buttonBusy(target, true);
     scopedStatus(target, "Submitting deployment…");
-    const reviewedFee = DEPLOYMENT_FEES.get(target);
-    if (reviewedFee) DEPLOYMENT_FEES.delete(target);
+    const reviewedFee = journey.fee;
+    delete journey.fee;
+    // A repaint while the press is in flight rebuilt the screen; its answer is
+    // applied there by binding the live screen again.
+    const rebound = (): boolean => {
+      if (target.isConnected) return false;
+      rebind();
+      return true;
+    };
     void deps.wallet.deployAccount(reviewedFee).then(
       async (response) => {
+        journey.pressed = false;
         // No quote was in hand, so this call returned one: show it and submit
         // on the next press rather than spending a fee the reader never saw.
         if (typeof response !== "string") {
+          journey.fee = response;
+          if (rebound()) return;
           showFee(response);
           scopedStatus(target, "");
           buttonBusy(target, false);
           return;
         }
-        reviewStage?.setAttribute("hidden", "");
-        successStage?.removeAttribute("hidden");
+        journey.receipt = { hash: response, outcome: null, settled: false };
+        if (rebound()) return;
         scopedStatus(target, "");
         buttonBusy(target, false);
-        // Submitted is not deployed. The receipt says only what the chain has
-        // answered for, so it opens on the submitted wording and turns into
-        // the deployment or its failure once the chain answers.
-        await paintDeployReceipt(deps, null, response);
-        const outcome = await awaitConfirmation({
-          ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
-          hash: response,
-          loadActivity: () => deps.wallet.loadActivity(),
-          stillCurrent: () => successStage?.isConnected === true,
-        });
-        if (successStage?.isConnected !== true) return;
-        await paintDeployReceipt(deps, outcome, response);
-        // As Send and Swap do, the toast is the chain's answer rather than the
-        // handoff, which the receipt heading already states.
-        if (outcome) {
-          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", target);
-        }
+        resumeDeployReceipt(deps, journey, reviewStage, successStage);
       },
       // Without a quote in hand this press only asked for one.
-      (error: unknown) => failed(error, "Deployment failed", reviewedFee ? "submit" : "quote"),
+      (error: unknown) => {
+        journey.pressed = false;
+        if (rebound()) {
+          // Amber when the reply was lost: the deployment may be on chain.
+          const tone = isOutcomeUnknown(error) ? "warning" : "error";
+          showToast(
+            deployToastText(error, "Deployment failed"),
+            tone,
+            deps.app,
+            errorDetails(error, "Deployment failed"),
+          );
+          return;
+        }
+        failed(error, "Deployment failed", reviewedFee ? "submit" : "quote");
+      },
     );
   });
 };
@@ -375,7 +476,7 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
           await render(status, "action");
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Network switch failed"), "error", button);
+          showToast(errorDetails(error, "Network switch failed"), "error", button);
           if (result) {
             result.textContent = errorLine(error, "Network switch failed");
           }

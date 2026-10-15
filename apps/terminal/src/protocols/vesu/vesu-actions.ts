@@ -4,7 +4,7 @@
  * sign, submit, or touch browser state.
  */
 import { type Call, CallData, cairo } from "starknet";
-import { VESU_ADDRESSES } from "../constants";
+import { VESU_ADDRESSES, VESU_VAULT_DEPOSITS_ENABLED } from "../constants";
 import { CAIRO_U256_MAX } from "../support/cairo-integers";
 import { WalletError } from "../support/errors";
 import {
@@ -17,13 +17,22 @@ const assertAddress = (value: string, label: string): void => {
   if (!isNonZeroStarkFieldElement(value)) throw new WalletError(`Invalid ${label}`);
 };
 
-/** Builds an ERC-4626 vault deposit and immediately revokes its allowance. */
+/** Refusal while vault deposits are paused (see `VESU_VAULT_DEPOSITS_ENABLED`). */
+export const VESU_VAULT_DEPOSITS_PAUSED =
+  "Vesu vault deposits are paused until vault addresses can be verified on chain";
+
+/**
+ * Builds an ERC-4626 vault deposit and immediately revokes its allowance.
+ * Refuses while `VESU_VAULT_DEPOSITS_ENABLED` is off (Sherlock 169).
+ */
 export const buildVesuVaultDepositCalls = (
   vaultAddress: string,
   assetAddress: string,
   amountRaw: bigint,
   receiver: string,
+  depositsEnabled: boolean = VESU_VAULT_DEPOSITS_ENABLED,
 ): readonly Call[] => {
+  if (!depositsEnabled) throw new WalletError(VESU_VAULT_DEPOSITS_PAUSED);
   assertAddress(vaultAddress, "Vesu vault");
   assertAddress(assetAddress, "Vesu vault asset");
   assertAddress(receiver, "Vesu vault receiver");

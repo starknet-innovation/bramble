@@ -19,12 +19,15 @@ import type { Strk20SubmissionPlan } from "./submission-plan";
 export const STRK20_INSUFFICIENT_BALANCE = "insufficient private balance";
 
 /**
- * Distinct tokens a batch spends privately, for a single balance read.
+ * Distinct tokens a batch spends privately, for a single balance read and for
+ * choosing the relay fee token. An `OPEN` transfer is a note the batch fills
+ * for the user during execution, not a spend from their balance, so it names
+ * a token the batch receives and is not counted (Sherlock 232).
  */
 export const spentTokens = (actions: readonly Strk20Action[]): readonly string[] => {
   const seen = new Map<bigint, string>();
   for (const action of actions) {
-    if (action.type === "withdraw" || action.type === "transfer") {
+    if ((action.type === "withdraw" || action.type === "transfer") && action.amount !== "OPEN") {
       seen.set(BigInt(action.token), action.token);
     }
   }

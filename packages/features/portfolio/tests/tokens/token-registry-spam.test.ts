@@ -53,3 +53,40 @@ describe("confusable letter homoglyphs", () => {
     ).toContain("symbol-spoof");
   });
 });
+
+// Issue 645: a bridged ticker carries one `.e` suffix, so the suffix must not
+// let a dapp borrow a curated ticker past the spoof check.
+describe("bridged .e suffix folding", () => {
+  const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+  const USDC = "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+
+  test("reads ETH.e as a spoof of ETH", () => {
+    expect(tokenSpamReasons(candidate({ name: "Ether", symbol: "ETH.e" }))).toContain(
+      "symbol-spoof",
+    );
+    // Confusable folding still applies under the suffix.
+    expect(
+      tokenSpamReasons(candidate({ address: "0xbeef", name: "Ether", symbol: "5TRK.e" })),
+    ).toContain("symbol-spoof");
+  });
+
+  test("still reads a dotless USDCE as a spoof of USDC.e", () => {
+    expect(tokenSpamReasons(candidate({ decimals: 6, symbol: "USDCE" }))).toContain("symbol-spoof");
+    expect(tokenSpamReasons(candidate({ decimals: 6, symbol: "USDC.e" }))).toContain(
+      "symbol-spoof",
+    );
+  });
+
+  test("clears both curated USDC contracts under their own and each other's ticker", () => {
+    for (const symbol of ["USDC", "USDC.e"]) {
+      for (const address of [USDC, USDC_ALIAS]) {
+        expect(
+          tokenSpamReasons(candidate({ address, decimals: 6, name: "USD Coin", symbol })),
+        ).not.toContain("symbol-spoof");
+      }
+    }
+    expect(
+      tokenSpamReasons(candidate({ address: ETH, decimals: 18, name: "Ether", symbol: "ETH" })),
+    ).toEqual([]);
+  });
+});

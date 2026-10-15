@@ -73,7 +73,7 @@ describe("approval surface", () => {
         type: "wallet.strk20PrepareInvoke",
       },
       { origin: ORIGIN, type: "wallet.strk20Register" },
-      { dappName: "Example", origin: ORIGIN, type: "wallet.strk20SubaccountCommitment" },
+      { dappName: "Example", origin: ORIGIN, type: "wallet.strk20ShadowAccountCommitment" },
     ]) {
       opener({
         browser: {

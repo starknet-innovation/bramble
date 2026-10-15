@@ -4,9 +4,10 @@
  * explicit and independently testable.
  */
 
+import { normalizeStarkName } from "@bramble/starknet/stark-name";
 import type { ValueBucket } from "@bramble/transactions/send-routes";
 import { isStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
-import { errorMessage } from "../../shared/dom";
+import { errorLine, errorMessage } from "../../shared/dom";
 import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 
@@ -28,11 +29,27 @@ export const recipientFieldError = (recipient: string): string | null =>
   isStarkFieldElement(normalizeFeltInput(recipient)) ? null : INVALID_RECIPIENT_MESSAGE;
 
 /**
- * Maps a malformed-recipient background error onto the same friendly copy.
+ * True when the text is a syntactically valid Starknet name (for example
+ * `name.stark` or `name.braavos.stark`). The `.stark` suffix is required: a
+ * bare word is not a name, so an ordinary recipient search can never turn a
+ * word into a lookup. A name is not an address: it is only offered to the
+ * background for resolution, and the address it resolves to is what a review is
+ * built from. A bare hex address is judged by {@link recipientFieldError}
+ * instead.
+ */
+export const isStarkName = (value: string): boolean => normalizeStarkName(value) !== null;
+
+/**
+ * Maps a malformed-recipient background error onto the same friendly copy, and
+ * any other review failure onto its reader-facing sentence: the result is
+ * written to a status line as well as a toast, so it must never be the raw
+ * diagnostic (issue 652).
  */
 export const friendlyReviewError = (error: unknown): string => {
   const message = errorMessage(error, "Transfer review failed");
-  return INVALID_REVIEW_ERRORS.has(message) ? INVALID_RECIPIENT_MESSAGE : message;
+  return INVALID_REVIEW_ERRORS.has(message)
+    ? INVALID_RECIPIENT_MESSAGE
+    : errorLine(error, "Transfer review failed");
 };
 
 /**
@@ -58,6 +75,24 @@ export type TransferStage =
   | "submitted";
 
 /**
+ * Whether a send is past the confirm and its result has not landed yet. Such a
+ * send is already signing or on its way to the network, so a screen that takes
+ * over the panel (a dapp approval) must keep its state rather than discard the
+ * hash it is about to return (Sherlock 164).
+ */
+export const isTransferInFlight = (stage: TransferStage): boolean =>
+  stage === "authorizing" || stage === "broadcasting" || stage === "confirming";
+
+/**
+ * Whether the Send form may act on a submit. Not once a send is past the
+ * confirm: a second submit there would sign the reviewed transfer again. The
+ * screen also hides and disables those controls; this is the state machine's
+ * own guard for a submit that arrives anyway (audit L5).
+ */
+export const acceptsTransferSubmit = (stage: TransferStage): boolean =>
+  !isTransferInFlight(stage) && stage !== "pending" && stage !== "submitted";
+
+/**
  * User-visible transaction fields frozen at review.
  */
 export type TransferFields = {
@@ -68,6 +103,12 @@ export type TransferFields = {
   readonly fiatEstimate: string;
   readonly recipient: string;
   readonly recipientLabel: string;
+  /**
+   * Set to `"stark-name"` when the recipient came from a resolved Starknet
+   * name, so the review can show the address it was resolved to and flag a
+   * recipient that is not already saved. Empty for every other recipient.
+   */
+  readonly recipientResolvedFrom: "" | "stark-name";
   readonly signer: "ledger" | "software";
   /** Balance the value is spent from. */
   readonly source: ValueBucket;
@@ -86,6 +127,14 @@ export type TransferFields = {
  */
 export type TransferState<Review> = {
   readonly error: string;
+  /**
+   * The complete diagnostic behind `error` on a `failed` stage, for the
+   * receipt's copy control: the rejected call's own message (`errorDetails`),
+   * which a pool route's background has already reduced to wallet-authored,
+   * sanitized text. Empty or absent when no error lies behind the failure (a
+   * chain rejection), in which case the control copies the reason shown.
+   */
+  readonly errorDetails?: string;
   readonly fields: TransferFields | null;
   readonly privatePreparation: PrivacyPreparation | null;
   /**
@@ -104,6 +153,15 @@ export type TransferState<Review> = {
    * unknown and offers Activity instead of Try again.
    */
   readonly submissionUnknown: boolean;
+  /**
+   * Set on a `failed` stage refused because an EARLIER private write may still
+   * land: this attempt was not sent, and the receipt offers Activity. When the
+   * refusal is `unresolved` it also offers Check again, which prepares afresh
+   * and so re-runs the background's resolution of that write; a `stranded`
+   * one offers no retry, since only ending the browser session clears it
+   * (mc-wallet issue 661).
+   */
+  readonly priorWrite?: "stranded" | "unresolved" | null;
   readonly transactionHash: string | null;
 };
 
@@ -142,6 +200,7 @@ export const transferFields = (form: HTMLFormElement): TransferFields => {
     fiatEstimate: String(data.get("fiatEstimate") ?? ""),
     recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
     recipientLabel: String(data.get("recipientLabel") ?? "").trim(),
+    recipientResolvedFrom: data.get("recipientResolvedFrom") === "stark-name" ? "stark-name" : "",
     signer: form.dataset["signer"] === "ledger" ? "ledger" : "software",
     source: bucket(data.get("source")),
     speed: data.get("speed") === "fast" ? "fast" : "standard",

@@ -215,13 +215,13 @@ const generatedStep = (): string => `
       >${recoveryWordInputs("generated")}</div>
       <div class="button-row">
         ${button({
-          attributes: { id: "phrase-toggle" },
+          attributes: { "aria-label": "Show recovery phrase", id: "phrase-toggle" },
           icon: "book",
           label: "Show",
           variant: "secondary",
         })}
         ${button({
-          attributes: { id: "generated-copy-phrase" },
+          attributes: { "aria-label": "Copy recovery phrase", id: "generated-copy-phrase" },
           disabled: true,
           icon: "copy",
           label: "Copy",
@@ -382,19 +382,14 @@ const accountStep = (): string => `
     ${flowBack("Back to passphrase")}
     ${stepHead("wallet", "Review your account")}
     <div class="onboarding-fields">
-      <button
-        class="onboarding-account"
-        id="account-preview"
-        type="button"
-        aria-pressed="false"
-      >
+      <div class="onboarding-account" id="account-preview">
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
           <strong data-preview-label>Primary Bramble account</strong>
           <span data-preview-address>Deriving account…</span>
         </span>
-        <span class="onboarding-account-check">${icon("check")}</span>
-      </button>
+        <span class="onboarding-account-check" aria-hidden="true">${icon("check")}</span>
+      </div>
       ${networkConsequence()}
       <p id="form-result" role="status"></p>
     </div>
@@ -402,7 +397,7 @@ const accountStep = (): string => `
       ${button({
         attributes: { id: "create-wallet-button" },
         disabled: true,
-        label: "Add selected account",
+        label: "Finish setup",
         type: "submit",
       })}
     </div>
@@ -446,7 +441,7 @@ export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): 
   FIRST VIEWPORT: One centered wallet stage; the Bramble wordmark leads to two full-width actions at the foot.
   FORM: Staged wallet setup based on the supplied reference flow, adapted to Bramble trust boundaries.
   -->
-  <main class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
+  <section class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
     <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready}" novalidate>
       ${welcomeStep(status.ready)}
       ${methodStep(ledgerAvailable)}
@@ -459,4 +454,4 @@ export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): 
       ${accountStep()}
     </form>
     ${ledgerStep(status, ledgerAvailable)}
-  </main>`;
+  </section>`;

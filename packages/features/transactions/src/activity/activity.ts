@@ -3,18 +3,44 @@
  * outside the encrypted vault; the clock stays injectable for tests.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import type { KeyValueStore } from "@bramble/store/kv";
+import { recordStorageDiagnostic } from "@bramble/starknet/rpc-diagnostics";
+import { type KeyValueStore, storageBudgetFor } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "@bramble/transactions/alerts";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
+import { isStarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks";
 import {
-  isStarkFieldElement,
-  isStarknetNetworkId,
-  type StarknetNetworkId,
-  sameFelt,
-} from "@bramble/wallet-model/networks";
+  type ActivityEntry,
+  type ActivityOutcome,
+  type ActivityScope,
+  activityForScope,
+  clampActivitySummary,
+  isActivityEntry,
+  matchesScope,
+  monotonicActivityStatus,
+} from "./activity-entry";
+import {
+  entriesAfterRecord,
+  scopeSnapshot,
+  withinByteBudget,
+  withinScopeLimit,
+} from "./activity-retention";
 
 export { activityToCsv } from "./activity-csv";
+export {
+  type ActivityEntry,
+  type ActivityOutcome,
+  type ActivityScope,
+  type ActivityStatus,
+  activityForScope,
+  activityOrigin,
+  activityToken,
+  clampActivitySummary,
+  isActivityEntry,
+  isUnresolvedActivityStatus,
+  MAX_ACTIVITY_TIMESTAMP_MS,
+  monotonicActivityStatus,
+} from "./activity-entry";
 
 /**
  * Browser storage key for the activity log.
@@ -22,7 +48,6 @@ export { activityToCsv } from "./activity-csv";
 const ACTIVITY_STORE_KEY = "bramble:activity";
 const ACTIVITY_HISTORY_SYNC_KEY = "bramble:activity-history-sync";
 
-const MAX_ENTRIES_PER_SCOPE = 200;
 const MAX_SYNC_SCOPES = 50;
 
 /**
@@ -31,127 +56,6 @@ const MAX_SYNC_SCOPES = 50;
  * touching `Date.now` themselves.
  */
 export const systemClock = (): number => Date.now();
-
-/**
- * Lifecycle status of a submitted transaction.
- *
- * `preconfirmed` is provisional: the block proposer executed the transaction
- * (so a revert is already visible) but consensus has not committed its block.
- * `accepted` covers both `ACCEPTED_ON_L2` and `ACCEPTED_ON_L1`; L1 finality is
- * carried by {@link ActivityEntry.finalizedOnL1} instead of a separate status,
- * so the feed never grows a third success tier.
- */
-export type ActivityStatus = "accepted" | "pending" | "preconfirmed" | "rejected" | "reverted";
-
-/**
- * Whether a status can still change on chain. Pre-confirmed and pending
- * transactions are both unresolved; `accepted` is a real outcome even though
- * reconciliation keeps watching it until L1 finality. Single source of truth —
- * do not re-derive this comparison at call sites.
- */
-export const isUnresolvedActivityStatus = (status: ActivityStatus): boolean =>
-  status === "pending" || status === "preconfirmed";
-
-/**
- * Resolves two status observations without allowing stale asynchronous reads
- * to demote chain progress or overwrite a terminal failure.
- */
-export const monotonicActivityStatus = (
-  current: ActivityStatus,
-  observed: ActivityStatus,
-): ActivityStatus => {
-  const terminal = (status: ActivityStatus): boolean =>
-    status === "rejected" || status === "reverted";
-  if (terminal(current)) {
-    return current;
-  }
-  if (terminal(observed)) {
-    return observed;
-  }
-  const progress = (status: ActivityStatus): number =>
-    status === "accepted" ? 2 : status === "preconfirmed" ? 1 : 0;
-  return progress(observed) >= progress(current) ? observed : current;
-};
-
-/**
- * One recorded transaction. The `amount`, `counterparty`, and `token` fields
- * are optional so entries stored before they existed still load and export;
- * absent values fall back to blank CSV cells. The three tracking fields below
- * are internal bookkeeping for background reconciliation and are never
- * rendered; they are optional for the same reason.
- */
-export type ActivityEntry = {
-  readonly accountId: string;
-  readonly amount?: string;
-  readonly counterparty?: string;
-  /**
-   * Set to `"pending"` when reconciliation observes a failure the user has
-   * already moved past, and flipped to `"delivered"` once the side panel has
-   * shown it. Absent means there is nothing to tell the user.
-   */
-  readonly failureNotice?: "delivered" | "pending";
-  /**
-   * True once the chain reported `ACCEPTED_ON_L1`. Reconciliation's terminal
-   * condition; not a user-visible state.
-   */
-  readonly finalizedOnL1?: boolean;
-  readonly hash: string;
-  /**
-   * What the account submitted. `"declare"` is its own kind rather than being
-   * folded into `"invoke"` so the feed and the CSV export can tell a class
-   * declaration apart from a call — they are different transaction types on
-   * chain and carry different meaning in an audit.
-   */
-  readonly kind: "declare" | "deploy" | "invoke" | "transfer";
-  readonly networkId: StarknetNetworkId;
-  /**
-   * Consecutive `TXN_HASH_NOT_FOUND` observations. Reset by any answer that
-   * finds the transaction, so ordinary RPC noise never accumulates.
-   */
-  readonly notFoundCount?: number;
-  /**
-   * Provenance: `"wallet"` only on rows this wallet recorded for a transaction
-   * it submitted itself (see the background's `recordSubmittedActivity`). Rows
-   * discovered from chain history or an explorer never carry it, so a
-   * third-party event that names this account cannot pose as a payment the
-   * user made. Absent on legacy rows, which are treated as unknown origin.
-   */
-  readonly origin?: "wallet";
-  /**
-   * True once a status read returned a real finality for this hash. Only a
-   * transaction the wallet has seen can be judged gone after repeated
-   * not-found answers; an unseen one stays pending until its observation
-   * window lapses.
-   */
-  readonly seenOnChain?: boolean;
-  readonly status: ActivityStatus;
-  readonly submittedAt: number;
-  readonly summary: string;
-  readonly token?: string;
-};
-
-/**
- * The reconciled result written back for one hash. Policy (which transition
- * deserves a user-visible notice, when a disappearance counts as failure) is
- * decided by the caller; this store only applies what it is handed.
- */
-export type ActivityOutcome = {
-  readonly failureNotice?: "pending";
-  readonly finalizedOnL1?: boolean;
-  readonly notFoundCount?: number;
-  readonly seenOnChain?: boolean;
-  readonly status: ActivityStatus;
-};
-
-/**
- * Account and network boundary for a single activity feed. Both fields remain
- * explicit so callers cannot accidentally treat an account id as globally
- * scoped if its representation changes in a future vault schema.
- */
-export type ActivityScope = {
-  readonly accountId: string;
-  readonly networkId: StarknetNetworkId;
-};
 
 /**
  * Activity log surface used by background message handling.
@@ -169,7 +73,13 @@ export type ActivityLog = {
   readonly record: (
     entry: Omit<
       ActivityEntry,
-      "failureNotice" | "finalizedOnL1" | "notFoundCount" | "seenOnChain" | "status" | "submittedAt"
+      | "failureNotice"
+      | "feePaid"
+      | "finalizedOnL1"
+      | "notFoundCount"
+      | "seenOnChain"
+      | "status"
+      | "submittedAt"
     >,
   ) => Promise<void>;
   /**
@@ -215,104 +125,32 @@ const readHistorySyncs = async (store: KeyValueStore): Promise<readonly Activity
   return Array.isArray(stored) ? stored.filter(isHistorySync).slice(-MAX_SYNC_SCOPES) : [];
 };
 
-const isActivityStatus = (value: unknown): value is ActivityStatus =>
-  value === "accepted" ||
-  value === "pending" ||
-  value === "preconfirmed" ||
-  value === "rejected" ||
-  value === "reverted";
-
-const isFailureNotice = (value: unknown): value is ActivityEntry["failureNotice"] =>
-  value === undefined || value === "delivered" || value === "pending";
-
-const isNotFoundCount = (value: unknown): value is number | undefined =>
-  value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
-
-const isActivityKind = (value: unknown): value is ActivityEntry["kind"] =>
-  value === "declare" || value === "deploy" || value === "invoke" || value === "transfer";
-
-const isOptionalDetail = (value: unknown): value is string | undefined =>
-  value === undefined || (typeof value === "string" && value.length > 0 && value.length <= 200);
-
-/**
- * Checks stored activity entries before trusting them. The detail fields are
- * optional, so older entries that predate them still validate.
- */
-export const isActivityEntry = (value: unknown): value is ActivityEntry =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, [
-    "accountId",
-    "amount",
-    "counterparty",
-    "failureNotice",
-    "finalizedOnL1",
-    "hash",
-    "kind",
-    "networkId",
-    "notFoundCount",
-    "origin",
-    "seenOnChain",
-    "status",
-    "submittedAt",
-    "summary",
-    "token",
-  ]) &&
-  isStarknetNetworkId(value["networkId"]) &&
-  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
-  typeof value["hash"] === "string" &&
-  isStarkFieldElement(value["hash"]) &&
-  isActivityKind(value["kind"]) &&
-  isActivityStatus(value["status"]) &&
-  typeof value["submittedAt"] === "number" &&
-  Number.isSafeInteger(value["submittedAt"]) &&
-  value["submittedAt"] >= 0 &&
-  typeof value["summary"] === "string" &&
-  value["summary"].length > 0 &&
-  value["summary"].length <= 200 &&
-  isOptionalDetail(value["amount"]) &&
-  isOptionalDetail(value["counterparty"]) &&
-  isOptionalDetail(value["token"]) &&
-  isFailureNotice(value["failureNotice"]) &&
-  (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
-  (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
-  isNotFoundCount(value["notFoundCount"]) &&
-  (value["origin"] === undefined || value["origin"] === "wallet");
-
 const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry[]> => {
   const stored = await store.get(ACTIVITY_STORE_KEY);
   return Array.isArray(stored) ? stored.filter(isActivityEntry) : [];
 };
 
-const matchesScope = (entry: ActivityEntry, scope: ActivityScope): boolean =>
-  entry.accountId === scope.accountId && entry.networkId === scope.networkId;
-
-/**
- * Selects the rows that belong to one account on one network. The persistent
- * store may contain many scopes, but no UI or status reconciliation boundary
- * should consume the unfiltered list.
- */
-export const activityForScope = (
+// Every write of the log goes through here: it is trimmed to its storage
+// budget first, so a log that outgrew it (a v0.10.5 log read by a release with
+// larger rows) becomes writable again instead of refusing every write. A
+// trimmed or failed write is counted in the opt-in diagnostics, because most
+// callers absorb the failure so it cannot replace a chain outcome.
+const writeEntries = async (
+  store: KeyValueStore,
   entries: readonly ActivityEntry[],
-  scope: ActivityScope,
-): readonly ActivityEntry[] => entries.filter((entry) => matchesScope(entry, scope));
-
-const entriesAfterRecord = (
-  entries: readonly ActivityEntry[],
-  next: ActivityEntry,
-): readonly ActivityEntry[] => {
-  const scope = { accountId: next.accountId, networkId: next.networkId };
-  const sameScope = activityForScope(entries, scope).filter(
-    (stored) => !sameFelt(stored.hash, next.hash),
-  );
-  const retainedScope = new Set(sameScope.slice(-(MAX_ENTRIES_PER_SCOPE - 1)));
-  return [
-    ...entries.filter(
-      (stored) =>
-        !matchesScope(stored, scope) ||
-        (!sameFelt(stored.hash, next.hash) && retainedScope.has(stored)),
-    ),
-    next,
-  ];
+  kept?: ActivityEntry,
+): Promise<readonly ActivityEntry[]> => {
+  const fitted = withinByteBudget(entries, storageBudgetFor(ACTIVITY_STORE_KEY), kept);
+  if (fitted !== entries) {
+    recordStorageDiagnostic("activity", "trimmed");
+  }
+  try {
+    await store.set(ACTIVITY_STORE_KEY, fitted);
+  } catch (error) {
+    recordStorageDiagnostic("activity", "write-failed");
+    throw error;
+  }
+  return fitted;
 };
 
 const outcomeForHash = (
@@ -320,6 +158,14 @@ const outcomeForHash = (
   hash: string,
 ): ActivityOutcome | undefined =>
   Object.entries(outcomes).find(([candidate]) => sameFelt(candidate, hash))?.[1];
+
+// A recorded fee is final: a later read never replaces it, so an outcome's fee
+// lands only on an entry that has none.
+const recordedFee = (
+  entry: ActivityEntry,
+  outcome: ActivityOutcome,
+): Pick<ActivityEntry, "feePaid"> =>
+  entry.feePaid === undefined && outcome.feePaid !== undefined ? { feePaid: outcome.feePaid } : {};
 
 // Merges one reconciled outcome into a stored entry. Absent optional fields are
 // dropped rather than written as `undefined`, so the persisted record stays
@@ -337,6 +183,7 @@ const applyOutcome = (entry: ActivityEntry, outcome: ActivityOutcome): ActivityE
   const next: ActivityEntry = {
     ...entry,
     ...(failureNotice === undefined ? {} : { failureNotice }),
+    ...recordedFee(entry, outcome),
     ...(finalizedOnL1 === undefined ? {} : { finalizedOnL1 }),
     ...(seenOnChain === undefined ? {} : { seenOnChain }),
     ...(outcome.notFoundCount === undefined ? {} : { notFoundCount: outcome.notFoundCount }),
@@ -402,12 +249,17 @@ export const createActivityLog = ({
         return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
       },
       async record(entry) {
-        const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
+        const next: ActivityEntry = {
+          ...entry,
+          status: "pending",
+          submittedAt: now(),
+          summary: clampActivitySummary(entry.summary),
+        };
         if (!isActivityEntry(next)) {
           return;
         }
         const entries = await readEntries(store);
-        await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
+        await writeEntries(store, entriesAfterRecord(entries, next), next);
       },
       async markHistorySynced(scope, syncedAt, unavailable) {
         const next = { ...scope, syncedAt, unavailable };
@@ -418,26 +270,33 @@ export const createActivityLog = ({
         await store.set(ACTIVITY_HISTORY_SYNC_KEY, [...retained, next].slice(-MAX_SYNC_SCOPES));
       },
       async replaceScope(entries, scope) {
-        const scoped = entries
-          .filter((entry) => isActivityEntry(entry) && matchesScope(entry, scope))
-          .sort((left, right) => right.submittedAt - left.submittedAt)
-          .slice(0, MAX_ENTRIES_PER_SCOPE);
-        await store.set(ACTIVITY_STORE_KEY, [
-          ...(await readEntries(store)).filter((entry) => !matchesScope(entry, scope)),
-          ...scoped,
-        ]);
-        return scoped;
+        const scoped = scopeSnapshot(entries, scope);
+        const stored = new Set(
+          await writeEntries(
+            store,
+            withinScopeLimit(
+              [
+                ...(await readEntries(store)).filter((entry) => !matchesScope(entry, scope)),
+                ...scoped,
+              ],
+              scope,
+            ),
+          ),
+        );
+        return scoped.filter((entry) => stored.has(entry));
       },
       async takeFailureNotices(scope) {
         const { delivered, next } = drainFailureNotices(await readEntries(store), scope);
         if (delivered.length > 0) {
-          await store.set(ACTIVITY_STORE_KEY, next);
+          await writeEntries(store, next);
         }
         return delivered;
       },
       async updateStatuses(outcomes, scope) {
-        const updated = reconciled(await readEntries(store), outcomes, scope);
-        await store.set(ACTIVITY_STORE_KEY, updated);
+        const updated = await writeEntries(
+          store,
+          reconciled(await readEntries(store), outcomes, scope),
+        );
         return [...activityForScope(updated, scope)].sort((a, b) => b.submittedAt - a.submittedAt);
       },
     },
@@ -459,22 +318,26 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
       return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
     },
     async record(entry) {
-      const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
+      const next: ActivityEntry = {
+        ...entry,
+        status: "pending",
+        submittedAt: now(),
+        summary: clampActivitySummary(entry.summary),
+      };
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
     },
     async markHistorySynced(scope, syncedAt, unavailable) {
       historySyncs.set(scopeKey(scope), { syncedAt, unavailable });
     },
     async replaceScope(next, scope) {
-      const scoped = next
-        .filter((entry) => isActivityEntry(entry) && matchesScope(entry, scope))
-        .sort((left, right) => right.submittedAt - left.submittedAt)
-        .slice(0, MAX_ENTRIES_PER_SCOPE);
+      const scoped = scopeSnapshot(next, scope);
       entries.splice(
         0,
         entries.length,
-        ...entries.filter((entry) => !matchesScope(entry, scope)),
-        ...scoped,
+        ...withinScopeLimit(
+          [...entries.filter((entry) => !matchesScope(entry, scope)), ...scoped],
+          scope,
+        ),
       );
       return scoped;
     },

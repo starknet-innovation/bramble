@@ -234,10 +234,18 @@ describe("watch-asset approval lifecycle", () => {
     expect(
       preferences.tokens.some((token) => token.address === USDC && token.symbol === "USDC"),
     ).toBe(true);
-    // The token is already tracked, so a repeat request resolves immediately.
+    // The token is already tracked, so a repeat request is held on a
+    // close-only notice and resolves only when the user closes it (audit M1).
+    const repeat = handler(
+      { asset: { address: USDC }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
+    const noticeId = await pendingId(handler);
     await expect(
-      handler({ asset: { address: USDC }, origin, type: "wallet.watchAsset" }, contentSender),
-    ).resolves.toEqual({ ok: true, watched: true });
+      handler({ id: noticeId, type: "wallet.denyOrigin" }, extensionSender),
+    ).resolves.toEqual({ ok: true, pending: [] });
+    await expect(repeat).resolves.toEqual({ ok: true, watched: true });
   });
 
   test("denying leaves the token untracked", async () => {
@@ -272,21 +280,17 @@ describe("watch-asset approval lifecycle", () => {
     await expect(held2).resolves.toEqual({ error: "request rejected" });
   });
 
-  test("falls back to dapp options when on-chain metadata is unavailable", async () => {
+  test("refuses the card when on-chain metadata is unavailable (Sherlock 125)", async () => {
     const { handler } = makeHandler(throwingRpc().getTokenMetadata);
 
-    const held = handler(
-      { asset: { address: DAI, decimals: 18, symbol: "DAI" }, origin, type: "wallet.watchAsset" },
-      contentSender,
-    );
-    await flushHeld();
+    await expect(
+      handler(
+        { asset: { address: DAI, decimals: 2, symbol: "DAI" }, origin, type: "wallet.watchAsset" },
+        contentSender,
+      ),
+    ).resolves.toEqual({ error: "invalid watch asset metadata" });
     const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-    expect((listed as { pending: readonly unknown[] }).pending.at(-1)).toMatchObject({
-      token: { address: DAI, decimals: 18, name: "DAI", symbol: "DAI" },
-    });
-    const id = await pendingId(handler);
-    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
-    await expect(held).resolves.toEqual({ error: "request rejected" });
+    expect((listed as { pending: readonly unknown[] }).pending).toEqual([]);
   });
 
   test("rejects unusable metadata and origin mismatches", async () => {
@@ -343,6 +347,14 @@ describe("watch-asset spoof handling (audit 171)", () => {
     const preferences = await approveWatch(SPOOF, "USDC");
     const stored = preferences.tokens.find((token) => sameFelt(token.address, SPOOF));
     if (!stored) throw new Error("token not stored");
+    expect(preferences.hiddenTokens ?? []).toContain(stored.id);
+  });
+
+  test("hides a bridged-suffix token that spoofs a curated ticker (issue 645)", async () => {
+    const preferences = await approveWatch(SPOOF, "eth.e");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, SPOOF));
+    if (!stored) throw new Error("token not stored");
+    expect(stored.symbol).toBe("ETH.e");
     expect(preferences.hiddenTokens ?? []).toContain(stored.id);
   });
 
@@ -422,13 +434,15 @@ describe("watch-asset tokens are not trusted by the call reviewer (audit 171)", 
   });
 
   test("a curated token watched by a dapp stays trusted", async () => {
-    const REAL_USDC = "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+    // Bridged USDC.e: native USDC is already tracked on a new wallet (issue
+    // 663), so watching it would raise no card.
+    const REAL_USDC_E = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
     const { codes, summary } = await watchAndReview({
-      address: REAL_USDC,
-      metadata: { decimals: 6, name: "USD Coin", symbol: "USDC" },
+      address: REAL_USDC_E,
+      metadata: { decimals: 6, name: "Bridged USDC", symbol: "USDC.e" },
       networkId: "SN_MAIN",
     });
     expect(codes).not.toContain("unknown-contract");
-    expect(summary).toContain("1000 USDC");
+    expect(summary).toContain("1000 USDC.e");
   });
 });

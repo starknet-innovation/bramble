@@ -48,7 +48,8 @@ const vault = {
   importedSeeds: [],
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 11,
+  schemaVersion: 12,
+  shadowAccountScopes: [],
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 
@@ -288,6 +289,39 @@ describe("signTypedData approval gate", () => {
       ok: true,
       signature: ["0x1", "0x2"],
     });
+  });
+
+  test("a long domain name is cut in the summary, so the panel still shows the approval (Sherlock 187)", async () => {
+    const handler = makeHandler();
+    const name = `Example ${"x".repeat(2_000)}`;
+    void handler(
+      {
+        ...signMessage,
+        typedData: {
+          ...MESSAGE,
+          domain: { ...MESSAGE.domain, name },
+          types: {
+            ...MESSAGE.types,
+            StarknetDomain: [
+              { name: "name", type: "string" },
+              { name: "version", type: "felt" },
+              { name: "chainId", type: "felt" },
+              { name: "revision", type: "felt" },
+            ],
+          },
+        },
+      },
+      content,
+    );
+    await flushHeld();
+    const pending = await waitForPendingApprovals<{
+      id: string;
+      kind: string;
+      summaries: string[];
+    }>(handler, page);
+    expect(pending.map((approval) => approval.kind)).toEqual(["sign-typed-data"]);
+    // The panel drops an approval whose summary is over 300 characters.
+    expect(pending[0]?.summaries[0]).toBe(`Mail · ${name.slice(0, 64)}…`);
   });
 
   test("deny rejects the held request with an error", async () => {

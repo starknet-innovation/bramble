@@ -35,7 +35,12 @@ import {
 
 import type { StarkscanClient } from "./starkscan";
 import type { StarkscanTransfer } from "./starkscan-types";
-import { MAX_HISTORY_ENTRIES, onChainActivityEntry, type TransferDirection } from "./tx-history";
+import {
+  type HistoryLane,
+  MAX_HISTORY_ENTRIES,
+  onChainActivityEntry,
+  type TransferDirection,
+} from "./tx-history";
 import { scanTransactionHistory, type TransactionHistoryScan } from "./tx-history-scan";
 
 // The token a transfer moved, and whether the user tracks it. An untracked
@@ -163,9 +168,12 @@ export const getStarkscanTransactionHistory = async (
 };
 
 /**
- * Serves an exact, complete indexed holdings snapshot as the wallet balance
- * response. Any incomplete or mismatched snapshot throws so callers can fall
- * back to latest-state RPC rather than silently treating missing rows as zero.
+ * Serves the gateway's latest balance of each tracked token as the wallet
+ * balance response, one `balance-of` read per token (#650: Starkscan retired
+ * the indexed token-holdings snapshot this lane used to read). Every answer
+ * must echo the requested network, token, owner and `latest` block tag, and
+ * any token that cannot be read fails the whole read: a missing row never
+ * becomes a zero balance, so callers keep the RPC failure instead.
  */
 export const getStarkscanTokenBalances = async (
   client: StarkscanClient,
@@ -182,28 +190,25 @@ export const getStarkscanTokenBalances = async (
   ) {
     throw new Error("Starkscan balance input must contain one indexed network");
   }
-  const snapshot = await client.getTokenHoldings(networkId, input.accountAddress, { limit: 200 });
-  if (
-    snapshot.chainId !== networkId ||
-    !sameFelt(snapshot.ownerAddress, input.accountAddress) ||
-    !snapshot.exact ||
-    snapshot.truncated ||
-    !snapshot.completeness.exact ||
-    snapshot.completeness.truncated ||
-    !snapshot.completeness.complete ||
-    snapshot.completeness.reasonCode !== "complete"
-  ) {
-    throw new Error("Starkscan holdings snapshot is incomplete");
-  }
-  return input.tokens.map((token) => {
-    const holding = snapshot.items.find((item) => sameFelt(item.tokenAddress, token.address));
-    const raw = BigInt(holding?.indexedBalanceRaw ?? "0");
-    return {
-      ...token,
-      balance: raw.toString(),
-      formatted: formatTokenAmount(raw, token.decimals),
-    };
-  });
+  return Promise.all(
+    input.tokens.map(async (token) => {
+      const reply = await client.getTokenBalance(networkId, token.address, input.accountAddress);
+      if (
+        reply.chainId !== networkId ||
+        reply.blockTag !== "latest" ||
+        !sameFelt(reply.tokenAddress, token.address) ||
+        !sameFelt(reply.ownerAddress, input.accountAddress)
+      ) {
+        throw new Error("Starkscan balance does not match the request");
+      }
+      const raw = BigInt(reply.balanceRaw);
+      return {
+        ...token,
+        balance: raw.toString(),
+        formatted: formatTokenAmount(raw, token.decimals),
+      };
+    }),
+  );
 };
 
 /**
@@ -291,6 +296,16 @@ export const createRpcFirstBalances =
   };
 
 /**
+ * Discovered history rows and the lane that produced them. The lane is
+ * provenance only: no discovered row settles the status of a transaction the
+ * wallet is still observing (see `mergeActivity`).
+ */
+export type DiscoveredHistory = {
+  readonly entries: readonly ActivityEntry[];
+  readonly lane: HistoryLane;
+};
+
+/**
  * Serves activity from the explorer gateway first and falls back to the RPC
  * transfer scan when the gateway cannot be used or does not answer.
  *
@@ -313,24 +328,31 @@ export const createRpcFirstBalances =
  * rate limit or its cooldown, malformed body — is silently replaced by the RPC
  * scan, whose own failure propagates so the caller degrades to the local log
  * with an honest "history unavailable" indicator. The feed is therefore marked
- * unavailable only when no permitted lane answered.
+ * unavailable only when no permitted lane answered. The result names the lane
+ * that answered.
  */
 export const createExplorerFirstHistory =
-  (options: ExplorerLaneReadOptions): typeof scanTransactionHistory =>
+  (
+    options: ExplorerLaneReadOptions,
+  ): ((
+    input: TransactionHistoryScan,
+    makeProvider?: Parameters<typeof scanTransactionHistory>[1],
+  ) => Promise<DiscoveredHistory>) =>
   async (input, makeProvider) => {
     if (input.networkId !== "SN_DEVNET") {
       const preferences = await gatewayPreferencesFor(options.readPreferences, input.networkId);
       if (preferences !== null) {
         try {
-          return await getStarkscanTransactionHistory(
+          const entries = await getStarkscanTransactionHistory(
             gatewayClientFor(options, input.networkId, preferences),
             input,
           );
+          return { entries, lane: "explorer" };
         } catch {
           // The gateway's failure is not the user's endpoint's failure: fall
           // through to the RPC scan and let its outcome speak.
         }
       }
     }
-    return scanTransactionHistory(input, makeProvider);
+    return { entries: await scanTransactionHistory(input, makeProvider), lane: "chain-events" };
   };

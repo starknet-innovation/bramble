@@ -5,7 +5,7 @@ import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import {
   BACKUP_VERIFY_COPY,
   backupVerifyPositions,
@@ -69,7 +69,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const verifyContinue = form.querySelector<HTMLButtonElement>("#verify-continue");
   const passwordContinue = form.querySelector<HTMLButtonElement>("#password-continue-button");
   const submitButton = form.querySelector<HTMLButtonElement>("#create-wallet-button");
-  const accountButton = form.querySelector<HTMLButtonElement>("#account-preview");
   const accountContractInput = form.querySelector<HTMLInputElement>(
     'input[name="accountContractType"]',
   );
@@ -80,7 +79,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let mnemonic = "";
   let importWordCount: 12 | 24 = 12;
   let requiresVerification = false;
-  let accountSelected = false;
   let previewMatchesInput = false;
   let previewGeneration = 0;
   let mnemonicGeneration = 0;
@@ -239,7 +237,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   });
   const refreshAccountGate = (): void => {
     if (submitButton) {
-      submitButton.disabled = !(walletReady && accountSelected && previewMatchesInput);
+      submitButton.disabled = !(walletReady && previewMatchesInput);
     }
   };
 
@@ -333,7 +331,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           return;
         }
         const message = errorMessage(error, "Recovery phrase failed");
-        showToast(message, "error", form);
+        showToast(message, "error", form, errorDetails(error, "Recovery phrase failed"));
         buttonBusy(createNew, false);
       },
     );
@@ -372,11 +370,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     showStep("recovery-accounts");
     recoveryAccounts.start();
   });
-  accountButton?.addEventListener("click", () => {
-    accountSelected = !(accountButton.getAttribute("aria-pressed") === "true");
-    accountButton.setAttribute("aria-pressed", String(accountSelected));
-    refreshAccountGate();
-  });
   const runReviewAccount = (): void => {
     if (!passwordOk()) {
       refreshPassword();
@@ -406,8 +399,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           invalidatePreview();
           return;
         }
-        accountSelected = false;
-        accountButton?.setAttribute("aria-pressed", "false");
         if (previewAddress) {
           previewAddress.textContent = `${account.address.slice(0, 10)}…${account.address.slice(-8)}`;
           previewAddress.title = account.address;
@@ -430,9 +421,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         }
         const message = errorMessage(error, "Could not derive this account");
         if (passphraseResult) {
-          passphraseResult.textContent = message;
+          passphraseResult.textContent = errorLine(error, "Could not derive this account");
         }
-        showToast(message, "error", form);
+        showToast(message, "error", form, errorDetails(error, "Could not derive this account"));
         buttonBusy(passwordContinue, false);
       },
     );
@@ -440,9 +431,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (!accountSelected || !previewMatchesInput) {
+    if (!previewMatchesInput) {
       if (result) {
-        result.textContent = "Select the account before continuing.";
+        result.textContent = "Wait for the account to finish deriving.";
       }
       return;
     }
@@ -462,9 +453,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         },
         (error: unknown) => {
           const message = errorMessage(error, "Account import failed");
-          showToast(message, "error", form);
+          showToast(message, "error", form, errorDetails(error, "Account import failed"));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, "Account import failed");
           }
           buttonBusy(submitButton, false);
         },

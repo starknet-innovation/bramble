@@ -25,13 +25,14 @@ import {
   isStarknetNetworkId,
   STARKNET_NETWORKS,
 } from "@bramble/wallet-model/networks";
-import type {
-  ApprovalContext,
-  ApprovalRiskFlag,
-  ConnectedSite,
-  DeclarationReview,
-  PendingApproval,
-  WatchAssetToken,
+import {
+  APPROVAL_SUMMARY_MAX_LENGTH,
+  type ApprovalContext,
+  type ApprovalRiskFlag,
+  type ConnectedSite,
+  type DeclarationReview,
+  type PendingApproval,
+  type WatchAssetToken,
 } from "@bramble/wallet-protocol/extension-responses";
 import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
@@ -84,7 +85,7 @@ const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
 
 const isSummaryText = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= 300;
+  typeof value === "string" && value.length > 0 && value.length <= APPROVAL_SUMMARY_MAX_LENGTH;
 
 const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
   isRecord(value) &&
@@ -174,6 +175,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, [
       "actionReviews",
+      "alreadyTracked",
       "blocked",
       "callReviews",
       "context",
@@ -188,6 +190,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "id",
       "insights",
       "kind",
+      "notice",
       "origin",
       "relayFeeAction",
       "reviewAssets",
@@ -211,7 +214,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value["kind"] !== "strk20-invoke" &&
       value["kind"] !== "strk20-prepare" &&
       value["kind"] !== "strk20-register" &&
-      value["kind"] !== "strk20-subaccount" &&
+      value["kind"] !== "strk20-shadow-account" &&
+      value["kind"] !== "strk20-unavailable" &&
       value["kind"] !== "switch-chain" &&
       value["kind"] !== "watch-asset") ||
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
@@ -242,8 +246,9 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   }
   const tokenValid =
     value["kind"] === "watch-asset"
-      ? isWatchAssetToken(value["token"])
-      : value["token"] === undefined;
+      ? isWatchAssetToken(value["token"]) &&
+        (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
+      : value["token"] === undefined && value["alreadyTracked"] === undefined;
   // The fee review travels only on invoke prompts and must be internally
   // consistent, mirroring `resolveReviewFee`: an undeployed account has no
   // estimate and no failure; a failed estimate carries no amount. Inconsistent
@@ -265,7 +270,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "strk20-invoke" ||
     value["kind"] === "strk20-prepare" ||
     value["kind"] === "strk20-register" ||
-    value["kind"] === "strk20-subaccount";
+    value["kind"] === "strk20-shadow-account";
   const declarationValid =
     value["kind"] === "declare"
       ? isDeclarationReview(value["declaration"])
@@ -279,8 +284,13 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const relayFeeValid =
     relayFeeAction === undefined ||
     (value["kind"] === "strk20-invoke" && relayFeeAction?.type === "withdraw");
+  const noticeValid =
+    value["notice"] === undefined ||
+    (value["kind"] === "strk20-unavailable" &&
+      (value["notice"] === "record-limit" || value["notice"] === "request-failed"));
   return (
     actionReviewValid &&
+    noticeValid &&
     relayFeeValid &&
     tokenValid &&
     feeValid &&

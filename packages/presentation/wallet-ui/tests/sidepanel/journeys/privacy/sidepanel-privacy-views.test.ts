@@ -74,6 +74,32 @@ describe("privacy journey templates", () => {
     expect(html).toContain("viewing-key commitment");
   });
 
+  test("activation review says what going private does and what it costs (#438)", () => {
+    const review = (preparation: PrivacyPreparation) =>
+      privacyFlow(status, preferences, {
+        preparation,
+        stage: "activate-review",
+        tokenId: token.id,
+      });
+    const outcome = (html: string) =>
+      /aria-label="What will happen">\s*<p class="decision-label">What will happen<\/p>\s*<p>([^<]*)<\/p>/.exec(
+        html,
+      )?.[1];
+
+    // The registration the background builds: public account, pool fee in STRK.
+    const html = review({ ...registration, poolFeeFri: "0x2386f26fc10000" });
+    expect(outcome(html)).toBe(
+      "Going private sets up a private balance for this account. Registering costs a one-time pool fee, paid from your public STRK.",
+    );
+    // The amount stays in one place: the Cost section.
+    expect(html).toContain("Pool fee");
+    expect(outcome(html)).not.toMatch(/[0-9]/);
+    // No pool fee on the route, no claim that one is paid from public STRK.
+    expect(outcome(review(relayedRegistration))).toBe(
+      "Going private sets up a private balance for this account.",
+    );
+  });
+
   test("activation review states the network fee in the estimate's own unit", () => {
     const review = (unit: string) =>
       privacyFlow(status, preferences, {
@@ -144,6 +170,7 @@ describe("privacy journey templates", () => {
 
     const failed = privacyFlow(status, preferences, {
       error: "<prover unavailable>",
+      errorDetails: 'strk20 services unavailable (proving/proof-rejected): "<prover>" & co',
       severity: "danger",
       stage: "failure",
       tokenId: token.id,
@@ -154,11 +181,18 @@ describe("privacy journey templates", () => {
     expect(failed).toContain('class="send-failure-mark"');
     expect(failed).toContain('id="privacy-retry"');
     expect(failed).toContain('data-severity="danger"');
+    // The full diagnostic rides on the copy control, escaped as an attribute,
+    // while the sentence stays the friendly one.
+    expect(failed).toContain('aria-label="Copy error details"');
+    expect(failed).toContain(
+      'data-copy="strk20 services unavailable (proving/proof-rejected): &quot;&lt;prover&gt;&quot; &amp; co"',
+    );
 
     // A submission whose reply was lost is a warning, not a failure: no red
     // cross and no blind Try again, only Activity (issue 382).
     const unknown = privacyFlow(status, preferences, {
       error: "<worker lost>",
+      errorDetails: "",
       severity: "warning",
       stage: "failure",
       tokenId: token.id,
@@ -168,6 +202,9 @@ describe("privacy journey templates", () => {
     expect(unknown).not.toContain('id="privacy-retry"');
     expect(unknown).toContain('data-view="activity"');
     expect(unknown).toContain('class="privacy-unknown-mark"');
+    // A warning keeps the copy control too; with no separate diagnostic it
+    // copies the sentence rather than rendering a control that copies nothing.
+    expect(unknown).toContain('data-copy="&lt;worker lost&gt;"');
 
     expect(privacyFlow(status, preferences, { stage: "idle" })).toContain(
       "Choose an asset to begin",

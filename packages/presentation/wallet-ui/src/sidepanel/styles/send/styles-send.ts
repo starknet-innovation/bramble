@@ -308,7 +308,7 @@ export const SEND_STYLES = `
     justify-content: center;
   }
   .ledger-signer-line code { color: var(--bramble-text); }
-  .ledger-signer-line span:last-child::before { content: "·"; margin-right: 5px; }
+  .ledger-signer-line span:last-child::before { content: "·"; margin-right: ${SPACE.xs}; }
   .ledger-task-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     padding: ${SPACE.md};
