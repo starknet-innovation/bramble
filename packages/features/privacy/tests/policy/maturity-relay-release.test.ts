@@ -1,10 +1,12 @@
 /**
  * A relay claim is resolved from chain evidence (#668): once any WriteOnce
- * slot its call writes reads non-zero PROVING_BLOCK_DEPTH below the tip, the
- * call can never apply and the claim is released; the next proof then targets
- * a block past that one. Anything less keeps it closed. A relay send that
- * cannot name its slots never leaves, and "Unlock anyway" clears a marker only
- * when no send on the scope is running.
+ * slot its call writes reads non-zero in a block the node reports
+ * ACCEPTED_ON_L1, read at that block's hash, the call can never apply. The
+ * claim is replaced by a durable floor at that block, so every later proof
+ * targets a block past it. Depth alone never releases it, since Starknet has
+ * reorganized deeper than PROVING_BLOCK_DEPTH. A relay send that cannot name
+ * its slots never leaves, and "Unlock anyway" clears only the marker the user
+ * acted on, never one a send still running leaves behind.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -15,6 +17,7 @@ import {
   STRK20_PRIOR_WRITE_UNRESOLVED,
 } from "@bramble/privacy/maturity";
 import { createStrk20MaturityRuntime } from "@bramble/privacy/official-sdk-maturity";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import type { RpcProvider } from "starknet";
 import { PROVING_BLOCK_DEPTH } from "../../src/sdk/official-sdk-maturity-resolution";
 
@@ -28,9 +31,18 @@ const claim = { route: "relay" as const, state: "submitting" as const, writeOnce
 
 type StorageRead = { readonly block: unknown; readonly contract: string; readonly slot: string };
 
-// A node whose tip starts at `tip` and advances by `step` each read, whose
-// storage answers come from `values` per slot.
-const chain = (tip: number, values: Readonly<Record<string, unknown>>, step = 0) => {
+const hashOf = (block: number): string => `0x${(0xb000 + block).toString(16)}`;
+
+// A node whose tip starts at `tip` and advances by `step` per read, whose
+// blocks up to `l1` are ACCEPTED_ON_L1, and whose storage (read by block hash)
+// answers from `values` per slot.
+const chain = (options: {
+  readonly l1: number;
+  readonly step?: number;
+  readonly tip: number;
+  readonly values?: Readonly<Record<string, unknown>>;
+}) => {
+  const { l1, step = 0, tip, values = {} } = options;
   const reads: StorageRead[] = [];
   let head = tip - step;
   const provider = {
@@ -38,6 +50,11 @@ const chain = (tip: number, values: Readonly<Record<string, unknown>>, step = 0)
       head += step;
       return head;
     },
+    getBlockWithTxHashes: async (number: number) => ({
+      block_hash: hashOf(number),
+      block_number: number,
+      status: number <= l1 ? "ACCEPTED_ON_L1" : "ACCEPTED_ON_L2",
+    }),
     getStorageAt: async (contract: string, slot: string, block: unknown) => {
       reads.push({ block, contract, slot });
       const value = values[slot];
@@ -54,77 +71,101 @@ const seeded = async () => {
   return store;
 };
 
-describe("resolving a relay claim from its WriteOnce slots", () => {
-  test("releases once a slot is set, and proves only past the block it was seen in", async () => {
-    const store = await seeded();
-    const { provider, reads } = chain(100, { "0x52": "0x1" }, 1);
-    const settled = 100 - PROVING_BLOCK_DEPTH;
+const quick = (store: ReturnType<typeof memoryStrk20MaturityStore>) =>
+  createStrk20MaturityRuntime({ maturityBudgetMs: 50, pause: async () => undefined, store });
 
-    const block = await createStrk20MaturityRuntime({
-      pause: async () => undefined,
-      store,
-    }).provingBlock(provider, scope);
+describe("resolving a relay claim from its WriteOnce slots", () => {
+  test("releases on an L1-finalized slot, read at that block's hash, and keeps the floor", async () => {
+    const store = await seeded();
+    const { provider, reads } = chain({ l1: 60, step: 1, tip: 100, values: { "0x52": "0x1" } });
+
+    const block = await quick(store).provingBlock(provider, scope);
 
     expect(reads.length).toBeGreaterThan(0);
     for (const read of reads) {
-      expect(read).toMatchObject({ block: settled, contract: scope.poolAddress });
+      expect(read).toMatchObject({ block: hashOf(60), contract: scope.poolAddress });
     }
-    expect(await store.read(scope)).toBeNull();
-    // The floor is the block the slot was seen set in, so the proof targets a
-    // strictly later one, which includes whatever the relayed call wrote.
-    expect(block).toBeGreaterThan(settled);
+    expect(await store.read(scope)).toEqual({ acceptedBlock: 60, state: "released" });
+    expect(block).toBeGreaterThan(60);
   });
 
-  test("does not prove at the very block the slot was seen set in", async () => {
+  test("the floor survives a failed wait and binds a later proof on a lagging node", async () => {
     const store = await seeded();
-    const { provider } = chain(100, { "0x51": "0x1" });
+    // The tip sits at 70, so the candidate (60) is not past the floor.
     await expect(
-      createStrk20MaturityRuntime({
-        maturityBudgetMs: 50,
-        pause: async () => undefined,
-        store,
-      }).provingBlock(provider, scope),
+      quick(store).provingBlock(
+        chain({ l1: 60, tip: 70, values: { "0x51": "0x1" } }).provider,
+        scope,
+      ),
     ).rejects.toThrow();
-    expect(await store.read(scope)).toBeNull();
+    expect(await store.read(scope)).toEqual({ acceptedBlock: 60, state: "released" });
+    // A fresh worker on a node lagging further still cannot prove at or below it.
+    await expect(
+      quick(store).provingBlock(chain({ l1: 50, tip: 65 }).provider, scope),
+    ).rejects.toThrow();
+    const later = await quick(store).provingBlock(chain({ l1: 60, tip: 90 }).provider, scope);
+    expect(later).toBeGreaterThan(60);
   });
 
-  test("stays closed while every slot still reads zero", async () => {
+  test("a slot set only in blocks not yet final on L1 keeps the claim closed", async () => {
     const store = await seeded();
-    const { provider } = chain(100, {});
+    const { provider, reads } = chain({ l1: -1, tip: 100, values: { "0x51": "0x1" } });
+    await expect(quick(store).provingBlock(provider, scope)).rejects.toThrow(
+      STRK20_PRIOR_WRITE_UNRESOLVED,
+    );
+    expect(reads).toEqual([]);
+    expect(await store.read(scope)).toEqual(claim);
+  });
+
+  test("stays closed while every slot reads zero at the finalized block", async () => {
+    const store = await seeded();
     await expect(
-      createStrk20MaturityRuntime({ store }).provingBlock(provider, scope),
+      quick(store).provingBlock(chain({ l1: 60, tip: 100 }).provider, scope),
     ).rejects.toThrow(STRK20_PRIOR_WRITE_UNRESOLVED);
     expect(await store.read(scope)).toEqual(claim);
   });
 
-  test("stays closed on a failed or malformed storage read", async () => {
+  test("stays closed on a failed or malformed storage or block read", async () => {
     for (const answer of [new Error("node down"), 7, "not-a-felt", null]) {
       const store = await seeded();
-      const { provider } = chain(100, { "0x51": answer });
-      await expect(
-        createStrk20MaturityRuntime({ store }).provingBlock(provider, scope),
-      ).rejects.toThrow(STRK20_PRIOR_WRITE_UNRESOLVED);
+      const { provider } = chain({ l1: 60, tip: 100, values: { "0x51": answer } });
+      await expect(quick(store).provingBlock(provider, scope)).rejects.toThrow(
+        STRK20_PRIOR_WRITE_UNRESOLVED,
+      );
       expect(await store.read(scope), String(answer)).toEqual(claim);
     }
+    const store = await seeded();
+    const malformedBlock = {
+      getBlockNumber: async () => 100,
+      getBlockWithTxHashes: async (number: number) => ({
+        block_hash: "nope",
+        block_number: number,
+        status: "ACCEPTED_ON_L1",
+      }),
+      getStorageAt: async () => "0x1",
+    } as unknown as RpcProvider;
+    await expect(quick(store).provingBlock(malformedBlock, scope)).rejects.toThrow(
+      STRK20_PRIOR_WRITE_UNRESOLVED,
+    );
+    expect(await store.read(scope)).toEqual(claim);
   });
 
   test("stays closed while the chain is shallower than the safety depth", async () => {
     const store = await seeded();
-    const { provider, reads } = chain(PROVING_BLOCK_DEPTH - 1, { "0x51": "0x1" });
-    await expect(
-      createStrk20MaturityRuntime({ store }).provingBlock(provider, scope),
-    ).rejects.toThrow(STRK20_PRIOR_WRITE_UNRESOLVED);
-    expect(reads).toEqual([]);
-    expect(await store.read(scope)).toEqual(claim);
+    const shallow = chain({ l1: 0, tip: PROVING_BLOCK_DEPTH - 1, values: { "0x51": "0x1" } });
+    await expect(quick(store).provingBlock(shallow.provider, scope)).rejects.toThrow(
+      STRK20_PRIOR_WRITE_UNRESOLVED,
+    );
+    expect(shallow.reads).toEqual([]);
   });
 
   test("a relay claim from an earlier build, with no slots, stays stranded", async () => {
     const store = memoryStrk20MaturityStore();
     await store.write(scope, { route: "relay", state: "submitting" });
-    const { provider, reads } = chain(100, { "0x51": "0x1" });
-    await expect(
-      createStrk20MaturityRuntime({ store }).provingBlock(provider, scope),
-    ).rejects.toThrow(STRK20_PRIOR_WRITE_STRANDED);
+    const { provider, reads } = chain({ l1: 60, tip: 100, values: { "0x51": "0x1" } });
+    await expect(quick(store).provingBlock(provider, scope)).rejects.toThrow(
+      STRK20_PRIOR_WRITE_STRANDED,
+    );
     expect(reads).toEqual([]);
   });
 });
@@ -134,7 +175,7 @@ describe("recording a relay claim", () => {
     const store = memoryStrk20MaturityStore();
     let seen: unknown = null;
     await createStrk20MaturityRuntime({ store, waitForAccepted: async () => 5 }).submitAccepted(
-      chain(100, {}).provider,
+      chain({ l1: 0, tip: 100 }).provider,
       scope,
       "relay",
       async () => "prepared",
@@ -153,7 +194,7 @@ describe("recording a relay claim", () => {
       let broadcasts = 0;
       await expect(
         createStrk20MaturityRuntime({ store }).submitAccepted(
-          chain(100, {}).provider,
+          chain({ l1: 0, tip: 100 }).provider,
           scope,
           "relay",
           async () => "prepared",
@@ -171,7 +212,7 @@ describe("recording a relay claim", () => {
 });
 
 describe("unlock anyway", () => {
-  test("clears a paused marker and reports whether one was cleared", async () => {
+  test("clears the paused marker and reports whether one was cleared", async () => {
     const store = await seeded();
     const runtime = createStrk20MaturityRuntime({ store });
     expect(await runtime.releasePendingWrite(scope)).toBe(true);
@@ -179,32 +220,49 @@ describe("unlock anyway", () => {
     expect(await runtime.releasePendingWrite(scope)).toBe(false);
   });
 
-  test("waits for a running send and then clears only what is still paused", async () => {
+  test("never clears a floor", async () => {
     const store = memoryStrk20MaturityStore();
-    const runtime = createStrk20MaturityRuntime({ store, waitForAccepted: async () => 5 });
-    let finish: () => void = () => undefined;
+    await store.write(scope, { acceptedBlock: 9, state: "released" });
+    expect(await createStrk20MaturityRuntime({ store }).releasePendingWrite(scope)).toBe(false);
+    expect(await store.read(scope)).toEqual({ acceptedBlock: 9, state: "released" });
+  });
+
+  test("refuses while a send is running, so a marker its lost answer leaves stays", async () => {
+    const store = memoryStrk20MaturityStore();
+    const runtime = createStrk20MaturityRuntime({ store });
+    let fail: () => void = () => undefined;
     const send = runtime.submitAccepted(
-      chain(100, {}).provider,
+      chain({ l1: 0, tip: 100 }).provider,
       scope,
       "relay",
       async () => "prepared",
       () =>
-        new Promise<{ readonly transactionHash: string }>((resolve) => {
-          finish = () => resolve({ transactionHash: "0x77" });
+        new Promise<{ readonly transactionHash: string }>((_, reject) => {
+          fail = () => reject(new IndeterminateRpcWriteError("relay reply lost"));
         }),
       () => SLOTS,
     );
-    const unlock = runtime.releasePendingWrite(scope);
     await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(runtime.releasePendingWrite(scope)).rejects.toThrow(STRK20_PRIOR_WRITE_UNRESOLVED);
+    fail();
+    await expect(send).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
     expect(await store.read(scope)).toEqual(claim);
-    finish();
-    await send;
-    // The send settled with a hash, so nothing is paused any more.
-    expect(await unlock).toBe(false);
-    expect(await store.read(scope)).toEqual({
-      acceptedBlock: 5,
-      state: "submitted",
-      transactionHash: "0x77",
+  });
+
+  test("leaves a marker that changed after the user saw it", async () => {
+    const store = await seeded();
+    const original = store.releaseSubmitting;
+    const runtime = createStrk20MaturityRuntime({
+      store: {
+        ...store,
+        releaseSubmitting: async (target, expected) => {
+          // A newer claim lands between the user's look and the clear.
+          await store.write(target, { ...claim, writeOnceSlots: ["0x99"] });
+          return original(target, expected);
+        },
+      },
     });
+    expect(await runtime.releasePendingWrite(scope)).toBe(false);
+    expect(await store.read(scope)).toEqual({ ...claim, writeOnceSlots: ["0x99"] });
   });
 });

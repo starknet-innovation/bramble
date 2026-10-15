@@ -187,8 +187,8 @@ device.
    returned hash before receipt polling. An indeterminate broadcast or receipt keeps the scope
    blocked, while only chain evidence clears it: a receipt-proven rejection, a spent nonce for a
    signed write, or, for a relayed write, one of the pool storage slots its `apply_actions` call
-   writes once already reading non-zero ten blocks deep, which makes that call revert whoever
-   submits it. A relayed write records those slots before it is sent and is refused if it has
+   writes once already reading non-zero in a block the node reports accepted on L1, which makes
+   that call revert whoever submits it; that block is then kept as the floor for later proofs. A relayed write records those slots before it is sent and is refused if it has
    none. Settings → Unlock private transactions clears a reservation no check can settle, after
    stating that the earlier write could still land. Production privacy operations fail closed if
    that store is unavailable.

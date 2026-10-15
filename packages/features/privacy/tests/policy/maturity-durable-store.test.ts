@@ -1,13 +1,12 @@
 /**
  * The durable maturity store (#668): relay claims keep their WriteOnce slots,
- * session markers from earlier builds are carried into local storage before
- * any read, `submitting` markers are never evicted, and each release clears
- * only the marker it was asked about.
+ * released floors persist, records that still guard a scope are never
+ * evicted, and each release acts only on the marker it was asked about.
  */
 
 import { describe, expect, test } from "bun:test";
 import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
-import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const KEY = "bramble:strk20-maturity";
 const scope = {
@@ -59,7 +58,7 @@ describe("eviction", () => {
     for (let index = 0; index < 120; index += 1) {
       await store.write(
         { ...scope, accountId: `SN_SEPOLIA:0x${(index + 1000).toString(16)}` },
-        { state: "submitted", transactionHash: `0x${(index + 1).toString(16)}` },
+        { acceptedBlock: 1, state: "submitted", transactionHash: `0x${(index + 1).toString(16)}` },
       );
     }
     expect(await store.read(scope)).toEqual(claim);
@@ -68,59 +67,48 @@ describe("eviction", () => {
   });
 });
 
-describe("carrying session markers from earlier builds", () => {
-  test("moves a session marker into local storage before the first read", async () => {
-    const local = createMemoryStore();
-    const session = createMemoryStore();
-    await session.set(KEY, [{ ...scope, route: "relay", state: "submitting" }]);
-    const store = createStrk20MaturityStore(local, session);
-
-    expect(await store.read(scope)).toEqual({ route: "relay", state: "submitting" });
-    expect(await session.get(KEY)).toBeUndefined();
-    // A later build starting over the same local storage still sees it.
-    expect(await createStrk20MaturityStore(local).read(scope)).toEqual({
-      route: "relay",
-      state: "submitting",
-    });
+describe("released floors", () => {
+  test("round-trips a released floor and drops a malformed one", async () => {
+    const store = createStrk20MaturityStore(createMemoryStore());
+    await store.write(scope, { acceptedBlock: 42, state: "released" });
+    expect(await store.read(scope)).toEqual({ acceptedBlock: 42, state: "released" });
+    for (const row of [
+      { state: "released" },
+      { acceptedBlock: -1, state: "released" },
+      { acceptedBlock: 4, state: "released", transactionHash: "0x9" },
+      { acceptedBlock: 4, route: "relay", state: "released" },
+    ]) {
+      const backing = createMemoryStore();
+      await backing.set(KEY, [{ ...scope, ...row }]);
+      expect(await createStrk20MaturityStore(backing).read(scope), JSON.stringify(row)).toBeNull();
+    }
   });
 
-  test("keeps the durable marker when both stores name the same scope", async () => {
-    const local = createMemoryStore();
-    const session = createMemoryStore();
-    await local.set(KEY, [{ ...scope, ...claim }]);
-    await session.set(KEY, [
-      { ...scope, route: "relay", state: "submitting" },
-      { ...other, state: "submitted", transactionHash: "0x9" },
-    ]);
-    const store = createStrk20MaturityStore(local, session);
-
-    expect(await store.read(scope)).toEqual(claim);
+  test("eviction keeps floors and receipts still pending", async () => {
+    const backing = createMemoryStore();
+    const store = createStrk20MaturityStore(backing);
+    await store.write(scope, { acceptedBlock: 7, state: "released" });
+    await store.write(other, { state: "submitted", transactionHash: "0x9" });
+    for (let index = 0; index < 120; index += 1) {
+      await store.write(
+        { ...scope, accountId: `SN_SEPOLIA:0x${(index + 1000).toString(16)}` },
+        { acceptedBlock: 1, state: "submitted", transactionHash: `0x${(index + 1).toString(16)}` },
+      );
+    }
+    expect(await store.read(scope)).toEqual({ acceptedBlock: 7, state: "released" });
     expect(await store.read(other)).toEqual({ state: "submitted", transactionHash: "0x9" });
-  });
-
-  test("fails every call closed when the carry cannot run", async () => {
-    const broken: KeyValueStore = {
-      get: async () => {
-        throw new Error("session storage unavailable");
-      },
-      remove: async () => undefined,
-      set: async () => undefined,
-    };
-    const store = createStrk20MaturityStore(createMemoryStore(), broken);
-    await expect(store.read(scope)).rejects.toThrow("session storage unavailable");
-    await expect(store.write(scope, claim)).rejects.toThrow("session storage unavailable");
   });
 });
 
 describe("conditional releases", () => {
-  test("releaseRelayClaim clears only the claim with exactly those slots", async () => {
+  test("releaseRelayClaim replaces only the claim with exactly those slots, by a floor", async () => {
     const store = createStrk20MaturityStore(createMemoryStore());
     await store.write(scope, { ...claim, writeOnceSlots: ["0x51", "0x52"] });
-    expect(await store.releaseRelayClaim(scope, ["0x51"])).toBe(false);
-    expect(await store.releaseRelayClaim(scope, ["0x51", "0x53"])).toBe(false);
-    expect(await store.read(scope)).not.toBeNull();
-    expect(await store.releaseRelayClaim(scope, ["0x51", "0x52"])).toBe(true);
-    expect(await store.read(scope)).toBeNull();
+    expect(await store.releaseRelayClaim(scope, ["0x51"], 9)).toBe(false);
+    expect(await store.releaseRelayClaim(scope, ["0x51", "0x53"], 9)).toBe(false);
+    expect(await store.read(scope)).toEqual({ ...claim, writeOnceSlots: ["0x51", "0x52"] });
+    expect(await store.releaseRelayClaim(scope, ["0x51", "0x52"], 9)).toBe(true);
+    expect(await store.read(scope)).toEqual({ acceptedBlock: 9, state: "released" });
   });
 
   test("releaseRelayClaim never clears a newer send's marker", async () => {
@@ -131,17 +119,22 @@ describe("conditional releases", () => {
       state: "submitting",
       transactionHash: "0x9",
     });
-    expect(await store.releaseRelayClaim(scope, ["0x51"])).toBe(false);
+    expect(await store.releaseRelayClaim(scope, ["0x51"], 9)).toBe(false);
     expect(await store.read(scope)).toMatchObject({ transactionHash: "0x9" });
   });
 
-  test("releaseSubmitting clears any submitting marker and leaves a submitted record", async () => {
+  test("releaseSubmitting clears only the very marker the user acted on", async () => {
     const store = createStrk20MaturityStore(createMemoryStore());
     await store.write(scope, claim);
+    const newer = { ...claim, writeOnceSlots: ["0x77"] };
+    expect(await store.releaseSubmitting(scope, newer)).toBe(false);
+    expect(await store.read(scope)).toEqual(claim);
+    expect(await store.releaseSubmitting(scope, { ...claim })).toBe(true);
+    expect(await store.read(scope)).toBeNull();
     await store.write(other, { state: "submitted", transactionHash: "0x9" });
-    expect(await store.releaseSubmitting(scope)).toBe(true);
-    expect(await store.releaseSubmitting(scope)).toBe(false);
-    expect(await store.releaseSubmitting(other)).toBe(false);
+    expect(
+      await store.releaseSubmitting(other, { state: "submitted", transactionHash: "0x9" }),
+    ).toBe(false);
     expect(await store.read(other)).toEqual({ state: "submitted", transactionHash: "0x9" });
   });
 });

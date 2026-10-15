@@ -284,7 +284,7 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ["insufficient private balance", "Insufficient private balance"],
   [
     "strk20 services unavailable: an earlier private transaction from this account may still be in progress",
-    "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+    "An earlier private transaction from this account may still be in progress. Check Activity, then check again. If it stays stuck, open Settings → Unlock private transactions.",
   ],
   [
     "strk20 services unavailable: an earlier private transaction from this account may still be in progress, and no check can confirm it",

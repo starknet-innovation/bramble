@@ -10,6 +10,7 @@
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   isRelayClaimWithSlots,
+  isSameSubmitting,
   isUnsignedAccountClaim,
   maturityRecordNamesHash,
   type Strk20MaturityRecord,
@@ -97,6 +98,14 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   typeof value["poolAddress"] === "string" &&
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
   ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
+    (value["state"] === "released" &&
+      value["route"] === undefined &&
+      value["senderAddress"] === undefined &&
+      value["nonce"] === undefined &&
+      value["transactionHash"] === undefined &&
+      value["writeOnceSlots"] === undefined &&
+      typeof value["acceptedBlock"] === "number" &&
+      isBlockNumberOrAbsent(value["acceptedBlock"])) ||
     (value["state"] === "submitted" &&
       value["route"] === undefined &&
       value["writeOnceSlots"] === undefined &&
@@ -124,6 +133,9 @@ const readScope = async (
   if (!entry) {
     return null;
   }
+  if (entry.state === "released") {
+    return { acceptedBlock: entry.acceptedBlock, state: "released" };
+  }
   if (entry.state === "submitting") {
     return entry.transactionHash === undefined
       ? {
@@ -147,14 +159,17 @@ const readScope = async (
   };
 };
 
-// Evicts the oldest `submitted` records past MAX_RECORDS, never a
-// `submitting` marker: dropping one would read as a clean scope and reopen
-// proving while an earlier write may still land.
+// Evicts the oldest settled records past MAX_RECORDS: a `submitted` write with
+// an accepted block. Never a record that still guards its scope (a
+// `submitting` marker, a `submitted` write awaiting its receipt, or a
+// `released` floor): dropping one would read as a clean scope and reopen
+// proving while an earlier write may still land or before its state is past.
+const guards = (entry: StoredMaturity): boolean =>
+  entry.state !== "submitted" || entry.acceptedBlock === undefined;
+
 const bounded = (entries: readonly StoredMaturity[]): readonly StoredMaturity[] => {
   let excess = entries.length - MAX_RECORDS;
-  return excess <= 0
-    ? entries
-    : entries.filter((entry) => entry.state === "submitting" || excess-- <= 0);
+  return excess <= 0 ? entries : entries.filter((entry) => guards(entry) || excess-- <= 0);
 };
 
 const writeScope = async (
@@ -179,43 +194,23 @@ const clearIf = async (
   return true;
 };
 
-// Builds before v0.10.7 kept markers in session storage. Each one still held
-// there is carried over for a scope the durable store has no marker for, then
-// the session copy is removed, so the browser restart that used to clear it
-// can no longer drop a write that may still land.
-const carryLegacyMarkers = async (store: KeyValueStore, legacy: KeyValueStore): Promise<void> => {
-  const carried = await readAll(legacy);
-  if (carried.length > 0) {
-    const current = await readAll(store);
-    const missing = carried.filter((entry) => !current.some((kept) => sameScope(kept, entry)));
-    if (missing.length > 0) {
-      await store.set(STORE_KEY, [...bounded([...current, ...missing])]);
-    }
-  }
-  await legacy.remove(STORE_KEY);
-};
-
 /**
  * Creates the durable maturity store over `store` (the extension's local
- * storage in production). When `legacy` (the session storage earlier builds
- * used) is given, its markers are carried over before any operation runs:
- * every call, `read` included, waits for that, so no read can miss a marker
- * still held in session storage. A failed carry rejects every call, so the
- * privacy runtime fails closed rather than proving over an unread marker.
+ * storage in production).
+ *
+ * Markers earlier builds kept in session storage are not carried over: the
+ * browser clears that area when the extension updates, so none survives to
+ * this build (mc-wallet 668 review). On Firefox, which has no
+ * `storage.setAccessLevel`, local storage is also readable by the extension's
+ * own content script; the marker is public metadata, but that script could
+ * clear it.
  *
  * `read` stays outside the mutation queue. The conditional updates do not:
  * each comparison and its write are one queued mutation, so a resolution that
  * observed an older marker cannot overwrite a newer send that queued first.
  */
-export const createStrk20MaturityStore = (
-  store: KeyValueStore,
-  legacy?: KeyValueStore,
-): Strk20MaturityStore => {
-  const ready = legacy ? carryLegacyMarkers(store, legacy) : Promise.resolve();
-  // Kept handled so an early failure is not reported as unhandled; every
-  // operation below still awaits `ready` and rethrows it.
-  ready.catch(() => undefined);
-  const serialized = serializeStoreMutations<Strk20MaturityStore>(
+export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityStore =>
+  serializeStoreMutations<Strk20MaturityStore>(
     {
       read(scope) {
         return readScope(store, scope);
@@ -231,11 +226,15 @@ export const createStrk20MaturityStore = (
       releaseUnsigned(scope) {
         return clearIf(store, scope, isUnsignedAccountClaim);
       },
-      releaseRelayClaim(scope, writeOnceSlots) {
-        return clearIf(store, scope, (record) => isRelayClaimWithSlots(record, writeOnceSlots));
+      async releaseRelayClaim(scope, writeOnceSlots, acceptedBlock) {
+        if (!isRelayClaimWithSlots(await readScope(store, scope), writeOnceSlots)) {
+          return false;
+        }
+        await writeScope(store, scope, { acceptedBlock, state: "released" });
+        return true;
       },
-      releaseSubmitting(scope) {
-        return clearIf(store, scope, (record) => record?.state === "submitting");
+      releaseSubmitting(scope, expected) {
+        return clearIf(store, scope, (record) => isSameSubmitting(record, expected));
       },
       write(scope, record) {
         return writeScope(store, scope, record);
@@ -243,18 +242,3 @@ export const createStrk20MaturityStore = (
     },
     ["read"],
   );
-  const afterCarry =
-    <A extends readonly unknown[], R>(operation: (...args: A) => Promise<R>) =>
-    async (...args: A): Promise<R> => {
-      await ready;
-      return operation(...args);
-    };
-  return {
-    read: afterCarry(serialized.read),
-    releaseRelayClaim: afterCarry(serialized.releaseRelayClaim),
-    releaseSubmitting: afterCarry(serialized.releaseSubmitting),
-    releaseUnsigned: afterCarry(serialized.releaseUnsigned),
-    replaceIfCurrentHash: afterCarry(serialized.replaceIfCurrentHash),
-    write: afterCarry(serialized.write),
-  };
-};

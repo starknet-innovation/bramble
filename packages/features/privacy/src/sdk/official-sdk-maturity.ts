@@ -355,13 +355,21 @@ export const createStrk20MaturityRuntime = ({
       return result;
     });
 
-  const releasePendingWrite = (scope: Strk20MaturityScope): Promise<boolean> =>
-    serializeSubmission(scope, async () => {
-      if (liveSends.has(scopeKey(scope))) {
-        throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
-      }
-      return store.releaseSubmitting(scope);
-    });
+  // "Unlock anyway" acts on the marker the user saw: it is read when the user
+  // asks, refused while a send on the scope is queued or running, and cleared
+  // only if it is still that marker once any queued work has settled. A
+  // marker a later send leaves is never cleared (review of mc-wallet 668).
+  const releasePendingWrite = async (scope: Strk20MaturityScope): Promise<boolean> => {
+    const key = scopeKey(scope);
+    if (liveSends.has(key) || submissionTails.has(key)) {
+      throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+    }
+    const seen = await store.read(scope);
+    if (seen?.state !== "submitting") {
+      return false;
+    }
+    return serializeSubmission(scope, () => store.releaseSubmitting(scope, seen));
+  };
 
   return {
     provingBlock,

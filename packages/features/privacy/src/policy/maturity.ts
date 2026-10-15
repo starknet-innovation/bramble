@@ -92,6 +92,17 @@ export type Strk20MaturityRecord =
       readonly state: "submitted";
       readonly transactionHash: string;
       readonly writeOnceSlots?: never;
+    }
+  | {
+      /**
+       * A relay claim released because one of its `WriteOnce` slots was set in
+       * this L1-finalized block: kept durably so every later proof, after any
+       * failure, restart, or RPC change, targets a block past it (mc-wallet 668).
+       */
+      readonly acceptedBlock: number;
+      readonly state: "released";
+      readonly transactionHash?: never;
+      readonly writeOnceSlots?: never;
     };
 
 /**
@@ -137,20 +148,27 @@ export type Strk20MaturityStore = {
    */
   readonly releaseUnsigned: (scope: Strk20MaturityScope) => Promise<boolean>;
   /**
-   * Clears the scope only while its marker is the `relay` claim that recorded
-   * exactly `writeOnceSlots`, and returns whether it did. Serialized like the
-   * other conditional updates, so a newer send's marker is never cleared.
+   * Replaces the scope's marker with a `released` record at `acceptedBlock`
+   * only while it is the `relay` claim that recorded exactly `writeOnceSlots`,
+   * and returns whether it did. Serialized like the other conditional updates,
+   * so a newer send's marker is never replaced.
    */
   readonly releaseRelayClaim: (
     scope: Strk20MaturityScope,
     writeOnceSlots: readonly string[],
+    acceptedBlock: number,
   ) => Promise<boolean>;
   /**
-   * The user's "Unlock anyway": clears the scope while its marker is still
-   * `submitting`, whatever it names, and returns whether it did. The earlier
-   * write may still land; only an explicit, informed user action calls this.
+   * The user's "Unlock anyway": clears the scope only while its marker is
+   * still the `submitting` record `expected` (the one the user acted on), and
+   * returns whether it did. A marker a later send wrote is never cleared. The
+   * earlier write may still land; only an explicit, informed user action
+   * calls this.
    */
-  readonly releaseSubmitting: (scope: Strk20MaturityScope) => Promise<boolean>;
+  readonly releaseSubmitting: (
+    scope: Strk20MaturityScope,
+    expected: Strk20MaturityRecord,
+  ) => Promise<boolean>;
   readonly write: (
     scope: Strk20MaturityScope,
     record: Strk20MaturityRecord | null,
@@ -185,6 +203,22 @@ export const isRelayClaimWithSlots = (
     recorded.every((slot, index) => sameFelt(slot, writeOnceSlots[index] ?? ""))
   );
 };
+
+/**
+ * True when `record` is still exactly `expected` and `expected` is a
+ * `submitting` marker: the compare half of "Unlock anyway".
+ */
+export const isSameSubmitting = (
+  record: Strk20MaturityRecord | null,
+  expected: Strk20MaturityRecord,
+): boolean =>
+  expected.state === "submitting" &&
+  record?.state === "submitting" &&
+  JSON.stringify(canonicalRecord(record)) === JSON.stringify(canonicalRecord(expected));
+
+// Key-sorted copy, so equal markers compare equal whatever their key order.
+const canonicalRecord = (record: Strk20MaturityRecord): Readonly<Record<string, unknown>> =>
+  Object.fromEntries(Object.entries(record).sort(([a], [b]) => (a < b ? -1 : 1)));
 
 const scopeKey = (scope: Strk20MaturityScope): string =>
   `${scope.accountId}|${scope.networkId}|${scope.poolAddress}`;
@@ -225,15 +259,15 @@ export const memoryStrk20MaturityStore = (): Strk20MaturityStore => {
       put(scope, null);
       return true;
     },
-    async releaseRelayClaim(scope, writeOnceSlots) {
+    async releaseRelayClaim(scope, writeOnceSlots, acceptedBlock) {
       if (!isRelayClaimWithSlots(records.get(scopeKey(scope)) ?? null, writeOnceSlots)) {
         return false;
       }
-      put(scope, null);
+      put(scope, { acceptedBlock, state: "released" });
       return true;
     },
-    async releaseSubmitting(scope) {
-      if (records.get(scopeKey(scope))?.state !== "submitting") {
+    async releaseSubmitting(scope, expected) {
+      if (!isSameSubmitting(records.get(scopeKey(scope)) ?? null, expected)) {
         return false;
       }
       put(scope, null);

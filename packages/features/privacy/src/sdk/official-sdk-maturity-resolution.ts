@@ -25,10 +25,13 @@
  * A `relay` claim names no hash, because the relay builds the transaction. It
  * records instead the pool storage slots its `apply_actions` call writes once
  * (`relay-claim-slots.ts`). The pool reverts the whole call when any of those
- * slots is already non-zero, so once one reads non-zero in a block
- * PROVING_BLOCK_DEPTH deep the call can never apply, whoever holds it: the
- * claim is released, and the next proof targets a block past that one. While
- * every slot still reads zero it stays closed with
+ * slots is already non-zero, so once one reads non-zero in a block the node
+ * reports ACCEPTED_ON_L1, read at that block's hash, the call can never apply,
+ * whoever holds it. Depth alone is not enough: Starknet has reorganized more
+ * than PROVING_BLOCK_DEPTH blocks (review of mc-wallet 668). The claim is then
+ * replaced, durably, by a `released` floor at that block, so every later proof
+ * targets a block past it. While no finalized block shows a slot set, it
+ * stays closed with
  * STRK20_PRIOR_WRITE_UNRESOLVED. A relay claim with no slots (written by an
  * earlier build), or a claim with no recorded route, has nothing the chain can
  * be asked about; it refuses with STRK20_PRIOR_WRITE_STRANDED. Either refusal
@@ -133,37 +136,81 @@ const resolveSigned = async (
 
 type SubmittingRecord = Extract<Strk20MaturityRecord, { readonly state: "submitting" }>;
 
-/**
- * A relay claim released because one of its `WriteOnce` slots was already
- * set at `acceptedBlock`: the next proof must target a later block, so state
- * the relayed call may have written is included.
- */
-export type ReleasedRelayFloor = {
-  readonly acceptedBlock: number;
-  readonly state: "released";
+/** A relay claim released at the L1-finalized block its slot was seen set in. */
+export type ReleasedRelayFloor = Extract<Strk20MaturityRecord, { readonly state: "released" }>;
+
+// Bounds the search for the latest L1-finalized block: enough for any chain
+// height a block number can hold, so a node cannot keep it searching.
+const MAX_FINALITY_PROBES = 64;
+
+type FinalizedBlock = { readonly hash: string; readonly number: number };
+
+// The block `number`, if the node reports it ACCEPTED_ON_L1 with a canonical
+// hash; null otherwise. Untrusted answers: anything malformed is not final.
+const finalizedAt = async (
+  provider: RpcProvider,
+  number: number,
+): Promise<FinalizedBlock | null> => {
+  const block: unknown = await provider.getBlockWithTxHashes(number);
+  if (typeof block !== "object" || block === null) return null;
+  const { block_hash: rawHash, block_number: rawNumber, status } = block as Record<string, unknown>;
+  const hash = typeof rawHash === "string" ? canonicalFelt(rawHash) : null;
+  return status === "ACCEPTED_ON_L1" && rawNumber === number && hash !== null
+    ? { hash, number }
+    : null;
 };
 
-// The block PROVING_BLOCK_DEPTH below the tip if any of `slots` is non-zero in
-// it at the pool, else null. Storage values are untrusted RPC answers: only a
-// canonical field element counts, and any failed or malformed read throws, so
-// the caller keeps the claim closed.
+// The latest block at or below `ceiling` the node reports ACCEPTED_ON_L1. L1
+// finality is monotone in block number, so a bounded binary search finds it;
+// null when none is, or the search runs out.
+const latestFinalized = async (
+  provider: RpcProvider,
+  ceiling: number,
+): Promise<FinalizedBlock | null> => {
+  const top = await finalizedAt(provider, ceiling);
+  if (top) return top;
+  let low = 0;
+  let high = ceiling - 1;
+  let found: FinalizedBlock | null = null;
+  for (let probe = 0; probe < MAX_FINALITY_PROBES && low <= high; probe += 1) {
+    const middle = low + Math.floor((high - low) / 2);
+    const block = await finalizedAt(provider, middle);
+    if (block) {
+      found = block;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return low > high ? found : null;
+};
+
+// The L1-finalized block number in which one of `slots` already reads
+// non-zero at the pool, read at that block's hash so every read is of one
+// branch; null while none does. Storage values are untrusted RPC answers:
+// only a canonical field element counts, and any failed or malformed read
+// throws, so the caller keeps the claim closed.
 const spentSlotBlock = async (
   provider: RpcProvider,
   poolAddress: string,
   slots: readonly string[],
 ): Promise<number | null> => {
-  const settled = (await provider.getBlockNumber()) - PROVING_BLOCK_DEPTH;
-  if (!Number.isSafeInteger(settled) || settled < 0) {
+  const ceiling = (await provider.getBlockNumber()) - PROVING_BLOCK_DEPTH;
+  if (!Number.isSafeInteger(ceiling) || ceiling < 0) {
     throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
   }
+  const finalized = await latestFinalized(provider, ceiling);
+  if (finalized === null) {
+    return null;
+  }
   for (const slot of slots) {
-    const raw: unknown = await provider.getStorageAt(poolAddress, slot, settled);
+    const raw: unknown = await provider.getStorageAt(poolAddress, slot, finalized.hash);
     const value = typeof raw === "string" ? canonicalFelt(raw) : null;
     if (value === null || !isStarkFieldElement(value)) {
       throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
     }
     if (BigInt(value) !== 0n) {
-      return settled;
+      return finalized.number;
     }
   }
   return null;
@@ -272,7 +319,7 @@ const releaseUnsigned = async (
     if (block === null) {
       throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
     }
-    return (await store.releaseRelayClaim(scope, marker.writeOnceSlots))
+    return (await store.releaseRelayClaim(scope, marker.writeOnceSlots, block))
       ? { acceptedBlock: block, state: "released" }
       : clearedMeanwhile(store, scope);
   }

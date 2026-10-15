@@ -131,7 +131,7 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
   // again re-runs the background's resolution of it.
   [
     "strk20 services unavailable: an earlier private transaction from this account may still be in progress",
-    "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+    "An earlier private transaction from this account may still be in progress. Check Activity, then check again. If it stays stuck, open Settings → Unlock private transactions.",
   ],
   // The same, for an earlier write no check can resolve. Its marker now
   // survives a browser restart (mc-wallet 668), so the sentence names the one way on,

@@ -14,8 +14,9 @@ See DEVELOPMENT.md and RELEASING.md.
 ### Fixed
 - A private transaction whose relay reply was lost no longer needs a browser
   restart, which used to unlock the account without cancelling anything. The
-  pause now survives restarts and lifts once the chain shows the relayed
-  transaction can no longer apply. Settings → Unlock private transactions
+  pause now survives restarts and lifts once Ethereum-finalized chain state
+  shows the relayed transaction can no longer apply, which can take hours.
+  Settings → Unlock private transactions
   lifts it on purpose, after stating that the earlier transaction could still
   go through (#668).
 

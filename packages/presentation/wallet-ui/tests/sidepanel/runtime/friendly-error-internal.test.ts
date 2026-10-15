@@ -102,10 +102,10 @@ describe("STRK20 (review F1, F2)", () => {
     const raw =
       "strk20 services unavailable: an earlier private transaction from this account may still be in progress";
     expect(friendlyError(raw).message).toBe(
-      "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+      "An earlier private transaction from this account may still be in progress. Check Activity, then check again. If it stays stuck, open Settings → Unlock private transactions.",
     );
     expect(friendlyError(raw, ADD_ACCOUNT).message).toBe(
-      "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+      "An earlier private transaction from this account may still be in progress. Check Activity, then check again. If it stays stuck, open Settings → Unlock private transactions.",
     );
   });
 
@@ -275,7 +275,7 @@ describe("STRK20 categories with a reviewed sentence", () => {
     const unknown =
       "strk20 services unavailable: an earlier private transaction from this account may still be in progress";
     expect(friendlyError(unknown).message).toBe(
-      "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+      "An earlier private transaction from this account may still be in progress. Check Activity, then check again. If it stays stuck, open Settings → Unlock private transactions.",
     );
     expect(
       friendlyError("strk20 privacy leak (proving/service-unavailable): USER_LINKAGE").message,
