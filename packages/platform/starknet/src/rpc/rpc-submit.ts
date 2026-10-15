@@ -45,7 +45,7 @@ export type InvokeInput = {
   readonly calls: readonly Call[];
   /** Live authorization checked immediately before each on-chain mutation. */
   readonly isAuthorized?: () => boolean;
-  /** Optional STRK20 proof material attached to a prepared privacy call. */
+  /** Optional SNIP-36 proof (a STRK20 pool proof or a dapp's app proof) sent with the invoke. */
   readonly proof?: Strk20Proof;
   /**
    * The fee estimate this submission was reviewed against — the exact figure a

@@ -39,7 +39,7 @@ import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
-import { strk20AccountContext } from "../privacy/strk20-account-context";
+import { isPoolShapedBatch, strk20AccountContext } from "../privacy/strk20-account-context";
 import { readAddInvokeTransactionInput } from "../routing/message-inputs";
 import {
   type ExtensionIdentity,
@@ -452,6 +452,10 @@ export const executeInvokeApproval = async (
       approval.payload.activitySummary ??
       `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
   });
+  // A SNIP-36 app proof is a plain invoke proof; only a pool batch takes the pool lane.
+  const poolProof = isPoolShapedBatch(calls, preferences, account.networkId)
+    ? approval.payload.proof
+    : undefined;
   // The public lane's hash as signed, captured before it is sent (audit M4).
   let signedHash: string | undefined;
   try {
@@ -462,13 +466,8 @@ export const executeInvokeApproval = async (
     // — a second local viewing-key reader here was the one copy that derived a
     // key for an already-locked wallet.
     const context = strk20AccountContext(deps, { ...resolved, rpcUrls });
-    const result = approval.payload.proof
-      ? await strk20.submitPrepared({
-          ...context,
-          calls,
-          proof: approval.payload.proof,
-          ...ceiling,
-        })
+    const result = poolProof
+      ? await strk20.submitPrepared({ ...context, calls, proof: poolProof, ...ceiling })
       : await runtimeRpc.submitInvokeTransaction({
           account,
           calls,
@@ -477,6 +476,7 @@ export const executeInvokeApproval = async (
           onSigned: async (signed) => {
             signedHash = signed.transactionHash;
           },
+          ...(approval.payload.proof ? { proof: approval.payload.proof } : {}),
           rpcUrls,
           signHash: context.signHash,
         });
@@ -491,7 +491,7 @@ export const executeInvokeApproval = async (
     await recordSubmittedActivity(activity, activityFor(result.transactionHash));
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return invokeFailureResponse(error, approval.payload.proof !== undefined, signedHash, (hash) =>
+    return invokeFailureResponse(error, poolProof !== undefined, signedHash, (hash) =>
       recordSubmittedActivity(activity, activityFor(hash)),
     );
   }

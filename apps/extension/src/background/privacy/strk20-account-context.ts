@@ -8,9 +8,15 @@ import {
   type Strk20Service,
   unavailableStrk20Service,
 } from "@bramble/privacy/service";
-import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
+import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
@@ -23,6 +29,25 @@ import { captureSessionAuthorization, type PassiveUnlockSession } from "../runti
  */
 export const strk20ServiceForRuntime = (runtimeRpc: RuntimeRpc): Strk20Service =>
   runtimeRpc.strk20 ?? unavailableStrk20Service;
+
+/**
+ * Whether a proof-bearing batch belongs on the STRK20 pool lane: it calls
+ * `apply_actions` or touches the network's configured pool. Deliberately broad,
+ * so a mis-addressed or unconfigured pool batch still meets the pool lane's
+ * checks (which refuse it) rather than going out as a plain invoke proof.
+ */
+export const isPoolShapedBatch = (
+  calls: readonly Call[],
+  preferences: Pick<WalletPreferences, "strk20Networks">,
+  networkId: StarknetNetworkId,
+): boolean => {
+  const pool = preferences.strk20Networks?.[networkId]?.poolAddress;
+  return calls.some(
+    (call) =>
+      call.entrypoint === "apply_actions" ||
+      (pool !== undefined && sameFelt(call.contractAddress, pool)),
+  );
+};
 
 /**
  * Builds a lazy protected SDK context. Viewing-key derivation and signing do

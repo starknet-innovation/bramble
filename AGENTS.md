@@ -85,7 +85,9 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
   the background-only vault service, bound to its exact account, chain, pool, and derivation scheme;
   it must never enter account metadata, preferences, activity, logs, session storage, messages, or
   UI state. Privacy-service responses are untrusted, and only the configured pool's `apply_actions`
-  call may carry a prepared proof into submission.
+  call may carry a prepared proof into submission. A pool-shaped invoke (`apply_actions`, or any
+  call to the configured pool) always takes the STRK20 lane; only a dapp's non-pool SNIP-36 proof
+  goes out as an ordinary invoke.
 
 ## Schema migrations
 

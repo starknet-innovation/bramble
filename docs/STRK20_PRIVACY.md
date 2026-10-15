@@ -263,10 +263,14 @@ The settled open notes are screened against the shadow
 account's own address (`Delegated`); whether the prover behind mc-backend performs that screening is
 not yet confirmed (issue 443).
 
-The generic `wallet_addInvokeTransaction` path also preserves an optional prepared proof. Such a
-request must contain exactly one call, receives the normal decoded approval review, and can submit
-only a non-empty proof to the configured pool's `apply_actions` entry point. The proof and call are
-included in the approval digest and are never silently converted into an ordinary public invoke.
+The generic `wallet_addInvokeTransaction` path also accepts an optional SNIP-36 proof, which must be
+submittable (a simulate-mode, all-empty proof is refused at intake). The request receives the normal
+decoded approval review, and the proof and calls are included in the approval digest. A pool-shaped
+batch (any call to `apply_actions` or to the configured pool) is submitted only through the STRK20
+lane, which requires `approve` calls followed by exactly one `apply_actions` on the configured pool;
+it is never converted into an ordinary public invoke. Any other proof-bearing batch, such as a SNIP-36
+application proof, is submitted as an ordinary invoke with `proof` and `proof_facts` attached, under the
+same fee review and reviewed-fee ceiling.
 
 ## Failure and trust boundaries
 
