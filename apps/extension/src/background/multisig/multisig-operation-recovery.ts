@@ -17,7 +17,7 @@ import { normalizedArgentMultisigCalls } from "./multisig-inputs";
  * an ERC20 send's (audit #163); the call set was already reviewed against the
  * poisoning rule before it could be signed.
  */
-export const recordSubmittedIntentActivity = (
+const recordSubmittedIntentActivity = (
   deps: Pick<MultisigOpsDeps, "activity">,
   intent: ArgentMultisigSigningIntent,
   networkId: ArgentMultisigRecord["networkId"],
