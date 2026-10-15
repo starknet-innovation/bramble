@@ -267,11 +267,11 @@ export type ArgentMultisigIntentPackage = {
  */
 export const argentMultisigIntentPackage = (
   intent: ArgentMultisigSigningIntent,
-): ArgentMultisigIntentPackage => ({
-  intent,
-  kind: "bramble.argent-multisig-intent",
-  version: 1,
-});
+): ArgentMultisigIntentPackage => {
+  // The stale reason is local (mc-wallet 673); older co-signers refuse unknown keys.
+  const { staleReason: _local, ...shared } = intent;
+  return { intent: shared, kind: "bramble.argent-multisig-intent", version: 1 };
+};
 
 /**
  * Discards untrusted remote lifecycle claims and derives local authority only
@@ -280,7 +280,7 @@ export const argentMultisigIntentPackage = (
 export const locallyDerivedImportedIntent = (
   intent: ArgentMultisigSigningIntent,
 ): ArgentMultisigSigningIntent => {
-  const { broadcastTransactionHash: _remoteBroadcast, ...imported } = intent;
+  const { broadcastTransactionHash: _remoteBroadcast, staleReason: _remote, ...imported } = intent;
   return {
     ...imported,
     state:

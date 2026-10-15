@@ -47,7 +47,7 @@ import {
   currentConfigFor,
   signerAccountFor,
 } from "./multisig-ops";
-import { refuseResend } from "./multisig-stale-intents";
+import { markFeeRefusedStale, refuseResend } from "./multisig-stale-intents";
 
 const preparationContext = async (
   deps: MultisigOpsDeps,
@@ -446,7 +446,7 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
     if (!(error instanceof IndeterminateRpcWriteError))
       await deps.multisigStore.releaseOperation(submission.operationId);
     if (error instanceof ArgentMultisigFeeExpiredError) {
-      await deps.multisigStore.upsertIntent({ ...submission.intent, state: "stale" });
+      await markFeeRefusedStale(deps, submission.intent, submission.resolved.context);
       return { error: error.details };
     }
     throw error;
