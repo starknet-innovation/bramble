@@ -87,6 +87,11 @@ raising this floor back to 154 and excluding ESR again.
 **Ledger is not supported on Firefox.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no
 hardware transport exists.
 
+**Arc never shows the side panel.** It accepts `sidePanel.open` and draws nothing (#690). On Arc,
+open the wallet from the extension's details page (**Extension options** opens it in a tab), then
+choose **Settings → Request display → Compact popup**. The toolbar button and site requests then
+open the popup.
+
 One security difference is worth stating plainly: Firefox implements no `storage.setAccessLevel`, so
 `storage.local` and `storage.sync` stay reachable from this extension's own content script and
 cannot be closed off. The encrypted vault stays unreadable without the unlock credential, but the

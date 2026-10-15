@@ -53,6 +53,7 @@ describe("firefox manifest derivation", () => {
       "content_scripts",
       "host_permissions",
       "optional_host_permissions",
+      "options_ui",
       "web_accessible_resources",
     ]) {
       expect(manifest[key], key).toEqual(chrome[key]);
