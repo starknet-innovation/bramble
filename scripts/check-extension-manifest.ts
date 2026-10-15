@@ -311,6 +311,7 @@ if (import.meta.main) {
       "manifest_version",
       "name",
       "optional_host_permissions",
+      "options_ui",
       "permissions",
       "sandbox",
       "side_panel",
@@ -398,7 +399,6 @@ if (import.meta.main) {
       failures.push(`manifest action ${size}px icon must stay ${path}`);
     await requireFile(`${publicRoot}/${path}`);
   }
-
   const sidePanel = hasOnlyKeys(manifest["side_panel"], ["default_path"])
     ? manifest["side_panel"]
     : null;
@@ -407,7 +407,11 @@ if (import.meta.main) {
   if (sidePanelPath !== expectedSidePanel) {
     failures.push("manifest side panel path must stay pinned");
   }
-
+  // Arc never draws the side panel (#690); "Extension options" opens this page in a tab instead.
+  const options = JSON.stringify(manifest["options_ui"]);
+  if (options !== JSON.stringify({ page: expectedSidePanel, open_in_tab: true })) {
+    failures.push("manifest options page must stay the wallet page, opened in a tab");
+  }
   const sandbox = hasOnlyKeys(manifest["sandbox"], ["pages"]) ? manifest["sandbox"] : null;
   if (!sandbox || !hasOnly(sandbox["pages"], [expectedSandboxPage])) {
     failures.push("manifest sandbox pages must stay pinned to the collectible renderer");
