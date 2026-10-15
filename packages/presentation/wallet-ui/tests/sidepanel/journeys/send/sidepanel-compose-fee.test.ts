@@ -32,6 +32,7 @@ import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime"
 import {
   context,
   DEPLOYMENT_FEE,
+  ETH_SHIELD_LINES,
   FIELDS,
   registered,
   review,
@@ -98,7 +99,7 @@ describe("the fee lines", () => {
 
   test("a pool route states the pool charge and no invented network fee", () => {
     // A deposit's calldata is built at submission, so its gas is not knowable
-    // here: the pool's charge is the whole honest answer.
+    // here: the pool's charge is the only figure (and its STRK, issue 665).
     const lines = composeFeeLines(
       target(
         context(
@@ -110,7 +111,7 @@ describe("the fee lines", () => {
       ),
       { failed: false, review: review() },
     );
-    expect(lines).toEqual(["Pool fee: 2 STRK from your public balance"]);
+    expect(lines).toEqual(ETH_SHIELD_LINES);
   });
 
   test("an unread pool fee renders no line rather than a zero", () => {
@@ -121,6 +122,7 @@ describe("the fee lines", () => {
       composeFeeLines(
         {
           fields: privateFields,
+          gasInStrk: false,
           leavesNoGas: false,
           poolFee: null,
           route: transferRoute(privateFields),
@@ -332,7 +334,7 @@ describe("the live preview", () => {
       context: context({ privacy: registered }, { destination: "private" }),
     });
 
-    expect(subject.region.textContent).toBe("Pool fee: 2 STRK from your public balance");
+    expect(subject.region.textContent).toBe(ETH_SHIELD_LINES.join(""));
     expect(subject.delays).toEqual([]);
     expect(subject.calls).toHaveLength(0);
   });
@@ -451,8 +453,8 @@ describe("on the real form", () => {
 
     typeAmount(app, "1");
     // No estimate is possible for a deposit, so the pool's own charge is the
-    // whole line — and it is there before the user reaches Review.
-    expect(feeLines(app)).toBe("Pool fee: 2 STRK from your public balance");
+    // only figure, with the STRK its gas is paid in, before Review (issue 665).
+    expect(feeLines(app)).toBe(ETH_SHIELD_LINES.join(""));
   });
 
   test("emptying the amount takes the fee line away again", async () => {
