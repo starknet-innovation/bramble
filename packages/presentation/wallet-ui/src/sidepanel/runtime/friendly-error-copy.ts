@@ -335,6 +335,8 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["name resolution unavailable", "Starknet names are not available on this network."],
   ["name resolution network changed", "The network changed. Try again."],
   ["unsupported chain", "This wallet doesn't support that network."],
+  // The panel's restart while a request is in progress (mc-wallet 708).
+  ["update waits for the request in progress", "Finish what's in progress, then restart."],
   ["unsupported api version", "That endpoint speaks an API version this wallet can't use."],
   [WRONG_CHAIN_MESSAGE.toLowerCase(), WRONG_CHAIN_ENDPOINT],
   ["switch to the deployment network first", "Switch to that account's network to deploy it."],
