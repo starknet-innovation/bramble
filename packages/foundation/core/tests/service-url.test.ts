@@ -86,6 +86,21 @@ describe("redactEndpoints", () => {
     );
   });
 
+  // Canonical storage controls what the wallet sends, not how an upstream
+  // echoes it: a JSON error body may escape every slash (#674 review).
+  test("removes a URL whose slashes an error body escaped", () => {
+    expect(
+      redactEndpoints('upstream error: {"url":"https:\\/\\/rpc.example\\/v1\\/node-key-123"}'),
+    ).toBe(`upstream error: {"url":"${REDACTED_ENDPOINT}"}`);
+    // Escaped again, as JSON quoted inside a JSON string.
+    expect(
+      redactEndpoints('{"error":"{\\"url\\":\\"wss:\\\\/\\\\/relay.example\\\\/node-key-123\\"}"}'),
+    ).not.toContain("node-key-123");
+    expect(redactEndpoints("no endpoint configured: rpc:\\/")).toBe(
+      "no endpoint configured: rpc:\\/",
+    );
+  });
+
   test("keeps the diagnostic around it: method, code, felts, plain words", () => {
     const text =
       "RPC: starknet_addInvokeTransaction with params {} 55: Account validation failed: 0x0123456789abcdef";
@@ -103,6 +118,9 @@ describe("redactEndpoints", () => {
     // Every line start is a candidate, and none of them may rescan the rest.
     redactEndpoints("a\n".repeat(100_000));
     redactEndpoints("https:".repeat(50_000));
+    // A backslash run that never reaches a slash is scanned once.
+    redactEndpoints(`https:${"\\".repeat(200_000)}`);
+    redactEndpoints("https:/\\".repeat(50_000));
     expect(performance.now() - started).toBeLessThan(500);
   });
 });

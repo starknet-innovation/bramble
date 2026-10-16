@@ -285,6 +285,42 @@ describe("stored endpoints are carried to the canonical spelling", () => {
     }
   });
 
+  // A null endpoint is no value an earlier build stored, so neither the
+  // stand-in for a dropped endpoint nor the drop itself may make it valid
+  // (#674 review).
+  test("a null STRK20 endpoint still fails closed, alone or beside a dropped one", async () => {
+    const UNCARRIED = "https://rpc.example/v1?key=a`b";
+    const routing = {
+      discoveryUrl: discovery.canonical,
+      ohttpRelayUrl: relay.canonical,
+      paymaster: { feeToken: POOL, url: paymaster.canonical },
+      poolAddress: POOL,
+      proverUrl: prover.canonical,
+    };
+    const nulled = [
+      { ...routing, discoveryUrl: null },
+      { ...routing, ohttpRelayUrl: null },
+      { ...routing, proverUrl: null },
+      { ...routing, paymaster: { feeToken: POOL, url: null } },
+    ];
+    const besideDropped = nulled.map((config) =>
+      config.discoveryUrl === null
+        ? { ...config, proverUrl: UNCARRIED }
+        : { ...config, discoveryUrl: UNCARRIED },
+    );
+    for (const config of [...nulled, ...besideDropped]) {
+      const fields = { strk20Networks: { SN_MAIN: config } };
+      const { preferences } = await storedWith(fields);
+      await expect(preferences.read()).rejects.toThrow("Invalid stored preferences");
+      await expect(
+        createPreferencesStore({ store: createMemoryStore() }).importPreferences({
+          ...defaultWalletPreferences(),
+          ...fields,
+        }),
+      ).rejects.toThrow("Invalid preferences backup");
+    }
+  });
+
   test("an endpoint the earlier rule refused still fails closed", async () => {
     for (const fields of [
       { rpcOverrides: { SN_MAIN: "http://rpc.example/v1" } },

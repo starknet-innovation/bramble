@@ -205,9 +205,13 @@ export const REDACTED_ENDPOINT = "[endpoint]";
 
 // A scheme, "://", then everything up to the first character a URL cannot
 // carry unescaped (whitespace, a quote, an angle bracket, a backtick), so a key
-// in the path or query never survives as a tail. The lookbehind starts a match
-// only at the front of a word, which keeps the scan linear.
-const ENDPOINT_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"<>`]+/gi;
+// in the path or query never survives as a tail. Either slash after the scheme
+// may follow a run of backslashes: an error body written as JSON can escape
+// them ("https:\/\/host\/key"), once or once per level of quoting, and storage
+// controls only what the wallet sends, not how an upstream echoes it (#674
+// review). The lookbehind starts a match only at the front of a word, and a
+// backslash run ends at the next slash, which keeps the scan linear.
+const ENDPOINT_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:(?:\\*\/){2}[^\s"<>`]+/gi;
 
 /**
  * Replaces every scheme-qualified URL in failure text with
@@ -218,8 +222,8 @@ const ENDPOINT_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"<>`]+/gi;
  * an RPC code, a revert reason, felts — is kept, so the text stays a useful
  * diagnostic. An endpoint the wallet holds is redacted whole: it passed
  * {@link isServiceUrl}, so it is written "scheme://" and holds no character the
- * match stops at, and a node or gateway echoes the same serialized form. Pure,
- * total, and linear.
+ * match stops at, and a node or gateway echoes the same serialized form, as
+ * written or with its slashes escaped by JSON. Pure, total, and linear.
  */
 export const redactEndpoints = (text: string): string =>
   text.replace(ENDPOINT_PATTERN, REDACTED_ENDPOINT);

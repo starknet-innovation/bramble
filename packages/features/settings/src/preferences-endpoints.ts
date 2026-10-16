@@ -85,7 +85,9 @@ const carryStrk20Config = (config: unknown): unknown => {
     }
     const carried = normalizeStoredServiceUrl(record[field]);
     dropped ||= carried === undefined;
-    const value = carried ?? DROPPED_ENDPOINT;
+    // Only a drop takes the stand-in: a `null` comes back as is, for the
+    // validator to reject (#674 review).
+    const value = carried === undefined ? DROPPED_ENDPOINT : carried;
     return value === record[field] ? record : { ...record, [field]: value };
   };
   let next: Record<string, unknown> = config;
