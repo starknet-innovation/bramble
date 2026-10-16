@@ -9,7 +9,15 @@ import { MAINNET_TOKEN_ADDRESSES, VESU_ADDRESSES } from "../constants";
 type Registry = Readonly<Record<string, string>>;
 let registry: Registry = {};
 let registryFails = false;
-const reads: { readonly calldata: readonly string[]; readonly contractAddress: string }[] = [];
+// The tip advances on every block-number read, so a check that read the tip
+// per asset would split its reads across blocks and the tests would see it.
+let tip = 100;
+let blockAnswer: (() => unknown) | null = null;
+const reads: {
+  readonly block: unknown;
+  readonly calldata: readonly string[];
+  readonly contractAddress: string;
+}[] = [];
 
 vi.mock("../support/provider", async (importActual) => {
   const actual = await importActual<typeof import("../support/provider")>();
@@ -20,16 +28,24 @@ vi.mock("../support/provider", async (importActual) => {
       run: (provider: unknown) => Promise<unknown>,
     ): Promise<unknown> =>
       run({
-        callContract: async (call: {
-          readonly calldata: readonly string[];
-          readonly contractAddress: string;
-          readonly entrypoint: string;
-        }) => {
-          reads.push(call);
+        callContract: async (
+          call: {
+            readonly calldata: readonly string[];
+            readonly contractAddress: string;
+            readonly entrypoint: string;
+          },
+          block: unknown,
+        ) => {
+          reads.push({ ...call, block });
           if (registryFails) throw new Error("node unreachable");
           if (call.entrypoint !== "v_token_for_asset") throw new Error("unexpected entrypoint");
           const [pool, asset] = call.calldata.map((felt) => BigInt(felt).toString(16));
           return [registry[`${pool}:${asset}`] ?? "0x0"];
+        },
+        getBlockNumber: async () => {
+          if (blockAnswer) return blockAnswer();
+          tip += 1;
+          return tip;
         },
       }),
   };
@@ -73,6 +89,8 @@ const answerApi = (body: unknown): void => {
 beforeEach(() => {
   registry = { [key(POOL, USDC)]: VTOKEN, [key(POOL, ETH)]: "0xe7" };
   registryFails = false;
+  tip = 100;
+  blockAnswer = null;
   reads.length = 0;
 });
 afterEach(() => {
@@ -153,6 +171,40 @@ describe("Vesu registry anchor", () => {
     );
   });
 
+  describe("one block per check (#270)", () => {
+    it("reads every asset of a check at the same block", async () => {
+      await verifyVesuMultiplyPool(POOL, ETH, USDC);
+      expect(reads).toHaveLength(2);
+      expect(new Set(reads.map((read) => read.block)).size).toBe(1);
+      expect(typeof reads[0]?.block).toBe("number");
+    });
+
+    it("reads a borrow quote's asset and collateral at the same block", async () => {
+      answerApi(apiPool(VTOKEN));
+      await quoteLending({
+        accountAddress: ACCOUNT,
+        action: "borrow",
+        amount: "1",
+        asset: USDC,
+        collateralAmount: "1",
+        collateralAsset: ETH,
+        poolId: POOL,
+      });
+      expect(reads).toHaveLength(2);
+      expect(new Set(reads.map((read) => read.block)).size).toBe(1);
+    });
+
+    it("refuses when the block number is unusable", async () => {
+      for (const answer of [-1, 1.5, Number.NaN, "100", null]) {
+        blockAnswer = () => answer;
+        await expect(verifyVesuMultiplyPool(POOL, ETH, USDC)).rejects.toThrow(
+          VESU_REGISTRY_UNAVAILABLE,
+        );
+      }
+      expect(reads).toEqual([]);
+    });
+  });
+
   describe("re-check at wallet handoff (#270)", () => {
     const borrowQuote = async () => {
       answerApi(apiPool(VTOKEN));
@@ -175,6 +227,7 @@ describe("Vesu registry anchor", () => {
         VESU_ADDRESSES.poolFactory,
         VESU_ADDRESSES.poolFactory,
       ]);
+      expect(new Set(reads.map((read) => read.block)).size).toBe(1);
     });
 
     it("refuses when the registry now names a different vToken than the quote", async () => {
