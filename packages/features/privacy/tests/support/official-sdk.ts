@@ -122,10 +122,25 @@ export const officialBuilder = (proofInvocation: unknown = { warnings: [] }): Of
   return self as unknown as OfficialBuilder;
 };
 
+/**
+ * An `apply_actions` calldata the relay route accepts: a one-action
+ * `Span<ServerAction>` whose only action is a `WriteOnce` at
+ * {@link RELAY_WRITE_ONCE_SLOT} (#668), then a `None` screening suffix.
+ */
+export const RELAY_WRITE_ONCE_SLOT = "0x5157";
+export const RELAY_CALLDATA: readonly string[] = [
+  "0x1",
+  "0x0",
+  RELAY_WRITE_ONCE_SLOT,
+  "0x1",
+  "0x1",
+  "0x1",
+];
+
 export const executeResult = (warnings: readonly unknown[] = []) => ({
   callAndProof: {
     call: {
-      calldata: ["0x1"],
+      calldata: [...RELAY_CALLDATA],
       contractAddress: STRK20_POOL_ADDRESS,
       entrypoint: "apply_actions",
     },

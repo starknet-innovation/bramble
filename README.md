@@ -87,6 +87,11 @@ raising this floor back to 154 and excluding ESR again.
 **Ledger is not supported on Firefox.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no
 hardware transport exists.
 
+**Arc never shows the side panel.** It accepts `sidePanel.open` and draws nothing (#690). On Arc,
+open the wallet from the extension's details page (**Extension options** opens it in a tab), then
+choose **Settings → Request display → Compact popup**. The toolbar button and site requests then
+open the popup.
+
 One security difference is worth stating plainly: Firefox implements no `storage.setAccessLevel`, so
 `storage.local` and `storage.sync` stay reachable from this extension's own content script and
 cannot be closed off. The encrypted vault stays unreadable without the unlock credential, but the
@@ -122,6 +127,19 @@ release, and Privacy SDK outputs. `bun install --frozen-lockfile` installs Krust
 remaining outputs with `bun run vendor:argent` (network) and `bun run vendor:privacy` (Node.js 24 +
 npm). `build`, packaging, and browser E2E also require the Argent and Privacy outputs; Playwright
 needs its Chromium install once per machine.
+
+## Upgrading
+
+Upgrades are one-way. Once you unlock a newer version, an older build can't open your wallet: it
+refuses the newer vault and settings. An older build can also delete recent activity history it
+doesn't recognize.
+
+If you installed an older build by mistake:
+
+- **Install the newer version again, over the old one.** Your wallet opens as before. Don't remove
+  Bramble first: removing the extension deletes the wallet from this browser.
+- **Or restore from your recovery phrase.** Anything not derived from the phrase has to be added
+  again: imported keys and phrases, Ledger accounts, site connections and settings.
 
 ## Built with
 

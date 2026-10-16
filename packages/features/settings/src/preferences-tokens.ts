@@ -132,11 +132,12 @@ const liftedRemoval = (
  * makes a dapp-suggested one trusted.
  *
  * One record per address on a network (audit 134/153): when the address is
- * already tracked under another id (another symbol from a second dapp, or a
- * token that renamed itself), a dapp source leaves the preferences unchanged
- * and returns the same object; a user source replaces that record with the
- * user's, carrying its hidden flag, so the chain metadata the wallet fetched is
- * what becomes trusted. Throws {@link WalletError}, writing nothing, for an
+ * already tracked, under any id, a dapp source leaves the preferences
+ * unchanged and returns the same object, so an older dapp card approved after
+ * the user added the token by hand cannot overwrite the user's record or its
+ * trusted status (#682); a user source replaces that record with the user's,
+ * carrying its hidden flag, so the chain metadata the wallet fetched is what
+ * becomes trusted. Throws {@link WalletError}, writing nothing, for an
  * invalid token or unknown source, and rather than evicting when the network
  * already holds {@link MAX_ADDED_TOKENS_PER_NETWORK} added tokens.
  */
@@ -152,7 +153,7 @@ export const withUpsertedToken = (
   const onNetwork = preferences.tokens.filter((stored) => stored.networkId === nextToken.networkId);
   const sameAddress = onNetwork.find((stored) => sameFelt(stored.address, nextToken.address));
   const replaced = sameAddress && sameAddress.id !== nextToken.id ? sameAddress.id : undefined;
-  if (replaced !== undefined && source === "dapp") {
+  if (sameAddress !== undefined && source === "dapp") {
     return preferences;
   }
   requireRoomFor(onNetwork, nextToken, sameAddress !== undefined);

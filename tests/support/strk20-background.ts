@@ -92,6 +92,10 @@ export type Strk20HarnessOptions = {
 export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Service => {
   const { balanceCalls, proveCalls, registerCalls, shadowAccountCalls } = options;
   return {
+    // Nothing is ever paused in this harness, so "Unlock anyway" clears nothing.
+    async releasePendingWrite() {
+      return false;
+    },
     async prepare() {
       if (proveCalls) {
         proveCalls.value += 1;

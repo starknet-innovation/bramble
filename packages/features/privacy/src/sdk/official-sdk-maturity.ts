@@ -134,8 +134,10 @@ export type Strk20MaturityRuntime = {
    * `route` is recorded on the claim. Pass `account` only when `broadcast`
    * signs through `journal` (the invoke's `onSigned` hook), because an
    * `account` claim that never gained a signed identity is later released as
-   * provably unsent. Anything else must pass `relay`.
-
+   * provably unsent. Anything else must pass `relay`, with `relaySlots`
+   * returning the `WriteOnce` slots of the exact call it hands the relay
+   * (`relayClaimSlots`). They are recorded on the claim before `broadcast`
+   * runs; a relay send without them is refused before anything leaves.
    */
   readonly submitAccepted: <P, T extends { readonly transactionHash: string }>(
     provider: RpcProvider,
@@ -143,7 +145,16 @@ export type Strk20MaturityRuntime = {
     route: Strk20SubmissionRoute,
     prepare: () => Promise<P>,
     broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
+    relaySlots?: (prepared: P) => readonly string[] | null,
   ) => Promise<T>;
+  /**
+   * The user's "Unlock anyway" for `scope`: waits for any send on the scope
+   * to settle, then clears its `submitting` marker and returns whether one was
+   * cleared. The earlier write may still land; call it only from an explicit,
+   * informed user action. A send still running refuses with the unresolved
+   * refusal.
+   */
+  readonly releasePendingWrite: (scope: Strk20MaturityScope) => Promise<boolean>;
 };
 
 /**
@@ -219,6 +230,9 @@ export const createStrk20MaturityRuntime = ({
         : stored;
     if (!record) {
       return undefined;
+    }
+    if (record.state === "released") {
+      return record.acceptedBlock;
     }
     if (record.acceptedBlock !== undefined) {
       return record.acceptedBlock;
@@ -296,9 +310,16 @@ export const createStrk20MaturityRuntime = ({
     route: Strk20SubmissionRoute,
     prepare: () => Promise<P>,
     broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
+    relaySlots?: (prepared: P) => readonly string[] | null,
   ): Promise<T> =>
     serializeSubmission(scope, async () => {
       const prepared = await prepare();
+      // A relay claim must name the slots its call writes once, or nothing
+      // could ever prove that call dead; refuse before the scope is claimed.
+      const writeOnceSlots = route === "relay" ? (relaySlots?.(prepared) ?? null) : null;
+      if (route === "relay" && writeOnceSlots === null) {
+        throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      }
       const previous = await store.read(scope);
       const key = scopeKey(scope);
       // Marked live before the claim is queued, so a resolution that reads the
@@ -312,7 +333,11 @@ export const createStrk20MaturityRuntime = ({
       // closed rather than risk proving against state a landed write invalidates.
       // The scope stays live until that restore has landed.
       const result = await (async (): Promise<T> => {
-        await store.write(scope, { route, state: "submitting" });
+        await store.write(scope, {
+          route,
+          state: "submitting",
+          ...(writeOnceSlots === null ? {} : { writeOnceSlots }),
+        });
         return broadcast(prepared, journalFor(store, scope)).catch(async (error: unknown) => {
           if (!(error instanceof IndeterminateRpcWriteError) && !isTransportRpcError(error)) {
             await store.write(scope, previous);
@@ -330,9 +355,26 @@ export const createStrk20MaturityRuntime = ({
       return result;
     });
 
+  // "Unlock anyway" acts on the marker the user saw: it is read when the user
+  // asks, refused while a send on the scope is queued or running, and cleared
+  // only if it is still that marker once any queued work has settled. A
+  // marker a later send leaves is never cleared (review of mc-wallet 668).
+  const releasePendingWrite = async (scope: Strk20MaturityScope): Promise<boolean> => {
+    const key = scopeKey(scope);
+    if (liveSends.has(key) || submissionTails.has(key)) {
+      throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+    }
+    const seen = await store.read(scope);
+    if (seen?.state !== "submitting") {
+      return false;
+    }
+    return serializeSubmission(scope, () => store.releaseSubmitting(scope, seen));
+  };
+
   return {
     provingBlock,
     recordSubmission,
+    releasePendingWrite,
     submitAccepted: submitPreparedAccepted,
   };
 };

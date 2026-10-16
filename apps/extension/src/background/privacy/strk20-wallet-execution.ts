@@ -32,7 +32,7 @@ import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { activityToken } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import { privacyShortfall } from "@bramble/wallet-protocol/privacy-blocker";
+import { PrivacyBlockerError, privacyShortfall } from "@bramble/wallet-protocol/privacy-blocker";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { approvalPayloadMatchesContext } from "../approvals/approval-context";
@@ -306,6 +306,12 @@ const executionWork = async (
     // so the panel does not report it as not sent (audit #173).
     if (error instanceof IndeterminateRpcWriteError) {
       return submissionUnknownResponse(errorText(error, "Private transaction failed"));
+    }
+    // A curated prerequisite (the pool-fee balance check, a deploy-first
+    // refusal) is raised before anything is signed, so its kind travels with
+    // it and the panel reads it as not sent rather than as unknown (#679).
+    if (error instanceof PrivacyBlockerError) {
+      return { error: errorText(error, "Private transaction failed"), privacyBlocker: error.kind };
     }
     return { error: errorText(error, "Private transaction failed") };
   }

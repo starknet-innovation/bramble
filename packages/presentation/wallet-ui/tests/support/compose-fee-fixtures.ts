@@ -29,6 +29,12 @@ export const strkBalance = {
   symbol: "STRK",
 };
 
+/** An ETH shield's fee lines: the pool's STRK charge, and the STRK its gas is paid in (665). */
+export const ETH_SHIELD_LINES = [
+  "Pool fee: 2 STRK from your public balance",
+  "The network fee is also paid in public STRK.",
+];
+
 export const FIELDS: TransferFields = {
   accountId: account.id,
   amount: "1",

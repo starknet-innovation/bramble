@@ -23,6 +23,7 @@ import {
 import { preparedReview } from "../../../../src/sidepanel/journeys/send/transfer-submit";
 import { reviewFeeSection } from "../../../../src/sidepanel/shared/review-render";
 import { context, registered, review, strkBalance } from "../../../support/compose-fee-fixtures";
+import { transferPublicBalance } from "../../../support/transfer-ui-harness";
 
 const NOTE = "Leave enough STRK for the network fee.";
 const STRK = 10n ** 18n;
@@ -148,5 +149,48 @@ describe("the review of a shield", () => {
     ).toBeNull();
     const relayed = { ...preparation("1000"), route: "private-relay" } as PrivacyPreparation;
     expect(preparedReview(relayed, funding("48")).feeAffordability).toBe("unknown");
+  });
+});
+
+// Issue 665: shielding another token still pays both fees in public STRK.
+describe("the Amount screen for a shield of another token", () => {
+  const STRK_NOTE = "The network fee is also paid in public STRK.";
+  const eth = (strk: readonly (typeof strkBalance)[]) =>
+    context(
+      {
+        privacy: registered,
+        publicBalances: [transferPublicBalance, ...strk],
+        recipientRegistration: "registered",
+      },
+      { amount: "1", destination: "private" },
+    );
+  const withStrk = (balance: bigint) => eth([{ ...strkBalance, balance: balance.toString() }]);
+
+  test("says the network fee is paid in STRK too", () => {
+    const target = composeFeeTarget(withStrk(50n * STRK));
+    if (target === null) throw new Error("expected a priceable shield");
+    expect(target.leavesNoGas).toBe(false);
+    expect(composeFeeLines(target, { failed: false, review: review() })).toEqual([
+      "Pool fee: 2 STRK from your public balance",
+      STRK_NOTE,
+    ]);
+  });
+
+  test("says to leave STRK for the network fee when the pool fee takes it all", () => {
+    const target = composeFeeTarget(withStrk(2n * STRK));
+    if (target === null) throw new Error("expected a priceable shield");
+    expect(target.leavesNoGas).toBe(true);
+    expect(composeFeeLines(target, { failed: false, review: review() })).toEqual([
+      "Pool fee: 2 STRK from your public balance",
+      NOTE,
+    ]);
+  });
+
+  test("still refuses before review when public STRK cannot cover the pool fee", () => {
+    expect(composeFeeTarget(withStrk(STRK))).toBeNull();
+  });
+
+  test("makes no claim while the STRK balance is unread", () => {
+    expect(shieldLeavesNoStrkForGas(eth([]))).toBe(false);
   });
 });
