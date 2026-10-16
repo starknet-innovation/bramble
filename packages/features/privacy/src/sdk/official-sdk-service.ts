@@ -21,6 +21,7 @@ import type {
   Strk20SubmissionRoute,
 } from "../policy/maturity";
 import { reportStrk20Phase } from "../policy/phases";
+import { relayClaimSlots } from "../policy/relay-claim-slots";
 import {
   type PreparedStrk20AccountSubmission,
   STRK20_PRIVACY_LEAK,
@@ -130,6 +131,7 @@ export const createOfficialStrk20Service = ({
     route: Strk20SubmissionRoute,
     prepare: (provider: RpcProvider, scope: Strk20MaturityScope) => Promise<P>,
     broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
+    relaySlots?: (prepared: P) => readonly string[] | null,
   ): Promise<T> => {
     const config = requireStrk20Config(input);
     const nodeUrl = input.rpcUrls[0];
@@ -144,6 +146,7 @@ export const createOfficialStrk20Service = ({
       route,
       () => prepare(provider, scope),
       broadcast,
+      relaySlots,
     );
   };
   const publicBatch = (
@@ -166,6 +169,10 @@ export const createOfficialStrk20Service = ({
     ...strk20ShadowAccountReads({ pauseForServiceRetry, providerFor, sdk }),
     async prepare(input) {
       return prepare(input);
+    },
+    async releasePendingWrite(input) {
+      const config = requireStrk20Config(input);
+      return maturity.releasePendingWrite(maturityScope(input, config.poolAddress));
     },
     async prepareRegistration(input) {
       const config = requireStrk20Config(input);
@@ -410,6 +417,13 @@ export const createOfficialStrk20Service = ({
             ...relayed,
           };
         },
+        // The slots are read at the configured pool, so they are taken only
+        // from a call to that pool's `apply_actions` (mc-wallet #668).
+        (callAndProof) =>
+          callAndProof.call.entry_point === "apply_actions" &&
+          sameFelt(callAndProof.call.contract_address, config.poolAddress)
+            ? relayClaimSlots(callAndProof.call.calldata)
+            : null,
       );
     },
     async submitPrepared(input) {

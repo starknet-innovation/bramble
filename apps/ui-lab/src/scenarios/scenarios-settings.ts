@@ -64,6 +64,14 @@ export const settingsScenario: WalletScenario = {
       state: { requestSurface: "side-panel" },
     },
     {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "privacy-unlock" }),
+      id: "privacy-unlock",
+      label: "Unlock private transactions",
+      narrative:
+        "Clearing a paused private transaction states that the earlier one could still go through.",
+      state: { pendingPrivateWrite: true },
+    },
+    {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "network" }),
       id: "network",
       label: "Choose network",
@@ -272,6 +280,7 @@ export const settingsScenario: WalletScenario = {
     "settings",
     "appearance",
     "request-settings",
+    "privacy-unlock",
     "network",
     "advanced-network",
     "account",

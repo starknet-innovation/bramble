@@ -37,6 +37,7 @@ import { createNftRuntimeClient } from "../journeys/collectibles/nft-runtime";
 import { createLedgerRuntimeClient } from "../journeys/ledger/runtime-client";
 import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding-runtime";
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
+import { createPrivacyUnlockClient } from "../journeys/privacy/privacy-unlock-runtime";
 import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
 
@@ -76,6 +77,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createNftRuntimeClient(sendMessage),
     ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
+    ...createPrivacyUnlockClient(sendMessage),
     ...createShadowAccountsRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),

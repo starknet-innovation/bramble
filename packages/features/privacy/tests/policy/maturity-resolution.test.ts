@@ -292,6 +292,8 @@ describe("resolving a stuck privacy write", () => {
         await backing.write(scope, newer);
         return false;
       },
+      releaseRelayClaim: (target, slots, block) => backing.releaseRelayClaim(target, slots, block),
+      releaseSubmitting: (target, expected) => backing.releaseSubmitting(target, expected),
       releaseUnsigned: () => backing.releaseUnsigned(scope),
       write: async (target, record) => {
         writes.push(record);

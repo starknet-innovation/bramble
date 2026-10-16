@@ -1,21 +1,28 @@
 /**
- * Trusted browser-session persistence for the latest STRK20 write per
- * account/network/pool. It contains only public transaction metadata and
- * survives MV3 service-worker restarts, but clears when the browser exits.
+ * Persistence for the latest STRK20 write per account/network/pool, in the
+ * extension's local storage, so a `submitting` marker survives service-worker
+ * restarts and browser restarts alike (mc-wallet #668). A browser restart used
+ * to clear it without cancelling anything, so a relayed proof could still land
+ * after the user retried. It holds public transaction metadata and, for a
+ * relay claim, the pool storage slots its call writes once; no key material.
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
+  isRelayClaimWithSlots,
+  isSameSubmitting,
   isUnsignedAccountClaim,
   maturityRecordNamesHash,
   type Strk20MaturityRecord,
   type Strk20MaturityScope,
   type Strk20MaturityStore,
 } from "@bramble/privacy/maturity";
+import { MAX_RELAY_CLAIM_SLOTS } from "@bramble/privacy/relay-claim-slots";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -33,19 +40,36 @@ type StoredMaturity = Strk20MaturityRecord & Strk20MaturityScope;
 // dropped like any other malformed entry.
 // An unsigned claim may name its route; a signed one is always the account's
 // and names none. An unknown route is malformed rather than read as either.
+// Only an unsigned `relay` claim may carry `WriteOnce` slots.
 const isSubmittingIdentity = (value: Record<string, unknown>): boolean =>
   value["acceptedBlock"] === undefined &&
   ((value["transactionHash"] === undefined &&
     value["senderAddress"] === undefined &&
     value["nonce"] === undefined &&
-    (value["route"] === undefined || value["route"] === "account" || value["route"] === "relay")) ||
+    (value["route"] === undefined || value["route"] === "account" || value["route"] === "relay") &&
+    (value["writeOnceSlots"] === undefined ||
+      (value["route"] === "relay" && isWriteOnceSlots(value["writeOnceSlots"])))) ||
     (value["route"] === undefined &&
+      value["writeOnceSlots"] === undefined &&
       typeof value["transactionHash"] === "string" &&
       isNonZeroStarkFieldElement(value["transactionHash"]) &&
       typeof value["senderAddress"] === "string" &&
       isNonZeroStarkFieldElement(value["senderAddress"]) &&
       typeof value["nonce"] === "string" &&
       isStarkFieldElement(value["nonce"])));
+
+// Sorted, distinct, canonical non-zero felts, as `relayClaimSlots` returns them.
+const isWriteOnceSlots = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.length <= MAX_RELAY_CLAIM_SLOTS &&
+  value.every(
+    (slot: unknown, index) =>
+      typeof slot === "string" &&
+      canonicalFelt(slot) === slot &&
+      isNonZeroStarkFieldElement(slot) &&
+      (index === 0 || (value[index - 1] as string) < slot),
+  );
 
 const isBlockNumberOrAbsent = (value: unknown): boolean =>
   value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
@@ -66,6 +90,7 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
     "senderAddress",
     "state",
     "transactionHash",
+    "writeOnceSlots",
   ]) &&
   typeof value["networkId"] === "string" &&
   isStarknetNetworkId(value["networkId"]) &&
@@ -73,8 +98,17 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
   typeof value["poolAddress"] === "string" &&
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
   ((value["state"] === "submitting" && isSubmittingIdentity(value)) ||
+    (value["state"] === "released" &&
+      value["route"] === undefined &&
+      value["senderAddress"] === undefined &&
+      value["nonce"] === undefined &&
+      value["transactionHash"] === undefined &&
+      value["writeOnceSlots"] === undefined &&
+      typeof value["acceptedBlock"] === "number" &&
+      isBlockNumberOrAbsent(value["acceptedBlock"])) ||
     (value["state"] === "submitted" &&
       value["route"] === undefined &&
+      value["writeOnceSlots"] === undefined &&
       value["senderAddress"] === undefined &&
       value["nonce"] === undefined &&
       typeof value["transactionHash"] === "string" &&
@@ -99,9 +133,18 @@ const readScope = async (
   if (!entry) {
     return null;
   }
+  if (entry.state === "released") {
+    return { acceptedBlock: entry.acceptedBlock, state: "released" };
+  }
   if (entry.state === "submitting") {
     return entry.transactionHash === undefined
-      ? { ...(entry.route === undefined ? {} : { route: entry.route }), state: "submitting" }
+      ? {
+          ...(entry.route === undefined ? {} : { route: entry.route }),
+          ...(entry.writeOnceSlots === undefined
+            ? {}
+            : { writeOnceSlots: [...entry.writeOnceSlots] }),
+          state: "submitting",
+        }
       : {
           nonce: entry.nonce,
           senderAddress: entry.senderAddress,
@@ -116,6 +159,19 @@ const readScope = async (
   };
 };
 
+// Evicts the oldest settled records past MAX_RECORDS: a `submitted` write with
+// an accepted block. Never a record that still guards its scope (a
+// `submitting` marker, a `submitted` write awaiting its receipt, or a
+// `released` floor): dropping one would read as a clean scope and reopen
+// proving while an earlier write may still land or before its state is past.
+const guards = (entry: StoredMaturity): boolean =>
+  entry.state !== "submitted" || entry.acceptedBlock === undefined;
+
+const bounded = (entries: readonly StoredMaturity[]): readonly StoredMaturity[] => {
+  let excess = entries.length - MAX_RECORDS;
+  return excess <= 0 ? entries : entries.filter((entry) => guards(entry) || excess-- <= 0);
+};
+
 const writeScope = async (
   store: KeyValueStore,
   scope: Strk20MaturityScope,
@@ -123,16 +179,35 @@ const writeScope = async (
 ): Promise<void> => {
   const retained = (await readAll(store)).filter((entry) => !sameScope(entry, scope));
   const next = record ? [...retained, { ...scope, ...record }] : retained;
-  await store.set(STORE_KEY, next.slice(-MAX_RECORDS));
+  await store.set(STORE_KEY, [...bounded(next)]);
+};
+
+const clearIf = async (
+  store: KeyValueStore,
+  scope: Strk20MaturityScope,
+  matches: (record: Strk20MaturityRecord | null) => boolean,
+): Promise<boolean> => {
+  if (!matches(await readScope(store, scope))) {
+    return false;
+  }
+  await writeScope(store, scope, null);
+  return true;
 };
 
 /**
- * Creates the session-backed maturity store.
+ * Creates the durable maturity store over `store` (the extension's local
+ * storage in production).
  *
- * `read` stays outside the mutation queue. `replaceIfCurrentHash` and
- * `releaseUnsigned` do not: the comparison and the write are one queued
- * mutation, so a resolution that observed an older marker cannot overwrite a
- * newer send that queued first.
+ * Markers earlier builds kept in session storage are not carried over: the
+ * browser clears that area when the extension updates, so none survives to
+ * this build (mc-wallet 668 review). On Firefox, which has no
+ * `storage.setAccessLevel`, local storage is also readable by the extension's
+ * own content script; the marker is public metadata, but that script could
+ * clear it.
+ *
+ * `read` stays outside the mutation queue. The conditional updates do not:
+ * each comparison and its write are one queued mutation, so a resolution that
+ * observed an older marker cannot overwrite a newer send that queued first.
  */
 export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityStore =>
   serializeStoreMutations<Strk20MaturityStore>(
@@ -148,12 +223,18 @@ export const createStrk20MaturityStore = (store: KeyValueStore): Strk20MaturityS
         await writeScope(store, scope, record);
         return true;
       },
-      async releaseUnsigned(scope) {
-        if (!isUnsignedAccountClaim(await readScope(store, scope))) {
+      releaseUnsigned(scope) {
+        return clearIf(store, scope, isUnsignedAccountClaim);
+      },
+      async releaseRelayClaim(scope, writeOnceSlots, acceptedBlock) {
+        if (!isRelayClaimWithSlots(await readScope(store, scope), writeOnceSlots)) {
           return false;
         }
-        await writeScope(store, scope, null);
+        await writeScope(store, scope, { acceptedBlock, state: "released" });
         return true;
+      },
+      releaseSubmitting(scope, expected) {
+        return clearIf(store, scope, (record) => isSameSubmitting(record, expected));
       },
       write(scope, record) {
         return writeScope(store, scope, record);

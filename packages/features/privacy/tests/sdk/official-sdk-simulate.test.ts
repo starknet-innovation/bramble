@@ -16,6 +16,7 @@ import {
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,
   executeResult,
+  RELAY_CALLDATA,
   sdkRuntime as runtime,
   STRK20_POOL_ADDRESS,
   strk20ProviderFor,
@@ -87,7 +88,7 @@ describe("STRK20 simulate keeps the viewing key off the RPC node", () => {
 
     await expect(service.prepare(withdrawal)).resolves.toEqual({
       call: {
-        calldata: ["0x1"],
+        calldata: [...RELAY_CALLDATA],
         contract_address: STRK20_POOL_ADDRESS,
         entry_point: "apply_actions",
       },
