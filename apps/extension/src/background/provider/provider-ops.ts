@@ -452,6 +452,17 @@ export const executeInvokeApproval = async (
       approval.payload.activitySummary ??
       `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
   });
+  // Grants, then activity, for every hash that may be on chain (#678, ./allowance-recording).
+  const recordSubmitted = async (hash: string): Promise<void> => {
+    await recordApproveAllowances({
+      assets: verificationContext(account, preferences),
+      calls,
+      owner: allowanceOwner(account),
+      store: allowanceStore,
+      transactionHash: hash,
+    });
+    await recordSubmittedActivity(activity, activityFor(hash));
+  };
   // A SNIP-36 app proof is a plain invoke proof; only a pool batch takes the pool lane.
   const poolProof = isPoolShapedBatch(calls, preferences, account.networkId)
     ? approval.payload.proof
@@ -480,19 +491,9 @@ export const executeInvokeApproval = async (
           rpcUrls,
           signHash: context.signHash,
         });
-    // Recorded before the activity line: see ./allowance-recording.
-    await recordApproveAllowances({
-      assets: verificationContext(account, preferences),
-      calls,
-      owner: allowanceOwner(account),
-      store: allowanceStore,
-      transactionHash: result.transactionHash,
-    });
-    await recordSubmittedActivity(activity, activityFor(result.transactionHash));
+    await afterBroadcast(() => recordSubmitted(result.transactionHash));
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return invokeFailureResponse(error, poolProof !== undefined, signedHash, (hash) =>
-      recordSubmittedActivity(activity, activityFor(hash)),
-    );
+    return invokeFailureResponse(error, poolProof !== undefined, signedHash, recordSubmitted);
   }
 };

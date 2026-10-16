@@ -376,7 +376,9 @@ const submitRevoke = async (
     if (pending !== undefined) await afterBroadcast(() => recordRevoke(pending));
     return submissionUnknownResponse(error.message, pending);
   }
-  await recordRevoke(transactionHash);
+  // Once a hash exists the reply carries it: a failed local write must not
+  // turn a revoke that is on its way into a plain error (errors audit F1).
+  await afterBroadcast(() => recordRevoke(transactionHash));
   return { ok: true, transactionHash };
 };
 

@@ -285,7 +285,7 @@ export const tokenDetailFlow = (
       <section class="section">
         <p class="eyebrow">Your balance</p>
         <div class="token-side">
-          <span class="token-amount">${escapeHtml(balance ? `${compactAmount(balance.formatted)} ${token.symbol}` : `0 ${token.symbol}`)}</span>
+          <span class="token-amount">${escapeHtml(balance?.formatted ? `${compactAmount(balance.formatted)} ${token.symbol}` : "—")}</span>
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
