@@ -25,6 +25,7 @@ import { icon } from "../../shared/icons";
 import { setFlowStep } from "../../shared/parts";
 import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import { compactAmount, tokenGlyph } from "../portfolio/token-row";
+import { sendBalanceLabel } from "../send/send-model";
 import { setText } from "../send/transfer-progress-ui";
 import {
   SWAP_LOSS_HIGH_RISK_PERCENT,
@@ -163,12 +164,10 @@ const paintSwapPanels = (deps: SwapUiDeps, root: Element, figures: SwapFigures):
   if (input && input.value !== amountText && input.ownerDocument.activeElement !== input) {
     input.value = amountText;
   }
-  setText(
-    root,
-    "swap-sell-balance",
-    figures.sellBalance ? compactAmount(figures.sellBalance.formatted) : "0",
-  );
-  setText(root, "swap-buy-balance", buyBalance ? compactAmount(buyBalance.formatted) : "0");
+  // An unknown balance reads "—", never 0 (issue 680); Max and the funds check
+  // are already withheld while it is unknown.
+  setText(root, "swap-sell-balance", sendBalanceLabel(figures.sellBalance?.formatted ?? ""));
+  setText(root, "swap-buy-balance", sendBalanceLabel(buyBalance?.formatted ?? ""));
   setText(root, "swap-buy-amount", compactAmount(quote?.buyAmount ?? pendingBuyAmount ?? "0"));
   setText(
     root,

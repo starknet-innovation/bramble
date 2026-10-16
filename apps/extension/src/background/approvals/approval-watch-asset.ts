@@ -8,6 +8,7 @@
 import { WalletError } from "@bramble/core/errors";
 import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { withTokenId } from "@bramble/wallet-model/preferences";
 import { type ApplyResult, reject } from "./approval-applier";
 import type { PendingApproval } from "./approvals";
@@ -25,11 +26,13 @@ const tracked: ApplyResult = {
 };
 
 /**
- * Applies an approved watch-asset card. The store treats an address already
- * tracked on the network as watched without writing (a second origin's card
- * for the same token) and refuses past its added-token cap; that refusal
- * reaches the dapp and the panel as is. An already-tracked notice writes
- * nothing and answers as its Close does.
+ * Applies an approved watch-asset card. An address already tracked on the
+ * network, under any id, is answered as watched without writing: a second
+ * origin's card for the same token, or an older card approved after the user
+ * added the token by hand, whose record and trusted status are kept (#682).
+ * The store refuses past its added-token cap; that refusal reaches the dapp
+ * and the panel as is. An already-tracked notice writes nothing and answers as
+ * its Close does.
  */
 export const applyWatchAssetApproval = async (
   preferencesStore: WalletPreferencesStore,
@@ -39,6 +42,18 @@ export const applyWatchAssetApproval = async (
     return reject({ error: "approval not found" });
   }
   if (approval.alreadyTracked === true) {
+    return tracked;
+  }
+  // Tracked since the card was queued: keep that record and write nothing, so
+  // neither the upsert nor the spam hide below can touch it. The store applies
+  // the same rule inside its own write, which covers a race with this read.
+  const card = approval.token;
+  const current = await preferencesStore.read();
+  if (
+    current.tokens.some(
+      (token) => token.networkId === card.networkId && sameFelt(token.address, card.address),
+    )
+  ) {
     return tracked;
   }
   // Recorded as dapp-supplied (audit 171): its metadata came from the site, so
