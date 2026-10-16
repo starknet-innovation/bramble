@@ -23,6 +23,11 @@ const providerWith = (blocks: number[]): RpcProvider =>
     getBlockNumber: async () => blocks.shift() ?? 30,
   }) as unknown as RpcProvider;
 
+// The relay claim's WriteOnce slots (#668): every relay send records them.
+const SLOTS = ["0x5157"];
+const relaySlots = () => SLOTS;
+const relayClaim = { route: "relay" as const, state: "submitting" as const, writeOnceSlots: SLOTS };
+
 describe("STRK20 proof maturity", () => {
   test("records a pending hash before waiting for an accepted receipt", async () => {
     const store = memoryStrk20MaturityStore();
@@ -211,13 +216,14 @@ describe("STRK20 proof maturity", () => {
         "relay",
         async () => "prepared",
         async () => {
-          expect(await store.read(scope)).toEqual({ route: "relay", state: "submitting" });
+          expect(await store.read(scope)).toEqual(relayClaim);
           throw new Error("worker terminated after broadcast");
         },
+        relaySlots,
       ),
     ).rejects.toThrow("worker terminated after broadcast");
 
-    expect(await store.read(scope)).toEqual({ route: "relay", state: "submitting" });
+    expect(await store.read(scope)).toEqual(relayClaim);
     await expect(runtime.provingBlock(providerWith([30]), scope)).rejects.toThrow(
       "may still be in progress",
     );
@@ -236,10 +242,11 @@ describe("STRK20 proof maturity", () => {
         async () => {
           throw new IndeterminateRpcWriteError("safe status-unknown message");
         },
+        relaySlots,
       ),
     ).rejects.toThrow("safe status-unknown message");
 
-    expect(await store.read(scope)).toEqual({ route: "relay", state: "submitting" });
+    expect(await store.read(scope)).toEqual(relayClaim);
   });
 
   test("uses the built-in receipt wait when no override is injected", async () => {
@@ -383,6 +390,7 @@ describe("STRK20 proof maturity", () => {
             proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
             signTypedData: async () => [],
           }),
+        relaySlots,
       )
       .then(
         () => null,
@@ -397,7 +405,7 @@ describe("STRK20 proof maturity", () => {
     // The relay may have forwarded the transaction, so the guard stays closed
     // and the next private action refuses rather than proving against note
     // state a landed write would have invalidated.
-    expect(await store.read(scope)).toEqual({ route: "relay", state: "submitting" });
+    expect(await store.read(scope)).toEqual(relayClaim);
     await expect(
       createStrk20MaturityRuntime({ store }).provingBlock(providerWith([30]), scope),
     ).rejects.toThrow("may still be in progress");

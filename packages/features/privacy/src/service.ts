@@ -179,6 +179,8 @@ export type Strk20ShadowAccountInfo = {
 export type Strk20Service = {
   readonly privateBalances: (input: Strk20BalancesInput) => Promise<readonly Strk20BalanceEntry[]>;
   readonly prepare: (input: Strk20PrepareInput) => Promise<Strk20CallAndProof>;
+  /** "Unlock anyway": clears a stuck `submitting` marker; that write may still land. */
+  readonly releasePendingWrite?: (input: Strk20AccountContext) => Promise<boolean>;
   readonly registrationStatus?: (
     input: Strk20AccountContext & { readonly subject?: string; readonly token: string },
   ) => Promise<"registered" | "unregistered">;
@@ -235,9 +237,8 @@ export type Strk20Service = {
   ) => Promise<{ readonly transactionHash: string }>;
 };
 
-// Names the stub explicitly. A build with no privacy runtime wired otherwise
-// reports the same line as a live service that failed, which sends the reader
-// looking at the backend for a wiring problem.
+// Names the stub explicitly, so a build with no privacy runtime wired does not
+// report the line a live failure does and send the reader to the backend.
 const unavailable = (): never => {
   throw new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: no privacy runtime is wired in this build`);
 };
@@ -372,11 +373,10 @@ export const quoteStrk20Plan = async (
   input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
 ): Promise<Strk20SubmissionPlan> => {
   assertNoPrivacyLeak(input.actions);
-  // Deposits are public by definition and may be the account's first private
-  // note. Routing them through the private relay would require a private fee
-  // balance that cannot exist yet, and checking for one here would disclose
-  // private state before the dapp request is approved. Keep the entry route
-  // deterministic and pay its fee from the public account instead.
+  // Deposits are public and may be the account's first private note. The relay
+  // would need a private fee balance that cannot exist yet, and checking for one
+  // here would disclose private state before the dapp request is approved. Keep
+  // the entry route deterministic and pay its fee from the public account.
   if (isDepositOnly(input.actions)) {
     if (!service.poolFee) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
