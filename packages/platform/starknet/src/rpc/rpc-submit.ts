@@ -219,14 +219,36 @@ const withDeployment = (
     ? { ...submission, deploymentTransactionHash: deployment.transactionHash }
     : submission;
 
-// A failure after an automatic deployment names the deployment, whose fee is
-// spent. A lost invoke reply stays indeterminate so callers never offer a
-// blind retry of a transaction that may already be on chain (audit #173).
-const postDeploymentFailure = (deploymentHash: string, error: unknown): WalletError => {
+// The accepted deployment each post-deployment failure carries, keyed by the
+// error object itself, so a caller can record the deployment whose fee is spent.
+const failedSubmissionDeployments = new WeakMap<object, string>();
+
+/**
+ * The accepted DEPLOY_ACCOUNT a failed {@link submitInvokeTransaction} sent
+ * before its invoke failed or lost its reply, or undefined when it deployed
+ * nothing. Only an error this module raised after an accepted deployment
+ * carries one, so a caller can record that deployment, and the fee it paid,
+ * whatever happened to the invoke (mc-wallet 712 review).
+ */
+export const failedSubmissionDeployment = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null ? failedSubmissionDeployments.get(error) : undefined;
+
+/**
+ * The failure of an invoke sent after an accepted automatic deployment. It
+ * names the deployment, whose fee is spent, and carries its hash for
+ * {@link failedSubmissionDeployment}. A lost invoke reply stays indeterminate,
+ * so callers never offer a blind retry of a transaction that may already be on
+ * chain (audit #173). Exported for callers' tests; production code reaches it
+ * only through {@link submitInvokeTransaction}.
+ */
+export const postDeploymentFailure = (deploymentHash: string, error: unknown): WalletError => {
   const message = `Account deployment ${deploymentHash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.`;
-  return error instanceof IndeterminateRpcWriteError
-    ? new IndeterminateRpcWriteError(message)
-    : new WalletError(message);
+  const failure =
+    error instanceof IndeterminateRpcWriteError
+      ? new IndeterminateRpcWriteError(message)
+      : new WalletError(message);
+  failedSubmissionDeployments.set(failure, deploymentHash);
+  return failure;
 };
 
 /**

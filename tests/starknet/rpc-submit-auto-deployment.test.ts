@@ -2,7 +2,11 @@
 
 import { describe, expect, test } from "bun:test";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
-import { type InvokeInput, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
+import {
+  failedSubmissionDeployment,
+  type InvokeInput,
+  submitInvokeTransaction,
+} from "@bramble/starknet/rpc-submit";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { type Call, CallData, hash, logger, type RpcProvider } from "starknet";
 
@@ -156,6 +160,9 @@ describe("auto-deployed invoke submission", () => {
       `Account deployment ${seen.signedHashes[0]} completed`,
     );
     expect((result as Error).message).toContain("Check on-chain state before retrying");
+    // mc-wallet 712 review: the failure carries the accepted deployment, so the
+    // caller can record it in Activity whatever happened to the invoke.
+    expect(failedSubmissionDeployment(result)).toBe(seen.signedHashes[0] ?? "missing");
     expect(seen.estimateBatchSizes).toEqual([2, 1]);
     expect(seen.deploys).toBe(1);
     expect(seen.invokes).toBe(1);
@@ -172,6 +179,7 @@ describe("auto-deployed invoke submission", () => {
     expect((result as Error).message).toContain(
       `Account deployment ${seen.signedHashes[0]} completed`,
     );
+    expect(failedSubmissionDeployment(result)).toBe(seen.signedHashes[0] ?? "missing");
     expect(seen.deploys).toBe(1);
     expect(seen.invokes).toBe(0);
     expect(journaled).toEqual([]);

@@ -4,6 +4,8 @@
  * explicit deploy, so the deploy is never missing from history.
  */
 import { describe, expect, test } from "bun:test";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { postDeploymentFailure } from "@bramble/starknet/rpc-submit";
 import { memoryActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -80,7 +82,7 @@ const walletStub = {
 const DEPLOY_HASH = "0x5d1";
 const TRANSFER_HASH = "0x7ab";
 
-const rpc = (deploymentTransactionHash?: string) =>
+const rpc = (deploymentTransactionHash?: string, failure?: Error) =>
   ({
     async estimateInvokeFee() {
       return { overallFee: "2500000000000000", unit: "FRI" };
@@ -95,6 +97,7 @@ const rpc = (deploymentTransactionHash?: string) =>
       return {};
     },
     async submitErc20Transfer() {
+      if (failure) throw failure;
       return {
         call: {
           calldata: ["0x777", "1500000000000000000", "0"],
@@ -107,13 +110,13 @@ const rpc = (deploymentTransactionHash?: string) =>
     },
   }) as unknown as RuntimeRpc;
 
-const send = async (deploymentTransactionHash?: string) => {
+const send = async (deploymentTransactionHash?: string, failure?: Error) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const activity = memoryActivityLog(() => 10);
   const handler = createMessageHandler(walletStub, testExtension, {
     activity,
-    runtimeRpc: rpc(deploymentTransactionHash),
+    runtimeRpc: rpc(deploymentTransactionHash, failure),
     session,
   });
   const response = await handler(
@@ -150,5 +153,32 @@ describe("a send that deploys the account first", () => {
   test("a send from a deployed account records only the transfer", async () => {
     const { activity } = await send();
     expect(activity.map((entry) => entry.kind)).toEqual(["transfer"]);
+  });
+
+  // mc-wallet 712 review: the deployment's fee is spent even when the
+  // transfer after it fails, so the deployment is recorded either way.
+  test("records the accepted deployment when the transfer after it is refused", async () => {
+    const failure = postDeploymentFailure(DEPLOY_HASH, new Error("invoke rejected"));
+    const { activity, response } = await send(DEPLOY_HASH, failure);
+    expect(response).toMatchObject({ error: expect.any(String) });
+    expect(activity.map((entry) => [entry.kind, entry.hash])).toEqual([["deploy", DEPLOY_HASH]]);
+  });
+
+  test("records the accepted deployment when the transfer's reply is lost", async () => {
+    const failure = postDeploymentFailure(
+      DEPLOY_HASH,
+      new IndeterminateRpcWriteError("reply lost"),
+    );
+    const { activity, response } = await send(DEPLOY_HASH, failure);
+    expect(response).toMatchObject({ submissionUnknown: true });
+    expect(activity.find((entry) => entry.hash === DEPLOY_HASH)).toMatchObject({
+      kind: "deploy",
+      summary: DEPLOY_ACTIVITY_SUMMARY,
+    });
+  });
+
+  test("an ordinary failure with no deployment records nothing", async () => {
+    const { activity } = await send(undefined, new Error("invoke rejected"));
+    expect(activity).toEqual([]);
   });
 });

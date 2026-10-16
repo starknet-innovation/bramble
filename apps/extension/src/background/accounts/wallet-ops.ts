@@ -351,8 +351,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     summary: report.calls[0]?.summary ?? `Send ${token.symbol}`,
     ...activityToken(token),
   });
-  // The hash of the invoke as signed, captured before it is sent. Only used when
-  // the reply is lost, so the transfer stays traceable (audit #173).
+  // The invoke's signed hash, kept so a lost reply stays traceable (audit #173).
   let signedHash: string | undefined;
   let transactionHash: string;
   let deploymentHash: string | undefined;
@@ -378,6 +377,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     });
     ({ deploymentTransactionHash: deploymentHash, transactionHash } = result);
   } catch (error) {
+    await afterBroadcast(() => recordAutoDeployment(deps.activity, account, error));
     if (!(error instanceof IndeterminateRpcWriteError)) {
       throw error;
     }

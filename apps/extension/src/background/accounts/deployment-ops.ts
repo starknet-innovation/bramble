@@ -2,6 +2,7 @@
 
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate, StarkHashSigner } from "@bramble/starknet/rpc";
+import { failedSubmissionDeployment } from "@bramble/starknet/rpc-submit";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
@@ -43,21 +44,26 @@ const recordAccountDeployment = (
   });
 
 /**
- * Records the deployment a send from an undeployed account ran first, when
- * `hash` names one; resolves at once otherwise.
+ * Records the deployment a send from an undeployed account ran first: `source`
+ * is the accepted deployment's hash on success, or the submission's failure,
+ * which names the accepted deployment when the invoke after it failed or lost
+ * its reply (its fee is spent either way). Resolves at once when no deployment
+ * was accepted.
  */
 export const recordAutoDeployment = (
   activity: ActivityLog,
   account: AccountRef,
-  hash: string | undefined,
-): Promise<void> =>
-  hash === undefined
+  source: unknown,
+): Promise<void> => {
+  const hash = typeof source === "string" ? source : failedSubmissionDeployment(source);
+  return hash === undefined
     ? Promise.resolve()
     : recordAccountDeployment(activity, {
         accountId: account.id,
         hash,
         networkId: account.networkId,
       });
+};
 
 // An account already deployed is refused by name before anything is estimated or
 // signed: estimating a deployment for it fails, and that failure read as
