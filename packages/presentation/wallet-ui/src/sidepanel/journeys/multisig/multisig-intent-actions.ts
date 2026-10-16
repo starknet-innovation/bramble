@@ -22,6 +22,18 @@ export const STALE_INTENT_MAY_HAVE_BEEN_SENT = "This may already have been sent 
 export const STALE_INTENT_FEE_REFUSED =
   "The network refused this version: the fee rose above what was signed.";
 
+/** A stale version whose exact hash the sequencer rejected (mc-wallet 673). */
+export const STALE_INTENT_NOT_SENT = "This version was not sent.";
+
+/** Beside a rejected version while the nonce shows something else may have gone out. */
+export const STALE_INTENT_OTHER_VERSION = "Another signer may have sent a different version.";
+
+/** A stale version included and reverted: settled, its nonce and fee spent. */
+export const STALE_INTENT_REVERTED = "Failed on chain, fee paid, nothing transferred.";
+
+/** The only way to send a rejected or reverted version's calls again. */
+export const PROPOSE_AGAIN = "Propose again";
+
 /** Short label for a stale multisig version; it says nothing about whether it was sent. */
 export const STALE_INTENT_LABEL = "Out of date";
 
@@ -60,6 +72,9 @@ const intentAction = (
       packageIsPrimary: false,
       primary: button({ attributes: { "data-ms-submit": intent.id }, label: "Submit transaction" }),
     };
+  }
+  if (intent.state === "stale" && intent.staleOutcome !== undefined) {
+    return settledStaleAction(intent, hasReplacement);
   }
   if (intent.state === "stale") {
     const retryable = intent.signatures.length === intent.configSnapshot.threshold;
@@ -127,6 +142,34 @@ const intentAction = (
     note: "Nothing left to do here.",
     packageIsPrimary: false,
     primary: "",
+  };
+};
+
+// A stale version whose own hash the chain answered for (mc-wallet 673): the
+// sequencer rejected it, so it was never included, or it reverted, spending
+// its nonce and fee. It is never retried as signed; its calls go out again only
+// through a new proposal that collects fresh signatures at the current nonce.
+const settledStaleAction = (
+  intent: ArgentMultisigSigningIntent,
+  hasReplacement: boolean,
+): IntentAction => {
+  const lead =
+    intent.staleOutcome === "reverted"
+      ? STALE_INTENT_REVERTED
+      : intent.staleOutcome === "rejected"
+        ? `${STALE_INTENT_NOT_SENT} ${STALE_INTENT_OTHER_VERSION}`
+        : STALE_INTENT_NOT_SENT;
+  const freshApprovals = `${intent.configSnapshot.threshold} fresh approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
+  return {
+    canSign: false,
+    note: hasReplacement
+      ? `${lead} Continue the new proposal and collect ${freshApprovals}.`
+      : `${lead} ${PROPOSE_AGAIN} to collect ${freshApprovals}.`,
+    packageIsPrimary: false,
+    primary: button({
+      attributes: { "data-ms-propose-again": "true", "data-ms-refresh-intent": intent.id },
+      label: hasReplacement ? "Continue new proposal" : PROPOSE_AGAIN,
+    }),
   };
 };
 
