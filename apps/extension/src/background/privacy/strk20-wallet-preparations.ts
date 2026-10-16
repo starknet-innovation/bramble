@@ -309,6 +309,8 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
  */
 export type Strk20WalletPreparationStore = {
   readonly claim: (id: string) => Strk20WalletPreparation | null;
+  /** True while a review the user has not answered is held (an update waits for it). */
+  readonly held?: () => boolean;
   readonly put: (preparation: Strk20WalletPreparation) => Strk20WalletPreparationReview;
 };
 
@@ -375,6 +377,7 @@ export const createStrk20WalletPreparationStore = (
   };
 
   return {
+    held: () => [...pending.values()].some((entry) => !expired(entry)),
     claim(id) {
       if (!isSha256Digest(id)) {
         return null;

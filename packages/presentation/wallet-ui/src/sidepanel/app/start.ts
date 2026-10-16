@@ -42,6 +42,7 @@ import {
   bindPickers,
   deploymentPollScope,
 } from "../shell/shell-bindings";
+import { startUpdateBanner } from "../shell/update-banner";
 import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
 import { emptyRenderCache, type RenderData, updateRenderScope } from "./rendering/render-cache";
@@ -470,5 +471,6 @@ export const startWalletUi = async (
   };
   applyTheme();
   startRefreshLifecycle({ mutationRuntime, render, runtime, wallet });
+  startUpdateBanner({ doc: document, wallet });
   void render(await wallet.loadStatus()).catch(() => undefined);
 };

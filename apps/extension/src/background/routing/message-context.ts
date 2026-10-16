@@ -60,6 +60,7 @@ import {
   unavailablePreferencesStore,
 } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";
+import { inertUpdateReady, type UpdateReady } from "../runtime/update-ready";
 import {
   createSwapPreparationStore,
   type SwapPreparationStore,
@@ -94,6 +95,7 @@ export type RouterContext = {
   readonly swapPreparations: SwapPreparationStore;
   readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
+  readonly updates: UpdateReady;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
   readonly watchAssetAdmission: WatchAssetAdmission;
@@ -135,6 +137,7 @@ export type MessageHandlerOptions = {
    */
   readonly strk20Jobs?: Strk20JobRegistry;
   readonly strk20Preparations?: Strk20WalletPreparationStore;
+  readonly updates?: UpdateReady;
   /**
    * Held-response registry the router parks deferred sign requests in. The
    * entrypoint supplies the instance its worker keepalive watches; the default
@@ -210,6 +213,9 @@ const recoveryDiscoveryFor = (
 const waitersFor = (provided: SignatureWaiters | undefined): SignatureWaiters =>
   provided ?? createSignatureWaiters();
 
+// Inert when no browser runtime is wired (tests, tooling): never restarts.
+const updatesFor = (updates: UpdateReady | undefined): UpdateReady => updates ?? inertUpdateReady;
+
 /**
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
@@ -257,6 +263,7 @@ export const routerContext = (
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),
     strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
+    updates: updatesFor(options.updates),
     waiters,
     wallet,
     watchAssetAdmission: watchAssetAdmissionFor(options.watchAssetAdmission),

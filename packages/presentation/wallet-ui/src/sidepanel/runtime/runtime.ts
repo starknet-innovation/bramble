@@ -39,6 +39,7 @@ import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
 import { createPrivacyUnlockClient } from "../journeys/privacy/privacy-unlock-runtime";
 import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
+import { createUpdateClient } from "../shell/update-banner";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
 
 /**
@@ -78,6 +79,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createOnboardingRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
     ...createPrivacyUnlockClient(sendMessage),
+    ...createUpdateClient(sendMessage),
     ...createShadowAccountsRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
