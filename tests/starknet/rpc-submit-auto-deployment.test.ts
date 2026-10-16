@@ -68,6 +68,7 @@ const undeployedProvider = (
       },
       async invoke() {
         seen.invokes += 1;
+        if (invokeHash === "signed") return { transaction_hash: seen.signedHashes[1] };
         return invokeHash === null
           ? Promise.reject(Object.assign(new Error("invoke rejected"), { baseError: { code: 53 } }))
           : { transaction_hash: invokeHash };
@@ -174,5 +175,21 @@ describe("auto-deployed invoke submission", () => {
     expect(seen.deploys).toBe(1);
     expect(seen.invokes).toBe(0);
     expect(journaled).toEqual([]);
+  });
+
+  // mc-wallet 712: the caller records the deployment in Activity, so a send
+  // that deployed the account first names that deployment on success.
+  test("names the accepted deployment on a successful deploy-then-invoke send", async () => {
+    const { provider, seen } = undeployedProvider("signed");
+    const result = (await submit(provider, "100000", seen.signedHashes)) as unknown as {
+      readonly deploymentTransactionHash?: string;
+      readonly transactionHash: string;
+    };
+
+    expect(result).not.toBeInstanceOf(Error);
+    expect(result.deploymentTransactionHash).toBe(seen.signedHashes[0] ?? "missing");
+    expect(result.transactionHash).toBe(seen.signedHashes[1] ?? "missing");
+    expect(seen.deploys).toBe(1);
+    expect(seen.invokes).toBe(1);
   });
 });

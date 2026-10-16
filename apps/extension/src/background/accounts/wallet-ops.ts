@@ -53,7 +53,7 @@ import {
 } from "./account-signability";
 import { handleSetAccountHidden } from "./account-visibility-ops";
 import { handleActivity } from "./activity-ops";
-import { submitReviewedAccountDeployment } from "./deployment-ops";
+import { recordAutoDeployment, submitReviewedAccountDeployment } from "./deployment-ops";
 import { handleResolveStarkName } from "./stark-name-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
@@ -355,6 +355,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
   // the reply is lost, so the transfer stays traceable (audit #173).
   let signedHash: string | undefined;
   let transactionHash: string;
+  let deploymentHash: string | undefined;
   try {
     // The fee the review step showed, echoed back by the panel, is the ceiling this
     // send may sign under (MCW-V09-119); one whose cost ran past it is refused.
@@ -375,7 +376,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
       speed: input.speed,
       token,
     });
-    transactionHash = result.transactionHash;
+    ({ deploymentTransactionHash: deploymentHash, transactionHash } = result);
   } catch (error) {
     if (!(error instanceof IndeterminateRpcWriteError)) {
       throw error;
@@ -389,6 +390,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     }
     return submissionUnknownResponse(error.message, signedHash);
   }
+  await afterBroadcast(() => recordAutoDeployment(deps.activity, account, deploymentHash));
   await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(transactionHash)));
   return { ok: true, transactionHash };
 };

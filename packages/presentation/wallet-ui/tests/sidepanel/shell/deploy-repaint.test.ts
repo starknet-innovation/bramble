@@ -390,4 +390,26 @@ describe("deploy screen across repaints", () => {
     expect(errorToasts()).toEqual([]);
     expect(app.querySelector("#deploy-review")?.textContent).toContain("The node did not answer.");
   });
+
+  // mc-wallet 712: a send from this account deployed it, and the screen still
+  // offered Deploy. The background refuses the quote by name; the screen then
+  // repaints from a fresh read rather than leaving a fee-estimate failure.
+  test("an already-deployed refusal repaints the screen from a fresh status read", async () => {
+    const { app } = panel();
+    const renders: unknown[] = [];
+    const wallet = {
+      deployAccount: async () => {
+        throw new Error("account already deployed");
+      },
+      loadStatus: async () => status,
+    } as unknown as ShellBindingDeps["wallet"];
+    bindDeploy({
+      ...depsFor(app, wallet),
+      render: async (next, reason) => {
+        renders.push([next, reason]);
+      },
+    });
+    await settle();
+    expect(renders).toEqual([[status, "action"]]);
+  });
 });

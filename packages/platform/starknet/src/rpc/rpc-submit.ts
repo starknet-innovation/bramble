@@ -95,6 +95,12 @@ export type SignedInvoke = {
  */
 export type InvokeSubmission = {
   readonly calls: readonly Call[];
+  /**
+   * The DEPLOY_ACCOUNT this submission sent first, set only when the account
+   * was undeployed and its deployment was accepted before the invoke went out,
+   * so the caller can record it in Activity (mc-wallet 712).
+   */
+  readonly deploymentTransactionHash?: string;
   readonly transactionHash: string;
 };
 
@@ -204,6 +210,15 @@ const invokeJournal = (onSigned: InvokeInput["onSigned"], senderAddress: string)
   };
 };
 
+// Names the deployment a send ran first, so the caller can record it.
+const withDeployment = (
+  deployment: { readonly transactionHash: string } | null,
+  submission: InvokeSubmission,
+): InvokeSubmission =>
+  deployment
+    ? { ...submission, deploymentTransactionHash: deployment.transactionHash }
+    : submission;
+
 // A failure after an automatic deployment names the deployment, whose fee is
 // spent. A lost invoke reply stays indeterminate so callers never offer a
 // blind retry of a transaction that may already be on chain (audit #173).
@@ -308,13 +323,13 @@ export const submitInvokeTransaction = async (
           [...calls],
           details as Parameters<Account["execute"]>[1],
         );
-        return {
+        return withDeployment(deployment, {
           calls,
           transactionHash: matchingAcceptedRpcWriteHash(
             result.transaction_hash,
             capturedTransactionHashes[invokeHashIndex],
           ),
-        };
+        });
       } catch (error) {
         throw deployment ? postDeploymentFailure(deployment.transactionHash, error) : error;
       }
