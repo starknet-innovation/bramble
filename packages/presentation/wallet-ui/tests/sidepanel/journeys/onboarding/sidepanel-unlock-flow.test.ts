@@ -77,4 +77,34 @@ describe("locked vault handoff", () => {
       document.querySelector<HTMLButtonElement>('#unlock-form button[type="submit"]')?.disabled,
     ).toBe(false);
   });
+
+  // QA C2: a wrong passphrase is the user's own mistake, so its toast offers
+  // nothing to copy. Any other unlock failure keeps the diagnostic copy.
+  const rejectWith = async (message: string): Promise<Element | null> => {
+    document.body.innerHTML = `<main id="app">${locked({ ...unlockedStatus, locked: true })}</main>`;
+    bindUnlock({
+      app: document.querySelector("#app"),
+      render: async () => undefined,
+      wallet: {
+        unlockVault: async () => {
+          throw new Error(message);
+        },
+      } as unknown as SidepanelWallet,
+    });
+    setPassphrase("wrong passphrase");
+    document.querySelector<HTMLFormElement>("#unlock-form")?.requestSubmit();
+    await tick();
+    return document.querySelector("#toast-stack .toast.error:last-child");
+  };
+
+  test("a wrong-passphrase toast has no copy control", async () => {
+    const toast = await rejectWith("Incorrect passphrase");
+    expect(toast?.textContent).toContain("That passphrase is wrong.");
+    expect(toast?.querySelector(".toast-copy")).toBeNull();
+  });
+
+  test("any other unlock failure keeps its copy control", async () => {
+    const toast = await rejectWith("vault store envelope is corrupt");
+    expect(toast?.querySelector(".toast-copy")).not.toBeNull();
+  });
 });
