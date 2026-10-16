@@ -342,14 +342,18 @@ window) is a dashboard-only option and is intentionally not automated.
 
 Upgrades are one-way. Once a user unlocks a new version, the wallet migrates
 their vault and preferences, and an older build can't open them: v0.10.5, for
-example, refuses a v0.10.6 vault as an unsupported schema. Storage stays
-intact, and reinstalling the current version reopens it.
+example, refuses a v0.10.6 vault as an unsupported schema. The vault and
+preferences stay intact while it is refused, and installing the current version
+again over the old one reopens them; removing the extension deletes them.
+Activity is not protected the same way: an older build drops activity rows it
+can't parse, and its next activity write (status reconciliation runs without an
+unlock) stores the list without them.
 
 So never republish, re-tag or attach an older version, on any channel. To pull
 a bad release, ship a patch with a higher version (vX.Y.Z+1) that contains the
 fix or the last good code. The Chrome Web Store refuses a lower version, but
 AMO and self-hosted zips don't, so this rule is the only guard there. User-facing
-recovery docs are tracked in #670.
+recovery steps are in the README ("Upgrading") and on the website support page.
 
 ## 9. Where automation hooks in
 
