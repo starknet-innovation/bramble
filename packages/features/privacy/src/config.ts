@@ -5,7 +5,7 @@
  * bundle cannot keep a shared API secret.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { hasRedactionBreak, isServiceUrl } from "@bramble/core/service-url";
+import { isServiceUrl } from "@bramble/core/service-url";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
@@ -91,22 +91,6 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
   (value["shadowAccountAnonymizerAddress"] === undefined ||
     (typeof value["shadowAccountAnonymizerAddress"] === "string" &&
       isNonZeroStarkFieldElement(value["shadowAccountAnonymizerAddress"])));
-
-const configEndpoints = (config: Strk20NetworkConfig): readonly string[] => [
-  config.discoveryUrl,
-  config.proverUrl,
-  ...(config.ohttpRelayUrl === undefined ? [] : [config.ohttpRelayUrl]),
-  ...(config.paymaster === undefined ? [] : [config.paymaster.url]),
-];
-
-/**
- * Validates a STRK20 network configuration as it is entered: an
- * {@link isStrk20NetworkConfig} whose every endpoint redacts whole (no
- * `hasRedactionBreak` character), so an error can never show part of an API key.
- * Stored configurations keep the {@link isStrk20NetworkConfig} rule.
- */
-export const isEnteredStrk20NetworkConfig = (value: unknown): value is Strk20NetworkConfig =>
-  isStrk20NetworkConfig(value) && !configEndpoints(value).some(hasRedactionBreak);
 
 /**
  * Bundled mainnet routing uses the wallet-owned AWS gateway so private upstream

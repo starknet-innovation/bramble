@@ -3,7 +3,6 @@
  * RPC overrides, and backup imports.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { isEnteredWebSocketServiceUrl } from "@bramble/core/service-url";
 import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@bramble/privacy/config";
 import { type AccountGroupIcon, isAccountGroupIcon } from "@bramble/settings/groups";
 import { isAccountId } from "@bramble/wallet-model/accounts";
@@ -13,7 +12,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
-import { isNostrPublicKey } from "@bramble/wallet-model/nostr";
+import { isNostrPublicKey, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
 import { isApprovalSurfacePreference, isDisplayCurrency } from "@bramble/wallet-model/preferences";
 
 const isGroupNameText = (value: unknown): value is string =>
@@ -336,7 +335,7 @@ export const readSetNostrRelayUrlInput = (
     return null;
   }
   const relayUrl = message["relayUrl"].trim();
-  return relayUrl.length === 0 || isEnteredWebSocketServiceUrl(relayUrl) ? { relayUrl } : null;
+  return relayUrl.length === 0 || isNostrRelayUrl(relayUrl) ? { relayUrl } : null;
 };
 
 /**
