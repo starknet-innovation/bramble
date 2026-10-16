@@ -196,7 +196,7 @@ describe("a lost broadcast reply on Send", () => {
 
 describe("a refusal over an earlier private write that may still land (#661)", () => {
   const SHOWN =
-    "An earlier private transaction from this account may still be in progress. Check Activity, then check again.";
+    "An earlier private transaction from this account may still be in progress. Check Activity, then check again. If it stays stuck, open Settings → Unlock private transactions.";
 
   test("says this one was not sent, keeps the earlier one's fact, and offers Check again", async () => {
     const { app, calls, form, navigated } = mount(async (call) => {
@@ -230,7 +230,7 @@ describe("a refusal over an earlier private write that may still land (#661)", (
 
     expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction not sent");
     expect(app.querySelector("#send-failure-copy")?.textContent).toBe(
-      "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+      "An earlier private transaction from this account may still be in progress, and no check can confirm it. To continue anyway, open Settings → Unlock private transactions.",
     );
     expect(visible(app, "#send-retry")).toBe(false);
     expect(visible(app, "#send-failure-activity")).toBe(true);

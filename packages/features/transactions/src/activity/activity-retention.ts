@@ -28,6 +28,19 @@ export const MAX_ACTIVITY_SCOPES = 50;
 const newestFirst = (left: ActivityEntry, right: ActivityEntry): number =>
   right.submittedAt - left.submittedAt;
 
+// A row still owed to the user: a failure notice not yet shown, or a
+// transaction still under observation. A retired row whose notice was already
+// delivered keeps its unresolved status (the wallet never learned the outcome)
+// but is owed nothing, so it no longer outranks settled rows (#677).
+const isOwed = (entry: ActivityEntry): boolean =>
+  entry.failureNotice === "pending" ||
+  (isUnresolvedActivityStatus(entry.status) && entry.failureNotice === undefined);
+
+// Every owed row before any other, then the newest: which rows a scope keeps
+// under its count cap.
+const keepOrder = (left: ActivityEntry, right: ActivityEntry): number =>
+  isOwed(left) === isOwed(right) ? newestFirst(left, right) : isOwed(left) ? -1 : 1;
+
 const scopeKey = (scope: ActivityScope): string => `${scope.networkId}\u0000${scope.accountId}`;
 
 // How much a scope is worth keeping: one still observing a transaction outranks
@@ -53,7 +66,7 @@ export const withinScopeLimit = (
     const rank = ranks.get(key);
     ranks.set(key, {
       newest: Math.max(rank?.newest ?? 0, entry.submittedAt),
-      unresolved: (rank?.unresolved ?? false) || isUnresolvedActivityStatus(entry.status),
+      unresolved: (rank?.unresolved ?? false) || isOwed(entry),
     });
   }
   if (ranks.size <= MAX_ACTIVITY_SCOPES) {
@@ -84,9 +97,7 @@ export const entriesAfterRecord = (
   const sameScope = activityForScope(entries, scope).filter(
     (stored) => !sameFelt(stored.hash, next.hash),
   );
-  const retainedScope = new Set(
-    [...sameScope].sort(newestFirst).slice(0, MAX_ENTRIES_PER_SCOPE - 1),
-  );
+  const retainedScope = new Set([...sameScope].sort(keepOrder).slice(0, MAX_ENTRIES_PER_SCOPE - 1));
   return withinScopeLimit(
     [
       ...entries.filter((stored) => !matchesScope(stored, scope) || retainedScope.has(stored)),
@@ -97,7 +108,8 @@ export const entriesAfterRecord = (
 };
 
 /**
- * The validated rows of one scope a `replaceScope` keeps, newest first.
+ * The validated rows of one scope a `replaceScope` keeps, newest first: every
+ * owed row before any other, then the newest, up to the count cap.
  */
 export const scopeSnapshot = (
   entries: readonly ActivityEntry[],
@@ -105,14 +117,11 @@ export const scopeSnapshot = (
 ): readonly ActivityEntry[] =>
   entries
     .filter((entry) => isActivityEntry(entry) && matchesScope(entry, scope))
-    .sort(newestFirst)
-    .slice(0, MAX_ENTRIES_PER_SCOPE);
+    .sort(keepOrder)
+    .slice(0, MAX_ENTRIES_PER_SCOPE)
+    .sort(newestFirst);
 
-// A row still owed to the user — a transaction under observation, or a
-// failure notice not yet shown — is evicted only after every other row.
-const isOwed = (entry: ActivityEntry): boolean =>
-  isUnresolvedActivityStatus(entry.status) || entry.failureNotice === "pending";
-
+// A row still owed to the user (see isOwed) is evicted only after every other row.
 const evictionOrder = (left: ActivityEntry, right: ActivityEntry): number =>
   isOwed(left) === isOwed(right) ? left.submittedAt - right.submittedAt : isOwed(left) ? 1 : -1;
 

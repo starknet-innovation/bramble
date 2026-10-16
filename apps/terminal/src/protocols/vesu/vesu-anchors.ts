@@ -4,8 +4,9 @@
  * vToken that a supply approves and deposits into, and nothing in its answer
  * proves those addresses belong to Vesu. The pinned V2 pool factory keeps the
  * registry that does — `v_token_for_asset(pool, asset)` is non-zero only for
- * an asset of a pool that factory created — so the terminal asks it, at the
- * latest block, before any call is built, and fails closed when it cannot.
+ * an asset of a pool that factory created — so the terminal asks it, every
+ * asset of one call at one block, before any call is built, and fails closed
+ * when it cannot.
  */
 import { CallData, type RpcProvider } from "starknet";
 import { VESU_ADDRESSES } from "../constants";
@@ -20,42 +21,74 @@ export const VESU_UNREGISTERED = "This Vesu pool or asset is not registered on c
 /** Refusal when the factory's registry could not be read. */
 export const VESU_REGISTRY_UNAVAILABLE = "Could not verify the Vesu pool on chain";
 
+type RegistryReader = <T>(run: (provider: RpcProvider) => Promise<T>) => Promise<T>;
+
+const defaultReader: RegistryReader = (run) => withRpcFallback([...DEFAULT_NETWORK.rpcUrls], run);
+
+/**
+ * Reads the vTokens the pinned Vesu V2 pool factory registers for each of
+ * `assets` in `pool`, all from one provider at one block (#270), so a pool
+ * and its assets are never judged against two different chain states. The
+ * block is the provider's latest, read once. Throws {@link VESU_UNREGISTERED}
+ * when the factory answers zero for an asset (an unknown pool, or an asset
+ * that pool does not list) and {@link VESU_REGISTRY_UNAVAILABLE} when every
+ * endpoint fails, the block number is unusable, or an answer is not one field
+ * element. Returns the vTokens in the order of `assets`.
+ */
+export const registeredVesuVTokens = async (
+  pool: string,
+  assets: readonly string[],
+  readWith: RegistryReader = defaultReader,
+): Promise<readonly string[]> => {
+  let results: readonly (readonly string[])[];
+  try {
+    results = await readWith(async (provider) => {
+      const block = await provider.getBlockNumber();
+      if (!Number.isSafeInteger(block) || block < 0) {
+        throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
+      }
+      return Promise.all(
+        assets.map((asset) =>
+          provider.callContract(
+            {
+              calldata: CallData.compile([pool, asset]),
+              contractAddress: VESU_ADDRESSES.poolFactory,
+              entrypoint: "v_token_for_asset",
+            },
+            block,
+          ),
+        ),
+      );
+    });
+  } catch {
+    throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
+  }
+  return results.map((result) => {
+    const vToken = result.length === 1 ? result[0] : undefined;
+    if (vToken === undefined || !isStarkFieldElement(vToken.toLowerCase())) {
+      throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
+    }
+    if (BigInt(vToken) === 0n) {
+      throw new WalletError(VESU_UNREGISTERED);
+    }
+    return `0x${BigInt(vToken).toString(16)}`;
+  });
+};
+
 /**
  * Reads the vToken the pinned Vesu V2 pool factory registers for `asset` in
- * `pool`. Throws {@link VESU_UNREGISTERED} when the factory answers zero (an
- * unknown pool, or an asset that pool does not list) and
- * {@link VESU_REGISTRY_UNAVAILABLE} when every endpoint fails or answers with
- * something that is not one field element.
+ * `pool`, with the refusals of {@link registeredVesuVTokens}.
  */
 export const registeredVesuVToken = async (
   pool: string,
   asset: string,
-  readWith: <T>(run: (provider: RpcProvider) => Promise<T>) => Promise<T> = (run) =>
-    withRpcFallback([...DEFAULT_NETWORK.rpcUrls], run),
+  readWith: RegistryReader = defaultReader,
 ): Promise<string> => {
-  let result: readonly string[];
-  try {
-    result = await readWith((provider) =>
-      provider.callContract(
-        {
-          calldata: CallData.compile([pool, asset]),
-          contractAddress: VESU_ADDRESSES.poolFactory,
-          entrypoint: "v_token_for_asset",
-        },
-        "latest",
-      ),
-    );
-  } catch {
+  const [vToken] = await registeredVesuVTokens(pool, [asset], readWith);
+  if (vToken === undefined) {
     throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
   }
-  const vToken = result.length === 1 ? result[0] : undefined;
-  if (vToken === undefined || !isStarkFieldElement(vToken.toLowerCase())) {
-    throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
-  }
-  if (BigInt(vToken) === 0n) {
-    throw new WalletError(VESU_UNREGISTERED);
-  }
-  return `0x${BigInt(vToken).toString(16)}`;
+  return vToken;
 };
 
 /**
@@ -69,10 +102,9 @@ export const verifyVesuMultiplyPool = async (
   pool: string,
   collateralAsset: string,
   debtAsset: string,
-  readWith?: <T>(run: (provider: RpcProvider) => Promise<T>) => Promise<T>,
+  readWith?: RegistryReader,
 ): Promise<void> => {
-  await registeredVesuVToken(pool, collateralAsset, readWith);
-  await registeredVesuVToken(pool, debtAsset, readWith);
+  await registeredVesuVTokens(pool, [collateralAsset, debtAsset], readWith);
 };
 
 /**
@@ -87,16 +119,15 @@ export const verifyVesuMultiplyPool = async (
  */
 export const recheckVesuLendingQuote = async (
   quote: Pick<LendingQuote, "asset" | "collateralAsset" | "poolAddress" | "vTokenAddress">,
-  readWith?: <T>(run: (provider: RpcProvider) => Promise<T>) => Promise<T>,
+  readWith?: RegistryReader,
 ): Promise<void> => {
   if (quote.vTokenAddress === null) {
     throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
   }
-  const vToken = await registeredVesuVToken(quote.poolAddress, quote.asset, readWith);
-  if (!sameAddress(vToken, quote.vTokenAddress)) {
+  const assets =
+    quote.collateralAsset === null ? [quote.asset] : [quote.asset, quote.collateralAsset];
+  const [vToken] = await registeredVesuVTokens(quote.poolAddress, assets, readWith);
+  if (vToken === undefined || !sameAddress(vToken, quote.vTokenAddress)) {
     throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
-  }
-  if (quote.collateralAsset !== null) {
-    await registeredVesuVToken(quote.poolAddress, quote.collateralAsset, readWith);
   }
 };

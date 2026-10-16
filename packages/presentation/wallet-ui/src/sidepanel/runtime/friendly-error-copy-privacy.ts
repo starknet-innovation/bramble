@@ -23,6 +23,9 @@ export const PRIVACY_ERROR_COPY: readonly (readonly [string, string])[] = [
     PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   ],
   ["private balances are already active", "Private balances are already active."],
+  // Settings → Unlock private transactions (mc-wallet 668). Pressing it again
+  // is safe: a second release finds nothing to clear.
+  ["private unlock failed", "Couldn't unlock private transactions. Try again."],
   [
     "private balances are not available for ledger accounts",
     "Private balances aren't available for Ledger accounts.",

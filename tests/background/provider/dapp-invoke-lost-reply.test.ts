@@ -10,6 +10,8 @@ import { createPreferencesStore } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { createMemoryStore } from "@bramble/store/kv";
 import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import { readSubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -33,22 +35,33 @@ type Submit = Parameters<typeof makeRuntimeRpc>[0] extends infer O
     : never
   : never;
 
-const approveInvoke = async (submitInvokeTransaction: NonNullable<Submit>) => {
+const TRANSFER = {
+  calldata: ["0x777", "1", "0"],
+  contractAddress: "0xabc",
+  entrypoint: "transfer",
+};
+
+const approveInvoke = async (
+  submitInvokeTransaction: NonNullable<Submit>,
+  calls = [TRANSFER],
+  activity = memoryActivityLog(() => 1),
+) => {
+  const allowanceStore = memoryAllowanceStore();
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  const activity = memoryActivityLog(() => 1);
   // The stub vault lives on SN_SEPOLIA.
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
   await preferencesStore.setActiveNetwork("SN_SEPOLIA");
   const handler = createMessageHandler(createWallet(), testExtension, {
     activity,
+    allowanceStore,
     preferencesStore,
     runtimeRpc: makeRuntimeRpc({ submitInvokeTransaction }),
     session,
   });
   const held = handler(
     {
-      calls: [{ calldata: ["0x777", "1", "0"], contractAddress: "0xabc", entrypoint: "transfer" }],
+      calls,
       origin: grantedOrigin,
       type: "wallet.addInvokeTransaction",
     },
@@ -59,7 +72,7 @@ const approveInvoke = async (submitInvokeTransaction: NonNullable<Submit>) => {
   const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
   const panel = await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
   const dapp = await held;
-  return { activity, dapp, panel };
+  return { activity, allowanceStore, dapp, panel };
 };
 
 describe("a dapp invoke with a lost broadcast reply", () => {
@@ -80,6 +93,53 @@ describe("a dapp invoke with a lost broadcast reply", () => {
     expect(rows.map((row) => [row.hash, row.status, row.kind])).toEqual([
       [SIGNED, "pending", "invoke"],
     ]);
+  });
+
+  // #678: the grant a lost-reply approve may have made must stay listed and
+  // revokable, filed under the signed hash like the activity row.
+  test("files the approve's grant under the signed hash", async () => {
+    const approve = {
+      calldata: ["0x7a11", "0x5", "0x0"],
+      contractAddress: STRK_TOKEN_ADDRESS,
+      entrypoint: "approve",
+    };
+    const { activity, allowanceStore, panel } = await approveInvoke(
+      async (input) => {
+        await input.onSigned?.({
+          nonce: "0x1",
+          senderAddress: account.address,
+          transactionHash: SIGNED,
+        });
+        throw new IndeterminateRpcWriteError("Transaction submission status is unknown.");
+      },
+      [approve],
+    );
+
+    expect(readSubmissionUnknownError(panel)?.transactionHash).toBe(SIGNED);
+    const grants = await allowanceStore.list();
+    expect(grants).toHaveLength(1);
+    expect(grants[0]).toMatchObject({ accountId: account.id, amount: "5" });
+    expect((await activity.list()).map((row) => row.hash)).toEqual([SIGNED]);
+  });
+
+  // #678 hardening: once a hash exists the reply carries it, even when the
+  // local activity write fails afterwards.
+  test("answers with the hash when a confirmed send's bookkeeping fails", async () => {
+    const failing = memoryActivityLog(() => 1);
+    const broken = {
+      ...failing,
+      record: async () => {
+        throw new Error("storage quota exceeded");
+      },
+    };
+    const { dapp, panel } = await approveInvoke(
+      async (input) => ({ calls: input.calls, transactionHash: "0x7cd" }),
+      [TRANSFER],
+      broken,
+    );
+    expect(panel).toMatchObject({ ok: true });
+    expect(JSON.stringify(dapp)).toContain("0x7cd");
+    expect(dapp).not.toHaveProperty("error");
   });
 
   test("stays status unknown with no row when nothing was signed", async () => {

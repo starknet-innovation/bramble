@@ -25,7 +25,11 @@ import {
   activityForScope,
 } from "@bramble/transactions/activity";
 import { mergeActivity, withoutPlantedRows } from "@bramble/transactions/tx-history";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+} from "@bramble/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import {
@@ -254,10 +258,47 @@ export const reconcileScope = async (
   });
 };
 
+// A reverted transaction still pays its fee, and that payment emits a Transfer
+// from the account, so a chain-only outgoing leg on its own does not show the
+// transaction succeeded (#656). Each outgoing transaction new to this scope is
+// read once, before it is stored; one the receipt shows reverted keeps its row,
+// marked reverted, so the fee it paid stays visible without reading as a
+// completed send. Incoming legs need no read: a reverted transaction emits no
+// event but its sender's fee. A failed read leaves rows as found, included in
+// a block, exactly as before.
+const withRevertedChainLegs = async (
+  deps: ReconcileDeps,
+  scope: ActivityScope,
+  stored: readonly ActivityEntry[],
+  onChain: readonly ActivityEntry[],
+): Promise<readonly ActivityEntry[]> => {
+  const known = new Set(stored.map((entry) => canonicalFelt(entry.hash) ?? entry.hash));
+  const hashes = [
+    ...new Set(
+      onChain
+        .filter((entry) => entry.direction === "out" && entry.status === "accepted")
+        .map((entry) => entry.hash)
+        .filter((hash) => !known.has(canonicalFelt(hash) ?? hash)),
+    ),
+  ];
+  if (hashes.length === 0) {
+    return onChain;
+  }
+  const preferences = await deps.preferencesStore.read();
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[scope.networkId], preferences);
+  const reports: Readonly<Record<string, TransactionStatusReport>> = await deps.runtimeRpc
+    .getTransactionStatuses({ hashes, rpcUrls })
+    .catch(() => ({}));
+  return onChain.map((entry) =>
+    reports[entry.hash]?.status === "reverted" ? { ...entry, status: "reverted" } : entry,
+  );
+};
+
 /**
  * Serializes a discovered-history merge with every status reconciliation.
  * Discovered rows never settle a transaction still under observation; only the
- * status re-poll does (see `mergeActivity`).
+ * status re-poll does (see `mergeActivity`). A chain-only outgoing transaction
+ * the receipt shows reverted is stored as reverted, not as a completed send.
  */
 export const mergeReconciledHistory = (
   deps: ReconcileDeps,
@@ -268,7 +309,7 @@ export const mergeReconciledHistory = (
     // Stored rows planted before audit #163's decoder filter are purged here,
     // and replaceScope writes the cleaned scope back.
     const stored = withoutPlantedRows(activityForScope(await deps.activity.list(), scope));
-    const merged = mergeActivity(stored, onChain);
+    const merged = mergeActivity(stored, await withRevertedChainLegs(deps, scope, stored, onChain));
     await deps.activity.replaceScope?.(merged, scope).catch(() => undefined);
     return merged;
   });

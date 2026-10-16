@@ -19,7 +19,7 @@ import { boundedFetch } from "../support/bounded-network";
 import { isRecord } from "../support/json";
 import { isNonZeroStarkFieldElement, sameAddress } from "../support/networks";
 import { VESU_API_BASE, VESU_LENDING_ENABLED } from "../constants";
-import { registeredVesuVToken } from "./vesu-anchors";
+import { registeredVesuVTokens, VESU_REGISTRY_UNAVAILABLE } from "./vesu-anchors";
 import type { LendingParams, LendingQuote, LendingQuoteParams } from "../types";
 import {
   buildVesuBorrowCalls,
@@ -104,16 +104,19 @@ export const quoteLending = async (params: LendingQuoteParams): Promise<LendingQ
   // The API names the pool and vToken; the pinned factory's registry decides
   // whether they are Vesu's (Sherlock 169). The registered vToken is the one
   // the calls use, and an API answer naming a different one is refused.
-  const vTokenAddress = await registeredVesuVToken(poolId, asset);
+  const [vTokenAddress] = await registeredVesuVTokens(
+    poolId,
+    resolvedCollateralAsset === null ? [asset] : [asset, resolvedCollateralAsset],
+  );
+  if (vTokenAddress === undefined) {
+    throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
+  }
   if (
     assetConfig?.vTokenAddress !== undefined &&
     assetConfig.vTokenAddress !== null &&
     !sameAddress(assetConfig.vTokenAddress, vTokenAddress)
   ) {
     throw new WalletError("The Vesu API named a vToken this pool does not register");
-  }
-  if (resolvedCollateralAsset !== null) {
-    await registeredVesuVToken(poolId, resolvedCollateralAsset);
   }
 
   return {
