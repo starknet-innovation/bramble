@@ -8,7 +8,7 @@ import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-mode
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import { paidCounterparty, recordSubmittedActivity } from "../transactions/activity-recording";
-import type { MultisigOpsDeps } from "./multisig-deps";
+import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import { normalizedArgentMultisigCalls } from "./multisig-inputs";
 
 /**
@@ -66,6 +66,10 @@ export const recordBroadcastIntent = async (
 export type ArgentSubmitResolution =
   | { readonly intent: ArgentMultisigSigningIntent; readonly kind: "submitted" }
   | { readonly kind: "absent" }
+  /** A stale version the sequencer refused: never included, it cannot land. */
+  | { readonly kind: "rejected" }
+  /** A stale version included and reverted: its nonce is spent, nothing was transferred. */
+  | { readonly kind: "reverted" }
   | { readonly kind: "unknown" };
 
 type ObservedSubmission =
@@ -76,6 +80,8 @@ type ObservedSubmission =
       /** The node reported a real finality status, not just an odd answer. */
       readonly seen: boolean;
       readonly state: "accepted" | "rejected" | "submitted";
+      /** The hash's own fate: `rejected` was never included, `reverted` was. */
+      readonly fate: "accepted" | "pending" | "rejected" | "reverted";
     }
   | { readonly kind: "absent" }
   | { readonly kind: "unknown" };
@@ -110,7 +116,11 @@ const observeSignedHash = async (
       : report.status === "rejected" || report.status === "reverted"
         ? "rejected"
         : "submitted";
-  return { kind: "found", preferences, record, seen: report.seen, state };
+  const fate =
+    report.status === "rejected" || report.status === "reverted" || report.status === "accepted"
+      ? report.status
+      : "pending";
+  return { fate, kind: "found", preferences, record, seen: report.seen, state };
 };
 
 const journalObservedSubmission = async (
@@ -166,6 +176,13 @@ export const recoverSubmittedArgentIntent = async (
  * the ordinary outcome reconciliation settles it and no screen offers to send
  * the same calls again. Only a positive chain observation moves it; a failed
  * read is `unknown` and leaves it stale.
+ *
+ * Two fates leave it stale instead (mc-wallet 673). A hash the sequencer
+ * rejected was never included: `rejected`, recording whether the nonce shows
+ * nothing else was sent. A hash included and reverted spent its nonce and fee
+ * and transferred nothing: `reverted`, journaled and settled, never looked up
+ * again. Neither is ever re-sent here; only a new proposal with fresh
+ * signatures sends those calls again.
  */
 export const recoverStaleArgentIntent = async (
   deps: MultisigOpsDeps,
@@ -174,10 +191,21 @@ export const recoverStaleArgentIntent = async (
   if (intent.state !== "stale" || intent.signatures.length !== intent.configSnapshot.threshold) {
     return { kind: "absent" };
   }
+  // Settled: a reverted version spent its nonce and can never run again.
+  if (intent.staleOutcome === "reverted") return { kind: "reverted" };
   const observed = await observeSignedHash(deps, intent);
   if (observed.kind !== "found") return observed;
   // `found` without `seen` is an odd answer, not a sighting: it proves nothing.
   if (!observed.seen) return { kind: "unknown" };
+  if (observed.fate === "rejected") return markRejected(deps, intent, observed.record);
+  if (observed.fate === "reverted") {
+    // On chain with its fee paid, so it joins activity, where reconciliation
+    // shows it reverted. The intent stays stale, marked settled.
+    await journalObservedSubmission(deps, intent, observed);
+    const settled: ArgentMultisigSigningIntent = { ...intent, staleOutcome: "reverted" };
+    await deps.multisigStore.upsertIntent(settled).catch(() => "invalid");
+    return { kind: "reverted" };
+  }
   // A stale intent may only move to `submitted`; the outcome follows from there.
   const submitted: ArgentMultisigSigningIntent = {
     ...intent,
@@ -192,6 +220,37 @@ export const recoverStaleArgentIntent = async (
     return { kind: "unknown" };
   }
   return { intent: submitted, kind: "submitted" };
+};
+
+// The sequencer refused this exact hash: this version was never included and
+// cannot land, so nothing is journaled. Whether another version of the same
+// calls could have gone out depends on the multisig's nonce: still the one this
+// version was signed for means nothing was sent at it; moved, or unreadable,
+// leaves a co-signer's own version possible. A nonce never moves back, so a
+// recorded `rejected` is never relaxed to `rejected-nonce-unused`.
+const markRejected = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  record: ArgentMultisigRecord,
+): Promise<ArgentSubmitResolution> => {
+  const preferences = await deps.preferencesStore.read().catch(() => null);
+  const nonce = preferences
+    ? await multisigRpc(deps)
+        .getNonce({
+          address: record.address,
+          rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+        })
+        .catch(() => null)
+    : null;
+  const unused =
+    intent.staleOutcome !== "rejected" && nonce !== null && sameFelt(nonce, intent.prepared.nonce);
+  const outcome = unused ? "rejected-nonce-unused" : "rejected";
+  if (intent.staleOutcome !== outcome) {
+    await deps.multisigStore
+      .upsertIntent({ ...intent, staleOutcome: outcome })
+      .catch(() => "invalid");
+  }
+  return { kind: "rejected" };
 };
 
 /**

@@ -105,6 +105,11 @@ const staleResend = async (
     if (!sameCalls(intent.prepared.calls, prepared.calls)) continue;
     const resolution = await recoverStaleArgentIntent(deps, intent);
     if (resolution.kind === "submitted") return "sent";
+    // A reverted version spent its own nonce and transferred nothing, so that
+    // nonce cannot have carried another version of these calls (mc-wallet 673).
+    // A rejected one never landed, but its nonce may have moved on to a
+    // co-signer's version, so it is judged like one not found.
+    if (resolution.kind === "reverted") continue;
     // At the same nonce only one of the two can execute, so a stale version
     // that isn't found is no reason to stop. At another nonce, not found (once
     // or for good) and a failed read alike leave a payment possible: the nonce

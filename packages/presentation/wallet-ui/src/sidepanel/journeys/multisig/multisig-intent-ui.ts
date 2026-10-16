@@ -171,7 +171,9 @@ const bindActions = (deps: MultisigUiDeps): void => {
           armResendConfirmation(button, error);
           throw error;
         }
-        return "Fee updated. Ready to review.";
+        return button.dataset["msProposeAgain"] === "true"
+          ? "Ready to review."
+          : "Fee updated. Ready to review.";
       });
     });
   });

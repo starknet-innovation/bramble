@@ -17,10 +17,10 @@ import { websiteDeployFailures } from "./website-deploy-policy";
 import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
 import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
 
-const NODE_SETUP_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
+const NODE_SETUP_ACTION = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1";
 const GITHUB_EXPRESSION = "$" + "{{";
 const SHELL_EXPANSION = "$" + "{";
-const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.0.0
+const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.1.0
         with:
           node-version: 24`;
 
@@ -231,7 +231,7 @@ const releaseBuildFailures = (source: string): string[] => {
   requireText(
     failures,
     publish,
-    "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+    "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
     "the hosted release publisher must consume the pinned build artifact",
   );
   return failures;
