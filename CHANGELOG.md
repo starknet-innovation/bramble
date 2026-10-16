@@ -11,6 +11,9 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+### Changed
+- Docs: upgrades are one-way. The README and support page say how to recover if an older build is installed (#670).
+
 ## [0.10.6] - 2026-10-14
 
 Shadow accounts for STRK20 sites, a recovery screen for a wallet that cannot
