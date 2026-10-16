@@ -284,6 +284,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     importWordCount: () => importWordCount,
     isRecoveryActive: () =>
       steps.find((step) => !step.hidden)?.dataset["onboardingStep"] === "recovery",
+    recoveryClear: form.querySelector<HTMLButtonElement>("#phrase-clear"),
     recoveryContinue,
     recoveryResult,
     refreshPassword,

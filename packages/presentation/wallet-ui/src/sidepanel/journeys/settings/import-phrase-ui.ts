@@ -65,7 +65,9 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
       wordCount === 12 ? "Use a 24-word phrase" : "Use a 12-word phrase",
     );
   };
+  const clear = form.querySelector<HTMLButtonElement>("#phrase-clear");
   bindRecoveryWordEntry({
+    clear,
     fillWords: (words) => {
       wordCount = fillRecoveryWords(form, inputs, words, "import");
       syncToggleLabel();
@@ -80,6 +82,18 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
     refreshWords();
   });
 
+  // Drops the validated copy and closes the picker, so neither a pending
+  // Search nor "Import selected accounts" can act on a phrase that was wiped.
+  const forgetPhrase = (): void => {
+    mnemonic = "";
+    searchGeneration += 1;
+    if (scanSection) {
+      scanSection.hidden = true;
+    }
+  };
+  // Runs after the shared binder has emptied the cells.
+  clear?.addEventListener("click", forgetPhrase);
+
   const scan = bindRecoveryAccountUi({
     existingIds: () => deps.existingAccountIds?.() ?? new Set<string>(),
     form,
@@ -88,14 +102,10 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
     // This screen survives a successful import unchanged, so wipe the phrase
     // here: every cell, the retained copy, and the account picker.
     onRestored: () => {
-      mnemonic = "";
-      searchGeneration += 1;
+      forgetPhrase();
       wordAssist.hideSuggestions();
       // Back to 12 cells; the fill also resets the length toggle label.
       wordCount = fillRecoveryWords(form, inputs, [], "import");
-      if (scanSection) {
-        scanSection.hidden = true;
-      }
       refreshWords();
     },
     render: deps.render,
@@ -137,6 +147,7 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
         if (result) {
           result.textContent = "";
         }
+        showToast("Valid recovery phrase", "success", form);
         if (scanSection) {
           scanSection.hidden = false;
         }
