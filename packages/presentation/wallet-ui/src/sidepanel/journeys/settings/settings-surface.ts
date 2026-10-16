@@ -9,6 +9,7 @@
 import { bindFindAccounts } from "./find-accounts-ui";
 import { bindImportKey } from "./import-key-ui";
 import { bindImportPhrase } from "./import-phrase-ui";
+import { bindPrivacyUnlock } from "./privacy-unlock";
 import {
   bindAccountLabel,
   bindAccountVisibility,
@@ -39,6 +40,7 @@ export const bindSettingsSurface = (deps: SettingsSurfaceDeps): void => {
   bindImportPhrase(deps);
   bindFindAccounts(deps);
   bindAppearance(deps);
+  bindPrivacyUnlock(deps);
   bindBackup(deps);
   bindContacts(deps);
   bindGroups(deps);

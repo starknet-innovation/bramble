@@ -70,6 +70,9 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: contentSender,
   },
   { message: { type: "wallet.strk20State" }, sender: extensionSender },
+  // Settings → Privacy → Unlock anyway (#668): clears a stuck submitting
+  // marker; it reads no key material.
+  { message: { type: "wallet.strk20ReleasePendingWrite" }, sender: extensionSender },
   // The Shadow accounts view (#443). The commitment entry above records the
   // scope these name, so each reaches the vault's records and, for the last
   // two, the viewing-key-derived listing.

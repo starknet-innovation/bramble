@@ -273,12 +273,13 @@ describe("Argent multisig background lifecycle", () => {
         ),
       );
     }
+    // The lost reply answers typed status unknown under the signed hash (#681).
     await expect(
       harness.handler(
         { intentId: intent.id, type: "wallet.submitArgentMultisigIntent" },
         harnessExtensionSender,
       ),
-    ).resolves.toEqual({ error: "submission outcome unknown" });
+    ).resolves.toMatchObject({ transactionHash: intent.prepared.transactionHash });
     found = true;
     await expect(
       harness.handler(
