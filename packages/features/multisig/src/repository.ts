@@ -42,7 +42,13 @@ export {
   isArgentMultisigOperationRecord,
   isArgentMultisigRecord,
   isArgentMultisigSigningIntent,
+  staleArgentMultisigIntent,
 } from "./repository-schema";
+
+/**
+ * Re-export the local stale reason (mc-wallet 673).
+ */
+export type { ArgentMultisigStaleReason } from "./stale-reason";
 
 /**
  * Browser storage key for the new Argent-only registry format.

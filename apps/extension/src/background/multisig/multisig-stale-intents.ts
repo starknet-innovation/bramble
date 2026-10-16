@@ -15,11 +15,33 @@
  * unless the stale version is found on chain, which refuses them outright. A
  * stale version at the same nonce needs no say-so: only one can execute.
  */
-import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import {
+  type ArgentMultisigSigningIntent,
+  staleArgentMultisigIntent,
+} from "@bramble/multisig/repository";
 import type { ArgentMultisigCall } from "@bramble/starknet/multisig-invoke";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import type { MultisigOpsDeps } from "./multisig-deps";
+import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import { recoverStaleArgentIntent } from "./multisig-operation-recovery";
+
+/**
+ * Marks an intent stale after the node refused its signed fee (mc-wallet 673).
+ * The reason is `fee` only when the account nonce, read again now, is still the
+ * one the intent was signed for; a moved nonce, or a nonce that cannot be read,
+ * records `nonce`, because a co-signer may then have sent this very version.
+ * The store write is the caller's to await; a failed nonce read never throws.
+ */
+export const markFeeRefusedStale = async (
+  deps: MultisigOpsDeps,
+  intent: ArgentMultisigSigningIntent,
+  context: { readonly record: { readonly address: string }; readonly rpcUrls: readonly string[] },
+): Promise<void> => {
+  const nonce = await multisigRpc(deps)
+    .getNonce({ address: context.record.address, rpcUrls: context.rpcUrls })
+    .catch(() => null);
+  const reason = nonce !== null && sameFelt(nonce, intent.prepared.nonce) ? "fee" : "nonce";
+  await deps.multisigStore.upsertIntent(staleArgentMultisigIntent(intent, reason));
+};
 
 /** Refusal when the calls being prepared already went out in a stale version. */
 export const ARGENT_INTENT_ALREADY_SENT = "Argent multisig intent was already sent";
