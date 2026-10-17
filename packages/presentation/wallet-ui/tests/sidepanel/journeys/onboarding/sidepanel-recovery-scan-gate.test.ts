@@ -189,6 +189,9 @@ describe("recovery scan Ready gate", () => {
     expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
       "Checked 20 of 40 indices…",
     );
+    // An empty group is only declared empty once the search has finished.
+    const braavosList = app.querySelector('[data-recovery-group="braavos"] ul');
+    expect(braavosList?.textContent).toBe("");
     finish({
       candidates: [{ account: lateAccount, deployed: true, funded: false }],
       complete: true,
@@ -199,6 +202,7 @@ describe("recovery scan Ready gate", () => {
     expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
       "Search complete. Checked 40 indices across every account type.",
     );
+    expect(braavosList?.textContent).toBe("No accounts with on-chain activity.");
   });
 
   test("says a guarded Argent account is view only before it is picked", async () => {

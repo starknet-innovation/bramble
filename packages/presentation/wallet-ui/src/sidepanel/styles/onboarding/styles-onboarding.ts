@@ -34,6 +34,9 @@ export const ONBOARDING_STYLES = `
     background-size: cover;
     min-width: 320px;
   }
+  /* The full-tab surface would stretch toasts edge to edge; keep them to the
+     wizard card's column. */
+  .onboarding-surface .toast-stack { margin-inline: auto; max-width: 520px; }
   .onboarding-surface #app { min-height: 100vh; }
   .onboarding-surface .shell {
     --onboarding-canvas-y: clamp(${SPACE.lg}, 3vh, ${SPACE.xxxl});
@@ -332,6 +335,7 @@ export const ONBOARDING_STYLES = `
   /* A label forwards clicks to its control even when the control is
      pointer-events:none, so the cell must opt out too. */
   .recovery-grid.is-masked .recovery-word-cell { pointer-events: none; }
+  .recovery-actions { display: flex; gap: ${SPACE.xs}; justify-content: center; }
   .onboarding-inline-action {
     background: transparent;
     color: var(--bramble-muted);

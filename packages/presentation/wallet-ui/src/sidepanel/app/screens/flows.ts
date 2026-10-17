@@ -184,7 +184,10 @@ export const importPhraseFlow = (status: WalletStatus): string =>
       <p class="review-flag" role="note">Anyone with this phrase controls its accounts.</p>
       <form id="import-phrase-form" class="stack" novalidate>
         <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
-        <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+        <div class="recovery-actions">
+          <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+          <button class="onboarding-inline-action" id="phrase-clear" type="button">Clear</button>
+        </div>
         <p id="recovery-result" role="status"></p>
         ${button({
           attributes: { id: "import-phrase-search" },

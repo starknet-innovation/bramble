@@ -166,6 +166,23 @@ describe("import-phrase flow", () => {
     );
   });
 
+  test("Clear empties every word, closes the picker, and disables the search", async () => {
+    const flow = mount();
+    fillPhrase(flow.app);
+    click(flow.app, "#import-phrase-search");
+    await tick();
+    await tick();
+    expect(flow.app.querySelector<HTMLElement>("#import-phrase-scan")?.hidden).toBe(false);
+    click(flow.app, "#phrase-clear");
+    expect(flow.app.querySelector<HTMLElement>("#import-phrase-scan")?.hidden).toBe(true);
+    const cells = Array.from(
+      flow.app.querySelectorAll<HTMLInputElement>('input[data-recovery-kind="import"]'),
+    );
+    expect(cells.every((cell) => cell.value === "")).toBe(true);
+    expect(flow.app.querySelector<HTMLButtonElement>("#import-phrase-search")?.disabled).toBe(true);
+    expect(document.activeElement).toBe(cells[0] ?? null);
+  });
+
   test("gates the search on a complete phrase and validates through Krusty", async () => {
     const flow = mount({ validate: false });
     const search = flow.app.querySelector<HTMLButtonElement>("#import-phrase-search");
@@ -187,6 +204,7 @@ describe("import-phrase flow", () => {
     click(flow.app, "#import-phrase-search");
     await tick();
     await tick();
+    expect(document.querySelector(".toast.success")?.textContent).toBe("Valid recovery phrase");
 
     // Both candidates are deployed; the one already in the vault is locked.
     const rows = Array.from(
@@ -200,6 +218,10 @@ describe("import-phrase flow", () => {
     expect(rows[1]?.disabled).toBe(false);
     expect(rows[1]?.checked).toBe(true);
     expect(flow.app.textContent).toContain("Already in this wallet");
+    // No Braavos candidates: the group still says so rather than opening empty.
+    expect(flow.app.querySelector('[data-recovery-group="braavos"] ul')?.textContent).toBe(
+      "No accounts with on-chain activity.",
+    );
 
     // The scan fields are shared with first-run onboarding, so the real-funds
     // tickbox removed there is gone here too; the selection is the only gate.

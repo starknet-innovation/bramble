@@ -265,7 +265,17 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
         .sort(
           (left, right) => recoveryLadderIndex(left.account) - recoveryLadderIndex(right.account),
         );
-      listElement.replaceChildren(...rows.map(candidateRow));
+      // Discovery omits unused addresses a type this wallet never creates (e.g.
+      // Braavos), so a finished search still needs a line or the group opens
+      // onto nothing. Mid-search the list stays empty: more may yet be found.
+      if (rows.length === 0 && complete) {
+        const empty = deps.form.ownerDocument.createElement("li");
+        empty.className = "empty";
+        empty.textContent = "No accounts with on-chain activity.";
+        listElement.replaceChildren(empty);
+      } else {
+        listElement.replaceChildren(...rows.map(candidateRow));
+      }
       const detected = rows.filter((candidate) => candidate.deployed || candidate.funded).length;
       const detectedSlot = group.querySelector<HTMLElement>("[data-detected]");
       if (detectedSlot) {

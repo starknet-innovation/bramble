@@ -25,6 +25,7 @@ type RecoveryImportBind = {
   readonly importedMnemonic: () => string;
   readonly importWordCount: () => 12 | 24;
   readonly isRecoveryActive: () => boolean;
+  readonly recoveryClear: HTMLButtonElement | null;
   readonly recoveryContinue: HTMLButtonElement | null;
   readonly recoveryResult: HTMLElement | null;
   readonly refreshRecovery: () => void;
@@ -55,6 +56,7 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
     importedMnemonic,
     importWordCount,
     isRecoveryActive,
+    recoveryClear,
     recoveryContinue,
     recoveryResult,
     refreshPassword,
@@ -73,6 +75,7 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
   };
 
   bindRecoveryWordEntry({
+    clear: recoveryClear,
     fillWords: (words) => fillWords(importInputs, words, "import"),
     inputs: importInputs,
     onBeforeChange: invalidateValidation,
@@ -114,6 +117,7 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
         if (recoveryResult) {
           recoveryResult.textContent = "";
         }
+        showToast("Valid recovery phrase", "success", recoveryContinue);
         wordAssist.hideSuggestions();
         showPasswordStep();
         refreshPassword();
