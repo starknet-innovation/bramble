@@ -13,6 +13,7 @@ import { bindTransferBuckets } from "./transfer-buckets-ui";
 import { createComposeFee } from "./transfer-compose-fee";
 import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transfer-compose-ui";
 import { bindTransferExits } from "./transfer-exits-ui";
+import { transferMaxSpendable } from "./transfer-max";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
   acceptsTransferSubmit,
@@ -31,7 +32,6 @@ import {
   resolveTransferRoute,
   type TransferRouteContext,
   transferRoute,
-  transferSpendable,
 } from "./transfer-route";
 import {
   confirmedState,
@@ -248,7 +248,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     },
     navigate: (view) => deps.navigate?.(view),
     resolveName: (name, networkId) => wallet.resolveStarkName(name, networkId),
-    spendable: () => transferSpendable(routeContext()),
+    spendable: () => transferMaxSpendable(routeContext(), composeFee.review()),
   });
   bindTransferBuckets({
     balanceIn: (bucket) => balanceInBucket(bucket, routeContext()),
