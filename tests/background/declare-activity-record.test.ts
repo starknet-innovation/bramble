@@ -218,7 +218,18 @@ describe("a declare that deploys the account first", () => {
     const { entries, run } = declareWith(async () => {
       throw markDeploymentFailure(new IndeterminateRpcWriteError("reply lost"), DEPLOY);
     });
-    await expect(run()).resolves.toHaveProperty("error");
+    // The declaration may be on chain, so the site is told the outcome is
+    // unknown, never that it failed (mc-wallet 719 review).
+    await expect(run()).resolves.toMatchObject({ submissionUnknown: true });
     expect(kinds(entries)).toEqual([["deploy", DEPLOY]]);
+  });
+
+  test("a declaration that is plainly refused still reads as failed", async () => {
+    const { run } = declareWith(async () => {
+      throw new Error("declare rejected");
+    });
+    const response = await run();
+    expect(response).toHaveProperty("error");
+    expect(response).not.toHaveProperty("submissionUnknown");
   });
 });

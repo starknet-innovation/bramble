@@ -14,10 +14,12 @@ import { normalizeWalletOrigin } from "@bramble/core/origin";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { isProviderDeclare, type ProviderDeclare } from "@bramble/wallet-protocol/declare";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { recordAutoDeployment } from "../accounts/deployment-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
@@ -448,7 +450,12 @@ export const executeDeclareApproval = async (
   } catch (error) {
     // An accepted automatic deployment is recorded whatever happened next (mc-wallet 719).
     await afterBroadcast(() => recordAutoDeployment(deps.activity, account, error));
-    return { error: declarationErrorMessage(error) };
+    // A lost reply stays typed as status-unknown, so the site is never told a
+    // declaration that may be on chain failed (mc-wallet 719 review).
+    const message = declarationErrorMessage(error);
+    return error instanceof IndeterminateRpcWriteError
+      ? submissionUnknownResponse(message)
+      : { error: message };
   }
   await afterBroadcast(() =>
     recordAutoDeployment(deps.activity, account, result.deploymentTransactionHash),
