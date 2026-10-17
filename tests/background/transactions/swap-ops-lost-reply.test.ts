@@ -11,6 +11,7 @@ import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
+import { postDeploymentFailure } from "@bramble/starknet/rpc-submit";
 import {
   approveRouter,
   buyTokenId,
@@ -85,5 +86,48 @@ describe("swap with a lost broadcast reply", () => {
     });
     expect(response).toEqual({ error: "fee exceeds the reviewed ceiling" });
     expect(rows).toEqual([]);
+  });
+});
+
+// mc-wallet 719: a swap from an undeployed account deploys it first. That
+// accepted deployment is recorded beside the swap, and still recorded when the
+// swap after it is refused or loses its reply, since its fee is spent.
+describe("a swap that deploys the account first", () => {
+  const DEPLOY = "0xd3a1";
+  const kinds = (rows: readonly { readonly hash: string; readonly kind: string }[]) =>
+    rows.map((row) => [row.kind, row.hash]);
+
+  test("records the deployment beside the swap", async () => {
+    const { response, rows } = await execute(async () => ({
+      calls: [],
+      deploymentTransactionHash: DEPLOY,
+      transactionHash: SIGNED,
+    }));
+    expect(response).toEqual({ ok: true, transactionHash: SIGNED });
+    expect(kinds(rows)).toContainEqual(["deploy", DEPLOY]);
+    expect(kinds(rows)).toContainEqual(["invoke", SIGNED]);
+  });
+
+  test("still records the deployment when the swap after it is refused", async () => {
+    const { response, rows } = await execute(async () => {
+      throw postDeploymentFailure(DEPLOY, new Error("invoke rejected"));
+    });
+    expect(response).toMatchObject({ error: expect.any(String) });
+    expect(kinds(rows)).toEqual([["deploy", DEPLOY]]);
+  });
+
+  test("still records the deployment when the swap's reply is lost, and stays unknown", async () => {
+    const { response, rows } = await execute(async (input) => {
+      await input.onSigned?.({ nonce: "0x1", senderAddress: "0x1", transactionHash: SIGNED });
+      throw postDeploymentFailure(DEPLOY, new IndeterminateRpcWriteError("reply lost"));
+    });
+    expect(response).toMatchObject({ submissionUnknown: true, transactionHash: SIGNED });
+    expect(kinds(rows)).toContainEqual(["deploy", DEPLOY]);
+    expect(kinds(rows)).toContainEqual(["invoke", SIGNED]);
+  });
+
+  test("records no deployment when none was sent", async () => {
+    const { rows } = await execute(async () => ({ calls: [], transactionHash: SIGNED }));
+    expect(rows.some((row) => row.kind === "deploy")).toBe(false);
   });
 });

@@ -14,10 +14,13 @@ import { normalizeWalletOrigin } from "@bramble/core/origin";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { isProviderDeclare, type ProviderDeclare } from "@bramble/wallet-protocol/declare";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
+import { recordAutoDeployment } from "../accounts/deployment-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
 import { withApprovalReservation } from "../approvals/approval-limits";
@@ -37,6 +40,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
+import { afterBroadcast } from "./activity-recording";
 import { FEE_REVIEW_REQUIRED } from "./fee-review";
 
 /**
@@ -421,7 +425,11 @@ export const executeDeclareApproval = async (
   // `{ error }` (mirroring executeStrk20InvokeApproval) so the applier settles
   // the held dapp request with the real reason instead of leaving it to hang on
   // an unhandled throw. Fails closed — nothing is submitted on error.
-  let result: { readonly classHash: string; readonly transactionHash: string };
+  let result: {
+    readonly classHash: string;
+    readonly deploymentTransactionHash?: string;
+    readonly transactionHash: string;
+  };
   try {
     result = await runtimeRpc.submitDeclareTransaction({
       account,
@@ -440,8 +448,18 @@ export const executeDeclareApproval = async (
       ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
     });
   } catch (error) {
-    return { error: declarationErrorMessage(error) };
+    // An accepted automatic deployment is recorded whatever happened next (mc-wallet 719).
+    await afterBroadcast(() => recordAutoDeployment(deps.activity, account, error));
+    // A lost reply stays typed as status-unknown, so the site is never told a
+    // declaration that may be on chain failed (mc-wallet 719 review).
+    const message = declarationErrorMessage(error);
+    return error instanceof IndeterminateRpcWriteError
+      ? submissionUnknownResponse(message)
+      : { error: message };
   }
+  await afterBroadcast(() =>
+    recordAutoDeployment(deps.activity, account, result.deploymentTransactionHash),
+  );
   // Journal the submitted declare like every other submitted transaction, so it
   // appears in the activity feed and CSV export and background reconciliation
   // follows it to acceptance or revert. The transaction is already on chain by
