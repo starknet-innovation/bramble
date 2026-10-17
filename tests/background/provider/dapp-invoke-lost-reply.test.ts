@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { postDeploymentFailure } from "@bramble/starknet/rpc-submit";
 import { createMemoryStore } from "@bramble/store/kv";
 import { memoryActivityLog } from "@bramble/transactions/activity";
 import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
@@ -164,5 +165,57 @@ describe("a dapp invoke with a lost broadcast reply", () => {
     expect(readSubmissionUnknownError(panel)).toBeNull();
     expect(panel).toHaveProperty("error");
     expect(await activity.list()).toEqual([]);
+  });
+});
+
+// mc-wallet 719: an approved dapp invoke from an undeployed account deploys it
+// first. That accepted deployment is recorded, including when the invoke after
+// it is refused or loses its reply, since its fee is spent.
+describe("a dapp invoke that deploys the account first", () => {
+  const DEPLOY = "0xd3a1";
+  const rowsOf = async (activity: Awaited<ReturnType<typeof approveInvoke>>["activity"]) =>
+    (await activity.list()).map((row) => [row.kind, row.hash]);
+
+  test("records the deployment beside the invoke", async () => {
+    const { activity, panel } = await approveInvoke(async () => ({
+      calls: [],
+      deploymentTransactionHash: DEPLOY,
+      transactionHash: SIGNED,
+    }));
+    expect(panel).toMatchObject({ ok: true });
+    expect(await rowsOf(activity)).toEqual([
+      ["deploy", DEPLOY],
+      ["invoke", SIGNED],
+    ]);
+  });
+
+  test("still records the deployment when the invoke after it is refused", async () => {
+    const { activity, panel } = await approveInvoke(async () => {
+      throw postDeploymentFailure(DEPLOY, new Error("invoke rejected"));
+    });
+    expect(panel).toHaveProperty("error");
+    expect(readSubmissionUnknownError(panel)).toBeNull();
+    expect(await rowsOf(activity)).toEqual([["deploy", DEPLOY]]);
+  });
+
+  test("still records the deployment when the reply is lost, and stays unknown", async () => {
+    const { activity, panel } = await approveInvoke(async (input) => {
+      await input.onSigned?.({
+        nonce: "0x1",
+        senderAddress: account.address,
+        transactionHash: SIGNED,
+      });
+      throw postDeploymentFailure(DEPLOY, new IndeterminateRpcWriteError("reply lost"));
+    });
+    expect(readSubmissionUnknownError(panel)?.transactionHash).toBe(SIGNED);
+    expect(await rowsOf(activity)).toEqual([
+      ["deploy", DEPLOY],
+      ["invoke", SIGNED],
+    ]);
+  });
+
+  test("records no deployment when none was sent", async () => {
+    const { activity } = await approveInvoke(async () => ({ calls: [], transactionHash: SIGNED }));
+    expect(await rowsOf(activity)).toEqual([["invoke", SIGNED]]);
   });
 });

@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import type { NftOwnership } from "@bramble/starknet/rpc-assets";
+import { postDeploymentFailure } from "@bramble/starknet/rpc-submit";
 import { createMemoryStore } from "@bramble/store/kv";
 import { createActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
@@ -93,7 +94,7 @@ const makeHarness = (options?: {
       readonly senderAddress: string;
       readonly transactionHash: string;
     }) => Promise<void>;
-  }) => Promise<{ readonly transactionHash: string }>;
+  }) => Promise<{ readonly deploymentTransactionHash?: string; readonly transactionHash: string }>;
 }) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
@@ -356,5 +357,69 @@ describe("an NFT send whose broadcast reply was lost", () => {
     const { activity, handler } = makeHarness();
     expect(await handler(send, sender)).toEqual({ ok: true, transactionHash: "0x7cd" });
     expect((await activity.list()).map((row) => row.hash)).toEqual(["0x7cd"]);
+  });
+});
+
+// mc-wallet 719: an NFT send from an undeployed account deploys it first. That
+// accepted deployment is recorded beside the send, and still recorded when the
+// send after it is refused or loses its reply, since its fee is spent.
+describe("an NFT send that deploys the account first", () => {
+  const DEPLOY = "0xd3a1";
+  const SIGNED = "0x5eed";
+  const send = {
+    contract: CONTRACT,
+    networkId: "SN_MAIN",
+    recipient: "0x777",
+    reviewedFee,
+    tokenId: "5",
+    type: "wallet.transferNft",
+  };
+  const rowsOf = async (activity: ReturnType<typeof makeHarness>["activity"]) =>
+    (await activity.list()).map((row) => [row.kind, row.hash]);
+
+  test("records the deployment beside the send", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async () => ({ deploymentTransactionHash: DEPLOY, transactionHash: SIGNED }),
+    });
+    expect(await handler(send, sender)).toEqual({ ok: true, transactionHash: SIGNED });
+    const rows = await rowsOf(activity);
+    expect(rows).toContainEqual(["deploy", DEPLOY]);
+    expect(rows).toContainEqual(["invoke", SIGNED]);
+  });
+
+  test("still records the deployment when the send after it is refused", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async () => {
+        throw postDeploymentFailure(DEPLOY, new Error("invoke rejected"));
+      },
+    });
+    expect(await handler(send, sender)).toHaveProperty("error");
+    expect(await rowsOf(activity)).toEqual([["deploy", DEPLOY]]);
+  });
+
+  test("still records the deployment when the reply is lost, and stays unknown", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async (input) => {
+        await input.onSigned?.({
+          nonce: "0x1",
+          senderAddress: account.address,
+          transactionHash: SIGNED,
+        });
+        throw postDeploymentFailure(DEPLOY, new IndeterminateRpcWriteError("reply lost"));
+      },
+    });
+    expect(await handler(send, sender)).toMatchObject({
+      submissionUnknown: true,
+      transactionHash: SIGNED,
+    });
+    const rows = await rowsOf(activity);
+    expect(rows).toContainEqual(["deploy", DEPLOY]);
+    expect(rows).toContainEqual(["invoke", SIGNED]);
+  });
+
+  test("records no deployment when none was sent", async () => {
+    const { activity, handler } = makeHarness();
+    await handler(send, sender);
+    expect((await rowsOf(activity)).some(([kind]) => kind === "deploy")).toBe(false);
   });
 });

@@ -41,6 +41,7 @@ import {
   type FeeEstimate,
   reviewedSpendFor,
 } from "../rpc/fee-bounds";
+import { markDeploymentFailure } from "../rpc/rpc-submit";
 
 /**
  * Inputs for submitting one declare transaction. `contractClass` is the opaque
@@ -77,6 +78,8 @@ export type DeclareInput = {
  */
 export type DeclareSubmission = {
   readonly classHash: string;
+  /** The account deployment sent first, when the account was undeployed (mc-wallet 719). */
+  readonly deploymentTransactionHash?: string;
   readonly transactionHash: string;
 };
 
@@ -138,10 +141,12 @@ const rethrowDeclareAfterDeployment = (
     throw error;
   }
   const message = `Account deployment ${deployment.transactionHash} completed, but the following declaration could not be confirmed. Check on-chain state before retrying.`;
-  if (error instanceof IndeterminateRpcWriteError) {
-    throw new IndeterminateRpcWriteError(message);
-  }
-  throw new WalletError(message);
+  throw markDeploymentFailure(
+    error instanceof IndeterminateRpcWriteError
+      ? new IndeterminateRpcWriteError(message)
+      : new WalletError(message),
+    deployment.transactionHash,
+  );
 };
 
 const estimateExactDeclareFee = async (
@@ -315,11 +320,14 @@ export const submitDeclareTransaction = async (
           payload,
           bounds as Parameters<Account["declare"]>[1],
         );
-        return acceptedDeclareSubmission(
+        const accepted = acceptedDeclareSubmission(
           result,
           payload.classHash,
           signedHashes[declarationHashIndex],
         );
+        return deployment
+          ? { ...accepted, deploymentTransactionHash: deployment.transactionHash }
+          : accepted;
       } catch (error) {
         return rethrowDeclareAfterDeployment(error, deployment);
       }
