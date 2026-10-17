@@ -240,11 +240,23 @@ export const showNoticeToast = (
   context: Document | Element | null | undefined,
 ): void => renderToast(message, "error", context, message);
 
+/**
+ * Shows a refusal of something the user typed (a wrong passphrase) as an error
+ * toast with no copy control. Its reviewed sentence says all there is: there
+ * is no diagnostic for support, and a copy button beside it only reads as one
+ * (QA C2). Real failures keep `showToast`, whose copy control holds the raw
+ * diagnostic.
+ */
+export const showRefusalToast = (
+  message: string,
+  context: Document | Element | null | undefined,
+): void => renderToast(friendlyError(message).message, "error", context, null);
+
 const renderToast = (
   display: string,
   tone: ToastTone,
   context: Document | Element | null | undefined,
-  details: string,
+  details: string | null,
 ): void => {
   const doc = documentFor(context);
   const stackId = "toast-stack";
@@ -267,7 +279,7 @@ const renderToast = (
   text.className = "toast-text";
   text.textContent = display;
   toast.append(text);
-  if (problem) {
+  if (problem && details !== null) {
     toast.append(toastCopyButton(doc, details));
   }
   stack.append(toast);

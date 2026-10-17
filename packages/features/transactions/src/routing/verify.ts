@@ -12,9 +12,10 @@
  * call is reported as opaque rather than as safe.
  */
 
+import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-discovery";
 import { AVNU_MULTI_ROUTE_SWAP } from "@bramble/wallet-model/avnu-route";
-import { asFelt, sameFelt } from "@bramble/wallet-model/networks";
+import { asFelt, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import {
   canonical,
@@ -55,6 +56,7 @@ export type RiskFlagCode =
   | "foreign-beneficiary"
   | "operator-approval"
   | "self-transfer"
+  | "token-contract-recipient"
   | "undecoded-swap"
   | "unknown-contract"
   | "unlimited-approval";
@@ -310,6 +312,30 @@ const selfTransferFlag = (recipient: string, context: VerificationContext): Risk
     ? { code: "self-transfer", message: "The recipient is this wallet's own address." }
     : null;
 
+const TOKEN_CONTRACT_RECIPIENT_FLAG: RiskFlag = {
+  code: "token-contract-recipient",
+  message: "This is a token contract, not a wallet. Tokens sent here are usually lost.",
+};
+
+// A payment whose recipient is a token contract the wallet knows (STRK, a
+// curated token on this network, or one this account tracks) almost always
+// strands the funds: a token contract holds no keys to send them back (QA I10).
+// A warning, not a refusal: only address poisoning refuses.
+const tokenContractRecipientFlag = (
+  recipient: string,
+  context: VerificationContext,
+): RiskFlag | null => {
+  if (!recipient) {
+    return null;
+  }
+  const tokens = [
+    STRK_TOKEN_ADDRESS,
+    ...knownTokensForNetwork(context.account.networkId).map((token) => token.address),
+    ...context.tokens.map((token) => token.address),
+  ];
+  return tokens.some((token) => sameFelt(recipient, token)) ? TOKEN_CONTRACT_RECIPIENT_FLAG : null;
+};
+
 const addressPoisoningFlag = (recipient: string, context: VerificationContext): RiskFlag | null => {
   if (!recipient) {
     return null;
@@ -371,7 +397,11 @@ const recipientFlags = (
         foreignBeneficiaryFlag(recipient, context),
         addressPoisoningFlag(recipient, context),
       ]
-    : [selfTransferFlag(recipient, context), addressPoisoningFlag(recipient, context)];
+    : [
+        selfTransferFlag(recipient, context),
+        tokenContractRecipientFlag(recipient, context),
+        addressPoisoningFlag(recipient, context),
+      ];
 
 // `unlimitedApproval` and `operatorApproval` are decided across the whole
 // transaction rather than from this call alone, so a grant split into several
