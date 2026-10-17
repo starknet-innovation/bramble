@@ -9,6 +9,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { postDeploymentFailure } from "@bramble/starknet/rpc-submit";
 import { type ActivityStatus, memoryActivityLog } from "@bramble/transactions/activity";
 import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import type { Vault } from "@bramble/vault/schema";
@@ -319,5 +320,109 @@ describe("a revoke with a lost reply", () => {
     expect(await harness.allowanceStore.list()).toMatchObject([
       { id, revokeHash: REVOKE_HASH, revoking: true },
     ]);
+  });
+});
+
+// mc-wallet 719: a revoke from an undeployed account deploys it first. That
+// accepted deployment is recorded beside the revoke, and still recorded when
+// the revoke after it is refused or loses its reply, since its fee is spent.
+describe("a revoke that deploys the account first", () => {
+  const DEPLOY = "0xd3a1";
+
+  type Submitted = Awaited<
+    ReturnType<
+      NonNullable<NonNullable<Parameters<typeof makeRuntimeRpc>[0]>["submitInvokeTransaction"]>
+    >
+  >;
+  const revokeWith = async (revokeSubmit: (input: InvokeInput) => Promise<Submitted>) => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const activity = memoryActivityLog(() => 1);
+    let calls = 0;
+    const handler = createMessageHandler(walletStub, testExtension, {
+      activity,
+      allowanceStore: memoryAllowanceStore(),
+      runtimeRpc: makeRuntimeRpc({
+        async getTrackedAllowances() {
+          return [];
+        },
+        async submitInvokeTransaction(input) {
+          calls += 1;
+          // The first submission is the dapp approve that creates the grant.
+          return calls === 1
+            ? { calls: input.calls, transactionHash: APPROVE_HASH }
+            : revokeSubmit(input);
+        },
+      }),
+      session,
+    });
+    const held = handler(
+      {
+        calls: [
+          { calldata: [SPENDER, "1000", "0"], contractAddress: TOKEN, entrypoint: "approve" },
+        ],
+        origin: "https://dapp.example",
+        type: "wallet.addInvokeTransaction",
+      },
+      contentSender,
+    );
+    await flushHeld();
+    const approval = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, approval);
+    await handler({ id: approval, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await held;
+    const listing = (await handler({ type: "wallet.allowances" }, extensionSender)) as Listing;
+    const response = await handler(
+      {
+        id: listing.allowances[0]?.id ?? "",
+        reviewedFee: { overallFee: "1", unit: "FRI" },
+        type: "wallet.revokeAllowance",
+      },
+      extensionSender,
+    );
+    const rows = (await activity.list()).map((row) => [row.kind, row.hash]);
+    return { response, rows };
+  };
+
+  test("records the deployment beside the revoke", async () => {
+    const { response, rows } = await revokeWith(async (input) => ({
+      calls: input.calls,
+      deploymentTransactionHash: DEPLOY,
+      transactionHash: REVOKE_HASH,
+    }));
+    expect(response).toEqual({ ok: true, transactionHash: REVOKE_HASH });
+    expect(rows).toContainEqual(["deploy", DEPLOY]);
+    expect(rows).toContainEqual(["invoke", REVOKE_HASH]);
+  });
+
+  test("still records the deployment when the revoke after it is refused", async () => {
+    const { response, rows } = await revokeWith(async () => {
+      throw postDeploymentFailure(DEPLOY, new Error("invoke rejected"));
+    });
+    expect(response).toHaveProperty("error");
+    expect(rows).toContainEqual(["deploy", DEPLOY]);
+    expect(rows).not.toContainEqual(["invoke", REVOKE_HASH]);
+  });
+
+  test("still records the deployment when the reply is lost, and stays unknown", async () => {
+    const { response, rows } = await revokeWith(async (input) => {
+      await input.onSigned?.({
+        nonce: "0x1",
+        senderAddress: account.address,
+        transactionHash: REVOKE_HASH,
+      });
+      throw postDeploymentFailure(DEPLOY, new IndeterminateRpcWriteError("reply lost"));
+    });
+    expect(readSubmissionUnknownError(response)?.transactionHash).toBe(REVOKE_HASH);
+    expect(rows).toContainEqual(["deploy", DEPLOY]);
+    expect(rows).toContainEqual(["invoke", REVOKE_HASH]);
+  });
+
+  test("records no deployment when none was sent", async () => {
+    const { rows } = await revokeWith(async (input) => ({
+      calls: input.calls,
+      transactionHash: REVOKE_HASH,
+    }));
+    expect(rows.some(([kind]) => kind === "deploy")).toBe(false);
   });
 });

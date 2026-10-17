@@ -141,6 +141,10 @@ const handlerWith = (ledgerSignQueue: LedgerSignQueue) => {
   const handler = createMessageHandler(walletStub, testExtension, {
     ledgerSignQueue,
     runtimeRpc: makeRuntimeRpc({
+      // An undeployed account, as a deployment needs (mc-wallet 712).
+      async getDeploymentStatus() {
+        return false;
+      },
       async submitAccountDeployment(input) {
         // Stand in for the real deploy-hash signing: hand the signer the hash and
         // capture the verified signature it returns before "broadcasting".
@@ -207,6 +211,9 @@ describe("Ledger signing flow through the dispatcher", () => {
         },
       },
       runtimeRpc: makeRuntimeRpc({
+        async getDeploymentStatus() {
+          return false;
+        },
         async submitAccountDeployment(input) {
           await input.signHash(DEPLOY_HASH);
           return { transactionHash: "0x0" };

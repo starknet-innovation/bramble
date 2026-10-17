@@ -102,6 +102,20 @@ export const exceedsReviewedFee = (reviewed: FeeEstimate, quoted: FeeEstimate): 
 };
 
 /**
+ * The most a submission held to `reviewed` may authorise, in base units: the
+ * reviewed figure raised by {@link REVIEWED_FEE_HEADROOM}, the same bound
+ * {@link exceedsReviewedFee} enforces, so a balance that keeps this much back
+ * always covers the fee the wallet will sign. Null for a value that is not a
+ * decimal base-units integer, so a caller can withhold rather than guess.
+ */
+export const reviewedFeeCeiling = (reviewed: FeeEstimate): bigint | null => {
+  const base = baseUnits(reviewed.overallFee);
+  return base === null
+    ? null
+    : (base * BigInt(REVIEWED_FEE_HEADROOM.numerator)) / BigInt(REVIEWED_FEE_HEADROOM.denominator);
+};
+
+/**
  * Fee speed control: `standard` signs the bounds the node's own estimate
  * implies, `fast` signs {@link FAST_BOUND_SCALE}-scaled bounds for faster
  * inclusion. Defined here rather than at the submit boundary because the review

@@ -262,6 +262,9 @@ const resumeDeployReceipt = (
   });
 };
 
+// The background's refusal for an account it already reports deployed.
+const ALREADY_DEPLOYED = "account already deployed";
+
 /**
  * Binds the account-deployment action.
  *
@@ -356,7 +359,14 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         scopedStatus(target, "");
         buttonBusy(target, false);
       },
-      (error: unknown) => failed(error, "Could not estimate the deployment fee", "quote", toast),
+      (error: unknown) => {
+        // Deployed meanwhile (a send from this account deployed it): repaint
+        // from a fresh read, which shows the deployed state (mc-wallet 712).
+        if (error instanceof Error && error.message === ALREADY_DEPLOYED) {
+          void deps.wallet.loadStatus().then((status) => deps.render(status, "action"));
+        }
+        failed(error, "Could not estimate the deployment fee", "quote", toast);
+      },
     );
   };
 

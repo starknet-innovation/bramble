@@ -13,6 +13,9 @@
  * failing log never turns a submitted declare into a reported failure.
  */
 import { describe, expect, test } from "bun:test";
+import { WalletError } from "@bramble/core/errors";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { markDeploymentFailure } from "@bramble/starknet/rpc-submit";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
@@ -168,5 +171,65 @@ describe("executeDeclareApproval activity", () => {
       ok: true,
       transactionHash: "0x7cd",
     });
+  });
+});
+
+// mc-wallet 719: a declare from an undeployed account deploys it first. That
+// accepted deployment is recorded before the declare, and still recorded when
+// the declare after it is refused or loses its reply, since its fee is spent.
+describe("a declare that deploys the account first", () => {
+  const DEPLOY = "0xd3a1";
+  const declareWith = (submit: () => Promise<unknown>) => {
+    const entries: Recorded[] = [];
+    const deps = executeDeps({
+      activity: recordingActivity((entry) => entries.push(entry)),
+      runtimeRpc: { submitDeclareTransaction: submit } as unknown as RuntimeRpc,
+    });
+    return { entries, run: () => executeDeclareApproval(deps, reviewedApproval) };
+  };
+  const kinds = (entries: readonly Recorded[]) => entries.map((entry) => [entry.kind, entry.hash]);
+
+  test("records the deployment before the declare", async () => {
+    const { entries, run } = declareWith(async () => ({
+      classHash: "0x7ce",
+      deploymentTransactionHash: DEPLOY,
+      transactionHash: "0x7cd",
+    }));
+    await expect(run()).resolves.toEqual({
+      classHash: "0x7ce",
+      ok: true,
+      transactionHash: "0x7cd",
+    });
+    expect(kinds(entries)).toEqual([
+      ["deploy", DEPLOY],
+      ["declare", "0x7cd"],
+    ]);
+  });
+
+  test("still records the deployment when the declare after it is refused", async () => {
+    const { entries, run } = declareWith(async () => {
+      throw markDeploymentFailure(new WalletError("declaration refused"), DEPLOY);
+    });
+    await expect(run()).resolves.toHaveProperty("error");
+    expect(kinds(entries)).toEqual([["deploy", DEPLOY]]);
+  });
+
+  test("still records the deployment when the declare's reply is lost", async () => {
+    const { entries, run } = declareWith(async () => {
+      throw markDeploymentFailure(new IndeterminateRpcWriteError("reply lost"), DEPLOY);
+    });
+    // The declaration may be on chain, so the site is told the outcome is
+    // unknown, never that it failed (mc-wallet 719 review).
+    await expect(run()).resolves.toMatchObject({ submissionUnknown: true });
+    expect(kinds(entries)).toEqual([["deploy", DEPLOY]]);
+  });
+
+  test("a declaration that is plainly refused still reads as failed", async () => {
+    const { run } = declareWith(async () => {
+      throw new Error("declare rejected");
+    });
+    const response = await run();
+    expect(response).toHaveProperty("error");
+    expect(response).not.toHaveProperty("submissionUnknown");
   });
 });

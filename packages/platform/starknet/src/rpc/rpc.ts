@@ -148,6 +148,8 @@ export {
  */
 export type TransferSubmission = {
   readonly call: Call;
+  /** The account deployment sent first, when the account was undeployed. */
+  readonly deploymentTransactionHash?: string;
   readonly transactionHash: string;
 };
 
@@ -341,6 +343,9 @@ export const submitErc20Transfer = async (
   );
   return {
     call,
+    ...(result.deploymentTransactionHash === undefined
+      ? {}
+      : { deploymentTransactionHash: result.deploymentTransactionHash }),
     transactionHash: result.transactionHash,
   };
 };
