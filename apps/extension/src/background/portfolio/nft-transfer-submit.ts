@@ -16,6 +16,7 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { Call } from "starknet";
+import { recordAutoDeployment } from "../accounts/deployment-ops";
 import { signerForContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
@@ -57,6 +58,7 @@ export const submitNftTransfer = async (
   // when the reply is lost, so the send stays traceable.
   let signedHash: string | undefined;
   let transactionHash: string;
+  let deploymentHash: string | undefined;
   try {
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
@@ -72,8 +74,10 @@ export const submitNftTransfer = async (
       rpcUrls: input.rpcUrls,
       signHash: signerForContext(deps, context),
     });
-    transactionHash = result.transactionHash;
+    ({ deploymentTransactionHash: deploymentHash, transactionHash } = result);
   } catch (error) {
+    // An accepted automatic deployment is recorded whatever happened next (mc-wallet 719).
+    await afterBroadcast(() => recordAutoDeployment(deps.activity, context.account, error));
     if (!(error instanceof IndeterminateRpcWriteError)) {
       throw error;
     }
@@ -85,6 +89,7 @@ export const submitNftTransfer = async (
     }
     return submissionUnknownResponse(error.message, signedHash);
   }
+  await afterBroadcast(() => recordAutoDeployment(deps.activity, context.account, deploymentHash));
   await afterBroadcast(async () => {
     await recordSubmittedActivity(deps.activity, activityFor(transactionHash));
     await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);

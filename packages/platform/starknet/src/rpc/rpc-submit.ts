@@ -234,6 +234,17 @@ export const failedSubmissionDeployment = (error: unknown): string | undefined =
   typeof error === "object" && error !== null ? failedSubmissionDeployments.get(error) : undefined;
 
 /**
+ * Marks `failure` as raised after the accepted deployment `deploymentHash`, for
+ * {@link failedSubmissionDeployment}, and returns it. For a submit path of its
+ * own (a declaration) that deploys first; only call it once that deployment
+ * was accepted.
+ */
+export const markDeploymentFailure = <E extends object>(failure: E, deploymentHash: string): E => {
+  failedSubmissionDeployments.set(failure, deploymentHash);
+  return failure;
+};
+
+/**
  * The failure of an invoke sent after an accepted automatic deployment. It
  * names the deployment, whose fee is spent, and carries its hash for
  * {@link failedSubmissionDeployment}. A lost invoke reply stays indeterminate,
@@ -247,8 +258,7 @@ export const postDeploymentFailure = (deploymentHash: string, error: unknown): W
     error instanceof IndeterminateRpcWriteError
       ? new IndeterminateRpcWriteError(message)
       : new WalletError(message);
-  failedSubmissionDeployments.set(failure, deploymentHash);
-  return failure;
+  return markDeploymentFailure(failure, deploymentHash);
 };
 
 /**

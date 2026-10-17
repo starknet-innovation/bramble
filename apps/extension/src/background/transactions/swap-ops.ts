@@ -30,6 +30,7 @@ import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { isApproveEntrypoint } from "@bramble/transactions/verify-selectors";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
+import { recordAutoDeployment } from "../accounts/deployment-ops";
 import { signerForContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import {
   approvalPayloadMatchesContext,
@@ -347,6 +348,7 @@ const swapExecuteResponse = async (
     // when the reply is lost.
     let signedHash: string | undefined;
     let transactionHash: string;
+    let deploymentHash: string | undefined;
     try {
       const result = await deps.runtimeRpc.submitInvokeTransaction({
         account: context.account,
@@ -359,8 +361,10 @@ const swapExecuteResponse = async (
         rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
         signHash: signerForContext(deps, context),
       });
-      transactionHash = result.transactionHash;
+      ({ deploymentTransactionHash: deploymentHash, transactionHash } = result);
     } catch (error) {
+      // An accepted automatic deployment is recorded whatever happened next (mc-wallet 719).
+      await afterBroadcast(() => recordAutoDeployment(deps.activity, context.account, error));
       if (!(error instanceof IndeterminateRpcWriteError)) {
         throw error;
       }
@@ -375,6 +379,9 @@ const swapExecuteResponse = async (
     }
     // Outside the catch below: once a hash exists the reply carries it, so the
     // panel never re-quotes a swap that is already on chain (audit 173).
+    await afterBroadcast(() =>
+      recordAutoDeployment(deps.activity, context.account, deploymentHash),
+    );
     await afterBroadcast(() => recordSubmitted(transactionHash));
     return { ok: true, transactionHash };
   } catch (error) {
