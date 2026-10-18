@@ -23,6 +23,9 @@ export const ONBOARDING_STYLES = `
      the field still reads as the calm dark ground; daylight leaves it untinted.
      The tint is one solid colour blended over the image, nothing ramped. */
   body.onboarding-surface {
+    /* Pinned to the viewport: sized to the page, the cover image rescaled and
+       shifted whenever a disclosure opened and the page grew. */
+    background-attachment: fixed;
     background-blend-mode: multiply;
     background-color: light-dark(
       var(--bramble-panel),
