@@ -355,6 +355,16 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   passphraseInput?.addEventListener("input", refreshPassword);
   confirmationInput?.addEventListener("input", refreshPassword);
+  // Enter takes the step's Continue, never the form's submit (which belongs to
+  // "Finish setup"), and only once Continue is enabled: a valid, matching
+  // passphrase that is not already being processed.
+  for (const input of [passphraseInput, confirmationInput]) {
+    input?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing) return;
+      event.preventDefault();
+      if (passwordContinue && !passwordContinue.disabled) passwordContinue.click();
+    });
+  }
   passwordContinue?.addEventListener("click", () => {
     if (!passwordOk()) {
       refreshPassword();
