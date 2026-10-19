@@ -267,18 +267,26 @@ export const shieldStrkFunding = (
 };
 
 /**
- * True when a STRK shield's amount leaves no public STRK for its network fee:
- * the amount is at least what the route can spend once the pool fee is held
- * back, which is what Max fills in. False on any other route or while the
- * spendable amount is unknown.
+ * True when a shield leaves no public STRK for its network fee. A shield's
+ * network fee and pool fee are both paid from public STRK whatever token it
+ * shields (issue 665). For a STRK shield that is an amount at least what the
+ * route can spend once the pool fee is held back, which is what Max fills in;
+ * for any other token it is a public STRK balance no larger than the pool fee.
+ * False on any other route, or while the spendable amount, the STRK balance or
+ * the pool fee is unknown.
  */
 export const shieldLeavesNoStrkForGas = (context: TransferRouteContext): boolean => {
   const { fields } = context;
-  if (
-    transferRoute(fields).id !== "public-private" ||
-    !sameFelt(fields.tokenAddress, STRK_TOKEN_ADDRESS)
-  ) {
+  if (transferRoute(fields).id !== "public-private") {
     return false;
+  }
+  if (!sameFelt(fields.tokenAddress, STRK_TOKEN_ADDRESS)) {
+    const input = sendRouteInputFor(context);
+    return (
+      input.poolFeeFri !== null &&
+      input.sourceFeeBalanceRaw !== null &&
+      input.sourceFeeBalanceRaw <= input.poolFeeFri
+    );
   }
   const spendable = transferSpendable(context);
   return spendable !== null && rawAmount(fields.amount, fields.tokenDecimals) >= spendable;

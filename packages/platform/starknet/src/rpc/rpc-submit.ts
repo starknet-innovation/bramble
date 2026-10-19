@@ -45,7 +45,7 @@ export type InvokeInput = {
   readonly calls: readonly Call[];
   /** Live authorization checked immediately before each on-chain mutation. */
   readonly isAuthorized?: () => boolean;
-  /** Optional STRK20 proof material attached to a prepared privacy call. */
+  /** Optional SNIP-36 proof (a STRK20 pool proof or a dapp's app proof) sent with the invoke. */
   readonly proof?: Strk20Proof;
   /**
    * The fee estimate this submission was reviewed against — the exact figure a
@@ -95,6 +95,12 @@ export type SignedInvoke = {
  */
 export type InvokeSubmission = {
   readonly calls: readonly Call[];
+  /**
+   * The DEPLOY_ACCOUNT this submission sent first, set only when the account
+   * was undeployed and its deployment was accepted before the invoke went out,
+   * so the caller can record it in Activity (mc-wallet 712).
+   */
+  readonly deploymentTransactionHash?: string;
   readonly transactionHash: string;
 };
 
@@ -204,14 +210,55 @@ const invokeJournal = (onSigned: InvokeInput["onSigned"], senderAddress: string)
   };
 };
 
-// A failure after an automatic deployment names the deployment, whose fee is
-// spent. A lost invoke reply stays indeterminate so callers never offer a
-// blind retry of a transaction that may already be on chain (audit #173).
-const postDeploymentFailure = (deploymentHash: string, error: unknown): WalletError => {
+// Names the deployment a send ran first, so the caller can record it.
+const withDeployment = (
+  deployment: { readonly transactionHash: string } | null,
+  submission: InvokeSubmission,
+): InvokeSubmission =>
+  deployment
+    ? { ...submission, deploymentTransactionHash: deployment.transactionHash }
+    : submission;
+
+// The accepted deployment each post-deployment failure carries, keyed by the
+// error object itself, so a caller can record the deployment whose fee is spent.
+const failedSubmissionDeployments = new WeakMap<object, string>();
+
+/**
+ * The accepted DEPLOY_ACCOUNT a failed {@link submitInvokeTransaction} sent
+ * before its invoke failed or lost its reply, or undefined when it deployed
+ * nothing. Only an error this module raised after an accepted deployment
+ * carries one, so a caller can record that deployment, and the fee it paid,
+ * whatever happened to the invoke (mc-wallet 712 review).
+ */
+export const failedSubmissionDeployment = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null ? failedSubmissionDeployments.get(error) : undefined;
+
+/**
+ * Marks `failure` as raised after the accepted deployment `deploymentHash`, for
+ * {@link failedSubmissionDeployment}, and returns it. For a submit path of its
+ * own (a declaration) that deploys first; only call it once that deployment
+ * was accepted.
+ */
+export const markDeploymentFailure = <E extends object>(failure: E, deploymentHash: string): E => {
+  failedSubmissionDeployments.set(failure, deploymentHash);
+  return failure;
+};
+
+/**
+ * The failure of an invoke sent after an accepted automatic deployment. It
+ * names the deployment, whose fee is spent, and carries its hash for
+ * {@link failedSubmissionDeployment}. A lost invoke reply stays indeterminate,
+ * so callers never offer a blind retry of a transaction that may already be on
+ * chain (audit #173). Exported for callers' tests; production code reaches it
+ * only through {@link submitInvokeTransaction}.
+ */
+export const postDeploymentFailure = (deploymentHash: string, error: unknown): WalletError => {
   const message = `Account deployment ${deploymentHash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.`;
-  return error instanceof IndeterminateRpcWriteError
-    ? new IndeterminateRpcWriteError(message)
-    : new WalletError(message);
+  const failure =
+    error instanceof IndeterminateRpcWriteError
+      ? new IndeterminateRpcWriteError(message)
+      : new WalletError(message);
+  return markDeploymentFailure(failure, deploymentHash);
 };
 
 /**
@@ -308,13 +355,13 @@ export const submitInvokeTransaction = async (
           [...calls],
           details as Parameters<Account["execute"]>[1],
         );
-        return {
+        return withDeployment(deployment, {
           calls,
           transactionHash: matchingAcceptedRpcWriteHash(
             result.transaction_hash,
             capturedTransactionHashes[invokeHashIndex],
           ),
-        };
+        });
       } catch (error) {
         throw deployment ? postDeploymentFailure(deployment.transactionHash, error) : error;
       }

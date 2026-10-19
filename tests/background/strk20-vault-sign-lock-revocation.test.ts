@@ -151,7 +151,7 @@ const preparedSubmissionDeps = (
 const preparedApproval = {
   origin: grantedOrigin,
   payload: {
-    calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "apply_actions" }],
+    calls: [{ calldata: [], contractAddress: "0x123", entrypoint: "apply_actions" }],
     proof: { data: "opaque", output: ["0x1"], proof_facts: ["0x2"] },
   },
 };

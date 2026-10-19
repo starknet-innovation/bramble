@@ -9,10 +9,11 @@ import {
   nextArgentMultisigPublicConfig,
   parseArgentMultisigConfigChange,
 } from "@bramble/multisig/chain";
-import type {
-  ArgentMultisigRecord,
-  ArgentMultisigSigningIntent,
-  MultisigStore,
+import {
+  type ArgentMultisigRecord,
+  type ArgentMultisigSigningIntent,
+  type MultisigStore,
+  staleArgentMultisigIntent,
 } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
@@ -59,7 +60,7 @@ export const markChangedIntentsStale = async (
       (intent.configSnapshot.threshold !== config.threshold ||
         !sameArgentSignerGuids(intent.configSnapshot.signerGuids, config.signerGuids))
     ) {
-      await store.upsertIntent({ ...intent, state: "stale" });
+      await store.upsertIntent(staleArgentMultisigIntent(intent, "config"));
     }
   }
 };

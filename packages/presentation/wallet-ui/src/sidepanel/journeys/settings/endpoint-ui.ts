@@ -4,7 +4,7 @@
  * entrypoint to keep it within the size budget.
  */
 
-import { isServiceUrl } from "@bramble/core/service-url";
+import { canonicalServiceUrl, canonicalWebSocketServiceUrl } from "@bramble/core/service-url";
 import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -28,14 +28,34 @@ export type EndpointUiDeps = {
   readonly wallet: SidepanelWallet;
 };
 
+// Characters refused in a typed endpoint rather than saved percent-encoded: in
+// a pasted URL they usually split a key, and encoding them would save a key the
+// person never typed.
+const TYPED_BREAK = /[\s"<>`]/u;
+const SERVICE_REFUSAL =
+  "Enter a secure HTTPS service URL with no spaces, quotes, angle brackets or backticks";
+const RELAY_REFUSAL =
+  "Enter a secure WSS relay URL with no spaces, quotes, angle brackets or backticks";
+
+// What a person typed, in the canonical spelling the store accepts: the URL
+// parser fixes case, a default port, slashes and dot segments here, so a URL
+// that differs only in those is saved as the request it makes rather than
+// refused. Empty stays empty, which resets the endpoint. Anything else without
+// a canonical spelling throws the refusal, before any host-permission prompt.
+const typedEndpoint = (value: string, relay = false): string => {
+  if (value === "") return "";
+  const spell = relay ? canonicalWebSocketServiceUrl : canonicalServiceUrl;
+  const url = TYPED_BREAK.test(value) ? null : spell(value);
+  if (url === null) throw relay ? new Error(RELAY_REFUSAL) : new Error(SERVICE_REFUSAL);
+  return url;
+};
+
+// Asks for the hosts of endpoints already passed through `typedEndpoint`.
 const requestHostAccess = (
   permissions: HostPermissionApi | undefined,
   urls: readonly string[],
 ): Promise<boolean> => {
   const configured = urls.filter(Boolean);
-  if (!configured.every(isServiceUrl)) {
-    return Promise.reject(new Error("Enter a secure HTTPS service URL"));
-  }
   const origins = [...new Set(configured.map((value) => `${new URL(value).origin}/*`))];
   if (origins.length === 0) return Promise.resolve(true);
   if (!permissions) {
@@ -46,14 +66,15 @@ const requestHostAccess = (
 
 // Wires an endpoint-URL settings form to its save handler, showing a
 // saved/reset toast and re-rendering, or the failure message. `noun` names the
-// endpoint in every toast/status line.
+// endpoint in every toast/status line. A relay is a WSS endpoint and, as
+// before, skips the host-permission request.
 const bindEndpointForm = (
   deps: EndpointUiDeps,
   formId: string,
   field: string,
   noun: string,
   submit: (value: string) => Promise<unknown>,
-  requestPermission = true,
+  relay = false,
 ): void => {
   const form = deps.app?.querySelector<HTMLFormElement>(formId);
   const result = deps.app?.querySelector<HTMLElement>(`${formId.replace("-form", "")}-result`);
@@ -61,19 +82,18 @@ const bindEndpointForm = (
   const fail = `${noun} update failed`;
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const value = String(new FormData(form).get(field) ?? "").trim();
+    const typed = String(new FormData(form).get(field) ?? "").trim();
     buttonBusy(submitButton, true);
-    const access = requestPermission
-      ? requestHostAccess(deps.permissions, [value])
-      : Promise.resolve(true);
-    void access
-      .then((granted) => {
+    void Promise.resolve()
+      .then(async () => {
+        const value = typedEndpoint(typed, relay);
+        const granted = relay || (await requestHostAccess(deps.permissions, [value]));
         if (!granted) throw new Error("Your browser did not grant access to that service host");
         return submit(value);
       })
       .then(
         async () => {
-          showToast(`${noun} ${value ? "saved" : "reset"}`, "success", form);
+          showToast(`${noun} ${typed ? "saved" : "reset"}`, "success", form);
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
@@ -112,26 +132,36 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
       paymasterUrl,
       feeToken,
     ].every((value) => value.length === 0);
-    const config: Strk20NetworkConfig | null = empty
-      ? null
-      : {
-          discoveryUrl,
-          ...(ohttpEnabled ? { ohttpEnabled: true } : {}),
-          poolAddress,
-          proverUrl,
-          ...(shadowAccountAnonymizerAddress ? { shadowAccountAnonymizerAddress } : {}),
-          ...(ohttpRelayUrl ? { ohttpRelayUrl } : {}),
-          ...(paymasterUrl || feeToken ? { paymaster: { feeToken, url: paymasterUrl } } : {}),
-        };
     buttonBusy(submitButton, true);
-    void requestHostAccess(deps.permissions, [discoveryUrl, ohttpRelayUrl, paymasterUrl, proverUrl])
-      .then((granted) => {
-        if (!granted) throw new Error("Your browser did not grant access to those service hosts");
+    void Promise.resolve()
+      .then(async () => {
+        const urls = {
+          discoveryUrl: typedEndpoint(discoveryUrl),
+          ohttpRelayUrl: typedEndpoint(ohttpRelayUrl),
+          paymasterUrl: typedEndpoint(paymasterUrl),
+          proverUrl: typedEndpoint(proverUrl),
+        };
+        const config: Strk20NetworkConfig | null = empty
+          ? null
+          : {
+              discoveryUrl: urls.discoveryUrl,
+              ...(ohttpEnabled ? { ohttpEnabled: true } : {}),
+              poolAddress,
+              proverUrl: urls.proverUrl,
+              ...(shadowAccountAnonymizerAddress ? { shadowAccountAnonymizerAddress } : {}),
+              ...(urls.ohttpRelayUrl ? { ohttpRelayUrl: urls.ohttpRelayUrl } : {}),
+              ...(urls.paymasterUrl || feeToken
+                ? { paymaster: { feeToken, url: urls.paymasterUrl } }
+                : {}),
+            };
+        if (!(await requestHostAccess(deps.permissions, Object.values(urls)))) {
+          throw new Error("Your browser did not grant access to those service hosts");
+        }
         return deps.wallet.setStrk20NetworkConfig(deps.networkId(), config);
       })
       .then(
         async () => {
-          showToast(`Privacy services ${config ? "saved" : "disabled"}`, "success", form);
+          showToast(`Privacy services ${empty ? "disabled" : "saved"}`, "success", form);
           deps.onStrk20ConfigChanged?.();
           await deps.render(await deps.wallet.loadStatus());
         },
@@ -159,12 +189,15 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(form);
-    const apiUrl = String(data.get("apiUrl") ?? "").trim();
+    const typed = String(data.get("apiUrl") ?? "").trim();
     const enabled = data.get("explorerFallback") === "on";
     buttonBusy(submitButton, true);
-    void requestHostAccess(deps.permissions, [apiUrl])
-      .then((granted) => {
-        if (!granted) throw new Error("Your browser did not grant access to that explorer host");
+    void Promise.resolve()
+      .then(async () => {
+        const apiUrl = typedEndpoint(typed);
+        if (!(await requestHostAccess(deps.permissions, [apiUrl]))) {
+          throw new Error("Your browser did not grant access to that explorer host");
+        }
         return deps.wallet.setExplorerFallback(deps.networkId(), enabled, apiUrl);
       })
       .then(
@@ -201,6 +234,6 @@ export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
     "relayUrl",
     "Coordination relay",
     (relayUrl) => deps.wallet.setNostrRelayUrl(relayUrl),
-    false,
+    true,
   );
 };

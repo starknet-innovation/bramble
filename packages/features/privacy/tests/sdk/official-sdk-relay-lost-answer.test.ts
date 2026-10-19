@@ -20,6 +20,7 @@ import {
   officialBuilder as builder,
   executeResult,
   STRK20_POOL_ADDRESS as poolAddress,
+  RELAY_WRITE_ONCE_SLOT,
   STRK20_RELAY_CONTEXT as relayContext,
   sdkRuntime as runtime,
   strk20ProviderFor,
@@ -66,7 +67,11 @@ describe("a relay broadcast whose answer the gateway lost", () => {
       await expect(
         service.submitActions({ ...relayContext, actions: [...actions], plan }),
       ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
-      expect(await maturityStore.read(scope)).toEqual({ route: "relay", state: "submitting" });
+      expect(await maturityStore.read(scope)).toEqual({
+        route: "relay",
+        state: "submitting",
+        writeOnceSlots: [RELAY_WRITE_ONCE_SLOT],
+      });
 
       await expect(
         service.submitActions({ ...relayContext, actions: [...actions], plan }),
@@ -85,7 +90,11 @@ describe("a relay broadcast whose answer the gateway lost", () => {
     await expect(
       service.submitActions({ ...relayContext, actions: [...actions], plan }),
     ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
-    expect(await maturityStore.read(scope)).toEqual({ route: "relay", state: "submitting" });
+    expect(await maturityStore.read(scope)).toEqual({
+      route: "relay",
+      state: "submitting",
+      writeOnceSlots: [RELAY_WRITE_ONCE_SLOT],
+    });
 
     await expect(
       service.submitActions({ ...relayContext, actions: [...actions], plan }),

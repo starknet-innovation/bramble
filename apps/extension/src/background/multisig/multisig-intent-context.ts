@@ -1,6 +1,9 @@
 /** Fresh-chain resolution for frozen Argent multisig signing intents. */
 import type { ArgentMultisigConfig } from "@bramble/multisig/chain";
-import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import {
+  type ArgentMultisigSigningIntent,
+  staleArgentMultisigIntent,
+} from "@bramble/multisig/repository";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import { matchesArgentPublicConfig, storedArgentPublicConfig } from "./multisig-config-reconcile";
@@ -51,7 +54,7 @@ const nonceMismatch = async (
   markStale: boolean,
 ): Promise<string> => {
   if (!markStale) return NONCE_NOT_CURRENT;
-  const stale: ArgentMultisigSigningIntent = { ...intent, state: "stale" };
+  const stale = staleArgentMultisigIntent(intent, "nonce");
   await deps.multisigStore.upsertIntent(stale);
   if (BigInt(nonce) <= BigInt(intent.prepared.nonce)) return NONCE_NOT_CURRENT;
   return (await recoverStaleArgentIntent(deps, stale)).kind === "submitted"
@@ -80,7 +83,8 @@ export const currentArgentIntentContext = async (
   try {
     const config = await currentChainConfigFor(deps, context);
     if (!sameConfig(intent.configSnapshot, config)) {
-      if (markStale) await deps.multisigStore.upsertIntent({ ...intent, state: "stale" });
+      if (markStale)
+        await deps.multisigStore.upsertIntent(staleArgentMultisigIntent(intent, "config"));
       return { error: "Argent multisig intent is stale after a configuration change" };
     }
     const nonce = await multisigRpc(deps).getNonce({

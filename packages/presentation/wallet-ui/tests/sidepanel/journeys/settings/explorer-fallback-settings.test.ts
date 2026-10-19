@@ -227,6 +227,60 @@ describe("advanced endpoints explorer-fallback control", () => {
     expect(calls).toEqual([["SN_MAIN", true, MY_EXPLORER]]);
   });
 
+  // The store accepts only an endpoint's canonical spelling. The panel saves a
+  // typed URL in that spelling, and refuses one it would have to percent-encode
+  // before the browser's host-permission prompt (#674 review).
+  const submitExplorer = async (apiUrl: string) => {
+    document.body.replaceChildren();
+    // Set as an attribute, not through the markup, so a typed quote survives.
+    const app = screen(true);
+    app.querySelector('input[name="apiUrl"]')?.setAttribute("value", apiUrl);
+    const calls: Array<readonly [string, boolean, string]> = [];
+    const origins: string[][] = [];
+    bindEndpointSettings({
+      app,
+      networkId: () => "SN_MAIN",
+      permissions: {
+        request: async ({ origins: requested }) => {
+          origins.push(requested);
+          return true;
+        },
+      },
+      render: async () => undefined,
+      wallet: walletStub(calls),
+    });
+    app.querySelector<HTMLFormElement>("#explorer-fallback-form")?.requestSubmit();
+    await tick();
+    return { calls, origins };
+  };
+
+  test("saves a typed URL in the spelling the store accepts", async () => {
+    for (const typed of [
+      "HTTPS://Explorer.Example:443/v1",
+      "https:\\\\explorer.example\\v1",
+      "https:explorer.example/x/../v1",
+    ]) {
+      const { calls, origins } = await submitExplorer(typed);
+      expect(origins).toEqual([["https://explorer.example/*"]]);
+      expect(calls).toEqual([["SN_MAIN", true, MY_EXPLORER]]);
+    }
+  });
+
+  test("refuses a typed URL it would have to percent-encode, before asking for access", async () => {
+    for (const typed of [
+      "https://explorer.example/v1/a b",
+      'https://explorer.example/v1/a"b',
+      "https://explorer.example/v1?key=a`b",
+    ]) {
+      const { calls, origins } = await submitExplorer(typed);
+      expect(origins).toEqual([]);
+      expect(calls).toEqual([]);
+      expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain(
+        "no spaces, quotes, angle brackets or backticks",
+      );
+    }
+  });
+
   test("does not store an endpoint when Chrome denies its host permission", async () => {
     const app = screen(true, MY_EXPLORER);
     const calls: Array<readonly [string, boolean, string]> = [];
@@ -290,6 +344,40 @@ describe("advanced endpoints explorer-fallback control", () => {
     await tick();
 
     expect(saved).toEqual(["wss://relay.team.example"]);
+  });
+
+  test("saves a typed relay in its canonical spelling and refuses one with a space", async () => {
+    const submitRelay = async (relayUrl: string) => {
+      document.body.replaceChildren();
+      const app = document.createElement("div");
+      app.innerHTML = `<form id="nostr-relay-form">
+        <input name="relayUrl" />
+        <button type="submit">Save</button>
+      </form><p id="nostr-relay-result"></p>`;
+      app.querySelector("input")?.setAttribute("value", relayUrl);
+      document.body.append(app);
+      const saved: string[] = [];
+      bindEndpointSettings({
+        app,
+        networkId: () => "SN_MAIN",
+        render: async () => undefined,
+        wallet: {
+          loadStatus: async () => status,
+          setNostrRelayUrl: async (url: string) => {
+            saved.push(url);
+          },
+        } as unknown as SidepanelWallet,
+      });
+      app.querySelector<HTMLFormElement>("#nostr-relay-form")?.requestSubmit();
+      await tick();
+      return saved;
+    };
+
+    expect(await submitRelay("WSS://Relay.Team.Example")).toEqual(["wss://relay.team.example"]);
+    expect(await submitRelay("wss://relay.team.example/k ey")).toEqual([]);
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain(
+      "Enter a secure WSS relay URL",
+    );
   });
 
   test("the endpoint note names the browser, not Chrome, now that it also fires on Gecko", () => {

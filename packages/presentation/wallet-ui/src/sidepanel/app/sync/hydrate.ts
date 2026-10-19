@@ -312,6 +312,17 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.priceStale = value.stale;
     });
   }
+  // The deploy screen reads deployment fresh, before it paints Deploy: Home's
+  // 60-second undeployed snapshot can outlive a send that deployed the account
+  // (mc-wallet 712).
+  if (activeView === "deploy-account") {
+    fill(
+      () => deployment.load(status, activeView, true),
+      (value) => {
+        cache.deployment = value;
+      },
+    );
+  }
   if (activeView === "home") {
     fill(
       () => deployment.load(status, activeView, refreshReason === "action"),

@@ -190,7 +190,10 @@ const recoveryStep = (): string => `
     ${stepHead("book", "Enter your recovery phrase")}
     <div class="onboarding-fields recovery-fields">
       <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
-      <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+      <div class="recovery-actions">
+        <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+        <button class="onboarding-inline-action" id="phrase-clear" type="button">Clear</button>
+      </div>
       <p id="recovery-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">

@@ -131,13 +131,14 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
   // again re-runs the background's resolution of it.
   [
     "strk20 services unavailable: an earlier private transaction from this account may still be in progress",
-    "An earlier private transaction from this account may still be in progress. Check Activity, then check again.",
+    "An earlier private transaction from this account may still be in progress. Check Activity, then check again. If it stays stuck, open Settings → Unlock private transactions.",
   ],
-  // The same, for an earlier write no later check can resolve: only ending the
-  // browser session clears its marker, so the sentence says that instead.
+  // The same, for an earlier write no check can resolve. Its marker now
+  // survives a browser restart (mc-wallet 668), so the sentence names the one way on,
+  // which the screen it points to spells out the risk of.
   [
-    "strk20 services unavailable: an earlier private transaction from this account may still be in progress; close every browser window and reopen the browser to recover",
-    "An earlier private transaction from this account may still be in progress. Close every browser window and reopen the browser to recover.",
+    "strk20 services unavailable: an earlier private transaction from this account may still be in progress, and no check can confirm it",
+    "An earlier private transaction from this account may still be in progress, and no check can confirm it. To continue anyway, open Settings → Unlock private transactions.",
   ],
   // The account's deploy class is not one this wallet derives: the same fact
   // the deployed-account checks already tell the reader.

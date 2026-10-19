@@ -1,12 +1,9 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
-import { walletErrorMessage } from "@bramble/core/errors";
 import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
-import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
@@ -18,8 +15,8 @@ import {
   verifyCalls,
 } from "@bramble/transactions/verify";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
-import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { Call } from "starknet";
+import { recordAutoDeployment } from "../accounts/deployment-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
@@ -31,6 +28,7 @@ import {
   PENDING_INVOKE_FEE,
 } from "../approvals/invoke-fee-review";
 import { type ResolvedOriginAccount, resolveOriginAccount } from "./provider-grant";
+import { invokeFailureResponse } from "./provider-invoke-failure";
 
 /** Re-exports the grant-resolution surface from its size-budget split. */
 export type { ResolvedOriginAccount } from "./provider-grant";
@@ -39,7 +37,7 @@ import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
-import { strk20AccountContext } from "../privacy/strk20-account-context";
+import { isPoolShapedBatch, strk20AccountContext } from "../privacy/strk20-account-context";
 import { readAddInvokeTransactionInput } from "../routing/message-inputs";
 import {
   type ExtensionIdentity,
@@ -208,18 +206,6 @@ export const queueInvokeApproval = async (
   return { approval };
 };
 
-const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
-  if (!hasProof) {
-    return walletErrorMessage(error, "invoke request failed");
-  }
-  try {
-    mapStrk20StageError("submission", error);
-  } catch (mapped) {
-    return walletErrorMessage(mapped, "invoke request failed");
-  }
-  return "invoke request failed";
-};
-
 // Fail-closed perimeter shared by the dapp surfaces that error on a blocked
 // origin: a claimed-origin mismatch or a blocklisted origin yields the error
 // response, otherwise null so the caller proceeds.
@@ -374,20 +360,6 @@ export const handleProviderOps = async (
   return handler ? handler(deps, message, sender) : null;
 };
 
-// A lost public-lane reply may be on chain: pending row + typed unknown (audit M4).
-const invokeFailureResponse = async (
-  error: unknown,
-  hasProof: boolean,
-  signedHash: string | undefined,
-  recordPending: (hash: string) => Promise<void>,
-): Promise<RuntimeResponse> => {
-  if (!(error instanceof IndeterminateRpcWriteError) || hasProof) {
-    return { error: invokeFailureMessage(error, hasProof) };
-  }
-  if (signedHash !== undefined) await afterBroadcast(() => recordPending(signedHash));
-  return submissionUnknownResponse(error.message, signedHash);
-};
-
 /**
  * Executes a user-approved invoke: re-resolves the currently active account for
  * the origin (a locked wallet or a revoked grant fails safely), submits the held
@@ -452,6 +424,21 @@ export const executeInvokeApproval = async (
       approval.payload.activitySummary ??
       `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
   });
+  // Grants, then activity, for every hash that may be on chain (#678, ./allowance-recording).
+  const recordSubmitted = async (hash: string): Promise<void> => {
+    await recordApproveAllowances({
+      assets: verificationContext(account, preferences),
+      calls,
+      owner: allowanceOwner(account),
+      store: allowanceStore,
+      transactionHash: hash,
+    });
+    await recordSubmittedActivity(activity, activityFor(hash));
+  };
+  // A SNIP-36 app proof is a plain invoke proof; only a pool batch takes the pool lane.
+  const poolProof = isPoolShapedBatch(calls, preferences, account.networkId)
+    ? approval.payload.proof
+    : undefined;
   // The public lane's hash as signed, captured before it is sent (audit M4).
   let signedHash: string | undefined;
   try {
@@ -462,13 +449,8 @@ export const executeInvokeApproval = async (
     // — a second local viewing-key reader here was the one copy that derived a
     // key for an already-locked wallet.
     const context = strk20AccountContext(deps, { ...resolved, rpcUrls });
-    const result = approval.payload.proof
-      ? await strk20.submitPrepared({
-          ...context,
-          calls,
-          proof: approval.payload.proof,
-          ...ceiling,
-        })
+    const result = poolProof
+      ? await strk20.submitPrepared({ ...context, calls, proof: poolProof, ...ceiling })
       : await runtimeRpc.submitInvokeTransaction({
           account,
           calls,
@@ -477,22 +459,23 @@ export const executeInvokeApproval = async (
           onSigned: async (signed) => {
             signedHash = signed.transactionHash;
           },
+          ...(approval.payload.proof ? { proof: approval.payload.proof } : {}),
           rpcUrls,
           signHash: context.signHash,
         });
-    // Recorded before the activity line: see ./allowance-recording.
-    await recordApproveAllowances({
-      assets: verificationContext(account, preferences),
-      calls,
-      owner: allowanceOwner(account),
-      store: allowanceStore,
-      transactionHash: result.transactionHash,
-    });
-    await recordSubmittedActivity(activity, activityFor(result.transactionHash));
+    // Only the public lane can deploy the account first (mc-wallet 719).
+    const deployment =
+      "deploymentTransactionHash" in result ? result.deploymentTransactionHash : undefined;
+    await afterBroadcast(() => recordAutoDeployment(activity, account, deployment));
+    await afterBroadcast(() => recordSubmitted(result.transactionHash));
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return invokeFailureResponse(error, approval.payload.proof !== undefined, signedHash, (hash) =>
-      recordSubmittedActivity(activity, activityFor(hash)),
+    return invokeFailureResponse(
+      error,
+      poolProof !== undefined,
+      signedHash,
+      recordSubmitted,
+      (source) => recordAutoDeployment(activity, account, source),
     );
   }
 };

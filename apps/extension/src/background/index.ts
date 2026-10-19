@@ -75,6 +75,7 @@ import {
   reconcileUnlockedActiveAccount,
 } from "./runtime/runtime-state";
 import { createBackgroundUnlockSession } from "./runtime/unlock-session-boot";
+import { createUpdateReady } from "./runtime/update-ready";
 import { createBackgroundPreferences } from "./settings/preferences-adapter";
 import { startTransactionMonitor } from "./transactions/tx-monitor";
 
@@ -182,12 +183,10 @@ const preferenceStore = createBackgroundPreferences({
   onReliabilityDiagnostics: setReliabilityDiagnosticsEnabled,
   store: preferences,
 });
-// The browser's own data-collection consent, which outranks the wallet's
-// preference in one direction only: it can withhold analytics the preference
-// enables, never enable analytics the user turned off. Firefox collects this
-// answer at install because the manifest declares `technicalAndInteraction` as
-// optional; honouring it here is what makes that declaration true. Re-read on
-// every permission change so a later revoke takes effect without a restart.
+// The browser's data-collection consent outranks the wallet's preference one
+// way only: it can withhold analytics, never enable what the user turned off
+// (Firefox asks at install for the optional `technicalAndInteraction`). Re-read
+// on every permission change so a revoke takes effect without a restart.
 let technicalDataConsent = true;
 const refreshTechnicalDataConsent = async (): Promise<void> => {
   technicalDataConsent = await technicalDataAllowed(extensionApi?.permissions);
@@ -204,12 +203,9 @@ const preferenceSignalsReady = preferences
     await refreshTechnicalDataConsent();
   })
   .catch(() => undefined);
-// The read-only slice of the fail-closed adapter above, handed to collaborators
-// that must never mutate preferences. It inherits the adapter's single
-// "preferences unavailable" refusal, so a storage lockdown failure rejects here
-// instead of silently answering from a half-built store — the explorer read
-// lane (MCW-V09-129) treats that rejection as "not permitted", narrowing
-// disclosure rather than widening it.
+// The read-only slice of the fail-closed adapter above. A storage lockdown
+// failure rejects here instead of answering from a half-built store, and the
+// explorer read lane (MCW-V09-129) treats that as "not permitted".
 const readPreferences = (): Promise<WalletPreferences> => preferenceStore.read();
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: unknown };
@@ -297,16 +293,13 @@ void storageReady
     if (phishingFeed) schedulePhishingFeedRefresh(extensionApi?.alarms, phishingFeed.refresh);
   })
   .catch(() => undefined);
-// Fails closed to the stub service when session storage is unavailable, which
-// is the only thing that can throw here (`createStrk20MaturityStore` itself is
-// pure construction). The reason cannot be logged — the standards check bars
-// logging from production sources — so it surfaces where a user can see it
-// instead: `unavailableStrk20Service` reports "no privacy runtime is wired in
-// this build" rather than the generic unavailable line, which is what
-// distinguishes this fallback from a live service that failed.
+// Fails closed to the stub service when browser storage is unavailable, the
+// only thing that can throw here (markers live in local storage, mc-wallet
+// 668). It cannot be logged, so `unavailableStrk20Service` says "no privacy
+// runtime is wired in this build" instead of a live failure's line.
 const strk20MaturityStore = (() => {
   try {
-    return createStrk20MaturityStore(createBrowserSessionStore());
+    return createStrk20MaturityStore(createBrowserLocalStore());
   } catch {
     return undefined;
   }
@@ -357,13 +350,10 @@ const strk20Preparations = createStrk20WalletPreparationStore({
     : {}),
   now: systemClock,
 });
-// This extension's own identity. The origin MUST come from the runtime rather
-// than be built from the id: on Firefox `runtime.id` is the add-on id from
-// `browser_specific_settings` while extension pages are served from
-// `moz-extension://<per-install uuid>`, so a synthesized origin matches nothing
-// and every privileged message from the sidebar, popup and onboarding page is
-// refused. An origin that cannot be read stays empty, which fails the gate
-// closed rather than opening it.
+// This extension's own identity. The origin MUST come from the runtime: on
+// Firefox `runtime.id` is the add-on id while pages are served from
+// `moz-extension://<per-install uuid>`, so an origin built from the id matches
+// nothing. An unreadable origin stays empty, which fails the gate closed.
 const extensionOrigin = (): string => {
   try {
     const url = runtime?.getURL?.("");
@@ -373,6 +363,15 @@ const extensionOrigin = (): string => {
   }
 };
 const extension = { id: runtime?.id ?? "", origin: extensionOrigin() };
+// Applies a downloaded update as soon as nothing is in progress (mc-wallet 708).
+const updateReady = createUpdateReady({
+  isBusy: () =>
+    approvals.list().length > 0 ||
+    signatureWaiters.pending() > 0 ||
+    strk20Jobs.active() ||
+    (strk20Preparations.held?.() ?? false),
+  runtime,
+});
 const handleMessage = createMessageHandler(walletReader, extension, {
   activeStateCoordinator,
   approvals,
@@ -394,6 +393,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   nostrCoordinationStore: nostrCoordinationLog,
   strk20Jobs,
   strk20Preparations,
+  updates: updateReady,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm
@@ -434,11 +434,9 @@ const broadcastEvent = (event: WalletEventMessage): void => {
   });
 };
 
-// On Firefox a dapp-triggered approval cannot raise the wallet by itself, so
-// the toolbar mark is the only indication the user gets that something is
-// waiting. It therefore has to track the queue on EVERY path that changes it,
-// not just the one that enqueues: approve and deny remove entries through
-// `claim`, which announces itself through the broadcasts below instead.
+// On Firefox a dapp-triggered approval cannot raise the wallet, so the toolbar
+// mark is the only sign something waits; it tracks the queue on every path,
+// including approve/deny `claim`s, which announce through the broadcasts below.
 const refreshPendingApprovals = (): void => {
   showPendingApprovals(extensionApi, approvals.list().length);
 };
@@ -484,16 +482,14 @@ const openApprovalSurface = createApprovalSurfaceOpener({
 bindToolbarActivation(extensionApi, () => approvalSurfacePreference);
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   openApprovalSurface(message, sender);
-  void runtimeReady
-    .then(() => handleMessage(message, sender))
-    .then(
-      (response) => {
-        sendResponse(response);
-        broadcastWalletEvents(message, response);
-      },
-      () => {
-        sendResponse({ error: "wallet request failed" });
-      },
-    );
+  void updateReady.track(runtimeReady.then(() => handleMessage(message, sender))).then(
+    (response) => {
+      sendResponse(response);
+      broadcastWalletEvents(message, response);
+    },
+    () => {
+      sendResponse({ error: "wallet request failed" });
+    },
+  );
   return true;
 });

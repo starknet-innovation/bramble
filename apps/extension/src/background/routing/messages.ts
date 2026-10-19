@@ -30,6 +30,7 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, createUnlockSession } from "../runtime/session";
+import { handleUpdateOps } from "../runtime/update-ready";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
 import { supportDiagnosticsResponse } from "../support/diagnostics";
@@ -402,6 +403,7 @@ const HANDLERS: readonly RouterHandler[] = [
   handleRevealSecrets,
   handleGetGrantedAccounts,
   handleDiagnostics,
+  async (ctx, messageType, message) => handleUpdateOps(ctx.updates, messageType, message),
   handlePendingApprovals,
   handleRequestAccounts,
   handleSetActiveAccount,

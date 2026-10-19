@@ -68,6 +68,14 @@ const NO_GRANT_POSSIBLE: Readonly<Record<string, string>> = {
 // Recurses the background capability folders, keyed by file name: the
 // exemption list below names modules, and a module keeps its name wherever the
 // capability layout puts it.
+// Modules that file their grants through a named recorder in another module,
+// as `module: [recorder, defining module]`. Each claim is re-checked: the
+// module must call the recorder, and the defining module must export it and
+// call recordApproveAllowances, so a delegation cannot silently go empty.
+const RECORDS_THROUGH: Readonly<Record<string, readonly [string, string]>> = {
+  "multisig-tx-ops.ts": ["recordBroadcastIntent", "multisig-operation-recovery.ts"],
+};
+
 const backgroundSources = (): readonly { readonly name: string; readonly text: string }[] =>
   sourceFiles(BACKGROUND_DIR).map((path) => ({
     name: basename(path),
@@ -99,6 +107,7 @@ describe("allowance recording covers every submitting path", () => {
         ({ name, text }) =>
           submits(text) &&
           !text.includes("recordApproveAllowances") &&
+          RECORDS_THROUGH[name] === undefined &&
           NO_GRANT_POSSIBLE[name] === undefined,
       )
       .map(({ name }) => name);
@@ -123,6 +132,20 @@ describe("allowance recording covers every submitting path", () => {
       .map(({ name }) => name);
 
     expect(unclassified).toEqual([]);
+  });
+
+  test("every delegated recorder is called and itself files the grants", () => {
+    const sources = new Map(backgroundSources().map(({ name, text }) => [name, text]));
+    for (const [name, [recorder, home]] of Object.entries(RECORDS_THROUGH)) {
+      const text = sources.get(name) ?? "";
+      const defining = sources.get(home) ?? "";
+      expect(submits(text), name).toBe(true);
+      expect(new RegExp(`\\b${recorder}\\(`).test(text), `${name} calls ${recorder}`).toBe(true);
+      expect(defining.includes(`export const ${recorder} =`), `${home} exports ${recorder}`).toBe(
+        true,
+      );
+      expect(defining.includes("recordApproveAllowances("), `${home} files grants`).toBe(true);
+    }
   });
 
   test("the exemptions still name modules that exist and still submit", () => {

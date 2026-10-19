@@ -2,8 +2,11 @@
  * Locked-gate binder that forwards the vault passphrase directly to the
  * privileged background and never persists or renders it.
  */
-import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showRefusalToast, showToast } from "../../shared/dom";
 import type { OnboardingUiDeps } from "./onboarding-ui";
+
+// The background's refusal for a passphrase that does not open the vault.
+const WRONG_PASSPHRASE = "Incorrect passphrase";
 
 /**
  * Binds the unlock form on the locked gate screen: submits the passphrase,
@@ -34,7 +37,13 @@ export const bindUnlock = (
         await deps.render(status);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Unlock failed"), "error", form);
+        // A wrong passphrase is the user's own mistake, not a diagnostic, so
+        // its toast carries no copy control (QA C2).
+        if (errorDetails(error, "Unlock failed") === WRONG_PASSPHRASE) {
+          showRefusalToast(WRONG_PASSPHRASE, form);
+        } else {
+          showToast(errorDetails(error, "Unlock failed"), "error", form);
+        }
         if (result) {
           result.textContent = errorLine(error, "Unlock failed");
         }

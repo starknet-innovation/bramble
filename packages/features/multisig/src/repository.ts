@@ -44,6 +44,13 @@ export {
   isArgentMultisigSigningIntent,
 } from "./repository-schema";
 
+/** Marks an intent stale for a reason that never weakens a recorded one (mc-wallet 673). */
+export { staleArgentMultisigIntent } from "./stale-intent";
+/**
+ * Re-export the local stale reason and outcome (mc-wallet 673).
+ */
+export type { ArgentMultisigStaleOutcome, ArgentMultisigStaleReason } from "./stale-reason";
+
 /**
  * Browser storage key for the new Argent-only registry format.
  */

@@ -17,10 +17,10 @@ import { websiteDeployFailures } from "./website-deploy-policy";
 import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
 import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
 
-const NODE_SETUP_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
+const NODE_SETUP_ACTION = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1";
 const GITHUB_EXPRESSION = "$" + "{{";
 const SHELL_EXPANSION = "$" + "{";
-const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.0.0
+const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.1.0
         with:
           node-version: 24`;
 
@@ -200,6 +200,16 @@ const releaseBuildFailures = (source: string): string[] => {
     "byte-identical",
     "release builds must not claim a byte-identical artifact they never compare against",
   );
+  // v0.10.6 shipped with only the Chromium zip (#684): AMO needs the Gecko
+  // package built from the tagged commit, and validated before it is published.
+  for (const step of ["bun run package:extension:firefox", "bun run check:firefox"]) {
+    requireText(
+      failures,
+      build,
+      `- run: ${step}`,
+      "release builds must package and validate the Firefox target",
+    );
+  }
   requireText(
     failures,
     publish,
@@ -221,7 +231,7 @@ const releaseBuildFailures = (source: string): string[] => {
   requireText(
     failures,
     publish,
-    "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+    "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
     "the hosted release publisher must consume the pinned build artifact",
   );
   return failures;

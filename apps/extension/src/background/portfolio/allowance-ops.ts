@@ -48,6 +48,7 @@ import {
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
+import { recordAutoDeployment } from "../accounts/deployment-ops";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import { readTypeOnlyInput } from "../routing/message-inputs";
@@ -358,25 +359,32 @@ const submitRevoke = async (
   };
   let signedHash: string | undefined;
   let transactionHash: string;
+  let deploymentHash: string | undefined;
   try {
-    ({ transactionHash } = await deps.runtimeRpc.submitInvokeTransaction({
-      account: revoke.account,
-      calls: [revoke.call],
-      isAuthorized: revoke.isAuthorized,
-      onSigned: async (signed) => {
-        signedHash = signed.transactionHash;
-      },
-      reviewedFee: revoke.reviewedFee,
-      rpcUrls: revoke.rpcUrls,
-      signHash: revoke.signHash,
-    }));
+    ({ deploymentTransactionHash: deploymentHash, transactionHash } =
+      await deps.runtimeRpc.submitInvokeTransaction({
+        account: revoke.account,
+        calls: [revoke.call],
+        isAuthorized: revoke.isAuthorized,
+        onSigned: async (signed) => {
+          signedHash = signed.transactionHash;
+        },
+        reviewedFee: revoke.reviewedFee,
+        rpcUrls: revoke.rpcUrls,
+        signHash: revoke.signHash,
+      }));
   } catch (error) {
+    // An accepted automatic deployment is recorded whatever happened next (mc-wallet 719).
+    await afterBroadcast(() => recordAutoDeployment(deps.activity, revoke.account, error));
     if (!(error instanceof IndeterminateRpcWriteError)) throw error;
     const pending = signedHash;
     if (pending !== undefined) await afterBroadcast(() => recordRevoke(pending));
     return submissionUnknownResponse(error.message, pending);
   }
-  await recordRevoke(transactionHash);
+  // Once a hash exists the reply carries it: a failed local write must not
+  // turn a revoke that is on its way into a plain error (errors audit F1).
+  await afterBroadcast(() => recordAutoDeployment(deps.activity, revoke.account, deploymentHash));
+  await afterBroadcast(() => recordRevoke(transactionHash));
   return { ok: true, transactionHash };
 };
 

@@ -14,21 +14,20 @@ import {
 } from "@bramble/starknet/multisig-invoke";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
-import { verificationContext } from "@bramble/transactions/verify";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { signerForContext } from "../accounts/wallet-ops";
-import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
+import { afterBroadcast } from "../transactions/activity-recording";
 import { reviewArgentMultisigCalls } from "./multisig-call-review";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
   argentMultisigIntentPackage,
   locallyDerivedImportedIntent,
   mergeImportedArgentMultisigIntent,
-  normalizedArgentMultisigCalls,
   readImportIntentInput,
   readImportIntentSignatureInput,
   readPrepareIntentInput,
@@ -37,17 +36,14 @@ import {
   sortedArgentMultisigSignatures,
 } from "./multisig-inputs";
 import { currentArgentIntentContext } from "./multisig-intent-context";
-import {
-  recordSubmittedIntentActivity,
-  recoverSubmittedArgentIntent,
-} from "./multisig-operation-recovery";
+import { recordBroadcastIntent, recoverSubmittedArgentIntent } from "./multisig-operation-recovery";
 import {
   type ArgentMultisigContext,
   configSnapshot,
   currentConfigFor,
   signerAccountFor,
 } from "./multisig-ops";
-import { refuseResend } from "./multisig-stale-intents";
+import { markFeeRefusedStale, refuseResend } from "./multisig-stale-intents";
 
 const preparationContext = async (
   deps: MultisigOpsDeps,
@@ -443,10 +439,19 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
       isAuthorized: submission.authorized.isCurrent,
     });
   } catch (error) {
-    if (!(error instanceof IndeterminateRpcWriteError))
-      await deps.multisigStore.releaseOperation(submission.operationId);
+    if (error instanceof IndeterminateRpcWriteError) {
+      // The reply was lost, so the signed package may be on chain under the
+      // hash every signer holds. Keep the claim, journal it as pending, and say
+      // the outcome is unknown; a resend reuses that hash and nonce (#681).
+      const pending = submission.intent.prepared.transactionHash;
+      await afterBroadcast(() =>
+        recordBroadcastIntent(deps, submission.intent, submission.resolved.context.record, pending),
+      );
+      return submissionUnknownResponse(error.message, pending);
+    }
+    await deps.multisigStore.releaseOperation(submission.operationId);
     if (error instanceof ArgentMultisigFeeExpiredError) {
-      await deps.multisigStore.upsertIntent({ ...submission.intent, state: "stale" });
+      await markFeeRefusedStale(deps, submission.intent, submission.resolved.context);
       return { error: error.details };
     }
     throw error;
@@ -461,20 +466,12 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
     .setOperationHash(submission.operationId, transactionHash)
     .catch(() => {});
   await deps.multisigStore.upsertIntent(submitted).catch(() => "invalid" as const);
-  const { record } = submission.resolved.context;
-  await deps.preferencesStore
-    .read()
-    .then((preferences) =>
-      recordApproveAllowances({
-        assets: verificationContext(record, preferences),
-        calls: normalizedArgentMultisigCalls(submission.intent.prepared.calls),
-        owner: allowanceOwner(record),
-        store: deps.allowanceStore,
-        transactionHash,
-      }),
-    )
-    .catch(() => {});
-  await recordSubmittedIntentActivity(deps, submission.intent, record.networkId, transactionHash);
+  await recordBroadcastIntent(
+    deps,
+    submission.intent,
+    submission.resolved.context.record,
+    transactionHash,
+  );
   return { intent: submitted, ok: true, transactionHash };
 };
 

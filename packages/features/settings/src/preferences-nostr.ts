@@ -1,6 +1,6 @@
 /** Nostr coordination relay preference mutation. */
 import { WalletError } from "@bramble/core/errors";
-import { isEnteredWebSocketServiceUrl } from "@bramble/core/service-url";
+import { isNostrRelayUrl } from "@bramble/wallet-model/nostr";
 import type { WalletPreferences } from "./preferences-types";
 
 /** Returns preferences with a validated custom relay, or the reviewed defaults restored. */
@@ -9,7 +9,7 @@ export const withNostrRelayUrl = (
   relayUrl: string,
 ): WalletPreferences => {
   const trimmed = relayUrl.trim();
-  if (trimmed.length > 0 && !isEnteredWebSocketServiceUrl(trimmed)) {
+  if (trimmed.length > 0 && !isNostrRelayUrl(trimmed)) {
     throw new WalletError("Invalid Nostr relay endpoint");
   }
   const next = { ...preferences };

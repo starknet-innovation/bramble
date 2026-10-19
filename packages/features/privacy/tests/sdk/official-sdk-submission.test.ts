@@ -16,6 +16,7 @@ import {
   type OfficialBuilder,
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
+  RELAY_CALLDATA,
   STRK20_REVIEWED_FEE as reviewedFee,
   sdkRuntime as runtime,
   strk20ProviderFor,
@@ -110,7 +111,7 @@ describe("official STRK20 SDK submission boundary", () => {
         account,
         calls: [
           {
-            calldata: ["0x1"],
+            calldata: [...RELAY_CALLDATA],
             contractAddress: poolAddress,
             entrypoint: "apply_actions",
           },
@@ -273,7 +274,7 @@ describe("official STRK20 SDK submission boundary", () => {
           entrypoint: "approve",
         },
         {
-          calldata: ["0x1"],
+          calldata: [...RELAY_CALLDATA],
           contractAddress: poolAddress,
           entrypoint: "apply_actions",
         },
@@ -400,7 +401,7 @@ describe("official STRK20 SDK submission boundary", () => {
           entrypoint: "approve",
         },
         {
-          calldata: ["0x1"],
+          calldata: [...RELAY_CALLDATA],
           contractAddress: poolAddress,
           entrypoint: "apply_actions",
         },

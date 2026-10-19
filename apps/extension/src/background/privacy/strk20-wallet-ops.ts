@@ -13,7 +13,7 @@
 
 import { WalletError } from "@bramble/core/errors";
 import { unavailablePriceService } from "@bramble/portfolio/prices";
-import { strk20ConvertedFeeCeiling } from "@bramble/privacy/fee-policy";
+import { STRK20_SERVICE_UNAVAILABLE, strk20ConvertedFeeCeiling } from "@bramble/privacy/fee-policy";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import {
   formatStrk20PoolFee,
@@ -339,6 +339,27 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
   );
 };
 
+// The user's "Unlock anyway" (mc-wallet #668), sent only after the panel's
+// confirmation states that the earlier private transaction could still go
+// through. User-initiated, so it uses the active (not observed) context.
+const releasePendingWrite = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
+  const context = await resolvePrivacyContext(deps, {
+    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+  });
+  if ("error" in context) {
+    return context;
+  }
+  const release = strk20ServiceForRuntime(deps.runtimeRpc).releasePendingWrite;
+  if (!release) {
+    return { error: STRK20_SERVICE_UNAVAILABLE };
+  }
+  try {
+    return { ok: true, released: await release(context.accountContext) };
+  } catch (error) {
+    return { error: errorText(error, "Private unlock failed") };
+  }
+};
+
 /**
  * Handles privileged wallet privacy messages and returns null for other types.
  */
@@ -356,6 +377,11 @@ export const handleStrk20WalletOps = async (
     return readTypeOnlyInput(message, messageType)
       ? registrationPreparation(deps)
       : { error: "Invalid privacy registration request" };
+  }
+  if (messageType === "wallet.strk20ReleasePendingWrite") {
+    return readTypeOnlyInput(message, messageType)
+      ? releasePendingWrite(deps)
+      : { error: "Invalid unlock request" };
   }
   if (messageType === "wallet.strk20Execute") {
     const input = readStrk20WalletExecuteInput(message);

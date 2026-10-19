@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bramble: Starknet Wallet",
-  "version": "0.10.6",
+  "version": "0.10.7",
   "description": "Self-custodial Starknet wallet with private balances, Ledger and multisig support.",
   "author": "Starknet Holdings",
   "homepage_url": "https://bramble.fi",
@@ -40,6 +40,10 @@
   "permissions": ["alarms", "sidePanel", "storage"],
   "side_panel": {
     "default_path": "sidepanel.html"
+  },
+  "options_ui": {
+    "page": "sidepanel.html",
+    "open_in_tab": true
   },
   "host_permissions": [
     "https://wallet.nodes.starknet.org/*",

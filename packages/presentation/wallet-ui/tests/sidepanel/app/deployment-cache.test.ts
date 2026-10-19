@@ -53,3 +53,30 @@ test("an account switch mid-request does not cache the other account's verdict",
   expect(await cache.load(statusA, "home")).toBe(false);
   expect(reads).toBe(2);
 });
+
+// mc-wallet 712: the deploy screen read Home's cached "undeployed" snapshot
+// while a send had already deployed the account, and offered Deploy.
+test("the deploy screen reads deployment fresh, past Home's undeployed snapshot", async () => {
+  let deployed = false;
+  let reads = 0;
+  const wallet = {
+    loadDeploymentStatus: async () => {
+      reads += 1;
+      return { accountId: "acc", deployed, ok: true as const };
+    },
+  } as unknown as SidepanelWallet;
+  const cache = createDeploymentCache(wallet, () => 1_000);
+  const status = {
+    activeAccountId: "acc",
+    hasVault: true,
+    locked: false,
+    networkId: "SN_MAIN",
+  } as WalletStatus;
+
+  expect(await cache.load(status, "home")).toBe(false);
+  deployed = true;
+  // Hydration forces the read on the deploy screen, within the 60-second window.
+  expect(await cache.load(status, "deploy-account", true)).toBe(true);
+  expect(reads).toBe(2);
+  expect(await cache.load(status, "settings", true)).toBeNull();
+});

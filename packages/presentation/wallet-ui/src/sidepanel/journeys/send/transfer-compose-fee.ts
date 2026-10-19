@@ -12,9 +12,11 @@
 
 import { sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { estimatedFeeText } from "../../shared/review-render";
 import { finitePositive } from "./send-model";
+import { paysFeeFromAmount } from "./transfer-max";
 import type { TransferFields, TransferStage } from "./transfer-model";
 import { poolFeeText } from "./transfer-review-routes";
 import {
@@ -34,12 +36,18 @@ const FEE_UNAVAILABLE = "Estimated fee unavailable";
 // A STRK shield at Max holds back the pool fee only: its network fee is not
 // known until the deposit is proved, and it is paid from the same STRK.
 const SHIELD_GAS_NOTE = "Leave enough STRK for the network fee.";
+// A shield of any other token still pays its network fee in public STRK, which
+// the pool fee line alone does not say (issue 665). No figure: the fee is not
+// known until the deposit is proved.
+const SHIELD_GAS_IN_STRK = "The network fee is also paid in public STRK.";
 
 /** The composed send an Amount-screen estimate applies to. */
 export type ComposeFeeTarget = {
   readonly fields: TransferFields;
-  /** A STRK shield whose amount leaves no public STRK for its network fee. */
+  /** A shield that leaves no public STRK for its network fee. */
   readonly leavesNoGas: boolean;
+  /** A shield of a token other than STRK, whose network fee is still paid in STRK. */
+  readonly gasInStrk: boolean;
   /** The pool fee in the token that pays it, as the route gate reserves it. */
   readonly poolFee: string | null;
   readonly route: SendRoute;
@@ -64,11 +72,13 @@ export const composeFeeTarget = (context: TransferRouteContext): ComposeFeeTarge
   if (resolveTransferRoute(context).blocked) {
     return null;
   }
+  const route = transferRoute(fields);
   return {
     fields,
+    gasInStrk: route.id === "public-private" && !sameFelt(fields.tokenAddress, STRK_TOKEN_ADDRESS),
     leavesNoGas: shieldLeavesNoStrkForGas(context),
     poolFee: transferPoolFeeAmount(context),
-    route: transferRoute(fields),
+    route,
   };
 };
 
@@ -110,6 +120,8 @@ export const composeFeeLines = (
   }
   if (target.leavesNoGas) {
     lines.push(SHIELD_GAS_NOTE);
+  } else if (target.gasInStrk) {
+    lines.push(SHIELD_GAS_IN_STRK);
   }
   // Only a plain public transfer's network fee can be estimated before the route
   // prepares; every other route's gas is sponsored or priced at review.
@@ -128,6 +140,23 @@ export type ComposeFee = {
   readonly clear: () => void;
   /** Re-reads the composed send and re-estimates, or clears when none applies. */
   readonly refresh: () => void;
+  /**
+   * The latest review for the composed account, token, recipient and speed,
+   * whatever amount it was priced at (a transfer's fee does not depend on its
+   * amount), or `null` when there is none yet. Max reserves its fee from it.
+   */
+  readonly review: () => TransferReview | null;
+};
+
+// What a review prices: the same send at any amount.
+const reviewKey = (fields: TransferFields): string =>
+  [fields.accountId, fields.tokenId, fields.recipient, fields.speed].join("|");
+
+// The smallest positive amount in the token's scale. A public STRK send with no
+// amount typed yet is priced at it, so Max can keep its fee back (mc-wallet 720).
+const nominalAmount = (decimals: string): string => {
+  const places = Number(decimals) || 0;
+  return places <= 0 ? "1" : `0.${"0".repeat(places - 1)}1`;
 };
 
 /**
@@ -179,6 +208,32 @@ export const createComposeFee = (deps: {
     });
   let cancel: (() => void) | null = null;
   let token = 0;
+  let latest: { readonly key: string; readonly review: TransferReview } | null = null;
+  let pricing: string | null = null;
+  const remember = (fields: TransferFields, review: TransferReview): void => {
+    latest = { key: reviewKey(fields), review };
+  };
+  const review = (): TransferReview | null => {
+    const key = reviewKey(deps.context().fields);
+    return latest?.key === key ? latest.review : null;
+  };
+  // Prices a public STRK send that has a recipient but no amount yet, once per
+  // send, so Max can fill an amount that leaves its fee. Paints nothing.
+  const priceForMax = (): void => {
+    const context = deps.context();
+    const { fields } = context;
+    const key = reviewKey(fields);
+    if (fields.recipient === "" || !paysFeeFromAmount(context) || review() || pricing === key) {
+      return;
+    }
+    pricing = key;
+    void estimate({ ...fields, amount: nominalAmount(fields.tokenDecimals) }).then(
+      (priced) => {
+        if (pricing === key) remember(fields, priced);
+      },
+      () => undefined,
+    );
+  };
   const clear = (): void => {
     token += 1;
     cancel?.();
@@ -193,6 +248,7 @@ export const createComposeFee = (deps: {
     const target = deps.form.isConnected ? composeFeeTarget(deps.context()) : null;
     if (target === null) {
       clear();
+      if (deps.form.isConnected) priceForMax();
       return;
     }
     token += 1;
@@ -211,8 +267,9 @@ export const createComposeFee = (deps: {
       // it would be a request with nothing left to paint.
       if (!deps.form.isConnected) return;
       void estimate(target.fields).then(
-        (review) => {
-          if (mine === token) paint(composeFeeLines(target, { failed: false, review }));
+        (priced) => {
+          remember(target.fields, priced);
+          if (mine === token) paint(composeFeeLines(target, { failed: false, review: priced }));
         },
         () => {
           if (mine === token) paint(composeFeeLines(target, { failed: true, review: null }));
@@ -221,5 +278,5 @@ export const createComposeFee = (deps: {
     });
   };
   refresh();
-  return { clear, refresh };
+  return { clear, refresh, review };
 };

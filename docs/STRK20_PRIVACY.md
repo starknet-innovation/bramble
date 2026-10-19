@@ -179,13 +179,19 @@ device.
    execution window, call count, fee, account, network, and payload digest are visible in review.
 7. The wallet requires the configured pool's `apply_actions` call and submits once through the
    configured private paymaster. The SDK signer binds account, chain, and complete call set using
-   the protocol SNIP-12 hash. Every accepted privacy write is recorded in browser-session storage;
-   a later proof waits until that accepted block is older than the SDK's historical proving block.
-   Writes for the same account, network, and pool are serialized across proof, submission, and
-   receipt acceptance. A `submitting` reservation is persisted immediately before broadcast; it
-   is replaced by the returned hash before receipt polling. An indeterminate broadcast or receipt
-   keeps the scope blocked, while only a receipt-proven rejection clears it. Production privacy
-   operations fail closed if that restart-safe session store is unavailable.
+   the protocol SNIP-12 hash. Every accepted privacy write is recorded in the extension's local
+   storage, so the record survives worker and browser restarts; a later proof waits until that
+   accepted block is older than the SDK's historical proving block. Writes for the same account,
+   network, and pool are serialized across proof, submission, and receipt acceptance. A
+   `submitting` reservation is persisted immediately before broadcast; it is replaced by the
+   returned hash before receipt polling. An indeterminate broadcast or receipt keeps the scope
+   blocked, while only chain evidence clears it: a receipt-proven rejection, a spent nonce for a
+   signed write, or, for a relayed write, one of the pool storage slots its `apply_actions` call
+   writes once already reading non-zero in a block the node reports accepted on L1, which makes
+   that call revert whoever submits it; that block is then kept as the floor for later proofs. A relayed write records those slots before it is sent and is refused if it has
+   none. Settings → Unlock private transactions clears a reservation no check can settle, after
+   stating that the earlier write could still land. Production privacy operations fail closed if
+   that store is unavailable.
 8. The proof base is ten blocks behind the finalized RPC head. Registration polls until the
    account contract exists at that exact historical block, and deposits poll until every
    aggregate ERC20 amount is visible there. This automatically covers freshly deployed and
@@ -263,10 +269,14 @@ The settled open notes are screened against the shadow
 account's own address (`Delegated`); whether the prover behind mc-backend performs that screening is
 not yet confirmed (issue 443).
 
-The generic `wallet_addInvokeTransaction` path also preserves an optional prepared proof. Such a
-request must contain exactly one call, receives the normal decoded approval review, and can submit
-only a non-empty proof to the configured pool's `apply_actions` entry point. The proof and call are
-included in the approval digest and are never silently converted into an ordinary public invoke.
+The generic `wallet_addInvokeTransaction` path also accepts an optional SNIP-36 proof, which must be
+submittable (a simulate-mode, all-empty proof is refused at intake). The request receives the normal
+decoded approval review, and the proof and calls are included in the approval digest. A pool-shaped
+batch (any call to `apply_actions` or to the configured pool) is submitted only through the STRK20
+lane, which requires `approve` calls followed by exactly one `apply_actions` on the configured pool;
+it is never converted into an ordinary public invoke. Any other proof-bearing batch, such as a SNIP-36
+application proof, is submitted as an ordinary invoke with `proof` and `proof_facts` attached, under the
+same fee review and reviewed-fee ceiling.
 
 ## Failure and trust boundaries
 
