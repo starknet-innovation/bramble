@@ -215,9 +215,17 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(5)}"]`)).toBeNull();
 
     click(h.mount, "[data-ledger-load-more]");
+    // With no activity the groups start closed, so the click opens them and
+    // marks itself busy; otherwise the appended page would arrive unseen.
+    expect(h.mount.querySelector<HTMLButtonElement>("[data-ledger-load-more]")?.disabled).toBe(
+      true,
+    );
     await tick();
     // Page 2 (indexes 5-9) is appended to the existing page (indexes 0-4).
     expect(toggleCount(h.mount)).toBe(20);
+    const groups = Array.from(h.mount.querySelectorAll<HTMLDetailsElement>("[data-account-group]"));
+    expect(groups.length).toBe(2);
+    expect(groups.every((group) => group.open)).toBe(true);
     for (let index = 5; index <= 9; index += 1) {
       expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(index)}"]`)).not.toBeNull();
     }
