@@ -54,15 +54,19 @@ type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
 const RPC_ENDPOINT_COOLDOWN_MS = 30_000;
 const MAX_RPC_ENDPOINT_COOLDOWN_MS = 5 * 60_000;
-const endpointCooldowns = new Map<string, number>();
+// `refused` stays true only while every failure behind the cooldown was an
+// endpoint refusal: a rate limit can be waited out, a timeout says nothing
+// about when the endpoint will answer.
+type EndpointCooldown = { readonly refused: boolean; readonly retryAt: number };
+const endpointCooldowns = new Map<string, EndpointCooldown>();
 
-const clearObservedCooldown = (nodeUrl: string, observed: number | undefined): void => {
+const clearObservedCooldown = (nodeUrl: string, observed: EndpointCooldown | undefined): void => {
   if (endpointCooldowns.get(nodeUrl) === observed) endpointCooldowns.delete(nodeUrl);
 };
 
 const availableRpcUrls = (rpcUrls: readonly string[], currentTime: number): readonly string[] => {
-  for (const [nodeUrl, retryAt] of endpointCooldowns) {
-    if (retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
+  for (const [nodeUrl, cooldown] of endpointCooldowns) {
+    if (cooldown.retryAt <= currentTime) endpointCooldowns.delete(nodeUrl);
   }
   return [...new Set(rpcUrls)].filter((nodeUrl) => !endpointCooldowns.has(nodeUrl));
 };
@@ -79,11 +83,14 @@ const coolDownRpcUrl = (
     ? parseRetryAfterMilliseconds(error.retryAfter, wallClock())
     : null;
   const stored = endpointCooldowns.get(nodeUrl);
-  const existing = stored && stored > currentTime ? stored : undefined;
+  const existing = stored && stored.retryAt > currentTime ? stored : undefined;
   const retryAt =
     currentTime +
     Math.min(requestedDelay ?? RPC_ENDPOINT_COOLDOWN_MS, MAX_RPC_ENDPOINT_COOLDOWN_MS);
-  endpointCooldowns.set(nodeUrl, Math.max(existing ?? 0, retryAt));
+  endpointCooldowns.set(nodeUrl, {
+    refused: refused && (existing?.refused ?? true),
+    retryAt: Math.max(existing?.retryAt ?? 0, retryAt),
+  });
 };
 
 /**
@@ -92,6 +99,39 @@ const coolDownRpcUrl = (
  * endpoint.
  */
 export const resetRpcEndpointCooldownsForTests = (): void => endpointCooldowns.clear();
+
+/**
+ * The wait every endpoint in a list is still serving after an earlier failure.
+ * `retryInMs` is how long until the first of them may be asked again;
+ * `refused` is true only when each one is cooling down after refusals alone
+ * (a rate limit or gateway rejection), never after a timeout or a broken answer.
+ */
+export type RpcEndpointBackoff = { readonly refused: boolean; readonly retryInMs: number };
+
+/**
+ * Reads the cooldown {@link withRpcFallback} would meet on `rpcUrls`, or null
+ * when one of them can be asked now or none is configured. Read-only: it never
+ * starts, extends or clears a cooldown. A caller that waits out refusals uses
+ * it to tell the wallet's own back-off ("every endpoint asked us to wait")
+ * from an outage, which must still fail. `now` must be the clock the reads
+ * themselves ran on; the default matches theirs.
+ */
+export const rpcEndpointBackoff = (
+  rpcUrls: readonly string[],
+  now: () => number = () => performance.now(),
+): RpcEndpointBackoff | null => {
+  const currentTime = now();
+  const nodeUrls = [...new Set(rpcUrls)];
+  const cooling = nodeUrls.flatMap((nodeUrl) => {
+    const cooldown = endpointCooldowns.get(nodeUrl);
+    return cooldown && cooldown.retryAt > currentTime ? [cooldown] : [];
+  });
+  if (cooling.length === 0 || cooling.length < nodeUrls.length) return null;
+  return {
+    refused: cooling.every((cooldown) => cooldown.refused),
+    retryInMs: Math.min(...cooling.map((cooldown) => cooldown.retryAt - currentTime)),
+  };
+};
 
 /**
  * Safe marker for a write whose transport failed after submission began. The

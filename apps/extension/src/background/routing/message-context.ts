@@ -39,6 +39,7 @@ import {
   createRecoveryDiscoveryCache,
   type RecoveryDiscoveryCache,
 } from "../onboarding/recovery-cache";
+import type { RecoveryReadPacer } from "../onboarding/recovery-read-pacer";
 import {
   type BalanceSnapshotStore,
   memoryBalanceSnapshotStore,
@@ -89,6 +90,7 @@ export type RouterContext = {
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
   readonly recoveryDiscovery: RecoveryDiscoveryCache;
+  readonly recoveryReads?: RecoveryReadPacer;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly swap: SwapService;
@@ -126,6 +128,12 @@ export type MessageHandlerOptions = {
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
   readonly recoveryDiscovery?: RecoveryDiscoveryCache;
+  /**
+   * Read budget for account discovery. The entrypoint supplies the one its
+   * worker keepalive touches; absent, discovery reads run unpaced, which only
+   * suites with stubbed RPC should rely on.
+   */
+  readonly recoveryReads?: RecoveryReadPacer;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
@@ -202,6 +210,11 @@ const nostrRelayTransportFor = (
 ): Pick<RouterContext, "nostrRelayTransport"> | Record<string, never> =>
   provided ? { nostrRelayTransport: provided } : {};
 
+const recoveryReadsFor = (
+  provided: RecoveryReadPacer | undefined,
+): Pick<RouterContext, "recoveryReads"> | Record<string, never> =>
+  provided ? { recoveryReads: provided } : {};
+
 const recoveryDiscoveryFor = (
   provided: RecoveryDiscoveryCache | undefined,
 ): RecoveryDiscoveryCache => provided ?? createRecoveryDiscoveryCache();
@@ -257,6 +270,7 @@ export const routerContext = (
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
     recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),
+    ...recoveryReadsFor(options.recoveryReads),
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session,
     swap: options.swap ?? unavailableSwapService,

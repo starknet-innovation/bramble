@@ -1,5 +1,6 @@
-/** RPC refusal cooldown and pre-submission error boundary checks. */
+/** RPC refusal cooldown, its read-only back-off view, and pre-submission error boundary checks. */
 import { describe, expect, test } from "bun:test";
+import { rpcEndpointBackoff } from "@bramble/starknet/provider";
 import {
   RPC_REFUSED_MESSAGE,
   RpcRefusedError,
@@ -225,5 +226,98 @@ describe("RPC endpoint cooldown", () => {
       () => currentTime,
     );
     expect(probes).toBe(1);
+  });
+});
+
+describe("RPC endpoint back-off", () => {
+  // A provider stand-in that names its endpoint, so one run can fail each
+  // endpoint its own way.
+  const tagged = (nodeUrl: string) => ({ nodeUrl }) as unknown as RpcProvider;
+  const endpointOf = (provider: RpcProvider): string =>
+    (provider as unknown as { readonly nodeUrl: string }).nodeUrl;
+
+  test("reports a refusal-only cooldown until the first endpoint may be asked again", async () => {
+    const gateway = "https://backoff-gateway.example";
+    const fallback = "https://backoff-fallback.example";
+    let currentTime = 1_000;
+    const retryAfter: Record<string, string> = { [fallback]: "20", [gateway]: "45" };
+    await expect(
+      withRpcFallback(
+        [gateway, fallback],
+        async (provider) => {
+          throw new RpcRefusedError(RPC_REFUSED_MESSAGE, retryAfter[endpointOf(provider)] ?? null);
+        },
+        tagged,
+        () => currentTime,
+      ),
+    ).rejects.toBeInstanceOf(RpcRefusedError);
+
+    expect(rpcEndpointBackoff([gateway, fallback], () => currentTime)).toEqual({
+      refused: true,
+      retryInMs: 20_000,
+    });
+    currentTime += 20_000;
+    expect(rpcEndpointBackoff([gateway, fallback], () => currentTime)).toBeNull();
+    expect(rpcEndpointBackoff([gateway], () => currentTime)).toEqual({
+      refused: true,
+      retryInMs: 25_000,
+    });
+  });
+
+  test("a timeout behind any cooldown is not a refusal to wait out", async () => {
+    const gateway = "https://backoff-mixed-gateway.example";
+    const fallback = "https://backoff-mixed-fallback.example";
+    await expect(
+      withRpcFallback(
+        [gateway, fallback],
+        async (provider) => {
+          throw endpointOf(provider) === gateway
+            ? new RpcRefusedError(RPC_REFUSED_MESSAGE, "45")
+            : new RpcTransportError("RPC request timed out");
+        },
+        tagged,
+        () => 1_000,
+      ),
+    ).rejects.toBeInstanceOf(RpcTransportError);
+    expect(rpcEndpointBackoff([gateway, fallback], () => 1_000)).toEqual({
+      refused: false,
+      retryInMs: 30_000,
+    });
+  });
+
+  test("a timeout merged into one endpoint's refusal cooldown clears its refusal", async () => {
+    const nodeUrl = "https://backoff-merged.example";
+    let releaseTimeout = (): void => undefined;
+    const refused = withRpcFallback(
+      [nodeUrl],
+      async () => {
+        await Promise.resolve();
+        throw new RpcRefusedError(RPC_REFUSED_MESSAGE, "60");
+      },
+      () => ({}) as RpcProvider,
+      () => 1_000,
+    );
+    const timedOut = withRpcFallback(
+      [nodeUrl],
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          releaseTimeout = () => reject(new RpcTransportError("RPC request timed out"));
+        }),
+      () => ({}) as RpcProvider,
+      () => 1_000,
+    );
+    await expect(refused).rejects.toBeInstanceOf(RpcRefusedError);
+    expect(rpcEndpointBackoff([nodeUrl], () => 1_000)?.refused).toBe(true);
+    releaseTimeout();
+    await expect(timedOut).rejects.toBeInstanceOf(RpcTransportError);
+    expect(rpcEndpointBackoff([nodeUrl], () => 1_000)).toEqual({
+      refused: false,
+      retryInMs: 60_000,
+    });
+  });
+
+  test("is null when nothing is configured or an endpoint never failed", () => {
+    expect(rpcEndpointBackoff([], () => 0)).toBeNull();
+    expect(rpcEndpointBackoff(["https://backoff-healthy.example"], () => 0)).toBeNull();
   });
 });

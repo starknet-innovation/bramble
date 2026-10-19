@@ -59,6 +59,7 @@ import { createSignatureWaiters } from "./approvals/signature-waiters";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
+import { createRecoveryReadPacer } from "./onboarding/recovery-read-pacer";
 import { createRankedAllowanceStore } from "./portfolio/allowance-log";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
@@ -82,6 +83,11 @@ import { startTransactionMonitor } from "./transactions/tx-monitor";
 const extensionApi = resolveExtensionApi<BackgroundBrowser>();
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
+// The touch every worker keepalive below makes: one cheap extension API call,
+// whose result is irrelevant and whose failure is ignored.
+const keepAliveOption = runtime?.getPlatformInfo
+  ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+  : {};
 declare const __MC_BUILD_BRANCH__: string | undefined;
 let approvalSurfacePreference: ApprovalSurfacePreference = "side-panel";
 let productAnalyticsEnabled = false;
@@ -101,9 +107,7 @@ const signatureWaiters = createSignatureWaiters();
 // the user decides. The interval runs only while something is pending.
 const approvalKeepAlive = createApprovalKeepAlive({
   isPending: () => approvals.list().length > 0 || signatureWaiters.pending() > 0,
-  ...(runtime?.getPlatformInfo
-    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
-    : {}),
+  ...keepAliveOption,
 });
 const sessionStore = (() => {
   try {
@@ -114,6 +118,9 @@ const sessionStore = (() => {
 })();
 const multisigDeploymentReviews = createArgentMultisigDeploymentReviews(sessionStore);
 const recoveryDiscovery = createRecoveryDiscoveryCache(sessionStore);
+// The picker pulls discovery pages back to back, so their chain reads share
+// one budget for the worker's life (the gateway counts them per address).
+const recoveryReads = createRecoveryReadPacer(keepAliveOption);
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
@@ -336,18 +343,14 @@ const runtimeReady = sessionReady.then(async () => {
 // what Chrome's lifecycle guidance prescribes to keep the worker from idling
 // out; the call's result is irrelevant and its failure is ignored.
 const strk20Jobs = createStrk20JobRegistry({
-  ...(runtime?.getPlatformInfo
-    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
-    : {}),
+  ...keepAliveOption,
   now: systemClock,
 });
 // A reviewed preparation is held only in worker memory too, so the same
 // extension API call keeps the worker alive while a confirmation sits on
 // screen; an unconfirmed review retires after its lifetime and drops the hold.
 const strk20Preparations = createStrk20WalletPreparationStore({
-  ...(runtime?.getPlatformInfo
-    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
-    : {}),
+  ...keepAliveOption,
   now: systemClock,
 });
 // This extension's own identity. The origin MUST come from the runtime: on
@@ -386,6 +389,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,
   recoveryDiscovery,
+  recoveryReads,
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,

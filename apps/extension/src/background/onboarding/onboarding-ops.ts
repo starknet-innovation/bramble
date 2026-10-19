@@ -41,15 +41,30 @@ import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
 import type { RecoveryDiscoveryCache } from "./recovery-cache";
+import type { RecoveryReadPacer } from "./recovery-read-pacer";
 
 type OnboardingOpsDeps = {
   readonly activeStateCoordinator: ActiveStateCoordinator;
   readonly preferencesStore: WalletPreferencesStore;
   readonly recoveryDiscovery: RecoveryDiscoveryCache;
+  /**
+   * Shared budget for the walk's chain reads. The worker always supplies one;
+   * absent, reads run unpaced and a refusal fails the page, as narrow test
+   * doubles expect.
+   */
+  readonly recoveryReads?: RecoveryReadPacer;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
 };
+
+// Upper bounds on the JSON-RPC calls each probe makes, which is what the
+// gateway charges: one class-hash read, one balance call per token, and the
+// live class plus up to three signer reads for either vendor's verdict.
+const DEPLOYMENT_PROBE_CALLS = 1;
+const SIGNING_PROBE_CALLS = 4;
+
+const unpacedReads: RecoveryReadPacer = { read: (_rpcUrls, _calls, run) => run() };
 
 const describeRecoveryAccount = async (
   deps: OnboardingOpsDeps,
@@ -57,27 +72,29 @@ const describeRecoveryAccount = async (
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
 ): Promise<RecoveryAccountCandidate> => {
-  const deployed = await deps.runtimeRpc.getDeploymentStatus({
-    accountAddress: account.address,
-    rpcUrls,
-  });
+  const reads = deps.recoveryReads ?? unpacedReads;
+  const deployed = await reads.read(rpcUrls, DEPLOYMENT_PROBE_CALLS, () =>
+    deps.runtimeRpc.getDeploymentStatus({ accountAddress: account.address, rpcUrls }),
+  );
   if (deployed) {
     // Advisory signability verdict (issue 542): a deployed vendor account can
     // carry a guardian or strong signer, a rotated owner, or an unauthorizable
     // live class. A missing probe or a throw lists the row unlabelled — the
     // transaction path re-checks authoritatively, so this can mislabel but
-    // never move funds.
+    // never move funds. A refusal is waited out first, like any other read.
     const probe =
       account.accountContractType === "argent"
         ? deps.runtimeRpc.getArgentSigningRestriction
         : account.accountContractType === "braavos"
           ? deps.runtimeRpc.getBraavosSigningRestriction
           : undefined;
-    const restriction = await probe?.({
-      accountAddress: account.address,
-      publicKeyX: account.publicKeyX,
-      rpcUrls,
-    }).catch(() => null);
+    const restriction = probe
+      ? await reads
+          .read(rpcUrls, SIGNING_PROBE_CALLS, () =>
+            probe({ accountAddress: account.address, publicKeyX: account.publicKeyX, rpcUrls }),
+          )
+          .catch(() => null)
+      : undefined;
     return {
       account,
       deployed: true,
@@ -85,11 +102,9 @@ const describeRecoveryAccount = async (
       ...(restriction ? { restriction } : {}),
     };
   }
-  const balances = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: account.address,
-    rpcUrls,
-    tokens,
-  });
+  const balances = await reads.read(rpcUrls, tokens.length, () =>
+    deps.runtimeRpc.getTokenBalances({ accountAddress: account.address, rpcUrls, tokens }),
+  );
   return {
     account,
     deployed: false,

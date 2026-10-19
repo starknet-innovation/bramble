@@ -16,6 +16,7 @@ import {
 } from "@bramble/wallet-model/accounts";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
+import type { RecoveryReadPacer } from "../../../apps/extension/src/background/onboarding/recovery-read-pacer";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -130,6 +131,38 @@ describe("wallet.discoverOwnAccounts routing", () => {
     expect(previewed.length).toBeGreaterThan(0);
     expect(new Set(previewed)).toEqual(new Set([ownPhrase]));
     expectNoSecrets(response);
+  });
+
+  test("paces the rescan through the worker's shared read budget", async () => {
+    // A rescan walks the same ~28 calls per index as first-run recovery, so
+    // it trips the gateway's per-address limit just as readily unpaced.
+    const booked: number[] = [];
+    let probes = 0;
+    const recoveryReads: RecoveryReadPacer = {
+      read: async (_rpcUrls, calls, run) => {
+        booked.push(calls);
+        return run();
+      },
+    };
+    const countedRpc = {
+      ...quietRpc,
+      async getDeploymentStatus() {
+        probes += 1;
+        return false;
+      },
+      async getTokenBalances(input: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
+        probes += 1;
+        return quietRpc.getTokenBalances(input);
+      },
+    };
+    const handler = createMessageHandler(ownPhraseWallet(), testExtension, {
+      recoveryReads,
+      runtimeRpc: countedRpc,
+      session: unlocked(),
+    });
+    expect(await handler(discoverMessage, sender)).toMatchObject({ ok: true });
+    expect(probes).toBeGreaterThan(0);
+    expect(booked.length).toBe(probes);
   });
 
   test("fails closed when the wallet is locked", async () => {

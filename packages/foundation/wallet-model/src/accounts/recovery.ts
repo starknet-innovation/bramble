@@ -22,6 +22,26 @@ export const RECOVERY_SCAN_LIMITS = {
 } as const;
 
 /**
+ * Request budget for the discovery walk's chain reads. One index probes seven
+ * account shapes at about four JSON-RPC calls each, so the `defaultCount` floor
+ * alone is some 560 calls. The built-in gateway admits 500 calls per minute per
+ * IP in a fixed window (a JSON-RPC batch is charged per call) behind a WAF
+ * ceiling of 2500 per five minutes, and an unpaced walk spent that in seconds.
+ * At most `callsPerWindow` calls start in any `windowMs`, which holds every
+ * minute to 360 and leaves the rest for the wallet's other reads and anyone
+ * sharing the address. A refused read pauses the walk for the endpoint's
+ * `Retry-After` or cooldown, clamped to `minPauseMs`..`maxPauseMs`, and is
+ * retried at most `refusalRetries` times before the walk fails closed.
+ */
+export const RECOVERY_SCAN_PACING = {
+  callsPerWindow: 60,
+  maxPauseMs: 60_000,
+  minPauseMs: 1_000,
+  refusalRetries: 3,
+  windowMs: 10_000,
+} as const;
+
+/**
  * The hardened account index strkd reserves for its agent accounts: `"AGNT"`
  * in ASCII (#336). strkd derives from the same phrase on the same
  * `accountIndex` axis, and keeps accounts that AI agents may drive under a
