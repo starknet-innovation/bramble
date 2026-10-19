@@ -22,12 +22,16 @@ export const ONBOARDING_LEDGER_STYLES = `
     justify-items: center;
     padding: var(--onboarding-canvas-y) clamp(${SPACE.xl}, 5vw, ${SPACE.xxxl});
   }
+  /* Auto block margins centre a short card and collapse for a tall one, so a
+     long account list scrolls from its heading; align-self: center would push
+     the card's top above the scroll origin, out of reach. */
   .onboarding-surface .ledger-onboard-overlay > * {
-    align-self: center;
+    align-self: start;
     background: var(--bramble-panel);
     border-radius: ${RADIUS.xl};
     box-shadow: var(--bramble-elev-md);
     box-sizing: border-box;
+    margin-block: auto;
     min-block-size: min(
       720px,
       calc(100vh - var(--onboarding-canvas-y) - var(--onboarding-canvas-y))
@@ -66,6 +70,19 @@ export const ONBOARDING_LEDGER_STYLES = `
   .onboarding-surface .ledger-onboard-overlay .onboard-actions {
     margin-top: auto;
     padding-top: ${SPACE.lg};
+  }
+  /* The device chooser renders inside the actions block: its options stay under
+     the heading, as a step's options do, and only Cancel drops to the foot. */
+  .onboarding-surface .ledger-onboard-overlay .onboard-actions:has(> .add-account-chooser) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    margin-top: 0;
+    padding-top: 0;
+  }
+  .onboarding-surface .ledger-onboard-overlay .onboard-actions:has(> .add-account-chooser) > .ghost {
+    align-self: center;
+    margin-top: auto;
   }
   @media (max-width: 520px) {
     .onboarding-surface .ledger-onboard-overlay { padding: 0; }

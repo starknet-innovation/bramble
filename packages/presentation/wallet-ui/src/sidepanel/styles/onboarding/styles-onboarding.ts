@@ -4,6 +4,7 @@
  * language without introducing new colour semantics.
  */
 import { EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
+import { LEDGER_OVERLAY_LAYERS } from "../core/styles-structure";
 
 const ONBOARDING_TRANSITION = {
   enterMs: 300,
@@ -46,6 +47,8 @@ export const ONBOARDING_STYLES = `
     left: auto;
     top: ${SPACE.lg};
     width: min(360px, calc(100vw - ${SPACE.lg} - ${SPACE.lg}));
+    /* Above the Ledger overlay, which here is transparent around its card. */
+    z-index: ${LEDGER_OVERLAY_LAYERS.sign + 1};
   }
   .onboarding-surface #app { min-height: 100vh; }
   .onboarding-surface .shell {
