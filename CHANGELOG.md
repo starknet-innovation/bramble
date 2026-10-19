@@ -6,21 +6,75 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
-is cut. Older entries are kept in [CHANGELOG_ARCHIVE_0.9.md](CHANGELOG_ARCHIVE_0.9.md) (v0.9.0–v0.10.2) and [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md) (before v0.9.0).
+is cut. Older entries are kept in [CHANGELOG_ARCHIVE_0.9.md](CHANGELOG_ARCHIVE_0.9.md) (v0.9.0–v0.10.4) and [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md) (before v0.9.0).
 See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+## [0.10.7] - Unreleased
+
+Private sends that recover from a lost relay reply without a browser restart,
+the remaining Low findings from the v0.10.6 release audit, and fixes from user
+and QA reports.
+
+### Added
+- Settings → Unlock private transactions lifts a private-transaction pause on
+  purpose, after stating that the earlier transaction could still go through
+  (#668).
+- When a downloaded update is ready, an idle wallet applies it straight away. A
+  wallet in use shows a prompt to restart, and applies the update once nothing
+  is in progress (#708).
+- Send warns when the recipient is a token contract, where tokens sent are
+  usually lost (#713).
+- Recovery has a Clear button, confirms a valid phrase, and fills empty account
+  groups (#718).
+- On Arc, Extension options opens the wallet in a tab (#690).
+- Multisig: a stale proposal says why it went stale, names a fee refusal on its
+  card, tells a rejected stale version from a reverted one, and offers Propose
+  again (#673).
+
 ### Changed
-- Docs: upgrades are one-way. The README and support page say how to recover if an older build is installed (#670).
+- Shielding says upfront that its network fee is paid in public STRK (#665).
+- Max on STRK leaves room for the network fee (#720).
+- A site's non-pool SNIP-36 proof invoke goes out as an ordinary invoke. Only a
+  privacy-pool batch takes the private lane (#692).
+- Service endpoints are stored only in their canonical spelling, so an endpoint
+  echoed in an error is always redacted in full (#674).
+- Docs: upgrades are one-way. The README and support page say how to recover if
+  an older build is installed (#670).
 
 ### Fixed
 - A private transaction whose relay reply was lost no longer needs a browser
   restart, which used to unlock the account without cancelling anything. The
   pause now survives restarts and lifts once Ethereum-finalized chain state
-  shows the relayed transaction can no longer apply, which can take hours.
-  Settings → Unlock private transactions lifts it on purpose, after stating
-  that the earlier transaction could still go through (#668).
+  shows the relayed transaction can no longer apply, which can take hours
+  (#668).
+- The deploy screen reads fresh deployment status, refuses an account that is
+  already deployed by name, and an automatic account deployment is recorded in
+  Activity for sends, NFT sends, swaps, revokes, site invokes and declares
+  (#712, #719).
+- A transaction found reverted only on chain is stored as reverted, not
+  accepted (#656).
+- A rate-limit refusal from an RPC endpoint stays a rate-limit refusal through
+  starknet.js, instead of reading as a generic failure (#660).
+- A wrong-passphrase error no longer offers a copy button (#713).
+- From the v0.10.6 release audit (Low):
+  - a pool-fee refusal before signing reads as not sent, never "status
+    unknown" (#679);
+  - a balance that was never read shows "—", never 0, on token detail and Swap
+    (#680);
+  - `wallet_watchAsset` keeps the user's own token record (#682);
+  - a site approve whose reply was lost files its allowance under the signed
+    hash, so it can be revoked (#678);
+  - a multisig submit whose reply was lost shows "status unknown" with the
+    signed hash and stays pending in Activity, with no blind resend (#681);
+  - old unresolved sends no longer push a send still being watched out of
+    Activity storage (#677).
+
+### Maintenance
+- The Firefox package is attached to every GitHub Release (#685).
+- CI actions bumped together with their security-policy pins (#711).
+- Terminal: each Vesu registry check reads at one block (#270).
 
 ## [0.10.6] - 2026-10-14
 
@@ -373,91 +427,3 @@ reports.
 - follow the token dropdown, Pro address form, and catalog view
 - open the account's own channel during registration
 - bump to 0.10.5
-
-## [0.10.4] - 2026-09-22
-
-### Added
-
-- scan every Argent release during recovery discovery
-- derive Argent accounts at any release they could have been deployed with
-- derive account addresses across every class a wallet deploys with
-- **terminal:** connect injected wallets through WalletAccountV6
-- let the revealed recovery phrase be copied to the clipboard
-- acknowledge a weak vault passphrase instead of accepting it silently
-- lower the vault passphrase floor to 8 and warn instead of refusing
-
-### Fixed
-
-- do not treat an unfinished check as a reason to deploy or fund
-- stop offering a deployment privacy cannot use
-- send unfunded token rows to receive before deployment
-- drop deployment status when the active account changes
-- offer privacy deployment only when it can succeed
-- bump web-ext past the image-size audit failure (#408)
-- offer deployment before privacy registration
-- accept an upgraded account class instead of demanding the pinned one
-- move wallet-standard types into a named capability folder
-- drop the starknet type patch for a shared wallet-standard path
-- keep starknet 10.8.0 with a reviewed WalletAccountV6 type patch
-- rescan history after the wallet records a transaction
-- refuse to start a Ledger flow from the toolbar popup
-- reserve the document scrollbar gutter so rows cannot shift the layout
-
-### Maintenance
-
-- regenerate bun.lock after Dependabot bumps
-- re-evaluate the PR guards when a pull request is retargeted
-- **deps:** bump the minor-and-patch group with 16 updates
-
-### Other
-
-- Restore Braavos accounts from a phrase (view-only) and close Ready 0.3.x restore gaps (#400)
-- Version the Ready Ledger path scheme as vault schema v9
-- Restore Ready Ledger accounts at Ready's EIP-2645 path
-- Name the publisher in the extension package
-- Build, package and validate the Gecko artifact in CI
-- Update the Receive stories to the address-first card
-- Fix the four confirmed UX-spec defects: allowance units, address-first Receive, bound connect grants, tested field edge
-- announce the Bramble bird as the dapp wallet icon
-- bump to 0.10.4 (#367)
-
-## [0.10.3] - 2026-09-16
-
-A patch release that lets a single-asset shielded balance pay its own relay
-fee, adds a Firefox build target, and hardens the vault and the v0.10.1
-authorization boundaries.
-
-### Added
-- The STRK20 relay fee can be paid in the token being sent. A converted fee is
-  admitted only under a ceiling derived from an independent reference price,
-  frozen into the reviewed plan and re-checked at submission; the route falls
-  back to STRK when no reference bounds it, when the batch spends several
-  tokens, or when the relay refuses the token.
-- A Firefox build target derived from the Chrome manifest. `bun run build:all`
-  emits both targets from one run of the gates; the wallet panel maps onto
-  `sidebar_action`, pending approvals mark the toolbar button so the click that
-  opens the panel is a real user gesture, and `data_collection_permissions` is
-  declared. The sandboxed collectible renderer and Ledger are not shipped on
-  Firefox, each decided rather than discovered.
-
-### Changed
-- The encrypted vault's commit state is mirrored into `storage.session`, which
-  no content script can reach, and an envelope must be vouched for by both the
-  durable record and the session shadow. The first read of a session seeds the
-  shadow, a version-2 envelope after a committed lineage is refused as a
-  downgrade, and the shadow is written before the durable record.
-- Deferred approval and signing work is bound to the unlock session that
-  authorized it; approvals claimed, grant metadata read, and session restores
-  superseded after a lock or revocation are rejected rather than served.
-- Embedded private-swap calls are validated against the reviewed trade intent,
-  and the paymaster gateway only carries credentials for the configured pool's
-  `apply_actions` call. Private-swap planning stays disabled until an
-  independently reviewed executor deployment is pinned.
-- Only wallet-authored errors reach STRK20 toast copy; SDK, RPC, and service
-  diagnostics collapse to a stable fallback.
-
-### Fixed
-- Analytics failures and consent races no longer affect wallet traffic.
-- Stale direct-provider account and permission responses are suppressed after
-  the session that produced them ends.
-- The website tooling pins a patched `sharp` (GHSA-rgj7-g3m4-5g8c).
