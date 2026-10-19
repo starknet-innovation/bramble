@@ -37,9 +37,16 @@ export const ONBOARDING_STYLES = `
     background-size: cover;
     min-width: 320px;
   }
-  /* The full-tab surface would stretch toasts edge to edge; keep them to the
-     wizard card's column. */
-  .onboarding-surface .toast-stack { margin-inline: auto; max-width: 520px; }
+  /* The panel's toast slot sits above its dock; this surface has no dock, so
+     there a toast lands on the card's bottom action. The top-right corner is
+     clear of the card at any width that shows the landscape, and on a narrow
+     tab it overlaps only the card's top padding, not its back control. */
+  .onboarding-surface .toast-stack {
+    bottom: auto;
+    left: auto;
+    top: ${SPACE.lg};
+    width: min(360px, calc(100vw - ${SPACE.lg} - ${SPACE.lg}));
+  }
   .onboarding-surface #app { min-height: 100vh; }
   .onboarding-surface .shell {
     --onboarding-canvas-y: clamp(${SPACE.lg}, 3vh, ${SPACE.xxxl});
