@@ -64,7 +64,7 @@ const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> 
   await expect(sidepanel.locator("#verify-result")).toHaveText("Backup confirmed.");
 };
 
-const protectAndSelectAccount = async (
+const protectAndFinishSetup = async (
   sidepanel: Page,
   passphrase: string = VAULT_PASSPHRASE,
 ): Promise<void> => {
@@ -72,9 +72,11 @@ const protectAndSelectAccount = async (
   await sidepanel.locator('input[name="vaultPassphraseConfirm"]').fill(passphrase);
   await sidepanel.getByRole("button", { name: "Review account" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Review your account" })).toBeVisible();
-  await sidepanel.locator("#account-preview").click();
-  await expect(sidepanel.getByRole("button", { name: "Add selected account" })).toBeEnabled();
-  await sidepanel.getByRole("button", { name: "Add selected account" }).click();
+  // The sole derived account is presented, not chosen: the confirm action
+  // enables as soon as the account preview resolves.
+  const finish = sidepanel.getByRole("button", { name: "Finish setup" });
+  await expect(finish).toBeEnabled();
+  await finish.click();
 };
 
 type RecoveryRpcCall = {
@@ -159,11 +161,11 @@ export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<
   const phrase = await phraseInputs.evaluateAll((inputs) =>
     inputs.map((input) => (input as HTMLInputElement).value).join(" "),
   );
-  await onboarding.getByRole("button", { name: "Show", exact: true }).click();
+  await onboarding.getByRole("button", { name: "Show recovery phrase", exact: true }).click();
   await onboarding.getByRole("button", { name: "I saved my phrase" }).click();
   await fillBackupVerify(onboarding, phrase);
   await onboarding.getByRole("button", { name: "Continue" }).click();
-  await protectAndSelectAccount(onboarding);
+  await protectAndFinishSetup(onboarding);
   await setup.finish();
   await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
 };

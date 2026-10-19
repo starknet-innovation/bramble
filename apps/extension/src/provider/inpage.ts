@@ -12,7 +12,11 @@ import {
   readProviderResponse,
   walletRpcException,
 } from "@bramble/wallet-protocol/bridge";
-import { createProviderEventHub, readProviderEvent } from "@bramble/wallet-protocol/events";
+import {
+  createProviderEventHub,
+  isPageEventNews,
+  readProviderEvent,
+} from "@bramble/wallet-protocol/events";
 import { isHexChainId } from "@bramble/wallet-protocol/results";
 import { invalidRequestPayload } from "@bramble/wallet-protocol/rpc-errors";
 import { WALLET_ICON } from "./wallet-icon";
@@ -68,6 +72,9 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 
   const providerEvent = readProviderEvent(event.data);
   if (providerEvent) {
+    if (!isPageEventNews(providerEvent, currentChainId)) {
+      return;
+    }
     if (providerEvent.event === "accountsChanged") {
       connectedAddresses = providerEvent.data;
     }
@@ -109,7 +116,17 @@ const request = (args: unknown): Promise<unknown> => {
 
   return new Promise((resolve, reject) => {
     const id = crypto.randomUUID();
-    pending.set(id, { reject, resolve });
+    pending.set(id, {
+      reject,
+      // Every chain-id answer is the chain the page now holds, so the repeat
+      // filter below never compares against a value the dapp has moved past.
+      resolve: (value) => {
+        if (input.method === "wallet_requestChainId" && isHexChainId(value)) {
+          currentChainId = value;
+        }
+        resolve(value);
+      },
+    });
     window.postMessage(
       {
         id,

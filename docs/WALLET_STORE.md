@@ -43,12 +43,19 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 
 | Key / state | Area | Sensitivity | Identity and bounds | Failure policy |
 | --- | --- | --- | --- | --- |
-| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v10; account ids unique; strict cross-references | fail closed |
+| `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v10; account ids unique; strict cross-references; capacity below | fail closed |
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
+| `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage | rollback refused; a missing primary record is restored from the local mirror |
+| `bramble:vault:commit:<lineage>` mirror (primary vault only) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
+| `bramble:vault:legacy` | `storage.local`, plain | marker that this install has committed a version-3 envelope | one per install | any version-2 envelope after it is a rollback |
+| `bramble:vault:recovering` | `storage.local`, plain | lineage of an Unlock anyway write in progress | only while a recovery writes | the next recovery removes the records an interrupted one left |
+| `bramble:vault:commit:<lineage>`, `bramble:vault:promoted` shadow | `storage.session`, plain | session copy of the commit record and the last promoted lineage | browser session | a durable record that disagrees is a rollback |
 | `bramble:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
 | `bramble:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
 | `bramble:allowances` | `storage.local`, plain | public ERC20 approvals | account + network + token + spender; 200 total | discard invalid rows |
-| `bramble:argent-multisigs:v2` | `storage.local`, plain, trusted contexts only | public contracts, frozen transaction intents, exact-hash authorization fragments | network + canonical contract; 20 multisigs / 100 intents / 100 operations | discard invalid or orphaned rows; never silently evict active authority |
+| `bramble:argent-multisigs:v2` | `storage.local`, plain, trusted contexts only | public contracts, frozen transaction intents, exact-hash authorization fragments | network + canonical contract; 20 multisigs / 100 intents (25 per multisig) / 100 operations | discard invalid or orphaned rows; never silently evict active authority |
+| `bramble:nostr-coordination:v1` | `storage.local`, plain | relay sync checkpoints: relay selection, last sync time, receipted gift-wrap event ids | multisig account; 20 accounts / 200 event ids each | discard invalid rows; event ids only save repeated work and never decide an import |
+| `bramble:nostr-coordination:removed:v1` | `storage.local`, plain | ids of intents the user removed | multisig account; 20 accounts / newest 100 intent ids each | discard invalid rows; relay sync never re-imports a listed intent |
 | `bramble:origin-history` | `storage.local`, plain | first-seen dapp origins | valid HTTPS/localhost origin; 500 origins | discard invalid entries |
 | `bramble:prices`, `bramble:charts` | `storage.local`, plain | recoverable market cache | TTL and cache-size bounded | cached-or-empty |
 | `bramble:phishing-feed` | `storage.local`, plain | signed/validated blocklist cache | TTL and response bounds | bundled baseline remains active |
@@ -57,10 +64,37 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | `bramble:strk20-maturity` | `storage.session`, plain | public pending transaction metadata | account + network + pool; 100 records | discard invalid rows |
 | approvals, AES keys, selected UI view | worker/page memory | transient authority or presentation state | request/session/view scoped | lost safely on restart |
 
-`storage.local` and `storage.session` are locked to trusted extension contexts with
-`setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" })`. Chrome documents that local data persists
+`storage.local`, `storage.session` and `storage.sync` are locked to trusted extension contexts with
+`setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" })` on Chromium; Firefox has no `setAccessLevel`,
+so there `local` and `sync` stay reachable from this extension's own content script.
+
+The commit record lives in `storage.sync` so that restoring an old copy of `storage.local` does not
+roll the vault back: `sync` still names the newer commit and refuses the old envelope. `storage.sync`
+can also be dropped on its own (a sync-account change, a profile reset, quota eviction), so the primary
+vault's record is mirrored in `storage.local` and the mirror is read only when the `sync` record is
+missing. The `vault-migration` staging store has no mirror: the wallet removes its `sync` record after
+every migration, so a mirror there would let a restored `storage.local` vouch for its own staged copy.
+Replaying an old vault therefore takes rolling back `local` and deleting the `sync` record together,
+the coordinated rollback of both areas this design already accepts. The version-2 downgrade marker
+stays in `storage.local`, because every synced install of the extension shares one `storage.sync`
+area and a marker there refused other installs' own vaults; an earlier release's marker in `sync`
+is moved to `local` on the next unlock. The cost is that a copy of `storage.local` taken before this
+install's version-3 migration (pre-0.9.2) carries no marker, so restoring that copy alone replays its
+version-2 vault unless this browser session has already seen a version-3 commit. Chrome documents that local data persists
 until extension removal, while session data is cleared when an extension is updated. See the
 [Chrome storage API](https://developer.chrome.com/docs/extensions/reference/api/storage).
+
+**Vault capacity.** The vault validators apply the provider JSON budget (`JSON_BUDGETS.provider`,
+1 MiB with strings charged at six bytes per character) on read as on write, so that budget is the
+vault's one capacity. It is shared by accounts, signing keys, imported phrases, retained secrets and
+connected sites, so it is not an account count: a vault of derived accounts alone holds about 243
+(pinned in `vault-capacity.test.ts`). STRK20 shadow-account scope records may use at most half of it
+(`SHADOW_ACCOUNT_SCOPES_BUDGET`), so they can never leave the rest of the vault unwritable. `writeVault` refuses the first vault past it with
+`Vault storage limit reached` before any storage is touched. Every storage area validates writes
+against `JSON_BUDGETS.storage`, which is derived to admit the base64 envelope of anything the provider
+budget admits, so storage never refuses a vault its validators accepted; the store still checks the
+envelope before writing the pending commit record, so a value storage refuses leaves no half-commit
+(Sherlock 261).
 
 ## Account identity and first-class behavior
 

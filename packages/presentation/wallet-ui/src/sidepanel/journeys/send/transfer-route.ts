@@ -9,9 +9,11 @@
  * would flip meaning mid-edit; deriving it from state cannot.
  */
 
-import { parseTokenAmount } from "@bramble/starknet/rpc";
+import { strk20SendFeeModel } from "@bramble/privacy/fee-bound";
+import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   type PoolRegistration,
+  poolFeeAmountIn,
   resolveSendRoute,
   routeFor,
   type SendRoute,
@@ -20,8 +22,9 @@ import {
   spendableForRoute,
   type ValueBucket,
 } from "@bramble/transactions/send-routes";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { STRK_TOKEN_ADDRESS, STRK_TOKEN_DECIMALS, sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
+import { formatFri } from "../../shared/parts";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
 import type { TransferFields } from "./transfer-model";
 
@@ -80,12 +83,37 @@ const tokenBalanceIn = (bucket: ValueBucket, context: TransferRouteContext): big
     ? privateBalanceOf(context.privacy, (entry) => entry.tokenId === context.fields.tokenId)
     : publicBalanceOf(context.publicBalances, (entry) => entry.id === context.fields.tokenId);
 
-const strkBalanceIn = (bucket: ValueBucket, context: TransferRouteContext): bigint | null =>
+const privateEntryFor = (context: TransferRouteContext, address: string) =>
+  context.privacy.value?.balances.find((entry) => sameFelt(entry.token, address));
+
+const publicEntryFor = (context: TransferRouteContext, address: string) =>
+  context.publicBalances.find((entry) => sameFelt(entry.address, address));
+
+// The source bucket's balance of an arbitrary token — used for the pool fee's
+// own token, which is not necessarily the token being sent.
+const balanceOfTokenIn = (
+  bucket: ValueBucket,
+  address: string,
+  context: TransferRouteContext,
+): bigint | null =>
   bucket === "private"
-    ? privateBalanceOf(context.privacy, (entry) => sameFelt(entry.token, STRK_TOKEN_ADDRESS))
-    : publicBalanceOf(context.publicBalances, (entry) =>
-        sameFelt(entry.address, STRK_TOKEN_ADDRESS),
-      );
+    ? rawBalance(privateEntryFor(context, address)?.balance)
+    : rawBalance(publicEntryFor(context, address)?.balance);
+
+const symbolOfToken = (context: TransferRouteContext, address: string): string | null =>
+  privateEntryFor(context, address)?.symbol ?? publicEntryFor(context, address)?.symbol ?? null;
+
+// The fee token's decimal scale: STRK's is fixed, the sent token's is on the
+// form, and any other comes from the public token list. Private balance entries
+// carry no scale, so a token known only there stays unknown.
+const decimalsOfToken = (context: TransferRouteContext, address: string): number | null => {
+  if (sameFelt(address, STRK_TOKEN_ADDRESS)) return STRK_TOKEN_DECIMALS;
+  if (sameFelt(address, context.fields.tokenAddress)) {
+    const decimals = Number(context.fields.tokenDecimals);
+    return Number.isSafeInteger(decimals) ? decimals : null;
+  }
+  return publicEntryFor(context, address)?.decimals ?? null;
+};
 
 const senderRegistration = (privacy: PrivacyDisclosureState): PoolRegistration => {
   if (privacy.loading || !privacy.value) {
@@ -104,24 +132,46 @@ const senderRegistration = (privacy: PrivacyDisclosureState): PoolRegistration =
  * Relay availability comes from the privileged account-scoped disclosure. An
  * absent disclosure therefore fails private spending closed; it never guesses
  * that a relay exists.
+ *
+ * The fee token follows the same preference the relay quote applies: a relayed
+ * batch pays in the token being sent when an independent reference bounds the
+ * conversion, otherwise in the configured fee token. The account route always
+ * pays the pool's on-chain STRK charge, so its fee token is STRK.
  */
 const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
   const { fields } = context;
+  const route = routeFor(fields.source, fields.destination);
+  const state = context.privacy.value;
+  const fallbackFeeToken = state?.feeToken ?? STRK_TOKEN_ADDRESS;
+  const feeModel =
+    route.submission === "relay"
+      ? strk20SendFeeModel({
+          convertedCeiling: rawBalance(privateEntryFor(context, fields.tokenAddress)?.feeCeiling),
+          fallbackCeiling: rawBalance(privateEntryFor(context, fallbackFeeToken)?.feeCeiling),
+          fallbackFeeToken,
+          token: fields.tokenAddress,
+        })
+      : { convertedCeiling: null, feeToken: STRK_TOKEN_ADDRESS };
   return {
     amountRaw: rawAmount(fields.amount, fields.tokenDecimals),
+    convertedFeeCeilingRaw: feeModel.convertedCeiling,
     destination: fields.destination,
-    poolFeeFri: context.privacy.value?.poolFeeFri
-      ? rawBalance(context.privacy.value.poolFeeFri)
-      : null,
+    feeTokenAddress: feeModel.feeToken,
+    feeTokenDecimals: decimalsOfToken(context, feeModel.feeToken),
+    feeTokenSymbol:
+      symbolOfToken(context, feeModel.feeToken) ??
+      (sameFelt(feeModel.feeToken, STRK_TOKEN_ADDRESS) ? "STRK" : "fee token"),
+    poolFeeFri: state?.poolFeeFri ? rawBalance(state.poolFeeFri) : null,
     recipient: fields.recipient || null,
     recipientRegistration: context.recipientRegistration,
-    relayConfigured: context.privacy.value?.relayConfigured ?? false,
+    relayConfigured: state?.relayConfigured ?? false,
     senderAddress: context.senderAddress,
     senderRegistration: senderRegistration(context.privacy),
     source: fields.source,
-    sourceStrkBalanceRaw: strkBalanceIn(fields.source, context),
+    sourceFeeBalanceRaw: balanceOfTokenIn(fields.source, feeModel.feeToken, context),
     sourceTokenBalanceRaw: tokenBalanceIn(fields.source, context),
     tokenAddress: fields.tokenAddress,
+    tokenDecimals: Number(fields.tokenDecimals) || 0,
     tokenSymbol: fields.tokenSymbol,
   };
 };
@@ -139,6 +189,23 @@ export const resolveTransferRoute = (context: TransferRouteContext): SendRouteRe
     return { blocked: { pending: false, reason: "Private balances are unavailable right now" } };
   }
   return resolveSendRoute(sendRouteInputFor(context));
+};
+
+/**
+ * The pool fee a composed send will reserve, formatted in the token that pays
+ * it: STRK's exact charge exactly as the review prints it, or a converted fee's
+ * bounded ceiling in its own token, read as "up to" because the relay's quote,
+ * known only at review, may be lower. `null` when the amount or the fee token's
+ * scale is not known yet, so no figure is ever guessed or shown as STRK.
+ */
+export const transferPoolFeeAmount = (context: TransferRouteContext): string | null => {
+  const input = sendRouteInputFor(context);
+  const amount = poolFeeAmountIn(input);
+  if (amount === null) return null;
+  if (sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)) return formatFri(amount.toString());
+  return input.feeTokenDecimals === null
+    ? null
+    : `up to ${formatTokenAmount(amount, input.feeTokenDecimals)} ${input.feeTokenSymbol}`;
 };
 
 /**
@@ -176,3 +243,51 @@ export const balanceInBucket = (
  */
 export const transferSpendable = (context: TransferRouteContext): bigint | null =>
   spendableForRoute(transferRoute(context.fields), sendRouteInputFor(context));
+
+/**
+ * What a shield takes from the public STRK balance besides its network fee
+ * (the pool fee, plus the amount when the shielded token is STRK) and that
+ * balance, so the review can warn when the balance cannot cover all three.
+ * Max holds back only the pool fee, because the network fee is not known
+ * until the deposit is proved. Null off the shield route or while the pool
+ * fee is unknown.
+ */
+export const shieldStrkFunding = (
+  fields: TransferFields,
+  publicBalances: readonly TokenBalance[] | undefined,
+  poolFeeFri: string | undefined,
+): { readonly balance: string | null; readonly spent: bigint } | null => {
+  const poolFee = rawBalance(poolFeeFri);
+  if (transferRoute(fields).id !== "public-private" || poolFee === null) return null;
+  const strk = publicBalances?.find((entry) => sameFelt(entry.address, STRK_TOKEN_ADDRESS));
+  const amount = sameFelt(fields.tokenAddress, STRK_TOKEN_ADDRESS)
+    ? rawAmount(fields.amount, fields.tokenDecimals)
+    : 0n;
+  return { balance: strk?.balance ?? null, spent: poolFee + amount };
+};
+
+/**
+ * True when a shield leaves no public STRK for its network fee. A shield's
+ * network fee and pool fee are both paid from public STRK whatever token it
+ * shields (issue 665). For a STRK shield that is an amount at least what the
+ * route can spend once the pool fee is held back, which is what Max fills in;
+ * for any other token it is a public STRK balance no larger than the pool fee.
+ * False on any other route, or while the spendable amount, the STRK balance or
+ * the pool fee is unknown.
+ */
+export const shieldLeavesNoStrkForGas = (context: TransferRouteContext): boolean => {
+  const { fields } = context;
+  if (transferRoute(fields).id !== "public-private") {
+    return false;
+  }
+  if (!sameFelt(fields.tokenAddress, STRK_TOKEN_ADDRESS)) {
+    const input = sendRouteInputFor(context);
+    return (
+      input.poolFeeFri !== null &&
+      input.sourceFeeBalanceRaw !== null &&
+      input.sourceFeeBalanceRaw <= input.poolFeeFri
+    );
+  }
+  const spendable = transferSpendable(context);
+  return spendable !== null && rawAmount(fields.amount, fields.tokenDecimals) >= spendable;
+};

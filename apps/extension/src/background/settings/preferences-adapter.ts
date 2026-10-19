@@ -42,8 +42,10 @@ export const createBackgroundPreferences = ({
     removeAddress: async (input) => (await required()).removeAddress(input),
     removeGroup: async (input) => (await required()).removeGroup(input),
     removeNft: async (input) => (await required()).removeNft(input),
+    removeToken: async (input) => (await required()).removeToken(input),
     renameGroup: async (input) => (await required()).renameGroup(input),
     saveAddress: async (input) => (await required()).saveAddress(input),
+    setAccountHidden: async (input) => (await required()).setAccountHidden(input),
     setAccountInGroup: async (input) => (await required()).setAccountInGroup(input),
     setAccountLabel: async (input) => (await required()).setAccountLabel(input),
     setActiveNetwork: async (input) => (await required()).setActiveNetwork(input),
@@ -67,6 +69,6 @@ export const createBackgroundPreferences = ({
     setRpcOverride: async (input) => (await required()).setRpcOverride(input),
     setStrk20NetworkConfig: async (input) => (await required()).setStrk20NetworkConfig(input),
     setTokenHidden: async (input) => (await required()).setTokenHidden(input),
-    upsertToken: async (input) => (await required()).upsertToken(input),
+    upsertToken: async (input, source) => (await required()).upsertToken(input, source),
   };
 };

@@ -17,23 +17,13 @@ import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
-  UINT128_LIMIT,
   uint256Felts,
 } from "@bramble/wallet-model/networks";
 import { hash } from "starknet";
 
-/**
- * A uint256 amount at or above this threshold is treated as an effectively
- * unlimited allowance: the conventional max-u128 sentinel, or any value that
- * sets the high 128-bit word, is far beyond a real spend cap. The one shared cut-off — the pre-sign verifier's
- * unlimited-approval risk flag (@bramble/transactions/verify) and the
- * allowance manager's display both read it here, so a transaction flagged
- * before signing is the same one the manager later lists as unlimited. Do not
- * re-derive the `1n << 128n` literal locally — the exponent itself is
- * `UINT128_LIMIT` in @bramble/wallet-model/networks, the same bound the
- * shared uint256 join holds each limb to.
- */
-export const UNLIMITED_ALLOWANCE_THRESHOLD = UINT128_LIMIT - 1n;
+// The unlimited cut-off lives with eviction ranking, which also reads it; it
+// is re-exported here, its public home, so every consumer keeps one import.
+export { isUnlimitedAllowance, UNLIMITED_ALLOWANCE_THRESHOLD } from "./allowance-retention";
 
 /**
  * The Starknet event selector emitted by an ERC20 `approve`.
@@ -62,10 +52,36 @@ export type AllowanceSource = "external" | "multisig" | "wallet";
  * value as an allowance nor offer the ERC20 revoke for such a row — on an
  * ERC721, `approve(spender, 0)` approves item #0 instead of revoking.
  */
-export type AllowanceView = AllowanceRecord & {
+export type AllowanceView = Omit<AllowanceRecord, "revokeHash"> & {
   readonly source: AllowanceSource;
   readonly unconfirmedToken?: true;
 };
+
+/**
+ * What an allowance listing could not vouch for, so the manager never reports
+ * "none found" for a list it knows is partial:
+ * - `scan-incomplete`: on-chain discovery stopped before the end of a tracked
+ *   token's approvals, or could not run (Sherlock 181);
+ * - `multisig-unread`: a watched multisig could not be read, so approvals it
+ *   granted are left out (Sherlock 190);
+ * - `retention-full`: the account's log is at its retention cap, so smaller
+ *   approvals may have been dropped (Sherlock 183).
+ */
+export const ALLOWANCE_NOTICES = ["multisig-unread", "retention-full", "scan-incomplete"] as const;
+
+/**
+ * One of {@link ALLOWANCE_NOTICES}.
+ */
+export type AllowanceNotice = (typeof ALLOWANCE_NOTICES)[number];
+
+/**
+ * Validates an untrusted list of allowance notices: known values, each at most
+ * once.
+ */
+export const isAllowanceNotices = (value: unknown): value is readonly AllowanceNotice[] =>
+  Array.isArray(value) &&
+  value.every((notice) => (ALLOWANCE_NOTICES as readonly unknown[]).includes(notice)) &&
+  new Set(value).size === value.length;
 
 /**
  * One outstanding allowance read from chain: the current on-chain amount for a
@@ -97,19 +113,6 @@ export type DecodedApprovalEvent = {
 };
 
 /**
- * Checks whether a decimal allowance amount should display as unlimited.
- * Non-numeric input is treated as not unlimited so a malformed amount never
- * silently reads as an infinite approval.
- */
-export const isUnlimitedAllowance = (amount: string): boolean => {
-  try {
-    return BigInt(amount) >= UNLIMITED_ALLOWANCE_THRESHOLD;
-  } catch {
-    return false;
-  }
-};
-
-/**
  * Validates an allowance view (a stored record plus its `source`) before it is
  * rendered or accepted across the message boundary.
  */
@@ -121,6 +124,7 @@ export const isAllowanceView = (value: unknown): value is AllowanceView =>
     "id",
     "lowerBound",
     "networkId",
+    "revoking",
     "source",
     "spender",
     "token",
@@ -181,11 +185,15 @@ export const parseAllowanceAmount = (response: readonly string[]): string | null
 // the chain has now stated the standing allowance for that exact pair, so the
 // row stops being an "at least" and becomes exact. A smaller reading leaves the
 // record — and its lower-bound marking — alone.
+//
+// A grant with a revoke pending is the exception: nothing this wallet sent can
+// leave the chain BEHIND it, only bring the allowance down, so its reading is
+// taken as it stands. A zero means the revoke executed and the row goes.
 const withOnChainAmount = (view: AllowanceView, onChain: string | undefined): AllowanceView => {
   if (!isBaseUnitsAmount(onChain) || !isBaseUnitsAmount(view.amount)) {
     return view;
   }
-  if (BigInt(onChain) < BigInt(view.amount)) {
+  if (BigInt(onChain) < BigInt(view.amount) && !view.revoking) {
     return view;
   }
   // Rebuilt field by field rather than spread, so the resolved `lowerBound`
@@ -197,6 +205,7 @@ const withOnChainAmount = (view: AllowanceView, onChain: string | undefined): Al
     amount: onChain,
     id: view.id,
     networkId: view.networkId,
+    ...(view.revoking && onChain !== "0" ? { revoking: true as const } : {}),
     source: view.source,
     spender: view.spender,
     token: view.token,
@@ -274,9 +283,15 @@ export const mergeAllowanceViews = (input: {
   for (const reading of input.readings ?? []) {
     onChainAmounts.set(reading.id, reading.amount);
   }
+  // A revoke's transaction hash is bookkeeping for settling the record, not
+  // something the manager shows, so it never reaches a view.
+  const viewOf = (
+    { revokeHash: _bookkeeping, ...record }: AllowanceRecord,
+    source: AllowanceView["source"],
+  ): AllowanceView => ({ ...record, source });
   const trackedViews: AllowanceView[] = [
-    ...inWallet.map((record): AllowanceView => ({ ...record, source: "wallet" })),
-    ...(input.multisig ?? []).map((record): AllowanceView => ({ ...record, source: "multisig" })),
+    ...inWallet.map((record) => viewOf(record, "wallet")),
+    ...(input.multisig ?? []).map((record) => viewOf(record, "multisig")),
   ].map((view) => withOnChainAmount(view, onChainAmounts.get(view.id)));
   const seen = new Set(trackedViews.map((view) => view.id));
   const externalViews: AllowanceView[] = [];

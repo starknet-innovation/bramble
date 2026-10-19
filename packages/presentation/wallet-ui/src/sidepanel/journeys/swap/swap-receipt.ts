@@ -64,6 +64,18 @@ export const swapReceiptFor = (
 });
 
 /**
+ * The receipt for a swap whose broadcast reply was lost before the wallet
+ * learned a hash. It may still land, so the screen says the status is unknown
+ * and offers Activity — never a re-quote that could swap the amount twice.
+ */
+export const swapUnknownReceipt = (message: string, summary: string): SwapReceipt => ({
+  hash: "",
+  note: message,
+  summary,
+  title: "Status unknown",
+});
+
+/**
  * Writes the receipt into the success stage under `root`. The identifier goes
  * through the shared outcome row, so a swap reports its transaction exactly as
  * a send does.
@@ -74,6 +86,11 @@ export const paintSwapReceipt = (root: Element, receipt: SwapReceipt, networkId:
   setText(root, "swap-success-note", receipt.note);
   root.querySelector("#swap-success-note")?.toggleAttribute("hidden", receipt.note === "");
   applyOutcomeHash(root, "swap-success-hash", receipt.hash, networkId);
+  // Without a hash there is no transaction row, and no check mark to claim one.
+  const stage = root.querySelector("#swap-success");
+  for (const selector of [".send-outcome-mark", ".send-receipt-tx"]) {
+    stage?.querySelector(selector)?.toggleAttribute("hidden", receipt.hash === "");
+  }
 };
 
 /** The token facts the confirm card states for one side of the pair. */

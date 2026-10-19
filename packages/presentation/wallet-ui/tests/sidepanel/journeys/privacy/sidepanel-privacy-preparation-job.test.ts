@@ -12,9 +12,12 @@
  * against the fixed phase vocabulary.
  */
 import { describe, expect, test } from "bun:test";
+import { STRK20_JOB_INTERRUPTED } from "@bramble/privacy/phases";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import {
   PREPARATION_CHANNEL_LOST,
   PREPARATION_POLL_MS,
+  PRIVATE_EXECUTION_UNKNOWN,
   type PreparationProgress,
   preparationProgressText,
 } from "../../../../src/sidepanel/journeys/privacy/privacy-preparation-job";
@@ -147,12 +150,10 @@ describe("shield preparation job", () => {
   });
 
   test("settles on the background's interruption reason after a worker restart", async () => {
-    const interrupted =
-      "The private operation was interrupted because the wallet's background worker stopped. Try again.";
-    const { client: wallet } = client([running(), running(), { error: interrupted }]);
+    const { client: wallet } = client([running(), running(), { error: STRK20_JOB_INTERRUPTED }]);
     await expect(
       wallet.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
-    ).rejects.toThrow(interrupted);
+    ).rejects.toThrow(STRK20_JOB_INTERRUPTED);
   });
 
   test("settles with a named reason when the channel itself fails", async () => {
@@ -292,9 +293,29 @@ describe("execution job", () => {
     await expect(malformed.client.executePrivacyPreparation(digest)).rejects.toThrow(
       "Private transaction failed",
     );
-    const lost = client([running(), new Error("channel closed")]);
-    await expect(lost.client.executePrivacyPreparation(digest)).rejects.toThrow(
-      PREPARATION_CHANNEL_LOST,
-    );
+  });
+
+  // An execution may broadcast before its worker is lost, so neither way of
+  // losing it may read as a plain failure the Send receipt calls "not sent"
+  // (audit #173 via the job channel).
+  test("reports a lost worker as status unknown, never as a failure", async () => {
+    const outcomes = [
+      client([running(), new Error("channel closed")]),
+      client([new Error("channel closed")]),
+      client([running(), running(), { error: STRK20_JOB_INTERRUPTED }]),
+    ];
+    for (const { client: wallet } of outcomes) {
+      const error = await wallet.executePrivacyPreparation(digest).catch((reason) => reason);
+      expect(error).toBeInstanceOf(SubmissionUnknownError);
+      expect((error as SubmissionUnknownError).transactionHash).toBeNull();
+      expect((error as Error).message).toBe(PRIVATE_EXECUTION_UNKNOWN);
+    }
+    // A preparation never broadcasts: its lost worker stays an ordinary failure.
+    const prepare = client([running(), { error: STRK20_JOB_INTERRUPTED }]);
+    const prepared = await prepare.client
+      .preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT)
+      .catch((reason) => reason);
+    expect(prepared).not.toBeInstanceOf(SubmissionUnknownError);
+    expect((prepared as Error).message).toBe(STRK20_JOB_INTERRUPTED);
   });
 });

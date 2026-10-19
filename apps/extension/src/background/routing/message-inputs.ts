@@ -71,6 +71,29 @@ const readInvokeCall = (value: unknown): Call | null => {
 export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
   isRecord(message) && hasOnlyKnownKeys(message, ["type"]) && message["type"] === type;
 
+// A Starknet name is a dotted list of 1-48 character labels plus the `.stark`
+// suffix; the bound leaves comfortable room while keeping an untrusted string
+// out of the RPC call.
+const MAX_STARK_NAME_CHARACTERS = 128;
+
+/**
+ * Parses the name-resolution reader's typed Starknet name and the network it
+ * is being read on. The network travels with the request so the background can
+ * refuse a read the panel made for a different chain than its own active one.
+ */
+export const readStarkNameInput = (
+  message: unknown,
+): { readonly name: string; readonly networkId: StarknetNetworkId } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["name", "networkId", "type"]) &&
+  message["type"] === "wallet.resolveStarkName" &&
+  typeof message["name"] === "string" &&
+  message["name"].trim().length > 0 &&
+  message["name"].length <= MAX_STARK_NAME_CHARACTERS &&
+  isStarknetNetworkId(message["networkId"])
+    ? { name: message["name"], networkId: message["networkId"] }
+    : null;
+
 /**
  * Parses the balance reader's optional local-snapshot request.
  */
@@ -209,7 +232,8 @@ export const readOriginRequestInput = (
 export { readRequestAccountsInput } from "../accounts/request-accounts-input";
 
 /**
- * Parses dapp invoke transaction requests from content-script traffic.
+ * Parses dapp invoke transaction requests from content-script traffic. A proof
+ * must be submittable: a simulate-mode (all-empty) proof is refused here.
  */
 export const readAddInvokeTransactionInput = (
   message: unknown,
@@ -234,7 +258,7 @@ export const readAddInvokeTransactionInput = (
   const proof = message["proof"];
   return origin &&
     calls.every((call): call is Call => call !== null) &&
-    (proof === undefined || isStrk20Proof(proof))
+    (proof === undefined || (isStrk20Proof(proof) && proof.data.length > 0))
     ? { calls, origin, ...(proof === undefined ? {} : { proof }) }
     : null;
 };
@@ -418,13 +442,17 @@ export const readReviewTransferInput = (message: unknown): ReturnType<typeof rea
   readTransferFields(message, "wallet.reviewTransfer");
 
 /**
- * Parses popup unlock messages carrying the vault passphrase.
+ * Parses popup unlock messages carrying the vault passphrase: `wallet.unlock`,
+ * or `wallet.unlockUnverified` for a vault awaiting recovery.
  */
-export const readUnlockInput = (message: unknown): { readonly vaultPassphrase: string } | null => {
+export const readUnlockInput = (
+  message: unknown,
+  type: "wallet.unlock" | "wallet.unlockUnverified" = "wallet.unlock",
+): { readonly vaultPassphrase: string } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["type", "vaultPassphrase"]) ||
-    message["type"] !== "wallet.unlock" ||
+    message["type"] !== type ||
     !isVaultPassphrase(message["vaultPassphrase"])
   ) {
     return null;
@@ -458,6 +486,7 @@ export {
   readRemoveGroupInput,
   readRenameGroupInput,
   readSaveAddressInput,
+  readSetAccountHiddenInput,
   readSetAccountInGroupInput,
   readSetAccountLabelInput,
   readSetDisplayInput,

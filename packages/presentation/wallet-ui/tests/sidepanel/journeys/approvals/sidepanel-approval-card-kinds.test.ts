@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
+import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
 
 const account = {
   accountContractType: "openzeppelin" as const,
@@ -52,10 +53,15 @@ describe("approvalCard renders each approval kind", () => {
     // The identity is on the face, not inside the technical disclosure.
     expect(html.indexOf("<dt>Account</dt>")).toBeGreaterThan(-1);
     expect(html).not.toContain("request-technical");
+    // The familiar display name leads, stacked over the address it shares.
+    expect(html).toContain(`<strong>${accountDisplayName(account, null)}</strong>`);
     expect(html).toContain(`title="${active?.address}"`);
     expect(html).toContain(`<dt>Network</dt><dd>${status.network}</dd>`);
     expect(html).toContain(`data-approval-account="${status.activeAccountId}"`);
     expect(html).toContain(`data-approval-action="approve"`);
+    // The consent action names what it does; the escape hatch reads as escaping.
+    expect(html).toContain(">Connect account</");
+    expect(html).toContain(">Cancel</");
     // Not locked, not blocked: the approve button is enabled.
     expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
     // Deny is reached first by keyboard and eye.
@@ -172,7 +178,7 @@ describe("approvalCard renders each approval kind", () => {
           collect_policy: { amount: "0xa", type: "exact" },
           dapp_name: "Example",
           nonce: "0x7",
-          type: "subaccount_invoke",
+          type: "shadow_account_invoke",
         },
       ],
       id: ID,
@@ -195,6 +201,9 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("0x7");
     expect(html).toContain("0x1, 0x2");
     expect(html).toContain("Relay fee action · Withdrawal");
+    // A listed relay fee is a charge, so the card must not claim there is none.
+    expect(html).not.toContain("charges no fee");
+    expect(html).toContain("no public wallet fee");
     expect(html).toContain("0x99");
     expect(html).toContain("3 actions · including relay fee");
     expect(html).toContain("public deposit approval");
@@ -224,7 +233,7 @@ describe("approvalCard renders each approval kind", () => {
     {
       action: "Share commitment",
       hint: "may link sessions for this site",
-      kind: "strk20-subaccount",
+      kind: "strk20-shadow-account",
       title: "Private identity request",
     },
   ] as const) {
@@ -374,6 +383,26 @@ describe("approvalCard renders each approval kind", () => {
       `<dt>Address</dt><dd><code title="${address}">0x053c…68a8</code><button class="icon-button ghost copy-inline" data-copy="${address}" type="button" aria-label="Copy token address"`,
     );
     expect(html).not.toContain(`<code>${address}</code>`);
+  });
+
+  test("an already-tracked watch-asset is a close-only notice (audit M1)", () => {
+    const address = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+    const html = approvalCard(
+      {
+        alreadyTracked: true,
+        id: ID,
+        kind: "watch-asset",
+        origin: ORIGIN,
+        token: { address, decimals: 6, name: "USD Coin", networkId: "SN_MAIN", symbol: "USDC" },
+      },
+      status,
+    );
+    expect(html).toContain("data-approval-notice");
+    expect(html).toContain("Already in this wallet");
+    expect(html).toContain("<strong>USDC</strong>");
+    expect(html).toContain('data-approval-action="deny"');
+    expect(html).toContain("Close");
+    expect(html).not.toContain('data-approval-action="approve"');
   });
 
   test("technical details name the signing account by address, truncated and copyable", () => {

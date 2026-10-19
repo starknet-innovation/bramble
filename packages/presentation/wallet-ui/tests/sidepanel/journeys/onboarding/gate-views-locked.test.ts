@@ -28,7 +28,7 @@ describe("locked gate view", () => {
     expect(html).toContain("Unlock");
     // The heading already says what the one field is for, so its label is
     // kept for assistive tech only rather than repeated above the input.
-    expect(html).toContain('<label><span class="sr-only">Vault passphrase</span><input');
+    expect(html).toContain('<label><span class="sr-only">Password</span><input');
     // Not the onboarding create form.
     expect(html).not.toContain('id="create-form"');
   });

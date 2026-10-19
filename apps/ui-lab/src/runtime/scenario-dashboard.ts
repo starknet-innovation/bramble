@@ -2,8 +2,9 @@ import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import type { AllowanceNotice, AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type {
+  AllowanceListing,
   ArgentMultisigView,
   BalanceState,
   ConnectedSite,
@@ -11,6 +12,7 @@ import type {
   PendingApproval,
   PrivacyDisclosureState,
   PrivacyJourneyState,
+  SignabilityVerdict,
   WalletStatus,
 } from "@bramble/wallet-ui/lab";
 import { dashboard, type WalletView } from "@bramble/wallet-ui/lab";
@@ -26,6 +28,8 @@ import {
 export type DashboardOptions = {
   readonly activity?: readonly ActivityEntry[];
   readonly allowances?: readonly AllowanceView[];
+  readonly allowanceNotices?: readonly AllowanceNotice[];
+  readonly allowancesUnavailable?: boolean;
   readonly balanceState?: BalanceState;
   readonly changes?: Readonly<Record<string, number>>;
   readonly chart?: readonly number[];
@@ -52,10 +56,20 @@ export type DashboardOptions = {
   readonly selectedMultisigIntentId?: string | null;
   readonly selectedNftId?: string | null;
   readonly selectedTokenId?: string | null;
+  /** The Home signability verdict; absent renders a normal, signable account. */
+  readonly signability?: SignabilityVerdict | null;
   readonly snoozed?: readonly string[];
   readonly status?: WalletStatus;
   readonly view?: WalletView;
 };
+
+// The allowance manager's listing for a scenario: fixture rows plus whatever
+// the scenario says the background could not vouch for.
+const allowanceListing = (options: DashboardOptions): AllowanceListing => ({
+  entries: options.allowances ?? [],
+  notices: options.allowanceNotices ?? [],
+  unavailable: options.allowancesUnavailable ?? false,
+});
 
 /**
  * Named-options adapter around the production dashboard's positional render
@@ -92,7 +106,7 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     options.prices ?? { [USDC_ADDRESS]: 1 },
     options.chart ?? [],
     options.selectedTokenId ?? null,
-    options.allowances ?? [],
+    allowanceListing(options),
     options.selectedNftId ?? null,
     options.changes ?? {},
     options.multisigs ?? [],
@@ -115,5 +129,7 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     options.privacyJourney ?? { stage: "idle" },
     null,
     selectedMultisigIntentId,
+    null,
+    options.signability ?? null,
   );
 };

@@ -14,7 +14,6 @@
  * shape exists to prevent.
  */
 
-import { escapeHtml } from "@bramble/core/html";
 import { button } from "@bramble/ui-kit/controls";
 import { setText } from "../journeys/send/transfer-progress-ui";
 import type { ConfirmationOutcome } from "./confirm-submitted";
@@ -62,14 +61,18 @@ export const outcomeReceiptFor = (
 };
 
 /**
- * Renders the section for `id`, hidden until its journey reveals it. `actions`
- * is the caller's own markup, so each screen offers the next step that suits
- * it; every screen gets the same mark, heading and identifier row.
+ * Renders the section for `id`, hidden until its journey reveals it. Every
+ * screen gets the same mark, heading, identifier row and ways on.
  *
- * Both marks ship and the paint shows one: the receipt opens before the chain
- * answers, so it has to be able to turn into a failure in place.
+ * Both marks and both sets of actions ship, and the paint shows one of each:
+ * the receipt opens before the chain answers, so it has to be able to turn
+ * into a failure in place. A receipt that stands — submitted or confirmed —
+ * leads with Activity and offers Back. A failed one leads with Try again,
+ * because the retry is the reader's next step, and keeps Activity, where the
+ * failure can be looked up; leaving is the header's arrow. The pair and its
+ * order are Send's failure screen's.
  */
-export const outcomeReceiptSection = (id: string, actions: string): string => `
+export const outcomeReceiptSection = (id: string): string => `
   <section class="send-outcome send-success" id="${id}" role="status" aria-live="polite" hidden>
     <span class="send-outcome-mark" data-outcome-mark="succeeded" aria-hidden="true">
       <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
@@ -87,22 +90,49 @@ export const outcomeReceiptSection = (id: string, actions: string): string => `
         ${outcomeHashRow(`${id}-hash`)}
       </div>
     </div>
-    <div class="send-actions">${actions}</div>
+    <div class="send-actions" data-outcome-actions="succeeded">
+      ${button({ attributes: { "data-outcome-action": "activity" }, icon: "activity", label: "View in Activity tab" })}
+      ${button({ attributes: { "data-outcome-action": "home", "data-view": "home" }, label: "Back", variant: "secondary" })}
+    </div>
+    <div class="send-actions" data-outcome-actions="failed" hidden>
+      ${button({ attributes: { "data-outcome-action": "retry" }, label: "Try again" })}
+      ${button({ attributes: { "data-outcome-action": "activity" }, icon: "activity", label: "View in Activity tab", variant: "secondary" })}
+    </div>
   </section>`;
 
 /**
- * The two ways off a receipt, in the order every other outcome offers them.
- * `activityId` binds the Activity control; Back carries no id because it
- * navigates through the shared `data-view` handler.
+ * Wires the receipt's own controls for `id`. `retry` is the journey's: each
+ * starts again from its own review, so a refused fee is never reused.
+ *
+ * Back carries `data-view`, which the shell binds once per render. A receipt
+ * that is part of the rendered screen (the deployment) leaves it to that and
+ * omits `home`; one inserted after the render (the NFT transfer) passes `home`,
+ * or its Back does nothing. Passing `home` for a receipt the shell also binds
+ * would navigate twice. Call once per rendered section — every call adds
+ * listeners.
  */
-export const outcomeReceiptActions = (activityId: string): string =>
-  `${button({ attributes: { id: escapeHtml(activityId) }, icon: "activity", label: "View in Activity tab" })}${button(
-    { attributes: { "data-view": "home" }, label: "Back", variant: "secondary" },
-  )}`;
+export const bindOutcomeReceipt = (
+  root: ParentNode,
+  id: string,
+  actions: {
+    readonly activity: () => void;
+    readonly home?: () => void;
+    readonly retry: () => void;
+  },
+): void => {
+  const section = root.querySelector(`#${id}`);
+  section?.querySelectorAll('[data-outcome-action="activity"]').forEach((control) => {
+    control.addEventListener("click", actions.activity);
+  });
+  section?.querySelector('[data-outcome-action="retry"]')?.addEventListener("click", actions.retry);
+  if (actions.home) {
+    section?.querySelector('[data-outcome-action="home"]')?.addEventListener("click", actions.home);
+  }
+};
 
 /**
- * Writes the receipt into the section for `id`, mark and tone included. Safe
- * to call on every paint.
+ * Writes the receipt into the section for `id` — mark, tone and actions
+ * included. Safe to call on every paint.
  */
 export const paintOutcomeReceipt = (
   root: ParentNode,
@@ -114,11 +144,11 @@ export const paintOutcomeReceipt = (
   section?.classList.toggle("send-success", !receipt.failed);
   section?.classList.toggle("send-failure", receipt.failed);
   section
-    ?.querySelector('[data-outcome-mark="succeeded"]')
-    ?.toggleAttribute("hidden", receipt.failed);
-  section
-    ?.querySelector('[data-outcome-mark="failed"]')
-    ?.toggleAttribute("hidden", !receipt.failed);
+    ?.querySelectorAll<HTMLElement>("[data-outcome-mark], [data-outcome-actions]")
+    .forEach((part) => {
+      const tone = part.dataset["outcomeMark"] ?? part.dataset["outcomeActions"];
+      part.toggleAttribute("hidden", (tone === "failed") !== receipt.failed);
+    });
   setText(root, `${id}-title`, receipt.title);
   setText(root, `${id}-description`, receipt.description);
   applyOutcomeHash(root, `${id}-hash`, receipt.hash, networkId);

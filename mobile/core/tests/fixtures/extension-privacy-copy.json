@@ -16,7 +16,7 @@
         "ETH",
         "Mainnet",
         "Preparing to go private",
-        "Going back discards this preparation.",
+        "No transaction is signed or sent until you confirm the review. Going back discards this preparation.",
         "Check registration",
         "Build registration proof",
         "Review and confirm",

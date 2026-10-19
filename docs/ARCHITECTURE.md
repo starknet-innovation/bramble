@@ -192,12 +192,12 @@ Recovery boundaries are deliberately explicit:
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is at **v10**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
+The vault schema is at **v12**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
 v4 adds encrypted `accountSecrets` (public `AccountRef` records cannot contain optional secrets; Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance);
 v5 canonicalizes account ids; v6 records the account-contract type; v7 retains the Argent deployment salt; v8 retains imported seeds; v9 admits Ready's `argentx` Ledger path scheme;
-v10 admits Braavos accounts (with their deployment salt) and an Argent account at any release it could have been deployed with, not only the one Bramble creates.
-The v3–v8 validators stay pinned to `LedgerW`, so the v9 step rewrites nothing but the version stamp; likewise the v9 validator stays pinned to Argent 0.4 and no Braavos, so the v10 step rewrites nothing but the version stamp. Vaults migrated from v1 carry `mnemonic: null`; they cannot add software
-accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v10`).
+v10 admits Braavos accounts (with their deployment salt) and an Argent account at any release it could have been deployed with; v11 admits Ready-scheme accounts (`argentx-bip44`, issue 505), x-only with no `publicKeyY`; v12 adds `shadowAccountScopes`, the encrypted record of which shadow-account scopes (account, chain, pool, anonymizer, origin, label, exact nonces) each account used (#443), and its step adds an empty collection.
+The v3–v8 validators stay pinned to `LedgerW`, so the v9 step rewrites nothing but the version stamp; likewise the v9 validator stays pinned to Argent 0.4 and no Braavos, and the v10 validator refuses the Ready-scheme kind, so the v10 and v11 steps each rewrite nothing but the version stamp. Vaults migrated from v1 carry `mnemonic: null`; they cannot add software
+accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v12`).
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs
@@ -291,9 +291,8 @@ object is frozen and installed as a non-configurable global.
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
-`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and sub-account-commitment
-methods behind the same origin and phishing gates. Private-state requests additionally require a
-held approval bound to the account, network, and payload digest; connection alone is insufficient.
+`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and shadow-account-commitment methods behind the same origin and phishing gates, under the Wallet API 0.10.4 names (`wallet_strk20ShadowAccountCommitment`, `shadow_account_invoke`; the old sub-account names have no alias).
+Private-state requests additionally require a held approval bound to the account, network, and payload digest; connection alone is insufficient. A shadow-account approval is also bound to the anonymizer its card named, and its scope is recorded in the vault's `shadowAccountScopes` before it runs; extension-only `wallet.strk20ShadowAccounts`, `wallet.strk20ShadowAccountBalances`, and `wallet.strk20PrepareShadowSweep` list, read on request, and sweep them.
 
 Grants and provider events are isolated per origin: each origin reads only its own accounts
 (`wallet.getGrantedAccounts`) and each content script derives page events from its own history
@@ -316,13 +315,12 @@ match — fail-closed, and unreachable in practice because both account pickers 
 the active network and `switchActiveNetwork` re-selects the target network's account.
 
 `wallet_watchAsset` (SNIP-compatible ERC20, `options.address`) fetches the token's on-chain
-`name`/`symbol`/`decimals` via RPC (falling back to the caller's options), then queues a
-`watch-asset` approval rendered in the side panel. Approving calls `preferencesStore.upsertToken`;
-denying leaves the token untracked. Like `wallet_requestAccounts`, this uses the queue-and-pending
-model rather than a persistent open promise: an already-tracked asset resolves `true` immediately,
-otherwise the current call rejects with `approval pending` and the dapp receives `true` on a repeat
-call after approval. Holding the dapp promise open across the side-panel decision within a single
-service-worker lifetime is a possible future enhancement.
+`name`/`symbol`/`decimals` via RPC, then queues a `watch-asset` approval rendered in the side
+panel, and holds the dapp's call until the user decides or the approval expires. Approving calls
+`preferencesStore.upsertToken`; denying leaves the token untracked. A token the wallet already
+tracks is never answered at once: the per-origin cap is checked before preferences are read, the
+same metadata read runs, and the request is held on a close-only "already tracked" notice whose
+Close answers `true` (audit M1), so a page cannot list the tracked tokens.
 
 ## Connected Sites & Site Reputation
 
@@ -379,7 +377,7 @@ and reputation signals before a connection is approved:
 
 ## STRK20 privacy
 
-Bramble implements Wallet API `0.10.4-rc.0` STRK20 through the pinned official Privacy SDK. Viewing
+Bramble implements Wallet API `0.10.4` STRK20 through the pinned official Privacy SDK. Viewing
 keys stay inside the encrypted vault; actions, relay fees, account, network, pool, and payload digest
 are frozen before dedicated approval. No fallback prover or signer exists. Registration and
 deposit-only batches may use the public account; other private actions require a relayer. Writes are

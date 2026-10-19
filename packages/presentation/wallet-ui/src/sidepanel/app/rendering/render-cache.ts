@@ -7,9 +7,10 @@
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
-import type { WalletStatus } from "../../../popup/responses/responses";
+import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
+import type { ConnectedSitesState } from "../screens/support-flows";
 
 // The price snapshot as the runtime client returns it; the cache's price fields
 // derive from this so their types cannot drift from loadPrices.
@@ -37,9 +38,14 @@ export type RenderData = {
   multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
   balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
   chart: readonly number[];
+  // The token id the chart belongs to. The chart is one slot shared by every
+  // token detail screen, so it is drawn only for the token it was read for
+  // (Sherlock 210).
+  chartTokenId: string | null;
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
-  connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
+  connectedSites: ConnectedSitesState;
   deployment: boolean | null;
+  signability: SignabilityVerdict | null;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
   preferences: WalletPreferences | null;
   changes: LoadedPrices["changes"];
@@ -82,6 +88,7 @@ export const updateRenderScope = (
           multisigBalanceId: null,
           multisigBalances: { error: "multisig balances unavailable" },
           deployment: null,
+          signability: null,
           multisigClassDeclared: null,
           multisigsError: false,
           ...(networkChanged ? { multisigsNetworkId: null } : {}),
@@ -98,7 +105,8 @@ export const updateRenderScope = (
  * value null. Used to prime the cache at boot and to reset it on lock.
  */
 export const emptyRenderCache = (): RenderData => ({
-  allowances: [],
+  // Not yet read: the screen shows no count and no "none found".
+  allowances: { entries: [], loading: true, notices: [], unavailable: false },
   multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
   multisigsNetworkId: null,
@@ -107,9 +115,11 @@ export const emptyRenderCache = (): RenderData => ({
   multisigBalances: { error: "multisig balances unavailable" },
   balances: { error: "wallet locked" },
   chart: [],
+  chartTokenId: null,
   classHashVerification: null,
-  connectedSites: [],
+  connectedSites: "loading",
   deployment: null,
+  signability: null,
   ...emptyActivityCache(),
   pending: [],
   changes: {},

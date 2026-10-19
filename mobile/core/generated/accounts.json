@@ -176,6 +176,7 @@
     "batchSize": 4,
     "defaultCount": 20,
     "maxIndex": 2147483647,
+    "maxScannedIndexes": 200,
     "maxSelections": 40
   }
 }

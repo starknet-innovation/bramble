@@ -1,0 +1,155 @@
+{
+  "ground-truth/ready-1": {
+    "id": "ground-truth/ready-1",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 0,
+    "address": "0x1a51de858dec150f4db134113b42c69374eaafd25e87efa3509be6dec267954",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-made, deployed 0.4.0",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": []
+  },
+  "ground-truth/ready-2": {
+    "id": "ground-truth/ready-2",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 1,
+    "address": "0x1af449dd78f05ca52c3d23404ab9fc84996e7097f61c6c31449deca4b5cf002",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "smart account, backend salt; guardian 0x7601f48c…",
+    "detectability": "D4",
+    "backedBy": "vendor-backend",
+    "state": {
+      "appMade": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": []
+  },
+  "ground-truth/ready-3": {
+    "id": "ground-truth/ready-3",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 2,
+    "address": "0x4e0c443cf394448b179264b5e334c32d22814b094db72de53c35f58bbe360b1",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "discarded in the Ready UI, empty; still the seed's account",
+    "detectability": "D5",
+    "backedBy": "vendor-backend",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  },
+  "ground-truth/ready-4": {
+    "id": "ground-truth/ready-4",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 4,
+    "address": "0x797212051516b6be4c9e5d21fe6d185308539c5533f8d012b33ba4453333042",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-recorded, untouched",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  },
+  "ground-truth/ready-5": {
+    "id": "ground-truth/ready-5",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MAIN",
+    "vendorDerivation": "ready-double",
+    "index": 5,
+    "address": "0x37ad76acb262e7766dc5c63f20c8086020435440c6295f8d9f78cf45744ae6e",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-recorded, untouched",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  },
+  "ground-truth/braavos-1": {
+    "id": "ground-truth/braavos-1",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN",
+    "vendorDerivation": "braavos-direct",
+    "index": 0,
+    "address": "0x165d85b4d79f5a31cd25f109a453938bd007d67604c4dc55e9bb4e19acf17b7",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-made, deployed, 2FA (+3FA if enrolled)",
+    "detectability": "D1",
+    "backedBy": "vendor-backend",
+    "state": {
+      "appMade": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": []
+  },
+  "ground-truth/braavos-2": {
+    "id": "ground-truth/braavos-2",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN",
+    "vendorDerivation": "braavos-direct",
+    "index": 1,
+    "address": "0x10d1aa580966bf51ba812de9846beeccc4e7d609284171b692180594fe8b9f6",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-made, deployed plain",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": []
+  },
+  "ground-truth/braavos-3": {
+    "id": "ground-truth/braavos-3",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN",
+    "vendorDerivation": "braavos-direct",
+    "index": 2,
+    "address": "0x45070a872b80d5c60a28a5a0982199bf75383d686241e2cd0134a94f89aac60",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-made, 2.3 STRK, undeployed",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  },
+  "ground-truth/braavos-4": {
+    "id": "ground-truth/braavos-4",
+    "seed": "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN",
+    "vendorDerivation": "braavos-direct",
+    "index": 3,
+    "address": "0x5bebe794bfb7d0a507d662cf508dab62a6e0447c0aec278d5079cc0e205c21",
+    "pubkey": "",
+    "classAtDeploy": null,
+    "expected": "app-recorded, untouched",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "appMade": true,
+      "liveClass": null
+    },
+    "log": []
+  }
+}

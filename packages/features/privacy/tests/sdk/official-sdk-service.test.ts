@@ -15,6 +15,7 @@ import {
   executeResult,
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
+  RELAY_CALLDATA,
   sdkRuntime as runtime,
   STRK20_SDK_TOKEN as token,
 } from "../support/official-sdk";
@@ -23,7 +24,7 @@ describe("official STRK20 SDK adapter", () => {
   test("routes the vault-only viewing key into discovery and preserves requested token order", async () => {
     let seenViewingKey = "";
     const sdk = runtime((input) => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         seenViewingKey = await input.viewingKeyProvider.getViewingKey();
         return {
@@ -47,14 +48,7 @@ describe("official STRK20 SDK adapter", () => {
 
   test("maps a simulated SDK call and canonical empty proof", async () => {
     const sdk = runtime(() => ({
-      build: () =>
-        builder({
-          callAndProof: {
-            call: { calldata: ["0x1"], contractAddress: poolAddress, entrypoint: "apply_actions" },
-            proof: { data: "", output: [], proofFacts: [] },
-          },
-          warnings: [],
-        }),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -68,7 +62,11 @@ describe("official STRK20 SDK adapter", () => {
         simulate: true,
       }),
     ).resolves.toEqual({
-      call: { calldata: ["0x1"], contract_address: poolAddress, entry_point: "apply_actions" },
+      call: {
+        calldata: [...RELAY_CALLDATA],
+        contract_address: poolAddress,
+        entry_point: "apply_actions",
+      },
       proof: { data: "", output: [], proof_facts: [] },
     });
   });
@@ -91,26 +89,15 @@ describe("official STRK20 SDK adapter", () => {
             ]);
             return self;
           },
-          simulate: async () => ({
-            ...executeResult(),
-            callAndProof: {
-              call: {
-                calldata: ["0x1"],
-                contractAddress: poolAddress,
-                entrypoint: "apply_actions",
-              },
-              proof: { data: "", output: [], proofFacts: [] },
-            },
-          }),
           surplusTo(recipient: string, withdraw?: boolean) {
             seen.push(["surplusTo", recipient, withdraw]);
             return self;
           },
-          subaccounts(dappName: string) {
+          shadowAccounts(dappName: string) {
             return {
               commitment: async () => 0x123n,
               invoke(nonce: string, options: unknown) {
-                seen.push(["subaccount", dappName, nonce, options]);
+                seen.push(["shadowAccount", dappName, nonce, options]);
                 return self;
               },
               partialCommitment: async () => 0x456n,
@@ -152,7 +139,7 @@ describe("official STRK20 SDK adapter", () => {
         collect_policy: { amount: "0x4", type: "exact" },
         dapp_name: "vesu",
         nonce: "0x5",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       },
       {
         calldata: [`${"$"}{poolAddress}`, `${"$"}{openNoteIds[0]}`, "literal"],
@@ -175,7 +162,7 @@ describe("official STRK20 SDK adapter", () => {
       ["withdraw", token, [{ amount: 3n, recipient: "0x999" }]],
       ["transfer", token, [{ amount: open, recipient: "0x998" }]],
       [
-        "subaccount",
+        "shadowAccount",
         "vesu",
         "0x5",
         {
@@ -194,7 +181,7 @@ describe("official STRK20 SDK adapter", () => {
       [BigInt(token), [{ amount: 5n }]],
     ]);
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes };
       },
@@ -217,7 +204,7 @@ describe("official STRK20 SDK adapter", () => {
       [BigInt(token), Array.from({ length: 4_097 }, () => ({ amount: 1n }))],
     ]);
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes };
       },
@@ -246,7 +233,7 @@ describe("official STRK20 SDK adapter", () => {
     let sdkInput: Record<string, unknown> | null = null;
     const sdk: PrivacySdkRuntime = {
       ...runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),
@@ -254,7 +241,7 @@ describe("official STRK20 SDK adapter", () => {
       createPrivateTransfers(input) {
         sdkInput = input as Record<string, unknown>;
         return {
-          build: () => builder(executeResult()),
+          build: () => builder(),
           discoverNotes: async () => ({ notes: new Map() }),
           executeWithInvocation: async () => executeResult(),
         };
@@ -274,10 +261,16 @@ describe("official STRK20 SDK adapter", () => {
     await expect(service.privateBalances({ ...privateContext, tokens: [] })).resolves.toEqual([]);
     expect(sdkInput?.["discoveryProvider"]).toBeInstanceOf(DiscoveryProvider);
     expect(sdkInput?.["provingProvider"]).toMatchObject({ ohttp: true });
-    expect(sdkInput).not.toHaveProperty("subAccountAnonymizerAddress");
+    expect(sdkInput).not.toHaveProperty("shadowAccountAnonymizerAddress");
     await expect(
-      service.subaccountCommitment({ ...privateContext, dappName: "vesu" }),
+      service.shadowAccountCommitment({ ...privateContext, dappName: "vesu" }),
     ).rejects.toThrow("strk20 services unavailable");
+    const withAnonymizer = {
+      ...privateContext,
+      config: { ...privateContext.config, shadowAccountAnonymizerAddress: "0x789" },
+    };
+    await expect(service.privateBalances({ ...withAnonymizer, tokens: [] })).resolves.toEqual([]);
+    expect(sdkInput).toHaveProperty("shadowAccountAnonymizerAddress", "0x789");
     await expect(
       service.prepare({
         ...privateContext,
@@ -287,7 +280,7 @@ describe("official STRK20 SDK adapter", () => {
             collect_policy: { type: "all" },
             dapp_name: "vesu",
             nonce: "0x1",
-            type: "subaccount_invoke",
+            type: "shadow_account_invoke",
           },
         ],
         simulate: true,
@@ -295,9 +288,9 @@ describe("official STRK20 SDK adapter", () => {
     ).rejects.toThrow("strk20 services unavailable");
   });
 
-  test("prepares a proof and derives both forms of subaccount commitment", async () => {
+  test("prepares a proof and derives both forms of shadow account commitment", async () => {
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -312,20 +305,24 @@ describe("official STRK20 SDK adapter", () => {
         simulate: false,
       }),
     ).resolves.toEqual({
-      call: { calldata: ["0x1"], contract_address: poolAddress, entry_point: "apply_actions" },
+      call: {
+        calldata: [...RELAY_CALLDATA],
+        contract_address: poolAddress,
+        entry_point: "apply_actions",
+      },
       proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
     });
-    await expect(service.subaccountCommitment({ ...context, dappName: "vesu" })).resolves.toBe(
+    await expect(service.shadowAccountCommitment({ ...context, dappName: "vesu" })).resolves.toBe(
       "0x456",
     );
     await expect(
-      service.subaccountCommitment({ ...context, dappName: "vesu", nonce: "0x1" }),
+      service.shadowAccountCommitment({ ...context, dappName: "vesu", nonce: "0x1" }),
     ).resolves.toBe("0x123");
   });
 
   test("blocks USER_LINKAGE before sending a proof request", async () => {
     let proved = false;
-    const linkedBuilder = builder(executeResult(), {
+    const linkedBuilder = builder({
       warnings: [{ code: "USER_LINKAGE", message: "multiple channels" }],
     });
     const sdk = runtime(() => ({
@@ -359,11 +356,11 @@ describe("official STRK20 SDK adapter", () => {
       {},
     ]) {
       const sdk = runtime(() => ({
-        build: () => builder(warningResult),
+        build: () => builder(),
         async discoverNotes() {
           return { notes: new Map() };
         },
-        executeWithInvocation: async () => executeResult(),
+        executeWithInvocation: async () => warningResult,
       }));
       await expect(
         createOfficialStrk20Service({ providerFor, sdk }).prepare({
@@ -381,18 +378,14 @@ describe("official STRK20 SDK adapter", () => {
       { calldata: ["0x1"], contractAddress: poolAddress, entrypoint: "transfer" },
     ]) {
       const sdk = runtime(() => ({
-        build: () =>
-          builder({
-            callAndProof: {
-              call,
-              proof: { data: "", output: [], proofFacts: [] },
-            },
-            warnings: [],
-          }),
+        build: () => builder(),
         async discoverNotes() {
           return { notes: new Map() };
         },
-        executeWithInvocation: async () => executeResult(),
+        executeWithInvocation: async () => ({
+          callAndProof: { call, proof: { data: "", output: [], proofFacts: [] } },
+          warnings: [],
+        }),
       }));
       await expect(
         createOfficialStrk20Service({ providerFor, sdk }).prepare({
@@ -406,7 +399,7 @@ describe("official STRK20 SDK adapter", () => {
 
   test("maps SDK insufficient-note failures to the stable wallet error", async () => {
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         throw new Error("not enough private notes");
       },

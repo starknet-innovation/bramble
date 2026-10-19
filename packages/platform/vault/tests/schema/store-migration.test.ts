@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@bramble/store/kv";
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
 import { migrateVault } from "@bramble/vault/migrations";
-import { isVaultV10 } from "@bramble/vault/schema";
+import { isVaultV12 } from "@bramble/vault/schema";
 import {
   readMigratedVault,
   VAULT_MIGRATION_STORE_KEY,
@@ -48,7 +48,7 @@ describe("readMigratedVault", () => {
 
     const migrated = await readMigratedVault({ primary, staging }, vaultPassphrase);
 
-    expect(isVaultV10(migrated)).toBe(true);
+    expect(isVaultV12(migrated)).toBe(true);
     expect(migrated.accountSecrets).toEqual([]);
     expect(await primary.read(vaultPassphrase)).toEqual(migrated);
     expect(await staging.exists()).toBe(false);
@@ -161,10 +161,11 @@ describe("readMigratedVault", () => {
       readMigratedVault({ primary: unwritablePrimary, staging }, vaultPassphrase),
     ).rejects.toThrow("injected primary write failure");
     expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
-    expect(isVaultV10(await staging.read(vaultPassphrase))).toBe(true);
+    expect(isVaultV12(await staging.read(vaultPassphrase))).toBe(true);
 
     await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toMatchObject({
-      schemaVersion: 10,
+      schemaVersion: 12,
+      shadowAccountScopes: [],
     });
     expect(await staging.exists()).toBe(false);
   });
@@ -180,5 +181,35 @@ describe("readMigratedVault", () => {
     ).rejects.toThrow();
     expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
     expect(await staging.exists()).toBe(true);
+  });
+
+  // Release audit S2: a v0.10.5 migration interrupted before cleanup left its
+  // staging copy, and that copy's `storage.sync` commit record was later lost.
+  // v0.10.5 deleted the leftover; v0.10.6 wrote over it, the write refused it
+  // as unverifiable, and every unlock failed while the primary was healthy.
+  test("replaces an unverifiable leftover stage and keeps the real vault", async () => {
+    const local = createMemoryStore();
+    const sync = createMemoryStore();
+    const primary = createEncryptedStore(local, VAULT_STORE_KEY, sync, undefined, true);
+    const staging = createEncryptedStore(local, VAULT_MIGRATION_STORE_KEY, sync);
+    const { shadowAccountScopes: _scopes, ...current } = migrateVault(legacyV3);
+    const v11 = { ...current, schemaVersion: 11 };
+    await primary.write(v11, vaultPassphrase);
+    await staging.write({ ...v11, activeAccountId: null }, vaultPassphrase);
+    const { lineage } = (await local.get(VAULT_MIGRATION_STORE_KEY)) as { lineage: string };
+    await sync.remove(`${VAULT_MIGRATION_STORE_KEY}:commit:${lineage}`);
+    expect(await staging.health()).toBe("unverified");
+    expect(await primary.health()).toBe("ok");
+
+    const migrated = await readMigratedVault({ primary, staging }, vaultPassphrase);
+
+    expect(migrated).toEqual(migrateVault(v11));
+    expect(migrated.activeAccountId).toBe(account.id);
+    expect(await primary.read(vaultPassphrase)).toEqual(migrated);
+    expect(await staging.exists()).toBe(false);
+    // The next unlock reads the migrated vault directly.
+    await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toEqual(
+      migrated,
+    );
   });
 });

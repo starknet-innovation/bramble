@@ -48,7 +48,7 @@ const preferences = (): WalletPreferences => ({
       discoveryUrl: "https://discovery.example",
       poolAddress: "0x123",
       proverUrl: "https://prover.example",
-      subaccountAnonymizerAddress: "0x456",
+      shadowAccountAnonymizerAddress: "0x456",
     },
   },
 });
@@ -151,7 +151,7 @@ const preparedSubmissionDeps = (
 const preparedApproval = {
   origin: grantedOrigin,
   payload: {
-    calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "apply_actions" }],
+    calls: [{ calldata: [], contractAddress: "0x123", entrypoint: "apply_actions" }],
     proof: { data: "opaque", output: ["0x1"], proof_facts: ["0x2"] },
   },
 };

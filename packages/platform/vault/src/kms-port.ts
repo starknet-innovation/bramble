@@ -20,6 +20,15 @@ export type StarkKeypair = {
 };
 
 /**
+ * X-only Stark key material from derivations whose backend cannot produce an
+ * affine Y coordinate (Ready's ETH-seeded scheme). Vault flows only.
+ */
+export type StarkXOnlyKeypair = {
+  readonly privateKey: string;
+  readonly publicKeyX: string;
+};
+
+/**
  * Minimum cryptographic capability required by the privileged vault. Concrete
  * implementations must validate every input and output and fail closed.
  */
@@ -40,6 +49,10 @@ export type KmsPort = {
     chainId: string,
     poolAddress: string,
   ) => Promise<string>;
+  readonly deriveArgentLegacyKeypair: (
+    mnemonic: string,
+    addressIndex: number,
+  ) => Promise<StarkXOnlyKeypair>;
   readonly deriveStarknetKeypair: (
     mnemonic: string,
     addressIndex: number,

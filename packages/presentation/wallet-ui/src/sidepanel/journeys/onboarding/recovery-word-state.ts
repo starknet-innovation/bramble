@@ -75,18 +75,26 @@ export const setGeneratedPhraseMasked = (
  * Shared word-entry wiring for a recovery grid: pasting a complete 12/24-word
  * phrase into any cell distributes it across the grid (via `fillWords`, which
  * also adjusts the active word count), space advances to the next cell,
- * backspace on an empty cell steps back, and every change reports through
+ * backspace on an empty cell steps back, `clear` empties every cell (keeping
+ * the word count), and every change reports through
  * `onChange` after an optional `onBeforeChange` (used to invalidate in-flight
  * validation). Used by first-run recovery and the in-wallet phrase import so
  * the two grids behave identically.
  */
 export const bindRecoveryWordEntry = (deps: {
+  readonly clear?: HTMLButtonElement | null;
   readonly fillWords: (words: readonly string[]) => void;
   readonly inputs: readonly HTMLInputElement[];
   readonly onBeforeChange?: () => void;
   readonly onChange: () => void;
 }): void => {
-  const { fillWords, inputs, onBeforeChange, onChange } = deps;
+  const { clear, fillWords, inputs, onBeforeChange, onChange } = deps;
+  clear?.addEventListener("click", () => {
+    onBeforeChange?.();
+    for (const input of inputs) input.value = "";
+    onChange();
+    inputs[0]?.focus();
+  });
   for (const [index, input] of inputs.entries()) {
     input.addEventListener("input", () => {
       onBeforeChange?.();

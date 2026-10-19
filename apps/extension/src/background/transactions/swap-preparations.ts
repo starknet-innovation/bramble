@@ -31,6 +31,9 @@ export type SwapPreparation = {
   readonly minBuyAmount: string;
   readonly reviewedFee: FeeEstimate;
   readonly sellSymbol: string;
+  // The sold token's contract, so the activity line names the token by
+  // address and not only by a symbol another contract may share (issue 643).
+  readonly sellTokenAddress: string;
   readonly summaries: readonly string[];
 };
 
@@ -63,6 +66,7 @@ export const swapPreparationPayload = (
   minBuyAmount: preparation.minBuyAmount,
   reviewedFee: preparation.reviewedFee,
   sellSymbol: preparation.sellSymbol,
+  sellTokenAddress: preparation.sellTokenAddress,
   summaries: preparation.summaries,
 });
 

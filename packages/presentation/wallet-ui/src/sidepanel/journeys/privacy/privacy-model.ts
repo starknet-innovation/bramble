@@ -3,10 +3,18 @@
  * journeys. Nothing here is persisted across lock or extension restart.
  */
 
+import { friendlyNetworkError } from "@bramble/core/network-error";
 import {
   PrivacyBlockerError,
   type PrivacyBlockerKind,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { friendlyError } from "../../runtime/friendly-error";
+
+// The sentence a service blocker shows when the lane's own reason is plumbing:
+// the same one the wallet already uses when the private services are down.
+const PRIVACY_SERVICE_FALLBACK = friendlyError("strk20 services unavailable").message;
+
 import type { PreparationProgress } from "./privacy-preparation-job";
 import type { PrivacyAccountState, PrivacyPreparation } from "./privacy-runtime";
 
@@ -66,16 +74,29 @@ export const deploymentKnownFromPrivacy = (
   return deployment;
 };
 
-/** Reads a validated typed refusal; unclassified errors always offer a service retry. */
-export const privacyBlockerFor = (error: unknown): PrivacyBlocker => ({
-  kind: error instanceof PrivacyBlockerError ? error.kind : "service",
-  message:
+/**
+ * Reads a validated typed refusal; unclassified errors always offer a service
+ * retry. A curated refusal (deploy, fund, ledger, network, pending) keeps the
+ * background's sentence. A "service" refusal wraps whatever the privacy lane
+ * threw, so its text is translated before it can reach the blocker screen
+ * (issue 652).
+ */
+export const privacyBlockerFor = (error: unknown): PrivacyBlocker => {
+  const kind = error instanceof PrivacyBlockerError ? error.kind : "service";
+  const raw =
     error instanceof Error
       ? error.message
       : typeof error === "string"
         ? error
-        : "Private journey unavailable",
-});
+        : "Private journey unavailable";
+  return {
+    kind,
+    message:
+      kind === "service"
+        ? (friendlyNetworkError(raw) ?? friendlyError(raw, PRIVACY_SERVICE_FALLBACK).message)
+        : raw,
+  };
+};
 
 /**
  * Which wait the `preparing` screen is showing. Discovery is the account's
@@ -83,6 +104,23 @@ export const privacyBlockerFor = (error: unknown): PrivacyBlocker => ({
  * it is; proving is the activation proof itself, a tracked background job.
  */
 export type PrivacyPreparingStep = "discovering" | "proving";
+
+/**
+ * How a not-completed private write is shown. `warning` is for a submission
+ * whose reply was lost: it may already be on chain, so it is not a failure and
+ * must not lead with the retry a failure offers (issue 382).
+ */
+export type PrivacyOutcomeSeverity = "danger" | "warning";
+
+/**
+ * Classifies a rejected private write for display. A {@link SubmissionUnknownError}
+ * means the write left the wallet and its outcome could not be established, so
+ * it is a warning; anything else is a determinate failure. Kept a total function
+ * of the error so the severity is decided once, at the origin, rather than
+ * inferred from the message at paint time.
+ */
+export const privacyOutcomeSeverity = (error: unknown): PrivacyOutcomeSeverity =>
+  error instanceof SubmissionUnknownError ? "warning" : "danger";
 
 /**
  * Deterministic checkpoint in the pool-registration journey.
@@ -132,7 +170,16 @@ export type PrivacyJourneyState =
       readonly tokenId: string;
     }
   | {
+      /** The reader-facing sentence the failure screen shows. */
       readonly error: string;
+      /**
+       * The complete diagnostic behind `error`, kept for the screen's explicit
+       * copy control so it can be sent to support: the background's message,
+       * which it built through `errorText` (wallet-authored text only, with a
+       * STRK20 stage error already passed through `sanitizeStrk20Detail`).
+       */
+      readonly errorDetails: string;
+      readonly severity: PrivacyOutcomeSeverity;
       readonly stage: "failure";
       readonly tokenId: string;
     };

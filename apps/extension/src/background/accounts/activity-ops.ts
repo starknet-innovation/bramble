@@ -1,5 +1,6 @@
 /** Durable-first account activity loading and background history refresh. */
 import type { MultisigStore } from "@bramble/multisig/repository";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   type ActivityEntry,
@@ -9,6 +10,7 @@ import {
   activityForScope,
   systemClock,
 } from "@bramble/transactions/activity";
+import { asUntrackedToken } from "@bramble/transactions/tx-history";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { readActivityInput } from "../routing/message-inputs";
@@ -98,28 +100,38 @@ const activityTarget = async (
     : null;
 };
 
+// Rows from the lane that answered.
+type AccountHistory = {
+  readonly onChain: readonly ActivityEntry[];
+  readonly unavailable: boolean;
+};
+
+const NO_HISTORY: AccountHistory = { onChain: [], unavailable: false };
+
 const accountHistory = async (
   deps: ActivityOpsDeps,
   target: ActivityTarget,
-): Promise<{ readonly onChain: readonly ActivityEntry[]; readonly unavailable: boolean }> => {
+): Promise<AccountHistory> => {
   const scan = deps.runtimeRpc.getTransactionHistory;
-  if (!scan) return { onChain: [], unavailable: false };
+  if (!scan) return NO_HISTORY;
   const preferences = await deps.preferencesStore.read();
-  const tokens = preferences.tokens.filter((token) => token.networkId === target.networkId);
-  if (tokens.length === 0) return { onChain: [], unavailable: false };
+  // A likely-spam token is scanned under the untracked identity, so a spoofed
+  // "USDC" contract never appears in Activity as USDC (Sherlock 249).
+  const tokens = preferences.tokens
+    .filter((token) => token.networkId === target.networkId)
+    .map((token) => (isLikelySpam(token) ? asUntrackedToken(token) : token));
+  if (tokens.length === 0) return NO_HISTORY;
   try {
-    return {
-      onChain: await scan({
-        account: target.address,
-        accountId: target.accountId,
-        networkId: target.networkId,
-        rpcUrls: networkRpcUrls(STARKNET_NETWORKS[target.networkId], preferences),
-        tokens,
-      }),
-      unavailable: false,
-    };
+    const discovered = await scan({
+      account: target.address,
+      accountId: target.accountId,
+      networkId: target.networkId,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[target.networkId], preferences),
+      tokens,
+    });
+    return { onChain: discovered.entries, unavailable: false };
   } catch {
-    return { onChain: [], unavailable: true };
+    return { ...NO_HISTORY, unavailable: true };
   }
 };
 
@@ -151,7 +163,7 @@ export const handleActivity = async (
   const scanHistory = shouldScanHistory(input, previousSync ?? null, now, local);
   const history = scanHistory
     ? await accountHistory(deps, target)
-    : { onChain: [], unavailable: previousSync?.unavailable ?? false };
+    : { ...NO_HISTORY, unavailable: previousSync?.unavailable ?? false };
   const merged =
     scanHistory && !history.unavailable
       ? await mergeReconciledHistory(deps, target.scope, history.onChain)

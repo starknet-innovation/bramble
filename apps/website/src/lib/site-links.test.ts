@@ -1,6 +1,11 @@
 /** Verifies public-link validation and support-copy safety boundaries. */
 import { describe, expect, test } from "bun:test";
-import { CHROME_STORE_ROOT, createSupportIssueUrl, resolveChromeStoreUrl } from "./site-links";
+import {
+  CHROME_STORE_LISTING,
+  CHROME_STORE_ROOT,
+  createSupportIssueUrl,
+  resolveChromeStoreUrl,
+} from "./site-links";
 
 describe("site links", () => {
   test("accepts only Chrome Web Store HTTPS listing URLs", () => {
@@ -8,6 +13,11 @@ describe("site links", () => {
       "https://chromewebstore.google.com/detail/bramble/id",
     );
     expect(resolveChromeStoreUrl("https://example.com/not-the-store")).toBe(CHROME_STORE_ROOT);
+  });
+
+  test("defaults to the published listing when no override is configured", () => {
+    expect(resolveChromeStoreUrl(undefined)).toBe(CHROME_STORE_LISTING);
+    expect(CHROME_STORE_LISTING).toContain("/detail/bramble-starknet-wallet/");
   });
 
   test("keeps support questions bounded and warns against sharing secrets", () => {

@@ -52,6 +52,37 @@ describe("vault recovery", () => {
     expect(JSON.stringify(await store.get("bramble:vault"))).not.toContain(mnemonic);
   });
 
+  test("restores one Argent index from either ladder as two distinct accounts (issue 505)", async () => {
+    const store = createMemoryStore();
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(store, "bramble:vault"),
+      kms: fakeKms(),
+      migrationStore: createEncryptedStore(store, "bramble:vault-migration"),
+    });
+    const accounts = await service.recoverAccounts({
+      mnemonic,
+      networkId: "SN_MAIN",
+      selections: [
+        // Absent means Ready's scheme; the wallet's own ladder is spelled out.
+        { accountContractType: "argent", accountIndex: 1 },
+        { accountContractType: "argent", accountIndex: 1, derivation: "starknet-bip44" },
+      ],
+      vaultPassphrase,
+    });
+    const [ready, own] = accounts;
+    if (!ready || !own) throw new Error("missing restored accounts");
+    expect(ready.derivation).toEqual({ addressIndex: 1, kind: "argentx-bip44" });
+    expect(own.derivation).toEqual({ accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" });
+    expect(ready.address).not.toBe(own.address);
+    // Each account's stored signing key is the one its own scheme derived, so
+    // signing works without ever re-deriving.
+    const vault = await service.readVault(vaultPassphrase);
+    const keyFor = (id: string) =>
+      vault.signingKeys.find((key) => key.accountId === id)?.privateKey;
+    expect(keyFor(ready.id)).toBe("0x91123456");
+    expect(keyFor(own.id)).toBe("0x123456");
+  });
+
   test("does not write a partial recovery when one derivation fails", async () => {
     const store = createMemoryStore();
     const kms: KmsPort = {
@@ -73,7 +104,9 @@ describe("vault recovery", () => {
         networkId: "SN_MAIN",
         selections: [
           { accountContractType: "openzeppelin", accountIndex: 0 },
-          { accountContractType: "argent", accountIndex: 1 },
+          // Pinned to the wallet's own ladder so the failing stub (keyed on
+          // the hardened account index) is the derivation that runs.
+          { accountContractType: "argent", accountIndex: 1, derivation: "starknet-bip44" },
         ],
         vaultPassphrase,
       }),

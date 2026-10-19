@@ -1,14 +1,14 @@
 /**
- * Persistent wallet-dock styling: a floating pill of three icon-only roots,
+ * Persistent wallet-dock styling: a floating pill of three labelled roots,
  * centred a little above the panel's bottom edge, the selected root on a
- * tinted disc. Each root carries its name as its accessible label and native
- * tooltip rather than a visible caption.
+ * tinted capsule. Each root shows its icon above a visible caption; the same
+ * caption is the root's accessible name.
  */
-import { CONTROL, MOTION, RADIUS, SPACE } from "@bramble/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
- * Inner padding of the dock pill around its 44px roots, equal on every side so
- * the selected disc sits concentric in the pill's rounded ends. Air between the
+ * Inner padding of the dock pill around its roots, equal on every side so the
+ * selected capsule sits concentric in the pill's rounded ends. Air between the
  * roots comes from the gap, not from extra padding at the ends.
  */
 export const DOCK_PADDING = "6px";
@@ -44,16 +44,19 @@ export const DOCK_STYLES = `
     border-radius: ${RADIUS.full};
     color: var(--bramble-muted);
     display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
     height: ${CONTROL.dockItem};
     justify-content: center;
     min-height: 0;
-    padding: 0;
+    min-width: ${CONTROL.dockItem};
+    padding: 0 ${SPACE.sm};
     position: relative;
     transition:
       background ${MOTION.tabMs}ms ${MOTION.ease},
       color ${MOTION.pressMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms var(--ease-out);
-    width: ${CONTROL.dockItem};
+    width: auto;
   }
   @media (hover: hover) and (pointer: fine) {
     button.nav-item:not(:disabled):hover { background: var(--bramble-hover); color: var(--bramble-text); }
@@ -62,7 +65,7 @@ export const DOCK_STYLES = `
   button.nav-item:not(:disabled):active { transform: scale(0.96); }
   /* The selected root sits on the accent's soft tint with accent ink — the
      kit's accent/surface + accent/on-surface pairing; in the neutral midnight
-     skin that reads as a quiet light disc. */
+     skin that reads as a quiet light capsule. */
   button.nav-item[aria-selected="true"] { background: var(--bramble-accent-soft); color: var(--bramble-accent); }
   .tab-icon {
     align-items: center;
@@ -73,4 +76,10 @@ export const DOCK_STYLES = `
   }
   .tab-icon .icon { height: ${CONTROL.dockIcon}; stroke-width: 1.8; width: ${CONTROL.dockIcon}; }
   .tab-icon .badge { position: absolute; right: -9px; top: -8px; }
+  .nav-label {
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.medium};
+    line-height: 1;
+    text-wrap: nowrap;
+  }
 `;

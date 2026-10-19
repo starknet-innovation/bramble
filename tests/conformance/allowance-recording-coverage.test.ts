@@ -56,9 +56,11 @@ const NO_GRANT_POSSIBLE: Readonly<Record<string, string>> = {
     "deploys the selected account contract; a deployment carries no calls, so no allowance can be granted",
   "multisig-deploy-ops.ts":
     "deploys the pinned Argent multisig account contract; a deployment carries no calls, so no allowance can be granted",
-  "nft-ops.ts":
+  "nft-transfer-submit.ts":
     "submits only the ERC721/ERC1155 transfer the wallet builds; an NFT approval's second argument is a token id, not an amount, and must never be filed as an ERC20 allowance",
   "runtime-rpc.ts": "defines the seams; it wires the RPC functions and submits nothing itself",
+  "strk20-shadow-sweep.ts":
+    "relays the reviewed shadow-account sweep for the shared execution path in strk20-wallet-execution.ts, which records whatever grants the submission reports",
   "wallet-ops.ts":
     "submits only the ERC20 transfer the wallet builds from the user's own inputs; it carries no approve",
 };
@@ -66,6 +68,14 @@ const NO_GRANT_POSSIBLE: Readonly<Record<string, string>> = {
 // Recurses the background capability folders, keyed by file name: the
 // exemption list below names modules, and a module keeps its name wherever the
 // capability layout puts it.
+// Modules that file their grants through a named recorder in another module,
+// as `module: [recorder, defining module]`. Each claim is re-checked: the
+// module must call the recorder, and the defining module must export it and
+// call recordApproveAllowances, so a delegation cannot silently go empty.
+const RECORDS_THROUGH: Readonly<Record<string, readonly [string, string]>> = {
+  "multisig-tx-ops.ts": ["recordBroadcastIntent", "multisig-operation-recovery.ts"],
+};
+
 const backgroundSources = (): readonly { readonly name: string; readonly text: string }[] =>
   sourceFiles(BACKGROUND_DIR).map((path) => ({
     name: basename(path),
@@ -97,6 +107,7 @@ describe("allowance recording covers every submitting path", () => {
         ({ name, text }) =>
           submits(text) &&
           !text.includes("recordApproveAllowances") &&
+          RECORDS_THROUGH[name] === undefined &&
           NO_GRANT_POSSIBLE[name] === undefined,
       )
       .map(({ name }) => name);
@@ -121,6 +132,20 @@ describe("allowance recording covers every submitting path", () => {
       .map(({ name }) => name);
 
     expect(unclassified).toEqual([]);
+  });
+
+  test("every delegated recorder is called and itself files the grants", () => {
+    const sources = new Map(backgroundSources().map(({ name, text }) => [name, text]));
+    for (const [name, [recorder, home]] of Object.entries(RECORDS_THROUGH)) {
+      const text = sources.get(name) ?? "";
+      const defining = sources.get(home) ?? "";
+      expect(submits(text), name).toBe(true);
+      expect(new RegExp(`\\b${recorder}\\(`).test(text), `${name} calls ${recorder}`).toBe(true);
+      expect(defining.includes(`export const ${recorder} =`), `${home} exports ${recorder}`).toBe(
+        true,
+      );
+      expect(defining.includes("recordApproveAllowances("), `${home} files grants`).toBe(true);
+    }
   });
 
   test("the exemptions still name modules that exist and still submit", () => {

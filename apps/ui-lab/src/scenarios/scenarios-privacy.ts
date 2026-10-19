@@ -4,6 +4,8 @@
  */
 
 import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
+import { STRK20_MAX_POOL_FEE } from "@bramble/privacy/fee-policy";
+import { formatStrk20PoolFee } from "@bramble/privacy/service";
 import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
@@ -16,22 +18,36 @@ import {
   journeyBalances,
   journeyPreferences,
   journeyPrices,
+  POOL_FEE_FRI,
 } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { WalletScenario } from "../runtime/types";
 import { privacyDappCheckpoints } from "./scenarios-privacy-dapp";
+import { shadowAccountCheckpoints } from "./scenarios-shadow-accounts";
 
 const digest = `sha256:${"d".repeat(64)}`;
 
+/** The largest pool fee the wallet accepts, the bound the fee line must hold. */
+const MAX_POOL_FEE_FRI = `0x${STRK20_MAX_POOL_FEE.toString(16)}`;
+
+// Production registration awaits a successful fee estimate before it returns a
+// review, so the fixture carries the same shape and spelling production does: a
+// network fee as a canonical base-units integer with its denomination, and the
+// pool's action fee as a canonical felt. Omitting them, or spelling either in a
+// form the wire grammar rejects, would render a ready-to-authorize review that
+// production never produces.
 const activation: PrivacyPreparation = {
   id: digest,
   kind: "register",
+  networkFee: { overallFee: "2000000000000000", unit: "FRI" },
   payloadDigest: digest,
   poolAddress: STRK20_MAINNET_POOL,
+  poolFeeFri: "0x53444835ec580000",
   route: "public-account",
   summaries: [
     "Register this account with the privacy pool",
     "Registration is public and links this wallet address to its viewing key",
+    `Approve and pay the reviewed ${formatStrk20PoolFee(POOL_FEE_FRI)} pool fee from this account`,
   ],
   symbol: ETH_TOKEN.symbol,
   tokenId: ETH_TOKEN.id,
@@ -40,6 +56,7 @@ const activation: PrivacyPreparation = {
 const disclosure = (
   registration: "registered" | "unregistered",
   balances: readonly PrivateBalanceView[] = [],
+  poolFeeFri: string = POOL_FEE_FRI,
 ): PrivacyDisclosureState => ({
   error: null,
   loading: false,
@@ -47,9 +64,10 @@ const disclosure = (
     accountId: softwareAccount.id,
     balances,
     networkId: "SN_MAIN",
-    // The pool's 6 STRK action fee and a configured relay: the scenarios review
-    // the private route, which is only offered when a relay exists.
-    poolFeeFri: "0x53444835ec580000",
+    // The pool's current 6 STRK action fee and a configured relay: the scenarios
+    // review the private route, which is only offered when a relay exists. The
+    // fund-blocked checkpoints override it to cover the fee's display bounds.
+    poolFeeFri,
     registration,
     relayConfigured: true,
   },
@@ -217,8 +235,7 @@ export const privacyScenario: WalletScenario = {
       content: () => privacyDashboard(privateReady),
       id: "private-portfolio",
       label: "Private portfolio",
-      narrative:
-        "The same token list now displays account-scoped private note totals instead of public balances.",
+      narrative: "Each row shows the combined total, with its public and private split beneath it.",
       state: { disclosure: "on", privateAssets: 1, registration: "ready" },
     },
     {
@@ -243,6 +260,9 @@ export const privacyScenario: WalletScenario = {
           privateReady,
           {
             error: "The prover could not complete this proof. No transaction was submitted.",
+            errorDetails:
+              "strk20 services unavailable (proving/proof-rejected): proving job failed",
+            severity: "danger",
             stage: "failure",
             tokenId: ETH_TOKEN.id,
           },
@@ -254,12 +274,90 @@ export const privacyScenario: WalletScenario = {
         "Failure is explicit, never auto-retries, and keeps retry or return choices close to the task.",
       state: { autoRetry: false, stage: "failure" },
     },
+    {
+      content: () =>
+        privacyDashboard(
+          privateReady,
+          {
+            error:
+              "The wallet's background worker stopped while sending this private transaction, so its status is unknown. Check Activity before trying again.",
+            errorDetails:
+              "The wallet's background worker stopped while sending this private transaction, so its status is unknown. Check Activity before trying again.",
+            severity: "warning",
+            stage: "failure",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "activation-unknown",
+      label: "Status unknown",
+      narrative:
+        "A registration whose reply was lost may still be on chain: the amber tone and Activity lead, never the red failure with a blind retry (issue 382).",
+      state: { autoRetry: false, severity: "warning", stage: "failure" },
+    },
+    {
+      content: () =>
+        privacyDashboard(
+          disclosure("unregistered"),
+          {
+            blocker: {
+              kind: "service",
+              message: "Could not estimate the network fee for this registration.",
+            },
+            stage: "blocked",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "activation-fee-failed",
+      label: "Fee estimate failed",
+      narrative:
+        "A failed fee estimate never reaches a ready-to-authorize review: the preparation blocks with the reported reason and an explicit retry, and nothing is submitted.",
+      state: { failClosed: true, prerequisite: "fee-estimate", retry: "available" },
+    },
+    // The funding shortfall sits after the activation sequence so the guided
+    // walkthrough's Step order (required, review, proving, submitted) is intact.
+    {
+      content: () =>
+        privacyDashboard(
+          disclosure("unregistered"),
+          {
+            blocker: { kind: "fund", message: "Not enough STRK for the pool fee" },
+            stage: "blocked",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "fund-blocked",
+      label: "Registration needs funds",
+      narrative:
+        "An account short of STRK is told the exact pool fee its registration needs, in the unit it pays.",
+      state: { blocked: "fund", poolFee: "6 STRK", registration: "required" },
+    },
+    {
+      content: () =>
+        privacyDashboard(
+          disclosure("unregistered", [], MAX_POOL_FEE_FRI),
+          {
+            blocker: { kind: "fund", message: "Not enough STRK for the pool fee" },
+            stage: "blocked",
+            tokenId: ETH_TOKEN.id,
+          },
+          "privacy",
+        ),
+      id: "fund-blocked-long",
+      label: "Registration fee at its ceiling",
+      narrative:
+        "The fee line holds at the largest pool fee the wallet accepts, so no figure can push the screen sideways.",
+      state: { blocked: "fund", poolFee: "protocol maximum" },
+    },
     ...privacyDappCheckpoints,
+    ...shadowAccountCheckpoints,
   ],
   description:
-    "Balance disclosure, pool registration, dapp approvals, dapp anonymizers, AVNU private swap, sub-accounts, and fail-closed recovery. Shielding, unshielding, and private sends are composed in Send, so they are checkpointed with the other send routes rather than here.",
+    "Balance disclosure, pool registration, dapp approvals, dapp anonymizers, AVNU private swap, shadow accounts, and fail-closed recovery. Shielding, unshielding, and private sends are composed in Send, so they are checkpointed with the other send routes rather than here.",
   id: "privacy",
   surface: "sidepanel",
   title: "Private balances and actions",
-  views: ["home", "token-detail", "privacy", "requests"],
+  views: ["home", "token-detail", "privacy", "requests", "shadow-accounts"],
 };

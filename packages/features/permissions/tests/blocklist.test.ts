@@ -19,6 +19,11 @@ describe("isBlockedOrigin", () => {
     expect(isBlockedOrigin("https://braavos-airdrop.com")).toBe(true);
   });
 
+  test("blocks a fully-qualified blocklisted host", () => {
+    expect(isBlockedOrigin("https://starknet-airdrop.com.")).toBe(true);
+    expect(isBlockedOrigin("https://www.starknet-airdrop.com.")).toBe(true);
+  });
+
   test("does not block legitimate or unparseable origins", () => {
     expect(isBlockedOrigin("https://starknet.io")).toBe(false);
     expect(isBlockedOrigin("https://app.argent.xyz")).toBe(false);

@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { VesuMarket, VesuPosition } from "../../data/index";
+import { freshReferenceUsdPrice, referenceUsdPrice, type VesuMarket, type VesuPosition } from "../../data/index";
+
+// The vToken the pinned factory registers, which differs from the API's (Sherlock 169).
+const { REGISTERED_VTOKEN } = vi.hoisted(() => ({ REGISTERED_VTOKEN: "0x5e9157e4" }));
 
 const mocks = vi.hoisted(() => ({
   buildClose: vi.fn(() => [{ contractAddress: "0x1", entrypoint: "close" }]),
@@ -10,7 +13,11 @@ const mocks = vi.hoisted(() => ({
   buildVaultRedeem: vi.fn(),
   quoteClose: vi.fn(async () => ({ maxInputAmount: 1n })),
   quoteIncrease: vi.fn(),
-  quoteLending: vi.fn(async () => ({ action: "supply" })),
+  quoteLending: vi.fn(async () => ({ action: "supply", vTokenAddress: REGISTERED_VTOKEN })),
+  recheckLendingQuote: vi.fn(async () => undefined),
+  recheckMultiplyQuote: vi.fn(async () => undefined),
+  registeredVToken: vi.fn(async () => REGISTERED_VTOKEN),
+  verifyMultiplyPool: vi.fn(async () => undefined),
   requestTransaction: vi.fn(async () => ({ transaction_hash: "0xabc" })),
   watchAsset: vi.fn(async () => undefined),
 }));
@@ -22,6 +29,11 @@ vi.mock("../../protocols/index", () => ({
   buildVesuVaultRedeemCalls: mocks.buildVaultRedeem,
   quoteVesuMultiplyClose: mocks.quoteClose,
   quoteVesuMultiplyIncrease: mocks.quoteIncrease,
+  recheckVesuLendingQuote: mocks.recheckLendingQuote,
+  recheckVesuMultiplyQuote: mocks.recheckMultiplyQuote,
+  registeredVesuVToken: mocks.registeredVToken,
+  VESU_VAULT_DEPOSITS_ENABLED: false,
+  verifyVesuMultiplyPool: mocks.verifyMultiplyPool,
 }));
 
 vi.mock("../../protocols/vesu/vesu", () => ({
@@ -102,6 +114,10 @@ const earn: VesuPosition = {
   type: "earn",
 };
 
+type Handoff = { readonly handoffCheck?: () => Promise<void> };
+const handedOff = (): Handoff =>
+  (mocks.requestTransaction.mock.calls.at(-1) as unknown as [Handoff] | undefined)?.[0] ?? {};
+
 describe("LendingManageModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -119,8 +135,9 @@ describe("LendingManageModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Track vUSDC" }));
     await waitFor(() =>
-      expect(mocks.watchAsset).toHaveBeenCalledWith({ address: market.vTokenAddress }),
+      expect(mocks.watchAsset).toHaveBeenCalledWith({ address: REGISTERED_VTOKEN }),
     );
+    expect(mocks.registeredVToken).toHaveBeenCalledWith(market.poolId, market.assetAddress);
     expect(mocks.requestTransaction).not.toHaveBeenCalled();
     expect(screen.getByText("vUSDC is now tracked in the wallet.")).toBeTruthy();
   });
@@ -147,8 +164,14 @@ describe("LendingManageModal", () => {
     expect(mocks.requestTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ reviewMode: "wallet" }),
     );
-    expect(mocks.watchAsset).toHaveBeenCalledWith({ address: market.vTokenAddress });
+    expect(mocks.watchAsset).toHaveBeenCalledWith({ address: REGISTERED_VTOKEN });
     expect(onSubmitted).toHaveBeenCalled();
+    // The quote's registry anchors are read again at wallet handoff (#270).
+    expect(mocks.recheckLendingQuote).not.toHaveBeenCalled();
+    await handedOff().handoffCheck?.();
+    expect(mocks.recheckLendingQuote).toHaveBeenCalledWith(
+      await mocks.quoteLending.mock.results[0]?.value,
+    );
   });
 
   it("offers a full atomic unwind without asking for another amount", async () => {
@@ -175,6 +198,114 @@ describe("LendingManageModal", () => {
     expect(screen.getByText("Close the full multiplied position")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Review in wallet/ }));
     await waitFor(() => expect(mocks.quoteClose).toHaveBeenCalled());
+    expect(mocks.verifyMultiplyPool).toHaveBeenCalledWith(
+      market.poolId,
+      multiply.collateralAddress,
+      multiply.debtAddress,
+    );
     expect(mocks.buildClose).toHaveBeenCalled();
+    // The swap cap is anchored to the AVNU feed with each leg's decimals (#646).
+    expect(mocks.quoteClose).toHaveBeenCalledWith(
+      multiply.debtAddress,
+      multiply.collateralAddress,
+      BigInt(multiply.debtRaw ?? "0"),
+      { collateralDecimals: 6, debtDecimals: 18, priceUsd: referenceUsdPrice },
+    );
+    // Both legs are re-verified at wallet handoff (#270).
+    await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalled());
+    expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(1);
+    expect(mocks.recheckMultiplyQuote).not.toHaveBeenCalled();
+    await handedOff().handoffCheck?.();
+    expect(mocks.verifyMultiplyPool).toHaveBeenCalledTimes(2);
+    expect(mocks.verifyMultiplyPool).toHaveBeenLastCalledWith(
+      market.poolId,
+      multiply.collateralAddress,
+      multiply.debtAddress,
+    );
+    // ...and the quoted swap cap is re-checked against an uncached price (#646).
+    expect(mocks.recheckMultiplyQuote).toHaveBeenCalledWith(
+      await mocks.quoteClose.mock.results[0]?.value,
+      freshReferenceUsdPrice,
+    );
+  });
+
+  // A price-anchor refusal while quoting (#646) must leave nothing to sign and
+  // no stale quote behind: the next attempt quotes again from scratch.
+  it("sends nothing on a price refusal, shows its sentence, and re-quotes on retry", async () => {
+    mocks.quoteClose.mockRejectedValueOnce(new Error("Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market."));
+    render(
+      <LendingManageModal
+        markets={[market]}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+        position={{
+          ...earn,
+          debtAddress: "0x4718",
+          debtDecimals: 18,
+          debtRaw: "1",
+          debtSymbol: "STRK",
+          type: "multiply",
+        }}
+      />,
+    );
+    const review = screen.getByRole("button", { name: /Review in wallet/ });
+    fireEvent.click(review);
+
+    expect(await screen.findByText("Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.")).toBeTruthy();
+    expect(mocks.buildClose).not.toHaveBeenCalled();
+    expect(mocks.requestTransaction).not.toHaveBeenCalled();
+
+    await waitFor(() => expect((review as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(review);
+    await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalledTimes(1));
+    expect(mocks.quoteClose).toHaveBeenCalledTimes(2);
+    expect(mocks.buildClose).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      await mocks.quoteClose.mock.results[1]?.value,
+    );
+  });
+
+  it("builds no Multiply calls for a pool the registry does not list (Sherlock 169)", async () => {
+    mocks.verifyMultiplyPool.mockRejectedValueOnce(
+      new Error("This Vesu pool or asset is not registered on chain"),
+    );
+    render(
+      <LendingManageModal
+        markets={[market]}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+        position={{
+          ...earn,
+          debtAddress: "0x4718",
+          debtDecimals: 18,
+          debtRaw: "1",
+          debtSymbol: "STRK",
+          type: "multiply",
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Review in wallet/ }));
+    await waitFor(() =>
+      expect(screen.getByText("This Vesu pool or asset is not registered on chain")).toBeTruthy(),
+    );
+    expect(mocks.quoteClose).not.toHaveBeenCalled();
+    expect(mocks.buildClose).not.toHaveBeenCalled();
+    expect(mocks.requestTransaction).not.toHaveBeenCalled();
+  });
+
+  it("offers a vault position no deposit while vault deposits are paused (Sherlock 169)", () => {
+    render(
+      <LendingManageModal
+        markets={[market]}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+        position={{ ...earn, type: "vault" }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Redeem" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add funds" })).toBeNull();
   });
 });

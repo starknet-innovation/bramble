@@ -11,6 +11,14 @@ import { MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@bramble/ui-kit/tokens";
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
+  /* Read-only flag body and the recovery confirmation that replaces it:
+     consent copy stacked above Cancel / confirm. */
+  .read-only-notice .read-only-body { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xs}; }
+  .recovery-confirm { display: grid; gap: ${SPACE.xs}; max-width: 34ch; text-align: center; }
+  .recovery-confirm .recovery-confirm-title { font-weight: 600; margin: 0; }
+  .recovery-confirm .recovery-confirm-warning { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; margin: 0; }
+  .recovery-confirm .read-only-detail { max-width: none; }
+  .recovery-confirm .button-row { justify-content: center; margin-top: ${SPACE.xs}; }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */
@@ -21,7 +29,7 @@ export const HOME_STYLES = `
     font-size: ${TYPE.caption.size};
     gap: 6px;
     line-height: ${TYPE.caption.line};
-    margin-top: 6px;
+    margin-top: ${SPACE.sm};
   }
   .verify-status .icon { flex: none; }
   .verify-status.verified { color: var(--bramble-positive); font-weight: 600; }
@@ -126,12 +134,12 @@ export const HOME_STYLES = `
     width: 100%;
   }
   .drawer-network-option:hover { background: var(--bramble-elevated); }
-  .drawer-network-option[aria-selected="true"] { color: var(--bramble-accent); }
+  .drawer-network-option[aria-current="true"] { color: var(--bramble-accent); }
   .drawer-network-option .icon { height: 15px; width: 15px; }
   .drawer-list { align-content: start; display: grid; gap: 6px; }
   /* The folders are the drawer's one scroll region, so the head stays put and
      "Add account" stays reachable however many folders there are. */
-  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; }
+  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; scrollbar-gutter: stable; }
   /* Folders: a heading that collapses its own list, and a section that is the
      drop target — an account can be dropped onto an empty folder, not only
      between rows. */
@@ -262,7 +270,9 @@ export const HOME_STYLES = `
     box-shadow: var(--bramble-elev-lg);
     display: grid;
     opacity: 1;
-    padding: 6px;
+    /* Concentric corners: the inset is the gap between the menu's radius and
+       its rows', so a row's hover fill follows the menu's curve. */
+    padding: calc(${RADIUS.lg} - ${RADIUS.md});
     position: absolute;
     right: 0;
     top: calc(100% + 6px);

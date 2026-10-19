@@ -7,7 +7,11 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import { type Account, type Call, num, type RpcProvider } from "starknet";
-import { ensureAccountDeployed, isCompatibleAccountDeployed } from "../transactions/deployment";
+import {
+  ensureAccountDeployed,
+  isCompatibleAccountDeployed,
+  refuseUndeployedBraavos,
+} from "../transactions/deployment";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -18,6 +22,7 @@ import {
 import { estimateExactInvokeFee } from "./invoke-fee";
 import {
   argentQueryAccount,
+  IndeterminateRpcWriteError,
   krustyAccount,
   matchingAcceptedRpcWriteHash,
   type StarkHashSigner,
@@ -40,7 +45,7 @@ export type InvokeInput = {
   readonly calls: readonly Call[];
   /** Live authorization checked immediately before each on-chain mutation. */
   readonly isAuthorized?: () => boolean;
-  /** Optional STRK20 proof material attached to a prepared privacy call. */
+  /** Optional SNIP-36 proof (a STRK20 pool proof or a dapp's app proof) sent with the invoke. */
   readonly proof?: Strk20Proof;
   /**
    * The fee estimate this submission was reviewed against — the exact figure a
@@ -90,6 +95,12 @@ export type SignedInvoke = {
  */
 export type InvokeSubmission = {
   readonly calls: readonly Call[];
+  /**
+   * The DEPLOY_ACCOUNT this submission sent first, set only when the account
+   * was undeployed and its deployment was accepted before the invoke went out,
+   * so the caller can record it in Activity (mc-wallet 712).
+   */
+  readonly deploymentTransactionHash?: string;
   readonly transactionHash: string;
 };
 
@@ -199,6 +210,57 @@ const invokeJournal = (onSigned: InvokeInput["onSigned"], senderAddress: string)
   };
 };
 
+// Names the deployment a send ran first, so the caller can record it.
+const withDeployment = (
+  deployment: { readonly transactionHash: string } | null,
+  submission: InvokeSubmission,
+): InvokeSubmission =>
+  deployment
+    ? { ...submission, deploymentTransactionHash: deployment.transactionHash }
+    : submission;
+
+// The accepted deployment each post-deployment failure carries, keyed by the
+// error object itself, so a caller can record the deployment whose fee is spent.
+const failedSubmissionDeployments = new WeakMap<object, string>();
+
+/**
+ * The accepted DEPLOY_ACCOUNT a failed {@link submitInvokeTransaction} sent
+ * before its invoke failed or lost its reply, or undefined when it deployed
+ * nothing. Only an error this module raised after an accepted deployment
+ * carries one, so a caller can record that deployment, and the fee it paid,
+ * whatever happened to the invoke (mc-wallet 712 review).
+ */
+export const failedSubmissionDeployment = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null ? failedSubmissionDeployments.get(error) : undefined;
+
+/**
+ * Marks `failure` as raised after the accepted deployment `deploymentHash`, for
+ * {@link failedSubmissionDeployment}, and returns it. For a submit path of its
+ * own (a declaration) that deploys first; only call it once that deployment
+ * was accepted.
+ */
+export const markDeploymentFailure = <E extends object>(failure: E, deploymentHash: string): E => {
+  failedSubmissionDeployments.set(failure, deploymentHash);
+  return failure;
+};
+
+/**
+ * The failure of an invoke sent after an accepted automatic deployment. It
+ * names the deployment, whose fee is spent, and carries its hash for
+ * {@link failedSubmissionDeployment}. A lost invoke reply stays indeterminate,
+ * so callers never offer a blind retry of a transaction that may already be on
+ * chain (audit #173). Exported for callers' tests; production code reaches it
+ * only through {@link submitInvokeTransaction}.
+ */
+export const postDeploymentFailure = (deploymentHash: string, error: unknown): WalletError => {
+  const message = `Account deployment ${deploymentHash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.`;
+  const failure =
+    error instanceof IndeterminateRpcWriteError
+      ? new IndeterminateRpcWriteError(message)
+      : new WalletError(message);
+  return markDeploymentFailure(failure, deploymentHash);
+};
+
 /**
  * Signs and submits generic Starknet invoke calls exactly once after selecting
  * a chain-matching RPC endpoint. Once submission starts, transport ambiguity
@@ -255,6 +317,7 @@ export const submitInvokeTransaction = async (
       });
       const estimating = invokeEstimatingAccount(provider, account, starknetAccount);
       const deployed = await isCompatibleAccountDeployed(provider, account);
+      refuseUndeployedBraavos(account, deployed);
       const resourceBounds = await settledResourceBounds(
         estimating.account,
         account,
@@ -276,33 +339,31 @@ export const submitInvokeTransaction = async (
             isAuthorized,
           );
       const invokeHashIndex = capturedTransactionHashes.length;
-      const details = {
-        ...(await journal.pin(starknetAccount)),
-        ...(resourceBounds === null ? {} : { resourceBounds }),
-        ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
-        tip: "0x0",
-      };
       try {
+        // The nonce read runs inside the deployment-aware handler: if it fails
+        // right after a fresh deployment, the user must still learn that the
+        // deployment (and its fee) went through (mc-wallet #474 item 3).
+        const details = {
+          ...(await journal.pin(starknetAccount)),
+          ...(resourceBounds === null ? {} : { resourceBounds }),
+          ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
+          tip: "0x0",
+        };
         assertAuthorized(isAuthorized);
         journal.arm();
         const result = await starknetAccount.execute(
           [...calls],
           details as Parameters<Account["execute"]>[1],
         );
-        return {
+        return withDeployment(deployment, {
           calls,
           transactionHash: matchingAcceptedRpcWriteHash(
             result.transaction_hash,
             capturedTransactionHashes[invokeHashIndex],
           ),
-        };
+        });
       } catch (error) {
-        if (deployment) {
-          throw new WalletError(
-            `Account deployment ${deployment.transactionHash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.`,
-          );
-        }
-        throw error;
+        throw deployment ? postDeploymentFailure(deployment.transactionHash, error) : error;
       }
     },
     makeProvider,

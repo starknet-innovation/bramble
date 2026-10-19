@@ -398,7 +398,7 @@
     { "extension": "valid", "value": "wss://nos.lol" },
     { "extension": "valid", "value": " wss://relay.example/path?x=1 " },
     { "extension": "valid", "value": "wss://relay.example:7447" },
-    { "extension": "valid", "value": "WSS://relay.example" },
+    { "extension": "invalid", "value": "WSS://relay.example" },
     { "extension": "valid", "value": "wss://127.0.0.1:7000" },
     { "extension": "valid", "value": "wss://[::1]:7000/nostr" },
     { "extension": "defaults", "value": "" },
@@ -412,9 +412,9 @@
     { "extension": "invalid", "value": "wss://relay.example:70000" },
     { "extension": "invalid", "value": "wss://" },
     { "extension": "invalid", "value": "not a url" },
-    { "extension": "valid", "mobileDiffers": "strict-subset", "value": "wss://réseau.example" },
-    { "extension": "valid", "mobileDiffers": "strict-subset", "value": "wss://relay.example#" },
-    { "extension": "valid", "mobileDiffers": "strict-subset", "value": "wss://@relay.example" }
+    { "extension": "invalid", "mobileDiffers": "strict-subset", "value": "wss://réseau.example" },
+    { "extension": "invalid", "mobileDiffers": "strict-subset", "value": "wss://relay.example#" },
+    { "extension": "invalid", "mobileDiffers": "strict-subset", "value": "wss://@relay.example" }
   ],
   "giftWrap": {
     "content": "{\"intent\":{\"accountId\":\"SN_SEPOLIA:0x123\",\"configSnapshot\":{\"signerGuids\":[],\"threshold\":1}},\"kind\":\"bramble.argent-multisig-intent\",\"version\":1}",

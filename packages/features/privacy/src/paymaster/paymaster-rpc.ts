@@ -7,7 +7,7 @@
  * shape-checked before any field is read. Failure behaviour is deliberately
  * asymmetric: a quote never broadcasts, so its failures are determinate
  * `WalletError`s with a sanitized reason; a broadcast whose answer was lost
- * (timeout, oversized, unparseable, ended by this client's deadline) throws an
+ * (any transport failure, a 5xx status, oversized, unparseable) throws an
  * {@link IndeterminateRpcWriteError} because the relay may already have
  * forwarded the transaction, and callers must hold their state closed rather
  * than retry over a possibly-live write.
@@ -28,11 +28,20 @@ import { STRK20_SUBMISSION_UNAVAILABLE } from "../service";
 
 /** The injected transport both paymaster entry points accept. */
 export type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-const PAYMASTER_TIMEOUT_MS = 30_000;
+/**
+ * This client's deadline on one relay request. It must end before the STRK20
+ * gateway's own paymaster deadline (`PAYMASTER_UPSTREAM_TIMEOUT_MS` in
+ * `apps/terminal/api/_lib/upstream-deadlines.ts`, pinned by a conformance test): when
+ * the gateway gives up first, the wallet learns of a lost answer only as an
+ * HTTP status, and when this client gives up first it learns of it as its own
+ * deadline expiry. Both are read as a lost answer, but the order keeps the
+ * deadline the wallet controls the one that normally fires (Sherlock 159).
+ */
+export const PAYMASTER_TIMEOUT_MS = 20_000;
 const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
 /**
  * The one relay method that puts a transaction on the wire, mirroring
- * `BROADCAST_RPC_METHODS` in `../provider`: only a broadcast-capable call can
+ * `BROADCAST_RPC_METHODS` in `@bramble/starknet/rpc-transport`: only a broadcast-capable call can
  * leave a write in flight, so only it may mint the ambiguity marker.
  */
 export const BROADCAST_PAYMASTER_METHOD = "paymaster_executeTransaction";
@@ -119,14 +128,19 @@ const readBoundedResponse = async (response: Response): Promise<string | null> =
 // A relay answer the wallet could not read is not the same thing as a relay
 // refusal. Once `paymaster_executeTransaction` has left the wallet, the relay
 // may already have forwarded the transaction while its reply was truncated,
-// oversized, unparseable, or ended by this client's own deadline — so that case
+// oversized, unparseable, or cut off in transport — so that case
 // carries the same ambiguity marker `runRpcBroadcast` mints on the JSON-RPC
 // lane, and every layer above (the maturity scope in particular) holds its
 // state closed instead of releasing it for a retry over a possibly-live write.
 //
+// A 5xx status is a lost answer too. The wallet's HTTP peer is usually the
+// STRK20 gateway, not the relay, and the gateway answers 502 or 504 when its
+// own upstream deadline expires or the relay's reply breaks off, which says
+// nothing about whether the relay forwarded the transaction (Sherlock 159).
+//
 // Quote calls never broadcast, so their failures stay determinate; so does a
-// refusal the relay states for itself, whether as a JSON-RPC error object or an
-// HTTP status of its own choosing. This closes the lossy-channel case, not a
+// refusal the relay states for itself, as a JSON-RPC error object or a 4xx
+// status, since a client error means the request was refused. This closes the lossy-channel case, not a
 // relay that lies about having rejected a transaction it forwarded — no
 // classification at this boundary can, and the relay URL is wallet-configured
 // rather than dapp-supplied for exactly that reason.
@@ -135,14 +149,13 @@ const lostAnswer = (method: string): WalletError =>
     ? new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE)
     : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
 
-// An expired request deadline is the one send-side failure that is ambiguous:
-// the request was written and this client stopped waiting for the answer. Every
-// other rejection here (DNS, refused connection, a refused redirect) means no
-// exchange took place. `AbortSignal.timeout` surfaces as this exact
-// `DOMException`, and the transport is wallet-chosen, never remote-controlled.
-const isDeadlineExpiry = (error: unknown): boolean =>
-  error instanceof DOMException && error.name === "TimeoutError";
-
+// Once a broadcast's request has been handed to the transport, no rejection
+// from it proves the relay never received the request: a connection reset or
+// an empty reply surfaces as the same `TypeError` as a DNS failure, and this
+// client's own deadline (`TimeoutError`) ends an exchange that already started.
+// The JSON-RPC lane reads every transport failure on a broadcast the same way
+// (`runRpcBroadcast` in `@bramble/starknet/provider`), so the relay lane does
+// too. A quote never broadcasts, so its transport failures stay determinate.
 /**
  * Posts one JSON-RPC request to the relay and returns its `result`. Throws a
  * determinate `WalletError` for a stated refusal or a failed quote, and an
@@ -162,13 +175,13 @@ export const rpc = async (
       method: "POST",
       signal: AbortSignal.timeout(PAYMASTER_TIMEOUT_MS),
     });
-  } catch (error) {
-    throw isDeadlineExpiry(error)
-      ? lostAnswer(method)
-      : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  } catch {
+    throw lostAnswer(method);
   }
   if (!response.ok) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    throw response.status >= 500
+      ? lostAnswer(method)
+      : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   let body: unknown;
   try {

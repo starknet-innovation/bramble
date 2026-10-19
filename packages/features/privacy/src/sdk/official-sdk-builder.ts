@@ -36,7 +36,7 @@ const expandInvokeCalldata = (
   });
 
 const collectPolicy = (
-  action: Extract<Strk20Action, { readonly type: "subaccount_invoke" }>,
+  action: Extract<Strk20Action, { readonly type: "shadow_account_invoke" }>,
 ): unknown =>
   action.collect_policy.type === "exact"
     ? { amount: BigInt(action.collect_policy.amount), type: "exact" }
@@ -72,8 +72,8 @@ const addAction = (builder: SdkBuilder, action: Strk20Action, open: symbol): Sdk
       })
       .done();
   }
-  if (action.type === "subaccount_invoke") {
-    return builder.subaccounts(action.dapp_name).invoke(action.nonce, {
+  if (action.type === "shadow_account_invoke") {
+    return builder.shadowAccounts(action.dapp_name).invoke(action.nonce, {
       calls: action.calls.map((call) => ({
         calldata: [...call.calldata],
         contractAddress: call.contract_address,

@@ -32,6 +32,7 @@ struct BrambleSkin: Equatable {
     let accentSoft: Color
     let positiveSoft: Color
     let dangerSoft: Color
+    let warningSoft: Color
     let hairline: Color
     let hairlineStrong: Color
     let actionTilePress: Color
@@ -74,6 +75,7 @@ extension BrambleSkin {
         accentSoft: Color(argb: 0xFFE5E7F9),
         positiveSoft: Color(argb: 0xFFE7EBE0),
         dangerSoft: Color(argb: 0xFFF4E6E6),
+        warningSoft: Color(argb: 0xFFF1E3DE),
         hairline: Color(argb: 0x1F0E0F16),
         hairlineStrong: Color(argb: 0x2E0E0F16),
         actionTilePress: Color(argb: 0xFFD1D5F4),
@@ -115,6 +117,7 @@ extension BrambleSkin {
         accentSoft: Color(argb: 0xFF323232),
         positiveSoft: Color(argb: 0xFF1C2F23),
         dangerSoft: Color(argb: 0xFF312020),
+        warningSoft: Color(argb: 0xFF35271A),
         hairline: Color(argb: 0x1FF5F5F5),
         hairlineStrong: Color(argb: 0x2EF5F5F5),
         actionTilePress: Color(argb: 0xFF484848),
@@ -136,6 +139,9 @@ enum BrambleSpace {
     static let sm: CGFloat = 8
     static let xl: CGFloat = 24
     static let xs: CGFloat = 4
+    static let xxl: CGFloat = 32
+    static let xxs: CGFloat = 2
+    static let xxxl: CGFloat = 48
 }
 
 enum BrambleRadius {
@@ -209,6 +215,7 @@ enum BrambleMotion {
     static let enterMs: Double = 200
     static let liftMs: Double = 160
     static let pressMs: Double = 90
+    static let stageMinMs: Double = 500
     static let tabMs: Double = 220
     static let toastMs: Double = 220
     static let waitLoopMs: Double = 2000

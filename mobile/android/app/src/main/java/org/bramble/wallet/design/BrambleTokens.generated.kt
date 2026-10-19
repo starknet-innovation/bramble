@@ -37,6 +37,7 @@ data class BrambleSkin(
     val accentSoft: Color,
     val positiveSoft: Color,
     val dangerSoft: Color,
+    val warningSoft: Color,
     val hairline: Color,
     val hairlineStrong: Color,
 )
@@ -70,6 +71,7 @@ object BrambleSkins {
         accentSoft = Color(0xFFE5E7F9),
         positiveSoft = Color(0xFFE7EBE0),
         dangerSoft = Color(0xFFF4E6E6),
+        warningSoft = Color(0xFFF1E3DE),
         hairline = Color(0x1F0E0F16),
         hairlineStrong = Color(0x2E0E0F16),
     )
@@ -102,6 +104,7 @@ object BrambleSkins {
         accentSoft = Color(0xFF323232),
         positiveSoft = Color(0xFF1C2F23),
         dangerSoft = Color(0xFF312020),
+        warningSoft = Color(0xFF35271A),
         hairline = Color(0x1FF5F5F5),
         hairlineStrong = Color(0x2EF5F5F5),
     )
@@ -113,6 +116,9 @@ object BrambleSpace {
     val sm = 8.dp
     val xl = 24.dp
     val xs = 4.dp
+    val xxl = 32.dp
+    val xxs = 2.dp
+    val xxxl = 48.dp
 }
 
 object BrambleRadius {
@@ -184,6 +190,7 @@ object BrambleMotion {
     const val enterMs = 200
     const val liftMs = 160
     const val pressMs = 90
+    const val stageMinMs = 500
     const val tabMs = 220
     const val toastMs = 220
     const val waitLoopMs = 2000

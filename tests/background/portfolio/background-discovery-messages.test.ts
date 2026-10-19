@@ -8,6 +8,7 @@ import { describe, expect, test } from "bun:test";
 import type { DeploymentStatusInput } from "@bramble/starknet/rpc";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { toProviderPayload } from "@bramble/wallet-protocol/results";
 import { CallData, hash } from "starknet";
 import {
   SUPPORTED_SPECS,
@@ -153,7 +154,7 @@ describe("background discovery messages", () => {
     expect(response).toEqual({
       deployment: {
         address: deployAddress,
-        calldata: CallData.compile([PUBLIC_KEY]),
+        calldata: [PUBLIC_KEY],
         classHash: CLASS_HASH,
         salt: "0x0",
         version: 1,
@@ -162,6 +163,27 @@ describe("background discovery messages", () => {
     });
     expect(statusCalls).toHaveLength(1);
     expect(statusCalls[0]?.accountAddress).toBe(deployAddress);
+  });
+
+  test("sends deployment data the provider boundary accepts (Sherlock 243)", async () => {
+    // CallData.compile emits decimal strings; the page-facing mapper accepts
+    // only hex felts and would turn the whole answer into an unknown error.
+    expect(CallData.compile([PUBLIC_KEY])[0]).not.toMatch(/^0x/);
+    const { handler } = makeHandler({});
+    const payload = toProviderPayload(
+      await handler({ origin, type: "wallet.deploymentData" }, contentSender),
+      "wallet_deploymentData",
+    );
+
+    expect(payload).toEqual({
+      result: {
+        address: `0x${BigInt(deployAddress).toString(16).padStart(64, "0")}`,
+        calldata: [`0x${BigInt(PUBLIC_KEY).toString(16).padStart(64, "0")}`],
+        class_hash: `0x${BigInt(CLASS_HASH).toString(16).padStart(64, "0")}`,
+        salt: `0x${"0".repeat(64)}`,
+        version: 1,
+      },
+    });
   });
 
   test("maps an already-deployed account to ACCOUNT_ALREADY_DEPLOYED", async () => {

@@ -65,20 +65,21 @@ describe("allowance store deltas", () => {
   });
 
   test("a record evicted by the retention cap is not re-established as an exact total", async () => {
-    // Ordinary churn evicts the oldest record in a scope. A later increase then
-    // finds no base — and must not rewrite a standing unlimited grant down to
-    // the increment, which is what made a 1-wei top-up display as "1".
+    // A full scope evicts its smallest record. A later increase then finds no
+    // base — and must not rewrite the grant it evicted down to the increment,
+    // which is what made a 1-wei top-up display as "1". The increase is large
+    // enough to be kept in the full scope, which drops its smallest first.
     const store = memoryAllowanceStore();
-    const unlimited = ((1n << 128n) + 5n).toString();
-    await store.record(input(unlimited));
+    await store.record(input("5"));
     for (let index = 0; index < ALLOWANCE_LIMITS.entriesPerScope; index += 1) {
-      await store.record(input("5", `0x${(index + 100).toString(16)}`));
+      await store.record(input("1000", `0x${(index + 100).toString(16)}`));
     }
-    expect((await store.list()).some((entry) => entry.amount === unlimited)).toBe(false);
+    const evicted = `0x${BigInt(SPENDER).toString(16)}`;
+    expect((await store.list()).some((entry) => entry.spender === evicted)).toBe(false);
 
-    await store.applyDelta({ direction: "add", input: input("1") });
-    const revived = (await store.list()).find((entry) => entry.spender === "0x5");
-    expect(revived).toMatchObject({ amount: "1", lowerBound: true });
+    await store.applyDelta({ direction: "add", input: input("5000") });
+    const revived = (await store.list()).find((entry) => entry.spender === evicted);
+    expect(revived).toMatchObject({ amount: "5000", lowerBound: true });
   });
 
   test("an increase saturates at the uint256 ceiling instead of overflowing", async () => {
@@ -92,14 +93,16 @@ describe("allowance store deltas", () => {
     expect(entry?.amount).toBe(UINT_256_MAX);
   });
 
-  test("a decrease floors at zero, which clears an EXACT entry", async () => {
-    // The base was stated by an `approve` this wallet saw, so 100 - 400 really
-    // is a standing allowance of zero and the entry is spent.
+  test("a decrease that floors an EXACT entry keeps the grant until the chain agrees", async () => {
+    // The base was stated by an `approve` this wallet saw, so 100 - 400 is a
+    // standing allowance of zero once it executes. It is recorded when
+    // submitted, though, and may still revert (Sherlock 192), so the grant is
+    // kept, marked as revoking, until a reading of zero confirms it.
     const store = memoryAllowanceStore();
     await store.record(input("100"));
     await store.applyDelta({ direction: "subtract", input: input("400") });
 
-    expect(await store.list()).toEqual([]);
+    expect(await store.list()).toMatchObject([{ amount: "100", revoking: true }]);
   });
 
   // MCW-V09-108: lower-bound erasure. A bound of zero bounds nothing, so

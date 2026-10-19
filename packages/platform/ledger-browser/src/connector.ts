@@ -20,6 +20,7 @@ import { extensionBrowser, requestDeviceGrant } from "@bramble/ledger-browser/gr
 import {
   closeTransport,
   deviceClientFrom,
+  isLedgerTransportAvailable,
   listConnectedDevices,
   openConnectedTransport,
 } from "@bramble/ledger-browser/transport";
@@ -40,7 +41,8 @@ const sessionFrom = (transport: LedgerTransport): LedgerDeviceSession => ({
  * Connector backed by Ledger's Web Bluetooth, WebUSB, and WebHID transports.
  * `listConnected` exposes non-secret chooser labels and opaque ids for
  * already-granted devices.
- * `request` never shows a device picker in the side panel: it reconnects a
+ * `request` never shows a device picker in the side panel: it refuses at once
+ * with `webhid-unavailable` when the runtime has no Ledger transport, reconnects a
  * previously granted cable device first, then opens the hardware-owning
  * `ledger-grant.html` tab when no silent route is available. Both paths return an OWNED
  * {@link LedgerDeviceSession} whose `close` releases the browser transport; the
@@ -48,12 +50,19 @@ const sessionFrom = (transport: LedgerTransport): LedgerDeviceSession => ({
  * claimed.
  */
 export const ledgerConnector: LedgerConnector = {
+  isAvailable: isLedgerTransportAvailable,
   listConnected: listConnectedDevices,
   async openConnected(deviceId) {
     const transport = await openConnectedTransport(deviceId);
     return transport ? sessionFrom(transport) : null;
   },
   async request() {
+    // A runtime with no Ledger transport (Firefox has no WebHID, WebUSB or Web
+    // Bluetooth) answers with the browser-support message at once, instead of
+    // opening a grant tab that can only say the same thing.
+    if (!isLedgerTransportAvailable()) {
+      throw new LedgerRejection("webhid-unavailable");
+    }
     const connected = await listConnectedDevices();
     if (connected.length > 1) {
       throw new LedgerRejection("multiple-devices");

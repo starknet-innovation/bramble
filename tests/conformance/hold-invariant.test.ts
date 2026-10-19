@@ -24,27 +24,30 @@ import {
   EXTENSION_SENDER,
   type MutationSpy,
   totalMutations,
+  uncountedStubMethods,
 } from "./harness";
 import { ERROR_CODES, SPEC_METHODS, type SpecMethod } from "./wallet-rpc-spec";
 
-// The single mutation each state-changing method performs on approval.
-const SPY_KEY: Readonly<Record<string, keyof MutationSpy>> = {
-  wallet_addDeclareTransaction: "submitDeclare",
-  wallet_addInvokeTransaction: "submitInvoke",
-  wallet_addStarknetChain: "addCustomNetwork",
-  wallet_requestAccounts: "grantOrigin",
-  wallet_signTypedData: "signHash",
-  wallet_strk20InvokeTransaction: "submitInvoke",
-  wallet_switchStarknetChain: "setActiveNetwork",
-  wallet_watchAsset: "upsertToken",
+// Every mutation each state-changing method performs on approval, each once.
+// A chain switch also makes sure the active account exists on the target
+// network, which writes the vault.
+const SPY_KEYS: Readonly<Record<string, readonly (keyof MutationSpy)[]>> = {
+  wallet_addDeclareTransaction: ["submitDeclare"],
+  wallet_addInvokeTransaction: ["submitInvoke"],
+  wallet_addStarknetChain: ["addCustomNetwork"],
+  wallet_requestAccounts: ["grantOrigin"],
+  wallet_signTypedData: ["signHash"],
+  wallet_strk20InvokeTransaction: ["submitInvoke"],
+  wallet_switchStarknetChain: ["setActiveNetwork", "ensureNetworkAccount"],
+  wallet_watchAsset: ["upsertToken"],
 };
 
-const spyKeyFor = (method: ProviderMethod): keyof MutationSpy => {
-  const key = SPY_KEY[method];
-  if (!key) {
+const spyKeysFor = (method: ProviderMethod): readonly (keyof MutationSpy)[] => {
+  const keys = SPY_KEYS[method];
+  if (!keys) {
     throw new Error(`no mutation spy mapped for ${method}`);
   }
-  return key;
+  return keys;
 };
 
 // The runtime message + sender the content bridge would deliver. Connect drives
@@ -64,10 +67,10 @@ const stateChanging: readonly SpecMethod[] = SPEC_METHODS.filter((entry) => entr
 
 describe("state-change hold invariant", () => {
   for (const entry of stateChanging) {
-    const spyKey = spyKeyFor(entry.method);
+    const spyKeys = spyKeysFor(entry.method);
 
     describe(entry.method, () => {
-      test("holds and mutates nothing until approval, then mutates exactly once", async () => {
+      test("holds and mutates nothing until approval, then makes exactly its mutations", async () => {
         const { handler, spy } = buildHarness();
         const { message, sender } = driveFor(entry);
 
@@ -91,9 +94,9 @@ describe("state-change hold invariant", () => {
 
         const result = (await held) as Record<string, unknown>;
         expect("error" in result).toBe(false);
-        // Exactly the one expected mutation happened, and only on approval.
-        expect(spy[spyKey]).toBe(1);
-        expect(totalMutations(spy)).toBe(1);
+        // Exactly the expected mutations happened, once each, and only on approval.
+        for (const key of spyKeys) expect(spy[key]).toBe(1);
+        expect(totalMutations(spy)).toBe(spyKeys.length);
       });
 
       test("a deny mutates nothing and reaches the dapp as USER_REFUSED_OP (113)", async () => {
@@ -119,7 +122,13 @@ describe("state-change hold invariant", () => {
 
   test("covers every state-changing spec method", () => {
     expect(stateChanging.map((entry) => entry.method).sort()).toEqual(
-      Object.keys(SPY_KEY).sort() as ProviderMethod[],
+      Object.keys(SPY_KEYS).sort() as ProviderMethod[],
     );
+  });
+
+  // The counters are only as good as their coverage: every method the harness
+  // stubs either only reads, or has a counter (Sherlock 208).
+  test("counts every state-changing method the harness stubs", async () => {
+    expect(await uncountedStubMethods()).toEqual([]);
   });
 });

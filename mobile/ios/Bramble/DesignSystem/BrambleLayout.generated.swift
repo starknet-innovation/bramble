@@ -58,7 +58,7 @@ enum BrambleMetrics {
     enum Badge {
         static let fontSize: CGFloat = 10
         static let minWidth: CGFloat = 16
-        static let padding: EdgeInsets = EdgeInsets(top: 3, leading: 5, bottom: 3, trailing: 5)
+        static let padding: EdgeInsets = EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)
         static let weight: Int = 700
     }
     enum Button {
@@ -164,7 +164,7 @@ enum BrambleMetrics {
     enum HardwarePill {
         static let glyph: CGFloat = 12
         static let height: CGFloat = 20
-        static let padding: EdgeInsets = EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8)
+        static let padding: EdgeInsets = EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8)
     }
     enum HeaderActions {
         static let gap: CGFloat = 4
@@ -220,17 +220,17 @@ enum BrambleMetrics {
         static let headBottomShort: CGFloat = 8
         static let headGap: CGFloat = 8
         static let headMaxWidth: CGFloat = 420
-        static let headTop: CGFloat = 46
-        static let headTopShort: CGFloat = 40
+        static let headTop: CGFloat = 48
+        static let headTopShort: CGFloat = 32
         static let iconGap: CGFloat = 8
         static let iconGlyph: CGFloat = 24
         static let iconSize: CGFloat = 54
         static let ledeLineHeight: CGFloat = 1.55
-        static let paddingBottom: CGFloat = 30
-        static let paddingBottomShort: CGFloat = 22
+        static let paddingBottom: CGFloat = 32
+        static let paddingBottomShort: CGFloat = 24
         static let paddingInlinePhone: CGFloat = 16
-        static let paddingTop: CGFloat = 38
-        static let paddingTopShort: CGFloat = 30
+        static let paddingTop: CGFloat = 32
+        static let paddingTopShort: CGFloat = 32
         static let titleLineHeight: CGFloat = 1.15
         static let titleSize: CGFloat = 28
         static let titleTracking: CGFloat = -0.035
@@ -258,7 +258,7 @@ enum BrambleMetrics {
         static let fontSize: CGFloat = 12
         static let gap: CGFloat = 6
         static let height: CGFloat = 28
-        static let padding: EdgeInsets = EdgeInsets(top: 3, leading: 12, bottom: 3, trailing: 12)
+        static let padding: EdgeInsets = EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12)
         static let weight: Int = 600
     }
     enum QRCard {
@@ -300,7 +300,7 @@ enum BrambleMetrics {
         static let optionPadding: EdgeInsets = EdgeInsets(top: 0, leading: 12, bottom: 0, trailing: 12)
         static let optionSize: CGFloat = 13
         static let optionWeight: Int = 650
-        static let padding: CGFloat = 3
+        static let padding: CGFloat = 2
     }
     enum Send {
         static let actionsGap: CGFloat = 8
@@ -387,11 +387,11 @@ enum BrambleMetrics {
     enum Toast {
         static let copySize: CGFloat = 30
         static let fontSize: CGFloat = 13
-        static let gap: CGFloat = 10
+        static let gap: CGFloat = 8
         static let glyph: CGFloat = 16
         static let iconRadius: CGFloat = 10
         static let iconSize: CGFloat = 30
-        static let padding: EdgeInsets = EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 12)
+        static let padding: EdgeInsets = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
         static let radius: CGFloat = 14
         static let stackBottom: CGFloat = 84
         static let stackGap: CGFloat = 8
@@ -431,7 +431,7 @@ enum BrambleMetrics {
         static let actionsGap: CGFloat = 8
         static let lockupHeight: CGFloat = 220
         static let lockupHeightShort: CGFloat = 160
-        static let paddingTop: CGFloat = 26
+        static let paddingTop: CGFloat = 24
         static let wordmarkFraction: CGFloat = 0.6
         static let wordmarkWidth: CGFloat = 220
     }

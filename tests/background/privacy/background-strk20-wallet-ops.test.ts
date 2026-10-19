@@ -37,7 +37,7 @@ const preferences = (): WalletPreferences => ({
       discoveryUrl: "https://discovery.example/strk20",
       poolAddress: "0x123",
       proverUrl: "https://prover.example/strk20",
-      subaccountAnonymizerAddress: "0x456",
+      shadowAccountAnonymizerAddress: "0x456",
     },
   },
 });
@@ -215,6 +215,10 @@ describe("background wallet STRK20 operations", () => {
         summary.includes("Registration is public"),
       ),
     ).toBe(true);
+    // Issue 484: the reviewed pool fee is drawn in STRK, never the raw felt.
+    expect(prepared.strk20Preparation.summaries).toContain(
+      "Approve and pay the reviewed 0.000000000000000001 STRK pool fee from this account",
+    );
     const execute = {
       preparationId: prepared.strk20Preparation.id,
       type: "wallet.strk20Execute",

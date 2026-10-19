@@ -10,7 +10,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EKUBO_API_BASE, MAINNET_TOKEN_ADDRESSES } from "../../protocols/index";
 
 // Shared, hoisted balance table the stubbed RPC provider reads from.
-const rpc = vi.hoisted(() => ({ balances: new Map<string, bigint>() }));
+const rpc = vi.hoisted(() => ({
+  balances: new Map<string, bigint>(),
+  failing: new Set<string>(),
+}));
 
 vi.mock("../core/client", async () => {
   const actual = await vi.importActual<typeof import("../core/client")>("../core/client");
@@ -19,6 +22,9 @@ vi.mock("../core/client", async () => {
     withRpc: <T,>(run: (provider: unknown) => Promise<T>): Promise<T> =>
       run({
         callContract: async ({ contractAddress }: { contractAddress: string }) => {
+          if (rpc.failing.has(contractAddress.toLowerCase())) {
+            throw new Error("fetch failed: https://rpc.example timed out");
+          }
           const raw = rpc.balances.get(contractAddress.toLowerCase()) ?? 0n;
           const mask = (1n << 128n) - 1n;
           return [`0x${(raw & mask).toString(16)}`, `0x${(raw >> 128n).toString(16)}`];
@@ -30,28 +36,24 @@ vi.mock("../core/client", async () => {
 import { useBalances } from "./useBalances";
 import { useCandles } from "./useCandles";
 import { usePortfolio } from "./usePortfolio";
-import { usePrices } from "./usePrices";
+import { referenceUsdPrice, usePrices } from "./usePrices";
 import { toAvnuRows, useTokens } from "./useTokens";
 import { useAsyncResource } from "../core/useAsyncResource";
 
 const ETH = MAINNET_TOKEN_ADDRESSES.ETH;
 const USDC = MAINNET_TOKEN_ADDRESSES.USDC;
 const STRK = MAINNET_TOKEN_ADDRESSES.STRK;
+// An airdropped token that names itself after a listed one (Sherlock 194).
+const SPOOF = "0x5f00f";
 const unpadded = (address: string): string => `0x${BigInt(address).toString(16)}`;
 
-type FakeResponse = {
-  ok: boolean;
-  status: number;
-  json: () => Promise<unknown>;
-  text: () => Promise<string>;
-};
-
-const respond = (body: unknown, status = 200): FakeResponse => ({
-  ok: status >= 200 && status < 300,
-  status,
-  json: async () => body,
-  text: async () => JSON.stringify(body),
-});
+// Returns a real `Response` so the production bounded network boundary can read
+// its status, headers and streamed body exactly as it would a live upstream.
+const respond = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status,
+  });
 
 const AVNU_TOKENS = [
   {
@@ -119,50 +121,6 @@ const routeFetch = (avnuStatus = 200): void => {
         ],
       });
     }
-    if (url.includes("starkscan.co") && url.includes("/token-holdings")) {
-      return respond({
-        chainId: "SN_MAIN",
-        ownerAddress: ETH,
-        items: [
-          {
-            tokenAddress: ETH,
-            normalizedTokenAddress: unpadded(ETH),
-            indexedBalanceRaw: String(rpc.balances.get(ETH.toLowerCase()) ?? 0n),
-            symbol: "ETH",
-            name: "Ether",
-            decimals: 18,
-          },
-          {
-            tokenAddress: USDC,
-            normalizedTokenAddress: unpadded(USDC),
-            indexedBalanceRaw: String(rpc.balances.get(USDC.toLowerCase()) ?? 0n),
-            symbol: "USDC",
-            name: "USD Coin",
-            decimals: 6,
-          },
-          {
-            tokenAddress: STRK,
-            normalizedTokenAddress: unpadded(STRK),
-            indexedBalanceRaw: String(rpc.balances.get(STRK.toLowerCase()) ?? 0n),
-            symbol: "STRK",
-            name: "Starknet Token",
-            decimals: 18,
-          },
-        ],
-        exact: true,
-        truncated: false,
-        completeness: {
-          exact: true,
-          truncated: false,
-          complete: true,
-          reasonCode: "complete",
-          reason: "Complete snapshot.",
-          lagBlocks: 0,
-          capped: false,
-          cap: null,
-        },
-      });
-    }
     if (url.includes("/prices/line")) {
       return respond(AVNU_CANDLES);
     }
@@ -179,6 +137,7 @@ const routeFetch = (avnuStatus = 200): void => {
 };
 
 beforeEach(() => {
+  rpc.failing = new Set<string>();
   rpc.balances = new Map<string, bigint>([
     [ETH.toLowerCase(), 1_000_000_000_000_000_000n], // 1 ETH
     [USDC.toLowerCase(), 500_000_000n], // 500 USDC
@@ -223,6 +182,7 @@ describe("useTokens", () => {
     const [ausd] = toAvnuRows([
       {
         address: "0xa0",
+        decimals: 6,
         name: "AUSD",
         symbol: "AUSD0",
         global: { usd: 1, usdMarketCapChangePercentage24h: 4.3 },
@@ -237,14 +197,20 @@ describe("useTokens", () => {
 });
 
 describe("usePrices", () => {
-  it("keys prices by lowercased address and by symbol", async () => {
+  it("keys prices by lowercased address only", async () => {
     const { result } = renderHook(() => usePrices());
     await waitFor(() => expect(result.current.data).not.toBeNull());
     const data = result.current.data;
     expect(data?.byAddress[ETH.toLowerCase()]?.usd).toBe(3000);
     expect(data?.byAddress[ETH.toLowerCase()]?.change24h).toBe(-2.1);
-    expect(data?.bySymbol.ETH?.usd).toBe(3000);
-    expect(data?.bySymbol.STRK?.usd).toBe(0.14);
+    expect(data).not.toHaveProperty("bySymbol");
+  });
+
+  it("serves one token's reference price by address, or null without one (#646)", async () => {
+    await expect(referenceUsdPrice(unpadded(ETH))).resolves.toBe(3000);
+    await expect(referenceUsdPrice(SPOOF)).resolves.toBeNull();
+    routeFetch(500);
+    await expect(referenceUsdPrice(ETH)).resolves.toBeNull();
   });
 });
 
@@ -258,6 +224,26 @@ describe("useBalances", () => {
     expect(eth?.display).toBe("1");
     expect(eth?.amount).toBe(1);
     expect(usdc?.amount).toBe(500);
+  });
+
+  it("reads the tracked tokens over RPC without asking Starkscan (#650)", async () => {
+    const { result } = renderHook(() => useBalances(ETH));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.filter((url) => url.includes("starkscan"))).toEqual([]);
+  });
+
+  it("never shows an unreadable token as zero; keeps the last good balances", async () => {
+    const { result } = renderHook(() => useBalances(ETH));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    rpc.failing.add(ETH.toLowerCase());
+    result.current.refresh();
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    // The banner gets the resource layer's generic text, not the RPC detail.
+    expect(result.current.error).toBe("Request failed");
+    expect(result.current.data?.find((row) => row.symbol === "ETH")?.raw).toBe(
+      1_000_000_000_000_000_000n,
+    );
   });
 
   it("returns an empty list with no address", async () => {
@@ -277,6 +263,15 @@ describe("usePortfolio", () => {
     expect(totalValueUsd).toBeCloseTo(3500, 5);
     const eth = holdings.find((h) => h.symbol === "ETH");
     expect(eth?.usdValue).toBeCloseTo(3000, 5);
+  });
+
+  it("never lists a token outside the tracked set, whatever it calls itself", async () => {
+    rpc.balances.set(SPOOF, 2_000_000_000_000_000_000n);
+    const { result } = renderHook(() => usePortfolio(ETH));
+    await waitFor(() => expect(result.current.data.holdings.length).toBe(2));
+    const { holdings, totalValueUsd } = result.current.data;
+    expect(holdings.find((h) => h.address === SPOOF)).toBeUndefined();
+    expect(totalValueUsd).toBeCloseTo(3500, 5);
   });
 });
 

@@ -35,7 +35,12 @@ import type {
   WrapNostrApplicationDataBatchInput,
   WrapNostrApplicationDataInput,
 } from "@bramble/vault/service";
-import type { RecoverVaultAccountsInput } from "@bramble/vault/service-types";
+import type {
+  ListShadowAccountScopesInput,
+  RecordShadowAccountScopeInput,
+  RecoverVaultAccountsInput,
+} from "@bramble/vault/service-types";
+import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
 import type { AccountRef, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
 
@@ -89,6 +94,22 @@ export type WalletStatusReader = {
   ) => Promise<readonly AccountRef[]>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
+  /**
+   * Records a used shadow-account scope in the encrypted vault (#443). Optional
+   * only for partial test stubs; every shadow-account path fails closed
+   * without it, because an unrecorded shadow account cannot be recovered.
+   */
+  readonly recordShadowAccountScope?: (input: RecordShadowAccountScopeInput) => Promise<void>;
+  /**
+   * Whether a scope record would be accepted now, without writing. Optional
+   * only for partial test stubs; without it the request is still refused at
+   * record time, after approval.
+   */
+  readonly canRecordShadowAccountScope?: (input: RecordShadowAccountScopeInput) => Promise<boolean>;
+  /** Lists recorded shadow-account scopes; optional only for partial test stubs. */
+  readonly listShadowAccountScopes?: (
+    input: ListShadowAccountScopesInput,
+  ) => Promise<readonly ShadowAccountScopeRef[]>;
   /** Atomically restores a confirmed set of phrase-derived accounts. */
   readonly recoverAccounts?: (input: RecoverVaultAccountsInput) => Promise<readonly AccountRef[]>;
   /**
@@ -102,6 +123,11 @@ export type WalletStatusReader = {
   ) => Promise<readonly AccountRef[]>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /**
+   * Accepts a vault awaiting recovery; see `WalletVaultService.recoverUnverifiedVault`.
+   * Optional only for partial test stubs; the handler fails closed without it.
+   */
+  readonly recoverUnverifiedVault?: (vaultPassphrase: string) => Promise<void>;
   /** Removes origin grants; optional only for partial test stubs. */
   readonly revokeOrigin?: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
@@ -183,11 +209,23 @@ export const createWalletReader = (
     async recoverAccounts(input) {
       return (await required()).recoverAccounts(input);
     },
+    async recordShadowAccountScope(input) {
+      return (await required()).recordShadowAccountScope(input);
+    },
+    async canRecordShadowAccountScope(input) {
+      return (await required()).canRecordShadowAccountScope(input);
+    },
+    async listShadowAccountScopes(input) {
+      return (await required()).listShadowAccountScopes(input);
+    },
     async validateMnemonic(mnemonic) {
       return (await required()).validateMnemonic(mnemonic);
     },
     async readVault(vaultPassphrase) {
       return (await required()).readVault(vaultPassphrase);
+    },
+    async recoverUnverifiedVault(vaultPassphrase) {
+      return (await required()).recoverUnverifiedVault(vaultPassphrase);
     },
     async revokeOrigin(input) {
       return (await required()).revokeOrigin(input);

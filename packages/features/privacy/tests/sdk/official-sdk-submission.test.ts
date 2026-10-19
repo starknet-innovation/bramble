@@ -16,6 +16,7 @@ import {
   type OfficialBuilder,
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
+  RELAY_CALLDATA,
   STRK20_REVIEWED_FEE as reviewedFee,
   sdkRuntime as runtime,
   strk20ProviderFor,
@@ -37,7 +38,7 @@ describe("official STRK20 SDK submission boundary", () => {
   test("submits only a non-empty proof to the configured apply_actions call", async () => {
     const submitted: Call[] = [];
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -73,7 +74,7 @@ describe("official STRK20 SDK submission boundary", () => {
     let registerCalls = 0;
     const submitted: unknown[] = [];
     const sdk = runtime(() => {
-      const base = builder(executeResult());
+      const base = builder();
       const instrumented = {
         ...base,
         register() {
@@ -110,7 +111,7 @@ describe("official STRK20 SDK submission boundary", () => {
         account,
         calls: [
           {
-            calldata: ["0x1"],
+            calldata: [...RELAY_CALLDATA],
             contractAddress: poolAddress,
             entrypoint: "apply_actions",
           },
@@ -131,7 +132,7 @@ describe("official STRK20 SDK submission boundary", () => {
     const pauses: number[] = [];
     const submitted: unknown[] = [];
     const sdk = runtime(() => {
-      const base = builder(executeResult());
+      const base = builder();
       const instrumented = {
         ...base,
         async createProofInvocation() {
@@ -181,7 +182,7 @@ describe("official STRK20 SDK submission boundary", () => {
     const pauses: number[] = [];
     let submitted = false;
     const sdk = runtime(() => {
-      const base = builder(executeResult());
+      const base = builder();
       const instrumented = {
         ...base,
         async createProofInvocation() {
@@ -223,7 +224,7 @@ describe("official STRK20 SDK submission boundary", () => {
   test("registration approves the pool's non-zero STRK action fee before apply_actions", async () => {
     const submitted: (readonly Call[])[] = [];
     const sdk = runtime(() => {
-      const base = builder(executeResult());
+      const base = builder();
       const instrumented = {
         ...base,
         register: () => instrumented,
@@ -273,7 +274,7 @@ describe("official STRK20 SDK submission boundary", () => {
           entrypoint: "approve",
         },
         {
-          calldata: ["0x1"],
+          calldata: [...RELAY_CALLDATA],
           contractAddress: poolAddress,
           entrypoint: "apply_actions",
         },
@@ -286,7 +287,7 @@ describe("official STRK20 SDK submission boundary", () => {
     let submissions = 0;
     const sdk = runtime(() => ({
       build: () => ({
-        ...builder(executeResult()),
+        ...builder(),
         async createProofInvocation() {
           proofs += 1;
           return executeResult();
@@ -315,7 +316,7 @@ describe("official STRK20 SDK submission boundary", () => {
 
   test("an unreadable pool fee fails registration closed before submission", async () => {
     const sdk = runtime(() => {
-      const base = builder(executeResult());
+      const base = builder();
       const instrumented = {
         ...base,
         register: () => instrumented,
@@ -354,7 +355,7 @@ describe("official STRK20 SDK submission boundary", () => {
   test("first deposits grant only exact aggregate approval before pool submission", async () => {
     const submitted: (readonly Call[])[] = [];
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },
@@ -400,7 +401,7 @@ describe("official STRK20 SDK submission boundary", () => {
           entrypoint: "approve",
         },
         {
-          calldata: ["0x1"],
+          calldata: [...RELAY_CALLDATA],
           contractAddress: poolAddress,
           entrypoint: "apply_actions",
         },
@@ -420,7 +421,7 @@ describe("official STRK20 SDK submission boundary", () => {
     let submissions = 0;
     const sdk = runtime(() => ({
       build: () => ({
-        ...builder(executeResult()),
+        ...builder(),
         async createProofInvocation() {
           proofs += 1;
           return executeResult();
@@ -453,7 +454,7 @@ describe("official STRK20 SDK submission boundary", () => {
 
   test("surfaces a pool rejection of registration and frees the scope for a retry", async () => {
     const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       async discoverNotes() {
         return { notes: new Map() };
       },

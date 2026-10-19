@@ -23,13 +23,19 @@ import {
   isRecoveryAccountIndex,
   isRecoveryAccountSelection,
   RECOVERY_SCAN_LIMITS,
+  type RecoveryAccountSelection,
 } from "@bramble/wallet-model/recovery";
 
+// Bounded by the hardened BIP-44 ceiling, the highest account index the
+// recovery flow's manual field accepts (Sherlock 253). Recovery selects by
+// account index only, so a non-zero address index is still not recoverable
+// from the phrase. Only this creation boundary narrows: stored accounts are
+// never re-validated against it.
 const readOptionalIndex = (value: unknown): number | null | undefined => {
   if (value === undefined) {
     return undefined;
   }
-  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
+  return isRecoveryAccountIndex(value) ? value : null;
 };
 
 const readDeploymentSalt = (
@@ -184,6 +190,58 @@ export const readImportSeedAccountsInput = (
   }
   return {
     mnemonic: message["mnemonic"],
+    networkId: message["networkId"],
+    selections: message["selections"],
+  };
+};
+
+/**
+ * Parses the settings-surface discovery of the wallet's OWN accounts. The
+ * message carries no phrase and no vault credential: the background reads the
+ * wallet's own phrase inside the vault boundary through the live unlock session.
+ */
+export const readDiscoverOwnAccountsInput = (
+  message: unknown,
+): { readonly manualIndex?: number; readonly networkId: StarknetNetworkId } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["manualIndex", "networkId", "type"]) ||
+    message["type"] !== "wallet.discoverOwnAccounts" ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    (message["manualIndex"] !== undefined && !isRecoveryAccountIndex(message["manualIndex"]))
+  ) {
+    return null;
+  }
+  return {
+    ...(message["manualIndex"] === undefined ? {} : { manualIndex: message["manualIndex"] }),
+    networkId: message["networkId"],
+  };
+};
+
+/**
+ * Parses the settings-surface selection of the wallet's OWN discovered
+ * accounts. The founding phrase is taken from the live unlock session inside the
+ * vault boundary, so the panel supplies only the target network and selections.
+ */
+export const readImportOwnAccountsInput = (
+  message: unknown,
+): {
+  readonly networkId: StarknetNetworkId;
+  readonly selections: readonly RecoveryAccountSelection[];
+} | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["networkId", "selections", "type"]) ||
+    message["type"] !== "wallet.importOwnAccounts" ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    !Array.isArray(message["selections"]) ||
+    message["selections"].length === 0 ||
+    message["selections"].length > RECOVERY_SCAN_LIMITS.maxSelections ||
+    !message["selections"].every(isRecoveryAccountSelection)
+  ) {
+    return null;
+  }
+  return {
     networkId: message["networkId"],
     selections: message["selections"],
   };

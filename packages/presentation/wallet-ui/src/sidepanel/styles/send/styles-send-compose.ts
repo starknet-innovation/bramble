@@ -126,6 +126,18 @@ export const SEND_COMPOSE_STYLES = `
     .send-amount-field input:not(:disabled):hover { background: transparent; }
   }
   .send-recipient-list, .send-asset-list { display: grid; gap: ${SPACE.sm}; }
+  /* The name-resolution readout sits directly under the field that caused it:
+     the resolving line while the read runs, and the reason it did not commit
+     when it fails. Muted, because it annotates the field rather than warning. */
+  .send-recipient-note {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.label.size};
+    line-height: ${TYPE.label.line};
+    margin: 0;
+    /* A name can be a single long token; without this it sets the stage's
+       min-content width and widens the whole panel past the viewport. */
+    overflow-wrap: anywhere;
+  }
   .send-list-heading {
     align-items: center;
     color: var(--bramble-muted);
@@ -324,6 +336,15 @@ export const SEND_COMPOSE_STYLES = `
     margin: -${SPACE.sm} 0 0;
     text-align: right;
   }
+  /* The Amount screen's fee preview sits under the value it is a cost beside:
+     the same muted caption voice, so neither figure reads as an action. */
+  .send-fee-lines { display: grid; gap: ${SPACE.xs}; }
+  .send-fee-line {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    margin: 0;
+    text-align: right;
+  }
   .send-context-receipt {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
@@ -331,15 +352,27 @@ export const SEND_COMPOSE_STYLES = `
     margin: 0;
     padding: 0 ${SPACE.lg};
   }
+  /* A fact's label sits on the first line of its value — beside the name, not
+     halfway down a name-over-address pair — while the row as a whole stays
+     centred in its height: the wrapping line box is what gets centred, and the
+     zero flex basis on the value keeps the pair on that one line. */
   .send-context-receipt > div,
   .send-review-facts > div {
-    align-items: center;
+    align-content: center;
+    align-items: baseline;
     display: flex;
+    flex-wrap: wrap;
     gap: ${SPACE.md};
     justify-content: space-between;
     min-height: ${SIZE.rowCompact};
     position: relative;
   }
+  .send-context-receipt dt,
+  .send-review-facts dt { flex: none; }
+  /* A value that leads with a mark (the network dot, the token logo) is one
+     visual line as tall as the mark: the label centres on it instead. */
+  .send-context-receipt > div:has(> dd.network-inline-value),
+  .send-review-facts > div:has(.send-review-amount) { align-items: center; }
   .send-context-receipt > div + div::before,
   .send-review-facts > div + div::before {
     background: var(--bramble-hairline);
@@ -386,6 +419,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-context-receipt dd,
   .send-review-facts dd {
     display: grid;
+    flex: 1 1 0;
     gap: 2px;
     justify-items: end;
     margin: 0;
@@ -398,6 +432,30 @@ export const SEND_COMPOSE_STYLES = `
      control on one line); the address clips first so the control never
      leaves the fact. */
   .send-review-address code { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  /* A native disclosure reveals a party's full address in place, so a keyboard
+     user inspects the exact value without leaving the review; the revealed
+     value wraps inside the fact rather than widening the panel. */
+  .address-reveal { max-width: 100%; min-width: 0; }
+  .address-reveal > summary {
+    color: var(--bramble-accent);
+    cursor: pointer;
+    font-size: ${TYPE.micro.size};
+    list-style: none;
+    text-align: right;
+  }
+  .address-reveal > summary::-webkit-details-marker { display: none; }
+  .address-reveal > code {
+    display: block;
+    font-size: ${TYPE.micro.size};
+    overflow-wrap: anywhere;
+    text-align: right;
+    word-break: break-all;
+  }
+  /* A name-resolved recipient shows the whole address, because the address is
+     what the reader is asked to check; it wraps rather than clipping. The
+     provenance line sits under it, muted like the other annotation copy. */
+  .send-review-address-full code { overflow-wrap: anywhere; text-wrap: wrap; }
+  .send-review-source { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
   #send-review-button { margin-top: auto; width: 100%; }
   /* The busy review button swaps its send glyph for the shared Liquid Dots
      mark, so a running preparation reads as work rather than as a dimmed

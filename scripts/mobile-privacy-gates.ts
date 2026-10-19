@@ -188,7 +188,7 @@ const poolNotice = (reading: Reading, deployment: Deployment, strk: Strk): strin
   noticeOf(
     simpleFlowScreen("receive", {
       account,
-      allowances: [],
+      allowances: { entries: [], notices: [], unavailable: false },
       balances: strk === "null" ? [] : balancesFor(strk),
       changes: {},
       classHashVerification: null,

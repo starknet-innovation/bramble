@@ -26,6 +26,12 @@ type BalanceSnapshot = {
 
 type BalanceSnapshotValue = Pick<BalanceSnapshot, "balances" | "fetchedAt">;
 
+/**
+ * Reads fresh balances. It receives the last snapshot's balances (or null) so
+ * a per-token read failure can keep that token's previous value.
+ */
+type BalanceLoader = (previous: readonly TokenBalance[] | null) => Promise<readonly TokenBalance[]>;
+
 const refreshes = new WeakMap<BalanceSnapshotStore, Map<string, Promise<BalanceSnapshotValue>>>();
 
 const refreshBalances = (
@@ -35,14 +41,15 @@ const refreshBalances = (
     readonly networkId: StarknetNetworkId;
     readonly now: number;
   },
-  load: () => Promise<readonly TokenBalance[]>,
+  previous: BalanceSnapshotValue | null,
+  load: BalanceLoader,
 ): Promise<BalanceSnapshotValue> => {
   const key = `${input.networkId}:${input.accountId}`;
   const active = refreshes.get(store) ?? new Map<string, Promise<BalanceSnapshotValue>>();
   refreshes.set(store, active);
   const running = active.get(key);
   if (running) return running;
-  const refresh = load()
+  const refresh = load(previous?.balances ?? null)
     .then(async (balances) => {
       const value = { balances, fetchedAt: input.now };
       await store
@@ -135,10 +142,12 @@ export const cachedBalances = async (
     readonly networkId: StarknetNetworkId;
     readonly now: number;
   },
-  load: () => Promise<readonly TokenBalance[]>,
+  load: BalanceLoader,
 ): Promise<(BalanceSnapshotValue & { readonly stale: boolean }) | null> => {
   if (!store) {
-    return input.cachedOnly ? null : { balances: await load(), fetchedAt: input.now, stale: false };
+    return input.cachedOnly
+      ? null
+      : { balances: await load(null), fetchedAt: input.now, stale: false };
   }
   const snapshot = await store.read(input.accountId, input.networkId).catch(() => null);
   const fresh =
@@ -151,7 +160,10 @@ export const cachedBalances = async (
   }
 
   try {
-    return { ...(await refreshBalances(store, input, load)), stale: false };
+    return {
+      ...(await refreshBalances(store, input, snapshot, load)),
+      stale: false,
+    };
   } catch (error) {
     if (snapshot) return { ...snapshot, stale: true };
     throw error;

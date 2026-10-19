@@ -1,4 +1,6 @@
 /** Typed extension message handling for the background service worker. */
+import { WalletError } from "@bramble/core/errors";
+import { redactEndpoints } from "@bramble/core/service-url";
 import { activeAccountSecrets } from "@bramble/vault/service";
 import { handleWalletOps, type WalletOpsDeps } from "../accounts/wallet-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -19,6 +21,7 @@ import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
 import { handleAddChainOps } from "../provider/add-chain-ops";
 import { handleProviderOps } from "../provider/provider-ops";
 import {
+  accountForNetwork,
   reconcileActiveAccount,
   reconcileUnlockedActiveAccount,
   selectActiveAccount,
@@ -27,6 +30,7 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, createUnlockSession } from "../runtime/session";
+import { handleUpdateOps } from "../runtime/update-ready";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
 import { supportDiagnosticsResponse } from "../support/diagnostics";
@@ -120,9 +124,25 @@ const handleRevealSecrets: RouterHandler = async (ctx, messageType, message) => 
   if (!input) {
     return { error: "invalid reveal request" };
   }
-  const { mnemonic, privateKey } = activeAccountSecrets(
-    await ctx.wallet.readVault(input.vaultPassphrase),
+  const vault = await ctx.wallet.readVault(input.vaultPassphrase);
+  const preferences = await ctx.preferencesStore.read();
+  // The account the panel shows as active, which is per network, not the
+  // vault's stored pointer: when the pointer names an account on another
+  // network the two differ, and the screen's imported-key warning described
+  // the wrong account (Sherlock 191).
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
   );
+  // A network with no account has no active key to show, but the wallet's
+  // recovery phrase is still the user's backup: reveal it on its own rather
+  // than refusing, as the screen shows no account to describe.
+  if (!account) {
+    return { mnemonic: vault.mnemonic, ok: true, privateKey: null };
+  }
+  const { mnemonic, privateKey } = activeAccountSecrets(vault, account.id);
   return { mnemonic, ok: true, privateKey };
 };
 
@@ -198,8 +218,9 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
       // still reports "first time seen" for a new site's approval.
       await ctx.originHistory.record(input.origin);
     }
-    if (!authorized.isCurrent()) return { error: "wallet locked" };
-    if (accounts.length > 0) return { accounts, ok: true };
+    // A lock that lands during the read falls through to what a locked wallet
+    // answers, so the race is not a lock-state signal of its own (Sherlock 148).
+    if (authorized.isCurrent() && accounts.length > 0) return { accounts, ok: true };
   }
   if (input.silent) {
     return { accounts: [], ok: true };
@@ -263,11 +284,26 @@ const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
     : { error: "invalid diagnostics request" };
 };
 
+// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway": it first
+// accepts a vault the store cannot verify (the service drops every site
+// connection and retained Ledger viewing key while doing so), then unlocks it
+// exactly like `wallet.unlock`. The service refuses a vault that verifies, so
+// this cannot be used to skip the freshness check on a healthy wallet.
+const acceptUnverifiedVault = async (
+  wallet: WalletStatusReader,
+  vaultPassphrase: string,
+): Promise<void> => {
+  if (!wallet.recoverUnverifiedVault) {
+    throw new WalletError("wallet unavailable");
+  }
+  await wallet.recoverUnverifiedVault(vaultPassphrase);
+};
+
 const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.unlock") {
+  if (messageType !== "wallet.unlock" && messageType !== "wallet.unlockUnverified") {
     return null;
   }
-  const input = readUnlockInput(message);
+  const input = readUnlockInput(message, messageType);
   if (!input) {
     return { error: "invalid unlock request" };
   }
@@ -276,6 +312,9 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
     return await ctx.activeStateCoordinator.run(async () => {
       if (ctx.session.generation() !== generation) {
         return { error: "wallet locked" };
+      }
+      if (messageType === "wallet.unlockUnverified") {
+        await acceptUnverifiedVault(ctx.wallet, input.vaultPassphrase);
       }
       await ctx.wallet.readVault(input.vaultPassphrase);
       if (ctx.session.generation() !== generation) {
@@ -327,6 +366,7 @@ const HANDLERS: readonly RouterHandler[] = [
     handleSwapOps(
       {
         ...buildOpsDeps(ctx),
+        prices: ctx.prices,
         swap: ctx.swap,
         swapPreparations: ctx.swapPreparations,
       },
@@ -347,6 +387,7 @@ const HANDLERS: readonly RouterHandler[] = [
     handleStrk20WalletOps(
       {
         ...buildOpsDeps(ctx),
+        prices: ctx.prices,
         strk20Jobs: ctx.strk20Jobs,
         strk20Preparations: ctx.strk20Preparations,
       },
@@ -362,6 +403,7 @@ const HANDLERS: readonly RouterHandler[] = [
   handleRevealSecrets,
   handleGetGrantedAccounts,
   handleDiagnostics,
+  async (ctx, messageType, message) => handleUpdateOps(ctx.updates, messageType, message),
   handlePendingApprovals,
   handleRequestAccounts,
   handleSetActiveAccount,
@@ -399,11 +441,18 @@ const handleRuntimeMessage = async (
   return response ?? { error: "unsupported message" };
 };
 
+// The wallet's own pages see a thrown error's message; a page sender never
+// does. On the public routes that message can be a node's or gateway's own
+// text, which may echo the configured RPC URL and its key, so endpoints are
+// redacted before it leaves (the panel redacts every refusal again on receipt).
 const runtimeErrorResponse = (
   error: unknown,
   revealError: boolean,
 ): { readonly error: string } => ({
-  error: revealError && error instanceof Error ? error.message : "wallet request failed",
+  error:
+    revealError && error instanceof Error
+      ? redactEndpoints(error.message)
+      : "wallet request failed",
 });
 
 /** Creates the trusted background runtime message dispatcher. */

@@ -42,7 +42,7 @@ export const DECISION_STYLES = `
   .review-call { align-items: center; display: flex; gap: ${SPACE.sm}; }
   .review-call > span:last-child { min-width: 0; }
   .review-call-assets { display: inline-flex; flex: none; }
-  .review-call-assets > * + * { margin-left: -6px; }
+  .review-call-assets > * + * { margin-left: calc(-1 * ${SPACE.sm}); }
   .review-call-assets .token-logo, .review-call-assets .token-mark { height: 24px; width: 24px; }
   .review-call-assets .token-mark { font-size: 8px; }
   .review-flag { align-items: center; display: flex; gap: ${SPACE.sm}; }

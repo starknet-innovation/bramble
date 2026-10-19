@@ -9,6 +9,7 @@ import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { ProviderChain } from "@bramble/wallet-protocol/add-chain";
 import type { ProviderDeclare } from "@bramble/wallet-protocol/declare";
+import type { Strk20NoticeReason } from "@bramble/wallet-protocol/extension-responses";
 import type { Strk20Action, Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type {
@@ -16,7 +17,7 @@ import type {
   Strk20DisclosureRequest,
 } from "../privacy/strk20-approval-types";
 import type { ApprovalContext } from "./approval-context";
-import type { ApprovalFeeRevision } from "./approval-limits";
+import type { ApprovalFeeRevision, ApprovalReservation } from "./approval-limits";
 import type { ApprovalPayload } from "./approval-payload";
 import type {
   ApprovalRiskFlag,
@@ -54,6 +55,16 @@ export type ApprovalQueue = {
    * there is room. A probe; dapp surfaces apply `requireApprovalAdmission`.
    */
   readonly canAdmit: (origin: string) => string | null;
+  /**
+   * Admits one request from `origin` to expensive work ahead of its enqueue,
+   * or throws the refusal {@link canAdmit} would report. Until the returned
+   * release runs, the reservation counts against the caps as one more prompt
+   * for that origin, so concurrent requests cannot all pass admission before
+   * any of them queues. Release in a `finally`; releasing twice is a no-op.
+   * Its `arrivedAt` is the request's admission time, which a STRK20 request
+   * passes on as the deadline its approval expires from.
+   */
+  readonly reserve: (origin: string) => ApprovalReservation;
   readonly claim: (id: string) => ApprovalClaim | null;
   readonly get: (id: string) => PendingApproval | null;
   readonly list: () => readonly PendingApproval[];
@@ -95,10 +106,29 @@ export type ApprovalQueue = {
   readonly requestSignTypedData: (input: {
     readonly context: ApprovalContext;
     readonly origin: string;
+    /**
+     * OutsideExecution call review: its flags ride on the approval and its
+     * decoded call summaries follow `summary` in `summaries`.
+     */
+    readonly review?: {
+      readonly flags: readonly ApprovalRiskFlag[];
+      readonly summaries: readonly string[];
+    };
     readonly summary: string;
     readonly typedData: unknown;
   }) => PendingApproval;
   readonly requestStrk20Disclosure: (input: {
+    /**
+     * When the request was admitted (its reservation's `arrivedAt`): the
+     * approval expires from then, not from when the wallet's own work let it
+     * queue. Never later than the enqueue time.
+     */
+    readonly arrivedAt?: number;
+    /**
+     * Recipient risk flags. An `address-poisoning` flag leaves the card with
+     * Deny only; the page learns nothing until the user decides.
+     */
+    readonly flags?: readonly ApprovalRiskFlag[];
     readonly context: ApprovalContext;
     readonly kind: Strk20DisclosureApprovalKind;
     readonly origin: string;
@@ -107,12 +137,42 @@ export type ApprovalQueue = {
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestStrk20Invoke: (input: {
+    /**
+     * When the request was admitted (its reservation's `arrivedAt`): the
+     * approval expires from then, not from when the wallet's own work let it
+     * queue. Never later than the enqueue time.
+     */
+    readonly arrivedAt?: number;
     readonly actions: readonly Strk20Action[];
+    /**
+     * Recipient risk flags. An `address-poisoning` flag leaves the card with
+     * Deny only; the page learns nothing until the user decides.
+     */
+    readonly flags?: readonly ApprovalRiskFlag[];
     readonly context: ApprovalContext;
     readonly origin: string;
     readonly plan: Strk20SubmissionPlan;
     readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
+    /** The anonymizer the card named; required when the batch holds a shadow invoke. */
+    readonly shadowAccountAnonymizer?: string;
     readonly summaries: readonly string[];
+  }) => PendingApproval;
+  /**
+   * Holds a site's private request on a notice the user can only close: the
+   * network has no private services for it. `refusal` is what the site
+   * receives on close or expiry; nothing is signed, prepared, or disclosed.
+   */
+  readonly requestStrk20Unavailable: (input: {
+    /**
+     * When the request was admitted (its reservation's `arrivedAt`): the
+     * approval expires from then, not from when the wallet's own work let it
+     * queue. Never later than the enqueue time.
+     */
+    readonly arrivedAt?: number;
+    /** Why it is held; absent when the network has no private services for it. */
+    readonly notice?: Strk20NoticeReason;
+    readonly origin: string;
+    readonly refusal: string;
   }) => PendingApproval;
   readonly requestSwitchChain: (input: {
     readonly chainId: string;
@@ -121,6 +181,11 @@ export type ApprovalQueue = {
     readonly summary: string;
   }) => PendingApproval;
   readonly requestWatchAsset: (input: {
+    /**
+     * The wallet already tracks this token: queue a close-only notice whose
+     * Close answers the site as an approval would (audit M1).
+     */
+    readonly alreadyTracked?: true;
     readonly origin: string;
     readonly token: WatchAssetToken;
   }) => PendingApproval;

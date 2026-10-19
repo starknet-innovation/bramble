@@ -18,6 +18,8 @@ import {
   verifyCalls,
 } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { observedVaultAccountAddresses } from "../runtime/runtime-state";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import type { ArgentMultisigContext } from "./multisig-ops";
 
@@ -63,7 +65,11 @@ export const reviewArgentMultisigCalls = async (
     );
     return { config: review, summary: review.summary };
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    await observedVaultAccountAddresses(deps.wallet, deps.session),
+  );
   const report = verifyCalls(
     normalized,
     verificationContext(context.record, {
@@ -75,5 +81,7 @@ export const reviewArgentMultisigCalls = async (
   if (refusal) return refusal;
   const first = report.calls[0]?.summary ?? "Review Argent multisig call";
   const suffix = report.calls.length > 1 ? ` (+${report.calls.length - 1} more)` : "";
-  return { summary: `${first}${suffix}`.slice(0, MULTISIG_LIMITS.summaryLength) };
+  // Trimmed after the cut: the stored intent refuses a summary with edge
+  // whitespace, and a cut can end on a space (Sherlock 216).
+  return { summary: `${first}${suffix}`.slice(0, MULTISIG_LIMITS.summaryLength).trimEnd() };
 };

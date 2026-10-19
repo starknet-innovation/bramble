@@ -152,28 +152,28 @@
         "acceptable": true,
         "hint": "Weak",
         "level": "weak",
-        "ratio": 0.5222710797934547,
+        "ratio": 0.4,
         "value": "abcdefgh"
       },
       {
         "acceptable": true,
         "hint": "Weak",
         "level": "weak",
-        "ratio": 0.5222710797934547,
+        "ratio": 0.4,
         "value": "password"
       },
       {
         "acceptable": true,
-        "hint": "Fair",
-        "level": "fair",
-        "ratio": 0.7442745387983594,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
         "value": "Password1"
       },
       {
         "acceptable": true,
-        "hint": "Fair",
-        "level": "fair",
-        "ratio": 0.9124799456015206,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
         "value": "Password1!"
       },
       {

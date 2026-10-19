@@ -67,6 +67,7 @@ const record = (
     })),
     owner,
     store,
+    transactionHash: "0x7ab",
   });
 
 const grant = (entrypoint: string, low: string, high = "0", spender = SPENDER) => ({
@@ -118,12 +119,14 @@ describe("recordApproveAllowances", () => {
     expect((await store.list()).map((entry) => entry.amount)).toEqual(["1000"]);
   });
 
-  test("a zero approve still clears the tracked allowance", async () => {
+  test("a zero approve keeps the grant, marked as revoking, until the chain confirms it", async () => {
+    // Recorded when submitted; a revoke that reverts leaves the grant standing
+    // (Sherlock 192), so the row stays until a reading of zero confirms it.
     const store = memoryAllowanceStore();
     await record(store, [grant("approve", "1000")]);
     await record(store, [grant("approve", "0")]);
 
-    expect(await store.list()).toEqual([]);
+    expect(await store.list()).toMatchObject([{ amount: "1000", revoking: true }]);
   });
 
   test("an increase never reduces the tracked allowance", async () => {
@@ -170,12 +173,12 @@ describe("recordApproveAllowances", () => {
     expect((await store.list()).map((entry) => entry.amount)).toEqual(["200"]);
   });
 
-  test("a decrease that empties the allowance clears the entry", async () => {
+  test("a decrease that empties the allowance keeps the grant until the chain agrees", async () => {
     const store = memoryAllowanceStore();
     await record(store, [grant("approve", "1000")]);
     await record(store, [grant("decrease_allowance", "1000")]);
 
-    expect(await store.list()).toEqual([]);
+    expect(await store.list()).toMatchObject([{ amount: "1000", revoking: true }]);
   });
 
   // MCW-V09-108: lower-bound erasure. The wallet does not know the standing
@@ -264,6 +267,7 @@ describe("recordApproveAllowances", () => {
       list: async () => [],
       record: () => Promise.reject(new Error("quota exceeded")),
       remove: async () => undefined,
+      settleRevocations: async () => undefined,
     };
 
     expect(await record(store, [grant("approve", "1000")])).toBeUndefined();

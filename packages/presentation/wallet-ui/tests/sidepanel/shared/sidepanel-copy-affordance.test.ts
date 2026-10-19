@@ -71,6 +71,7 @@ const transferFields: TransferFields = {
   fiatEstimate: "$1.00",
   recipient: COUNTERPARTY,
   recipientLabel: "",
+  recipientResolvedFrom: "",
   signer: "software",
   source: "public",
   speed: "standard",
@@ -191,14 +192,16 @@ describe("truncated identifiers are copyable in full", () => {
         summary: "Send 1 STRK",
       }),
     );
-    // The counterparty now sits in the row's expansion as a <code> with its
-    // control beside it, which is the shared affordance.
-    expect(root.querySelector(".disclosure-body code")?.textContent).toBe(
+    // The counterparty sits in the row's expansion as a <code> with its
+    // control beside it, which is the shared affordance; the transaction hash
+    // and its own control open there too, above it.
+    expect(root.querySelector(`.disclosure-body code[title="${COUNTERPARTY}"]`)?.textContent).toBe(
       accountLabel(COUNTERPARTY),
     );
-    expect(root.querySelector<HTMLElement>(".disclosure-body [data-copy]")?.dataset["copy"]).toBe(
-      COUNTERPARTY,
+    const copies = [...root.querySelectorAll<HTMLElement>(".disclosure-body [data-copy]")].map(
+      (control) => control.dataset["copy"],
     );
+    expect(copies).toEqual(["0x123", COUNTERPARTY]);
     expectEveryTruncatedIdentifierCopyable(root, 1);
   });
 
@@ -223,9 +226,11 @@ describe("truncated identifiers are copyable in full", () => {
     ] as const;
     for (const [view, atLeast] of screens) {
       const root = mount(
-        dashboard(view, status, [], withContacts, { balances: [] }, false, [], [], {}, [], null, [
-          allowance,
-        ]),
+        dashboard(view, status, [], withContacts, { balances: [] }, false, [], [], {}, [], null, {
+          entries: [allowance],
+          notices: [],
+          unavailable: false,
+        }),
       );
       expectEveryTruncatedIdentifierCopyable(root, atLeast);
     }
@@ -285,7 +290,7 @@ describe("truncated identifiers are copyable in full", () => {
           collect_policy: { type: "all" },
           dapp_name: "Example",
           nonce: "0x7",
-          type: "subaccount_invoke",
+          type: "shadow_account_invoke",
         },
       ],
       context,
@@ -329,7 +334,7 @@ describe("truncated identifiers are copyable in full", () => {
         {},
         [],
         null,
-        [],
+        { entries: [], notices: [], unavailable: false },
         null,
         {},
         [fixture.view],
@@ -353,7 +358,7 @@ describe("truncated identifiers are copyable in full", () => {
         {},
         [],
         null,
-        [],
+        { entries: [], notices: [], unavailable: false },
         null,
         {},
         [fixture.view],
@@ -405,7 +410,7 @@ describe("the shared copy binding", () => {
         {},
         [],
         null,
-        [allowance],
+        { entries: [allowance], notices: [], unavailable: false },
       ),
     );
     bindCopyButtons(root);

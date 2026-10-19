@@ -12,7 +12,15 @@
  * dapp, an aggregator response, or a stored proposal, so no case folding and no
  * normalization. An unrecognized selector reports false and is routed to the
  * opaque-call summary rather than being allowed to claim known semantics.
+ *
+ * Its one import is the pinned AVNU route layout, so the swap payee's position
+ * is read from that pin rather than restated here.
  */
+
+import {
+  AVNU_BENEFICIARY_FELT_INDEX,
+  AVNU_MULTI_ROUTE_SWAP,
+} from "@bramble/wallet-model/avnu-route";
 
 /**
  * Entrypoints that grant an ERC20 spending allowance, all sharing the
@@ -116,7 +124,9 @@ const TRANSFER_FROM_ENTRYPOINTS: readonly string[] = [
  * would silently switch off for exactly the shapes the wallet understands least.
  * Every `*transfer_from` spelling puts `to` second whatever follows it, and
  * ERC20 `transfer(to, amount)` puts it first, so the index is knowable from the
- * name even when the rest of the span is not.
+ * name even when the rest of the span is not. AVNU's `multi_route_swap` pays its
+ * proceeds to the `beneficiary` felt of the pinned route layout, so a dapp swap
+ * whose payee mimics a saved address is refused like any other poisoned send.
  *
  * Exact match; any other selector — including the allowance and operator grants,
  * whose first felt is a SPENDER the user is authorizing rather than an address
@@ -126,6 +136,9 @@ const TRANSFER_FROM_ENTRYPOINTS: readonly string[] = [
 export const recipientFeltIndex = (entrypoint: string): number | null => {
   if (entrypoint === "transfer") {
     return 0;
+  }
+  if (entrypoint === AVNU_MULTI_ROUTE_SWAP) {
+    return AVNU_BENEFICIARY_FELT_INDEX;
   }
   return TRANSFER_FROM_ENTRYPOINTS.includes(entrypoint) ? 1 : null;
 };

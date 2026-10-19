@@ -15,10 +15,7 @@ import type {
   DeploymentStatusResponse,
   WalletStatus,
 } from "../../../src/popup/responses/responses";
-import {
-  outcomeReceiptActions,
-  outcomeReceiptSection,
-} from "../../../src/sidepanel/shared/outcome-receipt";
+import { outcomeReceiptSection } from "../../../src/sidepanel/shared/outcome-receipt";
 import { accountLabel } from "../../../src/sidepanel/shared/parts";
 import {
   bindDashboard,
@@ -220,7 +217,7 @@ describe("bindDeploy", () => {
         <div id="deploy-review"></div>
         <p role="status"></p>
       </section>
-      ${outcomeReceiptSection("deploy-success", outcomeReceiptActions("deploy-view-activity"))}
+      ${outcomeReceiptSection("deploy-success")}
     </section>`;
 
   test("quotes the fee as the screen opens, then submits under it", async () => {
@@ -251,6 +248,10 @@ describe("bindDeploy", () => {
     // before pressing rather than as the result of pressing.
     await tick();
     expect(container.querySelector("#deploy-review")?.textContent).toContain("Cost");
+    // The quote is a fee line, so the box is "Cost", not "Cost and limits".
+    expect(container.querySelector("#deploy-review section")?.getAttribute("aria-label")).toBe(
+      "Cost",
+    );
     expect(calls).toEqual([undefined]);
 
     click(container.querySelector("#deploy-button"));
@@ -262,10 +263,13 @@ describe("bindDeploy", () => {
   // only submits under a reviewed fee (see deployment-ops) — then reports HASH
   // in the activity log at `chainStatus`.
   const deployingWallet = (chainStatus: ActivityEntry["status"]) => {
-    const calls = { deploys: 0 };
+    const calls = { deploys: 0, quotes: 0 };
     const wallet = {
       deployAccount: async (fee?: { readonly overallFee: string; readonly unit: "FRI" }) => {
-        if (!fee) return { overallFee: "1000000000000000", unit: "FRI" as const };
+        if (!fee) {
+          calls.quotes += 1;
+          return { overallFee: "1000000000000000", unit: "FRI" as const };
+        }
         calls.deploys += 1;
         return HASH;
       },
@@ -293,11 +297,14 @@ describe("bindDeploy", () => {
   const deployTo = async (chainStatus: ActivityEntry["status"]) => {
     const container = mount(deployMarkup);
     const { calls, wallet } = deployingWallet(chainStatus);
+    const views: string[] = [];
     bindDeploy({
       app: container,
       confirmationDelaysMs: [0],
       render: async () => undefined,
-      setActiveView: () => undefined,
+      setActiveView: (view) => {
+        views.push(view);
+      },
       wallet,
     });
     // The control is busy until the quote lands, so a press can only follow it.
@@ -307,8 +314,12 @@ describe("bindDeploy", () => {
     await tick();
     await tick();
     await tick();
-    return { calls, container };
+    return { calls, container, views };
   };
+
+  // Which of the receipt's two sets of actions shows.
+  const actionsShown = (container: Element, tone: "failed" | "succeeded"): boolean =>
+    container.querySelector(`[data-outcome-actions="${tone}"]`)?.hasAttribute("hidden") === false;
 
   test("submits a deployment and reports the transaction hash on the status line", async () => {
     const { calls, container } = await deployTo("preconfirmed");
@@ -322,6 +333,10 @@ describe("bindDeploy", () => {
       "can submit transactions",
     );
     expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(accountLabel(HASH));
+    // The hash links to the explorer of the network the account was deployed on.
+    const explorer = container.querySelector("#deploy-success-hash-link");
+    expect(explorer?.getAttribute("href")).toBe(`https://starkscan.co/tx/${HASH}`);
+    expect(explorer?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(container.querySelector('[data-outcome-mark="succeeded"]')?.hasAttribute("hidden")).toBe(
       false,
     );
@@ -331,6 +346,9 @@ describe("bindDeploy", () => {
     // The toast is the chain's answer; the handoff is the receipt heading's job.
     expect(toastTexts("success")).toEqual(["Transaction pre-confirmed on Starknet"]);
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
+    // A receipt that stands leads with Activity; Try again is for a refusal.
+    expect(actionsShown(container, "succeeded")).toBe(true);
+    expect(actionsShown(container, "failed")).toBe(false);
   });
 
   // The chain's two refusals. Each turns the receipt into a failure in place —
@@ -366,6 +384,45 @@ describe("bindDeploy", () => {
       expect(errorToasts()).toEqual(["Transaction was not confirmed"]);
       expect(toastTexts("success")).toEqual([]);
     });
+
+    test(`a ${chainStatus} deployment leads with Try again`, async () => {
+      const { container, views } = await deployTo(chainStatus);
+      expect(actionsShown(container, "failed")).toBe(true);
+      expect(actionsShown(container, "succeeded")).toBe(false);
+
+      // One primary: the retry. Activity, where the failure is looked up,
+      // steps down beside it.
+      const [retry, activity] = Array.from(
+        container.querySelectorAll('[data-outcome-actions="failed"] button'),
+      );
+      expect(retry?.textContent).toBe("Try again");
+      expect(retry?.classList.contains("secondary")).toBe(false);
+      expect(activity?.textContent).toContain("View in Activity tab");
+      expect(activity?.classList.contains("secondary")).toBe(true);
+      click(activity ?? null);
+      expect(views).toEqual(["activity"]);
+    });
+
+    test(`Try again after a ${chainStatus} deployment quotes afresh, then deploys`, async () => {
+      const { calls, container } = await deployTo(chainStatus);
+      const deployButton = container.querySelector<HTMLButtonElement>("#deploy-button");
+      click(container.querySelector('[data-outcome-action="retry"]'));
+
+      // Back on the screen it started on, waiting on a new quote rather than
+      // offering the refused fee again.
+      expect(container.querySelector("#deploy-success")?.hasAttribute("hidden")).toBe(true);
+      expect(container.querySelector("#deploy-review-stage")?.hasAttribute("hidden")).toBe(false);
+      expect(container.querySelector("#deploy-review")?.textContent).toBe("");
+      expect(deployButton?.disabled).toBe(true);
+      await tick();
+      expect(calls.quotes).toBe(2);
+      expect(container.querySelector("#deploy-review")?.textContent).toContain("Cost");
+      expect(deployButton?.disabled).toBe(false);
+
+      click(deployButton);
+      await tick();
+      expect(calls.deploys).toBe(2);
+    });
   }
 
   test("reports a deployment failure on the status line and re-enables the button", async () => {
@@ -382,13 +439,22 @@ describe("bindDeploy", () => {
       wallet: wallet as unknown as ShellBindingDeps["wallet"],
     });
 
+    // The quote the screen asked for on its own fails quietly: the reason is on
+    // the status line and in the Cost box, and nothing toasts before a press.
+    await tick();
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      "The deployment was denied.",
+    );
+    expect(errorToasts()).toEqual([]);
+    expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
+
     click(container.querySelector("#deploy-button"));
     await tick();
 
     expect(container.querySelector('[role="status"]')?.textContent).toBe(
       "The deployment was denied.",
     );
-    expect(errorToasts()).toContain("The deployment was denied.");
+    expect(errorToasts()).toEqual(["The deployment was denied."]);
     expect(container.querySelector<HTMLButtonElement>("#deploy-button")?.disabled).toBe(false);
   });
 });

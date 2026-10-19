@@ -83,26 +83,29 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
        its own small control, so it sizes to its label and stays at the start. */
     justify-self: start;
     min-height: ${CONTROL.hitSmall};
-    padding: 0 4px 0 ${SPACE.md};
+    padding: 0 ${SPACE.xs} 0 ${SPACE.md};
   }
   .switch-copy { align-items: center; display: inline-flex; gap: 5px; }
   .switch-copy .icon { height: 13px; width: 13px; }
   .switch-track {
+    --switch-knob: 18px;
+    --switch-track: 24px;
     align-items: center;
     background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     box-sizing: border-box;
     display: inline-flex;
-    height: 24px;
+    height: var(--switch-track);
     justify-content: flex-start;
-    padding: 3px;
+    /* The knob sits centred in the track: the inset is geometry, not rhythm. */
+    padding: calc((var(--switch-track) - var(--switch-knob)) / 2);
     width: 40px;
   }
   .switch-knob {
     background: var(--bramble-muted);
     border-radius: ${RADIUS.full};
-    height: 18px;
-    width: 18px;
+    height: var(--switch-knob);
+    width: var(--switch-knob);
   }
   button.switch-control[data-checked="true"] { color: var(--bramble-text); }
   button.switch-control[data-checked="true"] .switch-track {
@@ -206,7 +209,8 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   /* Select chevron: the glyph is a mask filled with the muted token, so it
      follows every skin. Anchored on the wrapping label (selects always render
      as a label's last child) and centred on the control's 46px height. */
-  select { padding-right: 40px; }
+  /* The chevron owns a hit-sized zone at the control's end. */
+  select { padding-right: ${CONTROL.hit}; }
   label:has(> select:last-child) { position: relative; }
   label:has(> select:last-child)::after {
     background: var(--bramble-muted);

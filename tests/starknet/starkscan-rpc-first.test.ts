@@ -51,31 +51,12 @@ const gateway = (body: unknown) => {
   return { client: createStarkscanClient({ baseUrl: "https://starkscan.test/v1", http }), urls };
 };
 
-const holdingsBody = {
+const balanceBody = {
+  balanceRaw: "77",
+  blockTag: "latest",
   chainId: "SN_MAIN",
-  completeness: {
-    cap: null,
-    capped: false,
-    complete: true,
-    exact: true,
-    lagBlocks: 0,
-    reason: "Complete snapshot.",
-    reasonCode: "complete",
-    truncated: false,
-  },
-  exact: true,
-  items: [
-    {
-      decimals: 18,
-      indexedBalanceRaw: "77",
-      name: "Starknet Token",
-      normalizedTokenAddress: TOKEN,
-      symbol: "STRK",
-      tokenAddress: TOKEN,
-    },
-  ],
   ownerAddress: ACCOUNT,
-  truncated: false,
+  tokenAddress: TOKEN,
 };
 
 const workingBalanceRpc = (reads: string[]) =>
@@ -95,7 +76,7 @@ const failingRpc = () =>
 
 describe("wallet reads prefer the configured RPC", () => {
   test("serves balances from RPC without disclosing the address to the gateway", async () => {
-    const { client, urls } = gateway(holdingsBody);
+    const { client, urls } = gateway(balanceBody);
     const reads: string[] = [];
     const balances = await rpcFirstBalances(client)(balanceInput, () => workingBalanceRpc(reads));
     expect(balances[0]?.balance).toBe("2");
@@ -104,14 +85,18 @@ describe("wallet reads prefer the configured RPC", () => {
   });
 
   test("falls back to the gateway only when the configured endpoints fail", async () => {
-    const { client, urls } = gateway(holdingsBody);
+    const { client, urls } = gateway(balanceBody);
     const balances = await rpcFirstBalances(client)(balanceInput, failingRpc);
     expect(balances[0]?.balance).toBe("77");
-    expect(urls).toHaveLength(1);
+    // #650: the retired token-holdings snapshot is never asked; the rescue
+    // reads the tracked token's latest balance.
+    expect(urls).toEqual([
+      `https://starkscan.test/v1/SN_MAIN/token/${TOKEN}/balance-of/${ACCOUNT}?block_tag=latest`,
+    ]);
   });
 
   test("does not disclose the address after a semantic RPC failure", async () => {
-    const { client, urls } = gateway(holdingsBody);
+    const { client, urls } = gateway(balanceBody);
     await expect(
       rpcFirstBalances(client)(
         balanceInput,
@@ -155,9 +140,7 @@ describe("wallet reads prefer the configured RPC", () => {
 
   test("consults the gateway strictly after the balance RPC attempt", async () => {
     const trace: string[] = [];
-    await rpcFirstBalances(traced(holdingsBody, trace))(balanceInput, () =>
-      tracedFailingRpc(trace),
-    );
+    await rpcFirstBalances(traced(balanceBody, trace))(balanceInput, () => tracedFailingRpc(trace));
     expect(trace).toEqual(["rpc", "gateway"]);
   });
 });

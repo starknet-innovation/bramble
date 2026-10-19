@@ -34,16 +34,43 @@ export const CONNECT_SENDER: RuntimeSender = { id: EXTENSION_ID, url: `${CONNECT
 
 const VAULT_PASSPHRASE = "correct horse battery staple";
 
-/** Mutation counters incremented only when the background changes real state. */
+/**
+ * Mutation counters incremented only when the background changes real state.
+ * Every state-changing collaborator method the harness stubs has a counter
+ * here; `walletStubMethods` and `strk20StubMethods` let the hold-invariant
+ * suite check that against the stubs themselves, so a new mutating stub
+ * cannot go uncounted (Sherlock 208).
+ */
 export type MutationSpy = {
   addCustomNetwork: number;
+  addDerivedAccount: number;
+  createAccount: number;
+  ensureNetworkAccount: number;
   grantOrigin: number;
+  setActiveAccount: number;
   setActiveNetwork: number;
   signHash: number;
   submitDeclare: number;
   submitInvoke: number;
+  submitPrepared: number;
   upsertToken: number;
 };
+
+/** Wallet stub methods that only read state, so they carry no counter. */
+const WALLET_STUB_READS = [
+  "generateMnemonic",
+  "getGrantedAccounts",
+  "readVault",
+  "status",
+] as const;
+
+/** STRK20 stub methods that only read or prepare, so they carry no counter. */
+const STRK20_STUB_READS = [
+  "prepare",
+  "privateBalances",
+  "quoteActions",
+  "shadowAccountCommitment",
+] as const;
 
 /** Bumps a single mutation counter; passed to the stubs as a closure. */
 type Bump = (key: keyof MutationSpy) => void;
@@ -64,12 +91,15 @@ const status: WalletStatus = {
 
 const walletStub = (bump: Bump) => ({
   async createAccount() {
+    bump("createAccount");
     return ACCOUNT;
   },
   async addDerivedAccount() {
+    bump("addDerivedAccount");
     return ACCOUNT;
   },
   async ensureNetworkAccount() {
+    bump("ensureNetworkAccount");
     return ACCOUNT;
   },
   async getGrantedAccounts(target: string) {
@@ -90,11 +120,13 @@ const walletStub = (bump: Bump) => ({
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [ACCOUNT.id], origin: ORIGIN }],
-      schemaVersion: 10 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: ACCOUNT.id, privateKey: "0x123456" }],
     };
   },
   async setActiveAccount() {
+    bump("setActiveAccount");
     return ACCOUNT;
   },
   async signHash() {
@@ -143,7 +175,7 @@ const strk20Stub = (bump: Bump): Strk20Service => ({
       feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" },
     };
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x1";
   },
   async submitActions() {
@@ -151,6 +183,7 @@ const strk20Stub = (bump: Bump): Strk20Service => ({
     return { transactionHash: "0x123" };
   },
   async submitPrepared() {
+    bump("submitPrepared");
     return { transactionHash: "0x123" };
   },
 });
@@ -201,11 +234,16 @@ const rpcStub = (bump: Bump): RuntimeRpc => ({
 export const buildHarness = (): Harness => {
   const spy: MutationSpy = {
     addCustomNetwork: 0,
+    addDerivedAccount: 0,
+    createAccount: 0,
+    ensureNetworkAccount: 0,
     grantOrigin: 0,
+    setActiveAccount: 0,
     setActiveNetwork: 0,
     signHash: 0,
     submitDeclare: 0,
     submitInvoke: 0,
+    submitPrepared: 0,
     upsertToken: 0,
   };
   const bump: Bump = (key) => {
@@ -223,10 +261,29 @@ export const buildHarness = (): Harness => {
 
 /** Sums every mutation counter, for a "nothing changed" assertion. */
 export const totalMutations = (spy: MutationSpy): number =>
-  spy.addCustomNetwork +
-  spy.grantOrigin +
-  spy.setActiveNetwork +
-  spy.signHash +
-  spy.submitDeclare +
-  spy.submitInvoke +
-  spy.upsertToken;
+  Object.values(spy).reduce((total, count) => total + count, 0);
+
+type StubMethods = Readonly<Record<string, (...args: never[]) => Promise<unknown>>>;
+
+/**
+ * Calls every wallet and STRK20 stub method outside the read lists and returns
+ * the ones that bumped no counter, so a new mutating stub cannot go uncounted
+ * (Sherlock 208).
+ */
+export const uncountedStubMethods = async (): Promise<readonly string[]> => {
+  const reads = new Set<string>([...WALLET_STUB_READS, ...STRK20_STUB_READS]);
+  const uncounted: string[] = [];
+  for (const build of [walletStub, strk20Stub]) {
+    let bumped = 0;
+    const stub = build(() => {
+      bumped += 1;
+    }) as unknown as StubMethods;
+    for (const [method, call] of Object.entries(stub)) {
+      if (reads.has(method)) continue;
+      bumped = 0;
+      await call();
+      if (bumped === 0) uncounted.push(method);
+    }
+  }
+  return uncounted;
+};

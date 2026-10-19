@@ -114,6 +114,29 @@ describe("account names section", () => {
     expect(html).toContain('id="new-account"');
   });
 
+  test("offers a Hide control on each visible row", () => {
+    const html = render();
+
+    expect(html).toContain(`data-hide-account="${acctA.id}"`);
+    expect(html).toContain(`aria-label="Hide ${friendlyAccountName(acctA.address)}"`);
+  });
+
+  test("lists hidden accounts separately, with the control that brings them back", () => {
+    const html = render({ ...preferences, hiddenAccountIds: [acctB.id] });
+
+    // The hidden account leaves the naming list...
+    expect(html).not.toContain(`data-account-name-form="${acctB.id}"`);
+    expect(html.split("data-account-name-form=").length - 1).toBe(1);
+    // ...and reappears below with the control that shows it again.
+    expect(html).toContain(`data-reveal-account="${acctB.id}"`);
+    expect(html).toContain(`aria-label="Show ${friendlyAccountName(acctB.address)}"`);
+    expect(html).toContain("Hidden accounts");
+  });
+
+  test("renders no Hidden accounts section when nothing is hidden", () => {
+    expect(render()).not.toContain("Hidden accounts");
+  });
+
   test("returns a half-typed name to the row it was typed in, and to no other", () => {
     const app = paintApp(render());
     const editing = nameField(app, acctB.id);

@@ -255,7 +255,7 @@
         "flags": [
           {
             "code": "address-poisoning",
-            "message": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending."
+            "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending."
           }
         ],
         "networkId": "SN_MAIN",
@@ -268,7 +268,7 @@
         "flags": [
           {
             "code": "address-poisoning",
-            "message": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending."
+            "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending."
           }
         ],
         "networkId": "SN_MAIN",
@@ -323,7 +323,7 @@
         "flags": [
           {
             "code": "address-poisoning",
-            "message": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending."
+            "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending."
           }
         ],
         "networkId": "SN_SEPOLIA",
@@ -336,7 +336,7 @@
         "flags": [
           {
             "code": "address-poisoning",
-            "message": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending."
+            "message": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending."
           }
         ],
         "networkId": "SN_SEPOLIA",

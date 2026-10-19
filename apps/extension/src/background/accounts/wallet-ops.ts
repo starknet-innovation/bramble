@@ -2,8 +2,9 @@
 
 import type { MultisigStore } from "@bramble/multisig/repository";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@bramble/starknet/rpc";
-import { type ActivityLog, systemClock } from "@bramble/transactions/activity";
+import { type ActivityLog, activityToken, systemClock } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import {
@@ -13,10 +14,12 @@ import {
 } from "@bramble/transactions/verify";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { type BalanceSnapshotStore, cachedBalances } from "../portfolio/balance-snapshots";
 import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
+import { readAccountPortfolio } from "../portfolio/portfolio-balances";
 import {
   readBalancesInput,
   readFeeReviewInput,
@@ -35,13 +38,23 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import { failureNoticeMessage } from "../transactions/tx-observation";
+import {
+  handleAccountSignability,
+  handleRecoverArgentAccount,
+  handleRecoverBraavosAccount,
+  handleReviewArgentRecovery,
+  handleReviewBraavosRecovery,
+} from "./account-signability";
+import { handleSetAccountHidden } from "./account-visibility-ops";
 import { handleActivity } from "./activity-ops";
-import { submitReviewedAccountDeployment } from "./deployment-ops";
+import { recordAutoDeployment, submitReviewedAccountDeployment } from "./deployment-ops";
+import { handleResolveStarkName } from "./stark-name-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**
@@ -115,7 +128,10 @@ const transferContext = async (
   if (!token || token.networkId !== account.networkId) {
     return { error: "token unavailable" } as const;
   }
-  return { account, authorized, preferences, token, vaultPassphrase } as const;
+  // The recipient rule judges against every address the user knows: their
+  // accounts, contacts, and the recipients this wallet has paid (audit #163).
+  const trusted = await withTrustedRecipients(deps, preferences, vault.accounts);
+  return { account, authorized, preferences: trusted, token, vaultPassphrase } as const;
 };
 
 /**
@@ -167,6 +183,7 @@ const handleGetBalances: WalletOpsHandler = async (deps, message) => {
   }
   const preferences = await deps.preferencesStore.read();
   const network = STARKNET_NETWORKS[context.networkId];
+  const now = (deps.now ?? systemClock)();
   const snapshot = await cachedBalances(
     deps.balanceSnapshots,
     {
@@ -174,14 +191,22 @@ const handleGetBalances: WalletOpsHandler = async (deps, message) => {
       cachedOnly: input.cached,
       force: input.refresh,
       networkId: network.id,
-      now: (deps.now ?? systemClock)(),
+      now,
     },
-    () =>
-      deps.runtimeRpc.getTokenBalances({
-        accountAddress: context.account.address,
-        rpcUrls: networkRpcUrls(network, preferences),
-        tokens: preferences.tokens.filter((token) => token.networkId === network.id),
-      }),
+    (previous) =>
+      readAccountPortfolio(
+        deps,
+        {
+          accountAddress: context.account.address,
+          forced: input.refresh,
+          networkId: network.id,
+          now,
+          preferences,
+          rpcUrls: networkRpcUrls(network, preferences),
+          scope: `${deps.session.generation()}:${context.account.id}`,
+        },
+        previous,
+      ),
   );
   if (!snapshot) return { error: "balance snapshot unavailable" };
   return {
@@ -315,37 +340,71 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
   if (!input.reviewedFee) {
     return FEE_REVIEW_REQUIRED;
   }
-  // The fee the review step showed, echoed back by the panel, is the ceiling this
-  // send may sign under (MCW-V09-119); one whose cost ran past it is refused.
-  const result = await deps.runtimeRpc.submitErc20Transfer({
-    account,
-    amount: input.amount,
-    isAuthorized: authorized.isCurrent,
-    recipient: input.recipient,
-    ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
-    reviewedFee: input.reviewedFee,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: accountHashSigner(deps, account, vaultPassphrase),
-    speed: input.speed,
-    token,
-  });
-  await recordSubmittedActivity(deps.activity, {
+  const activityFor = (hash: string) => ({
     accountId: account.id,
     amount: input.amount,
     counterparty: input.recipient,
-    hash: result.transactionHash,
-    kind: "transfer",
+    direction: "out" as const,
+    hash,
+    kind: "transfer" as const,
     networkId: account.networkId,
     summary: report.calls[0]?.summary ?? `Send ${token.symbol}`,
-    token: token.symbol,
+    ...activityToken(token),
   });
-  return { ok: true, transactionHash: result.transactionHash };
+  // The invoke's signed hash, kept so a lost reply stays traceable (audit #173).
+  let signedHash: string | undefined;
+  let transactionHash: string;
+  let deploymentHash: string | undefined;
+  try {
+    // The fee the review step showed, echoed back by the panel, is the ceiling this
+    // send may sign under (MCW-V09-119); one whose cost ran past it is refused.
+    const result = await deps.runtimeRpc.submitErc20Transfer({
+      account,
+      amount: input.amount,
+      isAuthorized: authorized.isCurrent,
+      onSigned: async (signed) => {
+        signedHash = signed.transactionHash;
+      },
+      recipient: input.recipient,
+      ...(input.reviewedDeploymentFee
+        ? { reviewedDeploymentFee: input.reviewedDeploymentFee }
+        : {}),
+      reviewedFee: input.reviewedFee,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+      signHash: accountHashSigner(deps, account, vaultPassphrase),
+      speed: input.speed,
+      token,
+    });
+    ({ deploymentTransactionHash: deploymentHash, transactionHash } = result);
+  } catch (error) {
+    await afterBroadcast(() => recordAutoDeployment(deps.activity, account, error));
+    if (!(error instanceof IndeterminateRpcWriteError)) {
+      throw error;
+    }
+    // The transfer may already be on chain. Record it as pending so Activity
+    // and the reconciler can follow it, and tell the panel the outcome is
+    // unknown so it never offers a blind re-send.
+    const pending = signedHash;
+    if (pending !== undefined) {
+      await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(pending)));
+    }
+    return submissionUnknownResponse(error.message, signedHash);
+  }
+  await afterBroadcast(() => recordAutoDeployment(deps.activity, account, deploymentHash));
+  await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(transactionHash)));
+  return { ok: true, transactionHash };
 };
 
 /**
  * Drains the failure notices background reconciliation recorded while the side
  * panel was closed. Each notice is returned exactly once; the activity entry
  * keeps its terminal status whether or not the notice was ever displayed.
+ *
+ * Multisig transactions and deployments are journaled under the multisig's own
+ * id, not the signing account's, so every stored multisig on the active network
+ * is drained too; otherwise their late failures were never shown (Sherlock
+ * 221). A scope whose drain fails is skipped, so one bad read never hides the
+ * others.
  */
 const handleTransactionAlerts: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.transactionAlerts")) {
@@ -355,10 +414,21 @@ const handleTransactionAlerts: WalletOpsHandler = async (deps, message) => {
   if (context.error !== undefined) {
     return { alerts: [], ok: true };
   }
-  const entries = await deps.activity
-    .takeFailureNotices({ accountId: context.account.id, networkId: context.networkId })
-    .catch(() => []);
-  return { alerts: entries.map(failureNoticeMessage), ok: true };
+  const multisigs = (await deps.multisigStore?.listMultisigs().catch(() => [])) ?? [];
+  const accountIds = [
+    context.account.id,
+    ...multisigs
+      .filter((record) => record.networkId === context.networkId)
+      .map((record) => record.id),
+  ];
+  const alerts: string[] = [];
+  for (const accountId of accountIds) {
+    const entries = await deps.activity
+      .takeFailureNotices({ accountId, networkId: context.networkId })
+      .catch(() => []);
+    alerts.push(...entries.map(failureNoticeMessage));
+  }
+  return { alerts, ok: true };
 };
 
 const handleLock: WalletOpsHandler = async (deps, message) => {
@@ -398,10 +468,17 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
 const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.activity": handleActivity,
   "wallet.deployAccount": handleDeployAccount,
+  "wallet.accountSignability": handleAccountSignability,
+  "wallet.recoverArgentAccount": handleRecoverArgentAccount,
+  "wallet.recoverBraavosAccount": handleRecoverBraavosAccount,
+  "wallet.reviewArgentRecovery": handleReviewArgentRecovery,
+  "wallet.reviewBraavosRecovery": handleReviewBraavosRecovery,
   "wallet.deploymentStatus": handleDeploymentStatus,
   "wallet.getBalances": handleGetBalances,
   "wallet.lock": handleLock,
+  "wallet.resolveStarkName": handleResolveStarkName,
   "wallet.reviewTransfer": handleReviewTransfer,
+  "wallet.setAccountHidden": (deps, message) => handleSetAccountHidden(deps, message),
   "wallet.transactionAlerts": handleTransactionAlerts,
   "wallet.transfer": handleTransfer,
   "wallet.verifyClassHash": handleVerifyClassHash,

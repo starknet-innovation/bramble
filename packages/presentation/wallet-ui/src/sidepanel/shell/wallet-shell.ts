@@ -185,11 +185,17 @@ export const shieldTile = (
   ready: boolean,
   deployment: boolean | null = null,
   fundedForFees: boolean | null = true,
+  readOnly = false,
 ): string => {
   const needsDeploy = deployment === false;
   const needsFunds = needsDeploy && fundedForFees === false;
   const body = `<span class="tile-icon">${icon("shield")}</span>
       <span class="tile-label">Shield</span>`;
+  // A read-only account cannot sign the activation or the shield, so the tile
+  // is a true disabled control, not a link into a flow that fails at the end.
+  if (readOnly) {
+    return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable — this account is read only">${body}</button>`;
+  }
   if (tokenId === null) {
     return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
   }

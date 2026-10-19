@@ -13,8 +13,9 @@ import type { OnboardingSurfaceBrowser } from "../onboarding/onboarding-surface"
 import type { RuntimeSender } from "../routing/senders";
 import type { AlarmsApi } from "../transactions/tx-monitor";
 import type { SessionAlarmsApi } from "./session-expiry-alarm";
+import type { UpdateRuntime } from "./update-ready";
 
-type RuntimeApi = {
+type RuntimeApi = UpdateRuntime & {
   readonly getManifest?: () => { readonly version?: string };
   readonly getPlatformInfo?: () => Promise<unknown>;
   readonly getURL?: (path: string) => string;

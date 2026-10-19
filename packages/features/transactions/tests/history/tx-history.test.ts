@@ -234,24 +234,24 @@ describe("mergeActivity", () => {
     expect(merged.map((entry) => entry.hash)).toEqual(["0xbbb", "0xaaa", "0xccc"]);
   });
 
-  test("de-dupes by hash and keeps the local record's summary on a collision", () => {
+  test("de-dupes by hash and keeps the local record's summary and status on a collision", () => {
     // The chain reports the same transaction the wallet submitted (leading-zero
-    // spelling); the local, richer summary must win, once. The status is
-    // reconciled to accepted because the chain scan proves the transfer was
-    // included (its Transfer event was emitted), closing the stuck-pending gap.
+    // spelling); the local, richer summary must win, once. The status stays as
+    // the local log has it: a Transfer for the hash does not prove the
+    // transaction succeeded (#653), so only the status re-poll settles it.
     const merged = mergeActivity(
       [localEntry("0x7ab", 4000, "pending")],
       [chainEntry("0x07ab", 4000)],
     );
     expect(merged).toHaveLength(1);
     expect(merged[0]?.summary).toBe("Send from wallet 0x7ab");
-    expect(merged[0]?.status).toBe("accepted");
+    expect(merged[0]?.status).toBe("pending");
   });
 
   test("leaves a terminal local status untouched even when the chain scan matches", () => {
     // A locally reverted row must not be flipped to accepted: terminal states are
-    // set by the authoritative status re-poll, and a reverted transaction emits
-    // no Transfer event, so a chain match here can only be a spurious collision.
+    // set by the authoritative status re-poll. A reverted transaction still
+    // emits its fee Transfer, so a chain match proves nothing about success.
     const merged = mergeActivity(
       [localEntry("0x7ab", 4000, "reverted")],
       [chainEntry("0x07ab", 4000)],

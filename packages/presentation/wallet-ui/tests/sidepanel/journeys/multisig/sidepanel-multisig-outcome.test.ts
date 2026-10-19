@@ -1,8 +1,10 @@
 /** Terminal and blocked multisig outcomes use familiar wallet feedback. */
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
+import { SUBMISSION_UNKNOWN } from "../../../../src/sidepanel/runtime/friendly-error-shared";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
@@ -181,4 +183,67 @@ test("opens the deployed account from the final deployment stage", async () => {
   expect(action?.textContent).toContain("Go to deployed account");
   action?.click();
   expect(opened).toEqual([fixture.record.id]);
+});
+
+// Errors audit F4: a deployment whose reply was lost may be on chain. It is
+// not a failure, and Deploy is not offered again.
+test("shows a lost deployment reply as outcome unknown and keeps Deploy down", async () => {
+  const fixture = await makeArgentMultisigFixture();
+  const signer = fixture.status.accounts[0];
+  if (!signer) throw new Error("signer fixture unavailable");
+  const unknown = new SubmissionUnknownError(
+    "That didn't complete. If it was a transaction, check Activity before trying again.",
+    null,
+  );
+  const app = mountMultisigUi(
+    multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+    await makeMultisigUiClient({
+      deployMultisig: async () => {
+        throw unknown;
+      },
+    }),
+    fixture.status,
+  );
+  const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+  form?.requestSubmit();
+  await flushMultisigUi();
+  form?.requestSubmit();
+  await flushMultisigUi();
+
+  // The generic lost-reply sentence gives way to the deployment's own.
+  const line = SUBMISSION_UNKNOWN("The deployment");
+  expect(app.querySelector("#multisig-deploy-result")?.textContent).toBe(line);
+  expect(app.textContent).not.toContain("Deployment failed");
+  expect(document.querySelector(".toast.warning .toast-text")?.textContent).toBe(line);
+  expect(document.querySelector(".toast.error")).toBeNull();
+  const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  expect(submit?.disabled).toBe(true);
+});
+
+// A refusal the gate raises before anything is claimed or signed is a known
+// failure: red, with its recovery line, and the review is offered again.
+test("keeps a known pre-submit deployment refusal red and resets the review", async () => {
+  const fixture = await makeArgentMultisigFixture();
+  const signer = fixture.status.accounts[0];
+  if (!signer) throw new Error("signer fixture unavailable");
+  const app = mountMultisigUi(
+    multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+    await makeMultisigUiClient({
+      deployMultisig: async () => {
+        throw new Error("Argent multisig deployment address needs STRK before deployment");
+      },
+    }),
+    fixture.status,
+  );
+  const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
+  form?.requestSubmit();
+  await flushMultisigUi();
+  form?.requestSubmit();
+  await flushMultisigUi();
+
+  expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain("Fund 0x");
+  expect(document.querySelector(".toast.warning")).toBeNull();
+  expect(form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
+    "Check fee and address",
+  );
 });

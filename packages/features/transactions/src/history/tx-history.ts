@@ -14,7 +14,11 @@
  */
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import { type ActivityEntry, isUnresolvedActivityStatus } from "@bramble/transactions/activity";
+import {
+  type ActivityEntry,
+  activityToken,
+  clampActivitySummary,
+} from "@bramble/transactions/activity";
 import {
   canonicalFelt,
   isStarkFieldElement,
@@ -24,8 +28,6 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import { hash } from "starknet";
-
-const MAX_SUMMARY_LENGTH = 200;
 
 /**
  * The Starknet event selector emitted by an ERC20 `transfer`.
@@ -123,6 +125,13 @@ const transferDirection = (parties: TransferParties, account: string): TransferD
  * token generation are discoverable. The counterparty is the other party to the
  * transfer, canonicalized to `0x`-hex; a zero address (mint/burn) is kept so
  * received-by-mint activity is not silently hidden.
+ *
+ * A zero-amount transfer is dropped in both directions (audit #163): on OZ
+ * ERC20 tokens anyone may call `transfer_from(victim, lookalike, 0)` with no
+ * allowance, and a lookalike may send the victim 0, so such an event proves
+ * nothing about the account and exists only to plant a copyable lookalike
+ * counterparty in the feed. The user's own zero-value sends keep their local
+ * wallet-recorded row, which owns the hash in {@link mergeActivity}.
  */
 export const decodeTransferEvent = (
   event: HistoryEvent,
@@ -142,7 +151,7 @@ export const decodeTransferEvent = (
   const parties = readTransferParties(event);
   const txHash =
     typeof event.transaction_hash === "string" ? canonicalFelt(event.transaction_hash) : null;
-  if (parties === null || txHash === null) {
+  if (parties === null || txHash === null || BigInt(parties.amountRaw) === 0n) {
     return null;
   }
   if (!isSafeBlockNumber(event.block_number)) {
@@ -163,8 +172,6 @@ export const decodeTransferEvent = (
 
 const shortAddress = (address: string): string =>
   address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
-
-const clampSummary = (summary: string): string => summary.slice(0, MAX_SUMMARY_LENGTH);
 
 /**
  * Folds a decoded on-chain transfer into a canonical {@link ActivityEntry} for
@@ -193,13 +200,14 @@ export const onChainActivityEntry = (input: {
     accountId,
     amount,
     counterparty: decoded.counterparty,
+    direction: decoded.direction,
     hash: decoded.hash,
     kind: "transfer",
     networkId,
     status: "accepted",
     submittedAt: timestampMs,
-    summary: clampSummary(summary),
-    token: token.symbol,
+    summary: clampActivitySummary(summary),
+    ...activityToken(token),
   };
 };
 
@@ -220,51 +228,117 @@ const txKey = (entry: ActivityEntry): string =>
 // source) so the separator can never appear inside a felt-derived value or a
 // free-form token symbol and make two distinct legs alias.
 const legKey = (entry: ActivityEntry): string =>
-  `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
+  `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.tokenAddress ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
+
+// The symbol the explorer lane gives a token the wallet does not track.
+const UNTRACKED_TOKEN_SYMBOL = "TOKEN";
+
+/**
+ * A tracked token re-labelled with the identity Activity gives a token it does
+ * not track. Used for a token the wallet flags as likely spam: its stored
+ * symbol may spoof a real one ("USDC"), and Activity must not repeat it, nor
+ * price it or show its logo by that symbol (Sherlock 249). Rows for such a
+ * token then fall under the untracked-token rules of
+ * {@link withoutPlantedRows}.
+ */
+export const asUntrackedToken = (token: TokenConfig): TokenConfig => ({
+  ...token,
+  name: "Untracked token",
+  symbol: UNTRACKED_TOKEN_SYMBOL,
+});
+
+const isZeroAmountLabel = (amount: string | undefined): boolean =>
+  amount !== undefined && /^0(?:\.0*)?$/.test(amount);
+
+/**
+ * Applies the planted-row rule of {@link decodeTransferEvent} and the explorer
+ * lane to rows already persisted before it existed (audit #163). Stored rows
+ * reach {@link mergeActivity} as `local` and are kept unconditionally, so a
+ * zero-value or untracked-token "Sent to" row planted under an older version
+ * would otherwise keep offering a one-click copy of the lookalike until the
+ * per-scope cap evicted it. Rows this wallet recorded itself (`origin:
+ * "wallet"`) are never touched. For rows of unknown origin: zero-amount
+ * transfers and outgoing untracked-token transfers are dropped, and an
+ * incoming untracked-token transfer keeps its row but loses its counterparty.
+ */
+export const withoutPlantedRows = (entries: readonly ActivityEntry[]): readonly ActivityEntry[] =>
+  entries.flatMap((entry): readonly ActivityEntry[] => {
+    if (entry.origin === "wallet" || entry.kind !== "transfer") {
+      return [entry];
+    }
+    if (isZeroAmountLabel(entry.amount)) {
+      return [];
+    }
+    if (entry.token !== UNTRACKED_TOKEN_SYMBOL) {
+      return [entry];
+    }
+    if (entry.summary.startsWith("Sent ")) {
+      return [];
+    }
+    const { counterparty: _untrusted, ...withoutCounterparty } = entry;
+    return [withoutCounterparty];
+  });
+
+/**
+ * Which lane discovered a set of history rows: the wallet's own RPC `getEvents`
+ * scan, or a third party's explorer answer. It is provenance only. Neither lane
+ * settles the status of a transaction the wallet is still observing (see
+ * {@link mergeActivity}).
+ */
+export type HistoryLane = "chain-events" | "explorer";
+
+// Local rows by leg, plus the transactions the local log owns.
+const indexLocalLegs = (
+  local: readonly ActivityEntry[],
+): {
+  readonly byKey: Map<string, ActivityEntry>;
+  readonly localTxs: ReadonlySet<string>;
+} => {
+  const byKey = new Map<string, ActivityEntry>();
+  const localTxs = new Set<string>();
+  for (const entry of local) {
+    const key = legKey(entry);
+    if (byKey.has(key)) {
+      continue;
+    }
+    byKey.set(key, entry);
+    localTxs.add(txKey(entry));
+  }
+  return { byKey, localTxs };
+};
 
 /**
  * Merges the wallet's locally recorded activity with transactions discovered on
  * chain, sorted newest-first. A locally submitted transaction collapses every
  * chain leg that shares its hash: the local record carries the richer,
  * user-facing summary, so it keeps its identity while purely chain-discovered
- * transactions are added around it. The one exception is status: a local row
- * still unresolved (`pending` or the provisional `preconfirmed`) is reconciled
- * to `accepted` when the chain scan found a
- * `Transfer` event for its hash, since an emitted event proves the transaction
- * was included and succeeded (a reverted transaction emits none). This closes
- * the gap where the status re-poll fails but the event scan succeeds,
- * which would otherwise leave a confirmed transfer showing as provisional.
- * Terminal local states (`accepted`, `rejected`, `reverted`) are authoritative
- * and left untouched. Chain rows with no local record are de-duplicated per leg, so a
- * swap or multicall keeps all of its transfers rather than showing one arbitrary
- * leg. The result is the union, never fewer rows than the local log.
+ * transactions are added around it.
+ *
+ * A chain leg never changes a local row's status, from either lane. A
+ * `Transfer` event for a hash does not prove the transaction succeeded: a
+ * reverted Starknet transaction still pays its fee, and the fee payment emits
+ * a `Transfer` from the account that the scan cannot tell apart from a value
+ * transfer (#653). Only the status re-poll, which reads the receipt's
+ * execution status, settles a local row; until then it stays unresolved, and
+ * an observation that never resolves is retired with its "could not confirm"
+ * notice rather than shown as done.
+ *
+ * Both sides are keyed per leg, so a swap or multicall keeps all of its
+ * transfers rather than showing one arbitrary leg. That includes the local
+ * side: a merged result is persisted and comes back as `local` on the next
+ * merge, so keying local rows per transaction would collapse a stored
+ * multi-leg transaction for good (Sherlock 204). The result is the union,
+ * never fewer rows than the local log.
  */
 export const mergeActivity = (
   local: readonly ActivityEntry[],
   onChain: readonly ActivityEntry[],
 ): readonly ActivityEntry[] => {
-  const byKey = new Map<string, ActivityEntry>();
-  const localTxKeys = new Set<string>();
-  for (const entry of local) {
-    localTxKeys.add(txKey(entry));
-    byKey.set(txKey(entry), entry);
-  }
+  const { byKey, localTxs } = indexLocalLegs(local);
   for (const entry of onChain) {
-    const tk = txKey(entry);
-    if (localTxKeys.has(tk)) {
-      // A local record owns this transaction and keeps its richer summary, so
-      // the chain leg adds no row. But an emitted `Transfer` proves the
-      // transaction was included and succeeded, so a still-unresolved local row
-      // is reconciled to `accepted` even when the status re-poll never
-      // landed. Terminal local states are left untouched.
-      const localMatch = byKey.get(tk);
-      if (
-        localMatch !== undefined &&
-        isUnresolvedActivityStatus(localMatch.status) &&
-        entry.status === "accepted"
-      ) {
-        byKey.set(tk, { ...localMatch, status: "accepted" });
-      }
+    if (localTxs.has(txKey(entry))) {
+      // A local record owns this transaction and keeps its richer summary and
+      // its status, so the chain leg adds nothing.
       continue;
     }
     const key = legKey(entry);

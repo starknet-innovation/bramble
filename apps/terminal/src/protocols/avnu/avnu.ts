@@ -19,7 +19,6 @@ import { checkedAvnuExchangeCall } from "./avnu-intent";
 import {
   type AvnuRoute,
   buildApproveCall,
-  DEFAULT_SLIPPAGE_BPS,
   fetchAvnuExchangeCall,
   fetchAvnuQuote,
   isAvnuRoute,
@@ -28,6 +27,7 @@ import {
   toExchangeCall,
 } from "./avnu-swap";
 import { AVNU_API } from "../constants";
+import { DEFAULT_SLIPPAGE_BPS } from "../support/slippage";
 import type { SwapParams, SwapQuote, SwapQuoteParams } from "../types";
 
 /**

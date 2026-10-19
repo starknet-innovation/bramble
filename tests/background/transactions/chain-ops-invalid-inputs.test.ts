@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { typedDataHash } from "@bramble/starknet/typed-data";
 import { createMemoryStore } from "@bramble/store/kv";
+import { memoryActivityLog } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
@@ -57,6 +58,7 @@ const walletStub = (granted: readonly AccountRef[]) =>
 
 const deps = (session: UnlockSession, granted: readonly AccountRef[] = []): ChainOpsDeps =>
   ({
+    activity: memoryActivityLog(),
     // A real queue: the sign handler probes queue admission before it reads the
     // session, so a stub without `canAdmit` would fail on the probe rather than
     // on the branch under test.

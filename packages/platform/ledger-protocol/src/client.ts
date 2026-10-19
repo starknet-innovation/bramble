@@ -44,6 +44,8 @@ type DevicePublicKeyResponse = DeviceResponseBase & { readonly publicKey: Uint8A
 type DeviceHashSignResponse = DeviceResponseBase & {
   readonly r: Uint8Array;
   readonly s: Uint8Array;
+  // The pinned library also returns the recovery byte; the wallet never reads it.
+  readonly v?: number | undefined;
 };
 
 /**

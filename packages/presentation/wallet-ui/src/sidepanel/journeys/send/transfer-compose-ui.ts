@@ -3,11 +3,14 @@
  * module changes only extension-owned form state and delegates journey stages
  * to the parent transfer state machine.
  */
+import { normalizeStarkName } from "@bramble/starknet/stark-name";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import type { StarkNameResolutionResponse } from "../../../popup/responses/responses";
 import { formatFiat } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
 import { bindTokenDropdown } from "../../shared/token-dropdown";
 import { setAddressBookDraft } from "../../shell/address-draft";
+import { isUnlistedRecipient, knownRecipientLabel, matchingRecipients } from "./recipient-rows";
 import {
   balanceShortcut,
   fiatInputToken,
@@ -16,6 +19,7 @@ import {
   tokenInputFiat,
 } from "./send-model";
 import {
+  isStarkName,
   recipientFieldError,
   type TransferExitView,
   type TransferFields,
@@ -37,6 +41,18 @@ export const sendFormInput = (form: HTMLFormElement, name: string): HTMLInputEle
 const setSendFormValue = (form: HTMLFormElement, name: string, value: string): void => {
   const input = sendFormInput(form, name);
   if (input) input.value = value;
+};
+
+/**
+ * Clears the chosen recipient when the user steps back to the recipient stage,
+ * so no review can be built from a recipient the current step no longer shows
+ * (audit 248). A scoped-intent recipient is cleared too: going Back is an
+ * explicit request to choose again.
+ */
+export const clearSendRecipient = (form: HTMLFormElement): void => {
+  setSendFormValue(form, "recipient", "");
+  setSendFormValue(form, "recipientLabel", "");
+  setSendFormValue(form, "recipientResolvedFrom", "");
 };
 
 const copySelectedGlyph = (form: HTMLFormElement, source: Element | null): void => {
@@ -81,9 +97,26 @@ export const restoreTransferCompose = (form: HTMLFormElement, fields: TransferFi
   }
 };
 
+// The display currency rides on the toggle itself. The label beside it is not
+// a source: in fiat mode it names the token, so reading the currency back from
+// it turned EUR and GBP into USD after one round trip.
 const currencyFor = (form: HTMLFormElement): Currency => {
-  const value = form.querySelector("#send-unit-label")?.textContent?.toLowerCase();
+  const value = form.querySelector<HTMLElement>("#send-unit-toggle")?.dataset["currency"];
   return value === "eur" || value === "gbp" ? value : "usd";
+};
+
+// The toggle names the unit it switches to: the currency while entering a
+// token amount, the selected token while entering a fiat one. Repainted
+// whenever the mode or the token changes, so it never names a token the user
+// has since replaced.
+const syncUnitToggle = (form: HTMLFormElement): void => {
+  const unit =
+    form.dataset["amountMode"] === "fiat"
+      ? sendFormInput(form, "tokenSymbol")?.value || "Token"
+      : currencyFor(form).toUpperCase();
+  const label = form.querySelector("#send-unit-label");
+  if (label) label.textContent = unit;
+  form.querySelector("#send-unit-toggle")?.setAttribute("aria-label", `Enter an amount in ${unit}`);
 };
 
 const updateAmountPresentation = (
@@ -142,26 +175,12 @@ const applySelectedAsset = (form: HTMLFormElement, row: HTMLElement): void => {
     balanceNode.textContent = sendBalanceLine("public", fields["tokenFormatted"] ?? "0", symbol);
   }
   copySelectedGlyph(form, row.querySelector(".send-asset-glyph"));
+  syncUnitToggle(form);
   const visible = form.querySelector<HTMLInputElement>("#send-amount-input");
   if (visible) visible.value = "";
   setSendFormValue(form, "amount", "");
   setSendFormValue(form, "fiatEstimate", "");
 };
-
-// The name of the row the typed address belongs to: one of the user's own
-// accounts, a saved contact, or a shared account, all on this network. Compared
-// as felts, so a padded or differently cased spelling of a known address is
-// still known. Names only ever come from the user's own rows, never from the
-// typed text, and the review keeps the real address beside them.
-const knownRecipientLabel = (form: HTMLFormElement, address: string): string | undefined =>
-  [...form.querySelectorAll<HTMLElement>("[data-send-recipient]")].find((row) =>
-    sameFelt(row.dataset["sendRecipient"] ?? "", address),
-  )?.dataset["sendRecipientLabel"];
-
-// True when the typed address matches no row on the screen. The same lookup as
-// the name, so "Save address" and the name shown can never disagree.
-const isUnlistedRecipient = (form: HTMLFormElement, address: string): boolean =>
-  knownRecipientLabel(form, address) === undefined;
 
 // True when the row sits in a folder the user has minimized. The archive starts
 // that way; every other folder starts open.
@@ -173,10 +192,17 @@ const bindRecipientControls = (
   goTo: (stage: TransferStage) => void,
   onFields: (fields: TransferFields) => void,
   navigate?: (view: TransferExitView) => void,
+  resolveName?: (name: string, networkId: string) => Promise<StarkNameResolutionResponse | null>,
 ): void => {
   const search = form.querySelector<HTMLInputElement>("#send-recipient-search");
   const continueButton = form.querySelector<HTMLButtonElement>("#send-recipient-continue");
   const saveRow = form.querySelector<HTMLElement>("#send-recipient-save-row");
+  const note = form.querySelector<HTMLElement>("#send-recipient-note");
+  const setNote = (message: string): void => {
+    if (!note) return;
+    note.textContent = message;
+    note.toggleAttribute("hidden", message.length === 0);
+  };
   const updateSearch = (): void => {
     const query = search?.value.trim().toLowerCase() ?? "";
     let visible = 0;
@@ -198,14 +224,25 @@ const bindRecipientControls = (
     });
     form.querySelector("#send-recipient-empty")?.toggleAttribute("hidden", visible > 0);
     const typed = search?.value ?? "";
-    const valid = recipientFieldError(typed) === null;
-    if (continueButton) continueButton.disabled = !valid;
+    // A bare address, or a Starknet name the background can resolve, is enough
+    // to step forward; anything else keeps the step from advancing.
+    const addressValid = recipientFieldError(typed) === null;
+    const nameValid = !addressValid && isStarkName(typed);
+    if (continueButton) continueButton.disabled = !(addressValid || nameValid);
     // Offered only for an address that is both usable and not already known,
     // so saving is a deliberate act on a new recipient rather than a way to
-    // duplicate a contact under a second name.
-    saveRow?.toggleAttribute("hidden", !(navigate && valid && isUnlistedRecipient(form, typed)));
+    // duplicate a contact under a second name. A name is never offered: the
+    // address book holds addresses, and a name only becomes one once resolved.
+    saveRow?.toggleAttribute(
+      "hidden",
+      !(navigate && addressValid && isUnlistedRecipient(form, typed)),
+    );
   };
-  search?.addEventListener("input", updateSearch);
+  search?.addEventListener("input", () => {
+    // A new keystroke retires the previous name's resolving or error note.
+    setNote("");
+    updateSearch();
+  });
   // Folder state is DOM-local: the recipient stage is toggled rather than
   // re-rendered, so a collapse survives without threading state through the
   // entrypoint the way the drawer does.
@@ -228,9 +265,11 @@ const bindRecipientControls = (
       navigate?.("address-book");
     }
   });
-  const choose = (address: string, label: string): void => {
+  const choose = (address: string, label: string, resolvedFrom: "" | "stark-name" = ""): void => {
+    setNote("");
     setSendFormValue(form, "recipient", address);
     setSendFormValue(form, "recipientLabel", label);
+    setSendFormValue(form, "recipientResolvedFrom", resolvedFrom);
     onFields(transferFields(form));
     goTo("details");
   };
@@ -239,15 +278,108 @@ const bindRecipientControls = (
       choose(row.dataset["sendRecipient"] ?? "", row.dataset["sendRecipientLabel"] ?? ""),
     );
   });
-  continueButton?.addEventListener("click", () => {
-    const address = search?.value.trim() ?? "";
-    if (recipientFieldError(address)) {
+  // Reads a name-resolution failure into the same short, literal note the
+  // resolving step shows. A resolved outcome never reaches here.
+  const resolutionFailure = (
+    response: StarkNameResolutionResponse | null,
+    name: string,
+  ): string => {
+    if (response === null) {
+      return `Could not resolve ${name}.`;
+    }
+    switch (response.resolution.status) {
+      case "not-found":
+        return `No address found for ${name}.`;
+      case "unreachable":
+        return `Could not reach the network to resolve ${name}.`;
+      case "unsupported-network":
+        return "Starknet names are not available on this network.";
+      default:
+        return `Could not resolve ${name}.`;
+    }
+  };
+  // Commits the typed value as the recipient. A bare address is taken as is; a
+  // Starknet name is resolved to an address first, and only the resolved
+  // address is reviewed (its label is the canonical name the wallet resolved).
+  // Shared by "Continue with address" and Enter in the search field: without
+  // the latter, Enter fell through to implicit form submission and reviewed the
+  // PREVIOUSLY chosen hidden recipient, not the address on screen (audit 248).
+  let resolving = false;
+  const commitTyped = async (): Promise<void> => {
+    if (resolving) return;
+    const typed = search?.value.trim() ?? "";
+    if (recipientFieldError(typed) === null) {
+      // A pasted address that is already on the screen reads as the row it
+      // matches, the same as tapping that row would.
+      choose(typed, knownRecipientLabel(form, typed) || accountLabel(typed));
+      return;
+    }
+    // The box is also the address-book search, so a text that names a listed
+    // contact or account is taken as that row: a name is never resolved over a
+    // row the screen is showing. More than one match commits nothing rather
+    // than guessing which was meant.
+    const listed = matchingRecipients(form, typed);
+    if (listed.length > 0) {
+      const row = listed.length === 1 ? listed[0] : undefined;
+      if (row) {
+        choose(row.dataset["sendRecipient"] ?? "", row.dataset["sendRecipientLabel"] ?? "");
+      } else {
+        search?.focus();
+      }
+      return;
+    }
+    const canonical = normalizeStarkName(typed);
+    if (canonical === null || !resolveName) {
       search?.focus();
       return;
     }
-    // A pasted address that is already on the screen reads as the row it
-    // matches, the same as tapping that row would.
-    choose(address, knownRecipientLabel(form, address) || accountLabel(address));
+    resolving = true;
+    if (continueButton) continueButton.disabled = true;
+    setNote(`Resolving ${canonical}…`);
+    let response: StarkNameResolutionResponse | null = null;
+    try {
+      response = await resolveName(canonical, form.dataset["sendNetwork"] ?? "");
+    } catch {
+      // A thrown resolver is the same failure as a malformed reply: no address
+      // is committed, and the field says so rather than staying stuck on
+      // "Resolving".
+      response = null;
+    } finally {
+      resolving = false;
+    }
+    // A repaint or close while the read was in flight leaves this form
+    // detached; a resolution that lands there must not commit a recipient. The
+    // same applies when the text was edited since, or when the answer was read
+    // on a network this screen no longer shows: the commit is for a name the
+    // field no longer spells, or for another chain.
+    if (
+      !form.isConnected ||
+      (search?.value.trim() ?? "") !== typed ||
+      (response !== null && response.networkId !== (form.dataset["sendNetwork"] ?? ""))
+    ) {
+      return;
+    }
+    if (response?.resolution.status === "resolved") {
+      // The label is the canonical name the wallet resolved, never the typed
+      // spelling, and the review is told the recipient came from a Starknet ID
+      // name so it can show the address and flag an unsaved recipient.
+      choose(response.resolution.address, canonical, "stark-name");
+      return;
+    }
+    // Re-enable the control for the current text (which is still a valid name)
+    // before showing why the last attempt did not commit.
+    updateSearch();
+    setNote(resolutionFailure(response, canonical));
+    search?.focus();
+  };
+  continueButton?.addEventListener("click", () => {
+    void commitTyped();
+  });
+  search?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void commitTyped();
+    }
   });
   updateSearch();
 };
@@ -328,13 +460,7 @@ const bindAmountControls = (
     const prefix = form.querySelector<HTMLElement>("#send-amount-prefix");
     prefix?.toggleAttribute("hidden", next !== "fiat");
     if (prefix) prefix.textContent = sendCurrencySymbol(currency);
-    const unit = form.querySelector("#send-unit-label");
-    if (unit) {
-      unit.textContent =
-        next === "fiat"
-          ? (sendFormInput(form, "tokenSymbol")?.value ?? "Token")
-          : currency.toUpperCase();
-    }
+    syncUnitToggle(form);
     updateAmountPresentation(form, onFields);
     visible.focus();
   });
@@ -348,6 +474,7 @@ export const bindTransferCompose = ({
   goTo,
   navigate,
   onFields,
+  resolveName,
   spendable,
 }: {
   readonly form: HTMLFormElement;
@@ -355,10 +482,18 @@ export const bindTransferCompose = ({
   readonly onFields: (fields: TransferFields) => void;
   /** Leaves Send for another screen: the address book, or token management. */
   readonly navigate?: (view: TransferExitView) => void;
+  /**
+   * Resolves a typed Starknet name to an address on the network the screen is
+   * showing; absent disables name entry.
+   */
+  readonly resolveName?: (
+    name: string,
+    networkId: string,
+  ) => Promise<StarkNameResolutionResponse | null>;
   /** Raw spendable units for the composed route; `null` withholds Max/Half. */
   readonly spendable?: () => bigint | null;
 }): void => {
-  bindRecipientControls(form, goTo, onFields, navigate);
+  bindRecipientControls(form, goTo, onFields, navigate, resolveName);
   bindAssetControls(form, onFields, navigate);
   bindAmountControls(form, onFields, spendable);
 };

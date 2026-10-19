@@ -1,27 +1,101 @@
 /** Removal and balance operations for one resolved Argent multisig account. */
+import type {
+  ArgentMultisigOperationRecord,
+  ArgentMultisigRecord,
+} from "@bramble/multisig/repository";
 import type { TokenBalance } from "@bramble/starknet/rpc";
 import { systemClock } from "@bramble/transactions/activity";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { cachedBalances } from "../portfolio/balance-snapshots";
+import { readPortfolioBalances } from "../portfolio/portfolio-balances";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { contextFor } from "./multisig-context";
+import { type ArgentMultisigContext, contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import {
   readMultisigBalancesInput,
   readRemoveIntentInput,
   readRemoveMultisigInput,
 } from "./multisig-inputs";
+import { resolveArgentDeployment } from "./multisig-operation-recovery";
 
 const removeIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const input = readRemoveIntentInput(message);
   if (!input) return { error: "invalid Argent multisig intent removal request" };
   const authorized = captureSessionAuthorization(deps.session);
+  // Recorded first: a record for an intent that is still stored changes
+  // nothing, while a removal with no record lets relay sync bring it back.
+  const intent = await deps.multisigStore.getIntent(input.intentId);
+  if (intent) {
+    await deps.nostrCoordinationStore.recordRemovedIntent(
+      intent.accountId,
+      intent.id,
+      authorized.isCurrent,
+    );
+  }
   const result = await deps.multisigStore.removeIntent(input.intentId, authorized.isCurrent);
   return result === "removed"
     ? { ok: true }
     : { error: result === "missing" ? "Argent multisig intent not found" : "wallet locked" };
+};
+
+/**
+ * Refusal when removing a multisig whose deployment this record alone can
+ * reproduce. Answered until the caller confirms with `confirmHistoryRemoval`.
+ */
+export const UNDEPLOYED_REMOVAL_UNCONFIRMED = "confirm removal of an undeployed Argent multisig";
+
+// A record that carries a deployment commitment and is not deployed holds the
+// only copy of the salt, signer set and threshold behind its counterfactual
+// address: the chain has no record of it yet. Removing it then needs the same
+// confirmation as deleting history (Sherlock 214). A failed read counts as not
+// deployed, which costs one extra press rather than a silent loss.
+const holdsUndeployedCommitment = async (
+  deps: MultisigOpsDeps,
+  context: ArgentMultisigContext,
+): Promise<boolean> => {
+  if (context.record.deployment === undefined) return false;
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: context.record.address, rpcUrls: context.rpcUrls })
+    .catch(() => false);
+  return !deployed;
+};
+
+// Why an unconfirmed removal must wait for a second press, if it must.
+const unconfirmedRemoval = async (
+  deps: MultisigOpsDeps,
+  context: ArgentMultisigContext,
+  hasHistory: boolean,
+): Promise<string | null> => {
+  if (await holdsUndeployedCommitment(deps, context)) return UNDEPLOYED_REMOVAL_UNCONFIRMED;
+  return hasHistory ? "confirm removal of terminal Argent multisig history" : null;
+};
+
+// A deployment claim a lost reply left without a hash blocks removal until it
+// is settled. It is settled here as a retried deployment would settle it: a
+// hash found locally is recorded, and a claim the chain shows to guard nothing
+// (nothing deployed, or deployed with no hash to keep) is released. Only an
+// unreadable chain leaves it unresolved (Sherlock 197).
+const settledOperations = async (
+  deps: MultisigOpsDeps,
+  record: ArgentMultisigRecord,
+): Promise<readonly ArgentMultisigOperationRecord[]> => {
+  const ownOperations = async () =>
+    (await deps.multisigStore.listOperations()).filter(
+      (operation) => operation.accountId === record.id,
+    );
+  for (const operation of await ownOperations()) {
+    if (operation.kind !== "deploy" || operation.transactionHash !== undefined) continue;
+    const resolution = await resolveArgentDeployment(deps, record, operation.id);
+    if (
+      resolution.kind === "absent" ||
+      (resolution.kind === "deployed" && resolution.transactionHash === null)
+    ) {
+      await deps.multisigStore.releaseOperation(operation.id).catch(() => {});
+    }
+  }
+  return ownOperations();
 };
 
 const removeMultisig = async (
@@ -42,9 +116,7 @@ const removeMultisig = async (
   const intents = (await deps.multisigStore.listIntents()).filter(
     (intent) => intent.accountId === context.record.id,
   );
-  const operations = (await deps.multisigStore.listOperations()).filter(
-    (operation) => operation.accountId === context.record.id,
-  );
+  const operations = await settledOperations(deps, context.record);
   const terminalIntentHashes = intents
     .filter(
       (intent) =>
@@ -70,9 +142,10 @@ const removeMultisig = async (
   if (pendingIntent || unresolvedOperation) {
     return { error: "Argent multisig has a pending or unresolved operation" };
   }
-  if ((intents.length > 0 || operations.length > 0) && !input.confirmHistoryRemoval) {
-    return { error: "confirm removal of terminal Argent multisig history" };
-  }
+  const unconfirmed = input.confirmHistoryRemoval
+    ? null
+    : await unconfirmedRemoval(deps, context, intents.length > 0 || operations.length > 0);
+  if (unconfirmed) return { error: unconfirmed };
   if (!authorized.isCurrent()) return { error: "wallet locked" };
   return (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
     "removed"
@@ -101,14 +174,18 @@ const multisigBalances = async (
       networkId: context.record.networkId,
       now: (deps.now ?? systemClock)(),
     },
-    async (): Promise<readonly TokenBalance[]> =>
-      deps.runtimeRpc.getTokenBalances({
-        accountAddress: context.record.address,
-        rpcUrls: context.rpcUrls,
-        tokens: (await deps.preferencesStore.read()).tokens.filter(
-          (token) => token.networkId === context.record.networkId,
-        ),
-      }),
+    async (previous): Promise<readonly TokenBalance[]> =>
+      readPortfolioBalances(
+        deps.runtimeRpc,
+        {
+          accountAddress: context.record.address,
+          rpcUrls: context.rpcUrls,
+          tokens: (await deps.preferencesStore.read()).tokens.filter(
+            (token) => token.networkId === context.record.networkId,
+          ),
+        },
+        previous,
+      ),
   );
   if (!snapshot) return { error: "multisig balance snapshot unavailable" };
   return {

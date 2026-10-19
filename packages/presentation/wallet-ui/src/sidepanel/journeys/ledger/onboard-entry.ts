@@ -28,7 +28,7 @@
 import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { RenderData } from "../../app/rendering/render-cache";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { errorMessage, isPopupSurface, renderFragment, showToast } from "../../shared/dom";
+import { errorDetails, isPopupSurface, renderFragment, showToast } from "../../shared/dom";
 import { createLedgerOnboardRuntime } from "./onboard-runtime";
 import { ledgerSurfaceNotice, ledgerSurfaceSwitched } from "./onboard-views";
 import type { LedgerConnector } from "./sign-session";
@@ -62,6 +62,7 @@ export const createLedgerOnboardEntry = (deps: {
   readonly mount: HTMLElement;
   readonly openImport: () => void;
   readonly openImportSeed: () => void;
+  readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: SidepanelWallet;
@@ -73,6 +74,7 @@ export const createLedgerOnboardEntry = (deps: {
     mount,
     openImport,
     openImportSeed,
+    openFindAccounts,
     openMultisig,
     refresh,
     wallet,
@@ -126,6 +128,7 @@ export const createLedgerOnboardEntry = (deps: {
     },
     openImport,
     openImportSeed,
+    openFindAccounts,
     openMultisig,
     refresh,
     wallet,
@@ -159,7 +162,7 @@ export const createLedgerOnboardEntry = (deps: {
               ?.addEventListener("click", dismiss);
           },
           (error: unknown) => {
-            showToast(errorMessage(error, "Could not switch surface"), "error", mount);
+            showToast(errorDetails(error, "Could not switch surface"), "error", mount);
           },
         );
       });

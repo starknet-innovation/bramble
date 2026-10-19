@@ -27,6 +27,8 @@
  * from Krusty rather than restated**, so there is one source of truth again.
  */
 
+import { sameFelt } from "../networks/networks";
+
 /**
  * The Argent Account 0.4 class this wallet deploys when it creates an Argent
  * account. Defined here, beside the rest of the class table, so the account
@@ -96,13 +98,72 @@ export const BRAAVOS_BASE_CLASS_HASH =
   "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6";
 
 /**
+ * The deployment class the current Braavos app pins counterfactual addresses
+ * to (labelled "braavos 1.0.0" in the table): a base-style account whose
+ * constructor replaces itself with the implementation named in the deploy
+ * transaction's extended authorization. The only Braavos class this wallet can
+ * deploy; older base-class counterfactuals are refused, since their expected
+ * deployment authorization has not been established.
+ */
+export const BRAAVOS_DEPLOYMENT_CLASS_HASH =
+  "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201";
+
+/**
+ * The implementation a wallet-made Braavos deployment installs (the table's
+ * "braavos current"): carried out-of-band in the deploy authorization and
+ * poseidon-signed beside it, exactly as the vendor app deploys.
+ */
+export const BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH =
+  "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
+
+/**
+ * The older Braavos implementation class (the table's "braavos legacy") that
+ * accounts upgraded before the current release still run.
+ */
+export const BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH =
+  "0x00816dd0297efc55dc1e7559020a3a825e81ef734b558f03c83325d4da7e6253";
+
+/**
+ * The Braavos classes a deployed account may be found RUNNING when this wallet
+ * signs for it: implementation releases that expose `get_signers` and verify a
+ * bare `(r, s)` against the first stark signer. The deployment classes are
+ * deliberately absent — their constructors replace themselves with an
+ * implementation, so a live account reporting one is not a state whose
+ * authorization rules this wallet has established, and it is refused.
+ */
+export const BRAAVOS_SIGNING_CLASS_HASHES: readonly string[] = [
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH,
+];
+
+/**
+ * Refusal for a transaction from an undeployed Braavos counterfactual: its
+ * deployment is its own reviewed step, never folded into another transaction.
+ * One string for the transaction refusal, the Home notice, and the approval card.
+ */
+export const UNDEPLOYED_BRAAVOS_REFUSAL = "Deploy this account first (Settings → Deploy account).";
+
+/**
+ * Whether an account is a Braavos counterfactual on the one deployment class
+ * this wallet deploys. While undeployed it can deploy only through the explicit
+ * deployment (its deployment authorization covers an extra hash first), so every
+ * deploy-then-act path refuses it with {@link UNDEPLOYED_BRAAVOS_REFUSAL}.
+ */
+export const isDeployableBraavos = (account: {
+  readonly accountContractType: string;
+  readonly classHash: string;
+}): boolean =>
+  account.accountContractType === "braavos" &&
+  sameFelt(account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH);
+
+/**
  * Every class this wallet recognises, with its role and constructor shape.
  * Ordered most-common-first so a candidate scan finds the usual case early.
  */
 export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
   {
     authorizationShape: "stark-pair",
-    classHash: "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
     constructorShape: "public-key",
     family: "braavos",
     label: "braavos 1.0.0",
@@ -118,7 +179,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
   },
   {
     authorizationShape: "stark-pair",
-    classHash: "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+    classHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
     constructorShape: "public-key",
     family: "braavos",
     label: "braavos current",
@@ -126,7 +187,7 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
   },
   {
     authorizationShape: "stark-pair",
-    classHash: "0x00816dd0297efc55dc1e7559020a3a825e81ef734b558f03c83325d4da7e6253",
+    classHash: BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH,
     constructorShape: "public-key",
     family: "braavos",
     label: "braavos legacy",
@@ -161,18 +222,27 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
 /**
  * Constructor calldata for one signer public key under the given convention.
  * Pure: the caller hashes it into an address, this only decides the felts.
+ *
+ * Exhaustive by construction (Sherlock 240): a new constructor shape is a
+ * build failure here until its layout is written, never a silent fall-through
+ * to another version's convention and so a wrong derived address.
  */
 export const accountConstructorCalldata = (
   shape: AccountConstructorShape,
   publicKey: string,
 ): readonly string[] => {
-  if (shape === "public-key") {
-    return [publicKey];
+  switch (shape) {
+    case "public-key":
+      return [publicKey];
+    case "owner-guardian":
+      return [publicKey, "0x0"];
+    case "signer-owner-guardian-option":
+      return ["0x0", publicKey, "0x1"];
+    default: {
+      const unreachable: never = shape;
+      throw new Error(`unknown account constructor shape: ${String(unreachable)}`);
+    }
   }
-  if (shape === "owner-guardian") {
-    return [publicKey, "0x0"];
-  }
-  return ["0x0", publicKey, "0x1"];
 };
 
 /**

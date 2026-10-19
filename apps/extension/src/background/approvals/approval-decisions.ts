@@ -11,21 +11,23 @@
  * decision instead of substituting its own figure.
  */
 
+import type { MultisigStore } from "@bramble/multisig/repository";
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import { type FeeEstimate, sameFeeEstimate } from "@bramble/starknet/fee-bounds";
+import { sameFeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
-  type DeferredStrk20Approval,
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
+} from "../privacy/strk20-approval-execution";
+import {
   stageApprovedStrk20Deposit,
   stageApprovedStrk20Registration,
-} from "../privacy/strk20-approval-execution";
+} from "../privacy/strk20-approval-staging";
 import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
@@ -40,11 +42,14 @@ import { captureSessionAuthorization, type UnlockSession } from "../runtime/sess
 import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
 import { executeDeclareApproval } from "../transactions/declare-ops";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
+import { type ApplyResult, type ApproveDecision, reject, settleExecutor } from "./approval-applier";
 import { settleClaimError, validateClaimContext } from "./approval-claim-context";
 import { pendingFeeRefusal } from "./approval-fee-refusal";
+import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
-import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
-import type { SignatureWaiters } from "./signature-waiters";
+import { applyWatchAssetApproval, WATCH_ASSET_TRACKED_RESPONSE } from "./approval-watch-asset";
+import type { ApprovalClaim, ApprovalKind, ApprovalQueue } from "./approvals";
+import { DROPPED_APPROVAL_RESPONSE, type SignatureWaiters } from "./signature-waiters";
 
 /**
  * Dependencies for resolving a queued approval into its settled result. These
@@ -57,6 +62,8 @@ export type ApprovalDecisionDeps = {
   readonly approvals: ApprovalQueue;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /** Watched shared accounts, trusted by the execution-time lookalike check (Sherlock 140). */
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -66,59 +73,18 @@ export type ApprovalDecisionDeps = {
 };
 
 const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
+const NO_LONGER_PENDING: RuntimeResponse = { error: "approval no longer pending" };
 // What a connection whose active account moved between paint and click is refused with.
 const ACCOUNT_CHANGED_REFUSAL = "the account changed since this request was reviewed";
-/**
- * Outcome of applying an already-claimed approve decision.
- */
-type ApplyResult =
-  | DeferredStrk20Approval
-  | { readonly status: "reject"; readonly response: RuntimeResponse }
-  | {
-      readonly status: "settle";
-      readonly settle: RuntimeResponse;
-      readonly respond: (listPending: () => readonly PendingApproval[]) => RuntimeResponse;
-    };
-
-/**
- * What the deciding surface reported about its own render, alongside the id it
- * decided. Only the fee travels today; it is separate from the claimed approval
- * because it describes the CARD, not the queue entry.
- */
-type ApproveDecision = {
-  readonly reviewedAccountId?: string;
-  readonly reviewedFee?: FeeEstimate;
-};
-
+/** Applies one claimed approve decision for a single approval kind. */
 type ApproveApplier = (
   deps: ApprovalDecisionDeps,
   claim: ApprovalClaim,
   decision: ApproveDecision,
 ) => Promise<ApplyResult>;
 
-const reject = (response: RuntimeResponse): ApplyResult => ({ response, status: "reject" });
-
-/**
- * Shared tail for executor-backed kinds: settle the executor result either way,
- * pass its error through on failure, and surface `{ ok, pending }` on success.
- */
-const settleExecutor = (result: RuntimeResponse): ApplyResult => ({
-  respond: (listPending) => ("error" in result ? result : { ok: true, pending: listPending() }),
-  settle: result,
-  status: "settle",
-});
-
-const applyWatchAsset: ApproveApplier = async (deps, { approval }) => {
-  if (!approval.token) {
-    return reject(NOT_FOUND);
-  }
-  await deps.preferencesStore.upsertToken(approval.token);
-  return {
-    respond: (listPending) => ({ ok: true, pending: listPending() }),
-    settle: { ok: true, watched: true },
-    status: "settle",
-  };
-};
+const applyWatchAsset: ApproveApplier = (deps, { approval }) =>
+  applyWatchAssetApproval(deps.preferencesStore, approval);
 
 const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (!payload) {
@@ -152,6 +118,7 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -178,12 +145,16 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       actions: payload.actions,
       ...(approval.context === undefined ? {} : { context: approval.context }),
       origin: approval.origin,
       plan: payload.strk20Plan,
+      ...(payload.shadowAccountAnonymizer === undefined
+        ? {}
+        : { shadowAccountAnonymizer: payload.shadowAccountAnonymizer }),
     },
   );
   return settleExecutor(result);
@@ -193,7 +164,7 @@ const isStrk20DisclosureKind = (kind: ApprovalKind): kind is Strk20DisclosureApp
   kind === "strk20-balances" ||
   kind === "strk20-prepare" ||
   kind === "strk20-register" ||
-  kind === "strk20-subaccount";
+  kind === "strk20-shadow-account";
 
 const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }) => {
   if (
@@ -217,6 +188,7 @@ const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -233,10 +205,12 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
   }
   const result = await executeSignApproval(
     {
+      activity: deps.activity,
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -255,6 +229,7 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
   const result = await executeSwitchChainApproval(
     {
       activeStateCoordinator: deps.activeStateCoordinator,
+      approvals: deps.approvals,
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,
@@ -350,6 +325,15 @@ const applyConnect: ApproveApplier = async (deps, { approval }, decision) => {
   });
 };
 
+// A private-services notice has nothing to approve. Its only control closes
+// it; an approve that reaches it anyway delivers the same refusal as Close.
+const applyStrk20Unavailable: ApproveApplier = async (_deps, { payload }) =>
+  reject(
+    payload?.noticeRefusal === undefined
+      ? DROPPED_APPROVAL_RESPONSE
+      : { error: payload.noticeRefusal },
+  );
+
 /**
  * Total map from approval kind to its approve applier. Keeping it exhaustive
  * over `ApprovalKind` means an added kind is a compile error here rather than a
@@ -365,7 +349,8 @@ const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
   "strk20-invoke": applyStrk20Invoke,
   "strk20-prepare": applyStrk20Disclosure,
   "strk20-register": applyStrk20Disclosure,
-  "strk20-subaccount": applyStrk20Disclosure,
+  "strk20-shadow-account": applyStrk20Disclosure,
+  "strk20-unavailable": applyStrk20Unavailable,
   "switch-chain": applySwitchChain,
   "watch-asset": applyWatchAsset,
 };
@@ -423,7 +408,11 @@ const applyApproveDecision = async (
     return result.respond(() => deps.approvals.list());
   }
   deps.waiters.settle(id, result.settle);
-  return result.respond(() => deps.approvals.list());
+  const response = result.respond(() => deps.approvals.list());
+  // An executor that answered with an error also consumed the request, and an
+  // error response broadcasts nothing (Sherlock 217).
+  if ("error" in response) notifyApprovalsChanged();
+  return response;
 };
 
 const applyDenyDecision = async (
@@ -434,13 +423,29 @@ const applyDenyDecision = async (
   if (!input) {
     return { error: "invalid approval request" };
   }
-  const denied = deps.approvals.claim(input.id)?.approval ?? null;
-  if (denied) {
-    await deps.originHistory.record(denied.origin).catch(() => undefined);
-    deps.waiters.settle(input.id, {
-      error: denied.kind === "connect" ? "connection rejected" : "request rejected",
-    });
+  const claim = deps.approvals.claim(input.id);
+  const denied = claim?.approval ?? null;
+  // Nothing to deny: it was answered elsewhere or expired. Reporting success
+  // showed "Request denied" over another window's broadcast (Sherlock 220).
+  if (!denied) {
+    return NO_LONGER_PENDING;
   }
+  await deps.originHistory.record(denied.origin).catch(() => undefined);
+  // Closing a private-services notice is how the site learns the network has
+  // no private services: it gets the refusal it would have had at once, and
+  // only now, after the user saw the notice (#443).
+  const noticeRefusal =
+    denied.kind === "strk20-unavailable" ? claim?.payload?.noticeRefusal : undefined;
+  // Closing an already-tracked notice is likewise when the site learns the
+  // token is tracked, and only then (audit M1).
+  deps.waiters.settle(
+    input.id,
+    denied.kind === "watch-asset" && denied.alreadyTracked === true
+      ? WATCH_ASSET_TRACKED_RESPONSE
+      : noticeRefusal === undefined
+        ? { error: denied.kind === "connect" ? "connection rejected" : "request rejected" }
+        : { error: noticeRefusal },
+  );
   return { ok: true, pending: deps.approvals.list() };
 };
 

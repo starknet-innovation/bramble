@@ -22,6 +22,20 @@ const GLYPH_SIZE = "16px";
  * Activity feed stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const ACTIVITY_STYLES = `
+  /* Activity pins its title bar: the feed is the only thing that scrolls. The
+     bar is the screen's first grid item, so it stays put for as long as the
+     screen is in view, while the rows pass beneath it. The fill is bled past
+     the text column to the panel edges and up over the shell's top inset by a
+     pseudo element, so the rows never show through and the resting layout is
+     unchanged (the inset cancels the bleed). */
+  .activity-head { position: sticky; top: 0; z-index: 2; }
+  .activity-head::before {
+    background: var(--bramble-bg);
+    content: "";
+    inset: calc(-1 * ${SPACE.md}) calc(-1 * ${SPACE.lg}) calc(-1 * ${SPACE.sm});
+    position: absolute;
+    z-index: -1;
+  }
   /* Activity list: rows breathe on a 4px gap with no rule between them; the
      rounded hover fill is the only affordance, since the verb is a link. Row
      content sits on the page's text column — glyphs line up with the screen
@@ -113,4 +127,51 @@ export const ACTIVITY_STYLES = `
     line-height: ${TYPE.body.line};
     margin: 0;
   }
+  /* Filter, sort and search controls: a wrapping grid on the page's text
+     column, the search box on its own full-width row so a pasted address is
+     never cramped. Each control keeps the kit's own field and segment skins. */
+  .activity-toolbar {
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
+    margin-bottom: ${SPACE.md};
+  }
+  .activity-toolbar > * { min-width: 0; }
+  .activity-toolbar > .activity-search { grid-column: 1 / -1; }
+  /* The matched-counterparty summary above the feed: one quiet raised block,
+     its figures in tabular numerals. */
+  .activity-summary {
+    background: var(--bramble-elevated);
+    border-radius: ${RADIUS.md};
+    display: grid;
+    gap: 2px;
+    margin-bottom: ${SPACE.sm};
+    padding: ${SPACE.sm};
+  }
+  .activity-summary-title {
+    color: var(--bramble-text);
+    font-size: ${TYPE.row.size};
+    font-weight: ${WEIGHT.medium};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  .activity-summary-body {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    font-variant-numeric: tabular-nums;
+    letter-spacing: ${TRACKING.caption};
+  }
+  /* The all-filtered state stands in for the feed, centered like the screen's
+     other empty states. */
+  .activity-empty {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.body.size};
+    margin: 0;
+    padding: ${SPACE.lg} 0;
+    text-align: center;
+  }
+  /* The amount sort drops the day headings, so its single list carries the day
+     gap itself. */
+  .tx-list-flat { gap: ${SPACE.sm}; }
 `;

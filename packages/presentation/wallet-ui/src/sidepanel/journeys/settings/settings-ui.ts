@@ -2,9 +2,10 @@
  * Bindings for personalization journeys: account labels, contact removal,
  * appearance (theme and currency), and non-secret backup export/restore.
  */
+import { exportablePreferences } from "@bramble/settings/preferences-backup";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { buildInfo } from "../../shell/build-info";
 import { bindGroupControls } from "./group-ui";
 
@@ -55,13 +56,65 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Name update failed"), "error", form);
+          showToast(errorDetails(error, "Name update failed"), "error", form);
           if (result) {
             result.textContent = errorLine(error, "Name update failed");
           }
           buttonBusy(submitButton, false);
         },
       );
+    });
+  });
+};
+
+/**
+ * Binds the account hide and show controls. Each row carries its own account id,
+ * so the write targets the row the user pressed rather than the active account.
+ * The background refuses hiding the last account a network still shows; that
+ * refusal lands in the section's status line.
+ */
+const writeAccountVisibility = (
+  deps: SettingsUiDeps,
+  accountId: string,
+  hidden: boolean,
+  control: HTMLButtonElement,
+): void => {
+  buttonBusy(control, true);
+  void deps.wallet.setAccountHidden(accountId, hidden).then(
+    async () => {
+      showToast(hidden ? "Account hidden" : "Account shown", "success", control);
+      await rerender(deps);
+    },
+    (error: unknown) => {
+      showToast(errorDetails(error, "Account update failed"), "error", control);
+      const result = deps.app?.querySelector<HTMLElement>("#account-visibility-result");
+      if (result) {
+        result.textContent = errorLine(error, "Account update failed");
+      }
+      buttonBusy(control, false);
+    },
+  );
+};
+
+/**
+ * Binds the per-row "Hide" controls and the "Show" controls in the manage
+ * screen's "Hidden accounts" section.
+ */
+export const bindAccountVisibility = (deps: SettingsUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-hide-account]").forEach((control) => {
+    const accountId = control.dataset["hideAccount"];
+    control.addEventListener("click", () => {
+      if (accountId) {
+        writeAccountVisibility(deps, accountId, true, control);
+      }
+    });
+  });
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-reveal-account]").forEach((control) => {
+    const accountId = control.dataset["revealAccount"];
+    control.addEventListener("click", () => {
+      if (accountId) {
+        writeAccountVisibility(deps, accountId, false, control);
+      }
     });
   });
 };
@@ -107,7 +160,7 @@ export const bindContacts = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Contact removal failed"), "error", button);
+          showToast(errorDetails(error, "Contact removal failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -143,7 +196,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Wallet request preference failed"), "error", button);
+          showToast(errorDetails(error, "Wallet request preference failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -166,7 +219,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Theme update failed"), "error", button);
+          showToast(errorDetails(error, "Theme update failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -186,7 +239,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Currency update failed"), "error", currencySelect);
+        showToast(errorDetails(error, "Currency update failed"), "error", currencySelect);
         if (result) {
           result.textContent = errorLine(error, "Currency update failed");
         }
@@ -210,7 +263,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       },
       (error: unknown) => {
         analyticsToggle.checked = !analyticsToggle.checked;
-        showToast(errorMessage(error, "Analytics preference failed"), "error", analyticsToggle);
+        showToast(errorDetails(error, "Analytics preference failed"), "error", analyticsToggle);
         analyticsToggle.disabled = false;
       },
     );
@@ -229,7 +282,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       },
       (error: unknown) => {
         diagnosticsToggle.checked = !diagnosticsToggle.checked;
-        showToast(errorMessage(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
+        showToast(errorDetails(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
         diagnosticsToggle.disabled = false;
       },
     );
@@ -253,7 +306,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         buttonBusy(diagnosticsExport, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Diagnostic export failed"), "error", diagnosticsExport);
+        showToast(errorDetails(error, "Diagnostic export failed"), "error", diagnosticsExport);
         buttonBusy(diagnosticsExport, false);
       },
     );
@@ -273,7 +326,9 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
     buttonBusy(exportButton, true);
     void deps.wallet.loadPreferences().then(
       (preferences) => {
-        const blob = new Blob([JSON.stringify(preferences, null, 2)], {
+        // Only what a restore reapplies: the contact graph and endpoints stay
+        // in the wallet (Sherlock 213).
+        const blob = new Blob([JSON.stringify(exportablePreferences(preferences), null, 2)], {
           type: "application/json",
         });
         const url = URL.createObjectURL(blob);
@@ -286,7 +341,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Backup export failed"), "error", exportButton);
+        showToast(errorDetails(error, "Backup export failed"), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );
@@ -308,7 +363,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Backup restore failed"), "error", importButton);
+          showToast(errorDetails(error, "Backup restore failed"), "error", importButton);
           if (result) {
             result.textContent = errorLine(error, "Backup restore failed");
           }

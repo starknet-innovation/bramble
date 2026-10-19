@@ -4,10 +4,12 @@
  * re-entered in the message rather than taken from the cached session.
  */
 import { describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import type { AddDerivedAccountInput } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
+import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { testExtension } from "../../support/background-wallet-stub";
 
@@ -27,6 +29,12 @@ const derived: AccountRef = {
   address: "0xdeadbeef",
   derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },
   id: "SN_SEPOLIA:0xdeadbeef",
+};
+
+// The fixture account is on Sepolia, so the reveal resolves it only there.
+const sepoliaPreferences = {
+  ...unavailablePreferencesStore,
+  read: async () => ({ ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const }),
 };
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
@@ -68,7 +76,8 @@ const createWallet = (captureAdd?: (input: AddDerivedAccountInput) => void) => (
       importedSeeds: [],
       mnemonic,
       originGrants: [],
-      schemaVersion: 10 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x1234" }],
     };
   },
@@ -148,7 +157,9 @@ describe("account lifecycle messages", () => {
   });
 
   test("reveals active account secrets only with a re-entered passphrase", async () => {
-    const handler = createMessageHandler(createWallet(), testExtension);
+    const handler = createMessageHandler(createWallet(), testExtension, {
+      preferencesStore: sepoliaPreferences,
+    });
 
     await expect(
       handler({ type: "wallet.revealSecrets", vaultPassphrase }, sender),

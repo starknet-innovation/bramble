@@ -16,6 +16,14 @@ export const fakeKms = (validMnemonic = true) => ({
   async deriveStrk20ViewingKey(_privateKey: string, _chainId: string, _poolAddress: string) {
     return "0x654321";
   },
+  async deriveArgentLegacyKeypair(_mnemonic: string, addressIndex: number) {
+    // Distinct from the plain ladder's keys so a test can tell the schemes
+    // apart, and distinct per index so coordinates never collide.
+    return {
+      privateKey: `0x9${addressIndex.toString(16)}123456`,
+      publicKeyX: `0xa9${addressIndex.toString(16)}bc`,
+    };
+  },
   async deriveStarknetKeypair(
     _mnemonic: string,
     _addressIndex: number,

@@ -3,13 +3,22 @@ import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountId } from "@bramble/wallet-model/accounts";
+import { isStarkFieldElement } from "@bramble/wallet-model/networks";
 import { isNostrEventId, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
 
 /** Browser-local key for non-secret relay sync metadata. */
 export const NOSTR_COORDINATION_STORE_KEY = "bramble:nostr-coordination:v1";
 
+/**
+ * Browser-local key for the intents a user removed, per multisig account, so
+ * relay sync never brings one back. Public metadata: intent ids only.
+ */
+export const NOSTR_REMOVED_INTENTS_STORE_KEY = "bramble:nostr-coordination:removed:v1";
+
 /** Checkpoints kept across all shared accounts; mirrored by the mobile core. */
 export const MAX_CHECKPOINTS = 20;
+const MAX_REMOVED_ACCOUNTS = 20;
+const MAX_REMOVED_INTENTS = 100;
 /** Authenticated event ids remembered per checkpoint; mirrored by the mobile core. */
 export const MAX_SEEN_EVENT_IDS = 200;
 /** Latest accepted checkpoint time (2100-01-01), rejecting far-future clocks. */
@@ -33,6 +42,43 @@ export type NostrCoordinationStore = {
     checkpoint: NostrSyncCheckpoint,
     isAuthorized?: () => boolean,
   ) => Promise<"invalid" | "stored" | "unauthorized">;
+  /**
+   * Remembers that the user removed an intent. Relay sync refuses to import a
+   * removed intent again, whatever event id a relay serves it under, because
+   * relay event ids are never authenticated (Sherlock 168, 237). The newest
+   * `MAX_REMOVED_INTENTS` per account are kept.
+   */
+  readonly recordRemovedIntent: (
+    accountId: string,
+    intentId: string,
+    isAuthorized?: () => boolean,
+  ) => Promise<"invalid" | "stored" | "unauthorized">;
+  /** Whether the user removed this intent; false for malformed input. */
+  readonly isRemovedIntent: (accountId: string, intentId: string) => Promise<boolean>;
+};
+
+/** Intents removed by the user on one multisig account, newest first. */
+type RemovedIntents = { readonly accountId: string; readonly intentIds: readonly string[] };
+
+// An intent id is its account id and its frozen transaction hash.
+const isIntentIdFor = (accountId: string, intentId: unknown): intentId is string =>
+  typeof intentId === "string" &&
+  intentId.startsWith(`${accountId}:`) &&
+  isStarkFieldElement(intentId.slice(accountId.length + 1));
+
+const isRemovedIntents = (value: unknown): value is RemovedIntents =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "intentIds"]) &&
+  isAccountId(value["accountId"]) &&
+  Array.isArray(value["intentIds"]) &&
+  value["intentIds"].length <= MAX_REMOVED_INTENTS &&
+  value["intentIds"].every((id) => isIntentIdFor(String(value["accountId"]), id));
+
+const readRemovedIntents = async (store: KeyValueStore): Promise<readonly RemovedIntents[]> => {
+  const stored = await store.get(NOSTR_REMOVED_INTENTS_STORE_KEY);
+  return Array.isArray(stored)
+    ? stored.filter(isRemovedIntents).slice(0, MAX_REMOVED_ACCOUNTS)
+    : [];
 };
 
 const isRelaySelection = (value: unknown): value is readonly string[] =>
@@ -100,6 +146,29 @@ const createMethods = (store: KeyValueStore): NostrCoordinationStore => ({
     );
     return "stored";
   },
+  async recordRemovedIntent(accountId, intentId, isAuthorized = () => true) {
+    if (!isAuthorized()) return "unauthorized";
+    if (!isAccountId(accountId) || !isIntentIdFor(accountId, intentId)) return "invalid";
+    const current = await readRemovedIntents(store);
+    const existing = current.find((entry) => entry.accountId === accountId);
+    const intentIds = [intentId, ...(existing?.intentIds ?? []).filter((id) => id !== intentId)];
+    const next: RemovedIntents = { accountId, intentIds: intentIds.slice(0, MAX_REMOVED_INTENTS) };
+    if (!isAuthorized()) return "unauthorized";
+    await store.set(
+      NOSTR_REMOVED_INTENTS_STORE_KEY,
+      [next, ...current.filter((entry) => entry.accountId !== accountId)].slice(
+        0,
+        MAX_REMOVED_ACCOUNTS,
+      ),
+    );
+    return "stored";
+  },
+  async isRemovedIntent(accountId, intentId) {
+    if (!isAccountId(accountId) || !isIntentIdFor(accountId, intentId)) return false;
+    return (await readRemovedIntents(store)).some(
+      (entry) => entry.accountId === accountId && entry.intentIds.includes(intentId),
+    );
+  },
 });
 
 /** Creates a serialized browser-local coordination receipt store. */
@@ -107,7 +176,8 @@ export const createNostrCoordinationStore = ({
   store,
 }: {
   readonly store: KeyValueStore;
-}): NostrCoordinationStore => serializeStoreMutations(createMethods(store), ["getCheckpoint"]);
+}): NostrCoordinationStore =>
+  serializeStoreMutations(createMethods(store), ["getCheckpoint", "isRemovedIntent"]);
 
 /** Creates isolated volatile receipts for tests and explicit fallback wiring. */
 export const memoryNostrCoordinationStore = (): NostrCoordinationStore =>

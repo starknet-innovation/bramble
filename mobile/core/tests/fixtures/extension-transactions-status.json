@@ -11,6 +11,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "pending"
         }
       },
@@ -24,6 +25,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "reverted"
         }
       },
@@ -36,6 +38,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "pending"
         }
       },
@@ -49,6 +52,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "pending"
         }
       },
@@ -62,6 +66,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "reverted"
         }
       },
@@ -74,6 +79,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "pending"
         }
       },
@@ -87,6 +93,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "preconfirmed"
         }
       },
@@ -100,6 +107,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "reverted"
         }
       },
@@ -112,6 +120,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "preconfirmed"
         }
       },
@@ -125,6 +134,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "accepted"
         }
       },
@@ -138,6 +148,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "reverted"
         }
       },
@@ -150,6 +161,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "accepted"
         }
       },
@@ -163,6 +175,7 @@
         "report": {
           "finalizedOnL1": true,
           "found": true,
+          "seen": true,
           "status": "accepted"
         }
       },
@@ -176,6 +189,7 @@
         "report": {
           "finalizedOnL1": true,
           "found": true,
+          "seen": true,
           "status": "reverted"
         }
       },
@@ -188,6 +202,7 @@
         "report": {
           "finalizedOnL1": true,
           "found": true,
+          "seen": true,
           "status": "accepted"
         }
       },
@@ -201,6 +216,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "rejected"
         }
       },
@@ -214,6 +230,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "reverted"
         }
       },
@@ -226,6 +243,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "rejected"
         }
       },
@@ -238,6 +256,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": false,
           "status": "pending"
         }
       },
@@ -250,6 +269,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": true,
           "status": "reverted"
         }
       },
@@ -260,6 +280,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": false,
           "status": "pending"
         }
       },
@@ -273,6 +294,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": false,
+          "seen": false,
           "status": "pending"
         }
       },
@@ -286,6 +308,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": false,
+          "seen": false,
           "status": "pending"
         }
       },
@@ -299,6 +322,7 @@
         "report": {
           "finalizedOnL1": false,
           "found": true,
+          "seen": false,
           "status": "pending"
         }
       }

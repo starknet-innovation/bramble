@@ -86,6 +86,11 @@ const callAndProof = {
   proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
 };
 
+const sepoliaPreferences = {
+  ...unavailablePreferencesStore,
+  read: async () => ({ ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const }),
+};
+
 const walletStub = (
   granted: readonly AccountRef[],
   captureSign?: (input: SignHashInput) => void,
@@ -116,7 +121,8 @@ const walletStub = (
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 10 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -144,7 +150,7 @@ const strk20Service: Strk20Service = {
       feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" },
     };
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x123";
   },
   async submitActions(input) {
@@ -321,12 +327,7 @@ describe("executeStrk20InvokeApproval", () => {
     const deps = {
       activity: memoryActivityLog(),
       allowanceStore: memoryAllowanceStore(),
-      preferencesStore: {
-        ...unavailablePreferencesStore,
-        async read() {
-          return { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
-        },
-      },
+      preferencesStore: sepoliaPreferences,
       runtimeRpc: rpcStub(),
       session,
       wallet: walletStub([account]),
@@ -352,12 +353,7 @@ describe("executeStrk20InvokeApproval", () => {
       activity: memoryActivityLog(),
       allowanceStore: memoryAllowanceStore(),
       ...(queue ? { ledgerSignQueue: queue } : {}),
-      preferencesStore: {
-        ...unavailablePreferencesStore,
-        async read() {
-          return { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
-        },
-      },
+      preferencesStore: sepoliaPreferences,
       runtimeRpc: rpcStub(undefined, {
         ...strk20Service,
         async submitActions(input) {
@@ -440,12 +436,7 @@ describe("executeStrk20InvokeApproval", () => {
     const deps = {
       activity,
       allowanceStore: memoryAllowanceStore(),
-      preferencesStore: {
-        ...unavailablePreferencesStore,
-        async read() {
-          return { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
-        },
-      },
+      preferencesStore: sepoliaPreferences,
       runtimeRpc,
       session,
       wallet: walletStub([account], (input) => signInputs.push(input)),
@@ -469,5 +460,37 @@ describe("executeStrk20InvokeApproval", () => {
     // A private-transaction entry was recorded without leaking action detail.
     const recorded = await activity.list();
     expect(recorded[0]?.summary).toContain("submitted a private transaction (1 action)");
+  });
+
+  test("records an invoke from a long origin under the end of its host (Sherlock 180)", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const activity = memoryActivityLog(() => 42);
+    const longOrigin = `https://${"a".repeat(180)}.example.com`;
+    const wallet = walletStub([account]);
+    const deps = {
+      activity,
+      allowanceStore: memoryAllowanceStore(),
+      preferencesStore: {
+        ...unavailablePreferencesStore,
+        read: async () => ({
+          ...defaultWalletPreferences(),
+          activeNetworkId: "SN_SEPOLIA" as const,
+        }),
+      },
+      runtimeRpc: rpcStub(undefined, strk20Service),
+      session,
+      wallet: { ...wallet, getGrantedAccounts: async () => [account] },
+    };
+    const actions = [{ calldata: ["0x1"], contract: token, type: "invoke" as const }];
+    const plan = {
+      feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" as const },
+    };
+    const result = await executeStrk20InvokeApproval(deps, { actions, origin: longOrigin, plan });
+
+    expect(result).toMatchObject({ ok: true });
+    const [recorded] = await activity.list();
+    expect(recorded?.summary).toStartWith("…");
+    expect(recorded?.summary).toEndWith(".example.com submitted a private transaction (1 action)");
   });
 });

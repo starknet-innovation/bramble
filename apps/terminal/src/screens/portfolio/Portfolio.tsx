@@ -22,6 +22,7 @@ import {
 import { formatSignedUsd, formatUsd, usePortfolio, type Holding } from "../../data/index";
 import { useWallet } from "../../wallet/connection/WalletProvider";
 import type { ScreenId } from "../../shell/screens";
+import { loadFailedMessage } from "../../protocols/support/user-error";
 
 type HeroTab = "total" | "tokens" | "perps";
 type BodyTab = "tokens" | "perps" | "tokenActivity" | "perpActivity" | "topMovers";
@@ -200,7 +201,7 @@ export default function Portfolio({ onNavigate }: PortfolioProps): ReactNode {
   return (
     <div className="screen" id="portfolio">
       {isConnected && error !== null && (
-        <ErrorBanner message={`Couldn't load portfolio: ${error}`} />
+        <ErrorBanner message={loadFailedMessage("portfolio", error)} />
       )}
       <Card className="pf-top">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

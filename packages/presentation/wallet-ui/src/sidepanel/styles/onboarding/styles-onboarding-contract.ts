@@ -36,7 +36,7 @@ export const ONBOARDING_CONTRACT_STYLES = `
     color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
     font-weight: ${WEIGHT.semibold};
-    padding: 3px ${SPACE.sm};
+    padding: ${SPACE.xs} ${SPACE.sm};
   }
   .onboarding-contract-check {
     align-items: center;

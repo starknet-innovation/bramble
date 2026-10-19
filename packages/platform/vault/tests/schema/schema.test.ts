@@ -12,7 +12,7 @@ import {
   isVaultV5,
   isVaultV7,
   isVaultV8,
-  isVaultV10,
+  isVaultV12,
 } from "@bramble/vault/schema";
 import {
   type AccountRef,
@@ -22,6 +22,7 @@ import {
 } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath, READY_EIP2645_APPLICATION } from "@bramble/wallet-model/ledger-path";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { asV7, withoutScopes } from "./legacy-stamp";
 
 const account = {
   address: "0x123",
@@ -54,20 +55,21 @@ const currentVault = {
   accounts: [currentAccount],
   importedSeeds: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
+  shadowAccountScopes: [],
 };
 
-describe("isVaultV10 (current schema)", () => {
+describe("isVaultV12 (current schema)", () => {
   test("accepts current vaults with or without a stored phrase", () => {
-    expect(isVaultV10(currentVault)).toBe(true);
-    expect(isVaultV10({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
+    expect(isVaultV12(currentVault)).toBe(true);
+    expect(isVaultV12({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
     expect(emptyVault().schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(isVaultV10(emptyVault())).toBe(true);
+    expect(isVaultV12(emptyVault())).toBe(true);
     expect(isVaultV5(legacyV5)).toBe(true);
   });
 
   test("rejects legacy v1 vaults and version mismatches", () => {
-    expect(isVaultV10(vault)).toBe(false);
-    expect(isVaultV10({ ...currentVault, schemaVersion: 1 })).toBe(false);
+    expect(isVaultV12(vault)).toBe(false);
+    expect(isVaultV12({ ...currentVault, schemaVersion: 1 })).toBe(false);
     expect(isVaultV1(currentVault)).toBe(false);
     expect(isVaultV3(legacyV3)).toBe(true);
     expect(isVaultV4(legacyV4)).toBe(true);
@@ -76,7 +78,7 @@ describe("isVaultV10 (current schema)", () => {
   test("rejects non-canonical account aliases in the current schema", () => {
     const alias = "SN_SEPOLIA:0x0123";
     expect(
-      isVaultV10({
+      isVaultV12({
         ...currentVault,
         accounts: [{ ...currentAccount, address: "0x0123", id: alias }],
         activeAccountId: alias,
@@ -87,22 +89,15 @@ describe("isVaultV10 (current schema)", () => {
   });
 
   test("rejects a missing or malformed recovery phrase", () => {
-    const withoutMnemonic = {
-      accounts: currentVault.accounts,
-      accountSecrets: currentVault.accountSecrets,
-      activeAccountId: currentVault.activeAccountId,
-      originGrants: currentVault.originGrants,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      signingKeys: currentVault.signingKeys,
-    };
+    const { mnemonic: _mnemonic, ...withoutMnemonic } = currentVault;
 
-    expect(isVaultV10(withoutMnemonic)).toBe(false);
-    expect(isVaultV10({ ...currentVault, mnemonic: "" })).toBe(false);
-    expect(isVaultV10({ ...currentVault, mnemonic: 42 })).toBe(false);
+    expect(isVaultV12(withoutMnemonic)).toBe(false);
+    expect(isVaultV12({ ...currentVault, mnemonic: "" })).toBe(false);
+    expect(isVaultV12({ ...currentVault, mnemonic: 42 })).toBe(false);
   });
 
   test("rejects unexpected keys", () => {
-    expect(isVaultV10({ ...currentVault, label: "unexpected" })).toBe(false);
+    expect(isVaultV12({ ...currentVault, label: "unexpected" })).toBe(false);
   });
 
   test("binds every imported-seed reference or rejects the vault", () => {
@@ -116,18 +111,18 @@ describe("isVaultV10 (current schema)", () => {
       ],
       importedSeeds: [{ id: "phrase-1", mnemonic: "correct horse battery staple" }],
     };
-    expect(isVaultV10(withSeed)).toBe(true);
+    expect(isVaultV12(withSeed)).toBe(true);
     // A dangling handle would break reveal and re-derivation: fail closed.
-    expect(isVaultV10({ ...withSeed, importedSeeds: [] })).toBe(false);
+    expect(isVaultV12({ ...withSeed, importedSeeds: [] })).toBe(false);
     // Handles are the bounded deterministic grammar, ids unique.
     expect(
-      isVaultV10({
+      isVaultV12({
         ...withSeed,
         importedSeeds: [{ id: "anything", mnemonic: "correct horse battery staple" }],
       }),
     ).toBe(false);
     expect(
-      isVaultV10({
+      isVaultV12({
         ...withSeed,
         importedSeeds: [
           { id: "phrase-1", mnemonic: "correct horse battery staple" },
@@ -136,7 +131,7 @@ describe("isVaultV10 (current schema)", () => {
       }),
     ).toBe(false);
     // The retained phrase itself must be mnemonic-shaped.
-    expect(isVaultV10({ ...withSeed, importedSeeds: [{ id: "phrase-1", mnemonic: "" }] })).toBe(
+    expect(isVaultV12({ ...withSeed, importedSeeds: [{ id: "phrase-1", mnemonic: "" }] })).toBe(
       false,
     );
   });
@@ -148,8 +143,8 @@ describe("isVaultV10 (current schema)", () => {
       classHash: canonicalFelt(ARGENT_ACCOUNT_CONTRACT.classHash),
       deploymentSalt: currentAccount.publicKeyX,
     };
-    expect(isVaultV10({ ...currentVault, accounts: [argent] })).toBe(true);
-    expect(isVaultV10({ ...currentVault, accounts: [{ ...argent, classHash: "0x123" }] })).toBe(
+    expect(isVaultV12({ ...currentVault, accounts: [argent] })).toBe(true);
+    expect(isVaultV12({ ...currentVault, accounts: [{ ...argent, classHash: "0x123" }] })).toBe(
       false,
     );
   });
@@ -178,12 +173,13 @@ const ledgerOnlyVault = {
   mnemonic: null,
   originGrants: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
+  shadowAccountScopes: [],
   signingKeys: [],
 };
 
 describe("mnemonic-less Ledger-only vault", () => {
   test("validates a keyless Ledger vault that stores no recovery phrase", () => {
-    expect(isVaultV10(ledgerOnlyVault)).toBe(true);
+    expect(isVaultV12(ledgerOnlyVault)).toBe(true);
     expect(isKeylessAccount(ledgerAccount as AccountRef)).toBe(true);
   });
 
@@ -205,20 +201,20 @@ describe("mnemonic-less Ledger-only vault", () => {
       accounts: [readyAccount],
       activeAccountId: readyAccount.id,
     };
-    expect(isVaultV10(readyVault)).toBe(true);
+    expect(isVaultV12(readyVault)).toBe(true);
     // The Ready scheme is admitted from v9 onward: the same record stamped v8
     // or v7 is refused, while a Bramble-path Ledger account is accepted at every version
     // that admits Ledger accounts at all.
-    expect(isVaultV8({ ...readyVault, schemaVersion: 8 })).toBe(false);
-    expect(isVaultV8({ ...ledgerOnlyVault, schemaVersion: 8 })).toBe(true);
-    const { importedSeeds: _ready, ...readyV7 } = { ...readyVault, schemaVersion: 7 };
-    const { importedSeeds: _bramble, ...brambleV7 } = { ...ledgerOnlyVault, schemaVersion: 7 };
+    expect(isVaultV8({ ...withoutScopes(readyVault), schemaVersion: 8 })).toBe(false);
+    expect(isVaultV8({ ...withoutScopes(ledgerOnlyVault), schemaVersion: 8 })).toBe(true);
+    const readyV7 = asV7(readyVault);
+    const brambleV7 = asV7(ledgerOnlyVault);
     expect(isVaultV7(readyV7)).toBe(false);
     expect(isVaultV7(brambleV7)).toBe(true);
     // Bramble's marker over Ready's path, or Ready's marker over Bramble's path,
     // would sign with a key nobody enumerated: both fail closed.
     expect(
-      isVaultV10({
+      isVaultV12({
         ...readyVault,
         accounts: [
           {
@@ -229,7 +225,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       }),
     ).toBe(false);
     expect(
-      isVaultV10({
+      isVaultV12({
         ...readyVault,
         accounts: [
           {
@@ -244,7 +240,7 @@ describe("mnemonic-less Ledger-only vault", () => {
   test("still accepts the grandfathered legacy null-phrase seed vault", () => {
     // A v1-migrated wallet carries seed accounts with a null mnemonic; that shape
     // stays valid so those wallets never fail closed.
-    expect(isVaultV10(currentVault)).toBe(true);
+    expect(isVaultV12(currentVault)).toBe(true);
     expect(currentVault.mnemonic).toBeNull();
   });
 
@@ -265,15 +261,15 @@ describe("mnemonic-less Ledger-only vault", () => {
       ],
     };
 
-    expect(isVaultV10(withSecret)).toBe(true);
+    expect(isVaultV12(withSecret)).toBe(true);
     expect(
-      isVaultV10({
+      isVaultV12({
         ...withSecret,
         accountSecrets: [{ ...withSecret.accountSecrets[0], accountId: "SN_MAIN:0x999" }],
       }),
     ).toBe(false);
     expect(
-      isVaultV10({
+      isVaultV12({
         ...withSecret,
         accountSecrets: [
           {
@@ -284,7 +280,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       }),
     ).toBe(false);
     expect(
-      isVaultV10({
+      isVaultV12({
         ...withSecret,
         accountSecrets: [
           {
@@ -304,7 +300,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       viewingKey: "0x654321",
     };
     expect(
-      isVaultV10({
+      isVaultV12({
         ...currentVault,
         accountSecrets: [
           {
@@ -315,7 +311,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       }),
     ).toBe(false);
     expect(
-      isVaultV10({
+      isVaultV12({
         ...ledgerOnlyVault,
         accountSecrets: [
           {

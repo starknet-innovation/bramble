@@ -15,9 +15,11 @@
  */
 import type { Call } from "starknet";
 import { WalletError } from "../support/errors";
+import { boundedFetch } from "../support/bounded-network";
 import { isRecord } from "../support/json";
 import { isNonZeroStarkFieldElement, sameAddress } from "../support/networks";
 import { VESU_API_BASE, VESU_LENDING_ENABLED } from "../constants";
+import { registeredVesuVTokens, VESU_REGISTRY_UNAVAILABLE } from "./vesu-anchors";
 import type { LendingParams, LendingQuote, LendingQuoteParams } from "../types";
 import {
   buildVesuBorrowCalls,
@@ -38,14 +40,15 @@ const assertLendingEnabled = (): void => {
   }
 };
 
-// Fetches and parses the Vesu pool config over HTTP, mapping any transport or
-// shape failure to a stable WalletError.
+// Fetches and parses the Vesu pool config through the bounded network boundary,
+// mapping any transport, deadline, size or shape failure to a stable WalletError.
 const fetchVesuPool = async (poolId: string) => {
   const url = `${VESU_API_BASE}/pools/${poolId}`;
   let body: unknown;
   try {
-    const response = await fetch(url);
+    const response = await boundedFetch(url);
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
       throw new WalletError("Vesu pool request failed");
     }
     body = await response.json();
@@ -61,11 +64,14 @@ const fetchVesuPool = async (poolId: string) => {
 
 /**
  * Resolves the Vesu V2 pool config and projects a lending position. Fetches the
- * pool from the Vesu API, resolves the per-asset vToken and current rates, and
- * returns a `LendingQuote` a review screen shows before the user commits. In V2
- * `poolId` is the `Pool` contract address, so `poolAddress` is that same value
- * (the contract borrow/repay call `modify_position` on). `vTokenAddress` is null
- * when the pool does not list the asset. Borrow/repay callers must pass
+ * pool's rates from the Vesu API and its vToken from the pinned pool factory's
+ * on-chain registry, and returns a `LendingQuote` a review screen shows before
+ * the user commits. In V2 `poolId` is the `Pool` contract address, so
+ * `poolAddress` is that same value (the contract borrow/repay call
+ * `modify_position` on). The pool must be one the factory created and must
+ * list the asset (and the collateral asset, when given), or the quote is
+ * refused; an API answer naming a different vToken is refused too. Borrow/repay
+ * callers must pass
  * `collateralAsset` (the asset keying the V2 position) and may pass
  * `collateralAmount` (smallest-unit collateral to supply; "0" = none); both are
  * validated and echoed onto the quote.
@@ -95,6 +101,23 @@ export const quoteLending = async (params: LendingQuoteParams): Promise<LendingQ
 
   const config = await fetchVesuPool(poolId);
   const assetConfig = findVesuAsset(config, asset);
+  // The API names the pool and vToken; the pinned factory's registry decides
+  // whether they are Vesu's (Sherlock 169). The registered vToken is the one
+  // the calls use, and an API answer naming a different one is refused.
+  const [vTokenAddress] = await registeredVesuVTokens(
+    poolId,
+    resolvedCollateralAsset === null ? [asset] : [asset, resolvedCollateralAsset],
+  );
+  if (vTokenAddress === undefined) {
+    throw new WalletError(VESU_REGISTRY_UNAVAILABLE);
+  }
+  if (
+    assetConfig?.vTokenAddress !== undefined &&
+    assetConfig.vTokenAddress !== null &&
+    !sameAddress(assetConfig.vTokenAddress, vTokenAddress)
+  ) {
+    throw new WalletError("The Vesu API named a vToken this pool does not register");
+  }
 
   return {
     action,
@@ -106,7 +129,7 @@ export const quoteLending = async (params: LendingQuoteParams): Promise<LendingQ
     poolAddress: poolId,
     poolId,
     supplyApyBps: assetConfig?.supplyApyBps ?? null,
-    vTokenAddress: assetConfig?.vTokenAddress ?? null,
+    vTokenAddress,
   };
 };
 

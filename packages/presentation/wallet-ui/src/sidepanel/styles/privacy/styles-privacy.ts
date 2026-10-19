@@ -57,7 +57,7 @@ export const PRIVACY_STYLES = `
   .token-breakdown {
     display: grid;
     gap: ${SPACE.sm};
-    padding: ${SPACE.md} ${SPACE.sm} ${SPACE.sm} calc(40px + ${SPACE.md});
+    padding: ${SPACE.md} ${SPACE.sm} ${SPACE.sm} calc(${SIZE.mark} + ${SPACE.md});
   }
   .token-breakdown-row {
     align-items: center;
@@ -74,6 +74,8 @@ export const PRIVACY_STYLES = `
     gap: ${SPACE.xs};
   }
   .token-breakdown-label .icon { height: 12px; width: 12px; }
+  /* The collapsed row's public · private split, under the combined amount. */
+  .token-copy p.token-split { color: var(--bramble-muted); font-variant-numeric: tabular-nums; }
   .token-breakdown-value { font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.medium}; }
   button.token-breakdown-register {
     background: transparent;
@@ -179,6 +181,17 @@ export const PRIVACY_STYLES = `
   .privacy-review-title p,
   .privacy-working > p,
   .privacy-outcome > p { color: var(--bramble-muted); margin: 0 auto; max-width: 32ch; }
+  /* The failure sentence with its copy control trailing it, as on the send
+     receipt (.send-outcome-reason), so the diagnostic sits beside its line. */
+  .privacy-outcome-reason {
+    align-items: start;
+    display: inline-flex;
+    gap: ${SPACE.xs};
+    justify-content: center;
+    margin: 0 auto;
+    min-width: 0;
+  }
+  .privacy-outcome-reason p { color: var(--bramble-muted); margin: 0; max-width: 32ch; min-width: 0; }
   .privacy-facts,
   .privacy-task-list {
     display: grid;
@@ -266,6 +279,12 @@ export const PRIVACY_STYLES = `
   }
   .privacy-success .privacy-outcome-mark { color: var(--bramble-positive); }
   .privacy-failure .privacy-outcome-mark { color: var(--bramble-danger); }
+  /* A submission whose reply was lost is not a failure: the amber tone and a
+     "!" mark, never the red cross that invites a retry (mc-wallet issue 382). */
+  .privacy-failure[data-severity="warning"] .privacy-outcome-mark { color: var(--bramble-warning); }
+  .privacy-unknown-mark,
+  .privacy-failure[data-severity="warning"] .send-failure-mark { display: none; }
+  .privacy-failure[data-severity="warning"] .privacy-unknown-mark { display: inline; }
   /* A prerequisite, not a failure: the shield mark in the muted tone, drawn at
      the registry icon's own weight rather than the receipt marks' heavier one. */
   .privacy-blocked .privacy-outcome-mark { color: var(--bramble-muted); }

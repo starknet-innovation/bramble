@@ -8,7 +8,7 @@
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 
 /** Dependencies the key-import binding closes over. */
 export type KeyImportUiDeps = {
@@ -104,9 +104,9 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
       await deps.render(await wallet.loadStatus());
     } catch (error) {
       const message = errorMessage(error, "Account import failed");
-      showToast(message, "error", form);
+      showToast(message, "error", form, errorDetails(error, "Account import failed"));
       if (result) {
-        result.textContent = message;
+        result.textContent = errorLine(error, "Account import failed");
       }
       buttonBusy(deps.passwordContinue, false);
     }

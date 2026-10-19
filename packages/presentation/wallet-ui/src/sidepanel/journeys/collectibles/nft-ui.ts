@@ -1,117 +1,24 @@
 /**
  * NFT gallery bindings: add a watched NFT after on-chain ownership is proven,
- * open a collectible's detail screen, toggle spam-hide, remove, and send
- * through the verified invoke path.
+ * open a collectible's detail screen, toggle spam-hide, and remove. The detail
+ * screen's send journey lives in ./nft-send-ui.
  */
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
-import type { TransferReviewResponse, WalletStatus } from "../../../popup/responses/responses";
-import type { SidepanelWallet } from "../../runtime/runtime";
-import { awaitConfirmation, type ConfirmationOutcome } from "../../shared/confirm-submitted";
-import { buttonBusy, errorLine, errorMessage, renderFragment, showToast } from "../../shared/dom";
-import {
-  outcomeReceiptActions,
-  outcomeReceiptFor,
-  outcomeReceiptSection,
-  paintOutcomeReceipt,
-} from "../../shared/outcome-receipt";
-import { reviewFeeBlocked } from "../../shared/review-render";
-import { watchDeployment } from "../../shell/shell-bindings";
-import { friendlyReviewError, recipientFieldError, reviewPanelHtml } from "../send/transfer-ui";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { bindNftSendForm, type NftSendDeps } from "./nft-send-ui";
 
 /**
- * Dependencies the NFT bindings close over. `openDetail` navigates to the NFT
- * detail screen for the given watched-NFT id.
+ * Dependencies the NFT bindings close over: the send journey's, plus
+ * `openDetail`, which navigates to the NFT detail screen for the given
+ * watched-NFT id.
  */
-export type NftUiDeps = {
-  readonly app: Element | null;
-  /** Overrides the confirmation checkpoints; tests pass a single zero delay. */
-  readonly confirmationDelaysMs?: readonly number[];
-  /** Leaves the transfer for a dock screen from its receipt. */
-  readonly navigate?: (view: "activity") => void;
+export type NftUiDeps = NftSendDeps & {
   readonly openDetail: (id: string) => void;
-  readonly render: (status: WalletStatus) => Promise<void>;
-  readonly wallet: SidepanelWallet;
-};
-
-// A transfer has nothing to itemise beyond the review above it, so the receipt
-// states the outcome, says once where the token went, and shows the hash.
-const paintNftReceipt = async (
-  deps: NftUiDeps,
-  root: ParentNode | null | undefined,
-  outcome: ConfirmationOutcome | null,
-  hash: string,
-): Promise<void> => {
-  const status = await deps.wallet.loadStatus();
-  if (!root) return;
-  paintOutcomeReceipt(
-    root,
-    "nft-success",
-    outcomeReceiptFor(
-      outcome,
-      {
-        confirmedDescription: "The collectible is now held by the recipient.",
-        confirmedTitle: "Transfer complete",
-        failedTitle: "Transfer failed",
-        submittedTitle: "Transfer submitted",
-      },
-      hash,
-    ),
-    status.networkId,
-  );
 };
 
 const rerender = async (deps: NftUiDeps): Promise<void> => {
   await deps.render(await deps.wallet.loadStatus());
-};
-
-type NftReviewElements = {
-  readonly form: HTMLFormElement;
-  readonly result: HTMLElement | null | undefined;
-  readonly reviewPanel: HTMLElement | null | undefined;
-  readonly submitButton: HTMLButtonElement | null | undefined;
-};
-
-const renderNftTransferReview = (
-  elements: NftReviewElements,
-  review: TransferReviewResponse["review"],
-  key: string,
-  setReviewedKey: (value: string | null) => void,
-  setRequiresDeployment: (value: boolean) => void,
-  setReviewedFees: (
-    fee: TransferReviewResponse["review"]["fee"],
-    deploymentFee: TransferReviewResponse["review"]["deploymentFee"],
-  ) => void,
-): void => {
-  const { form, result, reviewPanel, submitButton } = elements;
-  const feeFailed = reviewFeeBlocked(review);
-  const recipientBlocked = review.flags.some((flag) => flag.code === "address-poisoning");
-  setReviewedKey(feeFailed || recipientBlocked ? null : key);
-  setRequiresDeployment(review.requiresDeployment);
-  // Kept so the send can echo back the exact figure this panel rendered; the
-  // background refuses a send whose fee has outrun it (MCW-V09-119).
-  setReviewedFees(review.fee, review.deploymentFee);
-  form.dataset["stage"] = recipientBlocked ? "blocked" : feeFailed ? "fee-failure" : "review";
-  form.removeAttribute("aria-busy");
-  if (reviewPanel) {
-    renderFragment(reviewPanel, reviewPanelHtml(review));
-  }
-  submitButton?.lastChild?.replaceWith(
-    feeFailed || recipientBlocked ? "Review transfer" : "Confirm transfer",
-  );
-  if (result) {
-    result.textContent = recipientBlocked
-      ? "This transfer is blocked. Change the recipient and review it again."
-      : feeFailed
-        ? "Couldn't estimate the fee. Retry before sending."
-        : "Review the details above, then confirm.";
-  }
-  reviewPanel
-    ?.querySelector<HTMLButtonElement>("#review-retry-fee")
-    ?.addEventListener("click", () => {
-      form.requestSubmit();
-    });
-  buttonBusy(submitButton, feeFailed);
 };
 
 const bindAddForm = (deps: NftUiDeps): void => {
@@ -139,193 +46,9 @@ const bindAddForm = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't add that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't add that collectible"), "error", deps.app);
           if (result) {
             result.textContent = errorLine(error, "Couldn't add that collectible");
-          }
-          buttonBusy(submitButton, false);
-        },
-      );
-  });
-};
-
-const bindSendForm = (deps: NftUiDeps): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#nft-send-form");
-  if (!form) {
-    return;
-  }
-  const result = deps.app?.querySelector<HTMLElement>("#nft-send-result");
-  const reviewPanel = deps.app?.querySelector<HTMLElement>("#nft-review-panel");
-  const recipientInput = form.querySelector<HTMLInputElement>('input[name="recipient"]');
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  let reviewedKey: string | null = null;
-  let requiresDeployment = false;
-  let reviewedFee: TransferReviewResponse["review"]["fee"] = null;
-  let reviewedDeploymentFee: TransferReviewResponse["review"]["deploymentFee"] = null;
-  form.dataset["stage"] = "recipient";
-
-  const resetReview = (): void => {
-    reviewedKey = null;
-    requiresDeployment = false;
-    reviewedFee = null;
-    reviewedDeploymentFee = null;
-    form.dataset["stage"] = "recipient";
-    form.removeAttribute("aria-busy");
-    recipientInput?.setCustomValidity("");
-    if (reviewPanel) {
-      renderFragment(reviewPanel, "");
-    }
-    submitButton?.lastChild?.replaceWith("Review transfer");
-    buttonBusy(submitButton, false);
-  };
-
-  form.addEventListener("input", resetReview);
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-recipient]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (!recipientInput) {
-        return;
-      }
-      recipientInput.value = button.dataset["nftRecipient"] ?? "";
-      recipientInput.dispatchEvent(new Event("input", { bubbles: true }));
-      recipientInput.focus();
-    });
-  });
-
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    const fields = {
-      accountId: String(data.get("accountId") ?? ""),
-      contract: normalizeFeltInput(String(data.get("contract") ?? "")),
-      networkId: String(data.get("networkId") ?? ""),
-      recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
-      tokenId: String(data.get("tokenId") ?? ""),
-    };
-    const recipientError = recipientFieldError(fields.recipient);
-    if (recipientError) {
-      recipientInput?.setCustomValidity(recipientError);
-      recipientInput?.reportValidity();
-      if (result) {
-        result.textContent = recipientError;
-      }
-      return;
-    }
-
-    const key = JSON.stringify(fields);
-    buttonBusy(submitButton, true);
-
-    if (reviewedKey !== key) {
-      form.dataset["stage"] = "reviewing";
-      form.setAttribute("aria-busy", "true");
-      if (result) {
-        result.textContent = "Checking the transfer…";
-      }
-      void deps.wallet
-        .reviewNftTransfer(fields.contract, fields.tokenId, fields.networkId, fields.recipient)
-        .then(
-          (review) => {
-            renderNftTransferReview(
-              { form, result, reviewPanel, submitButton },
-              review,
-              key,
-              (value) => {
-                reviewedKey = value;
-              },
-              (value) => {
-                requiresDeployment = value;
-              },
-              (fee, deploymentFee) => {
-                reviewedFee = fee;
-                reviewedDeploymentFee = deploymentFee;
-              },
-            );
-          },
-          (error: unknown) => {
-            const message = friendlyReviewError(error);
-            form.dataset["stage"] = "failed";
-            form.removeAttribute("aria-busy");
-            showToast(message, "error", deps.app);
-            if (result) {
-              result.textContent = message;
-            }
-            buttonBusy(submitButton, false);
-          },
-        );
-      return;
-    }
-
-    form.dataset["stage"] = "submitting";
-    form.setAttribute("aria-busy", "true");
-    if (result) {
-      result.textContent = "Submitting…";
-    }
-    void deps.wallet
-      .transferNft(
-        fields.contract,
-        fields.tokenId,
-        fields.networkId,
-        fields.recipient,
-        reviewedFee,
-        reviewedDeploymentFee,
-      )
-      .then(
-        async (transactionHash) => {
-          form.dataset["stage"] = "submitted";
-          form.removeAttribute("aria-busy");
-          if (reviewPanel) {
-            renderFragment(
-              reviewPanel,
-              outcomeReceiptSection("nft-success", outcomeReceiptActions("nft-view-activity")),
-            );
-            reviewPanel.querySelector("#nft-success")?.removeAttribute("hidden");
-            reviewPanel
-              .querySelector("#nft-view-activity")
-              ?.addEventListener("click", () => deps.navigate?.("activity"));
-          }
-          if (result) {
-            result.textContent = "";
-          }
-          // Submitted is not delivered. The receipt opens on what is certain
-          // and turns into the transfer or its failure once the chain answers;
-          // as in Send and Swap, only that answer is toasted.
-          await paintNftReceipt(deps, reviewPanel, null, transactionHash);
-          void awaitConfirmation({
-            ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
-            hash: transactionHash,
-            loadActivity: () => deps.wallet.loadActivity(),
-            stillCurrent: () => form.isConnected,
-          }).then(async (outcome) => {
-            if (!form.isConnected) return;
-            await paintNftReceipt(deps, reviewPanel, outcome, transactionHash);
-            if (outcome) {
-              showToast(
-                outcome.toast,
-                outcome.kind === "succeeded" ? "success" : "error",
-                deps.app,
-              );
-            }
-          });
-          if (requiresDeployment) {
-            void watchDeployment(
-              { render: deps.render, wallet: deps.wallet },
-              {
-                accountId: fields.accountId,
-                stillCurrent: () =>
-                  form.isConnected && new FormData(form).get("accountId") === fields.accountId,
-              },
-            );
-          }
-          if (submitButton) {
-            submitButton.disabled = true;
-          }
-        },
-        (error: unknown) => {
-          const message = errorMessage(error, "The transfer didn't go through");
-          form.dataset["stage"] = "failed";
-          form.removeAttribute("aria-busy");
-          showToast(message, "error", deps.app);
-          if (result) {
-            result.textContent = `${message} Nothing was submitted; review the recipient and try again.`;
           }
           buttonBusy(submitButton, false);
         },
@@ -398,7 +121,7 @@ const bindHideDiscovered = (deps: NftUiDeps): void => {
             await rerender(deps);
           },
           (error: unknown) => {
-            showToast(errorMessage(error, "Couldn't update that collectible"), "error", deps.app);
+            showToast(errorDetails(error, "Couldn't update that collectible"), "error", deps.app);
             buttonBusy(button, false);
           },
         );
@@ -428,7 +151,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't update that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't update that collectible"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -448,7 +171,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't remove that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't remove that collectible"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -461,7 +184,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
  */
 export const bindNfts = (deps: NftUiDeps): void => {
   bindAddForm(deps);
-  bindSendForm(deps);
+  bindNftSendForm(deps);
   bindRowActions(deps);
   bindHideDiscovered(deps);
   bindImages(deps);

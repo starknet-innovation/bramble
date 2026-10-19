@@ -123,20 +123,14 @@ const prepareRecoveryAccounts = async (context: FrameContext): Promise<void> => 
   await nextTurn();
 };
 
-const prepareAccountSelection =
-  (selected: boolean) =>
-  async (context: FrameContext): Promise<void> => {
-    await prepareGenerated(true, true)(context);
-    press(context, "#verify-continue");
-    updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
-    updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
-    press(context, "#password-continue-button");
-    await nextTurn();
-    if (!selected) {
-      return;
-    }
-    press(context, "#account-preview");
-  };
+const prepareAccountReview = async (context: FrameContext): Promise<void> => {
+  await prepareGenerated(true, true)(context);
+  press(context, "#verify-continue");
+  updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
+  updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
+  press(context, "#password-continue-button");
+  await nextTurn();
+};
 
 const prepareGenerated =
   (reveal: boolean, confirm: boolean) =>
@@ -190,6 +184,15 @@ export const onboardingScenario: WalletScenario = {
       state: { choices: 3, path: "existing wallet" },
     },
     {
+      content: () => onboarding(emptyWalletStatus, false),
+      id: "method-no-ledger",
+      label: "Choose import method (no Ledger transport)",
+      narrative:
+        "A browser with no Web Bluetooth, WebUSB or WebHID is never offered a Ledger path it cannot finish.",
+      prepare: prepareMethod,
+      state: { choices: 2, ledgerTransport: "unavailable" },
+    },
+    {
       content: () => onboarding(emptyWalletStatus),
       id: "recovery",
       label: "Enter recovery phrase",
@@ -229,17 +232,9 @@ export const onboardingScenario: WalletScenario = {
       id: "accounts",
       label: "Review the Bramble account",
       narrative:
-        "The Bramble public account is derived without writing a vault and awaits selection.",
-      prepare: prepareAccountSelection(false),
-      state: { persisted: false, selected: 0, visibleAccounts: 1 },
-    },
-    {
-      content: () => onboarding(emptyWalletStatus),
-      id: "account-selected",
-      label: "Account selected",
-      narrative: "Selecting the derived account visibly activates the final action.",
-      prepare: prepareAccountSelection(true),
-      state: { selected: 1 },
+        "The sole derived account is presented as the one being created, with the final action ready and no selection step.",
+      prepare: prepareAccountReview,
+      state: { persisted: false, visibleAccounts: 1 },
     },
     {
       content: () => onboarding(emptyWalletStatus),
@@ -325,12 +320,28 @@ export const ledgerOnboardingScenario: WalletScenario = {
       state: { choices: 4, secretBoundary: "visible" },
     },
     {
+      content: () => addAccountChooser(false),
+      id: "method-no-ledger",
+      label: "Choose account method (no Ledger transport)",
+      narrative:
+        "Without a Ledger transport the chooser offers only the routes this browser can finish.",
+      state: { choices: 3, ledgerTransport: "unavailable" },
+    },
+    {
       content: () => importAccountChooser(),
       id: "method-import",
       label: "Import an existing account",
       narrative:
         "The import stage offers the recovery-phrase and private-key routes, each a single click.",
       state: { choices: 2 },
+    },
+    {
+      content: () => importAccountChooser(false),
+      id: "method-import-no-ledger",
+      label: "Import an existing account (no Ledger transport)",
+      narrative:
+        "The Ready Ledger restore route is likewise absent, leaving the phrase and key routes.",
+      state: { choices: 2, ledgerTransport: "unavailable" },
     },
     {
       content: ledgerConnectPrompt,

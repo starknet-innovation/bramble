@@ -94,6 +94,7 @@ describe("NFT gallery bindings", () => {
     let renders = 0;
     bindNfts({
       app,
+      navigate: () => undefined,
       openDetail: (id) => {
         opened.push(id);
       },
@@ -179,6 +180,7 @@ describe("NFT gallery bindings", () => {
     document.body.append(app);
     bindNfts({
       app,
+      navigate: () => undefined,
       openDetail: () => undefined,
       render: async () => undefined,
       wallet: {

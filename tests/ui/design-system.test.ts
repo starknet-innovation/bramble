@@ -159,9 +159,15 @@ describe("design system", () => {
     expect(markup).toContain('id="key-method-button"');
     expect(markup).toContain("Ready Account");
     expect(markup).toContain("Bramble Account");
-    // The wizard no longer names the network anywhere: the real-funds
-    // acknowledgement was the only place it did, and it was removed in the copy
-    // review. The network is still pinned to DEFAULT_NETWORK by the binder.
-    expect(markup).not.toContain("Starknet Mainnet");
+    // The real-funds tickbox is gone, but its consequence is stated instead, on
+    // every step that creates, imports or restores accounts on Mainnet (the
+    // binder pins onboarding to DEFAULT_NETWORK).
+    expect(markup).not.toContain('type="checkbox" name="mainnetAck"');
+    const consequence = "This wallet is on Starknet Mainnet and holds real funds.";
+    for (const step of ["import-key", "recovery-accounts", "accounts", "ledger"]) {
+      const section =
+        markup.split(`data-onboarding-step="${step}"`)[1]?.split("</section>")[0] ?? "";
+      expect(section).toContain(consequence);
+    }
   });
 });

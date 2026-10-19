@@ -223,7 +223,15 @@ export const computePrivacyCopy = (gates: {
     ),
   };
   const later = {
-    failure: texts(flow({ error: "ERROR", stage: "failure", tokenId })),
+    failure: texts(
+      flow({
+        error: "ERROR",
+        errorDetails: "ERROR",
+        severity: "danger",
+        stage: "failure",
+        tokenId,
+      }),
+    ),
     proving: texts(flow({ progress: null, stage: "preparing", step: "proving", tokenId })),
     success: texts(
       flow({ hash: "0x1", kind: "register", stage: "success", symbol: "ETH", tokenId }),

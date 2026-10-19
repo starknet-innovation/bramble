@@ -9,9 +9,11 @@
  */
 
 import {
+  DEFAULT_TOKENS,
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
   sameFelt,
+  USDC_TOKEN_ADDRESS,
 } from "@bramble/wallet-model/networks";
 import { type TokenConfig, withTokenId } from "@bramble/wallet-model/preferences";
 
@@ -49,7 +51,7 @@ const MAINNET_TOKENS: readonly RegistryToken[] = [
     symbol: "STRK",
   },
   {
-    address: "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+    address: USDC_TOKEN_ADDRESS,
     decimals: 6,
     name: "USD Coin",
     networkId: "SN_MAIN",
@@ -137,6 +139,22 @@ const foldSymbol = (symbol: string): string => {
     .join("");
 };
 
+// A bridged ticker carries one `.e` suffix (`USDC.e`), which the shared symbol
+// grammar admits. Each symbol is compared in both its full form and its base
+// form, so a dapp's `ETH.e` reads as ETH and a dotless `USDCE` still reads as
+// `USDC.e`. The suffix test is case-blind because folding lowercases anyway.
+const BRIDGED_SUFFIX = /\.e$/i;
+
+const symbolFolds = (symbol: string): readonly string[] => {
+  const full = foldSymbol(symbol);
+  return BRIDGED_SUFFIX.test(symbol)
+    ? [full, foldSymbol(symbol.replace(BRIDGED_SUFFIX, ""))]
+    : [full];
+};
+
+const sharesFold = (left: readonly string[], right: readonly string[]): boolean =>
+  left.some((fold) => right.includes(fold));
+
 /**
  * Returns the curated known tokens for a network, each carrying its derived
  * preference id so callers can probe balances or compare against tracked
@@ -172,16 +190,20 @@ export const tokenSpamReasons = (token: SpamCandidate): readonly SpamReason[] =>
   if (!Number.isSafeInteger(token.decimals) || token.decimals > MAX_PLAUSIBLE_DECIMALS) {
     reasons.push("absurd-decimals");
   }
-  const folded = foldSymbol(token.symbol);
-  const spoofs = knownTokensForNetwork(token.networkId).some((known) => {
-    if (foldSymbol(known.symbol) !== folded || sameFelt(known.address, token.address)) {
-      return false;
-    }
-    // A different contract sharing the symbol is only genuine when it is an
-    // explicitly allowlisted alternate deployment of that ticker.
-    const aliases = LEGITIMATE_ALIASES[known.symbol] ?? [];
-    return !aliases.some((alias) => sameFelt(alias, token.address));
-  });
+  const folds = symbolFolds(token.symbol);
+  const lookalikes = knownTokensForNetwork(token.networkId).filter((known) =>
+    sharesFold(symbolFolds(known.symbol), folds),
+  );
+  // A curated contract is never a spoof of a curated sibling whose ticker folds
+  // alike (native USDC beside bridged USDC.e). Any other contract is genuine
+  // only when it is an explicitly allowlisted alternate deployment.
+  const curated = lookalikes.some((known) => sameFelt(known.address, token.address));
+  const spoofs =
+    !curated &&
+    lookalikes.some((known) => {
+      const aliases = LEGITIMATE_ALIASES[known.symbol] ?? [];
+      return !aliases.some((alias) => sameFelt(alias, token.address));
+    });
   if (spoofs) {
     reasons.push("symbol-spoof");
   }
@@ -193,3 +215,28 @@ export const tokenSpamReasons = (token: SpamCandidate): readonly SpamReason[] =>
  * default.
  */
 export const isLikelySpam = (token: SpamCandidate): boolean => tokenSpamReasons(token).length > 0;
+
+// Every curated token on every network, so the per-entry network comparison in
+// isCuratedToken is the single network guard: the same contract and ticker on
+// another network (ETH/STRK share addresses everywhere; a mainnet-only token
+// does not exist on Sepolia) must not match.
+const CURATED_TOKENS: readonly RegistryToken[] = [
+  ...Object.values(REGISTRY).flat(),
+  ...DEFAULT_TOKENS,
+];
+
+/**
+ * Checks whether a token is exactly a curated one: a registry or default-tracked
+ * token on the same network with the same contract, ticker, and decimals. Used
+ * to keep a dapp-suggested token trusted only when the wallet already vouches
+ * for every field the review reads from it; any mismatch (including a real
+ * contract under a site-supplied ticker or decimals) is not curated.
+ */
+export const isCuratedToken = (token: SpamCandidate): boolean =>
+  CURATED_TOKENS.some(
+    (known) =>
+      known.networkId === token.networkId &&
+      sameFelt(known.address, token.address) &&
+      known.symbol === token.symbol &&
+      known.decimals === token.decimals,
+  );

@@ -36,6 +36,7 @@ export type LedgerCandidate = {
  * is the only way an account created in Ready (Argent X) can be found.
  */
 export type LedgerOnboardAddKind =
+  | "find-accounts"
   | "import"
   | "import-key"
   | "import-phrase"
@@ -101,6 +102,7 @@ export type LedgerOnboardControllerDeps = {
   readonly onCancel: () => void;
   readonly openImport: () => void;
   readonly openImportSeed: () => void;
+  readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;
@@ -132,11 +134,13 @@ export const ledgerCandidateActive = (candidate: LedgerCandidate): boolean =>
   candidate.deployed === true || candidate.funded === true;
 
 /**
- * Whether a candidate may be selected. Duplicates never are, and a Ready
- * candidate with no on-chain activity is listed but not selectable — importing
- * it would deploy a brand-new Ready account, and Bramble only creates Bramble
- * accounts.
+ * Whether a candidate may be selected. Duplicates never are, and a Ready or
+ * Braavos candidate with no on-chain activity is listed but not selectable —
+ * importing it would deploy a brand-new account of that family, and Bramble only
+ * creates Bramble accounts.
  */
-export const ledgerCandidateSelectable = (candidate: LedgerCandidate): boolean =>
-  !candidate.duplicate &&
-  (candidate.account.accountContractType !== "argent" || ledgerCandidateActive(candidate));
+export const ledgerCandidateSelectable = (candidate: LedgerCandidate): boolean => {
+  if (candidate.duplicate) return false;
+  const type = candidate.account.accountContractType;
+  return (type !== "argent" && type !== "braavos") || ledgerCandidateActive(candidate);
+};

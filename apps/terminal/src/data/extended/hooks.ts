@@ -9,6 +9,7 @@
  * uses.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import type { Resource } from "../core/types";
 import { useAsyncResource } from "../core/useAsyncResource";
 import type { CandleInterval, CandleType } from "./config";
@@ -44,7 +45,7 @@ const FUNDING_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 const CANDLES_SEED_LIMIT = 500;
 
 const toMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "Extended request failed";
+  userErrorMessage(error, "Extended request failed");
 
 /**
  * All perp markets (with nested stats + trading/L2 config), polled. The screen

@@ -11,17 +11,17 @@ import type {
 import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
-import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import type { AllowanceNotice, AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { SwapCatalogToken } from "@bramble/transactions/avnu";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
+import type { ReadOnlyReason, RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
+import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
 import type {
@@ -32,13 +32,24 @@ import type {
   Strk20BalancesResponse,
   Strk20PrepareResponse,
   Strk20RecipientStatusResponse,
-  Strk20SubaccountCommitmentResponse,
+  Strk20ShadowAccountBalancesResponse,
+  Strk20ShadowAccountCommitmentResponse,
+  Strk20ShadowAccountsResponse,
   Strk20WalletPreparationResponse,
   Strk20WalletStateResponse,
 } from "../privacy/runtime-strk20-types";
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationReview } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
+import type {
+  AccountRecoveryState,
+  RecoverAccountResponse,
+  RecoveryReviewResponse,
+} from "./recovery-types";
+import type {
+  ClassHashVerificationResponse,
+  StarkNameResolutionResponse,
+} from "./runtime-lookup-types";
 import type {
   FeeReviewResponse,
   TransferResponse,
@@ -73,7 +84,8 @@ type ValidateMnemonicResponse = {
 type RevealSecretsResponse = {
   readonly mnemonic: string | null;
   readonly ok: true;
-  readonly privateKey: string;
+  /** `null` on a network with no account: only the recovery phrase is revealed. */
+  readonly privateKey: string | null;
 };
 
 /**
@@ -146,8 +158,8 @@ type PermissionsResponse = {
 };
 
 /**
- * Watch-asset outcome returned when the requested token is already tracked and
- * no approval prompt is needed.
+ * Watch-asset outcome returned once the user approves the card, or closes the
+ * already-tracked notice (audit M1). Never returned before the user acts.
  */
 type WatchAssetResponse = {
   readonly ok: true;
@@ -208,9 +220,8 @@ type TokenChartResponse = {
 };
 
 /**
- * Verified AVNU token catalog returned to extension pages for the swap
- * picker. Directory data only — a selected untracked token is re-validated
- * on-chain by the add-token flow before the wallet trusts it.
+ * Verified AVNU token catalog for the swap picker. Directory data only — a
+ * selected untracked token is re-validated on-chain before the wallet trusts it.
  */
 type SwapTokensResponse = {
   readonly ok: true;
@@ -230,6 +241,9 @@ type SwapQuoteResponse = {
     readonly quoteId: string;
     readonly sellAmount: string;
     readonly sellAmountInUsd: number;
+    // Value delta priced from the wallet's own feed (Sherlock 137); absent
+    // when the feed has no price for either token.
+    readonly valueDeltaPercent?: number;
   };
 };
 
@@ -263,6 +277,7 @@ type TransactionAlertsResponse = {
  */
 type AllowancesResponse = {
   readonly allowances: readonly AllowanceView[];
+  readonly notices?: readonly AllowanceNotice[];
   readonly ok: true;
 };
 
@@ -276,15 +291,15 @@ type DeploymentStatusResponse = {
 };
 
 /**
- * On-chain class-hash verification returned to extension pages. `verification`
- * carries the discriminated {@link ClassHashVerification} outcome so the UI can
- * distinguish verified / mismatch / undeployed / unreachable without re-reading
- * the chain.
+ * Active-account signability verdict for the Home read-only flag; `reason`
+ * accompanies `readOnly: true` and never carries secret material.
  */
-type ClassHashVerificationResponse = {
+type AccountSignabilityResponse = {
   readonly accountId: string;
   readonly ok: true;
-  readonly verification: ClassHashVerification;
+  readonly readOnly: boolean;
+  readonly reason?: ReadOnlyReason;
+  readonly recovery?: AccountRecoveryState;
 };
 
 /**
@@ -406,6 +421,9 @@ type LedgerAccountStatusResponse = {
  * Union of supported background message responses.
  */
 export type RuntimeResponse =
+  | AccountSignabilityResponse
+  | RecoveryReviewResponse
+  | RecoverAccountResponse
   | AccountsResponse
   | ActivityResponse
   | AddChainResponse
@@ -414,6 +432,7 @@ export type RuntimeResponse =
   | DeclareResponse
   | ChainIdResponse
   | ClassHashVerificationResponse
+  | StarkNameResolutionResponse
   | ConnectedSitesResponse
   | CreateAccountResponse
   | DeploymentDataResponse
@@ -440,6 +459,9 @@ export type RuntimeResponse =
   | MultisigResponse
   | NostrCoordinationResponse
   | { readonly ok: true; readonly signer: MultisigSignerAccount }
+  | { readonly ok: true; readonly updateReady: boolean }
+  | { readonly ok: true; readonly restarting: boolean }
+  | { readonly ok: true; readonly released: boolean }
   | MultisigsResponse
   | { readonly ok: true }
   | PendingApprovalResponse
@@ -452,7 +474,9 @@ export type RuntimeResponse =
   | Strk20BalancesResponse
   | Strk20PrepareResponse
   | Strk20RecipientStatusResponse
-  | Strk20SubaccountCommitmentResponse
+  | Strk20ShadowAccountBalancesResponse
+  | Strk20ShadowAccountCommitmentResponse
+  | Strk20ShadowAccountsResponse
   | Strk20WalletPreparationResponse
   | Strk20WalletStateResponse
   | SupportDiagnosticsResponse
@@ -462,6 +486,7 @@ export type RuntimeResponse =
   | TokenChartResponse
   | TransactionAlertsResponse
   | TransferResponse
+  | SubmissionUnknownResponse
   | ValidateMnemonicResponse
   | WalletStatus
   | WatchAssetResponse

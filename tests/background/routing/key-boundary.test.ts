@@ -164,12 +164,14 @@ describe("key boundary", () => {
       "wallet.strk20PrepareDeposit",
       "wallet.strk20PrepareInvoke",
       "wallet.strk20PrepareRegistration",
+      "wallet.strk20PrepareShadowSweep",
       "wallet.strk20PrepareTransfer",
       "wallet.strk20PrepareWithdraw",
       "wallet.strk20RecipientStatus",
       "wallet.strk20Register",
+      "wallet.strk20ShadowAccountBalances",
+      "wallet.strk20ShadowAccountCommitment",
       "wallet.strk20State",
-      "wallet.strk20SubaccountCommitment",
     ]);
   });
 

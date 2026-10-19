@@ -20,10 +20,10 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import {
   type NftTarget,
   readAddNftInput,
@@ -33,6 +33,7 @@ import {
   readTransferNftInput,
 } from "./nft-inputs";
 import { cachedNfts } from "./nft-snapshot-cache";
+import { submitNftTransfer } from "./nft-transfer-submit";
 
 // Bounds how many on-chain ERC721 owner / ERC1155 balance re-proofs run at once
 // during discovery.
@@ -252,7 +253,11 @@ const prepareNftTransfer = async (deps: WalletOpsDeps, input: NftTransferInput) 
   if (input.networkId !== context.networkId) {
     return { error: "switch to the NFT's network first" } as const;
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    context.accounts,
+  );
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
   // Watched NFTs are not scoped to an account, so both review and confirmation
   // prove ownership for the active account instead of trusting gallery state.
@@ -353,24 +358,16 @@ const handleTransferNft = async (
   }
   // Same bind as the ERC20 send: the fee the review step rendered is the
   // ceiling this send may sign under (MCW-V09-119).
-  const result = await deps.runtimeRpc.submitInvokeTransaction({
-    account: context.account,
-    calls: [call],
+  return submitNftTransfer(deps, {
+    call,
+    context,
     isAuthorized: authorized.isCurrent,
+    recipient: input.recipient,
     ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
     reviewedFee: input.reviewedFee,
     rpcUrls,
-    signHash: signerForContext(deps, context),
-  });
-  await recordSubmittedActivity(deps.activity, {
-    accountId: context.account.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: context.networkId,
     summary: report.calls[0]?.summary ?? `Send NFT #${input.tokenId}`,
   });
-  await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);
-  return { ok: true, transactionHash: result.transactionHash };
 };
 
 const handleDiscoverNfts = async (

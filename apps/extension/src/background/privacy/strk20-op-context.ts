@@ -6,6 +6,7 @@
  */
 
 import { WalletError, walletErrorMessage } from "@bramble/core/errors";
+import type { PriceService } from "@bramble/portfolio/prices";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import { canonicalStrk20PoolFee, type Strk20AccountContext } from "@bramble/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
@@ -14,13 +15,19 @@ import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet
 import { withTokenId } from "@bramble/wallet-model/preferences";
 import {
   PRIVACY_DEPLOY_REQUIRED,
+  PRIVACY_PUBLIC_BALANCE_UNCONFIRMED,
   PrivacyBlockerError,
   type PrivacyBlockerKind,
+  privacyShortfall,
 } from "@bramble/wallet-protocol/privacy-blocker";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";
+import {
+  type TrustedRecipientSources,
+  withTrustedRecipients,
+} from "../transactions/trusted-recipients";
 import { strk20AccountContext } from "./strk20-account-context";
 import type { Strk20JobRegistry } from "./strk20-preparation-jobs";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
@@ -31,6 +38,12 @@ import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations"
  * lets a proof outlive the runtime request that asked for it.
  */
 export type Strk20WalletOpsDeps = WalletOpsDeps & {
+  /**
+   * Fiat price feed used to bound a converted pool fee. Optional so partial test
+   * stubs stay valid; a missing feed prices nothing, which leaves the Send gate
+   * on the fee token exactly as the relay quote would fall back.
+   */
+  readonly prices?: PriceService;
   readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
 };
@@ -40,7 +53,8 @@ export type Strk20WalletOpsDeps = WalletOpsDeps & {
  */
 export type ActivePrivacyContext = {
   readonly accountContext: Strk20AccountContext;
-  readonly preferences: WalletPreferences;
+  /** Carries the address-poisoning trust inputs (audit #163) for the pool routes. */
+  readonly preferences: WalletPreferences & TrustedRecipientSources;
   readonly token: TokenConfig;
 };
 
@@ -126,7 +140,7 @@ export const assertPublicPoolSpendAffordable = async (
   const balanceOf = (address: string): bigint => {
     const entry = balances.find((balance) => sameFelt(balance.address, address));
     if (!entry || !/^\d+$/.test(entry.balance)) {
-      throw new WalletError("Could not confirm the public balance required by this transaction");
+      throw new WalletError(PRIVACY_PUBLIC_BALANCE_UNCONFIRMED);
     }
     return BigInt(entry.balance);
   };
@@ -138,7 +152,7 @@ export const assertPublicPoolSpendAffordable = async (
     return;
   }
   if (depositAmountRaw !== undefined && balanceOf(context.token.address) < amount) {
-    throw new WalletError(`Not enough ${context.token.symbol}`);
+    throw new WalletError(privacyShortfall(context.token.symbol, "public"));
   }
   if (balanceOf(STRK_TOKEN_ADDRESS) < fee) {
     throw new PrivacyBlockerError("fund", "Not enough STRK for the pool fee");
@@ -203,7 +217,11 @@ export const resolvePrivacyContext = async (
   if (active.error !== undefined) {
     return { error: active.error };
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    active.accounts,
+  );
   const config = preferences.strk20Networks?.[active.networkId] ?? null;
   if (!config) {
     return {

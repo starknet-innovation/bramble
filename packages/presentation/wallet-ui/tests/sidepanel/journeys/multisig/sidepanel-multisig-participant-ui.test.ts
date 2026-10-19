@@ -183,4 +183,73 @@ describe("multisig participant selection", () => {
     expect(app.querySelector<HTMLElement>("[data-participant-screen]")?.hidden).toBe(false);
     expect(app.querySelector("[data-participant-result]")?.textContent).not.toBe("");
   });
+
+  // Sherlock 258: the address book refuses a card whose keys differ from a
+  // saved contact's. That refusal must also keep the card's keys out of the
+  // signer set, or the screen reports "nothing saved" while the key is used.
+  const refusingWallet = (status: unknown): MultisigUiDeps["wallet"] =>
+    ({
+      loadStatus: async () => status,
+      saveAddress: async () => {
+        throw new Error("Contact keys changed");
+      },
+    }) as unknown as MultisigUiDeps["wallet"];
+  const submitCard = async (app: HTMLElement, scope: ParentNode, publicKeyX: string) => {
+    scope.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();
+    app.querySelector<HTMLButtonElement>('[data-participant-method="wallet-card"]')?.click();
+    const label = app.querySelector<HTMLInputElement>("[data-participant-label-input]");
+    const card = app.querySelector<HTMLTextAreaElement>('[name="participantWalletCard"]');
+    if (!label || !card) throw new Error("wallet-card participant controls unavailable");
+    label.value = "Adrien";
+    card.value = walletContactCard({
+      address: "0xabc",
+      networkId: "SN_MAIN",
+      nostrPublicKey: "11".repeat(32),
+      publicKeyX,
+    });
+    app.querySelector<HTMLButtonElement>("[data-confirm-participant]")?.click();
+    await flush();
+  };
+
+  test("a card the address book refuses does not join a new multisig's signers", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const signer = fixture.status.accounts[0];
+    if (!signer) throw new Error("signer fixture unavailable");
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      await testClient(),
+      fixture.status,
+      { wallet: refusingWallet(fixture.status) },
+    );
+    await submitCard(app, app, "0x789");
+
+    expect(app.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]')?.value).toBe(
+      signer.publicKeyX,
+    );
+    expect(app.querySelector('[data-signer-public-key="0x789"]')).toBeNull();
+    expect(app.querySelector<HTMLElement>("[data-participant-screen]")?.hidden).toBe(false);
+    expect(app.querySelector("[data-participant-result]")?.textContent).not.toBe("");
+  });
+
+  test("a card the address book refuses is not selected as a new signer", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const app = mount(
+      multisigSignersFlow(
+        fixture.status,
+        fixture.status.accounts[0] ?? null,
+        fixture.view,
+        defaultWalletPreferences(),
+      ),
+      await testClient(),
+      fixture.status,
+      { wallet: refusingWallet(fixture.status) },
+    );
+    const form = app.querySelector<HTMLFormElement>('[data-ms-manage="add"]');
+    if (!form) throw new Error("add-signer form unavailable");
+    await submitCard(app, form, "0x789");
+
+    expect(form.querySelector<HTMLInputElement>('[name="selectedPublicKey"]')?.value).toBe("");
+    expect(form.querySelector<HTMLElement>("[data-participant-selection]")?.hidden).toBe(true);
+    expect(form.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+  });
 });

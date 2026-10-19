@@ -25,6 +25,12 @@ const mainnetToken = (symbol: "ETH" | "STRK") => {
 
 export const ETH_TOKEN = mainnetToken("ETH");
 export const STRK_TOKEN = mainnetToken("STRK");
+/**
+ * The pool's action fee in STRK base units (6 STRK), the value the STRK20
+ * checkpoints render. Kept in one place so the activation review and the
+ * dapp-registration review cannot disagree about it.
+ */
+export const POOL_FEE_FRI = "0x53444835ec580000";
 const SPAM_TOKEN = withTokenId({
   address: "0x099999",
   decimals: 6,
@@ -236,6 +242,44 @@ export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
           { name: "name", type: "felt" },
           { name: "revision", type: "felt" },
           { name: "chainId", type: "felt" },
+        ],
+      },
+    },
+  },
+  // A nested order whose composed keys are wider than the card (Sherlock 257).
+  signNested: {
+    context: approvalContext,
+    id: approvalId("211"),
+    kind: "sign-typed-data",
+    origin: "https://market.bramble.test",
+    typedData: {
+      domain: { chainId: "SN_MAIN", name: "Marketplace", revision: "1", version: "1" },
+      message: {
+        authorization: {
+          settlementInstruction: {
+            outboundTransfer: {
+              beneficiaryAddress: `0x05${"f1e2c3b4".repeat(7)}a59687`,
+              replayNonce: "7",
+              transferAmount: "250000000000000000000",
+            },
+          },
+        },
+      },
+      primaryType: "Order",
+      types: {
+        Authorization: [{ name: "settlementInstruction", type: "Settlement" }],
+        Order: [{ name: "authorization", type: "Authorization" }],
+        Settlement: [{ name: "outboundTransfer", type: "Transfer" }],
+        StarknetDomain: [
+          { name: "name", type: "shortstring" },
+          { name: "version", type: "shortstring" },
+          { name: "chainId", type: "shortstring" },
+          { name: "revision", type: "shortstring" },
+        ],
+        Transfer: [
+          { name: "beneficiaryAddress", type: "ContractAddress" },
+          { name: "transferAmount", type: "u128" },
+          { name: "replayNonce", type: "felt" },
         ],
       },
     },

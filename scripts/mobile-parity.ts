@@ -9,7 +9,8 @@
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { deriveAccount } from "@bramble/vault/accounts";
 import { decryptJson, isEncryptedEnvelope, KDF_ITERATIONS } from "@bramble/vault/encrypted-store";
-import { estimatePassphraseStrength, isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { estimatePassphraseStrength } from "@bramble/wallet-model/passphrase-strength";
 // Not a package export: the avatar is a side-panel renderer, read here only to pin the mobile port.
 import { accountAvatar } from "../packages/presentation/wallet-ui/src/sidepanel/shell/account-avatar";
 

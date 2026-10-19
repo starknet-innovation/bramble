@@ -129,7 +129,7 @@ export const computeScreenCopy = () => {
     texts(
       simpleFlowScreen("deploy-account", {
         account: account as never,
-        allowances: [],
+        allowances: { entries: [], notices: [], unavailable: false },
         balances: [],
         changes: {},
         classHashVerification: null,
@@ -175,7 +175,7 @@ export const computeScreenCopy = () => {
       confirmedDescription: bindingPrefix(/confirmedDescription: "([^"]+)"/),
       confirmedTitle: bindingPrefix(/confirmedTitle: "([^"]+)"/),
       deployed: deployScreen(true),
-      estimateFailed: bindingPrefix(/failed\(error, "([^"]+)"\)/),
+      estimateFailed: bindingPrefix(/failed\(error, "([^"]+)",/),
       estimating: bindingPrefix(/scopedStatus\(target, "(Estimating[^"]+)"\)/),
       maximumFeePrefix: bindingPrefix(
         /`(Maximum network fee: )\$\{formatFeeEstimate\(estimate\)\}`/,

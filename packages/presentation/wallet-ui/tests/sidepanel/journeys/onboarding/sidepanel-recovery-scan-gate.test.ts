@@ -6,7 +6,11 @@
  * candidates are unaffected.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
+import {
+  BRAAVOS_BASE_CLASS_HASH,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import { ARGENT_ACCOUNT_CLASS_HASH, type DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
@@ -70,7 +74,12 @@ const click = (root: ParentNode, selector: string): void => {
   button.click();
 };
 
-type Candidate = { account: DerivedAccountRef; deployed: boolean; funded: boolean };
+type Candidate = {
+  account: DerivedAccountRef;
+  deployed: boolean;
+  funded: boolean;
+  restriction?: "guardian" | "owner-changed" | "owner-type" | "release" | "strong-signer";
+};
 
 const mount = (
   candidates: readonly Candidate[] = [
@@ -78,6 +87,7 @@ const mount = (
     { account: readyIdleAccount, deployed: false, funded: false },
   ],
   discover?: SidepanelWallet["discoverRecoveryAccounts"],
+  hooks: { readonly onRender?: () => void } = {},
 ) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
@@ -94,9 +104,16 @@ const mount = (
           ok: true as const,
         })),
     loadStatus: () => Promise.resolve(status),
+    recoverAccounts: () => Promise.resolve([brambleAccount]),
     validateMnemonic: () => Promise.resolve(true),
   } as unknown as SidepanelWallet;
-  bindOnboarding({ app, render: async () => undefined, wallet });
+  bindOnboarding({
+    app,
+    render: async () => {
+      hooks.onRender?.();
+    },
+    wallet,
+  });
   return app;
 };
 
@@ -141,6 +158,73 @@ describe("recovery scan Ready gate", () => {
     await tick();
   });
 
+  test("extends the progress denominator past activity near the horizon", async () => {
+    // Issue 503: evidence at index 19 reopens the scan, and the status line
+    // quotes the extended target rather than announcing a finished window.
+    const lateAccount: DerivedAccountRef = {
+      ...brambleAccount,
+      address: "0xlate",
+      derivation: { accountIndex: 19, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_MAIN:0xlate",
+    };
+    const batches: Array<Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>> = [
+      {
+        candidates: [{ account: lateAccount, deployed: true, funded: false }],
+        complete: false,
+        nextIndex: 20,
+        ok: true,
+      },
+    ];
+    let finish: (value: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>) => void =
+      () => undefined;
+    const app = mount([], () => {
+      const batch = batches.shift();
+      if (batch) return Promise.resolve(batch);
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    await reachPicker(app);
+
+    expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
+      "Checked 20 of 40 indices…",
+    );
+    // An empty group is only declared empty once the search has finished.
+    const braavosList = app.querySelector('[data-recovery-group="braavos"] ul');
+    expect(braavosList?.textContent).toBe("");
+    finish({
+      candidates: [{ account: lateAccount, deployed: true, funded: false }],
+      complete: true,
+      nextIndex: 40,
+      ok: true,
+    });
+    await tick();
+    expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
+      "Search complete. Checked 40 indices across every account type.",
+    );
+    expect(braavosList?.textContent).toBe("No accounts with on-chain activity.");
+  });
+
+  test("says a guarded Argent account is view only before it is picked", async () => {
+    // Issue 542: the advisory verdict reaches the row's state line, and the
+    // account stays selectable — imported view-only, like Braavos.
+    const guarded: DerivedAccountRef = {
+      ...readyIdleAccount,
+      address: "0xguarded",
+      id: "SN_MAIN:0xguarded",
+    };
+    const app = mount([
+      { account: guarded, deployed: true, funded: false, restriction: "guardian" },
+    ]);
+    await reachPicker(app);
+
+    const row = rowsIn(app)("argent")[0];
+    if (!row) throw new Error("missing argent row");
+    expect(row.textContent).toContain("Deployed on Starknet · has a guardian · view only");
+    const checkbox = row.querySelector<HTMLInputElement>("input[type=checkbox]");
+    expect(checkbox?.disabled).toBe(false);
+  });
+
   test("lists an inactive Ready candidate but refuses to select it", async () => {
     const app = mount();
     await reachPicker(app);
@@ -177,10 +261,11 @@ describe("recovery scan Ready gate", () => {
     expect(brambleGroup?.open).toBe(true);
   });
 
-  test("shows a found Braavos account, selected, and says it is view only", async () => {
-    // Discovery auto-selects every account with activity. A family with no
-    // group of its own was selected without ever being shown, so the user
-    // restored accounts they never saw.
+  test("shows a found Braavos account, selected, labelled by its verdict", async () => {
+    // Discovery auto-selects every account with activity. A stark-only Braavos
+    // account is now usable, so its row reads as a plain deployed account; a
+    // strong signer labels the row view only with the reason; an undeployed
+    // one stays view only, since Bramble cannot deploy Braavos yet.
     const braavos: DerivedAccountRef = {
       ...brambleAccount,
       accountContractType: "braavos",
@@ -197,10 +282,34 @@ describe("recovery scan Ready gate", () => {
     expect(rowsIn(app)("braavos").length).toBe(1);
     expect(checkbox?.checked).toBe(true);
     expect(checkbox?.disabled).toBe(false);
-    expect(row?.textContent).toContain("view only for now");
+    expect(row?.textContent).toContain("Deployed on Starknet");
+    expect(row?.textContent).not.toContain("view only");
     expect(app.querySelector<HTMLDetailsElement>('[data-recovery-group="braavos"]')?.open).toBe(
       true,
     );
+
+    const guarded = mount([
+      { account: braavos, deployed: true, funded: false, restriction: "strong-signer" },
+    ]);
+    await reachPicker(guarded);
+    expect(rowsIn(guarded)("braavos")[0]?.textContent).toContain("2FA active · view only");
+
+    const undeployed = mount([{ account: braavos, deployed: false, funded: true }]);
+    await reachPicker(undeployed);
+    expect(rowsIn(undeployed)("braavos")[0]?.textContent).toContain(
+      "Funded, not deployed · view only for now",
+    );
+
+    // The modern deployment class deploys from here like any other account.
+    const modern = mount([
+      {
+        account: { ...braavos, classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH },
+        deployed: false,
+        funded: true,
+      },
+    ]);
+    await reachPicker(modern);
+    expect(rowsIn(modern)("braavos")[0]?.textContent).toContain("Funded and ready to deploy");
   });
 
   test("names the Argent release on rows that share an index", async () => {
@@ -306,5 +415,22 @@ describe("recovery scan Ready gate", () => {
     unchecked?.click();
     expect(unchecked?.checked).toBe(true);
     expect(boxes.filter((box) => box?.checked).length).toBe(RECOVERY_SCAN_LIMITS.maxSelections);
+  });
+
+  test("a first-run restore hands off to the repaint without emptying the picker", async () => {
+    // The in-wallet import wipes its form on success (audit #250); first-run
+    // passes no hook, because success there replaces the whole screen.
+    let renders = 0;
+    const app = mount(undefined, undefined, { onRender: () => (renders += 1) });
+    await reachPicker(app);
+    const picked = (): number =>
+      app.querySelectorAll<HTMLInputElement>("input.select-check:checked").length;
+    expect(picked()).toBe(1);
+    click(app, "#recover-accounts-button");
+    await tick();
+    await tick();
+    expect(renders).toBe(1);
+    expect(picked()).toBe(1);
+    expect(app.querySelector("#recovery-accounts-result")?.textContent).toContain("Restoring");
   });
 });

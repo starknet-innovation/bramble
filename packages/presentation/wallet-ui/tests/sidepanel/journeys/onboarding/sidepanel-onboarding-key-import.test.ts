@@ -95,6 +95,10 @@ describe("onboarding private-key import", () => {
     click(flow.app, "#add-existing-button");
     click(flow.app, "#key-method-button");
     expect(activeStep(flow.app)).toBe("import-key");
+    // The consequence of holding the key stays on the step (mc-wallet #476).
+    expect(
+      flow.app.querySelector('[data-onboarding-step="import-key"] [role="note"]')?.textContent,
+    ).toBe("Anyone with this key controls the account.");
 
     const continueButton = flow.app.querySelector<HTMLButtonElement>("#import-key-continue");
     expect(continueButton?.disabled).toBe(true);

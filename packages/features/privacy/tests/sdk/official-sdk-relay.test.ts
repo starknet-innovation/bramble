@@ -86,7 +86,7 @@ const quotedTransaction = async (
     nowSeconds: () => 1_000,
     providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
     sdk: runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       discoverNotes: async () => ({ notes: new Map() }),
       executeWithInvocation: async () => executeResult(),
     })),
@@ -160,7 +160,7 @@ describe("relay quote approvals", () => {
         poolFee: POOL_FEE_6_STRK,
       }),
       sdk: runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),
@@ -230,7 +230,7 @@ describe("relay quote approvals", () => {
       nowSeconds: () => 1_000,
       providerFor: strk20ProviderFor({ classHash: earlier.classHash, poolFee: POOL_FEE_6_STRK }),
       sdk: runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),
@@ -266,7 +266,7 @@ describe("relay quote approvals", () => {
       nowSeconds: () => 1_000,
       providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
       sdk: runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),
@@ -361,7 +361,7 @@ describe("converted relay fee", () => {
       nowSeconds: () => 1_000,
       providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
       sdk: runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),

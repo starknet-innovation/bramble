@@ -6,7 +6,10 @@ import { describe, expect, test } from "bun:test";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
-import type { PrivacyBlockerKind } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
+import type {
+  PrivacyBlockerKind,
+  PrivacyDisclosureState,
+} from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import { privacyFlow } from "../../../../src/sidepanel/journeys/privacy/privacy-views";
 
@@ -71,6 +74,47 @@ describe("privacy journey templates", () => {
     expect(html).toContain("viewing-key commitment");
   });
 
+  test("activation review says what going private does and what it costs (#438)", () => {
+    const review = (preparation: PrivacyPreparation) =>
+      privacyFlow(status, preferences, {
+        preparation,
+        stage: "activate-review",
+        tokenId: token.id,
+      });
+    const outcome = (html: string) =>
+      /aria-label="What will happen">\s*<p class="decision-label">What will happen<\/p>\s*<p>([^<]*)<\/p>/.exec(
+        html,
+      )?.[1];
+
+    // The registration the background builds: public account, pool fee in STRK.
+    const html = review({ ...registration, poolFeeFri: "0x2386f26fc10000" });
+    expect(outcome(html)).toBe(
+      "Going private sets up a private balance for this account. Registering costs a one-time pool fee, paid from your public STRK.",
+    );
+    // The amount stays in one place: the Cost section.
+    expect(html).toContain("Pool fee");
+    expect(outcome(html)).not.toMatch(/[0-9]/);
+    // No pool fee on the route, no claim that one is paid from public STRK.
+    expect(outcome(review(relayedRegistration))).toBe(
+      "Going private sets up a private balance for this account.",
+    );
+  });
+
+  test("activation review states the network fee in the estimate's own unit", () => {
+    const review = (unit: string) =>
+      privacyFlow(status, preferences, {
+        preparation: { ...registration, networkFee: { overallFee: "1000000000000000000", unit } },
+        stage: "activate-review",
+        tokenId: token.id,
+      });
+
+    expect(review("FRI")).toContain("1 STRK");
+    // A node answering in WEI must not have that figure relabelled as STRK.
+    const wei = review("WEI");
+    expect(wei).toContain("1000000000000000000 WEI");
+    expect(wei).not.toContain("STRK");
+  });
+
   test("a relayed registration discloses its authorization capability", () => {
     const html = privacyFlow(status, preferences, {
       preparation: relayedRegistration,
@@ -126,6 +170,8 @@ describe("privacy journey templates", () => {
 
     const failed = privacyFlow(status, preferences, {
       error: "<prover unavailable>",
+      errorDetails: 'strk20 services unavailable (proving/proof-rejected): "<prover>" & co',
+      severity: "danger",
       stage: "failure",
       tokenId: token.id,
     });
@@ -134,6 +180,31 @@ describe("privacy journey templates", () => {
     expect(failed).toContain('class="send-failure-ring"');
     expect(failed).toContain('class="send-failure-mark"');
     expect(failed).toContain('id="privacy-retry"');
+    expect(failed).toContain('data-severity="danger"');
+    // The full diagnostic rides on the copy control, escaped as an attribute,
+    // while the sentence stays the friendly one.
+    expect(failed).toContain('aria-label="Copy error details"');
+    expect(failed).toContain(
+      'data-copy="strk20 services unavailable (proving/proof-rejected): &quot;&lt;prover&gt;&quot; &amp; co"',
+    );
+
+    // A submission whose reply was lost is a warning, not a failure: no red
+    // cross and no blind Try again, only Activity (issue 382).
+    const unknown = privacyFlow(status, preferences, {
+      error: "<worker lost>",
+      errorDetails: "",
+      severity: "warning",
+      stage: "failure",
+      tokenId: token.id,
+    });
+    expect(unknown).toContain("Status unknown");
+    expect(unknown).toContain('data-severity="warning"');
+    expect(unknown).not.toContain('id="privacy-retry"');
+    expect(unknown).toContain('data-view="activity"');
+    expect(unknown).toContain('class="privacy-unknown-mark"');
+    // A warning keeps the copy control too; with no separate diagnostic it
+    // copies the sentence rather than rendering a control that copies nothing.
+    expect(unknown).toContain('data-copy="&lt;worker lost&gt;"');
 
     expect(privacyFlow(status, preferences, { stage: "idle" })).toContain(
       "Choose an asset to begin",
@@ -168,6 +239,8 @@ describe("privacy journey templates", () => {
     // Phase and elapsed time from the job's own poll, then the standing hint.
     expect(proving).toContain("Proving (attempt 2 of 3) · 1 min 35 s. Keep the wallet open.");
     expect(proving).toContain("Going back discards this preparation");
+    // Minutes of proving must not read as a signature underway (mc-wallet #476).
+    expect(proving).toContain("No transaction is signed or sent until you confirm the review.");
     // The task list beside it already names the step in progress.
     expect(proving).not.toContain("Building the registration proof");
   });
@@ -185,12 +258,35 @@ describe("privacy journey templates", () => {
   });
 
   test("a blocked activation explains the prerequisite and ends in its next step", () => {
-    const blocked = (kind: PrivacyBlockerKind, message: string): string =>
-      privacyFlow(status, preferences, {
-        blocker: { kind, message },
-        stage: "blocked",
-        tokenId: token.id,
-      });
+    // The disclosure the panel already holds carries the pool fee, so a settled
+    // read lets the fund screen state the amount the registration needs.
+    const disclosure: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x53444835ec580000",
+        relayConfigured: true,
+        registration: "unregistered",
+      },
+    };
+    const blocked = (
+      kind: PrivacyBlockerKind,
+      message: string,
+      read: PrivacyDisclosureState | null = null,
+    ): string =>
+      privacyFlow(
+        status,
+        preferences,
+        {
+          blocker: { kind, message },
+          stage: "blocked",
+          tokenId: token.id,
+        },
+        read,
+      );
 
     const fund = blocked("fund", "Not enough STRK for the <pool> fee");
     expect(fund).toContain("Go private");
@@ -201,6 +297,17 @@ describe("privacy journey templates", () => {
     expect(fund).toContain("Not enough STRK for the &lt;pool&gt; fee");
     expect(fund).toContain('id="privacy-cancel"');
     expect(fund).toContain('data-privacy-blocker="fund"');
+    // Without a read fee the amount is unknown, so no figure is invented.
+    expect(fund).not.toContain("Registration needs");
+
+    const funded = blocked("fund", "Not enough STRK for the pool fee", disclosure);
+    // The refusal names the shortfall, not the number; the screen adds it.
+    expect(funded).toContain("Registration needs 6 STRK for the pool fee, plus a network fee.");
+
+    // Only the fund shortfall has a figure; every other blocker is unchanged.
+    expect(blocked("deploy", "Deploy this account first", disclosure)).not.toContain(
+      "Registration needs",
+    );
 
     const deploy = blocked("deploy", "Deploy this account first");
     expect(deploy).toContain("Deploy this account first");

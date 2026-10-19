@@ -43,7 +43,14 @@ export type SignatureWaiters = {
   /** Moves held callers to a replacement approval without settling them. */
   readonly move: (fromId: string, toId: string) => void;
   readonly pending: () => number;
+  /** Parks a response on `id`. */
   readonly register: (id: string) => Promise<RuntimeResponse>;
+  /**
+   * Settles `id` with {@link DROPPED_APPROVAL_RESPONSE}, for an approval
+   * dropped unanswered. Every kind drops the same way, so an expired request
+   * says nothing about what it was waiting on.
+   */
+  readonly release: (id: string) => void;
   readonly settle: (id: string, response: RuntimeResponse) => void;
 };
 
@@ -58,6 +65,15 @@ export type SignatureWaiters = {
  */
 export const createSignatureWaiters = (): SignatureWaiters => {
   const waiters = new Map<string, ((response: RuntimeResponse) => void)[]>();
+  const settle = (id: string, response: RuntimeResponse): void => {
+    const resolvers = waiters.get(id);
+    if (resolvers) {
+      waiters.delete(id);
+      for (const resolve of resolvers) {
+        resolve(response);
+      }
+    }
+  };
   return {
     move(fromId, toId) {
       if (fromId === toId) {
@@ -91,15 +107,10 @@ export const createSignatureWaiters = (): SignatureWaiters => {
         waiters.set(id, resolvers);
       });
     },
-    settle(id, response) {
-      const resolvers = waiters.get(id);
-      if (resolvers) {
-        waiters.delete(id);
-        for (const resolve of resolvers) {
-          resolve(response);
-        }
-      }
+    release(id) {
+      settle(id, DROPPED_APPROVAL_RESPONSE);
     },
+    settle,
   };
 };
 
@@ -115,8 +126,8 @@ export const createSignatureWaiters = (): SignatureWaiters => {
  * contract `./ledger-sign-queue` keeps for its injected timeout: a bounded wait
  * rejects the parked request rather than leaving a waiter behind.
  *
- * Failure behaviour: dropped requests settle with
- * {@link DROPPED_APPROVAL_RESPONSE} (spec USER_REFUSED_OP), never with a
+ * Failure behaviour: dropped requests settle with their registered drop
+ * response — {@link DROPPED_APPROVAL_RESPONSE} (spec USER_REFUSED_OP) — never with a
  * success; `onChange` then signals open surfaces so a panel still rendering the
  * swept card repaints instead of leaving the user a button that can only
  * report "approval not found". Registration replaces any previous observer, so
@@ -129,7 +140,7 @@ export const releaseWaitersOnApprovalDrop = (
 ): void => {
   approvals.observeDrops((ids) => {
     for (const id of ids) {
-      waiters.settle(id, DROPPED_APPROVAL_RESPONSE);
+      waiters.release(id);
     }
     onChange();
   });

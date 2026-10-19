@@ -25,6 +25,12 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
+import {
+  type ArgentMultisigStaleOutcome,
+  type ArgentMultisigStaleReason,
+  isArgentMultisigStaleOutcome,
+  isArgentMultisigStaleReason,
+} from "./stale-reason";
 
 /**
  * Counterfactual constructor commitment retained for an account created here.
@@ -90,6 +96,10 @@ export type ArgentMultisigSigningIntent = {
   readonly id: string;
   readonly prepared: PreparedArgentMultisigInvokeV3;
   readonly signatures: readonly StarkSignature[];
+  /** What the chain said about this stale version's hash; local, read only while `stale`. */
+  readonly staleOutcome?: ArgentMultisigStaleOutcome;
+  /** Why it went stale; read only while `state` is `stale`. Absent on older records. */
+  readonly staleReason?: ArgentMultisigStaleReason;
   readonly state: ArgentMultisigIntentState;
   readonly summary: string;
 };
@@ -356,9 +366,14 @@ export const isArgentMultisigSigningIntent = (
       "id",
       "prepared",
       "signatures",
+      "staleOutcome",
+      "staleReason",
       "state",
       "summary",
     ]) ||
+    (value["staleReason"] !== undefined && !isArgentMultisigStaleReason(value["staleReason"])) ||
+    (value["staleOutcome"] !== undefined &&
+      (value["state"] !== "stale" || !isArgentMultisigStaleOutcome(value["staleOutcome"]))) ||
     !isAccountId(value["accountId"]) ||
     !isConfigSnapshot(value["configSnapshot"]) ||
     !isPreparedArgentMultisigInvokeV3(value["prepared"]) ||

@@ -6,427 +6,424 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
-is cut. Older entries are kept in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
+is cut. Older entries are kept in [CHANGELOG_ARCHIVE_0.9.md](CHANGELOG_ARCHIVE_0.9.md) (v0.9.0–v0.10.4) and [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md) (before v0.9.0).
 See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
-## [0.10.3] - 2026-09-16
+## [0.10.7] - Unreleased
 
-A patch release that lets a single-asset shielded balance pay its own relay
-fee, adds a Firefox build target, and hardens the vault and the v0.10.1
-authorization boundaries.
-
-### Added
-- The STRK20 relay fee can be paid in the token being sent. A converted fee is
-  admitted only under a ceiling derived from an independent reference price,
-  frozen into the reviewed plan and re-checked at submission; the route falls
-  back to STRK when no reference bounds it, when the batch spends several
-  tokens, or when the relay refuses the token.
-- A Firefox build target derived from the Chrome manifest. `bun run build:all`
-  emits both targets from one run of the gates; the wallet panel maps onto
-  `sidebar_action`, pending approvals mark the toolbar button so the click that
-  opens the panel is a real user gesture, and `data_collection_permissions` is
-  declared. The sandboxed collectible renderer and Ledger are not shipped on
-  Firefox, each decided rather than discovered.
-
-### Changed
-- The encrypted vault's commit state is mirrored into `storage.session`, which
-  no content script can reach, and an envelope must be vouched for by both the
-  durable record and the session shadow. The first read of a session seeds the
-  shadow, a version-2 envelope after a committed lineage is refused as a
-  downgrade, and the shadow is written before the durable record.
-- Deferred approval and signing work is bound to the unlock session that
-  authorized it; approvals claimed, grant metadata read, and session restores
-  superseded after a lock or revocation are rejected rather than served.
-- Embedded private-swap calls are validated against the reviewed trade intent,
-  and the paymaster gateway only carries credentials for the configured pool's
-  `apply_actions` call. Private-swap planning stays disabled until an
-  independently reviewed executor deployment is pinned.
-- Only wallet-authored errors reach STRK20 toast copy; SDK, RPC, and service
-  diagnostics collapse to a stable fallback.
-
-### Fixed
-- Analytics failures and consent races no longer affect wallet traffic.
-- Stale direct-provider account and permission responses are suppressed after
-  the session that produced them ends.
-- The website tooling pins a patched `sharp` (GHSA-rgj7-g3m4-5g8c).
-
-## [0.10.2] - 2026-09-11
-
-A refreshed wallet chrome on the design kit's light palette, explorer-backed
-activity, and STRK20 shielding that always reports where it is.
+Private sends that recover from a lost relay reply without a browser restart,
+the remaining Low findings from the v0.10.6 release audit, and fixes from user
+and QA reports.
 
 ### Added
-- Every shortened account address across the wallet carries a copy control for
-  the full address: activity rows, account switchers, multisig signers,
-  approvals, and receipts.
-- The onboarding passphrase meter fills and recolours from a strength estimate
-  as the passphrase is typed.
-- The working screen and the privacy diagnostics export report the phase and
-  elapsed time of a running STRK20 preparation (discovery, maturity, proof
-  request, proving), each wait under an explicit budget.
+- Settings → Unlock private transactions lifts a private-transaction pause on
+  purpose, after stating that the earlier transaction could still go through
+  (#668).
+- When a downloaded update is ready, an idle wallet applies it straight away. A
+  wallet in use shows a prompt to restart, and applies the update once nothing
+  is in progress (#708).
+- Send warns when the recipient is a token contract, where tokens sent are
+  usually lost (#713).
+- Recovery has a Clear button, confirms a valid phrase, and fills empty account
+  groups (#718).
+- On Arc, Extension options opens the wallet in a tab (#690).
+- Multisig: a stale proposal says why it went stale, names a fee refusal on its
+  card, tells a rejected stale version from a reverted one, and offers Propose
+  again (#673).
 
 ### Changed
-- The light skin adopts the design kit's blue-grey tinted neutrals and blue
-  accent; the midnight skin keeps its original values. Every surface stays a
-  solid fill and the contrast gate still enforces WCAG AA on both skins.
-- The website's bird mark and wordmark replace the traced wallet icon in the
-  header, gates, Ledger tab, onboarding, toolbar icons, and store artwork,
-  rendered from one source and pinned by a conformance test.
-- The bottom dock is a floating icon-only pill; home tiles share its tint;
-  screen headers show the short network name inline; standalone rows have
-  rounded hovers; composite fields highlight as one box; amount fields
-  ellipsise instead of clipping.
-- Instructional copy that crowded the multisig, send, and privacy screens is
-  removed.
-- Activity groups rows per day with the UTC time and status, trims amounts to
-  four decimals, and reads history from the configured explorer first with the
-  RPC scan as fallback.
-- Send presents Shield and Unshield semantics for pool routes, shows busy
-  feedback immediately on Review, and ticks the sign and broadcast steps as the
-  execute job hands the transaction on.
-- The Shield tile and "Go private" entry explain a blocked state instead of
-  doing nothing.
-- The compact onboarding surface closes once it has opened the setup tab, and
-  completion opens the wallet in the side panel. The lock screen follows the
-  chosen theme.
+- Shielding says upfront that its network fee is paid in public STRK (#665).
+- Max on STRK leaves room for the network fee (#720).
+- A site's non-pool SNIP-36 proof invoke goes out as an ordinary invoke. Only a
+  privacy-pool batch takes the private lane (#692).
+- Service endpoints are stored only in their canonical spelling, so an endpoint
+  echoed in an error is always redacted in full (#674).
+- Docs: upgrades are one-way. The README and support page say how to recover if
+  an older build is installed (#670).
 
 ### Fixed
-- Layouts hold at the side panel's minimum width (320px, and 256px under zoom)
-  without clipping the right edge.
-- Every STRK20 proof runs as a tracked background job polled on short requests,
-  so a service-worker restart or the extension message channel closing can no
-  longer swallow the result. Execution claims the one-time proof on the
-  request, so a lost worker can never double-submit.
-- Nested analytics-wrapped privacy services no longer deadlock on the
-  flow lock.
-- A white button no longer turns its text white on hover in the midnight skin.
-- The swap amount field no longer underlines on focus.
+- A private transaction whose relay reply was lost no longer needs a browser
+  restart, which used to unlock the account without cancelling anything. The
+  pause now survives restarts and lifts once Ethereum-finalized chain state
+  shows the relayed transaction can no longer apply, which can take hours
+  (#668).
+- The deploy screen reads fresh deployment status, refuses an account that is
+  already deployed by name, and an automatic account deployment is recorded in
+  Activity for sends, NFT sends, swaps, revokes, site invokes and declares
+  (#712, #719).
+- A transaction found reverted only on chain is stored as reverted, not
+  accepted (#656).
+- A rate-limit refusal from an RPC endpoint stays a rate-limit refusal through
+  starknet.js, instead of reading as a generic failure (#660).
+- A wrong-passphrase error no longer offers a copy button (#713).
+- From the v0.10.6 release audit (Low):
+  - a pool-fee refusal before signing reads as not sent, never "status
+    unknown" (#679);
+  - a balance that was never read shows "—", never 0, on token detail and Swap
+    (#680);
+  - `wallet_watchAsset` keeps the user's own token record (#682);
+  - a site approve whose reply was lost files its allowance under the signed
+    hash, so it can be revoked (#678);
+  - a multisig submit whose reply was lost shows "status unknown" with the
+    signed hash and stays pending in Activity, with no blind resend (#681);
+  - old unresolved sends no longer push a send still being watched out of
+    Activity storage (#677).
 
 ### Maintenance
-- Bump `actions/deploy-pages` to 5.0.1.
+- The Firefox package is attached to every GitHub Release (#685).
+- CI actions bumped together with their security-policy pins (#711).
+- Terminal: each Vesu registry check reads at one block (#270).
 
-## [0.10.1] - 2026-09-08
+## [0.10.6] - 2026-10-14
 
-### Changed
-- Hide the Collectibles tab, the "Manage collectibles" menu entry, the multisig Collectibles tab,
-  and the NFT indexer setting while the NFT journey is finished. No view loads NFT data any more:
-  watched-metadata and indexer discovery both stop, so a saved `nftIndexerUrl` stays in
-  preferences unused and can no longer be set. The gallery code stays in the tree, unreachable
-  from the UI, and a conformance test fails if any screen renders a route back into it.
+Shadow accounts for STRK20 sites, a recovery screen for a wallet that cannot
+be verified, fixes from an external security review, and fixes from user
+reports.
 
-## [0.9.2] - 2026-08-14
-
-Official Argent account contracts, true M-of-N multisig, safer account recovery,
-and the complete remediation of the v0.9.1 comprehensive security audit.
-
-### Added
-- New software and Ledger accounts can use the official Argent Account 0.4 or
-  OpenZeppelin account contract. Private-key import can attach an existing
-  Argent account only when the key is its pinned Stark owner, no guardian is
-  configured, and the exact deployment salt is supplied.
-- Recovery-phrase import numbers words, flags unknown BIP39 words, offers prefix
-  completions while typing, and runs Krusty mnemonic validation before the
-  vault passphrase step.
-
-### Changed
-- Multisig creation, signing, configuration review, and submission now use the
-  official Argent Multisig 0.2 implementation. The former OpenZeppelin-based
-  proposal flow is removed; older release entries describe historical behavior.
-- STRK20 service reads use bounded retries without multiplying retries across
-  nested service layers.
-
-### Security
-- Remediated the comprehensive v0.9.1 audit across encrypted-store freshness
-  and rollback protection, session and origin-grant races, provider admission
-  and event ordering, reviewed fee binding, canonical account identities, KMS
-  key verification, and post-broadcast outcome integrity. Full evidence is in
-  `docs/security-audit/releases/v0.9.1-comprehensive.md`.
-- Argent deployment and signing bind the pinned class, owner, guardian state,
-  deployment salt, chain, nonce, calls, fees, and returned transaction hash.
-  Multisig intent signatures are validated against the exact fresh signer set
-  and threshold before submission.
-
-## [0.9.1] - 2026-08-12
-
-Response to the 31 findings raised by the post-release deep adversarial audit of
-v0.9.0 (`MCW-V09-101`..`131`). No third-party dependency changes. Full detail,
-including the residual on the partially remediated `MCW-V09-127`, is in
-`docs/security-audit/releases/v0.9-deep.md`.
-
-### Security
-- SNIP-12 signing no longer accepts a type graph whose names can reassemble
-  `encodeType` into a different graph. A name carrying a separator let two
-  structures produce one message hash, so a site could obtain a signature over
-  an opaque payload that is valid against a structured order. Each revision is
-  now validated against its own vocabulary under a deny-by-default name grammar
-  (`MCW-V09-101`, High).
-- Multisig proposal ids are derived locally from the reviewed
-  `(to, selector, calldata, salt)` rather than taken from a node's
-  `hash_transaction` answer, which is now only a cross-check that must agree.
-  Stored proposals re-derive their id before confirm, revoke, and execute, so a
-  record written by an earlier version cannot be acted on if its id came from a
-  hostile answer (`MCW-V09-102`, High).
-- Inactivity auto-lock is alarm-driven and now fires in normal use.
-- Balances and history come from the configured Starknet RPC first; the explorer
-  gateway is a per-network opt-in, off by default once an RPC override is set.
-- The approval surface consults the phishing blocklist before opening and takes
-  a 1000 ms per-tab cooldown.
-- Every wallet-initiated fee-bearing action now estimates and displays the
-  maximum network fee before signing, then binds the transaction to that
-  reviewed ceiling. An estimate failure refuses signing.
-- Removed `wallet.signHash` (an unapproved arbitrary-hash signing path with no
-  production caller) and `wallet.grantOrigin`. Neither was dapp-reachable.
-- Malformed successful RPC broadcast responses now retain indeterminate-write
-  semantics, and multisig claims survive an indeterminate broadcast so a lost
-  response cannot reopen blind duplicate signing.
-- Declare approval binds the exact displayed declaration-plus-deployment total,
-  supports fail-closed fee retries, and enforces each component at submission;
-  duplicate multisig proposals and externally revoked confirmations are
-  reconciled through the durable claim ledger.
-- The Chromatic token is scoped only to its main-branch publish step.
-
-### Changed
-- SNIP-12 revision 0 remains signable and a numeric `revision: 1` is accepted.
-  Revision 0 is held to what its encoder resolves: preset field types, `enum`
-  fields, and tuple types are refused there, because the pinned library cannot
-  encode them. Preset *names* may now be declared as ordinary structs on
-  revision 0, a widening for legacy dapps.
-- A `merkletree` leaf must name a declared struct or preset on **both**
-  revisions; `contains: "felt"` is refused, because a raw-felt leaf is the value
-  the site supplied and could stand in for another structure's hash under the
-  same root. Dapps hashing their own allowlist or session leaves must declare
-  the leaf struct.
-- STRK20 sub-account commitments are separated by verified origin rather than a
-  caller-chosen label, so a site holding a commitment for a label sees a
-  different one.
-- Restoring a preferences backup applies only labels, groups, display, theme,
-  hidden tokens, and active network. Every trust-bearing field the review layer
-  reads as ground truth is ignored: RPC overrides, custom networks, token
-  metadata, NFT indexer, STRK20 network and prover endpoints, approval surface,
-  and explorer fallback. Address-book contacts are left untouched in both
-  directions, being the reference set behind the address-poisoning guard.
-- The sign-request card renders domain rows by the payload's actual revision;
-  rows that were never in the hash no longer appear as signed.
-
-## [0.9.0] - 2026-08-10
-
-Account-safe upgrades, one coherent public/private Send journey, managed service
-routing, and stricter Ledger and STRK20 trust boundaries ahead of the wallet's
-first formal external audit.
+### Breaking
+- STRK20 sub-accounts use the Wallet API 0.10.4 shadow-account names:
+  `wallet_strk20ShadowAccountCommitment` and the `shadow_account_invoke` action.
+  The old names are refused, with no alias. `wallet_supportedWalletApi` reports
+  `0.10.4` instead of `0.10.4-rc.0`, which still used the old names.
+- Every shadow-account identity changes: the scope domain is now
+  `bramble/strk20-shadow-account/v1`. Shadow accounts derived under the old
+  domain are not reachable from this build, by a site or by the wallet. Only
+  users who entered a sub-account anonymizer by hand on v0.8.0–v0.10.5 (no
+  build bundled one) can have funded one; recovering it needs an old build
+  together with that old anonymizer.
+- The per-network setting `subaccountAnonymizerAddress` is now
+  `shadowAccountAnonymizerAddress`. A stored value under the old key is
+  dropped, not carried over, and must be re-entered with a current anonymizer.
+- The vault migrates to schema v12 on unlock, adding encrypted shadow-account
+  records. Earlier builds cannot open a v12 vault.
 
 ### Added
-- A unified Send route model for public-to-public transfers, shielding into a
-  private balance, private transfers, and unshielding. Each route identifies its
-  submission path, fee source, and on-chain disclosure before review.
-- Account- and network-scoped encrypted custody for optional Ledger STRK20
-  viewing material. Software-account viewing keys remain derivable through
-  Krusty and are not retained.
-- Staged, authenticated, crash-recoverable vault schema v4 migration with
-  verified writes and deterministic recovery from interrupted extension updates.
-- Ledger OS and Starknet-app compatibility probes with model-specific firmware
-  floors, bounded response parsing, upgrade guidance, and exact-device reconnect.
+- Shadow accounts. A site can run calls through a per-site shadow account
+  funded from private notes. The approval card states the calls, which shadow
+  account runs them for which site, the anonymizer (bound into the approval),
+  which tokens settle back into private notes, any recipient other than you,
+  and the whole-balance effect of collecting `all`.
+- Settings → Shadow accounts. Every scope a site drives (origin, label,
+  anonymizer, and the exact nonces used) is recorded in the encrypted vault
+  before the request runs. The screen lists them, reads balances only when
+  asked (the read links the addresses at the RPC provider, and the screen says
+  so), and sweeps what a site left back into private notes through the private
+  relay, paying the relay fee from the private balance.
+- A recovery screen for a wallet whose stored copy cannot be confirmed as the
+  latest, for example after restoring a browser backup. Unlock anyway opens it
+  with your password and disconnects every site; a damaged wallet points to
+  restoring from the recovery phrase.
+- Send resolves Starknet names (`name.stark`) as recipients, quotes the
+  estimated fee on the Amount screen, and states what a private send needs to
+  keep for its fee.
+- Activity can be filtered, sorted and searched, with a per-counterparty
+  summary. The CSV export gains columns and a per-transfer summary.
+- Recovery finds accounts funded only in native USDC, and a Braavos account
+  owned by a Ledger key can be recovered and deployed.
+- New wallets track native USDC on Mainnet, and curated tokens you hold
+  publicly or privately are tracked automatically. Spam and uncurated tokens
+  are never added, and a token you removed stays removed.
+- Bridged `.e` tokens such as `USDC.e` can be suggested and added.
+- Multisig deploy quotes the fee and address beside the approval controls.
+- Home explains the 24h change figures, and the collapsed balance row shows
+  the public and private split.
+- Each wallet transaction records the fee it paid.
 
 ### Changed
-- Default Starknet RPC and bundled STRK20 traffic now route through the managed
-  Bramble gateway, with reviewed direct RPC fallbacks retained for transport
-  availability and custom user routing preserved.
-- Public and private balances share one portfolio and asset vocabulary. Shield
-  and Unshield open Send preconfigured instead of maintaining parallel transfer
-  interfaces.
-- Active-account and active-network mutations are serialized behind one
-  generation-aware authority so concurrent unlock, import, Ledger, dApp, and
-  preference operations cannot create split-brain state.
-- Browser storage is restricted to trusted extension contexts before startup,
-  session restoration, alarms, or runtime request handling continue.
-
-### Fixed
-- Private relay quotes no longer introduce a public sender fee approval or leave
-  unrelated allowance behind; mixed batches retain only exact public deposit
+- A site's shadow-account request that cannot run (no anonymizer on this
+  network, the record limit reached, or a request that fails before review)
+  shows a notice such as "Private services aren't set up for this network."
+  The site gets the refusal only after you close it, or a user-refused error
+  if the notice expires. Batches that cannot succeed are refused before
   approval.
-- Account-mode transaction preparation failures remain retry-safe, while an
-  indeterminate response after an add-transaction request retains the durable
-  one-broadcast guard instead of risking duplicate submission.
-- Structured sequencer errors keep their numeric semantics even when hostile
-  revert text contains transport-like phrases.
-- Send review now fails closed on unknown account-scoped balances, insufficient
-  source value, missing relays, unread pool fees, changed fees, stale recipient
-  registration, and account/network changes.
-- Closing or editing Send invalidates the frozen review instead of reopening or
-  submitting a stale composition.
-- UI Lab Send checkpoints use valid account-scoped balances and report the
-  actual fixture preparation error instead of timing out generically.
-
-### Security
-- The pool fee, recipient, token, amount, account, network, and route are bound
-  into each private preparation and checked again immediately before proof,
-  signing, and broadcast.
-- Paymaster execution errors are generic at the post-proof boundary, preventing
-  a relay from echoing short proof or proof-fact values into wallet UI or logs.
-- RPC write ambiguity is created only at the three actual
-  `starknet_add*Transaction` fetches; endpoint selection, deployment checks, fee
-  estimation, transaction construction, and class decompression cannot claim a
-  possible broadcast.
-- Vault migrations fail closed on malformed staging data, silently failed writes
-  or deletes, stale sessions, and preference-write failures. Public account
-  projections cannot expose encrypted account-secret records.
-- Ledger compatibility checks may reuse a verified transport session, but key
-  matching and signature verification remain mandatory for every signing path.
-- The final software release head passes the repository's full test, 95%
-  coverage, dependency-audit, terminal, UI Lab, build, extension E2E,
-  reproducible-package, and checksum gates.
-
-Physical Ledger confirmation across the full supported device and transport
-matrix is deliberately not claimed by v0.9.0. It is tracked in
-[#224](https://github.com/starknet-innovation/mc-wallet/issues/224) for v0.9.1,
-after this release can be loaded on the target hardware.
-
-## [0.8.0] - 2026-08-05
-
-Safer dApp account boundaries, explicit STRK20 privacy, faster and more truthful
-transaction status, and opt-in support for fully on-chain animated collectibles.
-
-### Added
-- An explicit multisig confirmation review that shows the exact decoded effect,
-  signer, network, mode, and estimated fee before hardware or software signing.
-- Atomic confirm-and-execute for the signer that reaches quorum, while retaining
-  a deliberate confirmation-only choice.
-- A background transaction monitor that recognizes Starknet pre-confirmation,
-  finality, and L1 acceptance, then reconciles submitted activity without
-  blocking the send flow on slow polling.
-- Account-scoped transaction alerts for late rejection, reversion, and expiry,
-  with bounded delivery and visible status updates in the popup and side panel.
-- Explicit playback for self-contained on-chain NFT animations on collectible
-  detail screens, including static fallbacks for gallery views.
-- Account- and network-scoped STRK20 registration, private balance disclosure,
-  shielding, transfer, withdrawal, and invoke journeys through the pinned
-  official Starknet Privacy SDK.
-- A mainnet Terminal privacy workspace for pool inspection, private portfolio
-  actions, and reviewed AVNU private swaps through bounded server gateways.
-
-### Changed
-- Connected dApps now resolve a grant to at most the active account. Switching
-  outside a site's approved accounts disconnects it and requires deliberate
-  reapproval instead of silently exposing or signing with a stale account.
-- Account creation, import, Ledger creation, and manual account selection now
-  notify connected pages of active-account changes consistently.
-- Submitted activity advances monotonically through pre-confirmed, accepted,
-  rejected, reverted, expired, and L1-confirmed states; terminal observations
-  cannot regress when providers disagree or respond out of order.
-- Mainnet status reads prefer the Starknet Foundation v0.10 endpoint with a
-  Cartridge fallback and bounded concurrency.
-- dApp invoke requests now take over the wallet before fee RPC work completes,
-  show an explicit estimating state, and share Send's unit-aware fee and
-  affordability review.
+- Transaction outcomes are stated truthfully. Once a transaction has a hash,
+  the result is that hash or "status unknown", never a plain error. "Not sent"
+  appears only when the wallet refused before broadcast, an unknown outcome
+  shows an amber notice rather than a red failure, and swap, sweep, activation,
+  multisig deploy and NFT actions do not offer a resend on an unknown outcome.
+- Errors read as reviewed, plain sentences instead of raw RPC or SDK text, and
+  security and funds facts are never collapsed. Ledger rejections show the
+  device's own message. The deploy screen translates its errors: a balance
+  rejection reads "Add STRK to this account to deploy it."
+- The unlock screen asks for a password, so it is not mistaken for the
+  recovery phrase. The passphrase meter rates common passwords as weak.
+- The Connect card names its action ("Connect account"), and the send review
+  shows the network and full addresses.
+- A payment to a lookalike of a known address can only be denied.
+- Account index `0x41474E54` is reserved and refused on manual entry, restore,
+  import and recovery.
+- Wallet copy is shorter throughout, following an owner-approved review.
+- Layout: the Activity title bar stays pinned, scroll areas no longer shift
+  width, spacing and label alignment are consistent, and each progress stage
+  stays on screen for at least 500 ms (display only; signing is never delayed).
+- The pinned official Starknet privacy SDK moved from `0.14.3-rc.4` to
+  `0.14.3-rc.8`. On its own it changes no dapp-visible behaviour, stored data,
+  settings, or Wallet API names; the shadow-account changes above do.
+- Terminal: Vesu lending and Multiply re-check the pool registry right before
+  handing calls to the wallet, and the Multiply swap cap is anchored to an
+  independent price. Balances are read over RPC (Starkscan retired its
+  holdings endpoint), and a failed read shows as unknown, never zero. Perps
+  placement stays off, and default slippage is 50 bps.
 
 ### Fixed
-- Multisig confirmation sheets keep focus contained, keep their final action
-  visible at compact side-panel heights, and expose a working fee-estimate retry.
-- Impossible confirmation counts no longer qualify for atomic execution, and
-  concurrent extension surfaces cannot broadcast the same proposal action twice.
-- Late transaction failures are delivered only to the matching unlocked
-  account and network, preventing activity or alerts from bleeding between
-  account scopes.
-- Reconnecting after an account switch no longer returns the previously active
-  address, and a stale network-switch approval cannot reconnect an origin that
-  is no longer authorized.
-- Fully on-chain collectibles without a static image no longer stop at an empty
-  placeholder when their supported animation is opened deliberately.
+- Fixes from an external security review (Sherlock audit). What changes for
+  users:
+  - The vault survives a lost synced commit record, and a second synced
+    install no longer locks out a vault it does not own.
+  - A full vault, or a refusal before any vault write, no longer signs you out.
+  - Sign and approval cards show STRK20 amounts, u256 totals and long
+    typed-data fields in full; typed data too long to display cannot be signed.
+  - An accepted transaction is never relabelled as failed, and zero-amount
+    notes from others no longer freeze the private balance.
+  - The allowances manager shows live approvals (with a loading state) instead
+    of "none".
+  - Sites no longer see wallet details they were not granted, and
+    network-change and account events report the right values.
+  - Multisig relay sync no longer stalls or re-imports removed proposals, and a
+    stale proposal is checked before it is sent again.
+  - Relay fee-token handling is stricter, and a relay server error counts as an
+    unknown outcome rather than a refusal.
+  - Ledger prompts are tied to the request that raised them, and an idle
+    device is released.
+  - Token details come from the chain, and price, chart and phishing-list data
+    refresh correctly.
+  - Wallet pages run under a stricter content security policy, and collectible
+    images stay sandboxed.
+- A stuck private "submitting" state is released when that is provably safe;
+  otherwise the wallet offers Check again instead of a browser restart.
+- Shield Max on STRK leaves room for the network fee, and the review checks the
+  network fee, pool fee and amount against the STRK balance before Confirm.
+- Same-symbol tokens no longer merge in the Activity filter; colliding labels
+  show a short address.
+- A failed allowance revoke clears "Revoke sent" and can be retried.
+- A pending activity row is settled only by its receipt, not by a transfer
+  event.
+- A reverted private transaction is no longer reported as "services
+  unavailable".
+- A Send review or proof that fails returns to the Amount screen with the error
+  instead of staying on "reviewing".
+- Smaller fixes: an existing Ledger account is refused up front on Firefox, the
+  Send unit toggle, one main landmark per page, the Terminal's Ekubo 1% fee
+  tier, and a patched `moment` in the Terminal.
 
-### Security
-- Multisig action messages require an exact confirmation mode and reject unknown
-  fields; the reviewed fee and submitted call batch are derived from that same
-  typed request. Durable pre-broadcast claims fail closed on unresolved duplicate
-  intent without blocking a valid later confirm/revoke state transition.
-- Untrusted animation HTML runs in a manifest sandbox with an egress-denying
-  CSP and a second opaque-origin iframe sandbox. Browser regression tests prove
-  it cannot access extension APIs or parent DOM state, beacon the network, load
-  remote images, or escape isolation through self-navigation.
-- Transaction approvals remain bound to the exact account shown at review time
-  and fail closed if active-account or origin-grant state changes before
-  execution.
-- STRK20 disclosures require explicit consent; prepared operations are
-  one-time, kind- and digest-bound, and discovery/proving use OHTTP through
-  bounded gateways without embedding private upstream URLs or credentials.
-- Review-time invoke fee estimation skips account validation, so it cannot
-  exercise Krusty or open a Ledger signing prompt before approval.
-- Status reconciliation is fail-closed, concurrency-bounded, and capped to five
-  sanitized alerts per drain, limiting provider-induced resource use and UI
-  flooding.
-- The final release head passes the repository's 95% coverage floor, extension
-  browser E2E suite, reproducible packaging, and high-severity dependency audit.
+### Known limitations
+- Shadow accounts ship with no default anonymizer: they are off unless you set
+  an anonymizer address in Settings → Privacy (#666).
+- A private transaction stranded after a lost relay reply still needs a
+  browser restart to clear (#668).
 
-## [0.7.2] - 2026-07-28
-
-A focused interaction-design and security release: clearer onboarding and
-account management, deliberate transaction progress, practical multisig
-workflows, and an expanded review lab backed by hardened provider and release
-boundaries.
+## [0.10.5] - 2026-10-07
 
 ### Added
-- A unified Add account chooser, shared by the account drawer and Manage
-  accounts, with explicit Standard, Ledger, private-key import, and Multisig
-  signer models. Multisig setup then separates creating a new shared account
-  from adding an existing deployed account where the active account is already
-  a signer.
-- A complete Multisig portfolio and operations journey: shared balances and
-  collectibles, proposal-first major actions, guided token-transfer proposals,
-  address-book and wallet-account signer selection, quorum review, deployment,
-  proposal tracking, and independent scan/copy/local-decoder verification.
-- Recipient-first sending with address-book selection, searchable token
-  selection, token/fiat amount switching, a network-aware summary, decoded
-  action accordion, and explicit review before submission.
-- Deterministic account identity artwork, a fourth Portfolio quick action, an
-  Bramble Terminal handoff, and production Starknet marks wherever a destination
-  network is displayed.
-- Storybook checkpoints for the unified account chooser and Multisig
-  create/add-existing gateway, extending the organized wallet journeys and
-  deterministic design-review coverage.
 
-### Changed
-- The wallet now uses an intentionally monochrome interaction system so
-  hierarchy, focus, motion, and state remain legible without pervasive accent
-  color. Green and red remain reserved for success and failure.
-- Full-browser onboarding follows a stable staged flow with slower,
-  counter-rotating icon orbits, smoother transitions, Mainnet defaults, and
-  reduced-motion behavior.
-- Portfolio surfaces use larger balances, four consistent major actions,
-  simplified Tokens/Collectibles navigation, a compact overflow menu, and a
-  cleaner icon-only wallet dock.
-- Send and Ledger transaction progress now advances through visible review,
-  hardware authorization, broadcast, confirmation, success, and failure states
-  with calmer liveness motion and direction-aware transitions.
-- Multisig proposals aggregate recipient, token, amount, source, network, and
-  decoded effects into focused stages while keeping raw contract calldata in an
-  explicit advanced path.
+- **285:** settings entry point for the own-account rescan
+- **285:** background rescan of the wallet's own accounts
+- **accounts:** hide accounts without removing them
+- **privacy:** state the STRK the registration needs
+- move deployment out of Home and into Security & permissions
+- quote one fee when a send also creates the account
+- put the address first on Receive, everything else behind Pro
+- rework token picking, the Send flow, and the address book
 
 ### Fixed
-- Activity state is partitioned by network and account so switching wallets
-  cannot show another account's history.
-- Add account no longer derives a Standard account immediately from the drawer;
-  both entry points require the same visible account-model choice.
-- Hover, focus, selected, and disabled states retain readable contrast, and
-  native-looking select controls no longer escape the wallet design system.
-- Onboarding orbit icons stay separated at normal playback speeds, surface
-  presets retain side-panel spacing, and waiting animations no longer pulse too
-  aggressively.
-- Destination-network rows use the canonical Starknet token mark rather than a
-  generic placeholder.
 
-### Security
-- All open CodeQL findings are addressed without suppressions: dapp provider
-  requests and results use an exhaustive, single-sourced method set instead of
-  page-controlled computed dispatch.
-- Bounded JSON normalization preserves hostile keys such as `__proto__` only as
-  own data properties on null-prototype records, and changelog regex inputs are
-  escaped literally.
-- AVNU asset synchronization accepts only signature-checked PNG, JPEG, and WebP
-  downloads; remotely supplied SVG is no longer treated as safely sanitizable
-  with regular expressions.
-- Release and nightly workflows resolve immutable commit SHAs before
-  self-hosted execution, validate tag-to-commit correspondence, and detach onto
-  the verified revision.
-- The repository-wide coverage gate remains enforced above 95%, with new tests
-  covering account routing, settings and address-book bindings, approval
-  behavior, NFT views, network marks, and navigation primitives.
+- **deps:** pin patched sharp and shell-quote in the reviewed overrides
+- **settings:** stop the own-phrase scan on lock and test its background handlers
+- **send:** reserve a non-STRK configured fee token instead of waiting forever
+- **accounts:** never fall back to a hidden account when choosing the active one
+- **onboarding:** read the account address in the data voice, not a caption
+- **firefox:** hold the event page open while an approval is pending
+- **deps:** pin patched source-map-js in the reviewed overrides
+- **security:** compare denylisted hosts without a trailing dot
+- **privacy:** warn, don't fail, when a registration reply is lost
+- **privacy:** hold the worker open while a reviewed preparation awaits confirmation
+- cap added tokens per network and keep one record per address
+- keep a late phrase validation from undoing the import wipe
+- say nothing is signed while the Ledger grant handshake runs
+- bound the custom networks dapps can store in preferences
+- keep deployment submit errors out of the Cost box
+- keep portfolio balances live when one tracked token reverts
+- leave the import-key form ready after a successful import
+- don't let a stale suggestion panel rewrite a pasted recovery word
+- never report a Firefox phrase copy as cleared
+- restore safety facts the copy review dropped
+- keep the guarded phrase copy's clipboard promise
+- clear the imported recovery phrase after an in-wallet import
+- don't let Tab or Enter replace a complete recovery word
+- don't claim a STRK20 approval charges no fee when it lists a relay fee
+- state the Mainnet consequence where the acknowledgement used to be
+- keep the wrong-network warning visible on Receive by default
+- don't tell users to retry a submission whose outcome is unknown
+- don't say "Transaction not sent" for a transaction the chain reverted
+- show a failed deploy or NFT transfer as a failure, not a success
+- bind the network picker to its buttons only
+- name a pasted recipient that is already a known account or contact
+- settle a stuck privacy marker without racing or trusting a bad nonce
+- tolerate a missing app root on the clipboard wait
+- clear the copied phrase before onboarding closes
+- commit a backup mismatch on Enter, and only from Continue
+- report a backup mismatch when Continue is pressed
+- align Manage tokens when the token list is absent
+- name both class hashes in the Receive mismatch alert
+- hide an empty send folder hint while it is minimized
+- forget a collapsed folder once that folder is gone
+- keep the folder drop highlight while the pointer is inside it
+- show a dropped account and count unfiled ones in My accounts
+- keep drawer folder names and leave account drags alone
+- show default folders on the manage view
+- re-estimate when the two fees cannot be added
+- withhold a fee total when the two estimates cannot be added
+- an undeployed account on Home is a state, not a fault
+- restoring a Ready Ledger account belongs under Import
+- treat only a real contract prefix as an address search
+- keep the save-address handoff until save or leave
+- match token search on name and address, best hit first
+- ignore a swap catalog reply that is no longer current
+- type the onboarding watchdog timer as one setTimeout
+
+### Documentation
+
+- keep the word for secret material out of non-boundary comments
+- **transfer-fee-review:** stop claiming no estimate ever signs
+- **deployment:** describe the Braavos deployment truthfully
+- **build:** verify the AMO rebuild against the submitted archive
+- **ui-lab:** recount the checkpoint total for this bundle
+- **accounts:** match the hide guard's comment to the visible-first fallback
+
+### Maintenance
+
+- split the flow-chrome and list rules out of styles-base
+- **recovery-ui:** kill the detached-flag mutant
+- reconcile the bundle's overlapping recovery and signability tests
+- drive the Braavos deployment estimate and submission end to end
+- cover scene selection and the recovery runtime client
+- **ledger:** count the find-accounts route in the no-transport import chooser
+- **285:** cover the find-accounts screen in the UI Lab
+- **285:** cover the find-accounts flow and its reviewed copy
+- pin the audit 134/153 hunks no test protected
+- keep the Send render under the complexity cap, and format
+- regenerate bun.lock and move the policy pins with the group bump
+- **deps:** bump the minor-and-patch group with 8 updates
+- keep onboarding-ui.ts within the 500-line cap
+- split the Send close cases out of the transfer-ui suite
+- assert the extension e2e paths the suite only named
+- add derek-flossman to codeowners
+
+### Other
+
+- Drop the unreachable key-less refusal from the recovery context
+- Bind the escape acknowledgement to the escape's kind as well as its ready_at
+- Let recovery gate reads fail over and re-pin instead of refusing
+- Refuse a Ready escape step inside the account's 12-hour limit in words
+- Never show a deployed account as not deployed on an RPC flake
+- State each recovery refusal's true cause
+- Pin the recovery gates to one accepted block
+- Never show a Ready escape to a new guardian as a guardian removal
+- Bind the owner-escape acknowledgement to the escape the review showed
+- Refuse Ready recovery for an account with a backup guardian
+- Confirm 2FA and guardian removal with the fee and a truthful consequence
+- Bind recovery submits to the reviewed account and journal them
+- Read the Ready escape window from chain and bind its submit to the confirmation
+- Bind the Braavos 2FA removal to a validated, confirmed fee
+- Say truthfully who can cancel a Ready guardian removal
+- ui-lab: checkpoint the undeployed Braavos Home state
+- dApp approval card says to deploy an undeployed Braavos account first
+- Send review says to deploy an undeployed Braavos account first
+- Home asks an undeployed Braavos account to deploy first
+- Refuse deploy-then-act for an undeployed Braavos account
+- Validate the signability response's account id with isAccountId
+- Correct stale Braavos comments and a family-specific RPC diagnostic
+- Re-pin the Braavos and submit-path live checks on block skew
+- Sign Braavos only on implementation classes, for the first stark signer
+- Split scene markup selection out of the side-panel entrypoint
+- Recover a Ready account with a guardian using the recovery phrase
+- Show the recovery unlock as an absolute UTC datetime
+- Recover a Braavos 2FA account with the recovery phrase
+- Deploy funded Braavos counterfactuals from the wallet
+- Sign for stark-only Braavos accounts
+- Disable Shield for a read-only account, and cover the signability poll
+- Home says an account is read only before any button is pressed
+- Document the AMO source-submission rebuild
+- Reserve the STRK20 pool fee in the token the relay charges it in
+- fix/privacy: keep the settle watch from re-arming after its window closes
+- fix/privacy: keep the home private balance fresh after a settled send
+- Gate the Ledger transport on browser support
+- Show the STRK20 pool fee as a STRK amount, not a raw felt
+- Say an account is view-only before it is picked, and in plain words after
+- Refuse the Ready-scheme kind in the v7/v8 legacy validator too
+- Find Ready and Braavos accounts on the ladders their apps actually use
+- Accept the optional api_version on every Wallet API method
+- Accept valid_until and api_version on wallet_strk20Balances
+- Keep the recovery scan going while it keeps finding accounts
+- Pin the swap review enrichment and the checker's secret-material pattern
+- Let the shared client classify non-OK silent reads in the grant tab
+- Review OutsideExecution signs against own accounts and paid recipients
+- Never re-quote a swap whose reply was lost, and pin header Back
+- Split the fallback preferences store out of runtime-state
+- Report a lost swap reply as status unknown with its signed hash
+- Protect the trust-set enrichments and the secret-material rule with tests
+- Report a lost private execution worker as status unknown
+- Stop Enter in the multisig token search from submitting the composer
+- Replay a lost Send reply through the full stack
+- Trust payees of NFT and multisig sends as paid recipients
+- Re-quote after a failed swap and hold header Back while it confirms
+- Purge planted history rows persisted before the decoder filter
+- Report a lost Send reply as status unknown and re-review every retry
+- Flag lookalikes in every zero-padded display spelling
+- Only reject a vanished transaction the wallet actually saw on chain
+- Keep the trust-set vault read inside the secret boundary modules
+- Fail closed on replaced STRK20 markers and keep post-deploy outcomes honest
+- Escape the account label in three innerHTML rows
+- Accept the Ledger signHash recovery byte in the grant tab
+- Stop Enter in Send searches from submitting a stale recipient
+- Widen the poisoning check to padded windows, own accounts and paid recipients
+- Drop planted zero-value and untracked-token rows from history
+- Persist the phishing feed cache in byte-budgeted chunks
+- Drop a cached price the feed answers without
+- pin the removal of the SDK builder's simulate
+- privacy-views: state the activation network fee in its own unit
+- track freshness per address so a stale leg cannot bound a relay fee
+- state a relayed private-send fee in its own token
+- refuse a stale price snapshot as the converted relay-fee reference
+- refuse a relayed private broadcast once the wallet is locked
+- stop the recipient-status probe renewing the unlock session
+- prove STRK20 simulations through the prover, not the RPC node
+- Pin the chain-switch landing to this origin's grant and the active account
+- Restore the copy review's final commits that #475 left out
+- Name the payee of a dapp STRK20 deposit that credits another account
+- Decode dapp AVNU swaps on the review card and flag foreign payees
+- Pin the dapp token source through the real wiring and curated checks
+- Split the verifier context out of verify-decode
+- Label STRK20 review cards from the trusted token set
+- Stop trusting dapp-watched tokens the wallet cannot vouch for
+- Flag OutsideExecution allowance top-ups against standing allowances
+- Land a chain switch on the origin's stored grant, not its visible account
+- Stop trusting spoofed tokens on watch-asset and review cards
+- Apply invoke call defences to OutsideExecution sign requests
+- Stop an approved chain switch from granting an unconnected account
+- Reset RPC cooldowns per case in the history-scan degradation tests
+- Accept the unpatched node-forge advisory with a scoped, documented ignore
+- Drop deployment verdicts that answer for a different account
+- Bump wrangler and patch stale lock entries to clear high advisories
+- Make every word count across the wallet (#466, rebased onto release/v0.10.5)
+- Say who sent what to whom on the Send receipt, and link it to Starkscan
+- send and swap a token from its detail screen
+- Copy button beside every address on a static screen
+- Lower the Firefox floor to ESR and withhold the sandboxed renderer
+- resolve a lost account-mode send on-chain, not by restarting
+- offer the Reveal screen's guarded copy for a new phrase
+- scroll dock screens only when content reaches the dock
+- say when the backup words don't match
+- give each surface one radius and one text column
+- name every account on the manage screen, identifiers to Receive
+- Group Send's recipients under their folders, and lower-case avnu
+- reword a groups comment the secret-material scan matched
+- Group the account drawer into folders you can drag between
+- warn Ledger users on NFT sends that deploy, and link the security hub
+- reset the QR when Pro closes and describe the address to assistive tech
+- fix token pick re-measure, catalog races, and dropdown listeners
+- follow the token dropdown, Pro address form, and catalog view
+- open the account's own channel during registration
+- bump to 0.10.5

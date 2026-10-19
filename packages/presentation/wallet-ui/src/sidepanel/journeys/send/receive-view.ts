@@ -128,13 +128,13 @@ const classHashRows = (
  */
 export const RECEIVE_QR_LABELS = {
   address: "QR code for your Starknet address",
-  card: "QR code for wallet contact card",
+  card: "QR code for wallet card",
 } as const;
 
-// The contact card is a public document; saying so keeps the signer and
+// The wallet card is a public document; saying so keeps the signer and
 // coordination keys from reading as secrets when they appear beside it.
 const CARD_EXPLAINER =
-  "The contact card is public: this address, the signer public key, and the coordination public key. It holds nothing secret.";
+  "The wallet card is public: this address, the signer public key, and the coordination public key. It holds nothing secret.";
 
 /**
  * Renders the canonical Receive card. The QR carries the plain Starknet
@@ -150,9 +150,14 @@ type ReceiveAddressViewOptions = {
   /** On-chain verdict for that class; `null` while it is still being checked. */
   readonly classHashVerification?: ClassHashVerification | null;
   readonly copyLabel: string;
+  /**
+   * The wrong-network warning ("Only send … assets to this address"). Always
+   * visible beside the address, for every account type: sending on the wrong
+   * network loses funds, so it never sits behind Advanced.
+   */
   readonly hint: string;
   readonly networkId: StarknetNetworkId;
-  /** Display name of the network, shown beside the address when provided. */
+  /** Nostr coordination public key, once derived. */
   readonly nostrPublicKey?: string;
   readonly publicKeyX?: string;
 };
@@ -194,6 +199,7 @@ export const receiveAddressView = ({
         <code id="receive-address-text" data-receive-address-text>${escapeHtml(address)}</code>
         <span class="receive-address-copy-mark" aria-hidden="true">${icon("copy")}</span>
       </button>
+      <p class="hint receive-network-hint">${escapeHtml(hint)}</p>
     </div>
     ${
       publicKeyX
@@ -202,10 +208,9 @@ export const receiveAddressView = ({
             label: "Advanced",
           })}
       <div class="receive-advanced-fields" id="receive-advanced-fields" hidden>
-        <p class="hint">${escapeHtml(hint)}</p>
         <div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
           <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
-          <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Bramble contact card</button>
+          <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Wallet card</button>
         </div>
         <p class="hint receive-card-explainer" data-receive-card-explainer>${escapeHtml(CARD_EXPLAINER)}</p>
         <div class="receive-actions">
@@ -239,7 +244,7 @@ export const receiveAddressView = ({
           ${classHashRows(classHash, classHashVerification)}
         </div>
       </div>`
-        : `<p class="hint">${escapeHtml(hint)}</p>`
+        : ""
     }
   </div>`;
 };
