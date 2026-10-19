@@ -1,6 +1,94 @@
-# Changelog archive (v0.9.0 – v0.10.2)
+# Changelog archive (v0.9.0 – v0.10.4)
 
 Entries moved out of [CHANGELOG.md](CHANGELOG.md) to keep it readable. v0.10.0 is backfilled from its GitHub Release notes. Earlier entries are in [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
+
+## [0.10.4] - 2026-09-22
+
+### Added
+
+- scan every Argent release during recovery discovery
+- derive Argent accounts at any release they could have been deployed with
+- derive account addresses across every class a wallet deploys with
+- **terminal:** connect injected wallets through WalletAccountV6
+- let the revealed recovery phrase be copied to the clipboard
+- acknowledge a weak vault passphrase instead of accepting it silently
+- lower the vault passphrase floor to 8 and warn instead of refusing
+
+### Fixed
+
+- do not treat an unfinished check as a reason to deploy or fund
+- stop offering a deployment privacy cannot use
+- send unfunded token rows to receive before deployment
+- drop deployment status when the active account changes
+- offer privacy deployment only when it can succeed
+- bump web-ext past the image-size audit failure (#408)
+- offer deployment before privacy registration
+- accept an upgraded account class instead of demanding the pinned one
+- move wallet-standard types into a named capability folder
+- drop the starknet type patch for a shared wallet-standard path
+- keep starknet 10.8.0 with a reviewed WalletAccountV6 type patch
+- rescan history after the wallet records a transaction
+- refuse to start a Ledger flow from the toolbar popup
+- reserve the document scrollbar gutter so rows cannot shift the layout
+
+### Maintenance
+
+- regenerate bun.lock after Dependabot bumps
+- re-evaluate the PR guards when a pull request is retargeted
+- **deps:** bump the minor-and-patch group with 16 updates
+
+### Other
+
+- Restore Braavos accounts from a phrase (view-only) and close Ready 0.3.x restore gaps (#400)
+- Version the Ready Ledger path scheme as vault schema v9
+- Restore Ready Ledger accounts at Ready's EIP-2645 path
+- Name the publisher in the extension package
+- Build, package and validate the Gecko artifact in CI
+- Update the Receive stories to the address-first card
+- Fix the four confirmed UX-spec defects: allowance units, address-first Receive, bound connect grants, tested field edge
+- announce the Bramble bird as the dapp wallet icon
+- bump to 0.10.4 (#367)
+
+## [0.10.3] - 2026-09-16
+
+A patch release that lets a single-asset shielded balance pay its own relay
+fee, adds a Firefox build target, and hardens the vault and the v0.10.1
+authorization boundaries.
+
+### Added
+- The STRK20 relay fee can be paid in the token being sent. A converted fee is
+  admitted only under a ceiling derived from an independent reference price,
+  frozen into the reviewed plan and re-checked at submission; the route falls
+  back to STRK when no reference bounds it, when the batch spends several
+  tokens, or when the relay refuses the token.
+- A Firefox build target derived from the Chrome manifest. `bun run build:all`
+  emits both targets from one run of the gates; the wallet panel maps onto
+  `sidebar_action`, pending approvals mark the toolbar button so the click that
+  opens the panel is a real user gesture, and `data_collection_permissions` is
+  declared. The sandboxed collectible renderer and Ledger are not shipped on
+  Firefox, each decided rather than discovered.
+
+### Changed
+- The encrypted vault's commit state is mirrored into `storage.session`, which
+  no content script can reach, and an envelope must be vouched for by both the
+  durable record and the session shadow. The first read of a session seeds the
+  shadow, a version-2 envelope after a committed lineage is refused as a
+  downgrade, and the shadow is written before the durable record.
+- Deferred approval and signing work is bound to the unlock session that
+  authorized it; approvals claimed, grant metadata read, and session restores
+  superseded after a lock or revocation are rejected rather than served.
+- Embedded private-swap calls are validated against the reviewed trade intent,
+  and the paymaster gateway only carries credentials for the configured pool's
+  `apply_actions` call. Private-swap planning stays disabled until an
+  independently reviewed executor deployment is pinned.
+- Only wallet-authored errors reach STRK20 toast copy; SDK, RPC, and service
+  diagnostics collapse to a stable fallback.
+
+### Fixed
+- Analytics failures and consent races no longer affect wallet traffic.
+- Stale direct-provider account and permission responses are suppressed after
+  the session that produced them ends.
+- The website tooling pins a patched `sharp` (GHSA-rgj7-g3m4-5g8c).
 
 ## [0.10.2] - 2026-09-11
 
