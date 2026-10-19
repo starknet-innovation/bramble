@@ -62,6 +62,12 @@ const STRK20_STAGE = /^strk20 services unavailable \(([a-z-]+)\/([a-z-]+)\)(?:: 
 // `mapStrk20ProtocolError`'s shape: the reviewed head and the sanitised cause.
 const STRK20_PROTOCOL = /^strk20 services unavailable: ([\s\S]+)$/i;
 const STRK20_SERVICES_DOWN = "strk20 services unavailable";
+// A privacy service that answered 502, 503 or 504, as the SDK words it
+// ("Indexer API <path> failed (502): …"), or the wallet gateway's own
+// `upstream_unavailable` body: an outage the reader can only wait out, so it
+// reads as services down, never the raw diagnostic (mc-wallet 723). A 4xx is
+// a refusal, not an outage, and keeps today's handling.
+const STRK20_OUTAGE_CAUSE = /\bfailed \(50[234]\)|\bupstream_unavailable\b/;
 
 // A reviewed sentence with the sanitised detail kept beside it, so the cause
 // stays visible on a status line that has no copy control.
@@ -116,6 +122,7 @@ const strk20Message = (trimmed: string, normalized: string): string => {
   const cause = STRK20_PROTOCOL.exec(trimmed)?.[1];
   if (cause && RATE_LIMIT.test(cause)) return withDetail(RATE_LIMITED, cause);
   if (cause && friendlyNetworkError(cause)) return withDetail(NETWORK_ERROR_MESSAGE, cause);
+  if (cause && STRK20_OUTAGE_CAUSE.test(cause)) return servicesDown;
   return trimmed;
 };
 

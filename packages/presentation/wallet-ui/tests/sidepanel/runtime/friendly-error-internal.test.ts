@@ -175,6 +175,29 @@ describe("STRK20 (review F1, F2)", () => {
     );
   });
 
+  test("a privacy service's 5xx outage reads as unavailable, never the raw text (mc-wallet 723)", () => {
+    for (const raw of [
+      'strk20 services unavailable: Indexer API /v1/sync/preflight_check failed (502): {"error":"upstream_unavailable"}',
+      "strk20 services unavailable: Indexer API /v1/sync/incoming_state failed (503)",
+      "strk20 services unavailable: Indexer API /v1/history failed (504): gateway timeout",
+      'strk20 services unavailable: Indexer API /v1/sync/outgoing_state failed (500): {"error":"upstream_unavailable"}',
+    ]) {
+      expect(friendlyError(raw).message).toBe(STRK20_DOWN);
+    }
+  });
+
+  test("a privacy service's 4xx refusal and other causes keep their words", () => {
+    for (const raw of [
+      'strk20 services unavailable: Indexer API /v1/sync/preflight_check failed (400): {"error":"bad_request"}',
+      "strk20 services unavailable: Indexer API /v1/history failed (404)",
+      "strk20 services unavailable: Indexer API /v1/history failed (501)",
+      "strk20 services unavailable: Indexer API /v1/history failed (5020)",
+      "strk20 services unavailable: unexpected discovery response shape",
+    ]) {
+      expect(friendlyError(raw).message).toBe(raw);
+    }
+  });
+
   test("a privacy-leak refusal says so, in every form, never 'may not have gone through'", () => {
     for (const raw of [
       "strk20 privacy leak",
