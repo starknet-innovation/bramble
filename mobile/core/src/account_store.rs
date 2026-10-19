@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use starknet_types_core::felt::Felt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::account_catalog::AccountFamily;
+use crate::account_catalog::{catalog, AccountFamily};
 use crate::account_names::{is_label, js_trim};
 use crate::files::storage;
 use crate::groups::{self, StoredGroup};
@@ -26,6 +26,12 @@ use crate::{felt, kms, CoreError};
 pub(crate) const MAX_ACCOUNT_RECORDS: usize = 128;
 /// Highest account index (`RECOVERY_SCAN_LIMITS.maxIndex`, Krusty's unhardened bound).
 pub(crate) const MAX_ACCOUNT_INDEX: u32 = 0x7fff_ffff;
+
+/// An index this wallet may derive, restore or create at (the extension's
+/// `isRecoveryAccountIndex`): in range, and never strkd's reserved agent index.
+pub(crate) fn is_usable_account_index(index: u32) -> bool {
+    index <= MAX_ACCOUNT_INDEX && index != catalog().reserved_agent_index
+}
 
 /// One account as sealed in the vault. Public data only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -196,7 +202,7 @@ pub(crate) fn record_at(
     public_key: &Felt,
     network: NetworkId,
 ) -> Result<StoredAccount, CoreError> {
-    if account_index > MAX_ACCOUNT_INDEX {
+    if !is_usable_account_index(account_index) {
         return Err(CoreError::InvalidInput {
             reason: "account index out of range".into(),
         });

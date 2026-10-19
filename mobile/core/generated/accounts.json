@@ -178,5 +178,6 @@
     "maxIndex": 2147483647,
     "maxScannedIndexes": 200,
     "maxSelections": 40
-  }
+  },
+  "reservedAgentIndex": 1095192148
 }

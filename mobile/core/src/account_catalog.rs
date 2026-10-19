@@ -74,6 +74,9 @@ pub struct RecoveryLimits {
     pub batch_size: u32,
     pub default_count: u32,
     pub max_index: u32,
+    /// Ceiling on indices one scan covers, so an endpoint that reports every probe deployed
+    /// cannot extend the gap-limit walk forever.
+    pub max_scanned_indexes: u32,
     pub max_selections: u32,
 }
 
@@ -127,6 +130,7 @@ struct RawCatalog {
     name_animals: Vec<String>,
     open_zeppelin: RawOpenZeppelin,
     recovery_limits: RecoveryLimits,
+    reserved_agent_index: u32,
 }
 
 /// One class with its hash parsed.
@@ -148,6 +152,9 @@ pub(crate) struct Catalog {
     pub animals: Vec<String>,
     pub group_icons: Vec<String>,
     pub limits: RecoveryLimits,
+    /// strkd's agent account index (`RESERVED_AGENT_ACCOUNT_INDEX`, #336): never derived,
+    /// scanned, restored or created.
+    pub reserved_agent_index: u32,
     pub copy_feedback: CopyFeedback,
 }
 
@@ -201,6 +208,7 @@ fn load() -> Catalog {
         animals: raw.name_animals,
         group_icons: raw.group_icons,
         limits: raw.recovery_limits,
+        reserved_agent_index: raw.reserved_agent_index,
         copy_feedback: CopyFeedback {
             confirm_ms: raw.copy_feedback.confirm_ms,
             success_toast_ms: raw.copy_feedback.success_toast_ms,

@@ -12,7 +12,7 @@ use starknet_types_core::felt::Felt;
 
 use crate::account_catalog::{catalog, class_entry, deployment_classes, AccountFamily};
 use crate::account_names::short_label;
-use crate::account_store::{record_at, StoredAccount, VaultPayload, MAX_ACCOUNT_INDEX};
+use crate::account_store::{is_usable_account_index, record_at, StoredAccount, VaultPayload};
 use crate::networks::NetworkId;
 use crate::{felt, CoreError};
 
@@ -202,7 +202,7 @@ pub(crate) fn derive_selections(
     let mut public_keys: HashMap<u32, Felt> = HashMap::new();
     let mut records = Vec::with_capacity(selections.len());
     for selection in selections {
-        if selection.account_index > MAX_ACCOUNT_INDEX {
+        if !is_usable_account_index(selection.account_index) {
             return Err(invalid("invalid recovery account selection"));
         }
         let class_hash = selection_class(selection)?;

@@ -12,7 +12,9 @@
 
 use crate::account_catalog::{authorization_shape, type_label, AccountFamily};
 use crate::account_names::{display_name, normalise_label, short_label};
-use crate::account_store::{StoredAccount, VaultPayload, MAX_ACCOUNT_INDEX, MAX_ACCOUNT_RECORDS};
+use crate::account_store::{
+    is_usable_account_index, StoredAccount, VaultPayload, MAX_ACCOUNT_INDEX, MAX_ACCOUNT_RECORDS,
+};
 use crate::groups::{self, AccountGroup};
 use crate::networks::NetworkId;
 use crate::recovery::{derive_selections, RecoverySelection};
@@ -153,6 +155,7 @@ fn require_record<'a>(
 // Lowest unused account index on `network` (`nextAccountIndex`): every family occupies its index.
 fn next_account_index(payload: &VaultPayload, network: NetworkId) -> Result<u32, CoreError> {
     (0..=MAX_ACCOUNT_INDEX)
+        .filter(|index| is_usable_account_index(*index))
         .find(|index| {
             !payload
                 .accounts
