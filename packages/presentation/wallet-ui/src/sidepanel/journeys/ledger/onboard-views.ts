@@ -355,6 +355,7 @@ export const ledgerAccountPicker = (
   selected: readonly string[] = [],
   message?: string,
   application: LedgerEip2645Application = LEDGER_EIP2645_APPLICATION,
+  loadingMore = false,
 ): string => {
   const list =
     application === READY_EIP2645_APPLICATION
@@ -372,7 +373,8 @@ export const ledgerAccountPicker = (
     ${message ? `<p class="review-flag" role="alert">${escapeHtml(message)}</p>` : ""}
     ${list}
     ${button({
-      attributes: { "data-ledger-load-more": true },
+      attributes: { "data-ledger-load-more": true, ...(loadingMore ? { "data-busy": true } : {}) },
+      disabled: loadingMore,
       icon: "plus",
       label: "Show more",
       size: "small",

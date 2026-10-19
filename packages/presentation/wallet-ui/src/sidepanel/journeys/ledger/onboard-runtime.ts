@@ -206,7 +206,13 @@ export const createLedgerOnboardRuntime = (
       return ledgerDevicePicker(view.devices);
     }
     if (view.kind === "picker") {
-      return ledgerAccountPicker(view.candidates, view.selected, view.message, view.application);
+      return ledgerAccountPicker(
+        view.candidates,
+        view.selected,
+        view.message,
+        view.application,
+        view.loadingMore,
+      );
     }
     return ledgerOnboardError(view.message);
   };
