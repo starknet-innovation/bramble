@@ -48,7 +48,8 @@ export type LedgerOnboardAddKind =
 /**
  * The onboarding device-prompt view the binder renders: the add-account
  * chooser, the connect gesture, the silent read, the multi-select account
- * picker (with the currently-selected ids and the path scheme it was read at),
+ * picker (with the currently-selected ids and its layout: Ready's scheme alone
+ * is a flat list, anything read at Bramble's scheme is grouped by family),
  * or a typed error.
  */
 export type LedgerOnboardView =
