@@ -111,6 +111,6 @@ Chrome requires an accurate public policy even when sensitive data is stored onl
 
 Any material handling change will be disclosed in the extension and listing before collection and
 will update this policy's effective date. Non-sensitive questions may be opened at
-<https://github.com/starknet-innovation/mc-wallet/issues>. Sensitive or security reports must use
+<https://github.com/starknet-innovation/bramble/issues>. Sensitive or security reports must use
 GitHub private vulnerability reporting from the repository's Security tab and must never include a
 recovery phrase or private key.
