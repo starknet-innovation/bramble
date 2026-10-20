@@ -11,7 +11,7 @@ the v10 encrypted-vault schema, account identity and scoping, mutation rules, Ch
 updates, and the custody boundary for a future Ledger-derived STRK20 viewing key.
 
 Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implementation tracked by
-[issue #208](https://github.com/starknet-innovation/mc-wallet/issues/208).
+[issue #208](https://github.com/starknet-innovation/bramble/issues/208).
 
 ## Security conclusions
 

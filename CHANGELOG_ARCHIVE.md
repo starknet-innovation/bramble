@@ -254,8 +254,8 @@ and clearer dapp approval hand-offs.
   accessible keyboard/focus behavior.
 - The unit suite is organized by source boundary, and privileged GitHub
   workflows now isolate untrusted source execution from release authority
-  ([#158](https://github.com/starknet-innovation/mc-wallet/pull/158),
-  [#160](https://github.com/starknet-innovation/mc-wallet/pull/160)).
+  ([#158](https://github.com/starknet-innovation/bramble/pull/158),
+  [#160](https://github.com/starknet-innovation/bramble/pull/160)).
 
 ### Fixed
 - “Add NFT” no longer assumes one `owner_of` ABI shape. Contracts exposing
