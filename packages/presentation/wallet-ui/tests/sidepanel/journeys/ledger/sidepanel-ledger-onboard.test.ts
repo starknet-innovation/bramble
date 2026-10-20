@@ -35,9 +35,11 @@ describe("Ledger onboard controller", () => {
     if (final?.kind === "picker") {
       expect(final.candidates[0]?.deployed).toBe(false);
       expect(final.candidates[0]?.balance).toBe("0 STRK");
-      // Both contract families derive from the same device keys.
+      // First run reads both paths: Bramble and Argent accounts from Bramble's
+      // keys, Ready (Argent) and Braavos accounts from Ready's.
       expect(pickerIndexes(final, "openzeppelin")).toEqual([0, 1]);
-      expect(pickerIndexes(final, "argent")).toEqual([0, 1]);
+      expect(pickerIndexes(final, "argent")).toEqual([0, 1, 0, 1]);
+      expect(pickerIndexes(final, "braavos")).toEqual([0, 1]);
     }
   });
 

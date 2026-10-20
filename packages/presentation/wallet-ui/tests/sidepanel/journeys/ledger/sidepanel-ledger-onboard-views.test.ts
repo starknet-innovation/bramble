@@ -141,8 +141,12 @@ describe("onboarding views", () => {
     // Only the active Bramble candidate counts as detected.
     expect(html).toContain("1 found");
     expect(html).toContain("Account 0");
-    expect(html).toContain("Deployed");
-    expect(html).toContain("1.5 STRK");
+    // Row status in the recovery-phrase picker's words, without a balance.
+    expect(html).toContain("Deployed on Starknet");
+    expect(html).not.toContain("1.5 STRK");
+    expect(html).toContain(
+      "No on-chain activity found — Bramble only imports existing Argent accounts",
+    );
     expect(html).toContain(`data-ledger-toggle="${candidateAccount(0).id}"`);
     // The idle Ready candidate is listed but not selectable.
     expect(html).toMatch(
@@ -246,7 +250,7 @@ describe("onboarding views", () => {
     );
   });
 
-  test("an undeployed candidate reflects needs-funding, distinct from an error", () => {
+  test("an undeployed candidate says it has no activity, as the recovery picker does", () => {
     const html = ledgerAccountPicker([
       {
         account: candidateAccount(1),
@@ -256,8 +260,8 @@ describe("onboarding views", () => {
         funded: false,
       },
     ]);
-    expect(html).toContain("needs funding");
-    expect(html).toContain("balance unavailable");
+    expect(html).toContain("No on-chain activity found");
+    expect(html).not.toContain("balance unavailable");
   });
 
   test("a checking candidate and a duplicate render distinctly", () => {
@@ -281,8 +285,59 @@ describe("onboarding views", () => {
         funded: false,
       },
     ]);
+    // As in the recovery picker: the checkbox stays, disabled, beside the status.
     expect(duplicate).toContain("Already in this wallet");
-    expect(duplicate).not.toContain("data-ledger-toggle");
+    expect(duplicate).toMatch(
+      new RegExp(`data-ledger-toggle="${candidateAccount(3).id}"[^>]*disabled`),
+    );
+  });
+
+  test("a first-run scan of both paths lists Bramble, Ready and Braavos accounts", () => {
+    const at = (
+      index: number,
+      type: "argent" | "braavos" | "openzeppelin",
+      application: "LedgerW" | "argentx",
+    ): LedgerAccountRef => {
+      const base = candidateAccount(index, type === "braavos" ? "argent" : type);
+      const tag = `${application === "argentx" ? "a" : ""}${type === "braavos" ? "b" : ""}`;
+      return {
+        ...base,
+        accountContractType: type,
+        address: base.address.replace("0x", `0x${tag}`),
+        derivation: {
+          accountIndex: index,
+          eip2645application: application,
+          kind: "ledger",
+          path: ledgerAccountPath(index, application),
+        },
+        id: base.id.replace(":0x", `:0x${tag}`),
+      } as LedgerAccountRef;
+    };
+    const idle = { balance: "0 STRK", deployed: false, duplicate: false, funded: false };
+    const live = { balance: "2 STRK", deployed: true, duplicate: false, funded: true };
+    const html = ledgerAccountPicker([
+      { account: at(0, "openzeppelin", "LedgerW"), ...idle },
+      { account: at(0, "argent", "LedgerW"), ...idle },
+      { account: at(1, "argent", "LedgerW"), ...live },
+      { account: at(0, "argent", "argentx"), ...idle },
+      { account: at(0, "braavos", "argentx"), ...idle },
+    ]);
+    expect(html).toContain("Bramble accounts");
+    expect(html).toContain("Ready accounts");
+    expect(html).toContain("Braavos accounts");
+    expect(html).not.toContain("Argent accounts");
+    expect(html).toContain(
+      "No on-chain activity found — Bramble only imports existing Braavos accounts",
+    );
+    expect(html).toContain(
+      "No on-chain activity found — Bramble only imports existing Ready accounts",
+    );
+    // An unused Argent account at Bramble's path would twin every Ready row: it
+    // is hidden, while one with activity is listed and named.
+    expect(html).not.toContain(`data-ledger-toggle="${at(0, "argent", "LedgerW").id}"`);
+    expect(html).toContain(`data-ledger-toggle="${at(1, "argent", "LedgerW").id}"`);
+    expect(html).toContain("Account 1 · Bramble path");
+    expect(html).toMatch(/Ready accounts<span class="eyebrow" data-detected="1">1 found/);
   });
 
   test("an empty candidate list renders the empty state", () => {
