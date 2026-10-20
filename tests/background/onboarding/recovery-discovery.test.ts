@@ -3,8 +3,13 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
-import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
 import {
+  BRAAVOS_BASE_CLASS_HASH,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
+import {
+  type AccountContractType,
   ARGENT_ACCOUNT_CLASS_HASH,
   type DerivedAccountRef,
   OPENZEPPELIN_ACCOUNT_CLASS_HASH,
@@ -413,10 +418,8 @@ describe("recovery discovery", () => {
     }
   });
 
-  test("lists a family Bramble does not create only once it exists on chain", async () => {
-    // Every other family and release is scanned, and each yields an address
-    // whether or not anyone deployed there. Offered unconditionally, those
-    // addresses would import accounts that belong to nobody.
+  test("lists an older release or class only once it exists on chain", async () => {
+    // Index zero shows at each family's current class; older ones only once used.
     const familyAccount = (input: AccountDerivationInput): DerivedAccountRef => {
       const accountIndex = input.accountIndex ?? 0;
       const family = input.accountContractType;
@@ -479,11 +482,13 @@ describe("recovery discovery", () => {
 
     const listed = (result as { readonly candidates: readonly RecoveryAccountCandidate[] })
       .candidates;
+    const today = (accountContractType: AccountContractType, classHash: string): string =>
+      familyAccount({ accountContractType, accountIndex: 0, classHash, mnemonic: "" }).address;
     expect(listed.map(({ account }) => account.address).sort()).toEqual(
       [
-        familyAccount({ accountContractType: "openzeppelin", accountIndex: 0, mnemonic: "" })
-          .address,
-        familyAccount({ accountContractType: "argent", accountIndex: 0, mnemonic: "" }).address,
+        today("openzeppelin", OPENZEPPELIN_ACCOUNT_CLASS_HASH),
+        today("argent", ARGENT_ACCOUNT_CLASS_HASH),
+        today("braavos", BRAAVOS_DEPLOYMENT_CLASS_HASH),
         braavosBase.address,
       ].sort(),
     );

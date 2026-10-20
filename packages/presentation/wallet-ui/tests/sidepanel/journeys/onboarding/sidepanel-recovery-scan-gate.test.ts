@@ -219,9 +219,6 @@ describe("recovery scan Ready gate", () => {
     expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
       "Checked 20 of 40 indices…",
     );
-    // An empty group is only declared empty once the search has finished.
-    const braavosList = app.querySelector('[data-recovery-group="braavos"] ul');
-    expect(braavosList?.textContent).toBe("");
     finish({
       candidates: [{ account: lateAccount, deployed: true, funded: false }],
       complete: true,
@@ -232,7 +229,6 @@ describe("recovery scan Ready gate", () => {
     expect(app.querySelector("#recovery-scan-status")?.textContent).toBe(
       "Search complete. Checked 40 indices across every account type.",
     );
-    expect(braavosList?.textContent).toBe("No accounts with on-chain activity.");
   });
 
   test("says a guarded Argent account is view only before it is picked", async () => {
@@ -340,6 +336,23 @@ describe("recovery scan Ready gate", () => {
     ]);
     await reachPicker(modern);
     expect(rowsIn(modern)("braavos")[0]?.textContent).toContain("Funded and ready to deploy");
+
+    // Unused, the current class's index-zero row is listed like Ready's: view
+    // only, and never described as funded.
+    const unused = mount([
+      {
+        account: { ...braavos, classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH },
+        deployed: false,
+        funded: false,
+      },
+    ]);
+    await reachPicker(unused);
+    const [unusedRow] = rowsIn(unused)("braavos");
+    expect(unusedRow?.textContent).toContain(
+      "No on-chain activity found — Bramble only imports existing Braavos accounts",
+    );
+    expect(unusedRow?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(true);
+    expect(unusedRow?.querySelector<HTMLInputElement>("input.select-check")?.checked).toBe(false);
   });
 
   test("names the Argent release on rows that share an index", async () => {

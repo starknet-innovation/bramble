@@ -117,7 +117,9 @@ const activityState = (candidate: RecoveryAccountCandidate): string => {
   }
   return candidate.account.accountContractType === "argent"
     ? "No on-chain activity found — Bramble only imports existing Ready accounts"
-    : "No on-chain activity found";
+    : candidate.account.accountContractType === "braavos"
+      ? "No on-chain activity found — Bramble only imports existing Braavos accounts"
+      : "No on-chain activity found";
 };
 
 // A deployed Braavos account is usable exactly when its advisory verdict says
@@ -125,7 +127,12 @@ const activityState = (candidate: RecoveryAccountCandidate): string => {
 // since Bramble cannot deploy Braavos accounts yet.
 const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
   if (duplicate) return "Already in this wallet";
-  if (candidate.account.accountContractType !== "braavos") return activityState(candidate);
+  if (
+    candidate.account.accountContractType !== "braavos" ||
+    (!candidate.deployed && !candidate.funded)
+  ) {
+    return activityState(candidate);
+  }
   if (!candidate.deployed) {
     // The modern deployment class deploys from here like any other account;
     // an older base-class counterfactual still cannot.
@@ -265,17 +272,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
         .sort(
           (left, right) => recoveryLadderIndex(left.account) - recoveryLadderIndex(right.account),
         );
-      // Discovery omits unused addresses a type this wallet never creates (e.g.
-      // Braavos), so a finished search still needs a line or the group opens
-      // onto nothing. Mid-search the list stays empty: more may yet be found.
-      if (rows.length === 0 && complete) {
-        const empty = deps.form.ownerDocument.createElement("li");
-        empty.className = "empty";
-        empty.textContent = "No accounts with on-chain activity.";
-        listElement.replaceChildren(empty);
-      } else {
-        listElement.replaceChildren(...rows.map(candidateRow));
-      }
+      listElement.replaceChildren(...rows.map(candidateRow));
       const detected = rows.filter((candidate) => candidate.deployed || candidate.funded).length;
       const detectedSlot = group.querySelector<HTMLElement>("[data-detected]");
       if (detectedSlot) {
