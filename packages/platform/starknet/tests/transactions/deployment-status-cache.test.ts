@@ -114,9 +114,55 @@ describe("rememberDeployedAccounts", () => {
     expect(calls).toHaveLength(4);
   });
 
+  test("reads a deployed address again once its answer is older than the window", async () => {
+    let clock = 0;
+    let deployed = true;
+    const { calls, read } = stubRead(() => deployed);
+    const status = rememberDeployedAccounts(read, { freshForMs: 1_000, now: () => clock });
+    const input = { accountAddress: ADDRESS, rpcUrls: MAINNET_RPC };
+    expect(await status(input)).toBe(true);
+    clock = 999;
+    expect(await status(input)).toBe(true);
+    expect(calls).toHaveLength(1);
+    // A reorg or a reset remote devnet: the next read after the window says so.
+    deployed = false;
+    clock = 1_000;
+    expect(await status(input)).toBe(false);
+    clock = 1_001;
+    expect(await status(input)).toBe(false);
+    expect(calls).toHaveLength(3);
+  });
+
+  test("a fresh deployed answer restarts the window", async () => {
+    let clock = 0;
+    const { calls, read } = stubRead(() => true);
+    const status = rememberDeployedAccounts(read, { freshForMs: 1_000, now: () => clock });
+    const input = { accountAddress: ADDRESS, rpcUrls: MAINNET_RPC };
+    await status(input);
+    clock = 1_500;
+    await status(input);
+    clock = 2_400;
+    await status(input);
+    expect(calls).toHaveLength(2);
+  });
+
+  test("never remembers an answer from a local node, whose chain can be reset", async () => {
+    const { calls, read } = stubRead(() => true);
+    const status = rememberDeployedAccounts(read);
+    for (const rpcUrls of [
+      ["http://127.0.0.1:5050/rpc"],
+      ["http://localhost:5050/rpc"],
+      ["https://rpc.example", "http://127.0.0.1:5050/rpc"],
+    ]) {
+      expect(await status({ accountAddress: ADDRESS, rpcUrls })).toBe(true);
+      expect(await status({ accountAddress: ADDRESS, rpcUrls })).toBe(true);
+    }
+    expect(calls).toHaveLength(6);
+  });
+
   test("evicts the oldest remembered address once at capacity", async () => {
     const { calls, read } = stubRead(() => true);
-    const status = rememberDeployedAccounts(read, 2);
+    const status = rememberDeployedAccounts(read, { capacity: 2 });
     const lookup = (accountAddress: string) => status({ accountAddress, rpcUrls: MAINNET_RPC });
     await lookup(ADDRESS);
     await lookup(OTHER_ADDRESS);

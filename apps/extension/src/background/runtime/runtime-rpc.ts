@@ -210,9 +210,9 @@ export type RuntimeRpc = {
     input: BraavosRecoveryInput,
   ) => ReturnType<typeof submitBraavosRecovery>;
   /**
-   * Whether the account contract exists. The production wiring remembers a
-   * "deployed" answer per address and endpoint list (deployment is permanent),
-   * so only "not deployed" and failures read the chain again.
+   * Whether the account contract exists. The production wiring reuses a
+   * "deployed" answer per address and endpoint list for a few minutes (never
+   * for a local node); "not deployed" and failures always read the chain.
    */
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
