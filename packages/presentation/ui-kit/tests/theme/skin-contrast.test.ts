@@ -87,14 +87,14 @@ const NEUTRAL_TOKENS: readonly SkinToken[] = [
 // ramp peaks at 35 (grey/500); any step of its blue ramp is well over 100, so
 // this catches a saturated surface or ink sneaking into a structural slot.
 const NEUTRAL_MAX_SPREAD = 40;
-const LIGHT_AVATAR_TONES: readonly SkinToken[] = [
-  "--bramble-account-avatar-0",
-  "--bramble-account-avatar-3",
-];
-const DARK_AVATAR_TONES: readonly SkinToken[] = [
-  "--bramble-account-avatar-1",
-  "--bramble-account-avatar-2",
-];
+const avatarTones = (role: string, count: number): readonly SkinToken[] =>
+  Array.from(
+    { length: count },
+    (_, index) => `--bramble-account-avatar-${role}-${index}` as SkinToken,
+  );
+const AVATAR_GROUNDS = avatarTones("ground", 4);
+const AVATAR_BODIES = avatarTones("body", 5);
+const AVATAR_ACCENTS = avatarTones("accent", 4);
 
 describe.each([
   ["midnight", darkSkin],
@@ -135,15 +135,28 @@ describe.each([
     expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
-  test("account character features keep non-text contrast against every identity tone", () => {
-    for (const ground of LIGHT_AVATAR_TONES) {
+  // Any ground, body, and accent can meet in one bird, so every pairing is held
+  // to non-text contrast: the body against its ground, the wing, crest, tail
+  // and beak against the body, and the paper eye against the body.
+  test("every account bird pairing keeps non-text contrast", () => {
+    const pairs: [SkinToken, SkinToken][] = [
+      ...AVATAR_BODIES.flatMap((body) =>
+        AVATAR_GROUNDS.map((ground): [SkinToken, SkinToken] => [body, ground]),
+      ),
+      ...AVATAR_ACCENTS.flatMap((accent) =>
+        AVATAR_BODIES.map((body): [SkinToken, SkinToken] => [accent, body]),
+      ),
+      ...AVATAR_BODIES.map((body): [SkinToken, SkinToken] => [
+        "--bramble-account-avatar-paper",
+        body,
+      ]),
+      ["--bramble-account-avatar-ink", "--bramble-account-avatar-paper"],
+    ];
+    for (const [ink, ground] of pairs) {
+      const ratio = contrast(token(skin, ink), token(skin, ground));
       expect(
-        contrast(token(skin, "--bramble-account-avatar-paper"), token(skin, ground)),
-      ).toBeGreaterThanOrEqual(3);
-    }
-    for (const ground of DARK_AVATAR_TONES) {
-      expect(
-        contrast(token(skin, "--bramble-account-avatar-ink"), token(skin, ground)),
+        ratio,
+        `${ink} on ${ground} is ${ratio.toFixed(2)}:1 (needs 3:1)`,
       ).toBeGreaterThanOrEqual(3);
     }
   });

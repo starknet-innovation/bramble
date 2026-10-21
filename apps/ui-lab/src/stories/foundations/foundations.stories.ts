@@ -28,10 +28,19 @@ const semanticColorTokens = new Set([
   "--bramble-warning",
 ]);
 const identityColorTokens = new Set([
-  "--bramble-account-avatar-0",
-  "--bramble-account-avatar-1",
-  "--bramble-account-avatar-2",
-  "--bramble-account-avatar-3",
+  "--bramble-account-avatar-accent-0",
+  "--bramble-account-avatar-accent-1",
+  "--bramble-account-avatar-accent-2",
+  "--bramble-account-avatar-accent-3",
+  "--bramble-account-avatar-body-0",
+  "--bramble-account-avatar-body-1",
+  "--bramble-account-avatar-body-2",
+  "--bramble-account-avatar-body-3",
+  "--bramble-account-avatar-body-4",
+  "--bramble-account-avatar-ground-0",
+  "--bramble-account-avatar-ground-1",
+  "--bramble-account-avatar-ground-2",
+  "--bramble-account-avatar-ground-3",
   "--bramble-account-avatar-ink",
   "--bramble-account-avatar-paper",
 ]);
