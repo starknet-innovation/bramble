@@ -67,6 +67,7 @@ import {
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  rememberDeployedAccounts,
   reviewArgentRecovery,
   reviewBraavosRecovery,
   type SigningRestrictionInput,
@@ -208,6 +209,11 @@ export type RuntimeRpc = {
   readonly submitBraavosRecovery?: (
     input: BraavosRecoveryInput,
   ) => ReturnType<typeof submitBraavosRecovery>;
+  /**
+   * Whether the account contract exists. The production wiring remembers a
+   * "deployed" answer per address and endpoint list (deployment is permanent),
+   * so only "not deployed" and failures read the chain again.
+   */
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -349,7 +355,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getArgentRecoveryState,
   getBraavosRecoveryState,
   getBraavosSigningRestriction,
-  getDeploymentStatus,
+  getDeploymentStatus: rememberDeployedAccounts(getDeploymentStatus),
   reviewArgentRecovery,
   reviewBraavosRecovery,
   submitArgentRecovery,
