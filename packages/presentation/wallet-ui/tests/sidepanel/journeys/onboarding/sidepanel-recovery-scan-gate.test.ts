@@ -13,127 +13,20 @@ import {
 } from "@bramble/wallet-model/account-families";
 import { ARGENT_ACCOUNT_CLASS_HASH, type DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
-import type { WalletStatus } from "../../../../src/popup/responses/responses";
-import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
-import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
+import {
+  brambleAccount,
+  click,
+  mount,
+  reachPicker,
+  readyIdleAccount,
+  rowsIn,
+  tick,
+} from "../../../support/recovery-picker-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
-
-const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
-const PASSPHRASE = "fixture vault passphrase";
-
-const status: WalletStatus = {
-  accountCount: 0,
-  accounts: [],
-  activeAccountId: null,
-  hasVault: false,
-  locked: false,
-  network: "Starknet Mainnet",
-  networkId: "SN_MAIN",
-  networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
-  ready: true,
-};
-
-const brambleAccount: DerivedAccountRef = {
-  accountContractType: "openzeppelin",
-  address: "0xabc",
-  classHash: "0x1",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0xabc",
-  networkId: "SN_MAIN",
-  publicKeyX: "0x2",
-  publicKeyY: "0x3",
-};
-
-const readyIdleAccount: DerivedAccountRef = {
-  ...brambleAccount,
-  accountContractType: "argent",
-  address: "0xready0",
-  id: "SN_MAIN:0xready0",
-};
-
-const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
-
-const setValue = (root: ParentNode, selector: string, value: string): void => {
-  const input = root.querySelector<HTMLInputElement>(selector);
-  if (!input) {
-    throw new Error(`missing ${selector}`);
-  }
-  input.value = value;
-  input.dispatchEvent(new window.Event("input", { bubbles: true }));
-};
-
-const click = (root: ParentNode, selector: string): void => {
-  const button = root.querySelector<HTMLButtonElement>(selector);
-  if (!button) {
-    throw new Error(`missing ${selector}`);
-  }
-  button.click();
-};
-
-type Candidate = {
-  account: DerivedAccountRef;
-  deployed: boolean;
-  funded: boolean;
-  restriction?: "guardian" | "owner-changed" | "owner-type" | "release" | "strong-signer";
-  privacyPool?: "registered-elsewhere" | "unchecked";
-};
-
-const mount = (
-  candidates: readonly Candidate[] = [
-    { account: brambleAccount, deployed: true, funded: false },
-    { account: readyIdleAccount, deployed: false, funded: false },
-  ],
-  discover?: SidepanelWallet["discoverRecoveryAccounts"],
-  hooks: { readonly onRender?: () => void } = {},
-) => {
-  document.body.replaceChildren();
-  const app = document.createElement("div");
-  app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
-  document.body.append(app);
-  const wallet = {
-    discoverRecoveryAccounts:
-      discover ??
-      (() =>
-        Promise.resolve({
-          candidates,
-          complete: true,
-          nextIndex: 20,
-          ok: true as const,
-        })),
-    loadStatus: () => Promise.resolve(status),
-    recoverAccounts: () => Promise.resolve([brambleAccount]),
-    validateMnemonic: () => Promise.resolve(true),
-  } as unknown as SidepanelWallet;
-  bindOnboarding({
-    app,
-    render: async () => {
-      hooks.onRender?.();
-    },
-    wallet,
-  });
-  return app;
-};
-
-const reachPicker = async (app: HTMLElement): Promise<void> => {
-  click(app, "#add-existing-button");
-  click(app, "#recovery-method-button");
-  setValue(app, 'input[name="import-word-0"]', MNEMONIC);
-  click(app, "#recovery-continue");
-  await tick();
-  setValue(app, 'input[name="vaultPassphrase"]', PASSPHRASE);
-  setValue(app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
-  click(app, "#password-continue-button");
-  await tick();
-};
-
-const rowsIn =
-  (app: HTMLElement) =>
-  (contractType: string): readonly HTMLLIElement[] =>
-    Array.from(app.querySelectorAll<HTMLLIElement>(`[data-recovery-group="${contractType}"] li`));
 
 describe("recovery scan Ready gate", () => {
   beforeEach(() => {
@@ -224,39 +117,6 @@ describe("recovery scan Ready gate", () => {
     expect(row.textContent).toContain("Deployed on Starknet · has a guardian · view only");
     const checkbox = row.querySelector<HTMLInputElement>("input[type=checkbox]");
     expect(checkbox?.disabled).toBe(false);
-  });
-
-  test("refuses an account another wallet registered with the privacy pool", async () => {
-    // The pool never replaces a viewing key, so Bramble could never shield or
-    // unshield for it: listed, never auto-selected, and not selectable.
-    const shielded: DerivedAccountRef = {
-      ...readyIdleAccount,
-      address: "0xshielded",
-      id: "SN_MAIN:0xshielded",
-    };
-    const app = mount([
-      { account: shielded, deployed: true, funded: false, privacyPool: "registered-elsewhere" },
-      {
-        account: { ...shielded, address: "0xunchecked", id: "SN_MAIN:0xunchecked" },
-        deployed: true,
-        funded: false,
-        privacyPool: "unchecked",
-      },
-    ]);
-    await reachPicker(app);
-
-    const rows = rowsIn(app)("argent");
-    expect(rows.map((row) => row.textContent?.includes("· can't be imported"))).toContain(true);
-    // A pool that could not be read blocks too, until the search is retried.
-    expect(rows.map((row) => row.textContent?.includes("Couldn't check privacy setup"))).toContain(
-      true,
-    );
-    for (const row of rows) {
-      const checkbox = row.querySelector<HTMLInputElement>("input[type=checkbox]");
-      expect(checkbox?.disabled).toBe(true);
-      expect(checkbox?.checked).toBe(false);
-    }
-    expect(rows.length).toBe(2);
   });
 
   test("lists an inactive Ready candidate but refuses to select it", async () => {
@@ -412,39 +272,6 @@ describe("recovery scan Ready gate", () => {
     expect(historicalRow?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(
       false,
     );
-  });
-
-  test("a rescan that blocks a picked account drops the pick", async () => {
-    // Picked while the pool answered "not registered", then the retried
-    // search could not read the pool: the restore must not carry it.
-    const batches: Array<Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>> = [
-      {
-        candidates: [{ account: brambleAccount, deployed: true, funded: false }],
-        complete: true,
-        nextIndex: 20,
-        ok: true,
-      },
-      {
-        candidates: [
-          { account: brambleAccount, deployed: true, funded: false, privacyPool: "unchecked" },
-        ],
-        complete: true,
-        nextIndex: 20,
-        ok: true,
-      },
-    ];
-    const app = mount([], () => Promise.resolve(batches.shift() ?? batches[0]) as never);
-    await reachPicker(app);
-    const restore = app.querySelector<HTMLButtonElement>("#recover-accounts-button");
-    expect(restore?.disabled).toBe(false);
-
-    click(app, "#recovery-scan-retry");
-    await tick();
-    const box =
-      rowsIn(app)("openzeppelin")[0]?.querySelector<HTMLInputElement>("input.select-check");
-    expect(box?.disabled).toBe(true);
-    expect(box?.checked).toBe(false);
-    expect(restore?.disabled).toBe(true);
   });
 
   test("stops auto-selecting once a restore would reject the selection", async () => {
