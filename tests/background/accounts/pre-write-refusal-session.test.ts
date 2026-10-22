@@ -19,6 +19,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { testExtension } from "../../support/background-wallet-stub";
+import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const vaultPassphrase = "correct horse battery staple";
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
@@ -57,7 +58,11 @@ const setup = async (kms = importKms()) => {
   await preferencesStore.setActiveNetwork("SN_SEPOLIA");
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  const handler = createMessageHandler(wallet, testExtension, { preferencesStore, session });
+  const handler = createMessageHandler(wallet, testExtension, {
+    preferencesStore,
+    runtimeRpc: makeRuntimeRpc(),
+    session,
+  });
   return { encryptedStore, handler, preferencesStore, session, wallet };
 };
 

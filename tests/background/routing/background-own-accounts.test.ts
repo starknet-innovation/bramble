@@ -9,15 +9,10 @@
 import { describe, expect, test } from "bun:test";
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
 import type { RecoverVaultAccountsInput } from "@bramble/vault/service";
-import {
-  ARGENT_ACCOUNT_CLASS_HASH,
-  type DerivedAccountRef,
-  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
-} from "@bramble/wallet-model/accounts";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { ARGENT_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import type { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
   account,
@@ -27,6 +22,7 @@ import {
   testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
+import { offlineDiscoveryRpc, recoveryAccountFor } from "../../support/recovery-accounts";
 
 const ownPhrase = "legal winner thank year wave sausage worth useful legal winner thank yellow";
 
@@ -45,31 +41,8 @@ const importMessage = {
   type: "wallet.importOwnAccounts",
 } as const;
 
-const accountFor = (input: AccountDerivationInput): DerivedAccountRef => {
-  const accountIndex = input.accountIndex ?? 0;
-  const ordinal = accountIndex * 2 + (input.accountContractType === "argent" ? 2 : 1);
-  const address = `0x${ordinal.toString(16)}`;
-  const base = {
-    address,
-    classHash:
-      canonicalFelt(
-        input.accountContractType === "argent"
-          ? ARGENT_ACCOUNT_CLASS_HASH
-          : OPENZEPPELIN_ACCOUNT_CLASS_HASH,
-      ) ?? "",
-    derivation: { accountIndex, addressIndex: 0, kind: "starknet-bip44" },
-    id: `SN_MAIN:${address}`,
-    networkId: "SN_MAIN",
-    publicKeyX: `0x${(ordinal + 100).toString(16)}`,
-    publicKeyY: `0x${(ordinal + 200).toString(16)}`,
-  } as const;
-  return input.accountContractType === "argent"
-    ? { ...base, accountContractType: "argent", deploymentSalt: "0x0" }
-    : { ...base, accountContractType: "openzeppelin" };
-};
-
 const quietRpc = {
-  ...defaultRuntimeRpc,
+  ...offlineDiscoveryRpc,
   async getDeploymentStatus() {
     return false;
   },
@@ -96,7 +69,7 @@ const ownPhraseWallet = (
     },
     async previewAccount(input: AccountDerivationInput) {
       options.onPreview?.(input);
-      return accountFor(input);
+      return recoveryAccountFor(input);
     },
     async readVault(passphrase: string) {
       const vault = await base.readVault(passphrase);

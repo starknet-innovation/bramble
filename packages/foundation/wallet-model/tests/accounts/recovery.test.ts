@@ -160,6 +160,14 @@ describe("recovery candidate restriction (issue 542)", () => {
     expect(isRecoveryAccountCandidate({ ...candidate, restriction: "frozen" })).toBe(false);
     expect(isRecoveryAccountCandidate({ ...candidate, restriction: 1 })).toBe(false);
   });
+
+  test("admit each privacy-pool block and nothing else", () => {
+    for (const privacyPool of ["registered-elsewhere", "unchecked"]) {
+      expect(isRecoveryAccountCandidate({ ...candidate, privacyPool })).toBe(true);
+    }
+    expect(isRecoveryAccountCandidate({ ...candidate, privacyPool: true })).toBe(false);
+    expect(isRecoveryAccountCandidate({ ...candidate, privacyPool: "registered" })).toBe(false);
+  });
 });
 
 describe("recovery scan target", () => {

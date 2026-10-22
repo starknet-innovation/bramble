@@ -14,33 +14,11 @@ import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import { handleOnboardingOps } from "../../../apps/extension/src/background/onboarding/onboarding-ops";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import type { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createActiveStateCoordinator } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { walletStub } from "../../support/key-boundary-collaborators";
-
-const accountFor = (input: AccountDerivationInput): DerivedAccountRef => {
-  const accountIndex = input.accountIndex ?? 0;
-  const ordinal = accountIndex * 2 + (input.accountContractType === "argent" ? 2 : 1);
-  const address = `0x${ordinal.toString(16)}`;
-  const account = {
-    address,
-    classHash:
-      canonicalFelt(
-        input.accountContractType === "argent"
-          ? ARGENT_ACCOUNT_CLASS_HASH
-          : OPENZEPPELIN_ACCOUNT_CLASS_HASH,
-      ) ?? "",
-    derivation: { accountIndex, addressIndex: 0, kind: "starknet-bip44" },
-    id: `SN_MAIN:${address}`,
-    networkId: "SN_MAIN",
-    publicKeyX: `0x${(ordinal + 100).toString(16)}`,
-    publicKeyY: `0x${(ordinal + 200).toString(16)}`,
-  } as const;
-  return input.accountContractType === "argent"
-    ? { ...account, accountContractType: "argent", deploymentSalt: "0x0" }
-    : { ...account, accountContractType: "openzeppelin" };
-};
+import { offlineDiscoveryRpc, recoveryAccountFor } from "../../support/recovery-accounts";
 
 describe("recovery discovery", () => {
   test("checks every account family in bounded resumable batches", async () => {
@@ -50,7 +28,7 @@ describe("recovery discovery", () => {
       ...walletStub,
       async previewAccount(input: AccountDerivationInput) {
         previewed.push([input.accountContractType, input.accountIndex ?? 0]);
-        return accountFor(input);
+        return recoveryAccountFor(input);
       },
     };
     const deps = {
@@ -58,7 +36,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
           return accountAddress === "0x3";
         },
@@ -138,7 +116,7 @@ describe("recovery discovery", () => {
     // Issue 503: a fixed 0-19 window silently misses a user whose accounts sit
     // near its edge. Activity at index 19 must extend the scan to index 39,
     // and only a quiet tail of defaultCount indices may end it.
-    const deployedAddress = accountFor({
+    const deployedAddress = recoveryAccountFor({
       accountContractType: "openzeppelin",
       accountIndex: 19,
       mnemonic: "",
@@ -149,7 +127,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
           return accountAddress === deployedAddress;
         },
@@ -164,7 +142,7 @@ describe("recovery discovery", () => {
         ...walletStub,
         async previewAccount(input: AccountDerivationInput) {
           previewedIndexes.add(input.accountIndex ?? 0);
-          return accountFor(input);
+          return recoveryAccountFor(input);
         },
       },
     };
@@ -203,7 +181,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus() {
           return false;
         },
@@ -219,7 +197,7 @@ describe("recovery discovery", () => {
         async previewAccount(input: AccountDerivationInput) {
           if (input.accountContractType === "argent") argentShapes.push(input.derivation);
           if (input.accountContractType === "braavos") braavosShapes.push(input.derivation);
-          return accountFor(input);
+          return recoveryAccountFor(input);
         },
       },
     };
@@ -249,7 +227,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getArgentSigningRestriction({ accountAddress }: { readonly accountAddress: string }) {
           probed.push(accountAddress);
           if (accountAddress === "0x2") return "guardian" as const;
@@ -268,7 +246,7 @@ describe("recovery discovery", () => {
       wallet: {
         ...walletStub,
         async previewAccount(input: AccountDerivationInput) {
-          return accountFor(input);
+          return recoveryAccountFor(input);
         },
       },
     };
@@ -304,7 +282,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getArgentSigningRestriction({ accountAddress }: { readonly accountAddress: string }) {
           probed.push(["argent", accountAddress]);
           return null;
@@ -325,7 +303,7 @@ describe("recovery discovery", () => {
       wallet: {
         ...walletStub,
         async previewAccount(input: AccountDerivationInput) {
-          const base = accountFor(input);
+          const base = recoveryAccountFor(input);
           if (input.accountContractType !== "braavos") return base;
           // One distinct Braavos address per deployment class scanned.
           const classIndex = deploymentClasses("braavos").findIndex(
@@ -375,7 +353,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus() {
           return false;
         },
@@ -392,7 +370,7 @@ describe("recovery discovery", () => {
           if (input.accountContractType === "argent") {
             argentClasses.push(input.classHash);
           }
-          return accountFor(input);
+          return recoveryAccountFor(input);
         },
       },
     };
@@ -451,7 +429,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
           return accountAddress === braavosBase.address;
         },

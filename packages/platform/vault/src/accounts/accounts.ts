@@ -385,6 +385,23 @@ export const deriveAccountRef = async (
 ): Promise<RecoverableAccountRef> => (await deriveAccount(kms, input)).account;
 
 /**
+ * Recovers the canonical stark public key (x) for a private key through Krusty
+ * only, from a verified signature over a fixed probe hash. Throws a
+ * `WalletError` when Krusty answers with an invalid or unverifiable key.
+ */
+export const recoverStarkPublicKey = async (kms: KmsPort, privateKey: string): Promise<string> => {
+  const probe = await kms.signStarkHash(privateKey, PUBLIC_KEY_PROBE_HASH);
+  if (!isNonZeroStarkFieldElement(probe.publicKey)) {
+    throw new WalletError("Krusty KMS returned invalid public key");
+  }
+  const publicKeyX = canonicalFelt(probe.publicKey) as string;
+  if (!verifyStarkSignature({ hash: PUBLIC_KEY_PROBE_HASH, publicKeyX, signature: probe })) {
+    throw new WalletError("Krusty KMS public-key probe did not verify");
+  }
+  return publicKeyX;
+};
+
+/**
  * Builds an imported account from a raw Starknet private key through Krusty
  * KMS only. Validates the key is a non-zero in-range felt, recovers the account
  * public key via Krusty (never locally), and derives the OZ account address the
@@ -412,20 +429,7 @@ export const deriveImportedAccount = async (
     networkId,
     input.classHash,
   );
-  const probe = await kms.signStarkHash(privateKey, PUBLIC_KEY_PROBE_HASH);
-  if (!isNonZeroStarkFieldElement(probe.publicKey)) {
-    throw new WalletError("Krusty KMS returned invalid public key");
-  }
-  const publicKeyX = canonicalFelt(probe.publicKey) as string;
-  if (
-    !verifyStarkSignature({
-      hash: PUBLIC_KEY_PROBE_HASH,
-      publicKeyX,
-      signature: probe,
-    })
-  ) {
-    throw new WalletError("Krusty KMS public-key probe did not verify");
-  }
+  const publicKeyX = await recoverStarkPublicKey(kms, privateKey);
 
   const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
     classHash: resolvedClassHash,

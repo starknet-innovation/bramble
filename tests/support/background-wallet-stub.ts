@@ -172,6 +172,9 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     async previewAccount() {
       return account;
     },
+    async previewImportedStrk20ViewingPublicKey() {
+      return { address: account.address, viewingPublicKey: "0x1" };
+    },
     async validateMnemonic() {
       return true;
     },

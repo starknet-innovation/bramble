@@ -6,7 +6,12 @@
  * the wallet surface is unavailable.
  */
 import { RefusedBeforeWrite } from "@bramble/core/errors";
-import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import {
+  DEFAULT_NETWORK,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+} from "@bramble/wallet-model/networks";
 import {
   readCreateAccountInput,
   readImportOwnAccountsInput,
@@ -14,9 +19,15 @@ import {
 } from "../accounts/account-creation-inputs";
 import { readCreateKeyVaultInput, readImportAccountInput } from "../accounts/import-inputs";
 import {
+  STRK20_IMPORT_REFUSALS,
+  strk20ImportBlock,
+  strk20ImportPool,
+} from "../privacy/strk20-import-guard";
+import {
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
+import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { RouterContext } from "./message-context";
 import { readAddAccountInput } from "./message-inputs";
@@ -96,6 +107,40 @@ const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
   });
 };
 
+// Refuses a raw key whose account another wallet registered with the privacy
+// pool, before anything is stored (see strk20-import-guard). An invalid key
+// throws here exactly as the import itself would.
+const rawKeyPrivacyRefusal = async (
+  ctx: RouterContext,
+  input: {
+    readonly accountContractType: AccountContractType;
+    readonly deploymentSalt?: string;
+    readonly networkId: StarknetNetworkId;
+    readonly privateKey: string;
+  },
+): Promise<RuntimeResponse | null> => {
+  const preferences = await ctx.preferencesStore.read();
+  const pool = strk20ImportPool(preferences, input.networkId);
+  if (!pool) return null;
+  const preview = ctx.wallet.previewImportedStrk20ViewingPublicKey;
+  if (!preview) return { error: STRK20_IMPORT_REFUSALS.unchecked };
+  const own = await preview({
+    accountContractType: input.accountContractType,
+    ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+    networkId: input.networkId,
+    privateKey: input.privateKey,
+    ...pool,
+  });
+  const block = await strk20ImportBlock({
+    address: own.address,
+    ownViewingPublicKey: async () => own.viewingPublicKey,
+    pool,
+    readRegistered: ctx.runtimeRpc.getStrk20PublicKey,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences),
+  });
+  return block ? { error: STRK20_IMPORT_REFUSALS[block] } : null;
+};
+
 const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.createKeyVault") {
     return null;
@@ -108,6 +153,8 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
   if (!createKeyVault) {
     return { error: "wallet unavailable" };
   }
+  const refusal = await rawKeyPrivacyRefusal(ctx, input);
+  if (refusal) return refusal;
   return ctx.activeStateCoordinator.run(async () => {
     const account = await runVaultCreationWithNetwork(
       ctx.session,
@@ -193,6 +240,12 @@ const handleImportAccount: RouterHandler = async (ctx, messageType, message) => 
   if (!importRawKeyAccount) {
     return { error: "wallet unavailable" };
   }
+  // A locked wallet answers as it always has, before any derivation or read.
+  if (!ctx.session.peekPassphrase()) {
+    return { error: "wallet locked" };
+  }
+  const refusal = await rawKeyPrivacyRefusal(ctx, input);
+  if (refusal) return refusal;
   return ctx.activeStateCoordinator.run(async () => {
     const account = await runUnlockedNetworkMutation(
       ctx.session,

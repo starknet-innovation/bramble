@@ -15,6 +15,13 @@ const DEPLOY_FIRST = "Deploy this account first.";
 /** Private-balance entries merged into ERROR_COPY, in table order. */
 export const PRIVACY_ERROR_COPY: readonly (readonly [string, string])[] = [
   ["private balances unavailable", "Couldn't load private balances. Try again."],
+  // Import refusals (strk20-import-guard): the pool keeps the first viewing key
+  // an account registers, so another wallet's registration cannot be replaced.
+  [
+    "account registered for privacy in another wallet",
+    "This account is set up for privacy in another wallet, so it can't be imported.",
+  ],
+  ["privacy registration unavailable", "Couldn't check this account's privacy setup. Try again."],
   ["strk20 services unavailable", "Private balances are unavailable right now. Try again shortly."],
   // The approved line a site's private request already shows for the same
   // fact (errors audit F7).

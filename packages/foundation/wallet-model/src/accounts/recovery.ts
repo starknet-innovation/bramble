@@ -81,16 +81,28 @@ const SIGNING_RESTRICTIONS: readonly RecoverySigningRestriction[] = [
 ];
 
 /**
+ * Why an account may not be imported. `registered-elsewhere`: another wallet
+ * registered it with the privacy pool under a viewing key this wallet does not
+ * derive, and the pool never replaces that key, so this wallet could never
+ * shield or unshield for it. `unchecked`: the pool could not be read, and the
+ * check fails closed until it can.
+ */
+export type RecoveryPrivacyPoolBlock = "registered-elsewhere" | "unchecked";
+
+/**
  * One derived account and the chain evidence that made it discoverable.
  * `restriction` is the scan's advisory signability verdict for a deployed
  * Argent candidate; absent means none found or the probe did not answer — the
- * transaction path re-checks authoritatively either way.
+ * transaction path re-checks authoritatively either way. `privacyPool` blocks
+ * import (see {@link RecoveryPrivacyPoolBlock}); absent means the account is
+ * not registered with the pool, or registered under this wallet's own key.
  */
 export type RecoveryAccountCandidate = {
   readonly account: RecoverableAccountRef;
   readonly deployed: boolean;
   readonly funded: boolean;
   readonly restriction?: RecoverySigningRestriction;
+  readonly privacyPool?: RecoveryPrivacyPoolBlock;
 };
 
 /**
@@ -230,9 +242,12 @@ export const isReadOnlyReason = (value: unknown): value is ReadOnlyReason =>
 /** Validates one public discovery result before caching or rendering it. */
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["account", "deployed", "funded", "restriction"]) &&
+  hasOnlyKnownKeys(value, ["account", "deployed", "funded", "privacyPool", "restriction"]) &&
   isRecoverableAccountRef(value["account"]) &&
   typeof value["deployed"] === "boolean" &&
   typeof value["funded"] === "boolean" &&
   (value["restriction"] === undefined ||
-    SIGNING_RESTRICTIONS.includes(value["restriction"] as RecoverySigningRestriction));
+    SIGNING_RESTRICTIONS.includes(value["restriction"] as RecoverySigningRestriction)) &&
+  (value["privacyPool"] === undefined ||
+    value["privacyPool"] === "registered-elsewhere" ||
+    value["privacyPool"] === "unchecked");
