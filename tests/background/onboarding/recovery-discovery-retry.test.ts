@@ -10,19 +10,14 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
-import {
-  ARGENT_ACCOUNT_CLASS_HASH,
-  type DerivedAccountRef,
-  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
-} from "@bramble/wallet-model/accounts";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import { handleOnboardingOps } from "../../../apps/extension/src/background/onboarding/onboarding-ops";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import type { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createActiveStateCoordinator } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { walletStub } from "../../support/key-boundary-collaborators";
+import { offlineDiscoveryRpc, recoveryAccountFor } from "../../support/recovery-accounts";
 
 type Page = {
   readonly candidates: readonly RecoveryAccountCandidate[];
@@ -38,28 +33,6 @@ const message = {
 
 // The same deterministic derivation the main discovery suite uses: OpenZeppelin
 // (and Braavos) at odd ordinals, Argent at even ones.
-const accountFor = (input: AccountDerivationInput): DerivedAccountRef => {
-  const accountIndex = input.accountIndex ?? 0;
-  const ordinal = accountIndex * 2 + (input.accountContractType === "argent" ? 2 : 1);
-  const address = `0x${ordinal.toString(16)}`;
-  const account = {
-    address,
-    classHash:
-      canonicalFelt(
-        input.accountContractType === "argent"
-          ? ARGENT_ACCOUNT_CLASS_HASH
-          : OPENZEPPELIN_ACCOUNT_CLASS_HASH,
-      ) ?? "",
-    derivation: { accountIndex, addressIndex: 0, kind: "starknet-bip44" },
-    id: `SN_MAIN:${address}`,
-    networkId: "SN_MAIN",
-    publicKeyX: `0x${(ordinal + 100).toString(16)}`,
-    publicKeyY: `0x${(ordinal + 200).toString(16)}`,
-  } as const;
-  return input.accountContractType === "argent"
-    ? { ...account, accountContractType: "argent", deploymentSalt: "0x0" }
-    : { ...account, accountContractType: "openzeppelin" };
-};
 
 const install = () => {
   const funded = new Set<string>();
@@ -69,7 +42,7 @@ const install = () => {
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     recoveryDiscovery: createRecoveryDiscoveryCache(),
     runtimeRpc: {
-      ...defaultRuntimeRpc,
+      ...offlineDiscoveryRpc,
       getDeploymentStatus: async () => false,
       async getTokenBalances({
         accountAddress,
@@ -85,7 +58,7 @@ const install = () => {
     session: createUnlockSession(),
     wallet: {
       ...walletStub,
-      previewAccount: async (input: AccountDerivationInput) => accountFor(input),
+      previewAccount: async (input: AccountDerivationInput) => recoveryAccountFor(input),
     },
   };
   // Pages until the walk reports complete, as the picker's Retry loop does.

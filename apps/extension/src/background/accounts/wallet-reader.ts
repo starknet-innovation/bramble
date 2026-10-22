@@ -94,6 +94,12 @@ export type WalletStatusReader = {
   ) => Promise<readonly AccountRef[]>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
+  /** Public viewing key a phrase account would register; optional only for partial test stubs. */
+  readonly previewStrk20ViewingPublicKey?: (
+    input: AccountDerivationInput & { readonly chainId: string; readonly poolAddress: string },
+  ) => Promise<string>;
+  /** Raw-key import address and viewing public key; optional only for partial test stubs. */
+  readonly previewImportedStrk20ViewingPublicKey?: WalletVaultService["previewImportedStrk20ViewingPublicKey"];
   /**
    * Records a used shadow-account scope in the encrypted vault (#443). Optional
    * only for partial test stubs; every shadow-account path fails closed
@@ -205,6 +211,12 @@ export const createWalletReader = (
     },
     async previewAccount(input) {
       return (await required()).previewAccount(input);
+    },
+    async previewStrk20ViewingPublicKey(input) {
+      return (await required()).previewStrk20ViewingPublicKey(input);
+    },
+    async previewImportedStrk20ViewingPublicKey(input) {
+      return (await required()).previewImportedStrk20ViewingPublicKey(input);
     },
     async recoverAccounts(input) {
       return (await required()).recoverAccounts(input);

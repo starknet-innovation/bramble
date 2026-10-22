@@ -276,6 +276,25 @@ export type WalletVaultService = {
    */
   readonly previewAccount: (input: AccountDerivationInput) => Promise<RecoverableAccountRef>;
   /**
+   * Public viewing key this wallet would register for a phrase account in one
+   * privacy pool. Returns only the public x-coordinate; derivation failures
+   * throw.
+   */
+  readonly previewStrk20ViewingPublicKey: (
+    input: AccountDerivationInput & { readonly chainId: string; readonly poolAddress: string },
+  ) => Promise<string>;
+  /**
+   * Address a raw private key would import as, and the public viewing key this
+   * wallet would register for it in one privacy pool. Stores nothing and
+   * returns no key material; an invalid key throws.
+   */
+  readonly previewImportedStrk20ViewingPublicKey: (
+    input: Omit<ImportRawKeyAccountInput, "vaultPassphrase"> & {
+      readonly chainId: string;
+      readonly poolAddress: string;
+    },
+  ) => Promise<{ readonly address: string; readonly viewingPublicKey: string }>;
+  /**
    * Checks a recovery phrase through Krusty only. Returns false for an invalid
    * phrase and never echoes the input; fails closed when KMS is unavailable.
    */

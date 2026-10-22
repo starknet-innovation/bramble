@@ -13,6 +13,7 @@ import { sameFelt } from "@bramble/wallet-model/networks";
 import type {
   RecoveryAccountCandidate,
   RecoveryAccountSelection,
+  RecoveryPrivacyPoolBlock,
   RecoverySigningRestriction,
 } from "@bramble/wallet-model/recovery";
 import {
@@ -104,12 +105,24 @@ const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
   "strong-signer": "2FA active",
 };
 
-const activityState = (candidate: RecoveryAccountCandidate): string => {
-  if (candidate.deployed) {
-    return candidate.restriction
+// Another wallet registered this account with the privacy pool under a viewing
+// key Bramble cannot derive, and the pool never replaces it, so Bramble could
+// never shield or unshield for it. An unreadable pool blocks too, until the
+// search is retried. Either row is listed but cannot be picked.
+const PRIVACY_POOL_COPY: Record<RecoveryPrivacyPoolBlock, string> = {
+  "registered-elsewhere": "Set up for privacy in another wallet · can't be imported",
+  unchecked: "Couldn't check privacy setup · retry the search",
+};
+
+const deployedState = (candidate: RecoveryAccountCandidate): string =>
+  candidate.privacyPool
+    ? PRIVACY_POOL_COPY[candidate.privacyPool]
+    : candidate.restriction
       ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
       : "Deployed on Starknet";
-  }
+
+const activityState = (candidate: RecoveryAccountCandidate): string => {
+  if (candidate.deployed) return deployedState(candidate);
   if (candidate.funded) {
     return deployableHere(candidate)
       ? "Funded and ready to deploy"
@@ -133,9 +146,7 @@ const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean)
       ? "Funded and ready to deploy"
       : "Funded, not deployed · view only for now";
   }
-  return candidate.restriction
-    ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
-    : "Deployed on Starknet";
+  return deployedState(candidate);
 };
 
 // Two Argent releases at one index are two accounts. Name the release on any
@@ -156,11 +167,13 @@ const candidateTitle = (candidate: RecoveryAccountCandidate): string => {
 // Bramble creates only Bramble accounts: any other candidate with no on-chain
 // history would be a brand-new deployment in a family Bramble does not create,
 // so it is listed but not selectable. Deployed or funded (counterfactual)
-// accounts in those families stay importable.
+// accounts in those families stay importable, unless the privacy-pool check
+// blocked them.
 const selectable = (candidate: RecoveryAccountCandidate): boolean =>
-  candidate.account.accountContractType === "openzeppelin" ||
-  candidate.deployed ||
-  candidate.funded;
+  candidate.privacyPool === undefined &&
+  (candidate.account.accountContractType === "openzeppelin" ||
+    candidate.deployed ||
+    candidate.funded);
 
 /** Binds and runs the recovery account picker without retaining the phrase. */
 export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAccountUi => {
@@ -192,7 +205,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const selectionNote = (): string => {
     if (selected.size < RECOVERY_SCAN_LIMITS.maxSelections) return "";
     const waiting = candidates.some((candidate) => {
-      if (!candidate.deployed && !candidate.funded) return false;
+      if (!selectable(candidate) || (!candidate.deployed && !candidate.funded)) return false;
       if (deps.existingIds?.().has(candidate.account.id)) return false;
       return !selected.has(selectionKey(selectionFor(candidate)));
     });
@@ -293,9 +306,17 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     for (const candidate of next.candidates) {
       const key = selectionKey(selectionFor(candidate));
       const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
-      if (!seen.has(key) && !duplicate && (candidate.deployed || candidate.funded)) {
+      if (
+        !seen.has(key) &&
+        !duplicate &&
+        selectable(candidate) &&
+        (candidate.deployed || candidate.funded)
+      ) {
         trySelect(key);
       }
+      // A rescan can block a row picked earlier (a privacy-pool read that now
+      // fails or finds a registration); its pick must not survive the block.
+      if (!selectable(candidate)) selected.delete(key);
       seen.add(key);
     }
     candidates = next.candidates;
@@ -386,6 +407,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   });
   restore?.addEventListener("click", () => {
     const selections = candidates
+      .filter(selectable)
       .map(selectionFor)
       .filter((selection) => selected.has(selectionKey(selection)));
     if (selections.length === 0) return;

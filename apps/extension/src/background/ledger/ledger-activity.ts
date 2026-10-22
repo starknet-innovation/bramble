@@ -8,6 +8,11 @@
 import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
+import {
+  STRK20_IMPORT_REFUSALS,
+  strk20ImportBlock,
+  strk20ImportPool,
+} from "../privacy/strk20-import-guard";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { AddLedgerAccountRequest } from "./ledger-inputs";
 
@@ -81,23 +86,40 @@ export const readLedgerAccountState = async (
  */
 export type LedgerStoreRefusal = { readonly error: string } | null;
 
+// Bramble provisions no Ledger viewing key yet, so it has never registered a
+// Ledger account with the pool: any registration is another wallet's. Once a
+// Ledger provisioning flow ships, compare against its key here instead.
+const ledgerPrivacyRefusal = async (
+  deps: WalletOpsDeps,
+  address: string,
+  networkId: StarknetNetworkId,
+): Promise<LedgerStoreRefusal> => {
+  const preferences = await deps.preferencesStore.read();
+  const block = await strk20ImportBlock({
+    address,
+    ownViewingPublicKey: null,
+    pool: strk20ImportPool(preferences, networkId),
+    readRegistered: deps.runtimeRpc.getStrk20PublicKey,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
+  });
+  return block ? { error: STRK20_IMPORT_REFUSALS[block] } : null;
+};
+
 /**
- * Checks whether the background may store this Ledger account. Bramble never
- * creates a Braavos account, so a Braavos request passes only when its derived
- * address is proven active on chain — deployed, or funded in a known token, the
- * same rule the picker's `ledgerCandidateSelectable` applies. Fails closed:
+ * Checks whether the background may store this Ledger account. Every family is
+ * refused when another wallet registered the address with the privacy pool, or
+ * the pool cannot be read (strk20-import-guard). Bramble never creates a
+ * Braavos account, so a Braavos request passes only when its derived address
+ * is proven active on chain — deployed, or funded in a known token, the same
+ * rule the picker's `ledgerCandidateSelectable` applies. Fails closed:
  * - no or failing derivation refuses as `wallet unavailable`;
  * - an address read as neither deployed nor funded refuses as not found;
  * - a chain read that failed without proving activity refuses as unavailable.
- * Every other family passes unchecked (Argent's picker rule is unchanged).
  */
 export const ledgerStoreRefusal = async (
   deps: WalletOpsDeps,
   input: AddLedgerAccountRequest,
 ): Promise<LedgerStoreRefusal> => {
-  if (input.accountContractType !== "braavos") {
-    return null;
-  }
   const derive = deps.wallet.deriveLedgerAccounts;
   const account = derive
     ? await derive({
@@ -114,6 +136,10 @@ export const ledgerStoreRefusal = async (
     : undefined;
   if (!account) {
     return { error: "wallet unavailable" };
+  }
+  const privacy = await ledgerPrivacyRefusal(deps, account.address, input.networkId);
+  if (privacy || input.accountContractType !== "braavos") {
+    return privacy;
   }
   const state = await readLedgerAccountState(deps, account.address, input.networkId);
   if (state.deployed === true || state.funded === true) {

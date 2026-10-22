@@ -6,6 +6,7 @@ import {
   type TokenConfig,
   type WalletPreferencesStore,
 } from "@bramble/settings/preferences";
+import type { AccountDerivationInput } from "@bramble/vault/accounts";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   deploymentClasses,
@@ -25,6 +26,7 @@ import {
   RESERVED_AGENT_ACCOUNT_INDEX,
   type RecoveryAccountCandidate,
   type RecoveryDerivationKind,
+  type RecoveryPrivacyPoolBlock,
   recoveryScanTarget,
 } from "@bramble/wallet-model/recovery";
 import {
@@ -35,6 +37,11 @@ import {
   readValidateMnemonicInput,
 } from "../accounts/account-creation-inputs";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import {
+  type Strk20ImportPool,
+  strk20ImportBlock,
+  strk20ImportPool,
+} from "../privacy/strk20-import-guard";
 import { runVaultCreationWithNetwork } from "../runtime/active-network-mutation";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-state";
@@ -51,11 +58,35 @@ type OnboardingOpsDeps = {
   readonly wallet: WalletStatusReader;
 };
 
+// Ready derives its viewing key its own way and does not publish how, so a
+// Ready account that shielded is refused here (see strk20-import-guard).
+const privacyPoolBlock = (
+  deps: OnboardingOpsDeps,
+  derivation: AccountDerivationInput,
+  address: string,
+  pool: Strk20ImportPool | null,
+  rpcUrls: readonly string[],
+): Promise<RecoveryPrivacyPoolBlock | null> =>
+  strk20ImportBlock({
+    address,
+    ownViewingPublicKey: async () => {
+      const previewOwn = deps.wallet.previewStrk20ViewingPublicKey;
+      if (!previewOwn || !pool) throw new WalletError("wallet unavailable");
+      return previewOwn({ ...derivation, ...pool });
+    },
+    pool,
+    readRegistered: deps.runtimeRpc.getStrk20PublicKey,
+    rpcUrls,
+  });
+
 const describeRecoveryAccount = async (
   deps: OnboardingOpsDeps,
   account: RecoverableAccountRef,
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
+  // Only a deployed account can have registered, so only a deployed one is
+  // read. Unlike the signing verdict this fails closed (`unchecked`).
+  privacyPool: () => Promise<RecoveryPrivacyPoolBlock | null>,
 ): Promise<RecoveryAccountCandidate> => {
   const deployed = await deps.runtimeRpc.getDeploymentStatus({
     accountAddress: account.address,
@@ -78,11 +109,13 @@ const describeRecoveryAccount = async (
       publicKeyX: account.publicKeyX,
       rpcUrls,
     }).catch(() => null);
+    const block = await privacyPool();
     return {
       account,
       deployed: true,
       funded: false,
       ...(restriction ? { restriction } : {}),
+      ...(block ? { privacyPool: block } : {}),
     };
   }
   const balances = await deps.runtimeRpc.getTokenBalances({
@@ -155,21 +188,25 @@ const scanRecoveryIndex = async (
   accountIndex: number,
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
+  pool: Strk20ImportPool | null,
 ): Promise<readonly RecoveryAccountCandidate[]> =>
   Promise.all(
     recoveryScanShapes().map(async (shape) => {
-      const account = await deps.wallet.previewAccount?.({
+      const derivation: AccountDerivationInput = {
         accountContractType: shape.accountContractType,
         accountIndex,
         ...(shape.classHash === undefined ? {} : { classHash: shape.classHash }),
         ...(shape.derivation === undefined ? {} : { derivation: shape.derivation }),
         mnemonic: input.mnemonic,
         networkId: input.networkId,
-      });
+      };
+      const account = await deps.wallet.previewAccount?.(derivation);
       if (!isRecoverableAccountRef(account)) {
         throw new WalletError("Account discovery is unavailable");
       }
-      return describeRecoveryAccount(deps, account, tokens, rpcUrls);
+      return describeRecoveryAccount(deps, account, tokens, rpcUrls, () =>
+        privacyPoolBlock(deps, derivation, account.address, pool, rpcUrls),
+      );
     }),
   );
 
@@ -224,6 +261,7 @@ const runRecoveryDiscovery = async (
   const manual = input.manualIndex;
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
+  const pool = strk20ImportPool(preferences, input.networkId);
   // Probe the recovery activity set, not just the display defaults: an
   // undeployed account funded only in native USDC has no ETH or STRK, so the
   // display-token probe would read it as empty and skip it (issue: USDC-only
@@ -246,7 +284,7 @@ const runRecoveryDiscovery = async (
     // `maxScannedIndexes` far below it and a manual index is refused at input,
     // so this only holds the line if either bound ever moves.
     if (accountIndex === RESERVED_AGENT_ACCOUNT_INDEX) continue;
-    const candidates = await scanRecoveryIndex(deps, input, accountIndex, tokens, rpcUrls);
+    const candidates = await scanRecoveryIndex(deps, input, accountIndex, tokens, rpcUrls, pool);
     discovered.push(
       ...candidates.filter(
         (candidate) =>

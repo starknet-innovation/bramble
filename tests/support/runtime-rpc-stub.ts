@@ -26,6 +26,11 @@ export const makeRuntimeRpc = (overrides: Partial<RuntimeRpc> = {}): RuntimeRpc 
   async getNftOwner() {
     return "0x0";
   },
+  async getStrk20PublicKey() {
+    // Benign default: no address is registered with the privacy pool, so no
+    // import is refused unless a suite sets a registration up.
+    return "0x0";
+  },
   async getTokenBalances() {
     return [];
   },

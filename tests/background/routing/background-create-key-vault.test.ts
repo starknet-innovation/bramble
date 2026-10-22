@@ -17,6 +17,7 @@ import {
   testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
+import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 // Clearly-fake test vector; not a real key.
 const privateKey = "0xfeedface";
@@ -36,7 +37,7 @@ describe("wallet.createKeyVault routing", () => {
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
       testExtension,
-      { session },
+      { runtimeRpc: makeRuntimeRpc(), session },
     );
 
     await expect(handler(validMessage, sender)).resolves.toEqual({ account, ok: true });
@@ -57,7 +58,7 @@ describe("wallet.createKeyVault routing", () => {
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
       testExtension,
-      { session },
+      { runtimeRpc: makeRuntimeRpc(), session },
     );
     const rejected = [
       // No vault passphrase: first-run creation has no session to take it from.
@@ -85,6 +86,7 @@ describe("wallet.createKeyVault routing", () => {
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
       testExtension,
+      { runtimeRpc: makeRuntimeRpc() },
     );
     await expect(
       handler({ ...validMessage, accountContractType: "argent", deploymentSalt: "0xabc" }, sender),

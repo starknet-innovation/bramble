@@ -5,6 +5,7 @@
 import { WalletError } from "@bramble/core/errors";
 import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   STARK_FIELD_PRIME,
@@ -266,25 +267,18 @@ const registrationUnreadable = (reason: string): WalletError =>
   new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: could not read pool registration (${reason})`);
 
 /**
- * Reads whether an address has a viewing key registered with the pool
- * (`get_public_key`, zero when unregistered).
- *
- * This is the only unambiguous registration answer available for a *third
- * party*. The SDK's `discoverRequirement` cannot serve that purpose: the
- * discovery service collapses "recipient has no public key" and "no
- * sender→recipient channel exists yet" into the same `SetupChannel` response,
- * and because a channel key is derived per sender/recipient pair, the first
- * private transfer between any two accounts always reports `SetupChannel`.
- * Reading the pool directly separates the two. An unreachable or malformed
- * response fails closed rather than guessing a recipient is reachable.
+ * Reads the public viewing key an address registered with the pool
+ * (`get_public_key`), canonical, or `0x0` when it never registered. The pool
+ * writes it once, so a non-zero answer is permanent for that pool. An
+ * unreachable or malformed response throws rather than guessing.
  */
-export const readStrk20Registered = async (
+export const readStrk20PublicKey = async (
   providerFor: (nodeUrl: string) => RpcProvider,
   rpcUrls: readonly string[],
   poolAddress: string,
   address: string,
   pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
-): Promise<boolean> => {
+): Promise<string> => {
   if (!isNonZeroStarkFieldElement(address)) {
     throw registrationUnreadable("the address is not a field element");
   }
@@ -304,8 +298,32 @@ export const readStrk20Registered = async (
   if (!isStarkFieldElement(felt)) {
     throw registrationUnreadable("the pool returned an out-of-field public key");
   }
-  return BigInt(felt) !== 0n;
+  return canonicalFelt(felt) as string;
 };
+
+/**
+ * Reads whether an address has a viewing key registered with the pool
+ * (`get_public_key`, zero when unregistered).
+ *
+ * This is the only unambiguous registration answer available for a *third
+ * party*. The SDK's `discoverRequirement` cannot serve that purpose: the
+ * discovery service collapses "recipient has no public key" and "no
+ * sender→recipient channel exists yet" into the same `SetupChannel` response,
+ * and because a channel key is derived per sender/recipient pair, the first
+ * private transfer between any two accounts always reports `SetupChannel`.
+ * Reading the pool directly separates the two. An unreachable or malformed
+ * response fails closed rather than guessing a recipient is reachable.
+ */
+export const readStrk20Registered = async (
+  providerFor: (nodeUrl: string) => RpcProvider,
+  rpcUrls: readonly string[],
+  poolAddress: string,
+  address: string,
+  pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
+): Promise<boolean> =>
+  BigInt(
+    await readStrk20PublicKey(providerFor, rpcUrls, poolAddress, address, pauseForServiceRetry),
+  ) !== 0n;
 
 /**
  * The pool fee to approve on the relay route: none.
