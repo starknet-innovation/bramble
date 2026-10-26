@@ -158,9 +158,11 @@ export const ONBOARDING_STYLES = `
   .verify-continue-hit { display: grid; }
   #verify-continue:disabled { pointer-events: none; }
 
+  /* The gate fills the shell through flex: 1 (.gate, .screen). A 100vh
+     min-height here added the shell's own padding on top of the viewport and
+     left the first-run panel permanently scrollable. */
   .onboarding-gate {
     justify-content: center;
-    min-height: 100vh;
     padding: ${SPACE.xl};
   }
   .onboarding-gate .gate-head { max-width: 34ch; }

@@ -18,7 +18,7 @@ boundaries, release controls, and security posture.
   data-flow diagram.
 - [UI Lab](https://effective-adventure-qwr464j.pages.github.io/) hosts deterministic Storybook
   scenarios for production wallet UI and Chromatic review. Its
-  [runbook](https://github.com/starknet-innovation/mc-wallet/tree/main/apps/ui-lab) covers local
+  [runbook](https://github.com/starknet-innovation/bramble/tree/main/apps/ui-lab) covers local
   setup, testing, static builds, review controls, and safety boundaries.
 - [Architecture and internals](architecture/) explains the runtime and data model.
 - [Modular architecture](modular-architecture/) defines the package boundaries, typed invariants,
@@ -38,9 +38,9 @@ boundaries, release controls, and security posture.
   remediations, validation evidence, and residual third-party boundaries.
 - [v0.7 release assurance](security-audit/releases/v0.7/) records the NFT ownership, metadata,
   transfer-review, privacy, performance, and release-gate review.
-- [Security policy](https://github.com/starknet-innovation/mc-wallet/blob/main/SECURITY.md) explains
+- [Security policy](https://github.com/starknet-innovation/bramble/blob/main/SECURITY.md) explains
   how to report a vulnerability privately.
-- [Contributing](https://github.com/starknet-innovation/mc-wallet/blob/main/CONTRIBUTING.md) contains
+- [Contributing](https://github.com/starknet-innovation/bramble/blob/main/CONTRIBUTING.md) contains
   the binding engineering and security rules.
 
 Security-sensitive exploit details are not published here before a fix is available. See the

@@ -54,15 +54,15 @@ phase  (phase:N label + roadmap issue #79–#87)
 
 | Phase | Roadmap issue | Theme | Gate note |
 | --- | --- | --- | --- |
-| 1 | [#79](https://github.com/starknet-innovation/mc-wallet/issues/79) | Core / shell build | |
-| 2 | [#80](https://github.com/starknet-innovation/mc-wallet/issues/80) | MVP single-sig wallet | |
-| 3 | [#81](https://github.com/starknet-innovation/mc-wallet/issues/81) | Table-stakes parity | |
-| 4 | [#82](https://github.com/starknet-innovation/mc-wallet/issues/82) | Wallet recovery | |
-| 5 | [#83](https://github.com/starknet-innovation/mc-wallet/issues/83) | Hardening, audit & public release | **Public-release gate** (external security audit) |
-| 6 | [#84](https://github.com/starknet-innovation/mc-wallet/issues/84) | Treasury multisig | |
-| 7 | [#85](https://github.com/starknet-innovation/mc-wallet/issues/85) | Migration off Braavos/Ready | |
-| 8 | [#86](https://github.com/starknet-innovation/mc-wallet/issues/86) | Later / optional | Post-GTM |
-| — | [#87](https://github.com/starknet-innovation/mc-wallet/issues/87) | Terminal track (test harness) | Out-of-GTM, in-scope |
+| 1 | [#79](https://github.com/starknet-innovation/bramble/issues/79) | Core / shell build | |
+| 2 | [#80](https://github.com/starknet-innovation/bramble/issues/80) | MVP single-sig wallet | |
+| 3 | [#81](https://github.com/starknet-innovation/bramble/issues/81) | Table-stakes parity | |
+| 4 | [#82](https://github.com/starknet-innovation/bramble/issues/82) | Wallet recovery | |
+| 5 | [#83](https://github.com/starknet-innovation/bramble/issues/83) | Hardening, audit & public release | **Public-release gate** (external security audit) |
+| 6 | [#84](https://github.com/starknet-innovation/bramble/issues/84) | Treasury multisig | |
+| 7 | [#85](https://github.com/starknet-innovation/bramble/issues/85) | Migration off Braavos/Ready | |
+| 8 | [#86](https://github.com/starknet-innovation/bramble/issues/86) | Later / optional | Post-GTM |
+| — | [#87](https://github.com/starknet-innovation/bramble/issues/87) | Terminal track (test harness) | Out-of-GTM, in-scope |
 
 A milestone's description should name the phase it slices (e.g. "`v0.4` — first
 slice of Phase 3, Table-stakes parity, #81"). An issue carries **both** its

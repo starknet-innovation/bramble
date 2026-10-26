@@ -332,7 +332,7 @@ describe("activity feed", () => {
         historyUnavailable: true,
         ok: true,
       }).loadActivity(),
-    ).toEqual({ entries: [activityEntry], historyUnavailable: true });
+    ).toEqual({ entries: [activityEntry], historyUnavailable: true, relays: [] });
   });
 
   test("loadActivity carries an explicit shared-account scope", async () => {
@@ -351,6 +351,7 @@ describe("activity feed", () => {
     expect(await runtimeReturning({ activity: [activityEntry], ok: true }).loadActivity()).toEqual({
       entries: [activityEntry],
       historyUnavailable: false,
+      relays: [],
     });
   });
 
@@ -358,6 +359,7 @@ describe("activity feed", () => {
     expect(await runtimeReturning(errorEnvelope).loadActivity()).toEqual({
       entries: [],
       historyUnavailable: true,
+      relays: [],
     });
   });
 });

@@ -102,8 +102,11 @@ export const addAccountChooser = (ledgerAvailable = true): string => {
  * that create one. The plain Ledger route stays on the chooser above, since it
  * also creates accounts on Bramble's own derivation path. `ledgerAvailable`
  * false omits the Ready Ledger route on a runtime that cannot reach a device.
+ * `phraselessNote` is set when a wallet with no recovery phrase was sent here
+ * from "Regular account": it says why, and the rescan, which needs that
+ * phrase, is left out.
  */
-export const importAccountChooser = (ledgerAvailable = true): string => {
+export const importAccountChooser = (ledgerAvailable = true, phraselessNote?: string): string => {
   return `
   <div class="onboard-hero add-account-hero">
     <header class="add-account-header">
@@ -115,8 +118,9 @@ export const importAccountChooser = (ledgerAvailable = true): string => {
         variant: "ghost",
       })}
     </header>
+    ${phraselessNote ? `<p class="hint" role="status">${escapeHtml(phraselessNote)}</p>` : ""}
     <div class="add-account-chooser" role="group" aria-label="Import an existing account">
-      ${chooserOption("find-accounts", "users", "Find my other accounts", "Search this wallet for accounts it does not list yet.")}
+      ${phraselessNote ? "" : chooserOption("find-accounts", "users", "Find my other accounts", "Search this wallet for accounts it does not list yet.")}
       ${chooserOption("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
       ${chooserOption("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
       ${ledgerAvailable ? chooserOption("restore-ready-ledger", "shield", "Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X).") : ""}

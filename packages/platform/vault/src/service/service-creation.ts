@@ -9,7 +9,7 @@
  */
 
 import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
-import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import { type DerivedAccountRef, NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
   deriveAccount,
@@ -102,7 +102,7 @@ export const vaultCreationMethods = ({
   async addDerivedAccount(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     if (!vault.mnemonic) {
-      throw new RefusedBeforeWrite("No recovery phrase stored for this wallet");
+      throw new RefusedBeforeWrite(NO_RECOVERY_PHRASE_REFUSAL);
     }
     const { account, privateKey } = await deriveNextFreeAccount(kms, vault, {
       accountContractType: input.accountContractType,

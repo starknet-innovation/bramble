@@ -24,6 +24,7 @@
 
 import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
+import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
 
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
 import { PRIVACY_ERROR_COPY } from "./friendly-error-copy-privacy";
@@ -249,7 +250,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "This wallet was set up without a recovery phrase, so there is nothing to search for.",
   ],
   [
-    "no recovery phrase stored for this wallet",
+    NO_RECOVERY_PHRASE_REFUSAL.toLowerCase(),
     "This wallet was set up without a recovery phrase. Import an existing account instead.",
   ],
   [

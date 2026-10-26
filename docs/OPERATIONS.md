@@ -29,6 +29,9 @@ an availability incident, open a maintainer-visible incident record with start t
 owner, affected release, user impact, decisions, and next update. Never paste a user's diagnostic
 file into a public issue.
 
+Issues opened by anyone outside the team are labelled **Public** by
+`.github/workflows/label-public-issues.yml`; triage that label for public reports.
+
 ## Gateway monitoring
 
 `.github/workflows/gateway-health.yml` probes the bundled wallet gateway and direct Foundation

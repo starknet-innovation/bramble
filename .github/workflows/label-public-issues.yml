@@ -1,0 +1,37 @@
+name: Label public issues
+
+# Marks issues opened by anyone outside the team with the Public label, so
+# reports filed through the website support link land in one triage queue.
+# The label cannot come from the link itself: GitHub ignores a labels= query
+# parameter from users without triage access.
+#
+# Issue events run this file from the default branch only. The job never checks
+# out or executes repository code and never interpolates issue text into the
+# shell; it reads the issue number from the event and holds issue write only.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  label:
+    # Private org members can appear as CONTRIBUTOR rather than MEMBER, so a
+    # team issue may occasionally be labelled; removing the label is harmless.
+    if: >-
+      !contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'),
+      github.event.issue.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Add the Public label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: gh issue edit "$ISSUE_NUMBER" --add-label Public

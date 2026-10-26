@@ -194,7 +194,7 @@ export const createLedgerOnboardRuntime = (
       return addAccountChooser(ledgerAvailable);
     }
     if (view.kind === "import-chooser") {
-      return importAccountChooser(ledgerAvailable);
+      return importAccountChooser(ledgerAvailable, view.phraselessNote);
     }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();
