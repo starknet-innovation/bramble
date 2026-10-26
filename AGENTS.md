@@ -80,6 +80,9 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
   colors.
 - Exported APIs need doc comments explaining trust boundaries and failure behavior (checked).
 - New dependencies: pinned exact, justified in the PR, used immediately. Prefer zero.
+- Audit records under `docs/security-audit/` are history. Never alter, reword, downgrade, or
+  delete an existing finding, its severity, or an accepted-advisory row. Record a fix by updating
+  only the finding's status and linking what shipped; record new evidence as a new entry.
 - Never expose an STRK20 viewing key. Software-account viewing keys remain derived on demand and
   unpersisted. A Ledger viewing key may be retained only in encrypted v4 `accountSecrets` through
   the background-only vault service, bound to its exact account, chain, pool, and derivation scheme;
