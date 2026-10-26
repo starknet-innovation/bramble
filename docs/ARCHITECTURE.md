@@ -345,7 +345,8 @@ and reputation signals before a connection is approved:
     a configurable source (default: MetaMask's community-maintained
     eth-phishing-detect, read from the repository's
     `https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json`)
-    under an explicit host permission (`https://raw.githubusercontent.com/*`).
+    without a host permission: the file allows any origin, so no grant (and no
+    update-time permission prompt) is needed.
   - The payload is validated before use and cached in plain (non-secret) local
     storage under `bramble:phishing-feed`. Wire format is
     `{ "blocklist": string[], "version"?: number }`; the eth-phishing-detect
