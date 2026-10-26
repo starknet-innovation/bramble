@@ -16,6 +16,19 @@ export const normalizeHostname = (hostname: string): string => {
   return lower.endsWith(".") ? lower.slice(0, -1) : lower;
 };
 
+/**
+ * Whether an endpoint points at this machine — a local node such as
+ * starknet-devnet, whose chain can be reset under the same URL. Pure; a string
+ * the URL parser rejects is not loopback.
+ */
+export const isLoopbackServiceUrl = (value: string): boolean => {
+  try {
+    return LOOPBACK_HOSTS.has(normalizeHostname(new URL(value).hostname));
+  } catch {
+    return false;
+  }
+};
+
 // The longest endpoint kept, measured on its canonical spelling.
 const MAX_SERVICE_URL_LENGTH = 2048;
 

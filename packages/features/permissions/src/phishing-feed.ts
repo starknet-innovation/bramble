@@ -28,8 +28,10 @@ import {
 import { isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
 import {
+  MAX_PHISHING_DOMAIN_CHARS,
   MAX_PHISHING_DOMAINS,
   normalizePhishingDomain,
+  phishingDomainChars,
   readPhishingCache,
   writePhishingCache,
 } from "./phishing-feed-cache";
@@ -43,11 +45,15 @@ const systemClock = (): number => Date.now();
 
 /**
  * Default maintained source: MetaMask's eth-phishing-detect config, the
- * de-facto web3 phishing list. Configurable per deployment via the `source`
- * option; the background must declare a matching host permission.
+ * de-facto web3 phishing list, read from the repository's `src/config.json`.
+ * The old GitHub Pages copy (`metamask.github.io/.../v1/config.json`) returns
+ * 404, so the live list never loaded (issue 772). It is served as `text/plain`;
+ * the bounded fetch doesn't check the content type, and it rejects redirects.
+ * Configurable per deployment via the `source` option; the background must
+ * declare a matching host permission.
  */
 export const DEFAULT_PHISHING_FEED_URL =
-  "https://metamask.github.io/eth-phishing-detect/v1/config.json";
+  "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json";
 
 // Refresh cadence: refetch only when the cache is older than this. The MV3
 // worker warms the feed on startup, so in practice the list refreshes on the
@@ -83,6 +89,31 @@ export type PhishingFeed = {
   readonly refresh: () => Promise<ReadonlySet<string>>;
 };
 
+// Normalizes and de-duplicates entries up to both caps: the count keeps the
+// cache inside its chunk budget, the size keeps it from crowding the wallet's
+// own storage. Non-string and malformed entries are skipped.
+const boundedDomains = (raw: readonly unknown[]): readonly string[] => {
+  const seen = new Set<string>();
+  const domains: string[] = [];
+  let chars = 0;
+  for (const entry of raw) {
+    const domain = typeof entry === "string" ? normalizePhishingDomain(entry) : null;
+    if (domain === null || seen.has(domain)) {
+      continue;
+    }
+    chars += phishingDomainChars(domain);
+    if (chars > MAX_PHISHING_DOMAIN_CHARS) {
+      break;
+    }
+    seen.add(domain);
+    domains.push(domain);
+    if (domains.length >= MAX_PHISHING_DOMAINS) {
+      break;
+    }
+  }
+  return domains;
+};
+
 /**
  * Parses a feed payload into a de-duplicated, normalized domain list. Returns
  * null when the payload is not the expected shape (missing `blocklist` /
@@ -94,26 +125,7 @@ export const parsePhishingFeed = (body: unknown): readonly string[] | null => {
     return null;
   }
   const raw = body["blocklist"] ?? body["blacklist"];
-  if (!Array.isArray(raw)) {
-    return null;
-  }
-  const seen = new Set<string>();
-  const domains: string[] = [];
-  for (const entry of raw) {
-    if (typeof entry !== "string") {
-      continue;
-    }
-    const domain = normalizePhishingDomain(entry);
-    if (domain === null || seen.has(domain)) {
-      continue;
-    }
-    seen.add(domain);
-    domains.push(domain);
-    if (domains.length >= MAX_PHISHING_DOMAINS) {
-      break;
-    }
-  }
-  return domains;
+  return Array.isArray(raw) ? boundedDomains(raw) : null;
 };
 
 /**

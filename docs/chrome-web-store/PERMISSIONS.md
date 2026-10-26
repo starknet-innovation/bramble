@@ -33,7 +33,7 @@ approval and store/revoke that site's local account permission.
 | `api.coingecko.com` | Public token price and market-change data. |
 | `starkscan.co` | User-opened explorer links and the separately disclosed, per-network opt-in activity fallback. |
 | `starknet.api.avnu.fi`, `sepolia.api.avnu.fi` | Swap token catalog, quote, and build services for user-initiated swaps. |
-| `metamask.github.io` | Public phishing-domain feed used to warn before site connection. |
+| `raw.githubusercontent.com` | Public phishing-domain feed (MetaMask's open-source eth-phishing-detect list) used to warn before site connection. |
 | `127.0.0.1:5050`, `localhost:5050` | Explicit local Starknet devnet support for developers; never used for a public network. |
 
 All remote hosts are HTTPS except the loopback-only developer endpoints. User-added Starknet

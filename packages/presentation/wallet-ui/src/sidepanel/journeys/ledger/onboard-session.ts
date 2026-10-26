@@ -41,7 +41,7 @@ import {
   READY_EIP2645_APPLICATION,
 } from "@bramble/wallet-model/ledger-path";
 import { friendlyError } from "../../runtime/friendly-error";
-import { ADD_ACCOUNT_FAILED } from "../../runtime/friendly-error-shared";
+import { ADD_ACCOUNT_FAILED, isPhraselessAddRefusal } from "../../runtime/friendly-error-shared";
 import {
   type LedgerCandidate,
   type LedgerCandidateState,
@@ -133,6 +133,10 @@ export const createLedgerOnboardController = (
   let nextIndex = 0;
   let busy = false;
   let flowEpoch = 0;
+  // "Show more" mid-page is queued, not dropped; the button stays busy until it's in.
+  let pageLoading = false;
+  let readingMore = false;
+  let moreQueued = false;
 
   const resetState = (): void => {
     flowEpoch += 1;
@@ -142,6 +146,7 @@ export const createLedgerOnboardController = (
     selectedDeviceId = null;
     selected.clear();
     nextIndex = 0;
+    moreQueued = false;
   };
 
   const toCandidate = (account: LedgerAccountRef): LedgerCandidate => ({
@@ -164,6 +169,7 @@ export const createLedgerOnboardController = (
       application,
       candidates,
       kind: "picker",
+      loadingMore: moreQueued || readingMore,
       ...(message ? { message } : {}),
       selected: [...selected],
     });
@@ -216,6 +222,8 @@ export const createLedgerOnboardController = (
     }
     const epoch = flowEpoch;
     busy = true;
+    pageLoading = true;
+    readingMore = !initial;
     if (initial) {
       deps.render({ kind: "reading" });
     }
@@ -235,29 +243,24 @@ export const createLedgerOnboardController = (
       // same device key, two classes, two addresses — and the on-chain probe
       // reveals which is live. Under Bramble's scheme the device key derives an
       // OpenZeppelin and an Argent account, grouped side by side.
-      const accounts =
+      const families =
         application === READY_EIP2645_APPLICATION
-          ? (
-              await Promise.all([
-                deps.derive(entries, "argent", application),
-                deps.derive(entries, "braavos", application),
-              ])
-            ).flat()
-          : (
-              await Promise.all([
-                deps.derive(entries, "openzeppelin", application),
-                deps.derive(entries, "argent", application),
-              ])
-            ).flat();
+          ? (["argent", "braavos"] as const)
+          : (["openzeppelin", "argent"] as const);
+      const accounts = (
+        await Promise.all(families.map((family) => deps.derive(entries, family, application)))
+      ).flat();
       if (epoch !== flowEpoch) {
         return;
       }
+      readingMore = false;
       appendPage(accounts, startIndex + entries.length);
       const described = await describePage(accounts);
       if (epoch === flowEpoch) {
         applyDescribed(described);
       }
     } catch (error) {
+      moreQueued = false;
       if (epoch === flowEpoch) {
         deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
       }
@@ -266,6 +269,12 @@ export const createLedgerOnboardController = (
         await closeLedgerSessionQuietly(session);
       }
       busy = false;
+      pageLoading = false;
+      readingMore = false;
+      if (moreQueued && epoch === flowEpoch) {
+        moreQueued = false;
+        void loadPage(obtainMore, nextIndex, false);
+      }
     }
   };
 
@@ -405,11 +414,14 @@ export const createLedgerOnboardController = (
       deps.render(null);
       await deps.refresh();
     } catch (error) {
-      const message = friendlyError(
-        error instanceof Error ? error.message : "",
-        ADD_ACCOUNT_FAILED,
-      ).message;
-      deps.render({ kind: "error", message });
+      const raw = error instanceof Error ? error.message : "";
+      const message = friendlyError(raw, ADD_ACCOUNT_FAILED).message;
+      // No phrase to derive from: land on import, not on a Ledger "Try again".
+      deps.render(
+        isPhraselessAddRefusal(raw)
+          ? { kind: "import-chooser", phraselessNote: message }
+          : { kind: "error", message },
+      );
     } finally {
       busy = false;
     }
@@ -465,6 +477,11 @@ export const createLedgerOnboardController = (
       startConnect();
     },
     loadMore() {
+      if (pageLoading) {
+        moreQueued = true;
+        renderPicker();
+        return;
+      }
       void loadPage(obtainMore, nextIndex, false);
     },
     showChooser() {

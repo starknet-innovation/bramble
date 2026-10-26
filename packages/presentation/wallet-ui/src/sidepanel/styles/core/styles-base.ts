@@ -91,6 +91,24 @@ export const BASE_STYLES = `
   }
   body.popup-surface #app { min-height: 600px; }
   h1, h2, h3, p, ul { margin: 0; }
+  /* Visually hidden, still read aloud. The box is pinned to its containing
+     block's top corner rather than left at its static position: the scope
+     announcer is appended after #app, whose full height already fills the
+     panel, so there its 1px box made the document 1px taller than the
+     viewport and Windows drew a permanent scrollbar. */
+  .sr-only {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    left: 0;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    text-wrap: nowrap;
+    top: 0;
+    width: 1px;
+  }
   ul { list-style: none; padding: 0; }
   h1 { font-size: ${TYPE.display.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.display.line}; }
   h2 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.01em; line-height: ${TYPE.title.line}; }
@@ -313,14 +331,6 @@ export const BASE_STYLES = `
     color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; max-width: 32ch; text-align: center;
   }
   .read-only-notice #recover-account { margin-top: ${SPACE.xxs}; }
-
-  /* The 24h figures are price moves, not changes in balance; one quiet caption
-     under either hero says so, and each row carries its own window label. */
-  .hero-note {
-    color: var(--bramble-muted);
-    font-size: ${TYPE.caption.size};
-    font-weight: 500;
-  }
 
   /* The frequent money actions are equal rounded-square tools. Their common
      shape makes the row instantly scannable; distinctive glyph silhouettes,

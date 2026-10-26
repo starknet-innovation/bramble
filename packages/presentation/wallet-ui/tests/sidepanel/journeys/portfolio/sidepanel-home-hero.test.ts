@@ -56,20 +56,16 @@ describe("sidepanel home hero caption", () => {
     );
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
 
-    // The hero names the figure a price move and one caption carries the caveat;
-    // the token rows below carry only their own short window.
+    // The hero names the figure a price move and carries no caption under it.
     expect(hero).toContain("Portfolio price · 4.00% · 24h");
-    expect(hero).toContain('class="hero-note"');
-    expect(hero).toContain(
-      "Price change over 24h at your current balances; sends and receives aren't included.",
-    );
+    expect(hero).not.toContain("hero-note");
   });
 
-  test("home hero omits the caption when there is no priced baseline", () => {
+  test("home hero omits the change line when there is no priced baseline", () => {
     // Prices exist so the hero renders its change region, but no balance is
-    // priced, so portfolioDelta is null and the gate must suppress the caption.
-    // Removing the gate renders the caption (or throws on the null delta) here,
-    // which the old empty-balances, empty-prices fixture could not detect.
+    // priced, so portfolioDelta is null and the gate must suppress the line.
+    // Removing the gate renders it (or throws on the null delta) here, which
+    // the old empty-balances, empty-prices fixture could not detect.
     const html = dashboard(
       "home",
       status,

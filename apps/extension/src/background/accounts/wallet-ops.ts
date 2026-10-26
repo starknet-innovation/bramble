@@ -7,6 +7,7 @@ import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@bra
 import { type ActivityLog, activityToken, systemClock } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
@@ -66,10 +67,7 @@ export type WalletOpsDeps = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly balanceSnapshots?: BalanceSnapshotStore;
-  /**
-   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
-   * stubs stay valid; a Ledger signing request with no queue wired fails closed.
-   */
+  /** Keyless Ledger round-trip queue; a Ledger signing request without one fails closed. */
   readonly ledgerSignQueue?: LedgerSignQueue;
   /**
    * Watched shared-account registry used only to authorize address-scoped,
@@ -85,6 +83,8 @@ export type WalletOpsDeps = {
    */
   readonly now?: () => number;
   readonly preferencesStore: WalletPreferencesStore;
+  /** Signed OutsideExecution messages Activity lists beside transactions (issue 299). */
+  readonly relaySignatures?: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
