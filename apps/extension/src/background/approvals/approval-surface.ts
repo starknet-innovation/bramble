@@ -5,6 +5,7 @@
 import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
 import { isSenderOrigin, type RuntimeSender, senderOrigins } from "../routing/senders";
+import type { SurfaceFallback } from "./approval-surface-fallback";
 import { readApprovalSurfaceRequest } from "./approval-surface-request";
 
 /**
@@ -175,22 +176,33 @@ const isGatedSender = (sender: RuntimeSender | undefined, guard: OriginGuard): b
  * Raises the user's chosen surface for one tab. Browser failures fall back to
  * the side panel and are otherwise swallowed, because the queued approval — not
  * this call — is what the user ultimately acts on.
+ *
+ * On Chromium a panel that is refused (#707) or never drawn (#690) hands over
+ * to the window fallback. Firefox is left as it was: its sidebar cannot open
+ * from a dapp message at all, and the toolbar badge is that path (#350).
  */
 const raiseSurface = (
   browser: ApprovalSurfaceBrowser,
   preference: ApprovalSurfacePreference,
   tabId: number,
   windowId: number | undefined,
+  fallback: SurfaceFallback | undefined,
 ): void => {
+  const rescue = browser.sidePanel ? fallback : undefined;
+  const panel = (): Promise<void> =>
+    openPanel(browser, tabId).then(
+      () => rescue?.confirm(),
+      () => rescue?.open(),
+    );
   if (preference === "popup" && browser.action?.openPopup) {
     const options = typeof windowId === "number" ? { windowId } : undefined;
     void browser.action
       .openPopup(options)
-      .catch(() => openPanel(browser, tabId))
+      .catch(panel)
       .catch(() => undefined);
     return;
   }
-  void openPanel(browser, tabId).catch(() => undefined);
+  void panel().catch(() => undefined);
 };
 
 /**
@@ -201,6 +213,8 @@ const raiseSurface = (
 export type ApprovalSurfaceDeps = {
   readonly browser: ApprovalSurfaceBrowser | undefined;
   readonly extensionId: string;
+  /** Opens the wallet in a window when the panel cannot be shown; optional. */
+  readonly fallback?: SurfaceFallback | undefined;
   readonly guard: OriginGuard;
   readonly now: () => number;
   readonly preference: () => ApprovalSurfacePreference;
@@ -224,6 +238,7 @@ export type ApprovalSurfaceDeps = {
 export const createApprovalSurfaceOpener = ({
   browser,
   extensionId,
+  fallback,
   guard,
   now,
   preference,
@@ -259,6 +274,6 @@ export const createApprovalSurfaceOpener = ({
     ) {
       return;
     }
-    raiseSurface(browser, preference(), request.tabId, sender?.tab?.windowId);
+    raiseSurface(browser, preference(), request.tabId, sender?.tab?.windowId, fallback);
   };
 };

@@ -9,6 +9,7 @@
 
 import type { DataConsentPermissions } from "../analytics/data-consent";
 import type { ApprovalSurfaceBrowser } from "../approvals/approval-surface";
+import type { SurfaceFallbackBrowser } from "../approvals/approval-surface-fallback";
 import type { OnboardingSurfaceBrowser } from "../onboarding/onboarding-surface";
 import type { RuntimeSender } from "../routing/senders";
 import type { AlarmsApi } from "../transactions/tx-monitor";
@@ -52,6 +53,7 @@ type TabsApi = {
  * where the browser does not provide it.
  */
 export type BackgroundBrowser = ApprovalSurfaceBrowser &
+  Pick<SurfaceFallbackBrowser, "windows"> &
   OnboardingSurfaceBrowser &
   AlarmsGlobal & {
     readonly permissions?: DataConsentPermissions;

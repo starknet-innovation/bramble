@@ -54,6 +54,7 @@ import {
   createApprovalSurfaceOpener,
   showPendingApprovals,
 } from "./approvals/approval-surface";
+import { createBrowserSurfaceFallback } from "./approvals/approval-surface-fallback";
 import { createApprovalQueue } from "./approvals/approvals";
 import { createSignatureWaiters } from "./approvals/signature-waiters";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
@@ -472,6 +473,7 @@ runtime?.onInstalled.addListener((details) => {
 const openApprovalSurface = createApprovalSurfaceOpener({
   browser: extensionApi,
   extensionId: runtime?.id ?? "",
+  fallback: createBrowserSurfaceFallback(extensionApi),
   guard: originGuard,
   now: systemClock,
   preference: () => approvalSurfacePreference,

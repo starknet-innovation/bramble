@@ -1,6 +1,10 @@
 /** Primary side-panel UI and its scene-preserving paint loop. */
 import type { LedgerConnector } from "@bramble/ledger-protocol/session";
 import { withDefaultGroups } from "@bramble/settings/groups";
+import {
+  reportSurfacePresence,
+  SURFACE_PRESENCE_CHANNEL,
+} from "@bramble/wallet-protocol/surface-presence";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
@@ -70,6 +74,11 @@ export const startWalletUi = async (
 ): Promise<void> => {
   const app = document.querySelector("#app");
   const fullPageOnboarding = document.body.classList.contains("onboarding-surface");
+  // First, so a panel the browser never draws (Arc, issue 690) is told apart from a
+  // slow one; the background opens a window when no wallet page answers.
+  if (!fullPageOnboarding && typeof BroadcastChannel === "function") {
+    reportSurfacePresence(new BroadcastChannel(SURFACE_PRESENCE_CHANNEL), document);
+  }
   const runtime = extensionApi?.runtime;
   const mutationRuntime = createMutationRuntime(runtime);
   const wallet = createSidepanelRuntime(mutationRuntime);

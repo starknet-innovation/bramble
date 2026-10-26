@@ -22,6 +22,7 @@
     "./strk20": "./src/privacy/strk20.ts",
     "./strk20-batch": "./src/privacy/strk20-batch.ts",
     "./submission-unknown": "./src/transactions/submission-unknown.ts",
+    "./surface-presence": "./src/provider/surface-presence.ts",
     "./typed-data-params": "./src/provider/typed-data-params.ts",
     "./strk20-bridge": "./src/privacy/strk20-bridge.ts",
     "./watch-asset": "./src/transactions/watch-asset.ts",
