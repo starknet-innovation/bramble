@@ -20,6 +20,16 @@ package or severity.
 **To remove an entry:** update the lockfile to a patched release, drop its `--ignore` from
 `package.json` and `scripts/config-standards-policy.ts`, and move the row to "Removed".
 
+## Temporary overrides
+
+These are not ignores. `check:audit` still reports them if the pin slips. Each one is a root
+`overrides` entry because a parent pins a vulnerable release exactly and a patched package
+already exists.
+
+| Package | Override | Why it is temporary | Drop when |
+| --- | --- | --- | --- |
+| `undici` | `7.30.1` | `wrangler`'s `miniflare` pins `undici` exactly at 7.29.1, inside [GHSA-xjj6-f33q-929c](https://github.com/advisories/GHSA-xjj6-f33q-929c) (`>= 7.18.0, < 7.30.1`). 7.30.1 is the first patched 7.x release. One root pin also replaces the already-patched `undici@8.12.2` that `jsdom` requests (`^8.10.2`); 8.x would move `miniflare` off the 7.x line. | A `miniflare` release no longer pins `undici` 7.29.1. Then delete the override from `package.json` and `scripts/check-config-standards.ts`. |
+
 ## Removed
 
 None yet.
