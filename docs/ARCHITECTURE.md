@@ -6,7 +6,7 @@ permalink: /architecture/
 
 # Bramble — Architecture & Internals
 
-The deep tour: how the extension is wired, the pinned account/multisig class hashes, the dApp provider surface, storage migrations, and the design system. For a quick overview and setup, see the [README](../README.md).
+The deep tour: how the extension is wired, the pinned account/multisig class hashes, the dApp provider surface, storage migrations, and the design system. For a quick overview and setup, see the [README](https://github.com/starknet-innovation/bramble/blob/main/README.md).
 
 ---
 
@@ -414,7 +414,7 @@ Release zips and SHA-256 checksum files are written to `artifacts/` by
 CI uploads those same files as the `bramble-extension` workflow artifact.
 
 Cutting a release and submitting to the Chrome Web Store is documented in
-[`RELEASING.md`](RELEASING.md): pushing a `vX.Y.Z` tag runs
+[`RELEASING.md`](https://github.com/starknet-innovation/bramble/blob/main/RELEASING.md): pushing a `vX.Y.Z` tag runs
 `.github/workflows/release.yml` to publish a GitHub Release with the packaged
 zip + checksum, and an optional, currently-disabled job can publish to the
 Chrome Web Store once a store account and secrets exist.
