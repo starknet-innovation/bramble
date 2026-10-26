@@ -1,8 +1,9 @@
 /**
  * Import by address in the built extension (issue 398): first-run restore,
  * against a mocked chain that reports an Argent account at a pasted address
- * whose owner is this phrase's own-ladder key. The account is found, picked,
- * and restored (the background proves the owner again before writing), and an
+ * whose owner is this phrase's own-ladder key, answered alike by the gateway
+ * and the Foundation node. The account is found, picked, and restored (the
+ * background proves the owner again before writing), and an
  * address with nothing deployed is answered with the network it searched.
  */
 import type { Page, Route } from "@playwright/test";
@@ -27,6 +28,8 @@ const sameFelt = (left: unknown, right: string): boolean =>
 const chainAnswer = (call: RpcCall, owner: string) => {
   const id = call.id ?? null;
   const ok = (result: unknown) => ({ id, jsonrpc: "2.0", result });
+  // Both sources (the gateway and the Foundation node) prove the chain first.
+  if (call.method === "starknet_chainId") return ok("0x534e5f4d41494e");
   if (call.method === "starknet_blockHashAndNumber") {
     return ok({ block_hash: "0x1b10c", block_number: 1 });
   }

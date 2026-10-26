@@ -27,6 +27,10 @@ export type RecoveryAddressFinder = {
   readonly reset: () => void;
 };
 
+// A search derives up to a few hundred keys before it can answer no, which
+// takes seconds; the line says so while it runs.
+const SEARCHING_LINE = "Checking this account. This can take a few seconds.";
+
 const notFoundLine = (networkId: string): string =>
   `No account found at this address on ${networkName(networkId)}. Check the address and network.`;
 
@@ -53,6 +57,12 @@ export const bindRecoveryAddressFinder = (
   const say = (line: string): void => {
     if (result) result.textContent = line;
   };
+  // Busy for the whole lookup: the button and the field are disabled, so a
+  // second search cannot start, and only a reset or the answer ends it.
+  const busy = (on: boolean): void => {
+    buttonBusy(search, on);
+    if (input) input.disabled = on;
+  };
 
   const find = async (): Promise<void> => {
     showNetwork();
@@ -67,15 +77,16 @@ export const bindRecoveryAddressFinder = (
       return;
     }
     const active = generation;
-    buttonBusy(search, true);
-    say("");
+    busy(true);
+    say(SEARCHING_LINE);
     try {
       const candidate = await deps.lookup(pasted.address);
       if (active === generation) say(deps.onFound(candidate));
     } catch (error) {
       if (active === generation) say(failureLine(error, networkId));
     } finally {
-      buttonBusy(search, false);
+      // A reset already ended this search and cleared its state.
+      if (active === generation) busy(false);
     }
   };
 
@@ -88,12 +99,13 @@ export const bindRecoveryAddressFinder = (
   input?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
-    if (!search?.disabled) void find();
+    if (!search?.hasAttribute("data-busy")) void find();
   });
 
   return {
     reset() {
       generation += 1;
+      busy(false);
       if (input) input.value = "";
       say("");
     },

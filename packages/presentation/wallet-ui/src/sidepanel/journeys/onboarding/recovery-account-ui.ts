@@ -378,6 +378,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const stop = (): void => {
     generation += 1;
     restartOnIdle = false;
+    addressFinder.reset();
   };
 
   // Drops every candidate and pick, and makes any scan still in flight discard

@@ -217,6 +217,51 @@ describe("finding an account by its address in the recovery picker", () => {
     }
   });
 
+  test("stays busy for the whole lookup, saying it can take a few seconds", async () => {
+    let answer: (candidate: RecoveryAccountCandidate) => void = () => undefined;
+    const pending = new Promise<RecoveryAccountCandidate>((resolve) => {
+      answer = resolve;
+    });
+    const { app, lookups } = firstRun(() => pending);
+    await reachPicker(app);
+    await find(app, PASTED);
+    const button = app.querySelector<HTMLButtonElement>("#recovery-address-search");
+    const input = app.querySelector<HTMLInputElement>('input[name="recoveryAddress"]');
+    expect(resultLine(app)).toBe("Checking this account. This can take a few seconds.");
+    expect(button?.disabled).toBe(true);
+    expect(button?.hasAttribute("data-busy")).toBe(true);
+    expect(input?.disabled).toBe(true);
+    input?.dispatchEvent(new window.KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+    expect(lookups).toHaveLength(1);
+    answer(found());
+    await tick();
+    expect(resultLine(app)).toBe("Found Account 4.");
+    expect(button?.disabled).toBe(false);
+    expect(input?.disabled).toBe(false);
+  });
+
+  test("going back ends a lookup in flight and ignores its late answer", async () => {
+    let answer: (candidate: RecoveryAccountCandidate) => void = () => undefined;
+    const { app } = firstRun(
+      () =>
+        new Promise<RecoveryAccountCandidate>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    await reachPicker(app);
+    await find(app, PASTED);
+    click(app, '[data-onboarding-step="recovery-accounts"] [data-onboarding-back]');
+    const button = app.querySelector<HTMLButtonElement>("#recovery-address-search");
+    expect(resultLine(app)).toBe("");
+    expect(button?.disabled).toBe(false);
+    answer(found());
+    await tick();
+    expect(resultLine(app)).toBe("");
+    expect(app.querySelectorAll('[data-recovery-group="argent"] input.select-check')).toHaveLength(
+      0,
+    );
+  });
+
   test("Enter in the field searches without submitting the form", async () => {
     const { app, lookups } = firstRun(() => Promise.resolve(found()));
     await reachPicker(app);
