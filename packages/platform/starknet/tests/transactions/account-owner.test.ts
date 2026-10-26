@@ -19,8 +19,18 @@ const RPC = ["https://rpc.example"];
 
 type Reads = Readonly<Record<string, readonly string[]>>;
 
-const providerOf = (liveClass: string | Error, reads: Reads = {}, calls: string[] = []) =>
+const MAINNET = "0x534e5f4d41494e";
+
+const providerOf = (
+  liveClass: string | Error,
+  reads: Reads = {},
+  calls: string[] = [],
+  chainId = MAINNET,
+) =>
   ({
+    async getChainId() {
+      return chainId;
+    },
     async getBlockLatestAccepted() {
       return { block_hash: "0xb10c" };
     },
@@ -37,7 +47,7 @@ const providerOf = (liveClass: string | Error, reads: Reads = {}, calls: string[
   }) as unknown as RpcProvider;
 
 const read = (provider: RpcProvider, accountAddress = ADDRESS) =>
-  getAccountOwner({ accountAddress, rpcUrls: RPC }, () => provider);
+  getAccountOwner({ accountAddress, chainId: MAINNET, rpcUrls: RPC }, () => provider);
 
 beforeEach(() => resetRpcEndpointCooldownsForTests());
 
@@ -125,6 +135,38 @@ describe("getAccountOwner", () => {
         }),
       ),
     ).rejects.toThrow("Account returned a malformed owner key");
+  });
+
+  test("an endpoint serving another chain refuses before reading the account", async () => {
+    const calls: string[] = [];
+    await expect(
+      read(
+        providerOf(
+          ARGENT_ACCOUNT_CLASS_HASH,
+          { get_owner: [OWNER] },
+          calls,
+          "0x534e5f5345504f4c4941",
+        ),
+      ),
+    ).rejects.toThrow("RPC endpoint returned the wrong Starknet chain");
+    expect(calls).toEqual([]);
+  });
+
+  test("a malformed owner type is unreadable, not a verdict", async () => {
+    for (const ownerType of [[], ["0x0", "0x1"], ["not-a-felt"]]) {
+      resetRpcEndpointCooldownsForTests();
+      await expect(
+        read(
+          providerOf(ARGENT_ACCOUNT_CLASS_HASH, { get_owner: [OWNER], get_owner_type: ownerType }),
+        ),
+      ).rejects.toThrow("Account returned a malformed owner type");
+    }
+  });
+
+  test("a well-formed nonzero owner type is another kind of signer", async () => {
+    await expect(
+      read(providerOf(ARGENT_ACCOUNT_CLASS_HASH, { get_owner_type: ["0x1"] })),
+    ).resolves.toEqual({ family: "argent", kind: "non-stark-owner" });
   });
 
   test("an address that is not a felt is refused before any read", async () => {

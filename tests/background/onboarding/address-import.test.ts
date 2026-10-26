@@ -7,154 +7,26 @@
  * writes the account — before the guarded write, so a refusal never locks.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@bramble/settings/preferences";
 import type { AccountOwnerReading } from "@bramble/starknet/rpc";
-import { createMemoryStore } from "@bramble/store/kv";
-import type { AccountDerivationInput } from "@bramble/vault/accounts";
-import type { RecoverVaultAccountsInput } from "@bramble/vault/service";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   BRAAVOS_BASE_CLASS_HASH,
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
-import type { RecoverableAccountRef } from "@bramble/wallet-model/accounts";
 import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
-import {
-  ADDRESS_IMPORT_REFUSALS,
-  RECOVERY_SCAN_LIMITS,
-  type RecoveryAccountSelection,
-} from "@bramble/wallet-model/recovery";
-import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import { ADDRESS_IMPORT_REFUSALS, RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
-  account,
-  createWallet,
-  extensionSender as sender,
-  testExtension,
-  vaultPassphrase,
-} from "../../support/background-wallet-stub";
-
-const PHRASE = "legal winner thank year wave sausage worth useful legal winner thank yellow";
-const PASTED = "0x7e57ad0e55";
-
-// Deterministic public keys, distinct per ladder: this wallet's own ladder,
-// Ready's ETH-seeded one, and Braavos's address axis.
-const keyFor = (family: string, derivation: string | undefined, index: number): string =>
-  `0x${family === "braavos" ? "3" : derivation === "argentx-bip44" ? "2" : "1"}${index.toString(16)}`;
-
-const previewFor = (input: AccountDerivationInput): RecoverableAccountRef => {
-  const index = input.accountIndex ?? 0;
-  const publicKeyX = keyFor(input.accountContractType, input.derivation, index);
-  const address = canonicalFelt(`0x${publicKeyX.slice(2)}aa`) as string;
-  const networkId = input.networkId ?? "SN_MAIN";
-  const core = {
-    address,
-    classHash: canonicalFelt(input.classHash ?? ARGENT_ACCOUNT_CLASS_HASH) as string,
-    id: `${networkId}:${address}`,
-    networkId,
-    publicKeyX,
-  } as const;
-  if (input.derivation === "argentx-bip44") {
-    return {
-      ...core,
-      accountContractType: "argent",
-      deploymentSalt: publicKeyX,
-      derivation: { addressIndex: index, kind: "argentx-bip44" },
-    };
-  }
-  return {
-    ...core,
-    accountContractType: input.accountContractType as "argent" | "braavos",
-    deploymentSalt: publicKeyX,
-    derivation:
-      input.accountContractType === "braavos"
-        ? { accountIndex: 0, addressIndex: index, kind: "starknet-bip44" }
-        : { accountIndex: index, addressIndex: 0, kind: "starknet-bip44" },
-    publicKeyY: "0x5",
-  };
-};
-
-type Harness = {
-  readonly imports: RecoverVaultAccountsInput[];
-  readonly ownerReads: { readonly accountAddress: string; readonly rpcUrls: readonly string[] }[];
-  readonly previews: AccountDerivationInput[];
-  readonly recovers: RecoverVaultAccountsInput[];
-};
-
-const harness = (
-  owner: AccountOwnerReading | Error | undefined,
-  options: {
-    readonly mnemonic?: string | null;
-    readonly restriction?: string | null;
-    readonly session?: ReturnType<typeof createUnlockSession>;
-  } = {},
-) => {
-  const seen: Harness = { imports: [], ownerReads: [], previews: [], recovers: [] };
-  const base = createWallet();
-  const wallet = {
-    ...base,
-    async importSeedAccounts(input: RecoverVaultAccountsInput) {
-      seen.imports.push(input);
-      return [account];
-    },
-    async previewAccount(input: AccountDerivationInput) {
-      seen.previews.push(input);
-      return previewFor(input);
-    },
-    async readVault(passphrase: string) {
-      const vault = await base.readVault(passphrase);
-      return { ...vault, mnemonic: options.mnemonic === undefined ? PHRASE : options.mnemonic };
-    },
-    async recoverAccounts(input: RecoverVaultAccountsInput) {
-      seen.recovers.push(input);
-      return [account];
-    },
-  };
-  const restriction = async () => (options.restriction ?? null) as never;
-  // The production wiring has a reader; "no reader at all" drops it.
-  const { getAccountOwner: _production, ...withoutReader } = defaultRuntimeRpc;
-  const runtimeRpc = {
-    ...withoutReader,
-    ...(owner === undefined
-      ? {}
-      : {
-          async getAccountOwner(input: {
-            readonly accountAddress: string;
-            readonly rpcUrls: readonly string[];
-          }) {
-            seen.ownerReads.push(input);
-            if (owner instanceof Error) throw owner;
-            return owner;
-          },
-        }),
-    getArgentSigningRestriction: restriction,
-    getBraavosSigningRestriction: restriction,
-  };
-  const session = options.session ?? createUnlockSession();
-  if (options.session === undefined) session.unlock(vaultPassphrase);
-  const handler = createMessageHandler(wallet, testExtension, {
-    preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
-    runtimeRpc,
-    session,
-  });
-  return { handler, seen, session };
-};
-
-const argentOwner = (ownerPublicKey: string): AccountOwnerReading => ({
-  classHash: ARGENT_ACCOUNT_CLASS_HASH,
-  family: "argent",
-  kind: "owner",
-  ownerPublicKey,
-});
-
-const findMessage = (networkId = "SN_MAIN", address = PASTED) => ({
-  address,
-  mnemonic: PHRASE,
-  networkId,
-  type: "wallet.findRecoveryAccountByAddress",
-});
+  argentOwner,
+  findMessage,
+  harness,
+  keyFor,
+  PASTED,
+  PHRASE,
+  pick,
+} from "../../support/address-import-harness";
+import { extensionSender as sender, vaultPassphrase } from "../../support/background-wallet-stub";
 
 describe("finding an account by its address", () => {
   test("matches an Argent owner on this wallet's own ladder and keeps the pasted address", async () => {
@@ -277,10 +149,14 @@ describe("finding an account by its address", () => {
     }
   });
 
-  test("reads the chosen network and derives for it", async () => {
+  test("reads the chosen network from two sources, each held to its chain id", async () => {
     const { handler, seen } = harness(argentOwner(keyFor("argent", "starknet-bip44", 0)));
     await handler(findMessage("SN_SEPOLIA"), sender);
-    expect(seen.ownerReads[0]?.rpcUrls).toEqual(STARKNET_NETWORKS.SN_SEPOLIA.rpcUrls);
+    const [gateway, foundation, cartridge] = STARKNET_NETWORKS.SN_SEPOLIA.rpcUrls;
+    expect(seen.ownerReads.map(({ chainId, rpcUrls }) => ({ chainId, rpcUrls }))).toEqual([
+      { chainId: STARKNET_NETWORKS.SN_SEPOLIA.chainId, rpcUrls: [gateway, cartridge] },
+      { chainId: STARKNET_NETWORKS.SN_SEPOLIA.chainId, rpcUrls: [foundation] },
+    ]);
     expect(seen.previews.every((input) => input.networkId === "SN_SEPOLIA")).toBe(true);
   });
 
@@ -320,14 +196,6 @@ describe("finding an account by its address", () => {
     await expect(locked.handler(message, sender)).resolves.toEqual({ error: "wallet locked" });
     expect(locked.seen.ownerReads).toEqual([]);
   });
-});
-
-const pick = (index: number): RecoveryAccountSelection => ({
-  accountContractType: "argent",
-  accountIndex: index,
-  address: PASTED,
-  classHash: ARGENT_ACCOUNT_CLASS_HASH,
-  derivation: "argentx-bip44",
 });
 
 describe("writing an account picked by its address", () => {

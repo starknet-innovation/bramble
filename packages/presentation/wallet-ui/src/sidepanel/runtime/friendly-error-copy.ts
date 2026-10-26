@@ -142,6 +142,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // The import-by-address owner read (issue 398); the lookup reports it as
   // "Couldn't check this account", so this is the fallback wording.
   ["account returned a malformed owner key", "Couldn't read this account's owner. Try again."],
+  ["account returned a malformed owner type", "Couldn't read this account's owner. Try again."],
   ["rpc returned an invalid account class hash", "Couldn't read this account. Try again."],
   [
     "braavos account class hash is not a release this wallet recognizes",
@@ -278,6 +279,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ],
   [ADDRESS_IMPORT_REFUSALS.noMatch, "This recovery phrase doesn't control that account."],
   [ADDRESS_IMPORT_REFUSALS.unavailable, "Couldn't check this account. Try again."],
+  [ADDRESS_IMPORT_REFUSALS.unconfirmed, "Couldn't confirm this account. Try again."],
+  [
+    ADDRESS_IMPORT_REFUSALS.stale,
+    "This wallet changed while the account was being checked. Search for it again.",
+  ],
   // The 2FA / guardian removal flow's own fallbacks (runtime-recovery.ts and
   // account-recovery.ts), worded apart from the account-discovery flow above.
   [

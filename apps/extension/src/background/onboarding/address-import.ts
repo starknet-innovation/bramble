@@ -9,12 +9,18 @@
  * The proof is an exact key match: the account's live owner key (read per
  * family, see `getAccountOwner`) must equal a key this phrase derives on one of
  * that family's ladders, within the recovery scan's own index bound. Nothing
- * else is trusted. An unreadable chain answer refuses rather than guesses, and
- * the same check runs again, at the selected coordinate, before any restore or
- * import writes the account.
+ * else is trusted, and no single endpoint is either: the owner is read from two
+ * independent sources (the configured endpoints and the network's bundled
+ * Foundation-direct node, each proving it serves the expected chain), which
+ * must agree on whether the account exists, its class, and its owner key. An
+ * unreadable or disputed answer refuses rather than guesses, and the same
+ * check runs again, at the selected coordinate, before any restore or import
+ * writes the account.
  */
 
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { AccountOwnerReading } from "@bramble/starknet/rpc";
+import { rpcEndpointClass } from "@bramble/starknet/rpc-diagnostics";
 import { accountClassEntry, BRAAVOS_BASE_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import {
   isRecoverableAccountRef,
@@ -76,28 +82,77 @@ const recordClassHash = (found: OwnerFound): string => {
     : BRAAVOS_BASE_CLASS_HASH;
 };
 
+// The two sources an ownership claim must agree across. The witness is always
+// the network's bundled Foundation-direct node, even under a custom endpoint,
+// so a lying configured node cannot answer for both. The primary is the
+// configured list without it (a custom endpoint, then the wallet gateway).
+// A network with no distinct Foundation-direct node has no second source.
+const ownerSources = async (
+  deps: AddressImportDeps,
+  networkId: StarknetNetworkId,
+): Promise<{ readonly primary: readonly string[]; readonly witness: string } | null> => {
+  const network = STARKNET_NETWORKS[networkId];
+  const witness = network.rpcUrls.find((url) => rpcEndpointClass(url) === "foundation");
+  if (witness === undefined) return null;
+  const configured = networkRpcUrls(network, await deps.preferencesStore.read());
+  const primary = configured.filter((url) => url !== witness);
+  return primary.length === 0 ? null : { primary, witness };
+};
+
+// Whether two sources describe the same account: both absent, both refusing the
+// same way, or the same family, class, and owner key. Their blocks may differ.
+const sameReading = (left: AccountOwnerReading, right: AccountOwnerReading): boolean => {
+  if (left.kind === "owner" && right.kind === "owner") {
+    return (
+      left.family === right.family &&
+      sameFelt(left.classHash, right.classHash) &&
+      sameFelt(left.ownerPublicKey, right.ownerPublicKey)
+    );
+  }
+  if (left.kind === "non-stark-owner" && right.kind === "non-stark-owner") {
+    return left.family === right.family;
+  }
+  return left.kind === right.kind;
+};
+
+const verdictOf = (reading: AccountOwnerReading): OwnerFound | Refusal => {
+  if (reading.kind === "not-deployed") return { error: ADDRESS_IMPORT_REFUSALS.notDeployed };
+  if (reading.kind === "unsupported-class") {
+    return { error: ADDRESS_IMPORT_REFUSALS.unsupportedClass };
+  }
+  if (reading.kind === "non-stark-owner") return { error: ADDRESS_IMPORT_REFUSALS.nonStarkOwner };
+  return {
+    classHash: reading.classHash,
+    family: reading.family,
+    ownerPublicKey: reading.ownerPublicKey,
+  };
+};
+
+// Reads the owner from both sources and accepts only an answer they agree on.
+// An unreachable or wrong-chain source, a missing reader, or no second source
+// is unavailable; a disagreement is its own refusal. Never imports on one.
 const readOwner = async (
   deps: AddressImportDeps,
   address: string,
-  rpcUrls: readonly string[],
+  networkId: StarknetNetworkId,
 ): Promise<OwnerFound | Refusal> => {
   const read = deps.runtimeRpc.getAccountOwner;
-  if (!read) return { error: ADDRESS_IMPORT_REFUSALS.unavailable };
+  const sources = await ownerSources(deps, networkId);
+  if (!read || !sources) return { error: ADDRESS_IMPORT_REFUSALS.unavailable };
+  const { chainId } = STARKNET_NETWORKS[networkId];
+  let readings: readonly [AccountOwnerReading, AccountOwnerReading];
   try {
-    const reading = await read({ accountAddress: address, rpcUrls });
-    if (reading.kind === "not-deployed") return { error: ADDRESS_IMPORT_REFUSALS.notDeployed };
-    if (reading.kind === "unsupported-class") {
-      return { error: ADDRESS_IMPORT_REFUSALS.unsupportedClass };
-    }
-    if (reading.kind === "non-stark-owner") return { error: ADDRESS_IMPORT_REFUSALS.nonStarkOwner };
-    return {
-      classHash: reading.classHash,
-      family: reading.family,
-      ownerPublicKey: reading.ownerPublicKey,
-    };
+    readings = await Promise.all([
+      read({ accountAddress: address, chainId, rpcUrls: sources.primary }),
+      read({ accountAddress: address, chainId, rpcUrls: [sources.witness] }),
+    ]);
   } catch {
     return { error: ADDRESS_IMPORT_REFUSALS.unavailable };
   }
+  const [primary, witness] = readings;
+  return sameReading(primary, witness)
+    ? verdictOf(primary)
+    : { error: ADDRESS_IMPORT_REFUSALS.unconfirmed };
 };
 
 // The public account this phrase derives at one coordinate, or null when the
@@ -126,6 +181,7 @@ const matchAtIndex = async (
   input: { readonly mnemonic: string; readonly networkId: StarknetNetworkId },
   found: OwnerFound,
   accountIndex: number,
+  stillAuthorized: () => boolean,
 ): Promise<RecoverableAccountRef | Refusal | null> => {
   for (const derivation of LADDERS[found.family]) {
     const preview = await previewAt(deps, input, {
@@ -134,6 +190,8 @@ const matchAtIndex = async (
       classHash: recordClassHash(found),
       ...(derivation === undefined ? {} : { derivation }),
     });
+    // A lock while the key was derived ends the search here, between ladders.
+    if (!stillAuthorized()) return { error: "wallet locked" };
     if (!preview) return { error: "account discovery is unavailable" };
     if (sameFelt(preview.publicKeyX, found.ownerPublicKey)) return preview;
   }
@@ -153,7 +211,9 @@ const findOwnerKey = async (
   for (let index = 0; index < RECOVERY_SCAN_LIMITS.maxScannedIndexes; index += 1) {
     if (!stillAuthorized()) return { error: "wallet locked" };
     const match =
-      index === RESERVED_AGENT_ACCOUNT_INDEX ? null : await matchAtIndex(deps, input, found, index);
+      index === RESERVED_AGENT_ACCOUNT_INDEX
+        ? null
+        : await matchAtIndex(deps, input, found, index, stillAuthorized);
     if (match !== null) return match;
   }
   return null;
@@ -187,8 +247,9 @@ const rpcUrlsFor = async (deps: AddressImportDeps, networkId: StarknetNetworkId)
 /**
  * Finds which key of `mnemonic` controls the account at `address`, and returns
  * it as a recovery candidate that keeps the address. Refuses with one of
- * {@link ADDRESS_IMPORT_REFUSALS} otherwise. `stillAuthorized` is re-checked
- * between indices when the phrase came from the unlocked vault.
+ * {@link ADDRESS_IMPORT_REFUSALS} otherwise. When the phrase came from the
+ * unlocked vault, `stillAuthorized` is re-checked after every derivation and
+ * once more after the last chain read, so a lock mid-search returns nothing.
  */
 export const findAccountByAddress = async (
   deps: AddressImportDeps,
@@ -201,14 +262,18 @@ export const findAccountByAddress = async (
 ): Promise<{ readonly candidate: RecoveryAccountCandidate; readonly ok: true } | Refusal> => {
   const address = canonicalAddress(input.address);
   if (address === null) return { error: ADDRESS_IMPORT_REFUSALS.invalid };
-  const rpcUrls = await rpcUrlsFor(deps, input.networkId);
-  const found = await readOwner(deps, address, rpcUrls);
+  const found = await readOwner(deps, address, input.networkId);
   if ("error" in found) return found;
   const matched = await findOwnerKey(deps, input, found, stillAuthorized);
   if (matched === null) return { error: ADDRESS_IMPORT_REFUSALS.noMatch };
   if ("error" in matched) return matched;
   const account = { ...matched, address, id: `${matched.networkId}:${address}` };
-  const restriction = await advisoryRestriction(deps, account, rpcUrls);
+  const restriction = await advisoryRestriction(
+    deps,
+    account,
+    await rpcUrlsFor(deps, input.networkId),
+  );
+  if (!stillAuthorized()) return { error: "wallet locked" };
   return {
     candidate: {
       account,
@@ -237,10 +302,8 @@ export const verifyAddressSelections = async (
   },
 ): Promise<Refusal | null> => {
   const byAddress = input.selections.filter((selection) => selection.address !== undefined);
-  if (byAddress.length === 0) return null;
-  const rpcUrls = await rpcUrlsFor(deps, input.networkId);
   for (const selection of byAddress) {
-    const found = await readOwner(deps, selection.address as string, rpcUrls);
+    const found = await readOwner(deps, selection.address as string, input.networkId);
     if ("error" in found) return found;
     if (found.family !== selection.accountContractType) {
       return { error: ADDRESS_IMPORT_REFUSALS.noMatch };

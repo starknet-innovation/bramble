@@ -278,6 +278,10 @@ export const ADDRESS_IMPORT_REFUSALS = {
   noMatch: "recovery phrase does not control this account",
   nonStarkOwner: "account signer not supported for import",
   notDeployed: "no account at this address on this network",
+  // The wallet's own vault or session changed between the check and the write.
+  stale: "wallet changed during the account check",
   unavailable: "account lookup unavailable",
+  // Two independent endpoints answered differently about the account.
+  unconfirmed: "account lookup sources disagree",
   unsupportedClass: "account class not supported for import",
 } as const;

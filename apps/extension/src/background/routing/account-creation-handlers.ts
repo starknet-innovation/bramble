@@ -8,7 +8,10 @@
 import { RefusedBeforeWrite } from "@bramble/core/errors";
 import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
 import { DEFAULT_NETWORK, type StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
+import {
+  ADDRESS_IMPORT_REFUSALS,
+  type RecoveryAccountSelection,
+} from "@bramble/wallet-model/recovery";
 import {
   readCreateAccountInput,
   readImportOwnAccountsInput,
@@ -21,6 +24,7 @@ import {
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization, type SessionAuthorization } from "../runtime/session";
 import type { RouterContext } from "./message-context";
 import { readAddAccountInput } from "./message-inputs";
 import type { RuntimeSender } from "./senders";
@@ -147,21 +151,33 @@ const handleImportSeedAccounts: RouterHandler = async (ctx, messageType, message
   });
 };
 
+// The phrase and unlock an own-phrase proof ran under. The write refuses
+// unless both are still the ones it is about to use.
+type OwnAddressProof = {
+  readonly authorized: SessionAuthorization;
+  readonly mnemonic: string;
+};
+
 // Re-proves the own-phrase picks made by address before the guarded write,
-// reading the phrase through the live session as the import itself does.
-const ownAddressSelectionRefusal = async (
+// reading the phrase through the live session as the import itself does, and
+// returns what the proof was bound to (null when no pick carries an address).
+const proveOwnAddressSelections = async (
   ctx: RouterContext,
   input: {
     readonly networkId: StarknetNetworkId;
     readonly selections: readonly RecoveryAccountSelection[];
   },
-): Promise<RuntimeResponse | null> => {
-  if (input.selections.every((selection) => selection.address === undefined)) return null;
+): Promise<{ readonly error: string } | { readonly proof: OwnAddressProof | null }> => {
+  if (input.selections.every((selection) => selection.address === undefined)) {
+    return { proof: null };
+  }
   const passphrase = ctx.session.peekPassphrase();
   if (!passphrase) return { error: "wallet locked" };
+  const authorized = captureSessionAuthorization(ctx.session);
   const { mnemonic } = await ctx.wallet.readVault(passphrase);
   if (mnemonic === null) return { error: "This wallet has no recovery phrase to scan" };
-  return verifyAddressSelections(ctx, { ...input, mnemonic });
+  const refusal = await verifyAddressSelections(ctx, { ...input, mnemonic });
+  return refusal ?? { proof: { authorized, mnemonic } };
 };
 
 const handleImportOwnAccounts: RouterHandler = async (ctx, messageType, message) => {
@@ -176,8 +192,9 @@ const handleImportOwnAccounts: RouterHandler = async (ctx, messageType, message)
   if (!importSeedAccounts) {
     return { error: "wallet unavailable" };
   }
-  const refusal = await ownAddressSelectionRefusal(ctx, input);
-  if (refusal) return refusal;
+  const proved = await proveOwnAddressSelections(ctx, input);
+  if ("error" in proved) return proved;
+  const { proof } = proved;
   return ctx.activeStateCoordinator.run(async () => {
     const accounts = await runUnlockedNetworkMutation(
       ctx.session,
@@ -191,6 +208,11 @@ const handleImportOwnAccounts: RouterHandler = async (ctx, messageType, message)
         const foundingPhrase = vault.mnemonic;
         if (foundingPhrase === null) {
           throw new RefusedBeforeWrite("This wallet has no recovery phrase to scan");
+        }
+        // An address proved under another unlock or phrase is not proved for
+        // this one: a refusal before the write restores the network, no lock.
+        if (proof && (!proof.authorized.isCurrent() || proof.mnemonic !== foundingPhrase)) {
+          throw new RefusedBeforeWrite(ADDRESS_IMPORT_REFUSALS.stale);
         }
         return importSeedAccounts({
           mnemonic: foundingPhrase,
