@@ -38,10 +38,13 @@ export const recordRelaySignature = async (
     readonly typedData: unknown;
   },
 ): Promise<void> => {
-  const terms = log ? outsideExecutionTerms(input.typedData) : null;
-  if (!log || !terms) return;
-  await log
-    .record({
+  // Everything after signing is inside the try: reading the untrusted typed
+  // data or a log that throws synchronously must not keep the approved,
+  // already signed message from reaching the dapp either.
+  try {
+    const terms = log ? outsideExecutionTerms(input.typedData) : null;
+    if (!log || !terms) return;
+    await log.record({
       accountId: input.account.id,
       callCount: terms.callCount,
       checkable: CHECKABLE_FAMILIES.has(input.account.accountContractType),
@@ -51,6 +54,8 @@ export const recordRelaySignature = async (
       nonce: terms.nonce,
       origin: input.origin,
       revision: terms.revision,
-    })
-    .catch(() => undefined);
+    });
+  } catch {
+    // Absorbed by design; see the module comment.
+  }
 };

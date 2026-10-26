@@ -36,9 +36,11 @@ const statusNote = (relay: RelaySignature): string => {
   if (!relay.checkable) {
     return "Bramble can't check relayed requests for this account type.";
   }
+  // A failed or never-made read leaves a row signed, so this must hold whatever
+  // the last read said: no claim that the chain was checked.
   return relay.executeBefore === undefined
-    ? "A relayer can still submit it."
-    : "A relayer can still submit it until it expires.";
+    ? "Not seen on chain yet. A relayer may still be able to submit it."
+    : "Not seen on chain yet. A relayer may still be able to submit it until it expires.";
 };
 
 const when = (epochMs: number): string =>

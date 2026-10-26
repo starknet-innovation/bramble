@@ -184,6 +184,56 @@ describe("recording a signature for relay", () => {
     });
   }
 
+  test("typed data that throws while being read after signing still returns the signature", async () => {
+    // Every read works until the wallet has signed; from then on any property
+    // read throws, so only the post-signing recording step can hit it.
+    let signedYet = false;
+    const armed = (value: unknown): unknown =>
+      value !== null && typeof value === "object"
+        ? new Proxy(value as object, {
+            get(target, key, receiver) {
+              if (signedYet) throw new Error("hostile getter");
+              return armed(Reflect.get(target, key, receiver));
+            },
+          })
+        : value;
+    const typedData = armed(outside());
+    const recorded: unknown[] = [];
+    const response = await executeSignApproval(
+      {
+        activity: memoryActivityLog(),
+        preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+        relaySignatures: {
+          record: async (entry) => {
+            recorded.push(entry);
+          },
+        },
+        session: unlocked(),
+        wallet: {
+          ...wallet,
+          async signHash() {
+            signedYet = true;
+            return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+          },
+        },
+      },
+      { origin: ORIGIN, typedData },
+    );
+    expect(signedYet).toBe(true);
+    expect(response).toEqual(expect.objectContaining({ ok: true, signature: expect.any(Array) }));
+    expect(recorded).toEqual([]);
+  });
+
+  test("a log that throws synchronously still returns the approved signature", async () => {
+    signFails = false;
+    const throwing = {
+      record: (() => {
+        throw new Error("storage unavailable");
+      }) as RelaySignatureLog["record"],
+    };
+    expect(await signDirect(throwing, outside())).toEqual(expect.objectContaining({ ok: true }));
+  });
+
   test("only account types with a verified nonce view are tracked", async () => {
     const relaySignatures = memoryRelaySignatureLog();
     for (const [type, hash] of [

@@ -44,7 +44,10 @@ describe("relay rows", () => {
     const html = relayRow(relay());
     expect(html).toContain("https://app.example");
     expect(html).toContain("Not seen on chain");
-    expect(html).toContain("A relayer can still submit it until it expires.");
+    expect(html).toContain(
+      "Not seen on chain yet. A relayer may still be able to submit it until it expires.",
+    );
+    expect(html).not.toContain("can still submit");
     expect(html).toContain("Valid until");
     expect(html).toContain("0xabc");
     // A message hash has no transaction page.
@@ -87,7 +90,8 @@ describe("relay rows", () => {
   test("a message without a deadline shows no expiry", () => {
     const { executeBefore: _deadline, ...open } = relay();
     const html = relayRow(open);
-    expect(html).toContain("A relayer can still submit it.");
+    expect(html).toContain("Not seen on chain yet. A relayer may still be able to submit it.");
+    expect(html).not.toContain("can still submit");
     expect(html).not.toContain("Valid until");
   });
 
