@@ -83,11 +83,10 @@ let productAnalyticsEnabled = false;
 const approvalSurface = createApprovalSurfaceControl({
   browser: extensionApi,
   extensionId: runtime?.id ?? "",
-  savePopup: () => preferenceStore.setDisplay({ approvalSurface: "popup" }),
+  saveSurface: (approvalSurface) => preferenceStore.setDisplay({ approvalSurface }),
   store: createBrowserLocalStore,
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 });
-const updateApprovalSurface = approvalSurface.update;
 const approvals = createApprovalQueue();
 // The held-response registry lives here rather than inside the router context
 // so the worker keepalive below can watch it alongside the approval queue: a
@@ -175,7 +174,7 @@ const preferences = storageReady
   .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
   .catch(() => null);
 const preferenceStore = createBackgroundPreferences({
-  onApprovalSurface: updateApprovalSurface,
+  onApprovalSurface: approvalSurface.update,
   onProductAnalytics: (enabled) => {
     productAnalyticsEnabled = enabled;
   },
@@ -196,7 +195,7 @@ observeTechnicalDataConsent(extensionApi?.permissions, () => {
 const preferenceSignalsReady = preferences
   .then(async (store) => {
     const stored = await store?.read();
-    updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
+    approvalSurface.apply(stored?.approvalSurface ?? "side-panel");
     void approvalSurface.load();
     productAnalyticsEnabled = store ? (stored?.productAnalytics ?? true) : false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);

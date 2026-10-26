@@ -10,6 +10,11 @@
  * their first click. Never seen after the open resolved, and the request
  * surface switches once to the compact popup, which Arc does draw.
  *
+ * That switch heals itself. If a real side panel renders later (a slow Chrome
+ * machine whose panel loaded after the wait), an automatic switch is undone:
+ * the side panel is saved back as the surface and the browser is verified. A
+ * choice the user made in Settings is never undone.
+ *
  * Only a click on Bramble's own toolbar action teaches this. Dapp requests
  * never do, and nothing here opens a window or moves focus. Every unknown
  * answer (a storage read that fails, a context query that fails, an open that
@@ -24,14 +29,20 @@ import type { RuntimeSender } from "../routing/senders";
 /** Plain `storage.local` key holding what this browser was learned to do. */
 export const SIDE_PANEL_LEARNING_STORE_KEY = "bramble:side-panel-learning";
 
-/** How long a toolbar click waits for the side panel to load before deciding. */
-export const SIDE_PANEL_LEARN_TIMEOUT_MS = 3_000;
+/**
+ * How long a toolbar click waits for the side panel to load before deciding.
+ * Chrome draws it well inside a second, and Arc never does, so a longer wait
+ * costs only Arc's first click; it also leaves a slow Chrome machine room
+ * before the self-healing switch above is ever needed.
+ */
+export const SIDE_PANEL_LEARN_TIMEOUT_MS = 5_000;
 const POLL_MS = 250;
 
 /**
  * `unknown`: no side panel seen yet, so toolbar clicks are learned from.
  * `verified`: a real side panel was seen; the built-in behavior applies.
  * `unsupported`: a click opened no panel, so the surface switched to the popup.
+ *   The switch is `automatic` until the user makes their own choice in Settings.
  */
 type SidePanelState = "unknown" | "unsupported" | "verified";
 
@@ -68,6 +79,11 @@ export type SidePanelLearnerDeps = {
    * ready. Null (or a throw) means nothing is learned.
    */
   readonly store: () => KeyValueStore | null;
+  /**
+   * Saves "side-panel" back as the request surface and applies it, undoing an
+   * automatic switch a real side panel render proved wrong.
+   */
+  readonly restoreSidePanel: () => Promise<void>;
   /** Saves "popup" as the user's request surface and applies it. */
   readonly switchToPopup: () => Promise<void>;
   readonly wait: (ms: number) => Promise<void>;
@@ -88,15 +104,29 @@ export type SidePanelLearner = {
   /** Marks the side panel seen when its page talks to the worker. */
   readonly observeSender: (sender: RuntimeSender | undefined) => void;
   readonly state: () => SidePanelState;
+  /**
+   * Records that the user chose a request surface in Settings. After that, a
+   * switch made automatically is the user's choice too, and never undone.
+   */
+  readonly userChose: () => void;
 };
 
-type Stored = { readonly notice: boolean; readonly state: SidePanelState };
+type Stored = {
+  readonly automatic: boolean;
+  readonly notice: boolean;
+  readonly state: SidePanelState;
+};
 
 const readStored = (value: unknown): Stored | null => {
   if (!isRecord(value)) return null;
   const state = value["state"];
   if (state !== "unsupported" && state !== "verified") return null;
-  return { notice: state === "unsupported" && value["notice"] === true, state };
+  const unsupported = state === "unsupported";
+  return {
+    automatic: unsupported && value["automatic"] === true,
+    notice: unsupported && value["notice"] === true,
+    state,
+  };
 };
 
 const readLearned = async (store: KeyValueStore): Promise<Stored | "unreadable" | null> => {
@@ -171,18 +201,23 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
   let loaded = false;
   let state: SidePanelState = "unknown";
   let noticePending = false;
+  // The popup switch was made by this learner, not chosen in Settings.
+  let automatic = false;
+  let chosen = false;
   let learning = false;
+  let reverting = false;
 
   const persist = (): void => {
     if (!store || state === "unknown") return;
     void store
-      .set(SIDE_PANEL_LEARNING_STORE_KEY, { notice: noticePending, state })
+      .set(SIDE_PANEL_LEARNING_STORE_KEY, { automatic, notice: noticePending, state })
       .catch(() => undefined);
   };
 
-  const settle = (next: Exclude<SidePanelState, "unknown">, notice = false): void => {
+  const settle = (next: Exclude<SidePanelState, "unknown">, switched = false): void => {
     state = next;
-    noticePending = notice;
+    noticePending = switched;
+    automatic = switched;
     persist();
     deps.reconfigure();
   };
@@ -195,6 +230,23 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     } catch {
       return null;
     }
+  };
+
+  // A real side panel rendered. Before any decision that is the answer; after
+  // an automatic switch it proves the switch wrong (a slow first load), so the
+  // side panel is saved back. A switch the user kept in Settings stays.
+  const sawSidePanel = async (): Promise<void> => {
+    if (state === "verified" || reverting) return;
+    // `chosen` also covers a choice made in this worker before the switch was
+    // recorded, so only a switch the user never touched is undone.
+    if (state === "unsupported" && automatic && !chosen) {
+      reverting = true;
+      const restored = await succeeds(deps.restoreSidePanel());
+      reverting = false;
+      // Not saved: the popup keeps working, and the next render tries again.
+      if (!restored) return;
+    }
+    settle("verified");
   };
 
   const learnFromClick = async (opening: Promise<void>, windowId: number): Promise<void> => {
@@ -252,10 +304,11 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
       else if (stored) {
         state = stored.state;
         noticePending = stored.notice;
+        automatic = stored.automatic && !chosen;
       }
       canLearn = true;
-      if (state === "unknown" && (await sidePanelSeen())) {
-        settle("verified");
+      if (state !== "verified" && (await sidePanelSeen())) {
+        await sawSidePanel();
         return;
       }
       deps.reconfigure();
@@ -264,8 +317,15 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     notice: () => state === "unsupported" && noticePending,
     observeSender(sender) {
       if (state === "verified" || !canLearn) return;
-      if (isSidePanelSender(sender, deps.extensionId, deps.sidePanelUrl)) settle("verified");
+      if (isSidePanelSender(sender, deps.extensionId, deps.sidePanelUrl)) void sawSidePanel();
     },
     state: () => state,
+    userChose() {
+      chosen = true;
+      if (!automatic) return;
+      automatic = false;
+      noticePending = false;
+      persist();
+    },
   };
 };

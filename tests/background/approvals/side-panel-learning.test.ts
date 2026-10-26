@@ -25,6 +25,7 @@ const harness = (
     readonly contexts?: "fail" | "never" | number;
     readonly openRejects?: boolean;
     readonly preference?: ApprovalSurfacePreference;
+    readonly restoreFails?: boolean;
     readonly store?: KeyValueStore | null | "throws";
     readonly switchFails?: boolean;
     readonly withSidePanel?: boolean;
@@ -34,6 +35,9 @@ const harness = (
   const listeners: Click[] = [];
   let preference: ApprovalSurfacePreference = options.preference ?? "side-panel";
   let switches = 0;
+  let restores = 0;
+  // Flipped by a test to make a side panel render late (a slow first load).
+  let renders = false;
   const store = options.store === undefined ? createMemoryStore() : options.store;
   const deps: SidePanelLearnerDeps = {
     browser: {
@@ -48,7 +52,9 @@ const harness = (
           calls.queries += 1;
           if (options.contexts === "fail") throw new Error("unavailable");
           const after = options.contexts ?? "never";
-          return after !== "never" && calls.queries > after ? [{ contextType: "SIDE_PANEL" }] : [];
+          return renders || (after !== "never" && calls.queries > after)
+            ? [{ contextType: "SIDE_PANEL" }]
+            : [];
         },
       },
       ...(options.withSidePanel === false
@@ -68,6 +74,11 @@ const harness = (
     preference: () => preference,
     reconfigure: () => {
       calls.reconfigures += 1;
+    },
+    restoreSidePanel: async () => {
+      if (options.restoreFails) throw new Error("preferences unavailable");
+      restores += 1;
+      preference = "side-panel";
     },
     sidePanelUrl: PANEL_URL,
     store: () => {
@@ -96,9 +107,14 @@ const harness = (
     click,
     learner,
     listeners,
+    render: () => {
+      renders = true;
+    },
+    restores: () => restores,
     setPreference: (next: ApprovalSurfacePreference) => {
       preference = next;
     },
+    settle,
     stored: async () =>
       store && store !== "throws" ? store.get(SIDE_PANEL_LEARNING_STORE_KEY) : undefined,
     switches: () => switches,
@@ -119,7 +135,7 @@ describe("side-panel learning", () => {
     expect(run.calls.opens).toEqual([7]);
     expect(run.learner.state()).toBe("verified");
     expect(run.learner.nativeClick()).toBe(true);
-    expect(await run.stored()).toEqual({ notice: false, state: "verified" });
+    expect(await run.stored()).toEqual({ automatic: false, notice: false, state: "verified" });
     expect(run.switches()).toBe(0);
     expect(run.calls.popups).toEqual([]);
   });
@@ -134,7 +150,7 @@ describe("side-panel learning", () => {
     expect(run.switches()).toBe(1);
     expect(run.learner.state()).toBe("unsupported");
     expect(run.learner.notice()).toBe(true);
-    expect(await run.stored()).toEqual({ notice: true, state: "unsupported" });
+    expect(await run.stored()).toEqual({ automatic: true, notice: true, state: "unsupported" });
     expect(run.calls.popups).toEqual([{ windowId: 7 }]);
     // The popup is the toolbar's own surface now: later clicks learn nothing.
     await run.click();
@@ -147,6 +163,7 @@ describe("side-panel learning", () => {
     await run.learner.load();
     await run.click();
     run.setPreference("side-panel");
+    run.learner.userChose();
     expect(run.learner.nativeClick()).toBe(true);
     await run.click();
     expect(run.switches()).toBe(1);
@@ -270,6 +287,7 @@ describe("side-panel learning", () => {
       extensionId: "bramble",
       preference: () => "side-panel",
       reconfigure: () => undefined,
+      restoreSidePanel: async () => undefined,
       sidePanelUrl: "",
       store: () => createMemoryStore(),
       switchToPopup: async () => undefined,
@@ -288,6 +306,84 @@ describe("side-panel learning", () => {
     await run.learner.dismissNotice();
     await run.learner.dismissNotice();
     expect(run.learner.notice()).toBe(false);
-    expect(await run.stored()).toEqual({ notice: false, state: "unsupported" });
+    expect(await run.stored()).toEqual({ automatic: true, notice: false, state: "unsupported" });
+  });
+
+  test("a side panel that renders after an automatic switch undoes it", async () => {
+    // A slow Chrome machine: the panel loaded after the wait, so the popup
+    // switch was wrong. Its later render restores the side panel.
+    for (const late of ["sender", "restart"] as const) {
+      const store = createMemoryStore();
+      const run = harness({ store });
+      await run.learner.load();
+      await run.click();
+      expect(run.learner.state()).toBe("unsupported");
+      run.render();
+      if (late === "sender") {
+        run.learner.observeSender({ id: "bramble", url: PANEL_URL });
+        await run.settle();
+      } else {
+        const restarted = harness({ preference: "popup", store });
+        restarted.render();
+        await restarted.learner.load();
+        expect(restarted.restores()).toBe(1);
+        expect(restarted.learner.state()).toBe("verified");
+        expect(restarted.learner.nativeClick()).toBe(true);
+        continue;
+      }
+      expect(run.restores()).toBe(1);
+      expect(run.learner.state()).toBe("verified");
+      expect(run.learner.notice()).toBe(false);
+      expect(run.learner.nativeClick()).toBe(true);
+      expect(await run.stored()).toEqual({ automatic: false, notice: false, state: "verified" });
+    }
+  });
+
+  test("a popup the user chose in Settings is never undone by a panel render", async () => {
+    const run = harness();
+    await run.learner.load();
+    await run.click();
+    run.learner.userChose();
+    expect(run.learner.notice()).toBe(false);
+    expect(await run.stored()).toEqual({ automatic: false, notice: false, state: "unsupported" });
+    run.render();
+    run.learner.observeSender({ id: "bramble", url: PANEL_URL });
+    await run.settle();
+    expect(run.restores()).toBe(0);
+    expect(run.learner.state()).toBe("verified");
+    // A choice made before the stored switch loads counts the same way.
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, {
+      automatic: true,
+      notice: true,
+      state: "unsupported",
+    });
+    const early = harness({ preference: "popup", store });
+    early.learner.userChose();
+    early.render();
+    await early.learner.load();
+    expect(early.restores()).toBe(0);
+  });
+
+  test("a restore that can't be saved keeps the working popup and retries later", async () => {
+    const run = harness({ restoreFails: true });
+    await run.learner.load();
+    await run.click();
+    run.render();
+    run.learner.observeSender({ id: "bramble", url: PANEL_URL });
+    await run.settle();
+    expect(run.learner.state()).toBe("unsupported");
+    expect(run.learner.notice()).toBe(true);
+    expect(await run.stored()).toEqual({ automatic: true, notice: true, state: "unsupported" });
+  });
+
+  test("an older stored switch without the automatic flag is treated as the user's", async () => {
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, { notice: true, state: "unsupported" });
+    const run = harness({ preference: "popup", store });
+    run.render();
+    await run.learner.load();
+    expect(run.restores()).toBe(0);
+    expect(run.learner.state()).toBe("verified");
   });
 });
