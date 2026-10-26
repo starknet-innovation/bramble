@@ -24,8 +24,7 @@ export const ONBOARDING_STYLES = `
      the field still reads as the calm dark ground; daylight leaves it untinted.
      The tint is one solid colour blended over the image, nothing ramped. */
   body.onboarding-surface {
-    /* Pinned to the viewport: sized to the page, the cover image rescaled and
-       shifted whenever a disclosure opened and the page grew. */
+    /* Pinned, so the cover doesn't rescale whenever the page grows. */
     background-attachment: fixed;
     background-blend-mode: multiply;
     background-color: light-dark(
@@ -38,10 +37,8 @@ export const ONBOARDING_STYLES = `
     background-size: cover;
     min-width: 320px;
   }
-  /* The panel's toast slot sits above its dock; this surface has no dock, so
-     there a toast lands on the card's bottom action. The top-right corner is
-     clear of the card at any width that shows the landscape, and on a narrow
-     tab it overlaps only the card's top padding, not its back control. */
+  /* No dock here, so the panel's toast slot would cover the card's bottom
+     action; top-right stays clear of the card and its back control. */
   .onboarding-surface .toast-stack {
     bottom: auto;
     left: auto;

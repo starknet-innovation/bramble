@@ -133,8 +133,7 @@ export const createLedgerOnboardController = (
   let nextIndex = 0;
   let busy = false;
   let flowEpoch = 0;
-  // "Show more" while a page is still read or described is queued, not dropped
-  // by the busy guard; the button stays busy until the next page is in.
+  // "Show more" mid-page is queued, not dropped; the button stays busy until it's in.
   let pageLoading = false;
   let readingMore = false;
   let moreQueued = false;
@@ -417,8 +416,7 @@ export const createLedgerOnboardController = (
     } catch (error) {
       const raw = error instanceof Error ? error.message : "";
       const message = friendlyError(raw, ADD_ACCOUNT_FAILED).message;
-      // A phrase-less wallet can't derive a regular account, but its import
-      // routes still work: land there rather than on a Ledger "Try again".
+      // No phrase to derive from: land on import, not on a Ledger "Try again".
       deps.render(
         isPhraselessAddRefusal(raw)
           ? { kind: "import-chooser", phraselessNote: message }
