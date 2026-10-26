@@ -250,6 +250,19 @@ describe("onboarding views", () => {
     );
   });
 
+  test("a failed balance read says so instead of reporting no activity, and stays unpickable", () => {
+    const ready = candidateAccount(1, "argent");
+    const html = ledgerAccountPicker(
+      [{ account: ready, balance: null, deployed: false, duplicate: false, funded: null }],
+      [],
+      undefined,
+      "argentx",
+    );
+    expect(html).toContain("Couldn&#39;t check this account&#39;s activity. Try again.");
+    expect(html).not.toContain("No on-chain activity found");
+    expect(html).toMatch(new RegExp(`data-ledger-toggle="${ready.id}"[^>]*disabled`));
+  });
+
   test("an undeployed candidate says it has no activity, as the recovery picker does", () => {
     const html = ledgerAccountPicker([
       {

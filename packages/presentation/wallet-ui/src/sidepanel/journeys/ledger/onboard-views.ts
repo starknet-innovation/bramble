@@ -250,6 +250,8 @@ const candidateState = (candidate: LedgerCandidate): string => {
   if (candidate.funded) {
     return type === "openzeppelin" ? "Funded and ready to deploy" : "Funded, not deployed";
   }
+  // A failed balance read proves nothing: a funded account must not read as empty.
+  if (candidate.funded === null) return "Couldn't check this account's activity. Try again.";
   if (type === "argent") {
     // Only Ready's own path holds Ready accounts; one at Bramble's path is an
     // Argent account on the key Bramble reads, not Ready's.
