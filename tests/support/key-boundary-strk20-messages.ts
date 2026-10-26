@@ -74,6 +74,9 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   // answers "nothing to restart" in the harness, which has no browser runtime.
   { message: { type: "wallet.updateStatus" }, sender: extensionSender },
   { message: { type: "wallet.applyUpdate" }, sender: extensionSender },
+  // The one-time "opens as a popup" notice (#690): reads and clears a flag.
+  { message: { type: "wallet.sidePanelNotice" }, sender: extensionSender },
+  { message: { type: "wallet.dismissSidePanelNotice" }, sender: extensionSender },
   // Settings → Privacy → Unlock anyway (#668): clears a stuck submitting
   // marker; it reads no key material.
   { message: { type: "wallet.strk20ReleasePendingWrite" }, sender: extensionSender },

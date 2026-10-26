@@ -20,7 +20,7 @@ import { readApprovalSurfaceRequest } from "./approval-surface-request";
 export type ApprovalSurfaceBrowser = {
   readonly action?: {
     readonly onClicked?: {
-      readonly addListener: (listener: () => void) => void;
+      readonly addListener: (listener: (tab?: { readonly windowId?: number }) => void) => void;
     };
     readonly openPopup?: (options?: { readonly windowId?: number }) => Promise<void>;
     readonly setBadgeText?: (details: { readonly text: string }) => Promise<void>;
@@ -112,11 +112,15 @@ export const bindToolbarActivation = (
 
 /**
  * Keeps toolbar activation aligned with the user's approval-surface choice.
+ * `nativePanelClick` is false while the side panel is still being learned
+ * (./side-panel-learning): the toolbar click then reaches `action.onClicked`
+ * instead of Chromium's built-in panel behavior.
  * Browser API failures are returned to the caller but never mutate wallet data.
  */
 export const configureApprovalSurface = async (
   browser: ApprovalSurfaceBrowser | undefined,
   preference: ApprovalSurfacePreference,
+  nativePanelClick = true,
 ): Promise<void> => {
   const jobs: Promise<void>[] = [];
   if (browser?.action?.setPopup) {
@@ -125,7 +129,7 @@ export const configureApprovalSurface = async (
   if (browser?.sidePanel?.setPanelBehavior) {
     jobs.push(
       browser.sidePanel.setPanelBehavior({
-        openPanelOnActionClick: preference === "side-panel",
+        openPanelOnActionClick: preference === "side-panel" && nativePanelClick,
       }),
     );
   }

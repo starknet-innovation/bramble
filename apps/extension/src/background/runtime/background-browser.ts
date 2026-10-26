@@ -9,31 +9,33 @@
 
 import type { DataConsentPermissions } from "../analytics/data-consent";
 import type { ApprovalSurfaceBrowser } from "../approvals/approval-surface";
+import type { SidePanelLearningBrowser } from "../approvals/side-panel-learning";
 import type { OnboardingSurfaceBrowser } from "../onboarding/onboarding-surface";
 import type { RuntimeSender } from "../routing/senders";
 import type { AlarmsApi } from "../transactions/tx-monitor";
 import type { SessionAlarmsApi } from "./session-expiry-alarm";
 import type { UpdateRuntime } from "./update-ready";
 
-type RuntimeApi = UpdateRuntime & {
-  readonly getManifest?: () => { readonly version?: string };
-  readonly getPlatformInfo?: () => Promise<unknown>;
-  readonly getURL?: (path: string) => string;
-  readonly id: string;
-  readonly onInstalled: {
-    readonly addListener: (listener: (details: { readonly reason?: string }) => void) => void;
+type RuntimeApi = UpdateRuntime &
+  NonNullable<SidePanelLearningBrowser["runtime"]> & {
+    readonly getManifest?: () => { readonly version?: string };
+    readonly getPlatformInfo?: () => Promise<unknown>;
+    readonly getURL?: (path: string) => string;
+    readonly id: string;
+    readonly onInstalled: {
+      readonly addListener: (listener: (details: { readonly reason?: string }) => void) => void;
+    };
+    readonly onMessage: {
+      readonly addListener: (
+        listener: (
+          message: unknown,
+          sender: RuntimeSender,
+          sendResponse: (response: unknown) => void,
+        ) => true,
+      ) => void;
+    };
+    readonly sendMessage?: (message: unknown) => Promise<unknown>;
   };
-  readonly onMessage: {
-    readonly addListener: (
-      listener: (
-        message: unknown,
-        sender: RuntimeSender,
-        sendResponse: (response: unknown) => void,
-      ) => true,
-    ) => void;
-  };
-  readonly sendMessage?: (message: unknown) => Promise<unknown>;
-};
 
 // Two alarm consumers, one API: recurring reconciliation cadences
 // (./transactions/tx-monitor) and the one-shot unlock deadline
@@ -52,6 +54,7 @@ type TabsApi = {
  * where the browser does not provide it.
  */
 export type BackgroundBrowser = ApprovalSurfaceBrowser &
+  SidePanelLearningBrowser &
   OnboardingSurfaceBrowser &
   AlarmsGlobal & {
     readonly permissions?: DataConsentPermissions;
