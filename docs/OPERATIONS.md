@@ -51,6 +51,46 @@ Run the same probe locally without account data:
 bun run scripts/check-gateway-health.ts
 ```
 
+## Phishing feed
+
+The service worker downloads MetaMask's public eth-phishing-detect list (`DEFAULT_PHISHING_FEED_URL`)
+about every six hours. It reads the list with no host permission, which relies on the source answering
+with `Access-Control-Allow-Origin: *` (issue 772). Sites are matched on the device against the live list
+and the bundled baseline in `blocklist.ts`; the baseline always applies.
+
+**Monitoring.** `.github/workflows/phishing-feed-check.yml` runs `scripts/check-phishing-feed.ts` daily.
+It fails on `http-error`, `no-cors`, `malformed`, `timeout` or `transport-error`. It also fails on
+`too-small` (fewer than 50,000 domains) and `near-cap` (90% of `MAX_PHISHING_DOMAINS` or
+`MAX_PHISHING_DOMAIN_CHARS`). Route failed runs to the release owner, as for the gateway probe. On a
+user's device, **Download diagnostics** includes a `phishingFeed` row: domain count, age in whole
+hours, consecutive failed fetches, whether the cache write failed, and `stale` (no list, or older
+than 24 hours).
+
+Run the check locally:
+
+```sh
+bun run scripts/check-phishing-feed.ts
+```
+
+**What users keep when it fails.** A failed fetch or an unparseable body keeps the last good list.
+Protection stops updating but doesn't drop below that list and the baseline. A list that parses
+**replaces** the cached one at the next refresh, whether it grew, shrank, or was wrongly edited.
+
+**Runbook**
+
+1. `http-error`, `no-cors`, `timeout`, `transport-error`: check the URL in a browser and with
+   `curl -I`. If the source moved, point `DEFAULT_PHISHING_FEED_URL` at the new location in a reviewed
+   release. Prefer a source that allows any origin. Adding a new host permission instead makes
+   Chrome disable the wallet on update for users whose grants don't cover it.
+2. `malformed` or `too-small`: the upstream format or content changed. Read the upstream repository's
+   recent commits before changing the parser. Users keep their last good list meanwhile.
+3. `near-cap`: raise `MAX_PHISHING_DOMAINS` or `MAX_PHISHING_DOMAIN_CHARS` within the documented
+   chunk and `storage.local` budgets (`phishing-feed-cache.ts`), with the budget tests.
+4. Legitimate sites blocked (a wrong or malicious upstream edit): the list only blocks, so funds and
+   keys are not at risk, but affected users can't connect those sites. Report it upstream. A
+   corrected list reaches users within about six hours of the fix. If upstream won't fix it, ship a
+   release that changes the source. The wallet has no remote switch or per-site override today.
+
 ## Product analytics
 
 Product analytics are enabled by default with an in-product disclosure. A user may turn them off at

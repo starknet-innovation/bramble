@@ -12,6 +12,7 @@ import {
 import { type MultisigStore, memoryMultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import { memoryOriginHistory, type OriginHistoryStore } from "@bramble/permissions/origin-history";
+import type { PhishingFeedHealth } from "@bramble/permissions/phishing-feed";
 import { type PriceService, unavailablePriceService } from "@bramble/portfolio/prices";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type ActivityLog, memoryActivityLog, systemClock } from "@bramble/transactions/activity";
@@ -90,6 +91,7 @@ export type RouterContext = {
   readonly nostrRelayTransport?: NostrRelayTransport;
   readonly now: () => number;
   readonly originHistory: OriginHistoryStore;
+  readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
   readonly recoveryDiscovery: RecoveryDiscoveryCache;
@@ -128,6 +130,8 @@ export type MessageHandlerOptions = {
   readonly now?: () => number;
   readonly originGuard?: OriginGuard;
   readonly originHistory?: OriginHistoryStore;
+  /** How current the live phishing list is, for support diagnostics; absent reports none. */
+  readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
   readonly recoveryDiscovery?: RecoveryDiscoveryCache;
@@ -199,6 +203,10 @@ const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): Watc
 const balanceSnapshotsFor = (provided: BalanceSnapshotStore | undefined): BalanceSnapshotStore =>
   provided ?? memoryBalanceSnapshotStore();
 
+const phishingFeedHealthFor = (
+  health: (() => PhishingFeedHealth) | undefined,
+): Pick<RouterContext, "phishingFeedHealth"> => (health ? { phishingFeedHealth: health } : {});
+
 const nftSnapshotsFor = (
   provided: NftSnapshotStore | undefined,
 ): Pick<RouterContext, "nftSnapshots"> | Record<string, never> =>
@@ -265,6 +273,7 @@ export const routerContext = (
     ...nostrRelayTransportFor(options.nostrRelayTransport),
     now,
     originHistory: options.originHistory ?? memoryOriginHistory(),
+    ...phishingFeedHealthFor(options.phishingFeedHealth),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
     recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),

@@ -26,6 +26,14 @@ export type SupportDiagnostics = {
   readonly hasVault: boolean;
   readonly locked: boolean;
   readonly networkId: string;
+  /** How current the live phishing list is; null when the feed is not running. */
+  readonly phishingFeed: {
+    readonly ageHours: number | null;
+    readonly cacheWriteFailed: boolean;
+    readonly consecutiveFailures: number;
+    readonly domains: number;
+    readonly stale: boolean;
+  } | null;
   /** Tracked privacy jobs by kind, phase label, and outcome class. */
   readonly privacy: readonly {
     readonly count: number;
@@ -48,6 +56,22 @@ export type SupportDiagnostics = {
     readonly store: "activity";
   }[];
 };
+
+const isPhishingFeedHealth = (value: unknown): boolean =>
+  value === null ||
+  (isRecord(value) &&
+    hasOnlyKnownKeys(value, [
+      "ageHours",
+      "cacheWriteFailed",
+      "consecutiveFailures",
+      "domains",
+      "stale",
+    ]) &&
+    (value["ageHours"] === null || Number.isInteger(value["ageHours"])) &&
+    typeof value["cacheWriteFailed"] === "boolean" &&
+    Number.isInteger(value["consecutiveFailures"]) &&
+    Number.isInteger(value["domains"]) &&
+    typeof value["stale"] === "boolean");
 
 // A phase label is one of the fixed strings the background's job registry
 // emits (plus "job" for the whole run); bounded here rather than enumerated so
@@ -114,6 +138,7 @@ export const isSupportDiagnosticsResponse = (
       "hasVault",
       "locked",
       "networkId",
+      "phishingFeed",
       "privacy",
       "ready",
       "rpc",
@@ -126,6 +151,7 @@ export const isSupportDiagnosticsResponse = (
     typeof diagnostics["hasVault"] === "boolean" &&
     typeof diagnostics["locked"] === "boolean" &&
     typeof diagnostics["networkId"] === "string" &&
+    isPhishingFeedHealth(diagnostics["phishingFeed"]) &&
     Array.isArray(diagnostics["privacy"]) &&
     diagnostics["privacy"].every(isPrivacyDiagnosticRow) &&
     typeof diagnostics["ready"] === "boolean" &&

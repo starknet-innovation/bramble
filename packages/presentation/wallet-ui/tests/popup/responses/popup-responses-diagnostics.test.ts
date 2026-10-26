@@ -14,6 +14,13 @@ const diagnostics = () => ({
   hasVault: true,
   locked: false,
   networkId: "SN_MAIN",
+  phishingFeed: {
+    ageHours: 2,
+    cacheWriteFailed: false,
+    consecutiveFailures: 0,
+    domains: 109_652,
+    stale: false,
+  },
   privacy: [
     { count: 1, durationMs: 41_000, kind: "deposit", outcome: "ok", phase: "proving" },
     { count: 1, durationMs: 62_500, kind: "deposit", outcome: "timeout", phase: "job" },
@@ -57,6 +64,43 @@ describe("isSupportDiagnosticsResponse", () => {
       expect(
         isSupportDiagnosticsResponse({
           diagnostics: { ...diagnostics(), privacy: [row] },
+          ok: true,
+        }),
+      ).toBe(false);
+    }
+  });
+
+  test("carries the phishing feed's health as counts and hours, or null", () => {
+    expect(
+      isSupportDiagnosticsResponse({
+        diagnostics: { ...diagnostics(), phishingFeed: null },
+        ok: true,
+      }),
+    ).toBe(true);
+    const stale = {
+      ageHours: null,
+      cacheWriteFailed: true,
+      consecutiveFailures: 3,
+      domains: 0,
+      stale: true,
+    };
+    expect(
+      isSupportDiagnosticsResponse({
+        diagnostics: { ...diagnostics(), phishingFeed: stale },
+        ok: true,
+      }),
+    ).toBe(true);
+    const { phishingFeed: _feed, ...withoutFeed } = diagnostics();
+    expect(isSupportDiagnosticsResponse({ diagnostics: withoutFeed, ok: true })).toBe(false);
+    for (const feed of [
+      { ...stale, fetchedAt: 1_793_048_511_970 },
+      { ...stale, source: "https://raw.githubusercontent.com/x" },
+      { ...stale, ageHours: 1.5 },
+      { ...stale, stale: "yes" },
+    ]) {
+      expect(
+        isSupportDiagnosticsResponse({
+          diagnostics: { ...diagnostics(), phishingFeed: feed },
           ok: true,
         }),
       ).toBe(false);

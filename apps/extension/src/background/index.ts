@@ -277,7 +277,7 @@ const swapService = (() => {
 // silently accepting signatures or broadcasts into a volatile registry.
 const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
 const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
-// Live phishing feed, fetched under an explicit host permission, cached locally,
+// Live phishing feed, read through CORS with no host permission, cached locally,
 // and refreshed on worker start and on a recurring alarm once its TTL lapses.
 // The guard reads its in-memory snapshot on every check; the bundled seed list
 // in blocklist.ts is always enforced, before the first fetch and offline too.
@@ -383,6 +383,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   preferencesStore: preferenceStore,
   runtimeRpc,
   originGuard,
+  ...(phishingFeed ? { phishingFeedHealth: phishingFeed.health } : {}),
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,

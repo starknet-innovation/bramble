@@ -281,7 +281,12 @@ const handleStatus: RouterHandler = async (ctx, messageType, message) => {
 const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.diagnostics") return null;
   return readTypeOnlyInput(message, "wallet.diagnostics")
-    ? supportDiagnosticsResponse(ctx.wallet, ctx.session, ctx.preferencesStore)
+    ? supportDiagnosticsResponse(
+        ctx.wallet,
+        ctx.session,
+        ctx.preferencesStore,
+        ctx.phishingFeedHealth,
+      )
     : { error: "invalid diagnostics request" };
 };
 
