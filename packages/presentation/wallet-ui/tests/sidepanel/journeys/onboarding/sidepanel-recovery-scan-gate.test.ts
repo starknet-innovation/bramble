@@ -10,6 +10,7 @@ import {
   BRAAVOS_BASE_CLASS_HASH,
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
   deploymentClasses,
+  XVERSE_ARGENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
 import { ARGENT_ACCOUNT_CLASS_HASH, type DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
@@ -378,6 +379,35 @@ describe("recovery scan Ready gate", () => {
     expect(historicalRow?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(
       false,
     );
+  });
+
+  test("says Bramble cannot deploy a funded Xverse account, and never offers an unused one", async () => {
+    // Issue 734: Xverse deploys on the first send, so a funded counterfactual is
+    // the common case. Deploy accepts only the pinned release, so the row must
+    // not promise a deployment; an unused Xverse address belongs to nobody.
+    const xverse = (address: string, accountIndex: number): DerivedAccountRef => ({
+      ...brambleAccount,
+      accountContractType: "argent",
+      address,
+      classHash: XVERSE_ARGENT_CLASS_HASH,
+      deploymentSalt: "0x2",
+      derivation: { accountIndex, addressIndex: 0, kind: "starknet-bip44" },
+      id: `SN_MAIN:${address}`,
+    });
+    const app = mount([
+      { account: xverse("0x7e51", 1), deployed: false, funded: true },
+      { account: xverse("0x7e52", 2), deployed: false, funded: false },
+    ]);
+    await reachPicker(app);
+
+    const rows = rowsIn(app)("argent");
+    const funded = rows.find((row) => row.textContent?.includes("Account 1"));
+    const unused = rows.find((row) => row.textContent?.includes("Account 2"));
+    expect(funded?.querySelector("strong")?.textContent).toBe("Account 1 · Argent 0.4.0 (Xverse)");
+    expect(funded?.textContent).toContain("Bramble cannot deploy this Argent release");
+    expect(funded?.textContent).not.toContain("ready to deploy");
+    expect(unused?.textContent).toContain("No on-chain activity found");
+    expect(unused?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(true);
   });
 
   test("stops auto-selecting once a restore would reject the selection", async () => {
