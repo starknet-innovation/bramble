@@ -49,8 +49,11 @@ const systemClock = (): number => Date.now();
  * The old GitHub Pages copy (`metamask.github.io/.../v1/config.json`) returns
  * 404, so the live list never loaded (issue 772). It is served as `text/plain`;
  * the bounded fetch doesn't check the content type, and it rejects redirects.
- * Configurable per deployment via the `source` option; the background must
- * declare a matching host permission.
+ * It is read without a host permission: the file allows any origin
+ * (`Access-Control-Allow-Origin: *`) and the extension CSP allows HTTPS
+ * connections. A granted host here would make Chrome disable the wallet on
+ * update until each user re-approved it. Configurable per deployment via the
+ * `source` option; another source needs CORS or a reviewed host permission.
  */
 export const DEFAULT_PHISHING_FEED_URL =
   "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json";
