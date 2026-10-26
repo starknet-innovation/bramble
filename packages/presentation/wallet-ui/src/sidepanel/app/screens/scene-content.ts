@@ -86,5 +86,6 @@ export const sceneContent = (cache: RenderData, state: SceneContentState): strin
     state.selectedMultisigIntentId,
     state.todayKey,
     cache.signability,
+    cache.relays,
   );
 };

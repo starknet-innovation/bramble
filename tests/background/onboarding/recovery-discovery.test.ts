@@ -234,7 +234,9 @@ describe("recovery discovery", () => {
 
     const vendor = argentShapes.filter((shape) => shape === "argentx-bip44");
     const own = argentShapes.filter((shape) => shape === undefined);
-    expect(vendor.length).toBe(deploymentClasses("argent").length);
+    // Every Argent release on the wallet's own ladder, Xverse's build included;
+    // Ready's ladder takes all but Xverse's build (issue 734).
+    expect(vendor.length).toBe(deploymentClasses("argent").length - 1);
     expect(own.length).toBe(deploymentClasses("argent").length);
     // Braavos never names a scheme; the vault maps its family to the vendor axis.
     expect(braavosShapes.every((shape) => shape === undefined)).toBe(true);

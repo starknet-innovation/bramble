@@ -9,6 +9,7 @@ import {
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   deploymentClasses,
+  XVERSE_ARGENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
 import type { AccountContractType } from "@bramble/wallet-model/accounts";
 import {
@@ -113,8 +114,9 @@ const discoveryFingerprint = (
 // straight from the phrase on this wallet's own ladder, and their accounts
 // date from Argent 0.3.x too: one deployed at 0.3.1 and since upgraded was
 // missed because only the release this wallet creates was scanned there.
-// Braavos keys live on the plain BIP-44 address axis, which the vault
-// derivation maps to by family.
+// Xverse derives on that own ladder at its own Argent build (issue 734), so
+// that class is scanned there and never on Ready's. Braavos keys live on the
+// plain BIP-44 address axis, which the vault derivation maps to by family.
 const recoveryScanShapes = (): readonly {
   readonly accountContractType: AccountContractType;
   readonly classHash?: string;
@@ -125,11 +127,13 @@ const recoveryScanShapes = (): readonly {
     accountContractType: "argent" as const,
     classHash: entry.classHash,
   })),
-  ...deploymentClasses("argent").map((entry) => ({
-    accountContractType: "argent" as const,
-    classHash: entry.classHash,
-    derivation: "argentx-bip44" as const,
-  })),
+  ...deploymentClasses("argent")
+    .filter((entry) => !sameFelt(entry.classHash, XVERSE_ARGENT_CLASS_HASH))
+    .map((entry) => ({
+      accountContractType: "argent" as const,
+      classHash: entry.classHash,
+      derivation: "argentx-bip44" as const,
+    })),
   ...deploymentClasses("braavos").map((entry) => ({
     accountContractType: "braavos" as const,
     classHash: entry.classHash,

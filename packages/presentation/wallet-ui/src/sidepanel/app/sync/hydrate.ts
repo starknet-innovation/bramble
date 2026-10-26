@@ -190,6 +190,7 @@ const hydrateCachedView = async (
       ),
       (value) => {
         cache.transactions = value.entries;
+        cache.relays = value.relays;
       },
     );
   }
@@ -350,6 +351,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       (value) => {
         cache.transactions = value.entries;
         cache.historyUnavailable = value.historyUnavailable;
+        cache.relays = value.relays;
       },
       activeView !== "activity",
     );

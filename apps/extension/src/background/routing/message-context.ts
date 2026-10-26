@@ -12,11 +12,16 @@ import {
 import { type MultisigStore, memoryMultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import { memoryOriginHistory, type OriginHistoryStore } from "@bramble/permissions/origin-history";
+import type { PhishingFeedHealth } from "@bramble/permissions/phishing-feed";
 import { type PriceService, unavailablePriceService } from "@bramble/portfolio/prices";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type ActivityLog, memoryActivityLog, systemClock } from "@bramble/transactions/activity";
 import { type AllowanceStore, memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import { type SwapService, unavailableSwapService } from "@bramble/transactions/avnu";
+import {
+  memoryRelaySignatureLog,
+  type RelaySignatureLog,
+} from "@bramble/transactions/relay-signatures";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "../approvals/approvals";
@@ -86,9 +91,11 @@ export type RouterContext = {
   readonly nostrRelayTransport?: NostrRelayTransport;
   readonly now: () => number;
   readonly originHistory: OriginHistoryStore;
+  readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
   readonly recoveryDiscovery: RecoveryDiscoveryCache;
+  readonly relaySignatures: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly swap: SwapService;
@@ -123,9 +130,13 @@ export type MessageHandlerOptions = {
   readonly now?: () => number;
   readonly originGuard?: OriginGuard;
   readonly originHistory?: OriginHistoryStore;
+  /** How current the live phishing list is, for support diagnostics; absent reports none. */
+  readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
   readonly recoveryDiscovery?: RecoveryDiscoveryCache;
+  /** Signed OutsideExecution messages for Activity; in memory when absent. */
+  readonly relaySignatures?: RelaySignatureLog;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
@@ -192,6 +203,10 @@ const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): Watc
 const balanceSnapshotsFor = (provided: BalanceSnapshotStore | undefined): BalanceSnapshotStore =>
   provided ?? memoryBalanceSnapshotStore();
 
+const phishingFeedHealthFor = (
+  health: (() => PhishingFeedHealth) | undefined,
+): Pick<RouterContext, "phishingFeedHealth"> => (health ? { phishingFeedHealth: health } : {});
+
 const nftSnapshotsFor = (
   provided: NftSnapshotStore | undefined,
 ): Pick<RouterContext, "nftSnapshots"> | Record<string, never> =>
@@ -215,6 +230,10 @@ const waitersFor = (provided: SignatureWaiters | undefined): SignatureWaiters =>
 
 // Inert when no browser runtime is wired (tests, tooling): never restarts.
 const updatesFor = (updates: UpdateReady | undefined): UpdateReady => updates ?? inertUpdateReady;
+
+// An unwired relay log keeps records for this worker's lifetime only.
+const relaySignaturesFor = (log: RelaySignatureLog | undefined): RelaySignatureLog =>
+  log ?? memoryRelaySignatureLog();
 
 /**
  * Resolves every optional collaborator into the fully wired router context.
@@ -254,9 +273,11 @@ export const routerContext = (
     ...nostrRelayTransportFor(options.nostrRelayTransport),
     now,
     originHistory: options.originHistory ?? memoryOriginHistory(),
+    ...phishingFeedHealthFor(options.phishingFeedHealth),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
     recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),
+    relaySignatures: relaySignaturesFor(options.relaySignatures),
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session,
     swap: options.swap ?? unavailableSwapService,

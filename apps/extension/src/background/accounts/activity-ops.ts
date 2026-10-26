@@ -10,14 +10,17 @@ import {
   activityForScope,
   systemClock,
 } from "@bramble/transactions/activity";
+import type { RelaySignature, RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import { asUntrackedToken } from "@bramble/transactions/tx-history";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { RpcProvider } from "starknet";
 import { readActivityInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
+import { refreshRelaySignatures } from "../transactions/relay-status";
 import { mergeReconciledHistory, reconcileScope } from "../transactions/tx-reconcile";
 import type { WalletStatusReader } from "./wallet-reader";
 
@@ -26,6 +29,10 @@ type ActivityOpsDeps = {
   readonly multisigStore?: MultisigStore;
   readonly now?: () => number;
   readonly preferencesStore: WalletPreferencesStore;
+  /** Signed OutsideExecution messages for this device; absent lists none. */
+  readonly relaySignatures?: RelaySignatureLog;
+  /** Overrides endpoint construction for the relay status read (tests). */
+  readonly rpcProviderFor?: (nodeUrl: string) => RpcProvider;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
@@ -135,8 +142,47 @@ const accountHistory = async (
   }
 };
 
+const readRelaySignatures = async (
+  deps: ActivityOpsDeps,
+  log: RelaySignatureLog,
+  target: ActivityTarget,
+  refresh: boolean,
+  now: number,
+): Promise<readonly RelaySignature[]> =>
+  refresh
+    ? await refreshRelaySignatures(
+        { log, ...(deps.rpcProviderFor ? { rpcProviderFor: deps.rpcProviderFor } : {}) },
+        {
+          address: target.address,
+          rpcUrls: networkRpcUrls(
+            STARKNET_NETWORKS[target.networkId],
+            await deps.preferencesStore.read(),
+          ),
+          scope: target.scope,
+        },
+        now,
+      )
+    : await log.list(target.scope);
+
+// Signed-for-relay rows for the scope, read from chain when `refresh` is set.
+// They ride beside the transaction feed and never enter it (issue 299). Never
+// rejects: the refresh starts beside the history work and is awaited last, and
+// an unreadable log or preferences store only leaves the rows out.
+const relaySignatures = async (
+  deps: ActivityOpsDeps,
+  target: ActivityTarget,
+  refresh: boolean,
+  now: number,
+): Promise<{ readonly relays?: readonly RelaySignature[] }> => {
+  const log = deps.relaySignatures;
+  if (!log) return {};
+  const relays = await readRelaySignatures(deps, log, target, refresh, now).catch(() => []);
+  return relays.length > 0 ? { relays } : {};
+};
+
 /**
  * Returns the cached scope immediately when requested, otherwise refreshes it.
+ * Signed-for-relay records for the scope ride beside the feed as `relays`.
  */
 export const handleActivity = async (
   deps: ActivityOpsDeps,
@@ -149,9 +195,14 @@ export const handleActivity = async (
   const target = await activityTarget(deps, context, input.accountId);
   if (!target) return { error: "activity scope unavailable" };
   if (input.cached) {
-    return { activity: activityForScope(await deps.activity.list(), target.scope), ok: true };
+    return {
+      activity: activityForScope(await deps.activity.list(), target.scope),
+      ok: true,
+      ...(await relaySignatures(deps, target, false, 0)),
+    };
   }
   const now = (deps.now ?? systemClock)();
+  const relays = relaySignatures(deps, target, input.refreshHistory, now);
   // Ambient panel reads cover only unresolved transactions. L2-accepted rows
   // stay on the monitor's 15-minute lane unless the user opens or refreshes
   // Activity, avoiding a duplicate finality poll on every visible-panel tick.
@@ -177,5 +228,6 @@ export const handleActivity = async (
     activity: merged,
     ...(history.unavailable ? { historyUnavailable: true } : {}),
     ok: true,
+    ...(await relays),
   };
 };
