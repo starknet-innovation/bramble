@@ -31,7 +31,7 @@ const PRESENCE_TIMEOUT_MS = 3_000;
 /** Window size close to a side panel, so the wallet layout reads the same. */
 const WINDOW_SIZE = { height: 680, width: 400 } as const;
 
-/** Narrow `chrome.windows` surface; neither call needs a manifest permission. */
+/** Narrow `chrome.windows` surface; none of these needs a manifest permission. */
 type SurfaceWindowsApi = {
   readonly create: (options: {
     readonly focused: true;
@@ -40,13 +40,41 @@ type SurfaceWindowsApi = {
     readonly url: string;
     readonly width: number;
   }) => Promise<{ readonly id?: number } | undefined>;
+  /** Reads only the window type, which needs no `tabs` permission. */
+  readonly get: (windowId: number) => Promise<{ readonly type?: string } | undefined>;
   readonly update: (windowId: number, info: { readonly focused: true }) => Promise<unknown>;
 };
 
-/** Browser members the fallback reads, each optional so absence degrades. */
+/**
+ * Browser members the fallback reads, each optional so absence degrades.
+ * `getContexts` (Chrome 116+, no permission) lists this extension's own open
+ * pages, which is how a window outlives the worker that opened it.
+ */
 export type SurfaceFallbackBrowser = {
-  readonly runtime?: { readonly getURL?: (path: string) => string };
+  readonly runtime?: {
+    readonly getContexts?: (filter: {
+      readonly contextTypes: readonly string[];
+    }) => Promise<readonly unknown[]>;
+    readonly getURL?: (path: string) => string;
+  };
   readonly windows?: Partial<SurfaceWindowsApi>;
+};
+
+/** The window id of one `runtime.getContexts` entry showing `url`, if any. */
+const contextWindow = (context: unknown, url: string): number | undefined => {
+  if (typeof context !== "object" || context === null) {
+    return undefined;
+  }
+  const { documentUrl, windowId } = context as {
+    readonly documentUrl?: unknown;
+    readonly windowId?: unknown;
+  };
+  return typeof documentUrl === "string" &&
+    documentUrl.startsWith(url) &&
+    typeof windowId === "number" &&
+    windowId >= 0
+    ? windowId
+    : undefined;
 };
 
 /** Injected effects, so tests control the channel and the timer. */
@@ -80,25 +108,54 @@ export const createSurfaceFallback = ({
   if (!create || !update || !getURL) {
     return undefined;
   }
+  const url = getURL("sidepanel.html");
+  const getContexts = browser?.runtime?.getContexts;
+  const get = windows?.get;
   let windowId: number | undefined;
   let opening: Promise<void> | null = null;
 
-  const openWindow = async (): Promise<void> => {
-    if (windowId !== undefined) {
-      try {
-        await update(windowId, { focused: true });
-        return;
-      } catch {
-        // The user closed it; open a fresh one below.
-        windowId = undefined;
-      }
+  const focus = async (id: number): Promise<boolean> => {
+    try {
+      await update(id, { focused: true });
+      windowId = id;
+      return true;
+    } catch {
+      return false;
     }
-    const created = await create({
-      focused: true,
-      type: "popup",
-      url: getURL("sidepanel.html"),
-      ...WINDOW_SIZE,
-    });
+  };
+
+  // The service worker forgets `windowId` when it is suspended, but the window
+  // stays open. Find it again among this extension's own tabs, keeping only a
+  // popup-type window: the options page is the same document in an ordinary
+  // tab, and focusing its window would not bring the wallet forward.
+  const findOpenWindow = async (): Promise<number | undefined> => {
+    if (!getContexts || !get) {
+      return undefined;
+    }
+    try {
+      const contexts = await getContexts({ contextTypes: ["TAB"] });
+      for (const context of contexts) {
+        const id = contextWindow(context, url);
+        if (id !== undefined && (await get(id).catch(() => undefined))?.type === "popup") {
+          return id;
+        }
+      }
+    } catch {
+      // Nothing to reuse; open a fresh window below.
+    }
+    return undefined;
+  };
+
+  const openWindow = async (): Promise<void> => {
+    if (windowId !== undefined && (await focus(windowId))) {
+      return;
+    }
+    windowId = undefined;
+    const existing = await findOpenWindow();
+    if (existing !== undefined && (await focus(existing))) {
+      return;
+    }
+    const created = await create({ focused: true, type: "popup", url, ...WINDOW_SIZE });
     windowId = typeof created?.id === "number" ? created.id : undefined;
   };
 

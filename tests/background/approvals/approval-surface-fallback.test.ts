@@ -307,4 +307,90 @@ describe("approval surface window fallback", () => {
     expect(created).toEqual([]);
     expect(createBrowserSurfaceFallback(undefined)).toBeUndefined();
   });
+
+  test("finds the wallet window again after the worker restarts (#764 review)", async () => {
+    const browser = restartableBrowser();
+    await fallbackFor(browser)?.open();
+    expect(browser.created).toHaveLength(1);
+
+    // A suspended worker starts over with no memory of the window it opened.
+    await fallbackFor(browser)?.open();
+
+    expect(browser.created).toHaveLength(1);
+    expect(browser.focused).toEqual([1]);
+  });
+
+  test("does not mistake the options tab for the wallet window", async () => {
+    const browser = restartableBrowser();
+    browser.open.set(9, "normal");
+    await fallbackFor(browser)?.open();
+
+    expect(browser.created).toHaveLength(1);
+    expect(browser.focused).toEqual([]);
+  });
+
+  test("does not reuse a popup showing another extension page", async () => {
+    const browser = restartableBrowser();
+    browser.foreign.set(8, "chrome-extension://id/ledger-grant.html");
+    await fallbackFor(browser)?.open();
+
+    expect(browser.created).toHaveLength(1);
+    expect(browser.focused).toEqual([]);
+  });
+
+  test("opens a fresh window when the remembered one was closed while the worker slept", async () => {
+    const browser = restartableBrowser();
+    await fallbackFor(browser)?.open();
+    browser.open.delete(1);
+    await fallbackFor(browser)?.open();
+
+    expect(browser.created).toHaveLength(2);
+  });
 });
+
+/**
+ * Browser state that outlives any one fallback instance, as a real window
+ * outlives the service worker that opened it.
+ */
+const restartableBrowser = () => {
+  const url = "chrome-extension://id/sidepanel.html";
+  const open = new Map<number, string>();
+  // Popup windows showing some other extension page, such as the Ledger grant.
+  const foreign = new Map<number, string>();
+  const created: number[] = [];
+  const focused: number[] = [];
+  const browser: SurfaceFallbackBrowser = {
+    runtime: {
+      getContexts: async () => [
+        ...[...open.keys()].map((windowId) => ({ documentUrl: `${url}#home`, windowId })),
+        ...[...foreign].map(([windowId, documentUrl]) => ({ documentUrl, windowId })),
+      ],
+      getURL: (path) => `chrome-extension://id/${path}`,
+    },
+    windows: {
+      async create() {
+        const id = created.length + 1;
+        created.push(id);
+        open.set(id, "popup");
+        return { id };
+      },
+      async get(windowId) {
+        const type = foreign.has(windowId) ? "popup" : open.get(windowId);
+        if (!type) {
+          throw new Error("No window with id");
+        }
+        return { type };
+      },
+      async update(windowId) {
+        if (!open.has(windowId) && !foreign.has(windowId)) {
+          throw new Error("No window with id");
+        }
+        focused.push(windowId);
+      },
+    },
+  };
+  return { browser, created, focused, foreign, open };
+};
+
+const fallbackFor = ({ browser }: ReturnType<typeof restartableBrowser>) =>
+  createSurfaceFallback({ browser, channel: () => null, schedule: () => () => undefined });
