@@ -61,6 +61,8 @@ export type LedgerOnboardView =
       readonly kind: "picker";
       readonly application: LedgerEip2645Application;
       readonly candidates: readonly LedgerCandidate[];
+      /** A further page is being read or is queued behind the current one. */
+      readonly loadingMore?: boolean;
       readonly message?: string;
       readonly selected: readonly string[];
     }

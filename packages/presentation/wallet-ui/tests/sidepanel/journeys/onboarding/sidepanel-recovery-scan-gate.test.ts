@@ -140,6 +140,36 @@ describe("recovery scan Ready gate", () => {
     document.body.replaceChildren();
   });
 
+  test("Enter in a passphrase field continues only once the passphrase is valid", async () => {
+    const app = mount();
+    click(app, "#add-existing-button");
+    click(app, "#recovery-method-button");
+    setValue(app, 'input[name="import-word-0"]', MNEMONIC);
+    click(app, "#recovery-continue");
+    await tick();
+    const step = (name: string): boolean =>
+      app.querySelector<HTMLElement>(`[data-onboarding-step="${name}"]`)?.hidden === true;
+    const enter = (name: string): boolean => {
+      const event = new window.KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Enter",
+      });
+      app.querySelector(`input[name="${name}"]`)?.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    setValue(app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(app, 'input[name="vaultPassphraseConfirm"]', `${PASSPHRASE}x`);
+    expect(enter("vaultPassphraseConfirm")).toBe(true);
+    expect(step("password")).toBe(false);
+
+    setValue(app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    expect(enter("vaultPassphraseConfirm")).toBe(true);
+    expect(step("password")).toBe(true);
+    expect(step("recovery-accounts")).toBe(false);
+  });
+
   test("says it is searching every account type while the scan is still running", async () => {
     let finish: (value: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>) => void =
       () => undefined;
