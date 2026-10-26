@@ -234,6 +234,19 @@ describe("recording a signature for relay", () => {
     expect(await signDirect(throwing, outside())).toEqual(expect.objectContaining({ ok: true }));
   });
 
+  test("a log write that never settles does not hold back the approved signature", async () => {
+    signFails = false;
+    const recorded: unknown[] = [];
+    const stalled: Pick<RelaySignatureLog, "record"> = {
+      record: (entry) => {
+        recorded.push(entry);
+        return new Promise<void>(() => undefined);
+      },
+    };
+    expect(await signDirect(stalled, outside())).toEqual(expect.objectContaining({ ok: true }));
+    expect(recorded).toHaveLength(1);
+  });
+
   test("only account types with a verified nonce view are tracked", async () => {
     const relaySignatures = memoryRelaySignatureLog();
     for (const [type, hash] of [

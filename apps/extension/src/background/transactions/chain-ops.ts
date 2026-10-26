@@ -187,8 +187,9 @@ export const executeSignApproval = async (
     }
     const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
     // A relay authorization the site can submit later is listed in Activity as
-    // signed, never as a transaction; recording it cannot fail the signature.
-    await recordRelaySignature(deps.relaySignatures, {
+    // signed, never as a transaction. Recording can neither fail nor delay the
+    // signature: it never rejects, and the reply does not wait for the write.
+    void recordRelaySignature(deps.relaySignatures, {
       account,
       messageHash,
       origin: input.origin,

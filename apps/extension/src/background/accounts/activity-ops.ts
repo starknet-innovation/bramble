@@ -142,17 +142,14 @@ const accountHistory = async (
   }
 };
 
-// Signed-for-relay rows for the scope, read from chain when `refresh` is set.
-// They ride beside the transaction feed and never enter it (issue 299).
-const relaySignatures = async (
+const readRelaySignatures = async (
   deps: ActivityOpsDeps,
+  log: RelaySignatureLog,
   target: ActivityTarget,
   refresh: boolean,
   now: number,
-): Promise<{ readonly relays?: readonly RelaySignature[] }> => {
-  const log = deps.relaySignatures;
-  if (!log) return {};
-  const relays = refresh
+): Promise<readonly RelaySignature[]> =>
+  refresh
     ? await refreshRelaySignatures(
         { log, ...(deps.rpcProviderFor ? { rpcProviderFor: deps.rpcProviderFor } : {}) },
         {
@@ -165,7 +162,21 @@ const relaySignatures = async (
         },
         now,
       )
-    : await log.list(target.scope).catch(() => []);
+    : await log.list(target.scope);
+
+// Signed-for-relay rows for the scope, read from chain when `refresh` is set.
+// They ride beside the transaction feed and never enter it (issue 299). Never
+// rejects: the refresh starts beside the history work and is awaited last, and
+// an unreadable log or preferences store only leaves the rows out.
+const relaySignatures = async (
+  deps: ActivityOpsDeps,
+  target: ActivityTarget,
+  refresh: boolean,
+  now: number,
+): Promise<{ readonly relays?: readonly RelaySignature[] }> => {
+  const log = deps.relaySignatures;
+  if (!log) return {};
+  const relays = await readRelaySignatures(deps, log, target, refresh, now).catch(() => []);
   return relays.length > 0 ? { relays } : {};
 };
 
@@ -191,6 +202,7 @@ export const handleActivity = async (
     };
   }
   const now = (deps.now ?? systemClock)();
+  const relays = relaySignatures(deps, target, input.refreshHistory, now);
   // Ambient panel reads cover only unresolved transactions. L2-accepted rows
   // stay on the monitor's 15-minute lane unless the user opens or refreshes
   // Activity, avoiding a duplicate finality poll on every visible-panel tick.
@@ -216,6 +228,6 @@ export const handleActivity = async (
     activity: merged,
     ...(history.unavailable ? { historyUnavailable: true } : {}),
     ok: true,
-    ...(await relaySignatures(deps, target, input.refreshHistory, now)),
+    ...(await relays),
   };
 };

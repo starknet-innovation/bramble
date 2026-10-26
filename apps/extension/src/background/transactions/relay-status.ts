@@ -11,7 +11,9 @@
  * record as it was, and absence of evidence is never read as an outcome. The
  * read is bounded per refresh and throttled per record, and runs only from an
  * Activity refresh. Rows never read go first, then the least recently read, so
- * no row is starved by newer ones.
+ * no row is starved by newer ones. One refresh reads the latest block at most
+ * once and the rows' nonces in parallel, so a slow node costs one round trip
+ * rather than one per row.
  */
 import { withRpcFallback } from "@bramble/starknet/provider";
 import type { ActivityScope } from "@bramble/transactions/activity";
@@ -22,6 +24,11 @@ import type {
 } from "@bramble/transactions/relay-signatures";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
+
+type ProviderFor = (nodeUrl: string) => RpcProvider;
+
+/** The latest block's number and timestamp: one clock for every row in a refresh. */
+type ChainClock = { readonly blockNumber: number; readonly timestamp: number };
 
 /** Most records read from chain in one Activity refresh. */
 export const MAX_RELAY_READS_PER_REFRESH = 4;
@@ -44,41 +51,47 @@ const nonceUnused = (result: readonly string[]): boolean | null => {
   return felt === "0x1" ? true : felt === "0x0" ? false : null;
 };
 
+// The block's own timestamp, not this device's clock, decides expiry, so it is
+// read only when some row's deadline may have passed by the local clock. A
+// failed or malformed read leaves expiry undecided for this refresh.
+const readChainClock = async (
+  rpcUrls: readonly string[],
+  rpcProviderFor: ProviderFor | undefined,
+): Promise<ChainClock | null> => {
+  const block = await withRpcFallback(
+    rpcUrls,
+    (provider) => provider.getBlockWithTxHashes("latest"),
+    rpcProviderFor,
+  ).catch(() => null);
+  return block &&
+    "block_number" in block &&
+    typeof block.block_number === "number" &&
+    typeof block.timestamp === "number"
+    ? { blockNumber: block.block_number, timestamp: block.timestamp }
+    : null;
+};
+
+const pastDeadline = (entry: RelaySignature, nowSeconds: number): boolean =>
+  entry.executeBefore !== undefined && nowSeconds >= entry.executeBefore;
+
 const readOne = async (
   provider: RpcProvider,
   address: string,
   entry: RelaySignature,
-  nowSeconds: number,
+  clock: ChainClock | null,
 ): Promise<RelaySignatureStatus> => {
   const deadline = entry.executeBefore;
-  // Only when the local clock says the deadline may have passed is a block
-  // read: its own timestamp, not this device's clock, decides expiry, and the
-  // nonce is read at that same block so the two answers agree.
-  const block =
-    deadline !== undefined && nowSeconds >= deadline
-      ? await provider.getBlockWithTxHashes("latest")
-      : null;
-  const blockNumber =
-    block && "block_number" in block && typeof block.block_number === "number"
-      ? block.block_number
-      : null;
+  // A row that can expire is read at the clock's block, so the nonce and the
+  // timestamp describe the same chain state.
+  const expiring = clock !== null && deadline !== undefined && clock.timestamp >= deadline;
   const unused = nonceUnused(
     await provider.callContract(
       { calldata: [entry.nonce], contractAddress: address, entrypoint: NONCE_VIEW },
-      blockNumber ?? "latest",
+      expiring ? clock.blockNumber : "latest",
     ),
   );
   if (unused === false) return "nonce-used";
-  if (
-    unused === true &&
-    deadline !== undefined &&
-    blockNumber !== null &&
-    typeof block?.timestamp === "number" &&
-    block.timestamp >= deadline
-  ) {
-    return "expired";
-  }
-  return "signed";
+  return unused === true && expiring ? "expired" : "signed";
 };
 
 /**
@@ -90,7 +103,7 @@ const readOne = async (
 export const refreshRelaySignatures = async (
   deps: {
     readonly log: RelaySignatureLog;
-    readonly rpcProviderFor?: (nodeUrl: string) => RpcProvider;
+    readonly rpcProviderFor?: ProviderFor;
   },
   target: {
     readonly address: string;
@@ -105,14 +118,21 @@ export const refreshRelaySignatures = async (
     .sort((a, b) => (a.checkedAt ?? -1) - (b.checkedAt ?? -1))
     .slice(0, MAX_RELAY_READS_PER_REFRESH);
   if (batch.length === 0) return stored;
-  const reads = new Map<string, RelaySignatureStatus>();
-  for (const entry of batch) {
-    const status = await withRpcFallback(
-      target.rpcUrls,
-      (provider) => readOne(provider, target.address, entry, Math.floor(now / 1000)),
-      deps.rpcProviderFor,
-    ).catch((): RelaySignatureStatus => "signed");
-    reads.set(entry.messageHash, status);
-  }
+  const nowSeconds = Math.floor(now / 1000);
+  const clock = batch.some((entry) => pastDeadline(entry, nowSeconds))
+    ? await readChainClock(target.rpcUrls, deps.rpcProviderFor)
+    : null;
+  const statuses = await Promise.all(
+    batch.map((entry) =>
+      withRpcFallback(
+        target.rpcUrls,
+        (provider) => readOne(provider, target.address, entry, clock),
+        deps.rpcProviderFor,
+      ).catch((): RelaySignatureStatus => "signed"),
+    ),
+  );
+  const reads = new Map(
+    batch.map((entry, index) => [entry.messageHash, statuses[index] ?? "signed"]),
+  );
   return deps.log.updateStatuses(target.scope, reads, now).catch(() => stored);
 };

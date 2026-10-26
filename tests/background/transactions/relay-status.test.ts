@@ -36,7 +36,11 @@ const input = (overrides: Partial<RelaySignatureInput> = {}): RelaySignatureInpu
   ...overrides,
 });
 
-type Answer = { readonly nonce: readonly string[] | Error; readonly timestamp?: number };
+type Answer = {
+  readonly block?: Error;
+  readonly nonce: readonly string[] | Error;
+  readonly timestamp?: number;
+};
 
 // A provider that answers the nonce view and the latest block, and records
 // every call so the tests can see what was asked and at which block.
@@ -49,6 +53,7 @@ const provider = (answer: Answer, calls: unknown[] = []): RpcProvider =>
     },
     getBlockWithTxHashes: async (block: unknown) => {
       calls.push({ block: "getBlock", requested: block });
+      if (answer.block) throw answer.block;
       return { block_number: 77, timestamp: answer.timestamp ?? DEADLINE };
     },
   }) as unknown as RpcProvider;
@@ -199,6 +204,81 @@ describe("refreshRelaySignatures", () => {
         .map((row) => row.messageHash)
         .sort(),
     ).toEqual(expect.arrayContaining(stale));
+  });
+
+  test("one refresh reads the latest block once, and every expiring row at that block", async () => {
+    const rows = ["0x1", "0x2", "0x3"].map((messageHash) => input({ messageHash }));
+    const { calls, result } = await refresh({ nonce: ["0x1"], timestamp: DEADLINE }, rows);
+    expect(calls.filter((call) => (call as { block: unknown }).block === "getBlock")).toHaveLength(
+      1,
+    );
+    expect(calls.filter((call) => (call as { block: unknown }).block === 77)).toHaveLength(3);
+    expect(result.every((row) => row.status === "expired")).toBe(true);
+  });
+
+  test("the rows' nonces are read in parallel, not one after another", async () => {
+    const rows = ["0x1", "0x2", "0x3"].map((messageHash) =>
+      input({ executeBefore: 2e9, messageHash }),
+    );
+    // Each read answers only once all three have started, so reading them in
+    // sequence would never finish.
+    let started = 0;
+    let release: () => void = () => undefined;
+    const allStarted = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const gated = {
+      callContract: async () => {
+        started += 1;
+        if (started === rows.length) release();
+        await allStarted;
+        return ["0x0"];
+      },
+    } as unknown as RpcProvider;
+    const log = memoryRelaySignatureLog(() => 1);
+    for (const row of rows) await log.record(row);
+    const result = await Promise.race([
+      refreshRelaySignatures(
+        { log, rpcProviderFor: () => gated },
+        { address: ADDRESS, rpcUrls: ["https://rpc.example"], scope },
+        NOW,
+      ),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1_000)),
+    ]);
+    expect(result?.every((row) => row.status === "nonce-used")).toBe(true);
+  });
+
+  test("a block without a number leaves expiry undecided but still proves a used nonce", async () => {
+    const pending = {
+      callContract: async (_call: unknown, block: unknown) => (block === "latest" ? ["0x0"] : []),
+      getBlockWithTxHashes: async () => ({ timestamp: DEADLINE }),
+    } as unknown as RpcProvider;
+    const log = memoryRelaySignatureLog(() => 1);
+    await log.record(input());
+    const result = await refreshRelaySignatures(
+      { log, rpcProviderFor: () => pending },
+      { address: ADDRESS, rpcUrls: ["https://rpc.example"], scope },
+      NOW,
+    );
+    expect(result[0]?.status).toBe("nonce-used");
+  });
+
+  test("a failed block read leaves the row signed", async () => {
+    // The failing node is benched for the rest of the refresh, so nothing is proven.
+    const { result } = await refresh({ block: new Error("block unavailable"), nonce: ["0x1"] });
+    expect(result[0]?.status).toBe("signed");
+    expect(result[0]?.checkedAt).toBe(NOW);
+  });
+
+  test("once the block is read, its clock expires a row the device clock has not reached", async () => {
+    // The first row is past its deadline by the device clock, so the block is
+    // read; its timestamp is also past the second row's later deadline.
+    const rows = [
+      input({ messageHash: "0x1" }),
+      input({ executeBefore: DEADLINE + 20, messageHash: "0x2" }),
+    ];
+    const { result } = await refresh({ nonce: ["0x1"], timestamp: DEADLINE + 30 }, rows);
+    expect(result.map((row) => row.status)).toEqual(["expired", "expired"]);
   });
 
   test("an unreadable log yields no rows instead of throwing", async () => {
