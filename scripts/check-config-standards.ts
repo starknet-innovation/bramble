@@ -85,17 +85,34 @@ if (
 // without GHSA-pqg4-j6r4-53mv. moment reaches the terminal's serverless
 // private-swap route through @avnu/avnu-sdk (^2.30.1); 2.31.0 is the first release
 // without GHSA-4p3w-j4w9-5jqw (moderate, so the high-level audit gate would not
-// catch it). The pins keep `bun audit` green until the parents' ranges move up
-// on their own.
+// catch it). happy-dom reaches the tests through vitest's optional peer as well as
+// @happy-dom/global-registrator; 21.0.4 is the first release without
+// GHSA-834v-8h66-3h79. vite reaches vitest, Storybook and the Vite plugins
+// through ^8 ranges that had kept 8.2.2; 8.3.3 (the direct pin) is the first 8.3
+// release without GHSA-587h-7wmj-h5pm. zod reaches starknet, @avnu/avnu-sdk and
+// knip through ^4 ranges; 4.6.6 is the first release without GHSA-mrhx-c7xc-m3w5.
+// The pins keep `bun audit` green until the parents' ranges move up on their own.
 const overrides = packageJson["overrides"];
 if (
   !isRecord(overrides) ||
-  !hasOnlyKeys(overrides, ["moment", "qs", "sharp", "shell-quote", "source-map-js"]) ||
+  !hasOnlyKeys(overrides, [
+    "happy-dom",
+    "moment",
+    "qs",
+    "sharp",
+    "shell-quote",
+    "source-map-js",
+    "vite",
+    "zod",
+  ]) ||
+  overrides["happy-dom"] !== "21.0.4" ||
   overrides["moment"] !== "2.31.0" ||
   overrides["qs"] !== "6.16.0" ||
   overrides["sharp"] !== "0.35.5" ||
   overrides["shell-quote"] !== "1.11.0" ||
-  overrides["source-map-js"] !== "1.2.2"
+  overrides["source-map-js"] !== "1.2.2" ||
+  overrides["vite"] !== "8.3.3" ||
+  overrides["zod"] !== "4.6.6"
 ) {
   failures.push("package.json must retain the reviewed security overrides");
 }
