@@ -6,7 +6,10 @@
  * names the relay it turns on.
  */
 import { describe, expect, test } from "bun:test";
-import { SPONSORED_DEPLOY_REFUSED } from "@bramble/privacy/sponsored-deploy";
+import {
+  SPONSORED_DEPLOY_REFUSED,
+  SPONSORED_DEPLOY_UNREACHABLE,
+} from "@bramble/privacy/sponsored-deploy";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import {
@@ -33,6 +36,9 @@ import {
   ozAccount,
   relay,
 } from "../../support/sponsored-deploy-harness";
+
+const submit = (deps: DeployAccountDeps) =>
+  handleDeployAccountSponsored(deps, { type: "wallet.deployAccountSponsored" });
 
 describe("sponsored deploy offer", () => {
   test("is offered when the sponsor accepts an account that cannot pay its own deploy", async () => {
@@ -64,6 +70,29 @@ describe("sponsored deploy offer", () => {
     }
   });
 
+  test("an unreachable relay offers nothing rather than claiming the sponsor said no", async () => {
+    const answers = [
+      async (): Promise<Response> => new Response("bad gateway", { status: 502 }),
+      async (): Promise<Response> => {
+        throw new TypeError("fetch failed");
+      },
+    ];
+    for (const http of answers) {
+      const { deps } = await harness({ relay: { calls: [], http } });
+      expect(await handleDeploySponsorship(deps, { type: "wallet.deploySponsorship" })).toEqual({
+        ok: true,
+        sponsorship: "none",
+      });
+    }
+  });
+
+  test("an unreachable relay at submission sends nothing and leaves no attempt behind", async () => {
+    const http = async (): Promise<Response> => new Response("bad gateway", { status: 502 });
+    const { deps, pending } = await harness({ relay: { calls: [], http } });
+    expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_UNREACHABLE });
+    expect(pending.entry(ozAccount)).toBeUndefined();
+  });
+
   test("says the sponsor declined, so the screen can fall back to a self-paid deploy", async () => {
     const { deps } = await harness({ relay: relay(accepted, false) });
     expect(await handleDeploySponsorship(deps, { type: "wallet.deploySponsorship" })).toEqual({
@@ -74,9 +103,6 @@ describe("sponsored deploy offer", () => {
 });
 
 describe("sponsored deploy submission", () => {
-  const submit = (deps: DeployAccountDeps) =>
-    handleDeployAccountSponsored(deps, { type: "wallet.deployAccountSponsored" });
-
   test("deploys through the sponsor and records a row whose fee is not the user's", async () => {
     const sponsor = relay(accepted);
     const { activity, deps } = await harness({ relay: sponsor });
@@ -120,7 +146,7 @@ describe("sponsored deploy submission", () => {
     expect(await submit(deps)).toEqual({ error: DEPLOYMENT_MAY_BE_ON_ITS_WAY });
     chain.deployed = true;
     expect(await submit(deps)).toEqual({ error: "account already deployed" });
-    expect(pending.pending(ozAccount)).toBeUndefined();
+    expect(pending.entry(ozAccount)).toBeUndefined();
     expect(sponsor.calls).toEqual(["paymaster_buildTransaction", "paymaster_executeTransaction"]);
   });
 
@@ -129,7 +155,7 @@ describe("sponsored deploy submission", () => {
     const { deps, pending } = await harness({ deployed: true, relay: sponsor });
     expect(await submit(deps)).toEqual({ error: "account already deployed" });
     expect(sponsor.calls).toEqual([]);
-    expect(pending.pending(ozAccount)).toBeUndefined();
+    expect(pending.entry(ozAccount)).toBeUndefined();
   });
 
   test("an unreadable deployment status is unknown, never deployed, and sends nothing", async () => {
@@ -137,7 +163,7 @@ describe("sponsored deploy submission", () => {
     const { deps, pending } = await harness({ deployed: new Error("rpc down"), relay: sponsor });
     expect(await submit(deps)).toEqual({ error: DEPLOYMENT_STATUS_UNKNOWN });
     expect(sponsor.calls).toEqual([]);
-    expect(pending.pending(ozAccount)).toBeUndefined();
+    expect(pending.entry(ozAccount)).toBeUndefined();
   });
 
   test("refuses an unsupported class and a network with sponsorship off", async () => {

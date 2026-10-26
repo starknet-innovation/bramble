@@ -50,11 +50,26 @@ export const SPONSORED_DEPLOY_REFUSED =
 export const SPONSORED_DEPLOY_UNSUPPORTED =
   "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.";
 
-/** A determinate refusal: the relay refused or never received the request. */
+/** The relay could not be reached or answered unusably. Nothing was sent. */
+export const SPONSORED_DEPLOY_UNREACHABLE =
+  "Couldn't reach the sponsor. Nothing was sent — try again.";
+
+/** The relay explicitly refused: a JSON-RPC error object or an HTTP 4xx. */
 export class SponsoredDeployRefusedError extends WalletError {
   constructor() {
     super(SPONSORED_DEPLOY_REFUSED);
     this.name = "SponsoredDeployRefusedError";
+  }
+}
+
+/**
+ * A quote that failed without an explicit refusal: transport failure, deadline,
+ * 5xx, or an unusable answer. Nothing was sent; the sponsor never said no.
+ */
+export class SponsoredDeployUnavailableError extends WalletError {
+  constructor() {
+    super(SPONSORED_DEPLOY_UNREACHABLE);
+    this.name = "SponsoredDeployUnavailableError";
   }
 }
 
@@ -205,27 +220,71 @@ const isInformationalFee = (value: unknown): boolean =>
     hasOnlyKnownKeys(value, FEE_KEYS) &&
     Object.values(value).every((entry) => typeof entry === "string" && isStarkFieldElement(entry)));
 
+const MAX_REFUSAL_BYTES = 64 * 1024;
+
+// Whether the relay's own answer was a refusal: an HTTP 4xx, or a 2xx carrying
+// a JSON-RPC error object. Read from a clone, bounded, after the hardened
+// transport has already failed the request; anything unreadable is not a
+// refusal.
+const isExplicitRefusal = async (response: Response | undefined): Promise<boolean> => {
+  if (!response) return false;
+  if (response.status >= 400 && response.status < 500) return true;
+  const reader = response.ok ? response.body?.getReader() : undefined;
+  if (!reader) return false;
+  const decoder = new TextDecoder();
+  let text = "";
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > MAX_REFUSAL_BYTES) {
+        await reader.cancel();
+        return false;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    const body: unknown = JSON.parse(text + decoder.decode());
+    return isRecord(body) && isRecord(body["error"]);
+  } catch {
+    return false;
+  }
+};
+
 /** A sponsor's acceptance of one exact deployment; nothing is in flight. */
 export type SponsoredDeployQuote = { readonly deployment: SponsoredDeploymentData };
 
 /**
  * Asks the relay to sponsor `deployment`. Resolves with the wallet's own frozen
  * copy only when the relay echoes it exactly under sponsored parameters. Every
- * failure is a {@link SponsoredDeployRefusedError}: a quote never broadcasts.
+ * failure is determinate, since a quote never broadcasts: a
+ * {@link SponsoredDeployRefusedError} only for an explicit refusal (a JSON-RPC
+ * error object or an HTTP 4xx), otherwise a {@link SponsoredDeployUnavailableError}.
  */
 export const quoteSponsoredDeploy = async (input: {
   readonly config: SponsoredDeployConfig;
   readonly deployment: SponsoredDeploymentData;
   readonly http?: PaymasterHttp;
 }): Promise<SponsoredDeployQuote> => {
+  const http = input.http ?? fetch;
+  let answered: Response | undefined;
   let result: unknown;
   try {
-    result = await rpc(input.http ?? fetch, input.config.url, "paymaster_buildTransaction", {
-      parameters: PARAMETERS,
-      transaction: { deployment: input.deployment, type: "deploy" },
-    });
+    result = await rpc(
+      async (url, init) => {
+        const response = await http(url, init);
+        answered = response.clone();
+        return response;
+      },
+      input.config.url,
+      "paymaster_buildTransaction",
+      { parameters: PARAMETERS, transaction: { deployment: input.deployment, type: "deploy" } },
+    );
   } catch {
-    throw new SponsoredDeployRefusedError();
+    throw (await isExplicitRefusal(answered))
+      ? new SponsoredDeployRefusedError()
+      : new SponsoredDeployUnavailableError();
   }
   if (
     !isRecord(result) ||
@@ -235,7 +294,7 @@ export const quoteSponsoredDeploy = async (input: {
     !isSponsoredParameters(result["parameters"]) ||
     !isInformationalFee(result["fee"])
   ) {
-    throw new SponsoredDeployRefusedError();
+    throw new SponsoredDeployUnavailableError();
   }
   return { deployment: input.deployment };
 };

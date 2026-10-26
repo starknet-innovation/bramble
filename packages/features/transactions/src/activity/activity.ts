@@ -166,7 +166,7 @@ const recordedFee = (
   entry: ActivityEntry,
   outcome: ActivityOutcome,
 ): Pick<ActivityEntry, "feePaid"> =>
-  entry.feePayer === undefined && entry.feePaid === undefined && outcome.feePaid !== undefined
+  entry.feePayer !== "sponsor" && entry.feePaid === undefined && outcome.feePaid !== undefined
     ? { feePaid: outcome.feePaid }
     : {};
 

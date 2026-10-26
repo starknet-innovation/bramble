@@ -226,7 +226,7 @@ const waitersFor = (provided: SignatureWaiters | undefined): SignatureWaiters =>
 const updatesFor = (updates: UpdateReady | undefined): UpdateReady => updates ?? inertUpdateReady;
 
 // The activity log, the pending-deployment store, and the RPC wrapped so every
-// deploy-capable submission refuses while a deploy may be in flight (issue 431).
+// deploy-capable submission refuses during a sponsored attempt's hold (issue 431).
 const deployGuardedRuntime = (
   options: MessageHandlerOptions,
 ): Pick<RouterContext, "activity" | "pendingDeployments" | "runtimeRpc"> => {
@@ -234,6 +234,7 @@ const deployGuardedRuntime = (
   const pendingDeployments = options.pendingDeployments ?? memoryPendingDeployments();
   const runtimeRpc = guardDeployments(options.runtimeRpc ?? defaultRuntimeRpc, {
     activity,
+    now: options.now ?? systemClock,
     pendingDeployments,
   });
   return { activity, pendingDeployments, runtimeRpc };

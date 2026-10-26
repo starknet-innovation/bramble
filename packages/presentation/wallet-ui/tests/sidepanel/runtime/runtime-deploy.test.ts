@@ -21,7 +21,7 @@ const client = (reply: () => Promise<unknown>) => {
 
 describe("deploy sponsorship offer", () => {
   test("reads the background's answer", async () => {
-    for (const sponsorship of ["available", "none", "refused"] as const) {
+    for (const sponsorship of ["available", "held", "may-land", "none", "refused"] as const) {
       const { deploy, sent } = client(async () => ({ ok: true, sponsorship }));
       expect(await deploy.deploySponsorship()).toBe(sponsorship);
       expect(sent).toEqual([{ type: "wallet.deploySponsorship" }]);

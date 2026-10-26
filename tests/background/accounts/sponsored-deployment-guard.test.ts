@@ -1,12 +1,14 @@
 /**
- * The shared deploy guard (issue 431 review). A sponsored deploy that may be in
- * flight holds its account in durable storage: the hold survives a worker
- * restart, never ages out, is reserved atomically, and refuses every deploy
- * route — sponsored, self-paid, and each deploy-before-send — until the chain
- * shows the account deployed or the deploy's own transaction failed.
+ * The bounded hold after a sponsored deploy attempt (issue 431 review). The
+ * attempt is stored durably and holds every deploy route of its account —
+ * sponsored, self-paid and each deploy-before-send — for three minutes, or
+ * until the chain shows the account deployed or the attempt's own transaction
+ * failed. After the hold a self-paid deploy goes ahead (a duplicate never costs
+ * the user), and sponsorship is never offered for that account again.
  */
 import { describe, expect, test } from "bun:test";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import type { ActivityLog } from "@bramble/transactions/activity";
 import {
   type DeployAccountDeps,
   handleDeployAccountSponsored,
@@ -18,7 +20,10 @@ import {
   guardDeployments,
   memoryPendingDeployments,
   PENDING_DEPLOYMENTS_KEY,
+  type PendingDeployments,
+  SPONSORED_DEPLOY_HOLD_MS,
 } from "../../../apps/extension/src/background/accounts/pending-deployments";
+import { SPONSORED_DEPLOY_ALREADY_SENT } from "../../../apps/extension/src/background/accounts/sponsored-deployment";
 import { routerContext } from "../../../apps/extension/src/background/routing/message-context";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
@@ -32,40 +37,138 @@ import {
   relay,
 } from "../../support/sponsored-deploy-harness";
 
-const submit = (deps: DeployAccountDeps) =>
-  handleDeployAccountSponsored(deps, { type: "wallet.deployAccountSponsored" });
-
 const HELD = { error: DEPLOYMENT_MAY_BE_ON_ITS_WAY };
+const INSIDE = 60_000;
+const AFTER = SPONSORED_DEPLOY_HOLD_MS + 1;
+const rpcInput = { account: ozAccount, rpcUrls: ["https://rpc.test"] } as never;
 
-describe("pending sponsored deploy", () => {
-  test("survives a worker restart: a lost reply still holds the account", async () => {
+const submit = (deps: DeployAccountDeps, now = 0) =>
+  handleDeployAccountSponsored(
+    { ...deps, now: () => now },
+    { type: "wallet.deployAccountSponsored" },
+  );
+const offer = async (deps: DeployAccountDeps, now: number): Promise<unknown> => {
+  const reply = await handleDeploySponsorship(
+    { ...deps, now: () => now },
+    { type: "wallet.deploySponsorship" },
+  );
+  return "sponsorship" in reply ? reply.sponsorship : reply;
+};
+
+// A transfer submitter behind the guard, counting the transfers that got through.
+const guardedTransfers = (
+  pending: PendingDeployments,
+  now: number,
+  deployed = false,
+  activity?: ActivityLog,
+) => {
+  const sent: string[] = [];
+  const rpc = guardDeployments(
+    makeRuntimeRpc({
+      async getDeploymentStatus() {
+        return deployed;
+      },
+      async submitErc20Transfer() {
+        sent.push("transfer");
+        return { transactionHash: "0x1" } as never;
+      },
+    }) as RuntimeRpc,
+    { ...(activity ? { activity } : {}), now: () => now, pendingDeployments: pending },
+  );
+  return { send: () => rpc.submitErc20Transfer(rpcInput), sent };
+};
+
+describe("sponsored attempt hold", () => {
+  test("holds every route during the hold and lets a self-paid deploy go after it", async () => {
+    const { deps, pending } = await harness({ relay: relay(lost) });
+    expect(await submit(deps, 0)).toMatchObject({ submissionUnknown: true });
+    const inside = guardedTransfers(pending, INSIDE);
+    await expect(inside.send()).rejects.toThrow(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
+    const after = guardedTransfers(pending, AFTER);
+    await after.send();
+    expect([inside.sent, after.sent]).toEqual([[], ["transfer"]]);
+  });
+
+  test("after the hold, sends read nothing extra from the chain", async () => {
+    const { deps, pending } = await harness({ relay: relay(lost) });
+    await submit(deps, 0);
+    let reads = 0;
+    const rpc = guardDeployments(
+      makeRuntimeRpc({
+        async getDeploymentStatus() {
+          reads += 1;
+          return false;
+        },
+        async submitErc20Transfer() {
+          return { transactionHash: "0x1" } as never;
+        },
+      }) as RuntimeRpc,
+      { now: () => AFTER, pendingDeployments: pending },
+    );
+    await rpc.submitErc20Transfer(rpcInput);
+    expect(reads).toBe(0);
+  });
+
+  test("tells the screen: held during the hold, may-land after, never offered again", async () => {
+    const sponsor = relay(lost);
+    const { deps } = await harness({ relay: sponsor });
+    await submit(deps, 0);
+    expect(await offer(deps, INSIDE)).toBe("held");
+    expect(await offer(deps, AFTER)).toBe("may-land");
+    expect(await submit(deps, INSIDE)).toEqual(HELD);
+    expect(await submit(deps, AFTER)).toEqual({ error: SPONSORED_DEPLOY_ALREADY_SENT });
+    expect(sponsor.calls).toEqual(["paymaster_buildTransaction", "paymaster_executeTransaction"]);
+  });
+
+  test("survives a worker restart inside the hold", async () => {
     const storage = createMemoryStore();
     const before = await harness({
       pending: createPendingDeployments(storage),
       relay: relay(lost),
     });
-    expect(await submit(before.deps)).toMatchObject({ submissionUnknown: true });
+    await submit(before.deps, 0);
     const sponsor = relay(accepted);
     const after = await harness({ pending: createPendingDeployments(storage), relay: sponsor });
-    expect(await submit(after.deps)).toEqual(HELD);
+    expect(await submit(after.deps, INSIDE)).toEqual(HELD);
     expect(sponsor.calls).toEqual([]);
   });
 
-  test("never ages out while the chain cannot show the account deployed", async () => {
-    const { deps } = await harness({ relay: relay(lost) });
-    await submit({ ...deps, now: () => 0 });
-    for (const now of [11 * 60_000, 30 * 24 * 60 * 60_000]) {
-      expect(await submit({ ...deps, now: () => now })).toEqual(HELD);
-    }
+  test("an unreadable store means no hold, never a locked account", async () => {
+    const unreadable: KeyValueStore = {
+      ...createMemoryStore(),
+      get: async () => {
+        throw new Error("storage unavailable");
+      },
+    };
+    const pending = createPendingDeployments(unreadable);
+    const transfers = guardedTransfers(pending, INSIDE);
+    await transfers.send();
+    expect(transfers.sent).toEqual(["transfer"]);
   });
 
-  test("withdraws the sponsored offer while it stands", async () => {
-    const sponsor = relay(lost);
-    const { deps } = await harness({ relay: sponsor });
-    await submit(deps);
-    const offer = await handleDeploySponsorship(deps, { type: "wallet.deploySponsorship" });
-    expect(offer).toEqual({ ok: true, sponsorship: "none" });
-    expect(sponsor.calls).toEqual(["paymaster_buildTransaction", "paymaster_executeTransaction"]);
+  test("ends early when the chain shows the account deployed", async () => {
+    const { chain, deps, pending } = await harness({ relay: relay(accepted) });
+    await submit(deps, 0);
+    chain.deployed = true;
+    const transfers = guardedTransfers(pending, INSIDE, true);
+    await transfers.send();
+    expect(transfers.sent).toEqual(["transfer"]);
+    expect(pending.entry(ozAccount)).toBeUndefined();
+  });
+
+  test("ends early when the attempt's own transaction is reverted or rejected", async () => {
+    for (const status of ["reverted", "rejected"] as const) {
+      const { activity, deps, pending } = await harness({ relay: relay(accepted) });
+      await submit(deps, 0);
+      await activity.updateStatuses(
+        { "0x5ab": { status } },
+        { accountId: ozAccount.id, networkId: "SN_SEPOLIA" },
+      );
+      const transfers = guardedTransfers(pending, INSIDE, false, activity);
+      await transfers.send();
+      expect(transfers.sent).toEqual(["transfer"]);
+      expect(await offer(deps, INSIDE)).toBe("may-land");
+    }
   });
 
   test("is reserved atomically: two concurrent submits make exactly one broadcast", async () => {
@@ -89,21 +192,7 @@ describe("pending sponsored deploy", () => {
     ]);
   });
 
-  test("is released when the deploy's own transaction is reverted or rejected", async () => {
-    for (const status of ["reverted", "rejected"] as const) {
-      const sponsor = relay(accepted);
-      const { activity, deps } = await harness({ relay: sponsor });
-      await submit(deps);
-      expect(await submit(deps)).toEqual(HELD);
-      await activity.updateStatuses(
-        { "0x5ab": { status } },
-        { accountId: ozAccount.id, networkId: "SN_SEPOLIA" },
-      );
-      expect(await submit(deps)).toEqual({ ok: true, transactionHash: "0x5ab" });
-    }
-  });
-
-  test("refuses, sending nothing, when the reservation cannot be stored", async () => {
+  test("refuses, sending nothing, when the attempt cannot be stored", async () => {
     const failing: KeyValueStore = {
       ...createMemoryStore(),
       set: async () => {
@@ -118,46 +207,57 @@ describe("pending sponsored deploy", () => {
 
   test("drops unreadable stored entries instead of trusting them", async () => {
     const storage = createMemoryStore();
+    const fields = { holdUntil: AFTER, since: 0 };
     await storage.set(PENDING_DEPLOYMENTS_KEY, [
-      { address: "not-a-felt", networkId: "SN_SEPOLIA", since: 0 },
-      { address: ozAccount.address, networkId: "SN_NOWHERE", since: 0 },
-      { address: ozAccount.address, extra: true, networkId: "SN_SEPOLIA", since: 0 },
+      { ...fields, address: "not-a-felt", networkId: "SN_SEPOLIA" },
+      { ...fields, address: ozAccount.address, networkId: "SN_NOWHERE" },
+      { ...fields, address: ozAccount.address, extra: true, networkId: "SN_SEPOLIA" },
+      { address: ozAccount.address, networkId: "SN_SEPOLIA", since: 0 },
     ]);
     const pending = createPendingDeployments(storage);
     await pending.load();
-    expect(pending.pending(ozAccount)).toBeUndefined();
+    expect(pending.entry(ozAccount)).toBeUndefined();
   });
 });
 
 describe("every deploy route honours the hold", () => {
-  test("the self-paid deploy is refused after a lost sponsored reply", async () => {
-    const sponsored = await harness({ relay: relay(lost) });
-    expect(await submit(sponsored.deps)).toMatchObject({ submissionUnknown: true });
-    let selfPaid = 0;
+  const selfPaid = async (pending: PendingDeployments, now: number) => {
+    const { preferencesStore, session } = await harness({});
+    let sent = 0;
     const handler = createMessageHandler(
       createWallet({ accounts: [ozAccount], activeAccountId: () => ozAccount.id }),
       testExtension,
       {
-        pendingDeployments: sponsored.pending,
-        preferencesStore: sponsored.preferencesStore,
+        now: () => now,
+        pendingDeployments: pending,
+        preferencesStore,
         runtimeRpc: makeRuntimeRpc({
           async getDeploymentStatus() {
             return false;
           },
           async submitAccountDeployment() {
-            selfPaid += 1;
+            sent += 1;
             return { transactionHash: "0x99" };
           },
         }),
-        session: sponsored.session,
+        session,
       },
     );
     const reply = await handler(
       { reviewedFee: { overallFee: "1000", unit: "FRI" }, type: "wallet.deployAccount" },
       extensionSender,
     );
-    expect(reply).toEqual(HELD);
-    expect(selfPaid).toBe(0);
+    return { reply, sent };
+  };
+
+  test("a self-paid deploy is refused inside the hold and goes ahead after it", async () => {
+    const sponsored = await harness({ relay: relay(lost) });
+    await submit(sponsored.deps, 0);
+    expect(await selfPaid(sponsored.pending, INSIDE)).toEqual({ reply: HELD, sent: 0 });
+    expect(await selfPaid(sponsored.pending, AFTER)).toEqual({
+      reply: { ok: true, transactionHash: "0x99" },
+      sent: 1,
+    });
   });
 
   test("the router context guards every deploy-capable submission", async () => {
@@ -173,6 +273,7 @@ describe("every deploy route honours the hold", () => {
       createWallet(),
       testExtension,
       {
+        now: () => INSIDE,
         pendingDeployments: pending,
         runtimeRpc: makeRuntimeRpc({
           async getDeploymentStatus() {
@@ -186,41 +287,14 @@ describe("every deploy route honours the hold", () => {
       },
       (await harness({})).session,
     );
-    const input = { account: ozAccount, rpcUrls: ["https://rpc.test"] } as never;
     for (const submitter of [
       ctx.runtimeRpc.submitAccountDeployment,
       ctx.runtimeRpc.submitDeclareTransaction,
       ctx.runtimeRpc.submitErc20Transfer,
       ctx.runtimeRpc.submitInvokeTransaction,
     ]) {
-      await expect(submitter(input)).rejects.toThrow(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
+      await expect(submitter(rpcInput)).rejects.toThrow(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
     }
     expect(called).toEqual([]);
-  });
-
-  test("a deployed account, or no entry, passes straight through", async () => {
-    const pending = memoryPendingDeployments();
-    await pending.load();
-    pending.reserve(ozAccount, 0);
-    let deployed = true;
-    let transfers = 0;
-    const rpc = guardDeployments(
-      makeRuntimeRpc({
-        async getDeploymentStatus() {
-          return deployed;
-        },
-        async submitErc20Transfer() {
-          transfers += 1;
-          return { transactionHash: "0x1" } as never;
-        },
-      }) as RuntimeRpc,
-      { pendingDeployments: pending },
-    );
-    const input = { account: ozAccount, rpcUrls: ["https://rpc.test"] } as never;
-    await rpc.submitErc20Transfer(input);
-    expect(pending.pending(ozAccount)).toBeUndefined();
-    deployed = false;
-    await rpc.submitErc20Transfer(input);
-    expect(transfers).toBe(2);
   });
 });

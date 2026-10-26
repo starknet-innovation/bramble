@@ -116,7 +116,7 @@ const hasReceipt = (status: ActivityOutcome["status"]): boolean =>
 // A recorded fee is final and never read again.
 const wantsFee = (entry: ActivityEntry, status: ActivityOutcome["status"]): boolean =>
   entry.origin === "wallet" &&
-  entry.feePayer === undefined &&
+  entry.feePayer !== "sponsor" &&
   entry.feePaid === undefined &&
   hasReceipt(status);
 

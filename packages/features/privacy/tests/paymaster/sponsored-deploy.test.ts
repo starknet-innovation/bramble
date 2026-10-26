@@ -11,8 +11,10 @@ import {
   quoteSponsoredDeploy,
   SPONSORED_DEPLOY_NETWORKS,
   SPONSORED_DEPLOY_REFUSED,
+  SPONSORED_DEPLOY_UNREACHABLE,
   type SponsoredDeploymentData,
   SponsoredDeployRefusedError,
+  SponsoredDeployUnavailableError,
   sponsoredDeployConfig,
   sponsoredDeploymentData,
   submitSponsoredDeploy,
@@ -133,19 +135,19 @@ describe("sponsored deploy quote", () => {
   ];
 
   for (const [name, overrides] of mismatches) {
-    test(`refuses an echo with ${name}`, async () => {
+    test(`refuses an echo with ${name} as unusable, never as a sponsor's no`, async () => {
       await expect(
         quoteSponsoredDeploy({
           config,
           deployment: deployment(),
           http: relay(quoteResult(overrides)),
         }),
-      ).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
+      ).rejects.toBeInstanceOf(SponsoredDeployUnavailableError);
     });
   }
 
-  test("reads a stated refusal and an unreachable relay as a refusal, never as sent", async () => {
-    const refused = async (): Promise<Response> =>
+  test("reads only the relay's own refusal as a refusal", async () => {
+    const stated = async (): Promise<Response> =>
       new Response(
         JSON.stringify({
           error: { code: 163, message: "sponsorship limit reached" },
@@ -153,13 +155,30 @@ describe("sponsored deploy quote", () => {
           jsonrpc: "2.0",
         }),
       );
-    const unreachable = async (): Promise<Response> => {
-      throw new TypeError("fetch failed");
-    };
-    for (const http of [refused, unreachable]) {
+    const forbidden = async (): Promise<Response> => new Response("no", { status: 403 });
+    for (const http of [stated, forbidden]) {
       const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
       await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
       await expect(quoting).rejects.toThrow(SPONSORED_DEPLOY_REFUSED);
+    }
+  });
+
+  test("reads a transport failure, a deadline, a 5xx or a garbled answer as unavailable", async () => {
+    const answers = [
+      async (): Promise<Response> => {
+        throw new TypeError("fetch failed");
+      },
+      async (): Promise<Response> => {
+        throw new DOMException("deadline", "TimeoutError");
+      },
+      async (): Promise<Response> => new Response("bad gateway", { status: 502 }),
+      async (): Promise<Response> => new Response("{not json"),
+      async (): Promise<Response> => new Response(JSON.stringify({ error: "x".repeat(70_000) })),
+    ];
+    for (const http of answers) {
+      const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
+      await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployUnavailableError);
+      await expect(quoting).rejects.toThrow(SPONSORED_DEPLOY_UNREACHABLE);
     }
   });
 });
@@ -183,6 +202,20 @@ describe("sponsored deploy submission", () => {
       parameters: { fee_mode: { mode: "sponsored" }, version: "0x1" },
       transaction: { deployment: deployment(), type: "deploy" },
     });
+  });
+
+  test("broadcasts its own frozen deployment whatever the relay's answer carries", async () => {
+    const requests: Record<string, unknown>[] = [];
+    const other = { ...deployment(), calldata: ["0x789"], salt: "0x0" };
+    const result = await submitSponsoredDeploy({
+      config,
+      http: relay({ deployment: other, transaction_hash: "0xabc" }, requests),
+      isAuthorized: () => true,
+      quote: quote(),
+    });
+    expect(result).toEqual({ transactionHash: "0xabc" });
+    const params = requests[0]?.["params"] as { transaction: { deployment: unknown } };
+    expect(params.transaction.deployment).toEqual(deployment());
   });
 
   test("refuses before sending when the wallet locked", async () => {

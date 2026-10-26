@@ -1,8 +1,9 @@
 /**
  * Sponsored account deployment (#431, #706): the Starknet Foundation pays the
- * network fee for a new account that cannot pay its own deploy. A deploy that
- * may be in flight holds the account in the durable pending-deployment store
- * (`./pending-deployments`), which every deploy route consults.
+ * network fee for a new account that cannot pay its own deploy. Each attempt
+ * opens a bounded hold in the durable store in `./pending-deployments`, which
+ * every deploy route consults, and is never offered again once accepted or
+ * lost.
  *
  * Off on every network until a relay is configured (`SPONSORED_DEPLOY_NETWORKS`
  * in `@bramble/privacy/sponsored-deploy`). The offer is made only when the
@@ -22,6 +23,7 @@ import {
   type SponsoredDeployConfig,
   type SponsoredDeploymentData,
   type SponsoredDeployNetworks,
+  SponsoredDeployRefusedError,
   sponsoredDeployConfig,
   sponsoredDeploymentData,
   submitSponsoredDeploy,
@@ -44,7 +46,7 @@ import { DEPLOY_ACTIVITY_SUMMARY } from "./deployment-ops";
 import {
   DEPLOYMENT_MAY_BE_ON_ITS_WAY,
   type PendingDeployments,
-  resolvePendingDeployment,
+  sponsoredAttemptState,
 } from "./pending-deployments";
 
 /** Collaborators for the sponsored route; `sponsoredDeploy` is a test seam. */
@@ -66,12 +68,21 @@ export type SponsoredDeploymentDeps = {
   };
 };
 
-/** What the deploy screen may offer: sponsored, declined by the sponsor, or nothing. */
-export type DeploySponsorship = "available" | "none" | "refused";
+/**
+ * What the deploy screen may offer: sponsored ("available"), declined by the
+ * sponsor ("refused"), nothing ("none"), or the state of an earlier attempt —
+ * "held" while its hold stands, "may-land" once it is over and the account is
+ * not confirmed deployed.
+ */
+export type DeploySponsorship = "available" | "held" | "may-land" | "none" | "refused";
 
 /** The chain could not say whether the account is deployed; nothing was sent. */
 export const DEPLOYMENT_STATUS_UNKNOWN =
   "Couldn't confirm whether this account is deployed. Check your connection and try again.";
+
+/** A sponsored attempt was already accepted or lost; it is never repeated. */
+export const SPONSORED_DEPLOY_ALREADY_SENT =
+  "This account's sponsored deployment was already sent and may still land. Add STRK to deploy it yourself.";
 
 const UNAVAILABLE = { error: "sponsored deployment unavailable" } as const;
 
@@ -97,52 +108,58 @@ const relayFor = (deps: SponsoredDeploymentDeps, account: AccountRef) =>
     ? sponsoredDeployConfig(account.networkId, deps.sponsoredDeploy?.networks)
     : null;
 
-const hasPendingDeploy = async (
+const nowOf = (deps: SponsoredDeploymentDeps): number => (deps.now ?? systemClock)();
+
+// Whether a fresh offer may be made, and if so with which relay: no earlier
+// attempt, a confirmed-undeployed account, and a STRK balance confirmed short.
+const freshOfferRelay = async (
   deps: SponsoredDeploymentDeps,
-  account: AccountRef,
-): Promise<boolean> => {
-  const pending = deps.pendingDeployments;
-  if (!pending) return true;
-  await pending.load();
-  return pending.pending(account) !== undefined;
+  input: { readonly account: AccountRef; readonly signHash: StarkHashSigner },
+  rpcUrls: readonly string[],
+) => {
+  const config = relayFor(deps, input.account);
+  const estimate = deps.runtimeRpc.estimateAccountDeploymentFee;
+  if (!config || !estimate) return null;
+  if ((await deploymentStatus(deps, input.account, rpcUrls)) !== "undeployed") return null;
+  const fee = await estimate({ account: input.account, rpcUrls, signHash: input.signHash });
+  const balance = await readStrkBalance(deps, input.account, await deps.preferencesStore.read());
+  return resolveFeeAffordability({ balance, fee }) === "insufficient" ? config : null;
 };
 
-// The relay answered no; told apart from a failed read, which offers nothing.
-class SponsorDeclined extends Error {}
-
 /**
- * Decides what the deploy screen may offer. "none" unless sponsorship is on
- * for the network, the class is sponsorable, no deploy of the account is
- * pending, the account is confirmed undeployed, and its STRK balance is
- * confirmed short of the deploy fee; then the relay is asked, and its answer
- * is "available" or "refused". Never throws and never sends a transaction.
+ * Decides what the deploy screen may offer. An earlier attempt answers "held"
+ * or "may-land" and is never offered again. Otherwise "none" unless
+ * sponsorship is on for the network, the class is sponsorable, the account is
+ * confirmed undeployed, and its STRK balance is confirmed short of the fee;
+ * then the relay is asked: "available", "refused" only for its explicit no,
+ * and "none" when it cannot be reached. Never throws and never sends.
  */
 export const deploySponsorship = async (
   deps: SponsoredDeploymentDeps,
   input: { readonly account: AccountRef; readonly signHash: StarkHashSigner },
 ): Promise<DeploySponsorship> => {
-  const config = relayFor(deps, input.account);
-  if (!config) return "none";
+  const pending = deps.pendingDeployments;
+  if (!pending) return "none";
   try {
-    if (await hasPendingDeploy(deps, input.account)) return "none";
     const rpcUrls = await rpcUrlsFor(deps, input.account);
-    if ((await deploymentStatus(deps, input.account, rpcUrls)) !== "undeployed") return "none";
-    const estimate = deps.runtimeRpc.estimateAccountDeploymentFee;
-    if (!estimate) return "none";
-    const fee = await estimate({ account: input.account, rpcUrls, signHash: input.signHash });
-    const balance = await readStrkBalance(deps, input.account, await deps.preferencesStore.read());
-    if (resolveFeeAffordability({ balance, fee }) !== "insufficient") return "none";
-    const deployment = sponsoredDeploymentData(accountDeployment(input.account));
+    const attempt = await sponsoredAttemptState(
+      { ...deps, pendingDeployments: pending },
+      input.account,
+      rpcUrls,
+      nowOf(deps),
+    );
+    if (attempt === "held" || attempt === "may-land") return attempt;
+    if (attempt === "deployed") return "none";
+    const config = await freshOfferRelay(deps, input, rpcUrls);
+    if (!config) return "none";
     await quoteSponsoredDeploy({
       config,
-      deployment,
+      deployment: sponsoredDeploymentData(accountDeployment(input.account)),
       ...(deps.sponsoredDeploy?.http ? { http: deps.sponsoredDeploy.http } : {}),
-    }).catch(() => {
-      throw new SponsorDeclined();
     });
     return "available";
   } catch (error) {
-    return error instanceof SponsorDeclined ? "refused" : "none";
+    return error instanceof SponsoredDeployRefusedError ? "refused" : "none";
   }
 };
 
@@ -153,7 +170,7 @@ type SponsoredRoute = {
 };
 
 // The refusals that need neither the chain nor a reservation: the class, the
-// route, the guard, and deployment data that cannot reproduce the address.
+// route, the store, and deployment data that cannot reproduce the address.
 const sponsoredRoute = (
   deps: SponsoredDeploymentDeps,
   account: AccountRef,
@@ -172,29 +189,31 @@ const sponsoredRoute = (
 };
 
 // Reserves the account: a synchronous check-and-set once the store is loaded,
-// so two submissions in this worker cannot both pass. A standing entry is first
-// resolved against the chain and Activity; only a released one is retried.
+// so a double press cannot send twice. An earlier attempt is resolved instead
+// and never repeated.
 const reserve = async (
   deps: SponsoredDeploymentDeps,
   pending: PendingDeployments,
   account: AccountRef,
   rpcUrls: readonly string[],
 ): Promise<{ readonly error: string } | null> => {
-  const now = (deps.now ?? systemClock)();
+  const now = nowOf(deps);
   await pending.load();
   if (pending.reserve(account, now)) return null;
-  const state = await resolvePendingDeployment(
+  const state = await sponsoredAttemptState(
     { ...deps, pendingDeployments: pending },
     account,
     rpcUrls,
+    now,
   );
   if (state === "deployed") return { error: "account already deployed" };
-  return state === "clear" && pending.reserve(account, now)
+  if (state === "held") return { error: DEPLOYMENT_MAY_BE_ON_ITS_WAY };
+  return state === "none" && pending.reserve(account, now)
     ? null
-    : { error: DEPLOYMENT_MAY_BE_ON_ITS_WAY };
+    : { error: SPONSORED_DEPLOY_ALREADY_SENT };
 };
 
-// Sends the reserved deploy. Anything that sent nothing releases the entry; a
+// Sends the reserved deploy. Anything that sent nothing forgets the attempt; a
 // lost reply keeps it, and an accepted deploy keeps it with its hash.
 const send = async (
   deps: SponsoredDeploymentDeps,
@@ -220,7 +239,7 @@ const send = async (
     if (error instanceof IndeterminateRpcWriteError) {
       return submissionUnknownResponse(error.message);
     }
-    await route.pending.release(account).catch(() => undefined);
+    await route.pending.forget(account).catch(() => undefined);
     return { error: error instanceof Error ? error.message : "sponsored deployment failed" };
   }
   await route.pending.recordHash(account, transactionHash).catch(() => undefined);
@@ -239,13 +258,14 @@ const send = async (
 
 /**
  * Deploys the account through the sponsor. Refuses with no request when the
- * class is unsupported or the route or guard is off; while another deploy of
- * the account may land ({@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}); when the chain
- * shows it deployed; and when the chain cannot say
- * ({@link DEPLOYMENT_STATUS_UNKNOWN}). The reservation is persisted before the
- * relay hears anything, and released only when the attempt sent nothing. A
- * lost reply is answered as submission-unknown. An accepted deploy is
- * recorded in Activity as sponsored, so no fee is ever attributed to the user.
+ * class is unsupported or the route or store is off; during an earlier
+ * attempt's hold ({@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}); after an earlier
+ * attempt was accepted or lost ({@link SPONSORED_DEPLOY_ALREADY_SENT}); when the
+ * chain shows it deployed; and when the chain cannot say
+ * ({@link DEPLOYMENT_STATUS_UNKNOWN}). The attempt is persisted before the
+ * relay hears anything and forgotten only when it sent nothing. A lost reply
+ * is answered as submission-unknown. An accepted deploy is recorded in
+ * Activity as sponsored, so no fee is ever attributed to the user.
  */
 export const submitSponsoredAccountDeployment = async (
   deps: SponsoredDeploymentDeps,
@@ -262,7 +282,7 @@ export const submitSponsoredAccountDeployment = async (
     .then(() => deploymentStatus(deps, account, rpcUrls))
     .catch(() => null);
   if (status === "undeployed") return send(deps, route, input);
-  await route.pending.release(account).catch(() => undefined);
+  await route.pending.forget(account).catch(() => undefined);
   if (status === null) return UNAVAILABLE;
   return status === "deployed"
     ? { error: "account already deployed" }

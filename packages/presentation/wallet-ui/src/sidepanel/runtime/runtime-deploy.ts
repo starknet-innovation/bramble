@@ -10,11 +10,15 @@ import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isFeeReviewResponse, isTransferResponse } from "../../popup/responses/responses";
 import { responseError } from "./runtime-errors";
 
-/** What the deploy screen may offer, as the background decided it. */
-export type DeploySponsorship = "available" | "none" | "refused";
+/**
+ * What the deploy screen may offer, as the background decided it: "held" and
+ * "may-land" describe an earlier sponsored attempt, during and after its hold.
+ */
+export type DeploySponsorship = "available" | "held" | "may-land" | "none" | "refused";
 
-const isSponsorship = (value: unknown): value is DeploySponsorship =>
-  value === "available" || value === "none" || value === "refused";
+const SPONSORSHIPS: readonly unknown[] = ["available", "held", "may-land", "none", "refused"];
+
+const isSponsorship = (value: unknown): value is DeploySponsorship => SPONSORSHIPS.includes(value);
 
 /** Creates the deployment client over chrome.runtime messaging. */
 export const createDeployRuntimeClient = (sendMessage: (message: unknown) => Promise<unknown>) => ({

@@ -1,23 +1,31 @@
 /**
- * Accounts whose sponsored deployment may be in flight (issue 431), kept in
- * browser-local storage so the guard survives a service-worker restart.
+ * Sponsored deployment attempts (issue 431), kept in browser-local storage so
+ * a worker restart does not drop them.
  *
- * An entry is made before the relay hears anything and is never aged out. It
- * goes only on a definitive outcome: the chain shows the account deployed, the
- * deploy's recorded transaction was rejected or reverted, or the attempt sent
- * nothing (a determinate refusal). While it stands, every deploy route — the
+ * An entry is made before the relay hears anything and opens a bounded hold
+ * ({@link SPONSORED_DEPLOY_HOLD_MS}). During the hold every deploy route — the
  * sponsored one, the self-paid one and each automatic deploy-before-send —
- * refuses with {@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}, so a lost or unconfirmed
- * deploy is never retried blind.
+ * refuses with {@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}. The hold ends early when
+ * the chain shows the account deployed or the attempt's recorded transaction
+ * was rejected or reverted. After it, self-paid deploys go ahead: a duplicate
+ * deploy never costs the user (a DEPLOY_ACCOUNT to a taken address is rejected
+ * before it is charged; a sponsor deploy that loses the race reverts at the
+ * sponsor's cost — verify on Sepolia before enabling). So the hold only stops
+ * an immediate double press, and it can never lock an account.
+ *
+ * The entry outlives its hold as a marker: an account whose sponsored attempt
+ * was accepted or lost is never offered sponsorship again. It is deleted when
+ * the account is deployed, or when the attempt sent nothing. An unreadable
+ * store loads as empty, which means "no hold".
  *
  * Reservation is a synchronous check-and-set on the loaded map, so two
- * concurrent submissions in one worker cannot both pass it. Public data only:
- * a network, an address, a time and a transaction hash.
+ * submissions in one worker cannot both pass it. Public data only: a network,
+ * an address, two times and a transaction hash.
  */
 import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
-import type { ActivityLog } from "@bramble/transactions/activity";
+import { type ActivityLog, systemClock } from "@bramble/transactions/activity";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -27,64 +35,82 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 
-/** Browser-local key for the pending-deployment entries. */
+/** Browser-local key for the sponsored-attempt entries. */
 export const PENDING_DEPLOYMENTS_KEY = "bramble:pending-deployments";
 
+/** How long a sponsored attempt holds every deploy route of its account. */
+export const SPONSORED_DEPLOY_HOLD_MS = 3 * 60_000;
+
 /**
- * Refusal while a deployment of the account may still land. Its ending is the
- * shared outcome-unknown sentence, so the panel shows it amber, never "failed".
+ * Refusal during the hold. Its ending is the shared outcome-unknown sentence,
+ * so the panel shows it amber, never "failed".
  */
 export const DEPLOYMENT_MAY_BE_ON_ITS_WAY =
   "A sponsored deployment of this account may already be on its way. Check activity before trying again.";
 
-// More accounts than one wallet deploys at once; bounds what a corrupted or
-// hostile local value can make the worker hold.
+// More accounts than one wallet deploys; bounds what a corrupted or hostile
+// local value can make the worker hold. A full map evicts its oldest marker.
 const MAX_ENTRIES = 64;
 
 type Entry = {
   readonly address: string;
   readonly hash?: string;
+  readonly holdUntil: number;
   readonly networkId: StarknetNetworkId;
   readonly since: number;
 };
 
-/** The account a pending entry belongs to. */
+/** The account an entry belongs to. */
 export type PendingAccount = { readonly address: string; readonly networkId: StarknetNetworkId };
 
 /**
- * Durable pending-deployment entries. `load` must resolve before `reserve` or
- * `pending` is read; both are synchronous on the loaded map.
+ * Durable sponsored-attempt entries. `load` must resolve before `reserve` or
+ * `entry` is read; both are synchronous on the loaded map.
  */
 export type PendingDeployments = {
   readonly load: () => Promise<void>;
   /** Check-and-set: false when the account already has an entry. */
-  readonly reserve: (account: PendingAccount, since: number) => boolean;
-  readonly pending: (account: PendingAccount) => Entry | undefined;
+  readonly reserve: (account: PendingAccount, now: number) => boolean;
+  readonly entry: (account: PendingAccount) => Entry | undefined;
   /** Writes the map; a rejection means the entry may not survive a restart. */
   readonly persist: () => Promise<void>;
   readonly recordHash: (account: PendingAccount, hash: string) => Promise<void>;
-  readonly release: (account: PendingAccount) => Promise<void>;
+  /** Ends the hold early but keeps the marker. */
+  readonly endHold: (account: PendingAccount) => Promise<void>;
+  /** Deletes the entry: the account is deployed, or the attempt sent nothing. */
+  readonly forget: (account: PendingAccount) => Promise<void>;
 };
 
 const keyOf = ({ address, networkId }: PendingAccount): string =>
   `${networkId}:${canonicalFelt(address) ?? address}`;
 
+const isTime = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
 const isEntry = (value: unknown): value is Entry =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "hash", "networkId", "since"]) &&
+  hasOnlyKnownKeys(value, ["address", "hash", "holdUntil", "networkId", "since"]) &&
   typeof value["address"] === "string" &&
   isNonZeroStarkFieldElement(value["address"]) &&
   isStarknetNetworkId(value["networkId"]) &&
-  typeof value["since"] === "number" &&
-  Number.isSafeInteger(value["since"]) &&
-  value["since"] >= 0 &&
+  isTime(value["since"]) &&
+  isTime(value["holdUntil"]) &&
   (value["hash"] === undefined ||
     (typeof value["hash"] === "string" && isNonZeroStarkFieldElement(value["hash"])));
 
+// Frees room for a new attempt by dropping the oldest marker whose hold is over.
+const evictOldestMarker = (entries: Map<string, Entry>, now: number): boolean => {
+  let oldest: [string, Entry] | undefined;
+  for (const pair of entries) {
+    if (pair[1].holdUntil <= now && (!oldest || pair[1].since < oldest[1].since)) oldest = pair;
+  }
+  if (oldest) entries.delete(oldest[0]);
+  return oldest !== undefined;
+};
+
 /**
- * Pending deployments over `store`. A stored value that does not validate is
- * dropped entry by entry; an unreadable store loads as empty, which is the
- * state before this guard existed.
+ * Sponsored attempts over `store`. A stored value that does not validate is
+ * dropped entry by entry; an unreadable store loads as empty.
  */
 export const createPendingDeployments = (store: KeyValueStore): PendingDeployments => {
   const entries = new Map<string, Entry>();
@@ -94,6 +120,12 @@ export const createPendingDeployments = (store: KeyValueStore): PendingDeploymen
     const snapshot = [...entries.values()];
     writes = writes.catch(() => undefined).then(() => store.set(PENDING_DEPLOYMENTS_KEY, snapshot));
     return writes;
+  };
+  const update = (account: PendingAccount, change: Partial<Entry>): Promise<void> => {
+    const entry = entries.get(keyOf(account));
+    if (!entry) return Promise.resolve();
+    entries.set(keyOf(account), { ...entry, ...change });
+    return persist();
   };
   return {
     load: () => {
@@ -108,99 +140,115 @@ export const createPendingDeployments = (store: KeyValueStore): PendingDeploymen
         });
       return loading;
     },
-    reserve: (account, since) => {
+    reserve: (account, now) => {
       const key = keyOf(account);
-      if (entries.has(key) || entries.size >= MAX_ENTRIES) return false;
+      if (entries.has(key)) return false;
+      if (entries.size >= MAX_ENTRIES && !evictOldestMarker(entries, now)) return false;
       entries.set(key, {
         address: canonicalFelt(account.address) ?? account.address,
+        holdUntil: now + SPONSORED_DEPLOY_HOLD_MS,
         networkId: account.networkId,
-        since,
+        since: now,
       });
       return true;
     },
-    pending: (account) => entries.get(keyOf(account)),
+    entry: (account) => entries.get(keyOf(account)),
     persist,
-    recordHash: (account, hash) => {
-      const entry = entries.get(keyOf(account));
-      if (!entry) return Promise.resolve();
-      entries.set(keyOf(account), { ...entry, hash });
-      return persist();
-    },
-    release: (account) => {
+    recordHash: (account, hash) => update(account, { hash }),
+    endHold: (account) => update(account, { holdUntil: 0 }),
+    forget: (account) => {
       entries.delete(keyOf(account));
       return persist();
     },
   };
 };
 
-/** In-memory pending deployments for tests and storage-less contexts. */
+/** In-memory sponsored attempts for tests and storage-less contexts. */
 export const memoryPendingDeployments = (): PendingDeployments =>
   createPendingDeployments(createMemoryStore());
 
-/** What a pending entry resolves to against the chain and Activity. */
-export type PendingResolution = "clear" | "deployed" | "held";
+/**
+ * What the account's sponsored attempt means now: "none" (no attempt),
+ * "deployed" (the chain shows the account deployed), "held" (inside the hold),
+ * or "may-land" (the hold is over and the account is not confirmed deployed).
+ */
+export type SponsoredAttempt = "deployed" | "held" | "may-land" | "none";
+
+type AttemptDeps = {
+  readonly activity?: Pick<ActivityLog, "list">;
+  readonly pendingDeployments: PendingDeployments;
+  readonly runtimeRpc: Pick<RuntimeRpc, "getDeploymentStatus">;
+};
+
+// Whether the attempt's own recorded transaction has failed on chain.
+const attemptFailed = async (deps: AttemptDeps, hash: string | undefined): Promise<boolean> => {
+  if (hash === undefined || !deps.activity) return false;
+  const rows = await deps.activity.list().catch(() => []);
+  return rows.some(
+    (row) => sameFelt(row.hash, hash) && (row.status === "rejected" || row.status === "reverted"),
+  );
+};
 
 /**
- * Resolves the account's pending entry, if any. "deployed" when the chain
- * shows the account deployed, "clear" when there is no entry or the deploy's
- * recorded transaction was rejected or reverted (both release the entry), and
- * "held" otherwise — including when the chain cannot be read.
+ * Resolves the account's sponsored attempt against the chain and Activity. A
+ * deployed account deletes the entry; a failed attempt transaction ends the
+ * hold early. An unreadable chain is not "deployed".
  */
-export const resolvePendingDeployment = async (
-  deps: {
-    readonly activity?: Pick<ActivityLog, "list">;
-    readonly pendingDeployments: PendingDeployments;
-    readonly runtimeRpc: Pick<RuntimeRpc, "getDeploymentStatus">;
-  },
+export const sponsoredAttemptState = async (
+  deps: AttemptDeps,
   account: PendingAccount,
   rpcUrls: readonly string[],
-): Promise<PendingResolution> => {
+  now: number,
+): Promise<SponsoredAttempt> => {
   await deps.pendingDeployments.load();
-  const entry = deps.pendingDeployments.pending(account);
-  if (!entry) return "clear";
+  const entry = deps.pendingDeployments.entry(account);
+  if (!entry) return "none";
   const deployed = await deps.runtimeRpc
     .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
     .catch(() => null);
   if (deployed === true) {
-    await deps.pendingDeployments.release(account).catch(() => undefined);
+    await deps.pendingDeployments.forget(account).catch(() => undefined);
     return "deployed";
   }
-  const rows = entry.hash && deps.activity ? await deps.activity.list().catch(() => []) : [];
-  const failed = rows.some(
-    (row) =>
-      entry.hash !== undefined &&
-      sameFelt(row.hash, entry.hash) &&
-      (row.status === "rejected" || row.status === "reverted"),
-  );
-  if (!failed) return "held";
-  await deps.pendingDeployments.release(account).catch(() => undefined);
-  return "clear";
+  if (now >= entry.holdUntil) return "may-land";
+  if (!(await attemptFailed(deps, entry.hash))) return "held";
+  await deps.pendingDeployments.endHold(account).catch(() => undefined);
+  return "may-land";
 };
 
 /**
  * Wraps the four `RuntimeRpc` submissions that can deploy an account — the
  * explicit deploy and the deploy-before-invoke inside transfers, invokes and
  * declarations — so each refuses with {@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}
- * while the account's pending entry stands. Everything else passes through.
+ * during the account's hold. Outside a hold nothing is read and everything
+ * passes through.
  */
 export const guardDeployments = (
   rpc: RuntimeRpc,
   deps: {
     readonly activity?: Pick<ActivityLog, "list">;
+    readonly now?: () => number;
     readonly pendingDeployments: PendingDeployments;
   },
 ): RuntimeRpc => {
+  const now = deps.now ?? systemClock;
   const guarded =
     <I extends { readonly account: PendingAccount; readonly rpcUrls: readonly string[] }, R>(
       submit: (input: I) => Promise<R>,
     ) =>
     async (input: I): Promise<R> => {
-      const state = await resolvePendingDeployment(
-        { ...deps, runtimeRpc: rpc },
-        input.account,
-        input.rpcUrls,
-      );
-      if (state === "held") throw new WalletError(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
+      await deps.pendingDeployments.load();
+      const entry = deps.pendingDeployments.entry(input.account);
+      const at = now();
+      if (entry && at < entry.holdUntil) {
+        const state = await sponsoredAttemptState(
+          { ...deps, runtimeRpc: rpc },
+          input.account,
+          input.rpcUrls,
+          at,
+        );
+        if (state === "held") throw new WalletError(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
+      }
       return submit(input);
     };
   return {

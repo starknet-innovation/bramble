@@ -93,6 +93,12 @@ describe("deploy Cost line", () => {
     expect(deployCostLine(quote, "refused")).toEndWith(
       ". The Starknet Foundation couldn't cover this deployment.",
     );
+    expect(deployCostLine(quote, "held")).toEndWith(
+      ". A sponsored deployment of this account may already be on its way.",
+    );
+    expect(deployCostLine(quote, "may-land")).toEndWith(
+      ". A sponsored deployment may still land. If it does, yours is refused at no cost.",
+    );
   });
 });
 
@@ -114,6 +120,21 @@ describe("sponsored deploy screen", () => {
     await tick();
     expect(stub.calls).toEqual(["deployAccount:quote", "deployAccountSponsored"]);
     expect(container.querySelector("#deploy-success")?.hasAttribute("hidden")).toBe(false);
+  });
+
+  test("after an earlier attempt, shows its state and deploys self-paid", async () => {
+    for (const sponsorship of ["held", "may-land"] as const) {
+      const container = mount();
+      const stub = wallet({ sponsored: async () => "0x5ab", sponsorship });
+      bind(container, stub.wallet);
+      await tick();
+      const cost = container.querySelector("#deploy-review")?.textContent ?? "";
+      expect(cost).toContain("Maximum network fee");
+      expect(cost).toContain("A sponsored deployment");
+      press(container);
+      await tick();
+      expect(stub.calls).toEqual(["deployAccount:quote", "deployAccount:fee"]);
+    }
   });
 
   test("keeps the user's own fee when nothing is offered", async () => {
