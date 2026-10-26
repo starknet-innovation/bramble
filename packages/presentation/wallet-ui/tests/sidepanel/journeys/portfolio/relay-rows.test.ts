@@ -52,11 +52,23 @@ describe("relay rows", () => {
     expect(html).not.toContain("<a ");
   });
 
-  test("an executed row names its evidence and admits there is no transaction hash", () => {
-    const html = relayRow(relay({ status: "executed" }));
-    expect(html).toContain("Executed");
-    expect(html).toContain("Its nonce is used on chain, so a relayer ran it.");
-    expect(html).toContain("Bramble has no transaction hash for it.");
+  test("a used nonce is reported as exactly that, never as this request executing", () => {
+    const html = relayRow(relay({ status: "nonce-used" }));
+    expect(html).toContain("Nonce used on chain");
+    expect(html).toContain("Its nonce is used on chain, so this request can no longer run.");
+    expect(html).toContain("confirm it was this request that ran.");
+    expect(html).not.toMatch(/executed/i);
+    expect(html).not.toContain("a relayer ran it");
+  });
+
+  test("two messages sharing a used nonce both read the same, neither claims it ran", () => {
+    const rows = [
+      relay({ messageHash: "0xa1", status: "nonce-used" }),
+      relay({ messageHash: "0xb2", status: "nonce-used" }),
+    ];
+    const html = relaySection(rows);
+    expect(html.match(/>Nonce used on chain</g)).toHaveLength(2);
+    expect(html).not.toMatch(/executed/i);
   });
 
   test("an expired row says it can no longer run", () => {

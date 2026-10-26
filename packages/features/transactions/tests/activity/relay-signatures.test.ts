@@ -2,8 +2,8 @@
  * The signed-for-relay log (issue 299) keeps a signature apart from the
  * transaction log, scopes it to one account on one network, refreshes the same
  * message instead of duplicating it, stays bounded, and only lets chain
- * evidence move a status forward: `executed` is final, and `expired` yields
- * only to `executed`.
+ * evidence move a status forward: `nonce-used` is final, and `expired` yields
+ * only to `nonce-used`.
  */
 import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@bramble/store/kv";
@@ -58,6 +58,22 @@ for (const [name, make] of logs) {
       expect((await log.list(scope)).map((entry) => entry.signedAt)).toEqual([2]);
     });
 
+    for (const status of ["nonce-used", "expired"] as const) {
+      test(`signing a ${status} message again keeps its chain evidence`, async () => {
+        let now = 1;
+        const log = make(() => now);
+        await log.record(input());
+        await log.updateStatuses(scope, new Map([["0xabc", status]]), 50);
+        now = 60;
+        await log.record(input());
+        const rows = await log.list(scope);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.status).toBe(status);
+        expect(rows[0]?.checkedAt).toBe(50);
+        expect(rows[0]?.signedAt).toBe(60);
+      });
+    }
+
     test("drops a record that would not validate", async () => {
       const log = make(() => 1);
       await log.record(input({ nonce: "not a felt" }));
@@ -86,14 +102,14 @@ for (const [name, make] of logs) {
       expect(kept.at(-1)?.signedAt).toBe(4);
     });
 
-    test("an executed read is final and an expiry yields only to it", async () => {
+    test("a nonce-used read is final and an expiry yields only to it", async () => {
       const log = make(() => 1);
       await log.record(input({ messageHash: "0x1" }));
       await log.record(input({ messageHash: "0x2" }));
       await log.updateStatuses(
         scope,
         new Map([
-          ["0x1", "executed"],
+          ["0x1", "nonce-used"],
           ["0x2", "expired"],
         ]),
         10,
@@ -102,13 +118,13 @@ for (const [name, make] of logs) {
         scope,
         new Map([
           ["0x1", "expired"],
-          ["0x2", "executed"],
+          ["0x2", "nonce-used"],
         ]),
         20,
       );
       expect(after.map((entry) => [entry.messageHash, entry.status, entry.checkedAt])).toEqual([
-        ["0x1", "executed", 20],
-        ["0x2", "executed", 20],
+        ["0x1", "nonce-used", 20],
+        ["0x2", "nonce-used", 20],
       ]);
     });
 

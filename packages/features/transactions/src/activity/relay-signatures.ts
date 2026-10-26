@@ -7,8 +7,9 @@
  * has since shown about it:
  *
  * - `signed`: no on-chain evidence yet. It may still be relayed.
- * - `executed`: the account reports the message's nonce used, which happens
- *   only when an outside execution with that nonce runs.
+ * - `nonce-used`: the account reports the message's nonce used, so it can no
+ *   longer run. This does not prove this message ran: the dapp chose the
+ *   nonce, and another message carrying it may be the one that did.
  * - `expired`: at a block whose timestamp passed the message's deadline, the
  *   nonce was still unused, so it can no longer run.
  *
@@ -33,7 +34,7 @@ const RELAY_SIGNATURES_KEY = "bramble:relay-signatures";
 export const MAX_RELAY_SIGNATURES = 100;
 
 /** What the chain has shown about a signed message so far. */
-export type RelaySignatureStatus = "executed" | "expired" | "signed";
+export type RelaySignatureStatus = "nonce-used" | "expired" | "signed";
 
 /** One OutsideExecution message the user signed in this wallet. */
 export type RelaySignature = {
@@ -103,7 +104,9 @@ export const isRelaySignature = (value: unknown): value is RelaySignature =>
   value["origin"].length <= 80 &&
   (value["revision"] === "1" || value["revision"] === "2") &&
   isTimestamp(value["signedAt"]) &&
-  (value["status"] === "signed" || value["status"] === "executed" || value["status"] === "expired");
+  (value["status"] === "signed" ||
+    value["status"] === "nonce-used" ||
+    value["status"] === "expired");
 
 /** The record a signing path hands over; status and timing are the store's. */
 export type RelaySignatureInput = Omit<RelaySignature, "checkedAt" | "signedAt" | "status">;
@@ -117,13 +120,14 @@ export type RelaySignatureLog = {
   /** Newest-first records for one account on one network. */
   readonly list: (scope: ActivityScope) => Promise<readonly RelaySignature[]>;
   /**
-   * Records a signed message, or refreshes the same message signed again (same
-   * scope and message hash) without adding a row. Invalid input is dropped.
+   * Records a signed message. The same message signed again (same scope and
+   * message hash) refreshes its row and keeps the chain evidence already on it
+   * (status and check time). Invalid input is dropped.
    */
   readonly record: (entry: RelaySignatureInput) => Promise<void>;
   /**
-   * Applies status reads for one scope, keyed by message hash. `executed` is
-   * final; `expired` yields only to `executed`; `signed` changes nothing but
+   * Applies status reads for one scope, keyed by message hash. `nonce-used` is
+   * final; `expired` yields only to `nonce-used`; `signed` changes nothing but
    * the check time.
    */
   readonly updateStatuses: (
@@ -150,20 +154,31 @@ const nextStatus = (
   current: RelaySignatureStatus,
   read: RelaySignatureStatus | undefined,
 ): RelaySignatureStatus =>
-  read === "executed"
-    ? "executed"
+  read === "nonce-used"
+    ? "nonce-used"
     : read === "expired" && current === "signed"
       ? "expired"
       : current;
 
+// Signing the same message again cannot undo what the chain already showed
+// about it, so an existing row's status and check time carry over.
 const afterRecord = (
   entries: readonly RelaySignature[],
   next: RelaySignature,
-): readonly RelaySignature[] =>
-  newestFirst([...entries.filter((entry) => !sameMessage(entry, next)), next]).slice(
+): readonly RelaySignature[] => {
+  const previous = entries.find((entry) => sameMessage(entry, next));
+  const kept: RelaySignature = previous
+    ? {
+        ...next,
+        ...(previous.checkedAt === undefined ? {} : { checkedAt: previous.checkedAt }),
+        status: previous.status,
+      }
+    : next;
+  return newestFirst([...entries.filter((entry) => !sameMessage(entry, next)), kept]).slice(
     0,
     MAX_RELAY_SIGNATURES,
   );
+};
 
 const afterReads = (
   entries: readonly RelaySignature[],

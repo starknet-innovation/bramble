@@ -2,14 +2,16 @@
  * Reads, from chain, what became of OutsideExecution messages this wallet
  * signed for relay (issue 299). The account's SNIP-9 view
  * `is_valid_outside_execution_nonce(nonce)` answers false once an outside
- * execution with that nonce has run, so a used nonce is the proof a relayer
- * executed the message. An unused nonce at a block whose timestamp has passed
- * the message's deadline proves it can no longer run.
+ * execution with that nonce has run, so a used nonce proves the message can no
+ * longer run. It does not prove this message was the one that ran: the dapp
+ * chose the nonce. An unused nonce at a block whose timestamp has passed the
+ * message's deadline proves it can no longer run either.
  *
  * Nothing else is inferred: a failed, unexpected or missing answer leaves the
  * record as it was, and absence of evidence is never read as an outcome. The
  * read is bounded per refresh and throttled per record, and runs only from an
- * Activity refresh.
+ * Activity refresh. Rows never read go first, then the least recently read, so
+ * no row is starved by newer ones.
  */
 import { withRpcFallback } from "@bramble/starknet/provider";
 import type { ActivityScope } from "@bramble/transactions/activity";
@@ -66,7 +68,7 @@ const readOne = async (
       blockNumber ?? "latest",
     ),
   );
-  if (unused === false) return "executed";
+  if (unused === false) return "nonce-used";
   if (
     unused === true &&
     deadline !== undefined &&
@@ -98,7 +100,10 @@ export const refreshRelaySignatures = async (
   now: number,
 ): Promise<readonly RelaySignature[]> => {
   const stored = await deps.log.list(target.scope).catch(() => []);
-  const batch = stored.filter((entry) => due(entry, now)).slice(0, MAX_RELAY_READS_PER_REFRESH);
+  const batch = stored
+    .filter((entry) => due(entry, now))
+    .sort((a, b) => (a.checkedAt ?? -1) - (b.checkedAt ?? -1))
+    .slice(0, MAX_RELAY_READS_PER_REFRESH);
   if (batch.length === 0) return stored;
   const reads = new Map<string, RelaySignatureStatus>();
   for (const entry of batch) {

@@ -72,9 +72,9 @@ const refresh = async (
 beforeEach(() => resetRpcEndpointCooldownsForTests());
 
 describe("refreshRelaySignatures", () => {
-  test("a used nonce marks the row executed", async () => {
+  test("a used nonce marks the row nonce-used", async () => {
     const { calls, result } = await refresh({ nonce: ["0x0"] }, [input({ executeBefore: 2e9 })]);
-    expect(result[0]?.status).toBe("executed");
+    expect(result[0]?.status).toBe("nonce-used");
     expect(result[0]?.checkedAt).toBe(NOW);
     // Before the deadline no block is read; the nonce is asked at "latest".
     expect(calls).toEqual([
@@ -146,7 +146,7 @@ describe("refreshRelaySignatures", () => {
       { address: ADDRESS, rpcUrls: ["https://rpc.example"], scope },
       NOW + RELAY_RECHECK_MS,
     );
-    expect(later[0]?.status).toBe("executed");
+    expect(later[0]?.status).toBe("nonce-used");
   });
 
   test(`reads at most ${MAX_RELAY_READS_PER_REFRESH} rows per refresh, settled rows never`, async () => {
@@ -162,7 +162,43 @@ describe("refreshRelaySignatures", () => {
       NOW,
     );
     expect(calls).toHaveLength(6);
-    expect(after.every((row) => row.status === "executed")).toBe(true);
+    expect(after.every((row) => row.status === "nonce-used")).toBe(true);
+  });
+
+  test("rows never read go first, then the least recently read, so none is starved", async () => {
+    const rows = Array.from({ length: 6 }, (_, index) =>
+      input({ executeBefore: 2e9, messageHash: `0x${(index + 1).toString(16)}` }),
+    );
+    const { log } = await refresh({ nonce: ["0x1"] }, rows, NOW);
+    let checked = (await log.list(scope)).filter((row) => row.checkedAt !== undefined);
+    expect(checked).toHaveLength(MAX_RELAY_READS_PER_REFRESH);
+    // Past the throttle every row is due again; the two never read go first.
+    const second = await refreshRelaySignatures(
+      { log, rpcProviderFor: () => provider({ nonce: ["0x1"] }) },
+      { address: ADDRESS, rpcUrls: ["https://rpc.example"], scope },
+      NOW + RELAY_RECHECK_MS,
+    );
+    checked = second.filter((row) => row.checkedAt !== undefined);
+    expect(checked).toHaveLength(6);
+    expect(second.filter((row) => row.checkedAt === NOW + RELAY_RECHECK_MS)).toHaveLength(
+      MAX_RELAY_READS_PER_REFRESH,
+    );
+    // The next refresh reads the rows left oldest, not the newest again.
+    const stale = second
+      .filter((row) => row.checkedAt === NOW)
+      .map((row) => row.messageHash)
+      .sort();
+    const third = await refreshRelaySignatures(
+      { log, rpcProviderFor: () => provider({ nonce: ["0x1"] }) },
+      { address: ADDRESS, rpcUrls: ["https://rpc.example"], scope },
+      NOW + 2 * RELAY_RECHECK_MS,
+    );
+    expect(
+      third
+        .filter((row) => row.checkedAt === NOW + 2 * RELAY_RECHECK_MS)
+        .map((row) => row.messageHash)
+        .sort(),
+    ).toEqual(expect.arrayContaining(stale));
   });
 
   test("an unreadable log yields no rows instead of throwing", async () => {

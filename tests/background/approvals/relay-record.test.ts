@@ -270,7 +270,7 @@ describe("Activity's relay rows", () => {
       refreshHistory: true,
       type: "wallet.activity",
     })) as { readonly relays?: readonly { readonly status: string }[] };
-    expect(response.relays?.map((relay) => relay.status)).toEqual(["executed"]);
+    expect(response.relays?.map((relay) => relay.status)).toEqual(["nonce-used"]);
   });
 
   test("an ambient refresh lists the rows without reading the chain", async () => {
@@ -288,6 +288,24 @@ describe("Activity's relay rows", () => {
     };
     expect(reads).toBe(0);
     expect(response.relays?.map((relay) => relay.status)).toEqual(["signed"]);
+  });
+
+  test("two messages sharing a used nonce are both reported as nonce used, not executed", async () => {
+    const log = memoryRelaySignatureLog(() => 1);
+    for (const hash of ["0xa1", "0xb2"]) {
+      await recordRelaySignature(log, {
+        account,
+        messageHash: hash,
+        origin: ORIGIN,
+        typedData: outside(),
+      });
+    }
+    const response = (await handleActivity(activityDeps(log, ["0x0"]), {
+      refreshHistory: true,
+      type: "wallet.activity",
+    })) as { readonly relays?: readonly { readonly status: string }[] };
+    expect(response.relays?.map((relay) => relay.status)).toEqual(["nonce-used", "nonce-used"]);
+    expect(JSON.stringify(response)).not.toMatch(/executed/i);
   });
 
   test("no rows leaves the response shape unchanged", async () => {

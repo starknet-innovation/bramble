@@ -3,8 +3,9 @@
  * messages this device signed for a site or relayer. They sit above the
  * transaction feed and never inside it: a signed message is not a transaction, has
  * no transaction hash or explorer page, and is never filtered, sorted or
- * exported as one. Each row says only what the record proves — signed, used on
- * chain, or past its deadline unused.
+ * exported as one. Each row says only what the record proves — signed, its
+ * nonce used on chain, or past its deadline unused. A used nonce does not prove
+ * this message ran: a dapp chooses the nonce, so another message may share it.
  */
 import { escapeHtml } from "@bramble/core/html";
 import type { RelaySignature } from "@bramble/transactions/relay-signatures";
@@ -13,21 +14,21 @@ import { formatUtcClock, formatUtcDate } from "../../shared/timestamp";
 
 // The meta word beside the site, and the row glyph's status hue.
 const META: Readonly<Record<RelaySignature["status"], string>> = {
-  executed: "Executed",
+  "nonce-used": "Nonce used on chain",
   expired: "Expired",
   signed: "Not seen on chain",
 };
 
 const HUE: Readonly<Record<RelaySignature["status"], string>> = {
-  executed: "accepted",
+  "nonce-used": "accepted",
   expired: "",
   signed: "pending",
 };
 
 // The one sentence the expansion adds about the status.
 const statusNote = (relay: RelaySignature): string => {
-  if (relay.status === "executed") {
-    return "Its nonce is used on chain, so a relayer ran it. Bramble has no transaction hash for it.";
+  if (relay.status === "nonce-used") {
+    return "Its nonce is used on chain, so this request can no longer run. Bramble can't confirm it was this request that ran.";
   }
   if (relay.status === "expired") {
     return "It passed its deadline unused and can no longer run.";
