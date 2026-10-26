@@ -114,18 +114,24 @@ const discoveryFingerprint = (
 // creates finds nobody who arrived from Ready. The wallet's own OpenZeppelin
 // class stays resolved per network by Krusty rather than listed here.
 //
-// Argent walks two ladders (issue 505): Ready derives its keys on an
-// ETH-seeded tree ("argentx-bip44"), so every Argent release is scanned
-// there, and the release this wallet creates is scanned once more on the
-// wallet's own ladder for accounts this wallet made. Braavos keys live on the
-// plain BIP-44 address axis, which the vault derivation maps to by family.
+// Argent walks two ladders, and every Argent release is scanned on both. The
+// Ready extension derives its keys on an ETH-seeded tree ("argentx-bip44",
+// issue 505). Other Argent-account apps, Ready mobile among them, derive
+// straight from the phrase on this wallet's own ladder, and their accounts
+// date from Argent 0.3.x too: one deployed at 0.3.1 and since upgraded was
+// missed because only the release this wallet creates was scanned there.
+// Braavos keys live on the plain BIP-44 address axis, which the vault
+// derivation maps to by family.
 const recoveryScanShapes = (): readonly {
   readonly accountContractType: AccountContractType;
   readonly classHash?: string;
   readonly derivation?: RecoveryDerivationKind;
 }[] => [
   { accountContractType: "openzeppelin" },
-  { accountContractType: "argent", classHash: ARGENT_ACCOUNT_CLASS_HASH },
+  ...deploymentClasses("argent").map((entry) => ({
+    accountContractType: "argent" as const,
+    classHash: entry.classHash,
+  })),
   ...deploymentClasses("argent").map((entry) => ({
     accountContractType: "argent" as const,
     classHash: entry.classHash,
