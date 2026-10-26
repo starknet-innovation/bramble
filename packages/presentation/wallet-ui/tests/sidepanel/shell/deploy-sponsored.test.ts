@@ -153,6 +153,37 @@ describe("sponsored deploy screen", () => {
     ]);
   });
 
+  test("a refusal after an earlier error quotes a fresh self-paid fee", async () => {
+    const container = mount();
+    const answers = [new Error("wallet locked"), new Error(SPONSORED_DEPLOY_REFUSED)];
+    const stub = wallet({
+      sponsored: async () => {
+        throw answers.shift();
+      },
+      sponsorship: "available",
+    });
+    bind(container, stub.wallet);
+    await tick();
+    // The lock spends the quoted fee; the screen is still on the sponsored route.
+    press(container);
+    await tick();
+    expect(container.querySelector("#deploy-review")?.textContent?.trim()).toBe("");
+    press(container);
+    await tick();
+    const cost = container.querySelector("#deploy-review")?.textContent ?? "";
+    expect(cost).toContain("Maximum network fee");
+    expect(cost).toContain("couldn't cover this deployment");
+    press(container);
+    await tick();
+    expect(stub.calls).toEqual([
+      "deployAccount:quote",
+      "deployAccountSponsored",
+      "deployAccountSponsored",
+      "deployAccount:quote",
+      "deployAccount:fee",
+    ]);
+  });
+
   test("a lost reply is amber, not a failure, and offers no self-paid fee", async () => {
     const container = mount();
     const stub = wallet({

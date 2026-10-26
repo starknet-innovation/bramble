@@ -57,6 +57,7 @@ import {
   handleDeploySponsorship,
 } from "./deploy-account-ops";
 import { recordAutoDeployment } from "./deployment-ops";
+import type { PendingDeployments } from "./pending-deployments";
 import { handleResolveStarkName } from "./stark-name-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
@@ -87,6 +88,8 @@ export type WalletOpsDeps = {
    * clock boundary.
    */
   readonly now?: () => number;
+  /** Shared deploy guard (issue 431); see `./pending-deployments`. */
+  readonly pendingDeployments?: PendingDeployments;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;

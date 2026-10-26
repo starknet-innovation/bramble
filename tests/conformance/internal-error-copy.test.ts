@@ -91,6 +91,7 @@ const READER_SENTENCES = new Set([
   "A 2FA removal is already pending for this account",
   "A sponsored deployment of this account may already be on its way. Check activity before trying again.",
   "Account already exists",
+  "Couldn't confirm whether this account is deployed. Check your connection and try again.",
   "Account deployment status is unknown. Check the account on-chain before retrying.",
   "Account is already deployed",
   "Account not found",

@@ -37,6 +37,7 @@ import {
   requireTrustedStorageAccess,
 } from "../browser-storage";
 import { resolveExtensionApi } from "../extension-api";
+import { createPendingDeployments } from "./accounts/pending-deployments";
 import { createWalletReader } from "./accounts/wallet-reader";
 import { observeTechnicalDataConsent, technicalDataAllowed } from "./analytics/data-consent";
 import {
@@ -240,6 +241,7 @@ const activityLog = (() => {
 // Public chain data only. The adapter is restricted to trusted extension
 // contexts at startup; wallet secrets remain exclusively in the encrypted vault.
 const balanceSnapshots = createBalanceSnapshotStore(createBrowserLocalStore());
+const pendingDeployments = createPendingDeployments(createBrowserLocalStore());
 const nftSnapshots = createNftSnapshotStore(createBrowserLocalStore());
 const originHistory = (() => {
   try {
@@ -378,6 +380,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   waiters: signatureWaiters,
   balanceSnapshots,
   nftSnapshots,
+  pendingDeployments,
   session,
   preferencesStore: preferenceStore,
   runtimeRpc,

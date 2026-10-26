@@ -374,8 +374,14 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       (error: unknown) => {
         journey.pressed = false;
         const message = error instanceof Error ? error.message : "";
-        const fee = message === SPONSORED_DEPLOY_REFUSED ? journey.fee : undefined;
-        if (fee) journey.sponsorship = "refused";
+        // A refusal sent nothing, so the screen turns self-paid whatever came
+        // before it; with no fee in hand (an earlier error spent it) it quotes
+        // afresh rather than leaving Deploy on the sponsored route.
+        const declined = message === SPONSORED_DEPLOY_REFUSED;
+        if (declined) {
+          journey.sponsorship = "refused";
+          if (!journey.fee) journey.quoted = false;
+        }
         if (message === ALREADY_DEPLOYED) {
           void deps.wallet.loadStatus().then((status) => deps.render(status, "action"));
         }
@@ -388,12 +394,17 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           );
           return;
         }
-        if (!fee) {
+        if (!declined) {
           failed(error, "Deployment failed", "submit");
           return;
         }
-        showFee(fee);
         showToast(SPONSORED_DEPLOY_REFUSED, "error", target);
+        if (!journey.fee) {
+          journey.quoted = true;
+          quote(false);
+          return;
+        }
+        showFee(journey.fee);
         scopedStatus(target, "");
         buttonBusy(target, false);
       },
