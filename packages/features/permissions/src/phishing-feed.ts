@@ -51,8 +51,8 @@ const systemClock = (): number => Date.now();
  * the bounded fetch doesn't check the content type, and it rejects redirects.
  * It is read without a host permission: the file allows any origin
  * (`Access-Control-Allow-Origin: *`) and the extension CSP allows HTTPS
- * connections. A granted host here would make Chrome disable the wallet on
- * update until each user re-approved it. Configurable per deployment via the
+ * connections. Granting a new host here would let Chrome disable the wallet on
+ * update for users whose existing grants don't cover it. Configurable per deployment via the
  * `source` option; another source needs CORS or a reviewed host permission.
  */
 export const DEFAULT_PHISHING_FEED_URL =
