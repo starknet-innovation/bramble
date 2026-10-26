@@ -462,6 +462,7 @@ export type RuntimeResponse =
   | { readonly ok: true; readonly updateReady: boolean }
   | { readonly ok: true; readonly restarting: boolean }
   | { readonly ok: true; readonly released: boolean }
+  | { readonly ok: true; readonly sponsorship: "available" | "none" | "refused" }
   | MultisigsResponse
   | { readonly ok: true }
   | PendingApprovalResponse

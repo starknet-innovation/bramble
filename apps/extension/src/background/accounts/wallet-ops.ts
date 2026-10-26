@@ -22,7 +22,6 @@ import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
 import { readAccountPortfolio } from "../portfolio/portfolio-balances";
 import {
   readBalancesInput,
-  readFeeReviewInput,
   readReviewTransferInput,
   readTransferInput,
   readTypeOnlyInput,
@@ -30,7 +29,6 @@ import {
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import {
   type ActiveStateCoordinator,
-  activeAccountContext,
   networkRpcUrls,
   observedAccountContext,
   runActiveStateMutation,
@@ -53,7 +51,12 @@ import {
 } from "./account-signability";
 import { handleSetAccountHidden } from "./account-visibility-ops";
 import { handleActivity } from "./activity-ops";
-import { recordAutoDeployment, submitReviewedAccountDeployment } from "./deployment-ops";
+import {
+  handleDeployAccount,
+  handleDeployAccountSponsored,
+  handleDeploySponsorship,
+} from "./deploy-account-ops";
+import { recordAutoDeployment } from "./deployment-ops";
 import { handleResolveStarkName } from "./stark-name-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
@@ -151,21 +154,6 @@ export const resolveReviewFee = (input: {
     : { fee: null, feeEstimateFailed: false };
 
 type WalletOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
-
-const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
-  const input = readFeeReviewInput(message, "wallet.deployAccount");
-  if (!input) return { error: "invalid deploy account request" };
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) return { error: context.error };
-  const authorized = captureSessionAuthorization(deps.session);
-  return submitReviewedAccountDeployment(deps, {
-    account: context.account,
-    isAuthorized: authorized.isCurrent,
-    networkId: context.networkId,
-    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
-    signHash: accountHashSigner(deps, context.account, context.vaultPassphrase),
-  });
-};
 
 // Side-panel reads use the non-renewing session so ambient polling cannot hold
 // the wallet unlocked. User actions keep the renewing account-context path.
@@ -468,6 +456,8 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
 const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.activity": handleActivity,
   "wallet.deployAccount": handleDeployAccount,
+  "wallet.deployAccountSponsored": handleDeployAccountSponsored,
+  "wallet.deploySponsorship": handleDeploySponsorship,
   "wallet.accountSignability": handleAccountSignability,
   "wallet.recoverArgentAccount": handleRecoverArgentAccount,
   "wallet.recoverBraavosAccount": handleRecoverBraavosAccount,

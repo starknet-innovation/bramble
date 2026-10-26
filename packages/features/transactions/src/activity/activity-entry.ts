@@ -91,6 +91,13 @@ export type ActivityEntry = {
    */
   readonly feePaid?: TransactionFee;
   /**
+   * `"sponsor"` on a row whose network fee someone else paid, such as a
+   * sponsored account deployment (#431). Its receipt fee was never the user's,
+   * so reconciliation never records it as `feePaid`. Absent means the account
+   * paid its own fee, as on every row before this field existed.
+   */
+  readonly feePayer?: "sponsor";
+  /**
    * True once the chain reported `ACCEPTED_ON_L1`. Reconciliation's terminal
    * condition; not a user-visible state.
    */
@@ -238,6 +245,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "direction",
     "failureNotice",
     "feePaid",
+    "feePayer",
     "finalizedOnL1",
     "hash",
     "kind",
@@ -273,6 +281,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   isRecordedTokenAddress(value["tokenAddress"], value["token"]) &&
   isFailureNotice(value["failureNotice"]) &&
   (value["feePaid"] === undefined || isTransactionFee(value["feePaid"])) &&
+  (value["feePayer"] === undefined || value["feePayer"] === "sponsor") &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
   (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
   isNotFoundCount(value["notFoundCount"]) &&

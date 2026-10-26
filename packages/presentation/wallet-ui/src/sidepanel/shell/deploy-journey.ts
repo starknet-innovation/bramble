@@ -10,6 +10,7 @@
  * back never offers Deploy over a transaction already sent.
  */
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { DeploySponsorship } from "../runtime/runtime-deploy";
 import type { ConfirmationOutcome } from "../shared/confirm-submitted";
 
 /** One account's deploy screen state, shared by every paint of it. */
@@ -23,6 +24,11 @@ export type DeployJourney = {
   /** Why the screen's own quote failed, kept for the screen a repaint rebuilt. */
   quoteNote?: string;
   receipt?: { readonly hash: string; outcome: ConfirmationOutcome | null; settled: boolean };
+  /**
+   * The background's sponsored-deploy offer (issue 431), asked once per visit after
+   * the fee is quoted. "available" makes Deploy the sponsored deploy.
+   */
+  sponsorship?: DeploySponsorship;
 };
 
 const DEPLOY_JOURNEYS = new WeakMap<Element, DeployJourney>();

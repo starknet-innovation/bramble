@@ -112,9 +112,13 @@ const hasReceipt = (status: ActivityOutcome["status"]): boolean =>
 
 // Only rows this wallet submitted get a fee: a receipt's fee is paid by the
 // transaction's sender, so on a discovered incoming transfer it is someone
-// else's. A recorded fee is final and never read again.
+// else's, and so is a sponsored deployment's, which the sponsor's relay sent.
+// A recorded fee is final and never read again.
 const wantsFee = (entry: ActivityEntry, status: ActivityOutcome["status"]): boolean =>
-  entry.origin === "wallet" && entry.feePaid === undefined && hasReceipt(status);
+  entry.origin === "wallet" &&
+  entry.feePayer === undefined &&
+  entry.feePaid === undefined &&
+  hasReceipt(status);
 
 /**
  * Wallet rows read for a missing fee per slow pass beyond those a status read

@@ -10,6 +10,7 @@ import { buttonBusy, errorDetails, errorLine, showToast } from "../shared/dom";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
 import type { ShellBindingDeps } from "./shell-binding-deps";
 
+/** The deploy binder and post-deploy watchers, kept importable from here. */
 export {
   awaitDeployment,
   bindDeploy,
@@ -18,6 +19,7 @@ export {
   deploymentPollScope,
   watchDeployment,
 } from "./deploy-bindings";
+/** The shared binder deps, kept importable from here. */
 export type { DeploymentPollScope, ShellBindingDeps } from "./shell-binding-deps";
 
 /**

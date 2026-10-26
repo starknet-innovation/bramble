@@ -102,6 +102,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
   "apps/extension/src/background/accounts/wallet-ops.ts",
+  // Deploy handlers split from wallet-ops (issue 431); the vault passphrase only
+  // transits into the protected hash-signer wiring, never logged or stored.
+  "apps/extension/src/background/accounts/deploy-account-ops.ts",
   "apps/extension/src/background/accounts/wallet-reader.ts",
   "apps/extension/src/background/ledger/ledger-inputs.ts",
   "packages/platform/kms-krusty/src/adapter.ts",

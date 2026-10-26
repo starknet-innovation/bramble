@@ -15,6 +15,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.createLedgerVault",
   "wallet.denyOrigin",
   "wallet.deployAccount",
+  "wallet.deployAccountSponsored",
   "wallet.deployArgentMultisig",
   "wallet.detectTokens",
   "wallet.importAccount",
@@ -69,6 +70,7 @@ export type MutationRefresh = "burst" | "once";
 // repaint once instead of amplifying every change into six full hydrations.
 const CHAIN_SETTLING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.deployAccount",
+  "wallet.deployAccountSponsored",
   "wallet.deployArgentMultisig",
   "wallet.revokeAllowance",
   "wallet.submitArgentMultisigIntent",

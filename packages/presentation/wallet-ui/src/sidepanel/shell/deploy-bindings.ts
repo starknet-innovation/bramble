@@ -1,10 +1,12 @@
 /**
  * The account-deployment screen's binder and the post-deploy watchers, split
  * from `shell-bindings` (which re-exports them) to keep both within the file
- * budget. The fee is quoted when the screen opens; a sponsored deploy (#431),
+ * budget. The fee is quoted when the screen opens; a sponsored deploy (issue 431),
  * when the background offers one, replaces the user's fee with the sponsor's
  * name rather than showing a fee nobody charges them.
  */
+
+import { SPONSORED_DEPLOY_REFUSED } from "@bramble/privacy/sponsored-deploy";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { SidepanelWallet } from "../runtime/runtime";
@@ -16,7 +18,7 @@ import {
   outcomeReceiptFor,
   paintOutcomeReceipt,
 } from "../shared/outcome-receipt";
-import { formatFeeEstimate, reviewCostNote } from "../shared/review-render";
+import { reviewCostNote } from "../shared/review-render";
 import { deployErrorLine, deployToastText } from "./deploy-errors";
 import {
   type DeployJourney,
@@ -25,6 +27,7 @@ import {
   isCurrentDeployJourney,
   leaveDeployScreen,
 } from "./deploy-journey";
+import { deployCostLine } from "./deploy-sponsorship";
 import type { DeploymentPollScope, ShellBindingDeps } from "./shell-binding-deps";
 
 const DEPLOY_WATCH_ATTEMPTS = 12;
@@ -222,9 +225,25 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     if (reviewPanelRoot) {
       renderFragment(
         reviewPanelRoot,
-        reviewCostNote(`Maximum network fee: ${formatFeeEstimate(estimate)}`),
+        reviewCostNote(deployCostLine(estimate, journey.sponsorship)),
       );
     }
+  };
+
+  // Asks once per visit, after the fee is in hand, whether the sponsor will pay.
+  // A press made before the answer lands deploys as the screen showed it then.
+  const askSponsorship = (): void => {
+    if (journey.sponsorship !== undefined) return;
+    journey.sponsorship = "none";
+    // A wallet double without the sponsored route offers nothing.
+    if (typeof deps.wallet.deploySponsorship !== "function") return;
+    void deps.wallet.deploySponsorship().then((sponsorship) => {
+      if (!isCurrentDeployJourney(app, journey) || journey.pressed || journey.receipt) return;
+      journey.sponsorship = sponsorship;
+      if (!journey.fee) return;
+      if (target.isConnected) showFee(journey.fee);
+      else rebind();
+    });
   };
 
   // Only a failed quote belongs in the Cost box: it is why there is no fee.
@@ -278,7 +297,10 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           rebind();
           return;
         }
-        if (typeof response !== "string") showFee(response);
+        if (typeof response !== "string") {
+          showFee(response);
+          askSponsorship();
+        }
         scopedStatus(target, "");
         buttonBusy(target, false);
       },
@@ -325,20 +347,70 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       },
     });
   }
+  // A repaint while a press is in flight rebuilt the screen; its answer is
+  // applied there by binding the live screen again.
+  const rebound = (): boolean => {
+    if (target.isConnected) return false;
+    rebind();
+    return true;
+  };
+  const showReceipt = (hash: string): void => {
+    journey.receipt = { hash, outcome: null, settled: false };
+    if (rebound()) return;
+    scopedStatus(target, "");
+    buttonBusy(target, false);
+    resumeDeployReceipt(deps, journey, reviewStage, successStage);
+  };
+
+  // The sponsor pays: nothing is signed and no fee is the user's. A refusal
+  // sent nothing, so the user's own fee comes back with the reason; a lost
+  // reply stays amber, and the background holds the account against a retry.
+  const deploySponsored = (): void => {
+    void deps.wallet.deployAccountSponsored().then(
+      (hash) => {
+        journey.pressed = false;
+        showReceipt(hash);
+      },
+      (error: unknown) => {
+        journey.pressed = false;
+        const message = error instanceof Error ? error.message : "";
+        const fee = message === SPONSORED_DEPLOY_REFUSED ? journey.fee : undefined;
+        if (fee) journey.sponsorship = "refused";
+        if (message === ALREADY_DEPLOYED) {
+          void deps.wallet.loadStatus().then((status) => deps.render(status, "action"));
+        }
+        if (rebound()) {
+          showToast(
+            deployToastText(error, "Deployment failed"),
+            isOutcomeUnknown(error) ? "warning" : "error",
+            app,
+            errorDetails(error, "Deployment failed"),
+          );
+          return;
+        }
+        if (!fee) {
+          failed(error, "Deployment failed", "submit");
+          return;
+        }
+        showFee(fee);
+        showToast(SPONSORED_DEPLOY_REFUSED, "error", target);
+        scopedStatus(target, "");
+        buttonBusy(target, false);
+      },
+    );
+  };
+
   target.addEventListener("click", () => {
     if (journey.pressed) return;
     journey.pressed = true;
     buttonBusy(target, true);
     scopedStatus(target, "Submitting deployment…");
+    if (journey.sponsorship === "available") {
+      deploySponsored();
+      return;
+    }
     const reviewedFee = journey.fee;
     delete journey.fee;
-    // A repaint while the press is in flight rebuilt the screen; its answer is
-    // applied there by binding the live screen again.
-    const rebound = (): boolean => {
-      if (target.isConnected) return false;
-      rebind();
-      return true;
-    };
     void deps.wallet.deployAccount(reviewedFee).then(
       async (response) => {
         journey.pressed = false;
@@ -352,11 +424,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           buttonBusy(target, false);
           return;
         }
-        journey.receipt = { hash: response, outcome: null, settled: false };
-        if (rebound()) return;
-        scopedStatus(target, "");
-        buttonBusy(target, false);
-        resumeDeployReceipt(deps, journey, reviewStage, successStage);
+        showReceipt(response);
       },
       // Without a quote in hand this press only asked for one.
       (error: unknown) => {
@@ -377,4 +445,3 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     );
   });
 };
-

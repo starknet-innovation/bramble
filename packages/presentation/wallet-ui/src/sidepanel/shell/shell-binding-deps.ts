@@ -35,4 +35,3 @@ export type DeploymentPollScope = {
   readonly accountId: string;
   readonly stillCurrent: () => boolean;
 };
-

@@ -160,12 +160,15 @@ const outcomeForHash = (
   Object.entries(outcomes).find(([candidate]) => sameFelt(candidate, hash))?.[1];
 
 // A recorded fee is final: a later read never replaces it, so an outcome's fee
-// lands only on an entry that has none.
+// lands only on an entry that has none. A sponsored row never takes one: its
+// receipt fee was the sponsor's, never the account's.
 const recordedFee = (
   entry: ActivityEntry,
   outcome: ActivityOutcome,
 ): Pick<ActivityEntry, "feePaid"> =>
-  entry.feePaid === undefined && outcome.feePaid !== undefined ? { feePaid: outcome.feePaid } : {};
+  entry.feePayer === undefined && entry.feePaid === undefined && outcome.feePaid !== undefined
+    ? { feePaid: outcome.feePaid }
+    : {};
 
 // Merges one reconciled outcome into a stored entry. Absent optional fields are
 // dropped rather than written as `undefined`, so the persisted record stays
