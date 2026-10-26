@@ -14,6 +14,7 @@ import { withRpcFallback } from "@bramble/starknet/provider";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import type { Vault } from "@bramble/vault/schema";
 import {
   networkIdForChainId,
@@ -55,6 +56,7 @@ import {
   type UnlockSession,
 } from "../runtime/session";
 import { reviewOutsideExecution } from "./outside-execution-review";
+import { recordRelaySignature } from "./relay-record";
 import { admitSignTypedData } from "./sign-typed-data-admission";
 import { withTrustedRecipients } from "./trusted-recipients";
 import { describeTypedData } from "./typed-data-summary";
@@ -106,6 +108,8 @@ export const executeSignApproval = async (
     ChainOpsDeps,
     "activity" | "ledgerSignQueue" | "multisigStore" | "preferencesStore" | "session" | "wallet"
   > & {
+    /** Signed OutsideExecution messages, recorded for Activity (issue 299). */
+    readonly relaySignatures?: Pick<RelaySignatureLog, "record">;
     /** Overrides endpoint construction. Unset, each endpoint builds its own client. */
     readonly rpcProviderFor?: (nodeUrl: string) => RpcProvider;
   },
@@ -182,6 +186,14 @@ export const executeSignApproval = async (
       );
     }
     const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
+    // A relay authorization the site can submit later is listed in Activity as
+    // signed, never as a transaction; recording it cannot fail the signature.
+    await recordRelaySignature(deps.relaySignatures, {
+      account,
+      messageHash,
+      origin: input.origin,
+      typedData: input.typedData,
+    });
     return {
       ok: true,
       signature: serializeAccountSignature(account.accountContractType, signature),
