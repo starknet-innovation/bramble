@@ -152,6 +152,9 @@ page code cannot reach signing or vault operations:
 
 ```
 apps/extension              MV3 pages, entrypoints, browser adapters, privileged orchestration
+apps/terminal              standalone trade terminal; connects as a dapp
+apps/ui-lab                Storybook workbench for production wallet UI
+apps/website               public site for docs, support, and privacy
 packages/foundation        pure values, validators, and wallet/provider protocol
 packages/platform          store, encrypted vault, Krusty, Starknet, and Ledger adapters
 packages/features          permissions, portfolio, transactions, multisig, privacy, settings
@@ -168,9 +171,14 @@ access only the validated provider protocol. The package graph and its enforced 
 ## Docs
 
 - **[Documentation portal](docs/index.md)** — host-ready project and security-audit documentation.
+- **[User guide](docs/USER-GUIDE.md)** — install, first run, backup, and everyday use.
+- **[Engineering](docs/ENGINEERING.md)** — reading order, import layers, and the untrusted-message path.
+- **[Development](DEVELOPMENT.md)** — release branches, where pull requests go, and which CI runs.
 - **[Architecture & internals](docs/ARCHITECTURE.md)** — the provider API, Ledger trust boundary, pinned class hashes, storage migrations, design system, and full tour.
 - **[Modular architecture](docs/MODULAR_ARCHITECTURE.md)** — package ownership, dependency direction, typed invariants, and local package workflows.
 - **[Wallet store architecture](docs/WALLET_STORE.md)** — persistence layout, account scoping, Chrome update migrations, and Ledger viewing-key custody.
+- **[Operations](docs/OPERATIONS.md)** — gateway monitoring, support diagnostics, and incident response.
+- **[STRK20 privacy](docs/STRK20_PRIVACY.md)** — pinned Privacy SDK, privileged data flow, and failure boundaries.
 - **[Security audit](docs/security-audit/index.md)** — baseline, threat model, review sequence, and sanitized findings ledger.
 - **[Source package audit](docs/security-audit/src-package-audit.md)** — package-by-package controls, resolved findings, and validation evidence.
 - **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Building from source](BUILDING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**
