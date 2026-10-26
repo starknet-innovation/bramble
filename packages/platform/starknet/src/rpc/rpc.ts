@@ -71,6 +71,10 @@ export {
   submitAccountDeployment,
 } from "../transactions/deployment";
 /**
+ * Re-exported deployment-status memo for the background RPC wiring.
+ */
+export { rememberDeployedAccounts } from "../transactions/deployment-status-cache";
+/**
  * Re-exported amount helpers and balance reads so callers keep one RPC import path.
  */
 export {

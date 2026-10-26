@@ -41,7 +41,7 @@ import {
   READY_EIP2645_APPLICATION,
 } from "@bramble/wallet-model/ledger-path";
 import { friendlyError } from "../../runtime/friendly-error";
-import { ADD_ACCOUNT_FAILED } from "../../runtime/friendly-error-shared";
+import { ADD_ACCOUNT_FAILED, isPhraselessAddRefusal } from "../../runtime/friendly-error-shared";
 import {
   type LedgerCandidate,
   type LedgerCandidateState,
@@ -405,11 +405,15 @@ export const createLedgerOnboardController = (
       deps.render(null);
       await deps.refresh();
     } catch (error) {
-      const message = friendlyError(
-        error instanceof Error ? error.message : "",
-        ADD_ACCOUNT_FAILED,
-      ).message;
-      deps.render({ kind: "error", message });
+      const raw = error instanceof Error ? error.message : "";
+      const message = friendlyError(raw, ADD_ACCOUNT_FAILED).message;
+      // A phrase-less wallet can't derive a regular account, but its import
+      // routes still work: land there rather than on a Ledger "Try again".
+      deps.render(
+        isPhraselessAddRefusal(raw)
+          ? { kind: "import-chooser", phraselessNote: message }
+          : { kind: "error", message },
+      );
     } finally {
       busy = false;
     }

@@ -6,6 +6,7 @@
  * the wallet surface is unavailable.
  */
 import { RefusedBeforeWrite } from "@bramble/core/errors";
+import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
 import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import {
   readCreateAccountInput,
@@ -51,16 +52,13 @@ const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => 
   });
 };
 
-// The refusal `addDerivedAccount` raises for a vault with no phrase, verbatim.
-const NO_RECOVERY_PHRASE = "No recovery phrase stored for this wallet";
-
 const missingPhraseRefusal = async (ctx: RouterContext): Promise<RuntimeResponse | null> => {
   const passphrase = ctx.session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const vault = await ctx.wallet.readVault(passphrase);
-  return vault.mnemonic ? null : { error: NO_RECOVERY_PHRASE };
+  return vault.mnemonic ? null : { error: NO_RECOVERY_PHRASE_REFUSAL };
 };
 
 const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
