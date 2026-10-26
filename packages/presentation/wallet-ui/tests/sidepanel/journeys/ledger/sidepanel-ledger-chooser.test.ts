@@ -182,4 +182,22 @@ describe("add-account chooser routing", () => {
       "The wallet is locked or unavailable. Unlock it and try again.",
     );
   });
+
+  // Issue 740: a wallet set up from a Ledger or a pasted key holds no phrase,
+  // so the regular tile lands on the import routes that still work, not on an
+  // error page whose "Try again" reconnects a Ledger.
+  test("a phrase-less wallet's regular-account choice lands on import, not an error", async () => {
+    const h = onboardHarness({
+      addHd: () => Promise.reject(new Error("No recovery phrase stored for this wallet")),
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    controller.showChooser();
+    controller.choose("regular");
+    await tick();
+    expect(h.views.at(-1)).toEqual({
+      kind: "import-chooser",
+      phraselessNote:
+        "This wallet was set up without a recovery phrase. Import an existing account instead.",
+    });
+  });
 });

@@ -24,6 +24,7 @@ import {
 import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnostics";
 import { createActivityLog, systemClock } from "@bramble/transactions/activity";
 import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
+import { createRelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
@@ -386,6 +387,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,
   recoveryDiscovery,
+  relaySignatures: createRelaySignatureLog({ now: systemClock, store: createBrowserLocalStore() }),
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,

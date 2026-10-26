@@ -103,7 +103,7 @@ describe("home hydration priority", () => {
     expect(deferredStarts).toEqual(["deployment", "activity"]);
 
     deployment.resolve(true);
-    activity.resolve({ entries: [], historyUnavailable: false });
+    activity.resolve({ entries: [], historyUnavailable: false, relays: [] });
     await run;
     expect(paints).toBeGreaterThanOrEqual(2);
     expect(cache.deployment).toBe(true);
