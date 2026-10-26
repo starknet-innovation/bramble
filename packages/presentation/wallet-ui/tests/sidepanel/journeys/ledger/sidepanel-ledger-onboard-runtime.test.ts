@@ -378,4 +378,19 @@ describe("Ledger onboarding runtime (DOM)", () => {
     h.runtime.startAddAccount();
     expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
   });
+
+  test("a phrase-less wallet's regular tile renders the import routes with the reason", async () => {
+    const h = mountRuntime({
+      addHd: () => Promise.reject(new Error("No recovery phrase stored for this wallet")),
+    });
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="regular"]');
+    await tick();
+    expect(h.mount.querySelector('[role="status"]')?.textContent).toBe(
+      "This wallet was set up without a recovery phrase. Import an existing account instead.",
+    );
+    expect(h.mount.querySelector('[data-add-kind="find-accounts"]')).toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="import-phrase"]')).not.toBeNull();
+    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).toBeNull();
+  });
 });
