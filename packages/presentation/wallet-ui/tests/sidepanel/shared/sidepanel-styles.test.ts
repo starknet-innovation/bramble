@@ -166,6 +166,8 @@ describe("sidepanel styles", () => {
 
   test("short screens suppress overscroll and activity puts state on the icon", () => {
     expect(SIDEPANEL_STYLES).toMatch(/body \{[^}]*overscroll-behavior-y: none;/s);
+    // The document scrolls the approval takeover; a contained list would trap the wheel.
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.request-list \{[^}]*overscroll-behavior/s);
     expect(SIDEPANEL_STYLES).toMatch(/\.activity-head h1 \{[^}]*font-size: 22px;/s);
     expect(SIDEPANEL_STYLES).toContain(
       ".tx-kind-icon.accepted { color: var(--bramble-positive); }",
