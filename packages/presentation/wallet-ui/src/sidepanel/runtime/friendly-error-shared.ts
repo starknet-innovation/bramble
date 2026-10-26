@@ -17,6 +17,13 @@ export const SUBMISSION_UNKNOWN = (what: string): string =>
 /** Shared ending for an account that was not added (add, create, or import). */
 export const ADD_ACCOUNT_FAILED = "Couldn't add that account. Try again.";
 
+/**
+ * True for the refusal `wallet.addAccount` returns when the vault was set up
+ * from a Ledger or a pasted key and so holds no phrase to derive from.
+ */
+export const isPhraselessAddRefusal = (raw: string): boolean =>
+  raw.trim().toLowerCase() === "no recovery phrase stored for this wallet";
+
 /** Shared ending for a recovery phrase the wallet could not import. */
 export const SEED_IMPORT_FAILED =
   "Couldn't import that recovery phrase. Check the words and try again.";
