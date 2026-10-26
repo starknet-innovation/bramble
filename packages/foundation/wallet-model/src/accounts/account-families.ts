@@ -61,6 +61,8 @@ export type AccountFamily = "argent" | "braavos";
  * What a class hash can be used for.
  *
  * `deployment` fixes an address, so it is the set to derive candidates from.
+ * It means "an account may have been deployed with this class", not "this
+ * wallet deploys it": deploying is gated separately in `transactions/deployment.ts`.
  * `implementation` is what an upgraded account runs, so it is the set a
  * deployed account may legitimately be found running. A class can be both.
  */
