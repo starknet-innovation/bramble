@@ -343,8 +343,9 @@ and reputation signals before a connection is approved:
   was to adopt a remote feed with a **fail-safe** stance:
   - `packages/features/permissions/src/phishing-feed.ts` fetches a maintained web3 phishing list from
     a configurable source (default: MetaMask's community-maintained
-    eth-phishing-detect, `https://metamask.github.io/eth-phishing-detect/v1/config.json`)
-    under an explicit new host permission (`https://metamask.github.io/*`).
+    eth-phishing-detect, read from the repository's
+    `https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json`)
+    under an explicit host permission (`https://raw.githubusercontent.com/*`).
   - The payload is validated before use and cached in plain (non-secret) local
     storage under `bramble:phishing-feed`. Wire format is
     `{ "blocklist": string[], "version"?: number }`; the eth-phishing-detect

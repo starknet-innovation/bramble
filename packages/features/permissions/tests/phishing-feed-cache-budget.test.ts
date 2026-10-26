@@ -15,7 +15,10 @@ import {
   parsePhishingFeed,
 } from "@bramble/permissions/phishing-feed";
 import {
+  MAX_PHISHING_DOMAIN_CHARS,
+  MAX_PHISHING_DOMAINS,
   PHISHING_FEED_STORE_KEY,
+  phishingDomainChars,
   readPhishingCache,
   writePhishingCache,
 } from "@bramble/permissions/phishing-feed-cache";
@@ -87,6 +90,52 @@ describe("phishing feed cache under the provider storage budget", () => {
     await writePhishingCache(store, { domains, fetchedAt: 1, source: DEFAULT_PHISHING_FEED_URL });
     const cached = await readPhishingCache(store, DEFAULT_PHISHING_FEED_URL, 1);
     expect(cached?.domains.length).toBe(6_000);
+  });
+
+  test("keeps every domain of a list the size of today's eth-phishing-detect", async () => {
+    // About 110,000 valid entries in October 2026, past the old 100,000 cap
+    // (issue 772). Every one must survive parsing and a cache round trip.
+    const store = createMemoryStore();
+    const domains =
+      parsePhishingFeed({ blacklist: bigList(120_000), whitelist: ["ok.example"] }) ?? [];
+    expect(domains.length).toBe(120_000);
+    await writePhishingCache(store, { domains, fetchedAt: 1, source: DEFAULT_PHISHING_FEED_URL });
+    expect((await readPhishingCache(store, DEFAULT_PHISHING_FEED_URL, 1))?.domains.length).toBe(
+      120_000,
+    );
+  });
+
+  test("a list past the cap keeps exactly the cap", () => {
+    expect(parsePhishingFeed({ blocklist: bigList(MAX_PHISHING_DOMAINS + 5) })?.length).toBe(
+      MAX_PHISHING_DOMAINS,
+    );
+  });
+
+  test("a list past the size budget keeps only what fits, so storage stays shared", () => {
+    // 20,000 valid 253-character names is about 5 MiB, past the 4 MiB budget.
+    const label = "a".repeat(60);
+    const long = Array.from({ length: 20_000 }, (_, index) =>
+      `${label}.${label}.${label}.${label}.x${index}.example`.slice(-253),
+    );
+    const kept = parsePhishingFeed({ blocklist: long }) ?? [];
+    const chars = kept.reduce((total, domain) => total + phishingDomainChars(domain), 0);
+    expect(kept.length).toBeLessThan(long.length);
+    expect(chars).toBeLessThanOrEqual(MAX_PHISHING_DOMAIN_CHARS);
+    expect(chars + phishingDomainChars(long[kept.length] ?? "")).toBeGreaterThan(
+      MAX_PHISHING_DOMAIN_CHARS,
+    );
+  });
+
+  test("the cap fits the chunk budget even when every name is 253 characters", async () => {
+    const store = createMemoryStore();
+    const label = "a".repeat(60);
+    const domains = Array.from({ length: MAX_PHISHING_DOMAINS }, (_, index) =>
+      `${label}.${label}.${label}.${label}.x${index}.example`.slice(-253),
+    );
+    await writePhishingCache(store, { domains, fetchedAt: 1, source: DEFAULT_PHISHING_FEED_URL });
+    expect((await readPhishingCache(store, DEFAULT_PHISHING_FEED_URL, 1))?.domains.length).toBe(
+      MAX_PHISHING_DOMAINS,
+    );
   });
 
   test("names longer than a DNS name are rejected at parse time", () => {
