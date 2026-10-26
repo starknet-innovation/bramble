@@ -11,7 +11,7 @@ the v10 encrypted-vault schema, account identity and scoping, mutation rules, Ch
 updates, and the custody boundary for a future Ledger-derived STRK20 viewing key.
 
 Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implementation tracked by
-[issue #208](https://github.com/starknet-innovation/mc-wallet/issues/208).
+[issue #208](https://github.com/starknet-innovation/bramble/issues/208).
 
 ## Security conclusions
 
@@ -52,6 +52,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | `bramble:vault:commit:<lineage>`, `bramble:vault:promoted` shadow | `storage.session`, plain | session copy of the commit record and the last promoted lineage | browser session | a durable record that disagrees is a rollback |
 | `bramble:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
 | `bramble:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
+| `bramble:relay-signatures` | `storage.local`, plain | OutsideExecution messages signed for relay: origin, message hash, nonce, deadline, call count, chain-read status and check time; no signature or calldata | account + network; 100 total | discard invalid rows; monotonic status (`nonce-used` is final) |
 | `bramble:allowances` | `storage.local`, plain | public ERC20 approvals | account + network + token + spender; 200 total | discard invalid rows |
 | `bramble:argent-multisigs:v2` | `storage.local`, plain, trusted contexts only | public contracts, frozen transaction intents, exact-hash authorization fragments | network + canonical contract; 20 multisigs / 100 intents (25 per multisig) / 100 operations | discard invalid or orphaned rows; never silently evict active authority |
 | `bramble:nostr-coordination:v1` | `storage.local`, plain | relay sync checkpoints: relay selection, last sync time, receipted gift-wrap event ids | multisig account; 20 accounts / 200 event ids each | discard invalid rows; event ids only save repeated work and never decide an import |

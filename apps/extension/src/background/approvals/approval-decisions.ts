@@ -18,6 +18,7 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { sameFeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
@@ -66,6 +67,8 @@ export type ApprovalDecisionDeps = {
   readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
+  /** Signed OutsideExecution messages for Activity; optional for narrow test stubs. */
+  readonly relaySignatures?: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly waiters: SignatureWaiters;
@@ -211,6 +214,7 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
       ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
+      ...(deps.relaySignatures ? { relaySignatures: deps.relaySignatures } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),

@@ -17,6 +17,10 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type ActivityLog, memoryActivityLog, systemClock } from "@bramble/transactions/activity";
 import { type AllowanceStore, memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import { type SwapService, unavailableSwapService } from "@bramble/transactions/avnu";
+import {
+  memoryRelaySignatureLog,
+  type RelaySignatureLog,
+} from "@bramble/transactions/relay-signatures";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "../approvals/approvals";
@@ -89,6 +93,7 @@ export type RouterContext = {
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
   readonly recoveryDiscovery: RecoveryDiscoveryCache;
+  readonly relaySignatures: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly swap: SwapService;
@@ -126,6 +131,8 @@ export type MessageHandlerOptions = {
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
   readonly recoveryDiscovery?: RecoveryDiscoveryCache;
+  /** Signed OutsideExecution messages for Activity; in memory when absent. */
+  readonly relaySignatures?: RelaySignatureLog;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
@@ -216,6 +223,10 @@ const waitersFor = (provided: SignatureWaiters | undefined): SignatureWaiters =>
 // Inert when no browser runtime is wired (tests, tooling): never restarts.
 const updatesFor = (updates: UpdateReady | undefined): UpdateReady => updates ?? inertUpdateReady;
 
+// An unwired relay log keeps records for this worker's lifetime only.
+const relaySignaturesFor = (log: RelaySignatureLog | undefined): RelaySignatureLog =>
+  log ?? memoryRelaySignatureLog();
+
 /**
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
@@ -257,6 +268,7 @@ export const routerContext = (
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
     recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),
+    relaySignatures: relaySignaturesFor(options.relaySignatures),
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session,
     swap: options.swap ?? unavailableSwapService,

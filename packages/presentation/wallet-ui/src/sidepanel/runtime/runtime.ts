@@ -6,7 +6,6 @@ import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
-  type ActivityResponse,
   type AllowanceListing,
   allowanceListingFrom,
   type ConnectedSitesResponse,
@@ -25,6 +24,7 @@ import {
   isTransferResponse,
   isTransferReviewResponse,
   isWalletStatus,
+  type LoadedActivity,
   type PendingApproval,
   type RevealSecretsResponse,
   readDetectedTokens,
@@ -166,10 +166,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       cached = false,
       refreshHistory = false,
       forceHistory = false,
-    ): Promise<{
-      readonly entries: ActivityResponse["activity"];
-      readonly historyUnavailable: boolean;
-    }> {
+    ): Promise<LoadedActivity> {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
         ...(cached ? { cached: true } : {}),
@@ -178,11 +175,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
-        return { entries: [], historyUnavailable: true };
+        return { entries: [], historyUnavailable: true, relays: [] };
       }
       return {
         entries: response.activity,
         historyUnavailable: response.historyUnavailable ?? false,
+        relays: response.relays ?? [],
       };
     },
     /**

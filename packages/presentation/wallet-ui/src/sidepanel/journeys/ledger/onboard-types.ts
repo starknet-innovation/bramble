@@ -54,7 +54,7 @@ export type LedgerOnboardAddKind =
  */
 export type LedgerOnboardView =
   | { readonly kind: "chooser" }
-  | { readonly kind: "import-chooser" }
+  | { readonly kind: "import-chooser"; readonly phraselessNote?: string }
   | { readonly kind: "connect" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "reading" }

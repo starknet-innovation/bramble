@@ -67,6 +67,7 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   ...(ctx.nftSnapshots ? { nftSnapshots: ctx.nftSnapshots } : {}),
   now: ctx.now,
   preferencesStore: ctx.preferencesStore,
+  relaySignatures: ctx.relaySignatures,
   runtimeRpc: ctx.runtimeRpc,
   session: ctx.session,
   wallet: ctx.wallet,
