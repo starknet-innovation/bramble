@@ -1,5 +1,6 @@
 {
   "name": "@bramble/kms-krusty",
+  "description": "The only adapter from the vault's KMS port to the pinned Krusty WASM package. Validates every KMS input and output and fails closed.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

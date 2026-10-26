@@ -1,5 +1,6 @@
 {
   "name": "@bramble/vault",
+  "description": "The encrypted vault: envelopes, versioned schemas and migrations, account-secret custody, the unlock-aware vault service, origin grants and the `KmsPort` it requires.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

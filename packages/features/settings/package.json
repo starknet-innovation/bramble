@@ -1,5 +1,6 @@
 {
   "name": "@bramble/settings",
+  "description": "Account groups, public preferences, network overrides and their validated stores.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
