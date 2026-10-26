@@ -144,12 +144,21 @@ export type AddDerivedAccountInput = {
  * key is validated and routed to the encrypted vault; it is never persisted in
  * plain preferences or logged.
  */
-export type ImportRawKeyAccountInput = {
+export type ImportRawKeyAccountInput = PreviewImportedAccountInput & {
+  readonly vaultPassphrase: string;
+};
+
+/**
+ * Input for deriving a raw-key account's public metadata without writing it.
+ * `classHash` names the release the account was deployed with; absent means the
+ * family default, and a class its family was never deployed with is refused.
+ */
+export type PreviewImportedAccountInput = {
   readonly accountContractType: AccountContractType;
+  readonly classHash?: string;
   readonly deploymentSalt?: string;
   readonly networkId: StarknetNetworkId;
   readonly privateKey: string;
-  readonly vaultPassphrase: string;
 };
 
 /**
@@ -275,6 +284,13 @@ export type WalletVaultService = {
    * returning key material. Invalid derivation input fails closed.
    */
   readonly previewAccount: (input: AccountDerivationInput) => Promise<RecoverableAccountRef>;
+  /**
+   * Derives a raw key's public account metadata through Krusty without
+   * persisting it or returning the key. An invalid key or class fails closed.
+   */
+  readonly previewImportedAccount: (
+    input: PreviewImportedAccountInput,
+  ) => Promise<ImportedAccountRef>;
   /**
    * Checks a recovery phrase through Krusty only. Returns false for an invalid
    * phrase and never echoes the input; fails closed when KMS is unavailable.

@@ -27,6 +27,7 @@ import {
   type RecoveryDerivationKind,
   recoveryScanTarget,
 } from "@bramble/wallet-model/recovery";
+import { readAccountActivity } from "../accounts/account-activity";
 import {
   readDiscoverOwnAccountsInput,
   readDiscoverRecoveryAccountsInput,
@@ -57,11 +58,12 @@ const describeRecoveryAccount = async (
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
 ): Promise<RecoveryAccountCandidate> => {
-  const deployed = await deps.runtimeRpc.getDeploymentStatus({
+  const activity = await readAccountActivity(deps.runtimeRpc, {
     accountAddress: account.address,
     rpcUrls,
+    tokens,
   });
-  if (deployed) {
+  if (activity.deployed) {
     // Advisory signability verdict (issue 542): a deployed vendor account can
     // carry a guardian or strong signer, a rotated owner, or an unauthorizable
     // live class. A missing probe or a throw lists the row unlabelled — the
@@ -85,16 +87,7 @@ const describeRecoveryAccount = async (
       ...(restriction ? { restriction } : {}),
     };
   }
-  const balances = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: account.address,
-    rpcUrls,
-    tokens,
-  });
-  return {
-    account,
-    deployed: false,
-    funded: balances.some((balance) => BigInt(balance.balance) > 0n),
-  };
+  return { account, deployed: false, funded: activity.funded };
 };
 
 const discoveryFingerprint = (

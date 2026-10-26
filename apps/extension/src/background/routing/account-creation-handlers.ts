@@ -14,6 +14,7 @@ import {
   readImportSeedAccountsInput,
 } from "../accounts/account-creation-inputs";
 import { readCreateKeyVaultInput, readImportAccountInput } from "../accounts/import-inputs";
+import { rawKeyImportClass } from "../accounts/raw-key-class";
 import {
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
@@ -106,12 +107,13 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
   if (!createKeyVault) {
     return { error: "wallet unavailable" };
   }
+  const classHash = await rawKeyImportClass(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
     const account = await runVaultCreationWithNetwork(
       ctx.session,
       ctx.preferencesStore,
       input.networkId,
-      () => createKeyVault(input),
+      () => createKeyVault({ ...input, ...(classHash === undefined ? {} : { classHash }) }),
     );
     ctx.session.unlock(input.vaultPassphrase);
     return { account, ok: true };
@@ -191,12 +193,20 @@ const handleImportAccount: RouterHandler = async (ctx, messageType, message) => 
   if (!importRawKeyAccount) {
     return { error: "wallet unavailable" };
   }
+  // Probed outside the coordinator: the chain round-trips must not hold the
+  // serialized state boundary.
+  const classHash = await rawKeyImportClass(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
     const account = await runUnlockedNetworkMutation(
       ctx.session,
       ctx.preferencesStore,
       input.networkId,
-      (vaultPassphrase) => importRawKeyAccount({ ...input, vaultPassphrase }),
+      (vaultPassphrase) =>
+        importRawKeyAccount({
+          ...input,
+          ...(classHash === undefined ? {} : { classHash }),
+          vaultPassphrase,
+        }),
     );
     return account ? { account, ok: true } : { error: "wallet locked" };
   });

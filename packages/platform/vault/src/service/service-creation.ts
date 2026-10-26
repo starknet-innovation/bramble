@@ -157,6 +157,7 @@ export const vaultCreationMethods = ({
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     const { account, privateKey } = await deriveImportedAccount(kms, {
       accountContractType: input.accountContractType,
+      ...(input.classHash === undefined ? {} : { classHash: input.classHash }),
       ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
       networkId: input.networkId,
       privateKey: input.privateKey,
@@ -209,6 +210,7 @@ export const vaultCreationMethods = ({
     }
     const { account, privateKey } = await deriveImportedAccount(kms, {
       accountContractType: input.accountContractType,
+      ...(input.classHash === undefined ? {} : { classHash: input.classHash }),
       ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
       networkId: input.networkId,
       privateKey: input.privateKey,
