@@ -7,13 +7,15 @@
  */
 import { RefusedBeforeWrite } from "@bramble/core/errors";
 import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
-import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
+import { DEFAULT_NETWORK, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
 import {
   readCreateAccountInput,
   readImportOwnAccountsInput,
   readImportSeedAccountsInput,
 } from "../accounts/account-creation-inputs";
 import { readCreateKeyVaultInput, readImportAccountInput } from "../accounts/import-inputs";
+import { verifyAddressSelections } from "../onboarding/address-import";
 import {
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
@@ -130,6 +132,10 @@ const handleImportSeedAccounts: RouterHandler = async (ctx, messageType, message
   if (!importSeedAccounts) {
     return { error: "wallet unavailable" };
   }
+  // An account picked by its address is re-proved before the guarded write,
+  // which locks the session on any error.
+  const refusal = await verifyAddressSelections(ctx, input);
+  if (refusal) return refusal;
   return ctx.activeStateCoordinator.run(async () => {
     const accounts = await runUnlockedNetworkMutation(
       ctx.session,
@@ -139,6 +145,23 @@ const handleImportSeedAccounts: RouterHandler = async (ctx, messageType, message
     );
     return accounts ? { accounts, ok: true } : { error: "wallet locked" };
   });
+};
+
+// Re-proves the own-phrase picks made by address before the guarded write,
+// reading the phrase through the live session as the import itself does.
+const ownAddressSelectionRefusal = async (
+  ctx: RouterContext,
+  input: {
+    readonly networkId: StarknetNetworkId;
+    readonly selections: readonly RecoveryAccountSelection[];
+  },
+): Promise<RuntimeResponse | null> => {
+  if (input.selections.every((selection) => selection.address === undefined)) return null;
+  const passphrase = ctx.session.peekPassphrase();
+  if (!passphrase) return { error: "wallet locked" };
+  const { mnemonic } = await ctx.wallet.readVault(passphrase);
+  if (mnemonic === null) return { error: "This wallet has no recovery phrase to scan" };
+  return verifyAddressSelections(ctx, { ...input, mnemonic });
 };
 
 const handleImportOwnAccounts: RouterHandler = async (ctx, messageType, message) => {
@@ -153,6 +176,8 @@ const handleImportOwnAccounts: RouterHandler = async (ctx, messageType, message)
   if (!importSeedAccounts) {
     return { error: "wallet unavailable" };
   }
+  const refusal = await ownAddressSelectionRefusal(ctx, input);
+  if (refusal) return refusal;
   return ctx.activeStateCoordinator.run(async () => {
     const accounts = await runUnlockedNetworkMutation(
       ctx.session,

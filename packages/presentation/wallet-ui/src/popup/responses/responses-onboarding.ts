@@ -48,6 +48,23 @@ export const isRecoveryDiscoveryResponse = (value: unknown): value is RecoveryDi
   isRecoveryAccountIndex(value["nextIndex"]) &&
   value["ok"] === true;
 
+/** One account found by its pasted address (issue 398). */
+export type AddressLookupResponse = {
+  readonly candidate: RecoveryAccountCandidate;
+  readonly ok: true;
+};
+
+/**
+ * Validates an import-by-address answer: one public candidate, marked as found
+ * by address so its pick carries the address the chain reported.
+ */
+export const isAddressLookupResponse = (value: unknown): value is AddressLookupResponse =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["candidate", "ok"]) &&
+  isRecoveryAccountCandidate(value["candidate"]) &&
+  value["candidate"].byAddress === true &&
+  value["ok"] === true;
+
 /** Successful atomic restoration response. */
 export type RecoveredAccountsResponse = {
   readonly accounts: readonly AccountRef[];

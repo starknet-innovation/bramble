@@ -167,6 +167,55 @@ export const readDiscoverRecoveryAccountsInput = (
   };
 };
 
+// "0x" and 64 hex digits; anything longer is not an address. Parsing beyond
+// that is left to the lookup, so a malformed one gets its own refusal.
+const ADDRESS_INPUT_MAX_LENGTH = 66;
+
+const isAddressInput = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= ADDRESS_INPUT_MAX_LENGTH;
+
+/**
+ * Parses a lookup of one pasted account address against a phrase the panel
+ * holds (first-run restore, or importing another phrase): the address, the
+ * phrase, and the network to read. The address is only bounded here; the
+ * lookup canonicalizes it and refuses one that is not a Starknet address.
+ */
+export const readFindRecoveryAccountByAddressInput = (
+  message: unknown,
+): {
+  readonly address: string;
+  readonly mnemonic: string;
+  readonly networkId: StarknetNetworkId;
+} | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["address", "mnemonic", "networkId", "type"]) &&
+  message["type"] === "wallet.findRecoveryAccountByAddress" &&
+  isAddressInput(message["address"]) &&
+  isMnemonicText(message["mnemonic"]) &&
+  isStarknetNetworkId(message["networkId"])
+    ? {
+        address: message["address"],
+        mnemonic: message["mnemonic"],
+        networkId: message["networkId"],
+      }
+    : null;
+
+/**
+ * Parses a lookup of one pasted account address against the wallet's OWN
+ * phrase. The message carries no phrase: the background reads it inside the
+ * vault boundary through the live unlock session.
+ */
+export const readFindOwnAccountByAddressInput = (
+  message: unknown,
+): { readonly address: string; readonly networkId: StarknetNetworkId } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["address", "networkId", "type"]) &&
+  message["type"] === "wallet.findOwnAccountByAddress" &&
+  isAddressInput(message["address"]) &&
+  isStarknetNetworkId(message["networkId"])
+    ? { address: message["address"], networkId: message["networkId"] }
+    : null;
+
 /**
  * Parses the in-wallet imported-seed account selection. Unlike first-run
  * recovery the unlock passphrase comes from the live session, so the message

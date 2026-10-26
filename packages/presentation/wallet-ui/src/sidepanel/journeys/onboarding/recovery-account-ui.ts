@@ -25,6 +25,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
+import { bindRecoveryAddressFinder } from "./recovery-address-ui";
 
 /** One bounded discovery page as the runtime returns it. */
 type DiscoveryResult = Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>;
@@ -36,6 +37,12 @@ type RecoveryAccountUiDeps = {
    * and the picker calls `wallet.discoverRecoveryAccounts` with `mnemonic`.
    */
   readonly discover?: (manualIndex?: number) => Promise<DiscoveryResult>;
+  /**
+   * Injected address lookup, like `discover`: the own-phrase rescan has no
+   * phrase in the panel. Absent, the picker asks
+   * `wallet.findRecoveryAccountByAddress` with `mnemonic`.
+   */
+  readonly findByAddress?: (address: string) => Promise<RecoveryAccountCandidate>;
   /** Accounts already in the vault; scan candidates matching them are shown but locked. */
   readonly existingIds?: () => ReadonlySet<string>;
   readonly form: HTMLFormElement;
@@ -81,6 +88,9 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
   ...(candidate.account.accountContractType === "argent"
     ? { derivation: candidate.account.derivation.kind }
     : {}),
+  // An account found by its address keeps it: no derivation reproduces it, and
+  // the background re-proves the owner key before writing it (issue 398).
+  ...(candidate.byAddress ? { address: candidate.account.address } : {}),
 });
 
 // Only the class this wallet itself deploys can be brought on chain from here.
@@ -173,6 +183,16 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const manual = deps.form.querySelector<HTMLInputElement>('input[name="recoveryManualIndex"]');
   const manualSearch = deps.form.querySelector<HTMLButtonElement>("#recovery-manual-search");
   let candidates: readonly RecoveryAccountCandidate[] = [];
+  // The scan's own page, and accounts found by pasted address, which no page
+  // contains. The picker lists both.
+  let scanned: readonly RecoveryAccountCandidate[] = [];
+  const foundByAddress = new Map<string, RecoveryAccountCandidate>();
+  const withFound = (): readonly RecoveryAccountCandidate[] => [
+    ...scanned,
+    ...[...foundByAddress.values()].filter(
+      (found) => !scanned.some((candidate) => candidate.account.id === found.account.id),
+    ),
+  ];
   let complete = false;
   let scanStatus = "";
   let generation = 0;
@@ -298,7 +318,8 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       }
       seen.add(key);
     }
-    candidates = next.candidates;
+    scanned = next.candidates;
+    candidates = withFound();
     complete = next.complete;
     renderCandidates();
     scanStatus = complete
@@ -364,6 +385,9 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const reset = (): void => {
     generation += 1;
     candidates = [];
+    scanned = [];
+    foundByAddress.clear();
+    addressFinder.reset();
     complete = false;
     scanStatus = "";
     selected.clear();
@@ -371,6 +395,38 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     if (result) result.textContent = "";
     renderCandidates();
   };
+
+  // A match is listed, its group opened, and picked unless it is already in
+  // the wallet; the returned line reports it under the finder.
+  const addFound = (candidate: RecoveryAccountCandidate): string => {
+    const key = selectionKey(selectionFor(candidate));
+    const title = candidateTitle(candidate);
+    const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
+    foundByAddress.set(key, candidate);
+    candidates = withFound();
+    if (!duplicate && selectable(candidate)) trySelect(key);
+    const group = groupFor(candidate.account.accountContractType);
+    if (group) group.open = true;
+    renderCandidates();
+    renderStatus();
+    if (duplicate) return `${title} is already in this wallet.`;
+    return candidate.restriction
+      ? `Found ${title}. It's view only until you recover it.`
+      : `Found ${title}.`;
+  };
+  const addressFinder = bindRecoveryAddressFinder({
+    form: deps.form,
+    lookup: (address) =>
+      deps.findByAddress !== undefined
+        ? deps.findByAddress(address)
+        : deps.wallet.findRecoveryAccountByAddress(
+            deps.mnemonic?.() ?? "",
+            deps.networkId(),
+            address,
+          ),
+    networkId: deps.networkId,
+    onFound: addFound,
+  });
 
   retry?.addEventListener("click", () => void scan());
   deps.form

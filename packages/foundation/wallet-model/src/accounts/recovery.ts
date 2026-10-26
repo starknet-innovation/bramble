@@ -1,6 +1,6 @@
 /** Public account-recovery coordinates and bounded discovery results. */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { canonicalFelt, sameFelt } from "../networks/networks";
+import { canonicalFelt, isNonZeroStarkFieldElement, sameFelt } from "../networks/networks";
 import { ARGENT_ACCOUNT_CLASS_HASH, deploymentClasses } from "./account-families";
 import {
   type AccountContractType,
@@ -40,10 +40,17 @@ export const RESERVED_AGENT_ACCOUNT_INDEX = 0x41474e54;
  * Absent means the family's own default — the release this wallet creates for
  * Argent, the per-network class for OpenZeppelin. Braavos has no default, since
  * this wallet never creates one, so a Braavos selection must name its class.
+ *
+ * `address` is set only for an account found by its address (issue 398): one
+ * whose address no derivation reproduces (a guardian, another salt, a rotated
+ * key), matched instead by its on-chain owner key. The coordinate still says
+ * which key signs; the record keeps this address. The background re-reads the
+ * owner and refuses the restore unless that key still controls it.
  */
 export type RecoveryAccountSelection = {
   readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
+  readonly address?: string;
   readonly classHash?: string;
   readonly derivation?: RecoveryDerivationKind;
 };
@@ -84,10 +91,14 @@ const SIGNING_RESTRICTIONS: readonly RecoverySigningRestriction[] = [
  * One derived account and the chain evidence that made it discoverable.
  * `restriction` is the scan's advisory signability verdict for a deployed
  * Argent candidate; absent means none found or the probe did not answer — the
- * transaction path re-checks authoritatively either way.
+ * transaction path re-checks authoritatively either way. `byAddress` marks an
+ * account found by its pasted address (issue 398): its address is the one the
+ * chain reported, not the one its coordinate derives, so a pick of it must
+ * carry that address.
  */
 export type RecoveryAccountCandidate = {
   readonly account: RecoverableAccountRef;
+  readonly byAddress?: true;
   readonly deployed: boolean;
   readonly funded: boolean;
   readonly restriction?: RecoverySigningRestriction;
@@ -131,11 +142,27 @@ const hasSelectableClass = (
  */
 export const isRecoveryAccountSelection = (value: unknown): value is RecoveryAccountSelection =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountContractType", "accountIndex", "classHash", "derivation"]) &&
+  hasOnlyKnownKeys(value, [
+    "accountContractType",
+    "accountIndex",
+    "address",
+    "classHash",
+    "derivation",
+  ]) &&
   isAccountContractType(value["accountContractType"]) &&
+  isSelectableAddress(value["accountContractType"], value["address"]) &&
   isRecoveryAccountIndex(value["accountIndex"]) &&
   hasSelectableClass(value["accountContractType"], value["classHash"]) &&
   hasSelectableDerivation(value["accountContractType"], value["derivation"]);
+
+// An address found by owner match is canonical and names an Argent or Braavos
+// account: the families whose owner key the import-by-address reader matches.
+const isSelectableAddress = (accountContractType: AccountContractType, address: unknown): boolean =>
+  address === undefined ||
+  (accountContractType !== "openzeppelin" &&
+    typeof address === "string" &&
+    isNonZeroStarkFieldElement(address) &&
+    canonicalFelt(address) === address);
 
 // Only Argent accounts exist on two ladders (the vendor's and this wallet's
 // own); every other family walks exactly one, so naming a scheme there is
@@ -161,6 +188,9 @@ export const recoverySelectionKey = (selection: RecoveryAccountSelection): strin
     selectionDerivation(selection),
     selectionClass(selection),
     selection.accountIndex,
+    // An address found by owner match is its own account: the same coordinate
+    // also derives a counterfactual address the scan may list beside it.
+    ...(selection.address === undefined ? [] : [selection.address]),
   ].join(":");
 
 /**
@@ -230,9 +260,24 @@ export const isReadOnlyReason = (value: unknown): value is ReadOnlyReason =>
 /** Validates one public discovery result before caching or rendering it. */
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["account", "deployed", "funded", "restriction"]) &&
+  hasOnlyKnownKeys(value, ["account", "byAddress", "deployed", "funded", "restriction"]) &&
   isRecoverableAccountRef(value["account"]) &&
+  (value["byAddress"] === undefined || value["byAddress"] === true) &&
   typeof value["deployed"] === "boolean" &&
   typeof value["funded"] === "boolean" &&
   (value["restriction"] === undefined ||
     SIGNING_RESTRICTIONS.includes(value["restriction"] as RecoverySigningRestriction));
+
+/**
+ * Why an account pasted by its address (issue 398) cannot be imported, one per
+ * reason the user acts on differently. The background answers with these and
+ * the panel translates each; single-sourced so the two cannot drift.
+ */
+export const ADDRESS_IMPORT_REFUSALS = {
+  invalid: "invalid account address to import",
+  noMatch: "recovery phrase does not control this account",
+  nonStarkOwner: "account signer not supported for import",
+  notDeployed: "no account at this address on this network",
+  unavailable: "account lookup unavailable",
+  unsupportedClass: "account class not supported for import",
+} as const;

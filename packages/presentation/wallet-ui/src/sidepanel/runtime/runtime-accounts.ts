@@ -4,6 +4,7 @@ import type { AccountContractType, AccountRef } from "@bramble/wallet-model/acco
 import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
 import { isCreateAccountResponse } from "../../popup/responses/responses";
 import {
+  isAddressLookupResponse,
   isRecoveredAccountsResponse,
   isRecoveryDiscoveryResponse,
 } from "../../popup/responses/responses-onboarding";
@@ -103,6 +104,31 @@ export const createAccountRuntimeClient = (
     });
     if (isRecoveryDiscoveryResponse(response)) return response;
     throw responseError(response, "account discovery unavailable");
+  },
+  /**
+   * Finds the account at a pasted address among the keys of a phrase the panel
+   * holds (issue 398). Read-only: the background reads the chain and derives
+   * public keys only, and nothing is stored until a restore or import commits.
+   */
+  async findRecoveryAccountByAddress(mnemonic: string, networkId: string, address: string) {
+    const response = await sendMessage({
+      address,
+      mnemonic,
+      networkId,
+      type: "wallet.findRecoveryAccountByAddress",
+    });
+    if (isAddressLookupResponse(response)) return response.candidate;
+    throw responseError(response, "account lookup unavailable");
+  },
+  /** As {@link findRecoveryAccountByAddress}, against the wallet's OWN phrase inside the vault boundary. */
+  async findOwnAccountByAddress(networkId: string, address: string) {
+    const response = await sendMessage({
+      address,
+      networkId,
+      type: "wallet.findOwnAccountByAddress",
+    });
+    if (isAddressLookupResponse(response)) return response.candidate;
+    throw responseError(response, "account lookup unavailable");
   },
   async previewAccount(
     mnemonic: string,

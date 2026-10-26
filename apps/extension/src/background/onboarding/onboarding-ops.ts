@@ -31,6 +31,8 @@ import {
 import {
   readDiscoverOwnAccountsInput,
   readDiscoverRecoveryAccountsInput,
+  readFindOwnAccountByAddressInput,
+  readFindRecoveryAccountByAddressInput,
   readPreviewAccountInput,
   readRecoverAccountsInput,
   readValidateMnemonicInput,
@@ -41,6 +43,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
+import { findAccountByAddress, verifyAddressSelections } from "./address-import";
 import type { RecoveryDiscoveryCache } from "./recovery-cache";
 
 type OnboardingOpsDeps = {
@@ -317,6 +320,41 @@ const discoverOwnAccounts = async (
   );
 };
 
+// Finds the account at a pasted address among the keys of the wallet's OWN
+// phrase (issue 398). As in the own-phrase rescan, the phrase is read inside
+// the vault boundary and only public candidate metadata crosses back.
+const findOwnAccountByAddress = async (
+  deps: OnboardingOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readFindOwnAccountByAddressInput(message);
+  if (!input) return { error: "invalid account lookup request" };
+  const vaultPassphrase = deps.session.getPassphrase();
+  if (!vaultPassphrase) return { error: "wallet locked" };
+  const authorized = captureSessionAuthorization(deps.session);
+  const { mnemonic } = await deps.wallet.readVault(vaultPassphrase);
+  if (mnemonic === null) {
+    return { error: "This wallet has no recovery phrase to scan" };
+  }
+  return findAccountByAddress(deps, { ...input, mnemonic }, authorized.isCurrent);
+};
+
+// The two import-by-address lookups (issue 398), or null for any other message.
+const handleAddressLookup = (
+  deps: OnboardingOpsDeps,
+  messageType: string,
+  message: unknown,
+): Promise<RuntimeResponse> | null => {
+  if (messageType === "wallet.findOwnAccountByAddress") {
+    return findOwnAccountByAddress(deps, message);
+  }
+  if (messageType !== "wallet.findRecoveryAccountByAddress") return null;
+  const input = readFindRecoveryAccountByAddressInput(message);
+  return input
+    ? findAccountByAddress(deps, input)
+    : Promise.resolve({ error: "invalid account lookup request" });
+};
+
 const recoverAccounts = async (
   deps: OnboardingOpsDeps,
   message: unknown,
@@ -325,6 +363,9 @@ const recoverAccounts = async (
   const recover = deps.wallet.recoverAccounts;
   if (!input) return { error: "invalid recover accounts request" };
   if (!recover) return { error: "wallet unavailable" };
+  // An account picked by its address is re-proved before anything is written.
+  const refusal = await verifyAddressSelections(deps, input);
+  if (refusal) return refusal;
   const accounts = await deps.activeStateCoordinator.run(() =>
     runVaultCreationWithNetwork(deps.session, deps.preferencesStore, input.networkId, () =>
       recover(input),
@@ -354,6 +395,8 @@ export const handleOnboardingOps = async (
   if (messageType === "wallet.discoverOwnAccounts") {
     return discoverOwnAccounts(deps, message);
   }
+  const addressLookup = handleAddressLookup(deps, messageType, message);
+  if (addressLookup) return addressLookup;
   if (messageType === "wallet.previewAccount") {
     const input = readPreviewAccountInput(message);
     if (!input) {
