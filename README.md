@@ -152,14 +152,14 @@ page code cannot reach signing or vault operations:
 
 ```
 apps/extension              MV3 pages, entrypoints, browser adapters, privileged orchestration
-apps/terminal              standalone trade terminal; connects as a dapp
-apps/ui-lab                Storybook workbench for production wallet UI
-apps/website               public site for docs, support, and privacy
-packages/foundation        pure values, validators, and wallet/provider protocol
-packages/platform          store, encrypted vault, Krusty, Starknet, and Ledger adapters
-packages/features          permissions, portfolio, transactions, multisig, privacy, settings
-packages/presentation      UI Kit and production wallet UI shared with UI Lab
-packages/testing/testkit   deterministic test doubles excluded from production bundles
+apps/terminal               standalone trade terminal; connects as a dapp
+apps/ui-lab                 Storybook workbench for production wallet UI
+apps/website                public site for docs, support, and privacy
+packages/foundation         pure values, validators, and wallet/provider protocol
+packages/platform           store, encrypted vault, Krusty, Starknet, and Ledger adapters
+packages/features           permissions, portfolio, transactions, multisig, privacy, settings
+packages/presentation       UI Kit and production wallet UI shared with UI Lab
+packages/testing/testkit    deterministic test doubles excluded from production bundles
 ```
 
 `apps/extension/src/background` remains the sole privileged authority and composition root for
