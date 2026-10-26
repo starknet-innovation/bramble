@@ -60,9 +60,10 @@ const deployedKey = ({ accountAddress, rpcUrls }: DeploymentStatusInput): string
  * answered from memory for `freshForMs` afterwards, per endpoint list.
  * Undeployed answers and failures always reach `read` and are never stored; an
  * address `read` would refuse, and any endpoint list that includes a loopback
- * node, always pass through. The map lives as long as the returned function
- * (one background worker), is never persisted, and holds at most `capacity`
- * addresses, dropping the oldest first.
+ * node, always pass through. When reads of one address overlap, only the one
+ * started last decides what is remembered. The map lives as long as the
+ * returned function (one background worker), is never persisted, and holds at
+ * most `capacity` addresses, dropping the oldest first.
  */
 export const rememberDeployedAccounts = (
   read: DeploymentStatusRead,
@@ -87,19 +88,40 @@ export const rememberDeployedAccounts = (
     }
     deployedAt.set(key, now());
   };
+  // Key -> the newest read started for it. Only that read may store or clear
+  // the answer, so an older "deployed" resolving after a newer "not deployed"
+  // (a reorg one remote node has seen) cannot overwrite it. An entry is removed
+  // when its read settles, so the map only ever holds reads in flight.
+  let lastTicket = 0;
+  const newestRead = new Map<string, number>();
+  const settle = (key: string, ticket: number, isDeployed: boolean | null): void => {
+    if (newestRead.get(key) !== ticket) {
+      return;
+    }
+    newestRead.delete(key);
+    if (isDeployed === true) {
+      remember(key);
+    } else if (isDeployed === false) {
+      deployedAt.delete(key);
+    }
+  };
+  const readAndSettle = async (key: string, input: DeploymentStatusInput): Promise<boolean> => {
+    lastTicket += 1;
+    const ticket = lastTicket;
+    newestRead.set(key, ticket);
+    let isDeployed: boolean | null = null;
+    try {
+      isDeployed = await read(input);
+      return isDeployed;
+    } finally {
+      settle(key, ticket, isDeployed);
+    }
+  };
   return async (input) => {
     const key = deployedKey(input);
-    if (key !== null && isFresh(key)) {
-      return true;
+    if (key === null) {
+      return read(input);
     }
-    const isDeployed = await read(input);
-    if (key !== null) {
-      if (isDeployed) {
-        remember(key);
-      } else {
-        deployedAt.delete(key);
-      }
-    }
-    return isDeployed;
+    return isFresh(key) ? true : readAndSettle(key, input);
   };
 };

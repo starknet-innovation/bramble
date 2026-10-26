@@ -37,6 +37,48 @@ const stubRead = (answer: (input: DeploymentStatusInput) => boolean | Error) => 
   return { calls, read };
 };
 
+// A reader whose reads stay pending until the test settles them, in any order.
+const deferredRead = () => {
+  const pending: ((deployed: boolean) => void)[] = [];
+  const read = (_input: DeploymentStatusInput): Promise<boolean> =>
+    new Promise((resolve) => {
+      pending.push(resolve);
+    });
+  return { pending, read };
+};
+
+describe("rememberDeployedAccounts with overlapping reads", () => {
+  const input = { accountAddress: ADDRESS, rpcUrls: MAINNET_RPC };
+
+  test("an older 'deployed' settling after a newer 'not deployed' is not remembered", async () => {
+    const { pending, read } = deferredRead();
+    const status = rememberDeployedAccounts(read);
+    const older = status(input);
+    const newer = status(input);
+    pending[1]?.(false);
+    expect(await newer).toBe(false);
+    pending[0]?.(true);
+    expect(await older).toBe(true);
+    const next = status(input);
+    expect(pending).toHaveLength(3);
+    pending[2]?.(false);
+    expect(await next).toBe(false);
+  });
+
+  test("an older 'not deployed' settling after a newer 'deployed' does not clear it", async () => {
+    const { pending, read } = deferredRead();
+    const status = rememberDeployedAccounts(read);
+    const older = status(input);
+    const newer = status(input);
+    pending[1]?.(true);
+    expect(await newer).toBe(true);
+    pending[0]?.(false);
+    expect(await older).toBe(false);
+    expect(await status(input)).toBe(true);
+    expect(pending).toHaveLength(2);
+  });
+});
+
 describe("rememberDeployedAccounts", () => {
   test("answers a deployed address from memory after the first read", async () => {
     const { calls, read } = stubRead(() => true);
