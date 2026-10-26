@@ -82,11 +82,14 @@ Protection stops updating but doesn't drop below that list and the baseline. A l
    `curl -I`. If the source moved, point `DEFAULT_PHISHING_FEED_URL` at the new location in a reviewed
    release. Prefer a source that allows any origin. Adding a new host permission instead makes
    Chrome disable the wallet on update for users whose grants don't cover it.
-2. `malformed` or `too-small`: the upstream format or content changed. Read the upstream repository's
-   recent commits before changing the parser. Users keep their last good list meanwhile.
-3. `near-cap`: raise `MAX_PHISHING_DOMAINS` or `MAX_PHISHING_DOMAIN_CHARS` within the documented
+2. `malformed`: the upstream format changed. Users keep their last good list. Read the upstream
+   repository's recent commits before changing the parser.
+3. `too-small`: the list still parses, so it has **already replaced** users' lists at their next
+   refresh, and protection from the live list shrank with it. Investigate the same day: read the upstream
+   commits, and if the shrink is a mistake, report it upstream or ship a release that changes the source.
+4. `near-cap`: raise `MAX_PHISHING_DOMAINS` or `MAX_PHISHING_DOMAIN_CHARS` within the documented
    chunk and `storage.local` budgets (`phishing-feed-cache.ts`), with the budget tests.
-4. Legitimate sites blocked (a wrong or malicious upstream edit): the list only blocks, so funds and
+5. Legitimate sites blocked (a wrong or malicious upstream edit): the list only blocks, so funds and
    keys are not at risk, but affected users can't connect those sites. Report it upstream. A
    corrected list reaches users within about six hours of the fix. If upstream won't fix it, ship a
    release that changes the source. The wallet has no remote switch or per-site override today.

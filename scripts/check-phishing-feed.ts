@@ -13,6 +13,7 @@ import {
 import {
   MAX_PHISHING_DOMAIN_CHARS,
   MAX_PHISHING_DOMAINS,
+  normalizePhishingDomain,
   phishingDomainChars,
 } from "../packages/features/permissions/src/phishing-feed-cache";
 import {
@@ -48,12 +49,22 @@ const MIN_DOMAINS = 50_000;
 // Alert ahead of the caps, while there is still time to raise them.
 const NEAR_CAP = 0.9;
 
+// Measures what the parser would keep before its caps cut in: valid,
+// normalized, unique domains, so duplicates and junk entries don't read as
+// growth toward the caps.
 const capUse = (body: unknown): number => {
-  const raw = typeof body === "object" && body !== null ? Reflect.get(body, "blacklist") : null;
+  const record = typeof body === "object" && body !== null ? body : null;
+  const raw = record
+    ? (Reflect.get(record, "blocklist") ?? Reflect.get(record, "blacklist"))
+    : null;
   if (!Array.isArray(raw)) return 0;
-  const strings = raw.filter((entry): entry is string => typeof entry === "string");
-  const chars = strings.reduce((total, entry) => total + phishingDomainChars(entry), 0);
-  return Math.max(strings.length / MAX_PHISHING_DOMAINS, chars / MAX_PHISHING_DOMAIN_CHARS);
+  const kept = new Set<string>();
+  for (const entry of raw) {
+    const domain = typeof entry === "string" ? normalizePhishingDomain(entry) : null;
+    if (domain !== null) kept.add(domain);
+  }
+  const chars = [...kept].reduce((total, domain) => total + phishingDomainChars(domain), 0);
+  return Math.max(kept.size / MAX_PHISHING_DOMAINS, chars / MAX_PHISHING_DOMAIN_CHARS);
 };
 
 const outcomeOf = (domains: number, use: number): FeedOutcome =>

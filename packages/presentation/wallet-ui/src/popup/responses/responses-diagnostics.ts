@@ -57,6 +57,8 @@ export type SupportDiagnostics = {
   }[];
 };
 
+const isCount = (value: unknown): boolean => Number.isSafeInteger(value) && (value as number) >= 0;
+
 const isPhishingFeedHealth = (value: unknown): boolean =>
   value === null ||
   (isRecord(value) &&
@@ -67,10 +69,10 @@ const isPhishingFeedHealth = (value: unknown): boolean =>
       "domains",
       "stale",
     ]) &&
-    (value["ageHours"] === null || Number.isInteger(value["ageHours"])) &&
+    (value["ageHours"] === null || isCount(value["ageHours"])) &&
     typeof value["cacheWriteFailed"] === "boolean" &&
-    Number.isInteger(value["consecutiveFailures"]) &&
-    Number.isInteger(value["domains"]) &&
+    isCount(value["consecutiveFailures"]) &&
+    isCount(value["domains"]) &&
     typeof value["stale"] === "boolean");
 
 // A phase label is one of the fixed strings the background's job registry

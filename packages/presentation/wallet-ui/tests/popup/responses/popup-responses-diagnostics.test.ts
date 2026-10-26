@@ -96,6 +96,9 @@ describe("isSupportDiagnosticsResponse", () => {
       { ...stale, fetchedAt: 1_793_048_511_970 },
       { ...stale, source: "https://raw.githubusercontent.com/x" },
       { ...stale, ageHours: 1.5 },
+      { ...stale, ageHours: -1 },
+      { ...stale, consecutiveFailures: -2 },
+      { ...stale, domains: Number.MAX_SAFE_INTEGER + 2 },
       { ...stale, stale: "yes" },
     ]) {
       expect(

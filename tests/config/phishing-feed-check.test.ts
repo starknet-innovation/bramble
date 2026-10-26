@@ -23,6 +23,13 @@ describe("phishing feed check", () => {
     expect(JSON.stringify(result)).not.toContain("http");
   });
 
+  test("duplicates and invalid entries don't count toward the caps", async () => {
+    const valid = domains(110_000);
+    const padded = [...valid, ...valid, ...Array.from({ length: 40_000 }, () => "not a domain")];
+    const result = await runPhishingFeedCheck({ fetch: feed({ blacklist: padded }) });
+    expect(result).toEqual({ domains: 110_000, outcome: "ok", percentOfCap: 73 });
+  });
+
   test("a missing CORS header fails, since the extension has no host permission for it", async () => {
     const result = await runPhishingFeedCheck({ fetch: feed({ blacklist: domains(110_000) }, {}) });
     expect(result.outcome).toBe("no-cors");
