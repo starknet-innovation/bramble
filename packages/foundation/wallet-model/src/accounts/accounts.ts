@@ -490,3 +490,10 @@ export const canonicalLegacyAccountRef = (value: unknown): LegacyAccountRef | nu
  */
 export const isKeylessAccount = (account: AccountRef): account is LedgerAccountRef =>
   account.derivation.kind === "ledger";
+
+/**
+ * Refusal for deriving an account in a vault set up from a Ledger or a pasted
+ * key. One string for the vault, the background handler and the panel, which
+ * routes on it to import instead of an error page (#740).
+ */
+export const NO_RECOVERY_PHRASE_REFUSAL = "No recovery phrase stored for this wallet";
