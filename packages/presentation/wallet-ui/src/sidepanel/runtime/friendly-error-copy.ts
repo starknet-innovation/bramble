@@ -104,7 +104,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // table covers the authoritative transaction-path refusals behind them.
   [
     "deployed argent account guardian is not supported by this wallet",
-    "This account has a guardian, a second approver this wallet can't provide. Use it in Ready, or remove the guardian there.",
+    "This account has a guardian, a second approver this wallet can't provide. Remove it with Recover account on Home, or use the account in Ready.",
   ],
   [
     "deployed argent account owner does not match the wallet signer",
