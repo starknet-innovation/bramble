@@ -51,6 +51,13 @@ describe("friendlyError", () => {
     );
   });
 
+  // The refusal raw-key-class.ts throws when a Ready key has no account behind it.
+  test("says a Ready key has no account instead of importing an empty one", () => {
+    expect(friendlyError("No deployed or funded Ready account uses this key").message).toBe(
+      "No Ready account uses this key on this network.",
+    );
+  });
+
   // The exact strings argent-recovery.ts and account-recovery.ts throw.
   test("maps the recovery refusals to reviewed copy", () => {
     for (const [raw, message] of [

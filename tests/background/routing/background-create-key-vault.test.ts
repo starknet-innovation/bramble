@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import type { CreateKeyVaultInput } from "@bramble/vault/service";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
+import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
   account,
@@ -82,14 +83,17 @@ describe("wallet.createKeyVault routing", () => {
 
   test("accepts a Ready account with its exact deployment salt", async () => {
     const captured: CreateKeyVaultInput[] = [];
+    // A Ready key is only imported once its account is found on chain.
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
       testExtension,
+      { runtimeRpc: { ...defaultRuntimeRpc, getDeploymentStatus: async () => true } },
     );
     await expect(
       handler({ ...validMessage, accountContractType: "argent", deploymentSalt: "0xabc" }, sender),
     ).resolves.toEqual({ account, ok: true });
     expect(captured[0]?.deploymentSalt).toBe("0xabc");
+    expect(captured[0]?.classHash).toBeDefined();
   });
 
   test("is privileged: content scripts cannot reach it", async () => {

@@ -222,6 +222,11 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["account import failed", "Couldn't add those accounts. Try again."],
   ["import account failed", KEY_IMPORT_FAILED],
   ["create key vault failed", "Couldn't create your wallet. Try again."],
+  // A "Ready Account" key import only restores an account that exists.
+  [
+    "no deployed or funded ready account uses this key",
+    "No Ready account uses this key on this network.",
+  ],
   ["seed import failed", SEED_IMPORT_FAILED],
   ["mnemonic validation unavailable", "Couldn't check that recovery phrase. Try again."],
   ["reveal failed", "Couldn't reveal that. Re-enter your passphrase and try again."],

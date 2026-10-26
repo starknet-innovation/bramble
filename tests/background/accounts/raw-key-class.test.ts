@@ -16,7 +16,10 @@ import {
 } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
-import { rawKeyImportClass } from "../../../apps/extension/src/background/accounts/raw-key-class";
+import {
+  NO_READY_ACCOUNT_FOR_KEY,
+  rawKeyImportClass,
+} from "../../../apps/extension/src/background/accounts/raw-key-class";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -94,8 +97,8 @@ describe("raw-key import class", () => {
     expect(await pick({ funded: ARGENT_031 })).toBe(ARGENT_031);
   });
 
-  test("keeps the family default when no release shows activity", async () => {
-    expect(await pick({})).toBeUndefined();
+  test("refuses a Ready key with no account on chain", async () => {
+    await expect(pick({})).rejects.toThrow(NO_READY_ACCOUNT_FOR_KEY);
   });
 
   test("leaves other families alone", async () => {
@@ -118,6 +121,38 @@ describe("raw-key import class", () => {
         { accountContractType: "argent", networkId: "SN_MAIN", privateKey },
       ),
     ).rejects.toThrow("rpc unavailable");
+  });
+
+  test("wallet.importAccount writes nothing for a key with no account", async () => {
+    const captured: ImportRawKeyAccountInput[] = [];
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(
+      {
+        ...createWallet(),
+        async importRawKeyAccount(input: ImportRawKeyAccountInput) {
+          captured.push(input);
+          return account;
+        },
+        previewImportedAccount,
+      },
+      testExtension,
+      { runtimeRpc: rpcWith({}), session },
+    );
+
+    const response = await handler(
+      {
+        accountContractType: "argent",
+        networkId: "SN_MAIN",
+        privateKey,
+        type: "wallet.importAccount",
+      },
+      sender,
+    );
+
+    expect(response).toEqual({ error: NO_READY_ACCOUNT_FOR_KEY });
+    expect(JSON.stringify(response)).not.toContain("feedface");
+    expect(captured).toEqual([]);
   });
 
   test("wallet.importAccount stores the deployed release", async () => {

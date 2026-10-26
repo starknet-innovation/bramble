@@ -172,6 +172,9 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     async previewAccount() {
       return account;
     },
+    async previewImportedAccount() {
+      return account;
+    },
     async validateMnemonic() {
       return true;
     },
