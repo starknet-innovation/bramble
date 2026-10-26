@@ -9,6 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { SPONSORED_DEPLOY_REFUSED } from "@bramble/privacy/sponsored-deploy";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import type { DeploySponsorship } from "../../../src/sidepanel/runtime/runtime-deploy";
+import { outcomeReceiptSection } from "../../../src/sidepanel/shared/outcome-receipt";
 import {
   deployCostLine,
   SPONSORED_DEPLOY_COST,
@@ -31,7 +32,7 @@ const deployMarkup = `<section class="section">
       <div id="deploy-review"></div>
       <p role="status"></p>
     </section>
-    <section id="deploy-success" hidden></section>
+    ${outcomeReceiptSection("deploy-success")}
   </section>`;
 
 const mount = (): HTMLElement => {
@@ -50,8 +51,9 @@ const toasts = (tone: string): string[] =>
   );
 
 const wallet = (input: {
+  readonly activity?: () => unknown;
   readonly sponsored: () => Promise<string>;
-  readonly sponsorship: DeploySponsorship;
+  readonly sponsorship: DeploySponsorship | (() => DeploySponsorship);
 }) => {
   const calls: string[] = [];
   return {
@@ -65,8 +67,9 @@ const wallet = (input: {
         calls.push("deployAccountSponsored");
         return input.sponsored();
       },
-      deploySponsorship: async () => input.sponsorship,
-      loadActivity: async () => [],
+      deploySponsorship: async () =>
+        typeof input.sponsorship === "function" ? input.sponsorship() : input.sponsorship,
+      loadActivity: async () => input.activity?.() ?? { entries: [] },
       loadStatus: async () => ({ networkId: "SN_SEPOLIA" }),
     } as unknown as ShellBindingDeps["wallet"],
   };
@@ -199,6 +202,61 @@ describe("sponsored deploy screen", () => {
     expect(stub.calls).toEqual([
       "deployAccount:quote",
       "deployAccountSponsored",
+      "deployAccountSponsored",
+      "deployAccount:quote",
+      "deployAccount:fee",
+    ]);
+  });
+
+  test("after a lost reply, the screen turns self-paid once the hold is over", async () => {
+    const container = mount();
+    const states: DeploySponsorship[] = ["available", "held", "may-land"];
+    const stub = wallet({
+      sponsored: async () => {
+        throw new SubmissionUnknownError("deployment failed", null);
+      },
+      sponsorship: () => states.shift() ?? "may-land",
+    });
+    bind(container, stub.wallet);
+    await tick();
+    press(container);
+    await tick();
+    // The press after the lost reply only quotes; the refreshed state says the
+    // hold is over and the sponsored deploy may still land.
+    press(container);
+    await tick();
+    expect(container.querySelector("#deploy-review")?.textContent).toContain(
+      "A sponsored deployment may still land. If it does, yours is refused at no cost.",
+    );
+    press(container);
+    await tick();
+    expect(stub.calls).toEqual([
+      "deployAccount:quote",
+      "deployAccountSponsored",
+      "deployAccount:quote",
+      "deployAccount:fee",
+    ]);
+  });
+
+  test("after a sponsored deploy reverts, Try again deploys self-paid", async () => {
+    const container = mount();
+    const states: DeploySponsorship[] = ["available", "may-land"];
+    const stub = wallet({
+      activity: () => ({ entries: [{ hash: "0x5ab", status: "reverted" }] }),
+      sponsored: async () => "0x5ab",
+      sponsorship: () => states.shift() ?? "may-land",
+    });
+    bind(container, stub.wallet);
+    await tick();
+    press(container);
+    await tick();
+    container.querySelector<HTMLButtonElement>('[data-outcome-action="retry"]')?.click();
+    await tick();
+    expect(container.querySelector("#deploy-review")?.textContent).toContain("may still land");
+    press(container);
+    await tick();
+    expect(stub.calls).toEqual([
+      "deployAccount:quote",
       "deployAccountSponsored",
       "deployAccount:quote",
       "deployAccount:fee",

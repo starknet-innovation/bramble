@@ -230,11 +230,14 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     }
   };
 
-  // Asks once per visit, after the fee is in hand, whether the sponsor will pay.
+  // Asks after the fee is in hand whether the sponsor will pay, once per visit
+  // unless an earlier attempt's state has to be refreshed.
   // A press made before the answer lands deploys as the screen showed it then.
+  // "held" is asked again on every fresh quote, so once the hold is over the
+  // screen turns self-paid with the "may still land" line.
   const askSponsorship = (): void => {
-    if (journey.sponsorship !== undefined) return;
-    journey.sponsorship = "none";
+    if (journey.sponsorship !== undefined && journey.sponsorship !== "held") return;
+    journey.sponsorship ??= "none";
     // A wallet double without the sponsored route offers nothing.
     if (typeof deps.wallet.deploySponsorship !== "function") return;
     void deps.wallet.deploySponsorship().then((sponsorship) => {
@@ -343,6 +346,8 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         reviewStage?.removeAttribute("hidden");
         if (reviewPanelRoot) renderFragment(reviewPanelRoot, "");
         delete journey.receipt;
+        // A failed sponsored deploy is never re-offered; the background says so.
+        delete journey.sponsorship;
         quote(true);
       },
     });
@@ -396,6 +401,12 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         }
         if (!declined) {
           failed(error, "Deployment failed", "submit");
+          // A lost reply may have deployed: the offer is the background's to
+          // restate (held, then may-land), never "available" again.
+          if (isOutcomeUnknown(error)) {
+            delete journey.sponsorship;
+            askSponsorship();
+          }
           return;
         }
         showToast(SPONSORED_DEPLOY_REFUSED, "error", target);
@@ -431,6 +442,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           journey.fee = response;
           if (rebound()) return;
           showFee(response);
+          askSponsorship();
           scopedStatus(target, "");
           buttonBusy(target, false);
           return;

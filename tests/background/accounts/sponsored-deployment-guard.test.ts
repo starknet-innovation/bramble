@@ -20,6 +20,7 @@ import {
   guardDeployments,
   memoryPendingDeployments,
   PENDING_DEPLOYMENTS_KEY,
+  PENDING_DEPLOYMENTS_LIMIT,
   type PendingDeployments,
   SPONSORED_DEPLOY_HOLD_MS,
 } from "../../../apps/extension/src/background/accounts/pending-deployments";
@@ -146,6 +147,44 @@ describe("sponsored attempt hold", () => {
     expect(transfers.sent).toEqual(["transfer"]);
   });
 
+  test("after a restart whose read failed, sponsorship stops but self-paid goes ahead", async () => {
+    const storage = createMemoryStore();
+    const before = await harness({
+      pending: createPendingDeployments(storage),
+      relay: relay(lost),
+    });
+    await submit(before.deps, 0);
+    const unreadable: KeyValueStore = {
+      ...storage,
+      get: async () => {
+        throw new Error("storage unavailable");
+      },
+    };
+    const sponsor = relay(accepted);
+    const after = await harness({ pending: createPendingDeployments(unreadable), relay: sponsor });
+    expect(await offer(after.deps, INSIDE)).toBe("none");
+    expect(await submit(after.deps, INSIDE)).toEqual({ error: "sponsored deployment unavailable" });
+    expect(sponsor.calls).toEqual([]);
+    const transfers = guardedTransfers(after.pending, INSIDE);
+    await transfers.send();
+    expect(transfers.sent).toEqual(["transfer"]);
+  });
+
+  test("never evicts an attempt marker: a full store refuses new sponsorship instead", async () => {
+    const { deps, pending } = await harness({ relay: relay(lost) });
+    await submit(deps, 0);
+    for (let index = 1; index < PENDING_DEPLOYMENTS_LIMIT; index += 1) {
+      const other = {
+        address: `0x${(index + 0x1000).toString(16)}`,
+        networkId: "SN_SEPOLIA",
+      } as const;
+      expect(pending.reserve(other, AFTER)).toBe("reserved");
+    }
+    expect(pending.reserve({ address: "0xfffff", networkId: "SN_SEPOLIA" }, AFTER)).toBe("full");
+    expect(await offer(deps, AFTER)).toBe("may-land");
+    expect(await submit(deps, AFTER)).toEqual({ error: SPONSORED_DEPLOY_ALREADY_SENT });
+  });
+
   test("ends early when the chain shows the account deployed", async () => {
     const { chain, deps, pending } = await harness({ relay: relay(accepted) });
     await submit(deps, 0);
@@ -203,6 +242,23 @@ describe("sponsored attempt hold", () => {
     const { deps } = await harness({ pending: createPendingDeployments(failing), relay: sponsor });
     expect(await submit(deps)).toEqual({ error: "sponsored deployment unavailable" });
     expect(sponsor.calls).toEqual([]);
+  });
+
+  test("treats a stored value over the limit as unreadable rather than trimming it", async () => {
+    const storage = createMemoryStore();
+    await storage.set(
+      PENDING_DEPLOYMENTS_KEY,
+      Array.from({ length: PENDING_DEPLOYMENTS_LIMIT + 1 }, (_, index) => ({
+        address: `0x${(index + 1).toString(16)}`,
+        holdUntil: AFTER,
+        networkId: "SN_SEPOLIA",
+        since: 0,
+      })),
+    );
+    const pending = createPendingDeployments(storage);
+    await pending.load();
+    expect(pending.readable()).toBe(false);
+    expect(pending.entry({ address: "0x1", networkId: "SN_SEPOLIA" })).toBeUndefined();
   });
 
   test("drops unreadable stored entries instead of trusting them", async () => {

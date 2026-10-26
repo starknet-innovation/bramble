@@ -149,7 +149,8 @@ export const deploySponsorship = async (
       nowOf(deps),
     );
     if (attempt === "held" || attempt === "may-land") return attempt;
-    if (attempt === "deployed") return "none";
+    // An unreadable store may be hiding an attempt it lost: never offer then.
+    if (attempt === "deployed" || !pending.readable()) return "none";
     const config = await freshOfferRelay(deps, input, rpcUrls);
     if (!config) return "none";
     await quoteSponsoredDeploy({
@@ -199,7 +200,9 @@ const reserve = async (
 ): Promise<{ readonly error: string } | null> => {
   const now = nowOf(deps);
   await pending.load();
-  if (pending.reserve(account, now)) return null;
+  const reserved = pending.reserve(account, now);
+  if (reserved === "reserved") return null;
+  if (reserved === "full") return UNAVAILABLE;
   const state = await sponsoredAttemptState(
     { ...deps, pendingDeployments: pending },
     account,
@@ -208,7 +211,7 @@ const reserve = async (
   );
   if (state === "deployed") return { error: "account already deployed" };
   if (state === "held") return { error: DEPLOYMENT_MAY_BE_ON_ITS_WAY };
-  return state === "none" && pending.reserve(account, now)
+  return state === "none" && pending.reserve(account, now) === "reserved"
     ? null
     : { error: SPONSORED_DEPLOY_ALREADY_SENT };
 };

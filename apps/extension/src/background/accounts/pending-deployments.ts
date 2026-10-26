@@ -14,9 +14,12 @@
  * an immediate double press, and it can never lock an account.
  *
  * The entry outlives its hold as a marker: an account whose sponsored attempt
- * was accepted or lost is never offered sponsorship again. It is deleted when
- * the account is deployed, or when the attempt sent nothing. An unreadable
- * store loads as empty, which means "no hold".
+ * was accepted or lost is never offered sponsorship again. A marker is never
+ * evicted; it is deleted only when the account is deployed, or when the
+ * attempt sent nothing. An unreadable store (or one holding more than
+ * {@link PENDING_DEPLOYMENTS_LIMIT} entries) loads as empty and marks itself
+ * unreadable: no hold, so self-paid deploys and sends go ahead, but no
+ * sponsorship either, since an attempt it lost could otherwise be sent again.
  *
  * Reservation is a synchronous check-and-set on the loaded map, so two
  * submissions in one worker cannot both pass it. Public data only: a network,
@@ -48,9 +51,11 @@ export const SPONSORED_DEPLOY_HOLD_MS = 3 * 60_000;
 export const DEPLOYMENT_MAY_BE_ON_ITS_WAY =
   "A sponsored deployment of this account may already be on its way. Check activity before trying again.";
 
-// More accounts than one wallet deploys; bounds what a corrupted or hostile
-// local value can make the worker hold. A full map evicts its oldest marker.
-const MAX_ENTRIES = 64;
+/**
+ * Most entries kept. Far more accounts than one wallet sponsors; a full store
+ * refuses new sponsored attempts rather than evicting a marker.
+ */
+export const PENDING_DEPLOYMENTS_LIMIT = 256;
 
 type Entry = {
   readonly address: string;
@@ -69,8 +74,13 @@ export type PendingAccount = { readonly address: string; readonly networkId: Sta
  */
 export type PendingDeployments = {
   readonly load: () => Promise<void>;
-  /** Check-and-set: false when the account already has an entry. */
-  readonly reserve: (account: PendingAccount, now: number) => boolean;
+  /** Whether the last load read the store; false means no sponsorship. */
+  readonly readable: () => boolean;
+  /**
+   * Check-and-set: "exists" when the account already has an entry, "full"
+   * at {@link PENDING_DEPLOYMENTS_LIMIT} or when the store was unreadable.
+   */
+  readonly reserve: (account: PendingAccount, now: number) => "exists" | "full" | "reserved";
   readonly entry: (account: PendingAccount) => Entry | undefined;
   /** Writes the map; a rejection means the entry may not survive a restart. */
   readonly persist: () => Promise<void>;
@@ -98,14 +108,12 @@ const isEntry = (value: unknown): value is Entry =>
   (value["hash"] === undefined ||
     (typeof value["hash"] === "string" && isNonZeroStarkFieldElement(value["hash"])));
 
-// Frees room for a new attempt by dropping the oldest marker whose hold is over.
-const evictOldestMarker = (entries: Map<string, Entry>, now: number): boolean => {
-  let oldest: [string, Entry] | undefined;
-  for (const pair of entries) {
-    if (pair[1].holdUntil <= now && (!oldest || pair[1].since < oldest[1].since)) oldest = pair;
-  }
-  if (oldest) entries.delete(oldest[0]);
-  return oldest !== undefined;
+// The valid entries of a stored value, or null when it holds more than the
+// limit: an oversized value is treated as unreadable rather than trimmed, since
+// trimming would drop markers.
+const storedEntries = (stored: unknown): readonly Entry[] | null => {
+  const valid = Array.isArray(stored) ? stored.filter(isEntry) : [];
+  return valid.length > PENDING_DEPLOYMENTS_LIMIT ? null : valid;
 };
 
 /**
@@ -114,6 +122,7 @@ const evictOldestMarker = (entries: Map<string, Entry>, now: number): boolean =>
  */
 export const createPendingDeployments = (store: KeyValueStore): PendingDeployments => {
   const entries = new Map<string, Entry>();
+  let readable = false;
   let loading: Promise<void> | undefined;
   let writes: Promise<void> = Promise.resolve();
   const persist = (): Promise<void> => {
@@ -129,28 +138,31 @@ export const createPendingDeployments = (store: KeyValueStore): PendingDeploymen
   };
   return {
     load: () => {
-      loading ??= store
-        .get(PENDING_DEPLOYMENTS_KEY)
-        .catch(() => undefined)
-        .then((stored) => {
-          const valid = Array.isArray(stored) ? stored.filter(isEntry) : [];
-          for (const entry of valid.slice(-MAX_ENTRIES)) {
+      loading ??= store.get(PENDING_DEPLOYMENTS_KEY).then(
+        (stored) => {
+          const valid = storedEntries(stored);
+          if (!valid) return;
+          for (const entry of valid) {
             if (!entries.has(keyOf(entry))) entries.set(keyOf(entry), entry);
           }
-        });
+          readable = true;
+        },
+        () => undefined,
+      );
       return loading;
     },
+    readable: () => readable,
     reserve: (account, now) => {
       const key = keyOf(account);
-      if (entries.has(key)) return false;
-      if (entries.size >= MAX_ENTRIES && !evictOldestMarker(entries, now)) return false;
+      if (entries.has(key)) return "exists";
+      if (!readable || entries.size >= PENDING_DEPLOYMENTS_LIMIT) return "full";
       entries.set(key, {
         address: canonicalFelt(account.address) ?? account.address,
         holdUntil: now + SPONSORED_DEPLOY_HOLD_MS,
         networkId: account.networkId,
         since: now,
       });
-      return true;
+      return "reserved";
     },
     entry: (account) => entries.get(keyOf(account)),
     persist,
