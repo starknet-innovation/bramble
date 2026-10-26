@@ -116,6 +116,7 @@ Anything a user reads is governed by `docs/COPY_STYLE.md`. **Read its "Every wor
 section before adding or editing a user-facing string** — it is eight rules, each one a habit a
 copy review had to delete from this wallet, and the standing feedback is that the extension uses
 too many words for people to read any of them.
+For any UI, UX or copy change, start with the `bramble-ui-ux` skill (`.claude/skills/bramble-ui-ux/SKILL.md`).
 
 - The short version: say the subject once per screen, keep the user's verb on the control, state
   a consequence rather than collecting a tick, do not narrate the wallet's internals, do not
