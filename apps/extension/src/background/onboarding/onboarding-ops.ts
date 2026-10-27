@@ -322,12 +322,20 @@ const recoverAccounts = async (
   const recover = deps.wallet.recoverAccounts;
   if (!input) return { error: "invalid recover accounts request" };
   if (!recover) return { error: "wallet unavailable" };
-  const accounts = await deps.activeStateCoordinator.run(() =>
-    runVaultCreationWithNetwork(deps.session, deps.preferencesStore, input.networkId, () =>
-      recover(input),
-    ),
-  );
-  deps.session.unlock(input.vaultPassphrase);
+  // The unlock lands inside the coordinator task, as every other vault-creation
+  // path does: a queued task (a Ready-key import holding the old session's
+  // authorization) must see the new generation the moment it runs, never a
+  // replaced vault under the old one.
+  const accounts = await deps.activeStateCoordinator.run(async () => {
+    const recovered = await runVaultCreationWithNetwork(
+      deps.session,
+      deps.preferencesStore,
+      input.networkId,
+      () => recover(input),
+    );
+    deps.session.unlock(input.vaultPassphrase);
+    return recovered;
+  });
   return { accounts, ok: true };
 };
 

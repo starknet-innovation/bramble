@@ -19,6 +19,7 @@ import {
   verifyReadyKeyClasses,
 } from "../../../apps/extension/src/background/accounts/ready-key-accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
+import { createActiveStateCoordinator } from "../../../apps/extension/src/background/runtime/runtime-state";
 import {
   createUnlockSession,
   type UnlockSession,
@@ -127,6 +128,99 @@ describe("wallet.importAccount across the verification reads", () => {
     });
     expect(reads).toBe(0);
     expect(captured).toEqual([]);
+  });
+});
+
+// A wallet whose recovery replaces the vault: every write is recorded against
+// the vault in place when it landed. The recovery parks inside its
+// coordinator task until released, so the import queues right behind it.
+const replacingWallet = (writes: Array<{ readonly vault: string }>) => {
+  let vault = "original";
+  let entered: () => void = () => undefined;
+  let release: () => void = () => undefined;
+  const inside = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return {
+    inside,
+    release,
+    wallet: {
+      ...capturingWallet([]),
+      async importRawKeyAccount(_request: ImportRawKeyAccountInput) {
+        writes.push({ vault });
+        return account;
+      },
+      async recoverAccounts() {
+        entered();
+        await released;
+        vault = "replacement";
+        return [account];
+      },
+    },
+  };
+};
+
+const recoverMessage = {
+  mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+  networkId: "SN_SEPOLIA",
+  selections: [{ accountContractType: "argent", accountIndex: 0, classHash: ARGENT_031 }],
+  type: "wallet.recoverAccounts",
+  vaultPassphrase: "a different vault passphrase",
+};
+
+describe("wallet.importAccount across a vault replacement", () => {
+  test("a recovery replacing the vault during the reads gets no import write", async () => {
+    const writes: Array<{ readonly vault: string }> = [];
+    const preferencesStore = await sepoliaPreferences();
+    const session = unlocked();
+    const replacing = replacingWallet(writes);
+    const base = rpcWith({ deployed: [ARGENT_031] });
+    let recovery: Promise<unknown> | null = null;
+    // Which passphrase each coordinator task leaves behind as it releases the
+    // boundary: the next queued task sees exactly that session.
+    const leftBehind: Array<string | null> = [];
+    const coordinator = createActiveStateCoordinator();
+    const handler = createMessageHandler(replacing.wallet, testExtension, {
+      activeStateCoordinator: {
+        run: (operation) =>
+          coordinator.run(async () => {
+            try {
+              return await operation();
+            } finally {
+              leftBehind.push(session.peekPassphrase());
+            }
+          }),
+      },
+      preferencesStore,
+      runtimeRpc: {
+        ...base,
+        async getDeploymentStatus(request: Parameters<typeof base.getDeploymentStatus>[0]) {
+          if (recovery === null) {
+            recovery = handler(recoverMessage, sender);
+            await replacing.inside;
+          }
+          return base.getDeploymentStatus(request);
+        },
+      },
+      session,
+    });
+    const importing = handler(importMessage([ARGENT_031]), sender);
+    // Let the import finish its reads and queue behind the parked recovery.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    replacing.release();
+    const response = await importing;
+    await expect(recovery).resolves.toMatchObject({ ok: true });
+    expect(response).toEqual({ error: "wallet locked" });
+    expect(writes).toEqual([]);
+    // The recovery's own network, never the import's SN_MAIN.
+    expect((await preferencesStore.read()).activeNetworkId).toBe("SN_SEPOLIA");
+    expect(session.getPassphrase()).toBe("a different vault passphrase");
+    // The recovery unlocked its vault before releasing the boundary, so no
+    // queued task can run against the replaced vault under the old session.
+    expect(leftBehind[0]).toBe("a different vault passphrase");
   });
 });
 
