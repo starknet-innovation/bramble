@@ -202,6 +202,10 @@ describe("finding an account by its address", () => {
   });
 });
 
+// An Argent release the pinned 0.4.0 account was not found running.
+const ARGENT_0_3_0_CLASS_HASH =
+  "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003";
+
 describe("writing an account picked by its address", () => {
   test("first-run restore re-proves the owner, then commits with the address", async () => {
     const { handler, seen } = harness(argentOwner(keyFor("argent", "argentx-bip44", 4)), {
@@ -290,6 +294,22 @@ describe("writing an account picked by its address", () => {
       ),
     ).resolves.toEqual({ error: ADDRESS_IMPORT_REFUSALS.noMatch });
     expect(seen.imports).toEqual([]);
+  });
+
+  test("a pick whose class is not the account's live class refuses as stale", async () => {
+    const owner = argentOwner(keyFor("argent", "argentx-bip44", 4));
+    const { classHash: _ignored, ...classless } = pick(4);
+    for (const selection of [{ ...pick(4), classHash: ARGENT_0_3_0_CLASS_HASH }, classless]) {
+      const { handler, seen, session } = harness(owner);
+      await expect(
+        handler(
+          { networkId: "SN_MAIN", selections: [selection], type: "wallet.importOwnAccounts" },
+          sender,
+        ),
+      ).resolves.toEqual({ error: ADDRESS_IMPORT_REFUSALS.stale });
+      expect(seen.imports).toEqual([]);
+      expect(session.isUnlocked()).toBe(true);
+    }
   });
 
   test("picks without an address skip the chain entirely", async () => {

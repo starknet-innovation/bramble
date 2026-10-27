@@ -320,6 +320,14 @@ export const verifyAddressSelections = async (
     if (found.family !== selection.accountContractType) {
       return { error: ADDRESS_IMPORT_REFUSALS.noMatch };
     }
+    // The record keeps the class the lookup found; a pick naming another (or
+    // none), or an account upgraded since, is no longer the one shown.
+    if (
+      selection.classHash === undefined ||
+      !sameFelt(selection.classHash, recordClassHash(found))
+    ) {
+      return { error: ADDRESS_IMPORT_REFUSALS.stale };
+    }
     const preview = await previewAt(deps, input, selection);
     if (!preview) return { error: "account discovery is unavailable" };
     if (!sameFelt(preview.publicKeyX, found.ownerPublicKey)) {
