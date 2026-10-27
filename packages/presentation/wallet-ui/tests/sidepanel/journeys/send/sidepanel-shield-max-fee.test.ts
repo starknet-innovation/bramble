@@ -111,9 +111,10 @@ describe("the review of a shield", () => {
 
   test("warns when the balance cannot also cover the proved network fee", () => {
     expect(funding("48")).toEqual({
-      amountIfStrk: 48n * STRK,
+      amount: 48n * STRK,
       balance: strkBalance.balance,
-      poolFee: 2n * STRK,
+      poolFeeFri: `0x${(2n * STRK).toString(16)}`,
+      shieldsStrk: true,
     });
     expect(preparedReview(preparation("1000"), funding("48")).feeAffordability).toBe(
       "insufficient",
@@ -139,9 +140,10 @@ describe("the review of a shield", () => {
   test("counts only the pool fee for a token other than STRK", () => {
     const ethShield = shield({ amount: "48", tokenAddress: "0x9" }).fields;
     expect(shieldStrkFunding(ethShield, [strkBalance], preparation(null).poolFeeFri)).toEqual({
-      amountIfStrk: 0n,
+      amount: 0n,
       balance: strkBalance.balance,
-      poolFee: 2n * STRK,
+      poolFeeFri: `0x${(2n * STRK).toString(16)}`,
+      shieldsStrk: false,
     });
   });
 

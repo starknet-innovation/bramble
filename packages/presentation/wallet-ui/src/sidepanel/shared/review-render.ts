@@ -37,10 +37,12 @@ export type ReviewFeeState = {
    * A shield's STRK requirement from the shared `shieldStrkNeed` helper (issue
    * 665): `need` is every STRK figure the shield may take, with the network
    * fee at its signing ceiling, and `short` how much the public balance lacks.
-   * `includesAmount` is set when the shielded token is STRK itself. A positive
-   * `short` replaces the generic `feeAffordability` notice with the figures.
+   * `includesAmount` is set when the shielded token is STRK itself, and
+   * `blocksConfirm` when the shortfall disables Confirm. A positive `short`
+   * replaces the generic `feeAffordability` notice with the figures.
    */
   readonly shieldStrkNeed?: {
+    readonly blocksConfirm: boolean;
     readonly includesAmount: boolean;
     readonly need: bigint;
     readonly short: bigint;

@@ -8,8 +8,7 @@
  * route rather than once per privacy feature.
  */
 
-import { reviewedFeeCeiling } from "@bramble/starknet/fee-bounds";
-import { resolveFeeAffordability, shieldStrkNeed } from "@bramble/transactions/fee-funds";
+import { shieldStrkNeed } from "@bramble/transactions/fee-funds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import type { TokenBalance } from "../../../popup/responses/responses";
@@ -116,33 +115,28 @@ export const preparationFailure = (route: SendRoute): string => {
 export const preparedReview = (
   preparation: PrivacyPreparation,
   funding: ShieldStrkFunding = null,
+  blockWhenShort: boolean = BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT,
 ): TransferReview => {
   const shield = funding && preparation.route === "public-account" ? funding : null;
   const networkFee = preparation.networkFee ?? null;
-  const need =
-    shield === null
-      ? null
-      : shieldStrkNeed({
-          amountIfStrk: shield.amountIfStrk,
-          balance: shield.balance,
-          networkMaxFee: networkFee?.unit === "FRI" ? reviewedFeeCeiling(networkFee) : null,
-          poolFee: shield.poolFee,
-        });
+  const need = shield === null ? null : shieldStrkNeed({ ...shield, networkFee });
   return {
     fee: networkFee,
-    feeAffordability: shield
-      ? resolveFeeAffordability({
-          balance: shield.balance,
-          fee: networkFee,
-          sendAmount: shield.poolFee + shield.amountIfStrk,
-        })
-      : "unknown",
+    // One source for both notices: the verdict is the need's, so the generic
+    // line can never contradict the figures (or make a claim they withheld).
+    feeAffordability: need === null ? "unknown" : need.short > 0n ? "insufficient" : "ok",
     feeEstimateFailed: preparation.route === "public-account" && !preparation.networkFee,
     flags: [],
     requiresDeployment: false,
     ...(need === null || shield === null
       ? {}
-      : { shieldStrkNeed: { ...need, includesAmount: shield.amountIfStrk > 0n } }),
+      : {
+          shieldStrkNeed: {
+            ...need,
+            blocksConfirm: blockWhenShort && need.short > 0n,
+            includesAmount: shield.shieldsStrk,
+          },
+        }),
     summaries: [...preparation.summaries],
   } as TransferReview;
 };
@@ -150,23 +144,19 @@ export const preparedReview = (
 /**
  * Owner decision for issue 665: whether a shield review that is short of
  * public STRK may still be confirmed. `false` (today's behaviour) keeps it
- * warn-only — the review names the figures and Confirm stays live, so the
- * network refuses what the balance cannot pay. `true` disables Confirm and
- * withholds the reviewed key until a fresh review fits the balance. Flipping
- * this constant is the whole change.
+ * warn-only — the review names the figures and Confirm stays live. `true`
+ * disables Confirm and withholds the reviewed key, so the next press reviews
+ * again instead of signing. Flipping this constant is the whole change.
  */
 export const BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT = false;
 
 /**
- * True when Confirm must stay disabled because a shield review is short of
- * public STRK and `block` (default {@link BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT})
- * says a shortfall blocks. False whenever no shortfall is known: an unknown
- * balance or ceiling makes no claim and never blocks.
+ * True when the review recorded, at preparation, that its STRK shortfall
+ * blocks Confirm. False whenever no shortfall is known: an unknown balance or
+ * ceiling makes no claim and never blocks.
  */
-export const shieldStrkBlocked = (
-  review: ReviewFeeState,
-  block: boolean = BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT,
-): boolean => block && review.shieldStrkNeed !== undefined && review.shieldStrkNeed.short > 0n;
+export const shieldStrkBlocked = (review: ReviewFeeState): boolean =>
+  review.shieldStrkNeed?.blocksConfirm === true;
 
 /**
  * Whether the review's Confirm stays disabled: no single fee figure to consent
@@ -221,11 +211,16 @@ export const preparedState = (
   preparation: PrivacyPreparation,
   fields: TransferFields,
   key: string,
-  publicBalances?: readonly TokenBalance[],
+  options: {
+    /** Overrides {@link BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT}; for tests only. */
+    readonly blockShieldStrkShort?: boolean;
+    readonly publicBalances?: () => readonly TokenBalance[];
+  } = {},
 ): TransferState<TransferReview> => {
   const review = preparedReview(
     preparation,
-    shieldStrkFunding(fields, publicBalances, preparation.poolFeeFri),
+    shieldStrkFunding(fields, options.publicBalances?.(), preparation.poolFeeFri),
+    options.blockShieldStrkShort,
   );
   return {
     error: review.feeEstimateFailed ? FEE_UNAVAILABLE : "",

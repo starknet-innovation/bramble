@@ -10,7 +10,9 @@
  * malformed numeric input yields "unknown" — never a fabricated verdict, and
  * callers must never block on it.
  */
-import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { isBaseUnitsAmount } from "@bramble/core/json";
+import { type FeeEstimate, reviewedFeeCeiling } from "@bramble/starknet/fee-bounds";
+import { isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 /**
  * Affordability verdict. "unknown" means no claim could be made and must be
@@ -26,37 +28,46 @@ const asBigInt = (value: string): bigint | null => {
   }
 };
 
+// Strict base units: a canonical decimal (the shared amount grammar) or a
+// lowercase-hex field element, as a pool fee is quoted. Anything else, blank
+// and whitespace included, is no figure at all — `BigInt("")` would read 0.
+const strictBaseUnits = (value: string | null): bigint | null =>
+  value !== null && (isBaseUnitsAmount(value) || isStarkFieldElement(value)) ? BigInt(value) : null;
+
 /**
  * What a shield needs from the public STRK balance, and how much of it is
- * missing (issue 665). `need` is the pool fee, the most the network fee may
- * be signed for (`networkMaxFee`, the reviewed ceiling rather than the bare
- * estimate, so the figure is an upper bound and "up to" is true), and the
- * amount when the shielded token is STRK itself (`amountIfStrk`, else `0n`).
- * `short` is how far `balance` (raw STRK base units) falls below `need`, or
- * `0n` when it covers it.
+ * missing (issue 665). `need` is the pool fee (`poolFeeFri`), the most the
+ * network fee may be signed for, and — only when the shielded token is STRK
+ * (`shieldsStrk`) — the amount (`amount`, raw STRK base units).
  *
- * Fails open like {@link resolveFeeAffordability}: an unknown or malformed
- * balance, an unknown network ceiling, or any negative figure yields `null` —
- * no claim, never a fabricated shortfall. Never throws.
+ * The network share is {@link reviewedFeeCeiling} of the reviewed FRI fee. The
+ * submission refuses, before signing, any resource bounds whose
+ * `max_amount x max_price_per_unit` spend exceeds that ceiling, on every speed
+ * and with a zero tip (`@bramble/starknet/rpc-submit`,
+ * `tests/starknet/rpc-submit-fee-bounds.test.ts`), so the signed maximum is
+ * never above it and "up to" is true. `short` is how far `balance` (raw STRK
+ * base units) falls below `need`, or `0n` when it covers it.
+ *
+ * Fails open: a missing, blank or malformed balance or pool fee, a non-FRI or
+ * malformed network fee, or a STRK shield without a readable amount yields
+ * `null` — no numeric claim, never a fabricated shortfall. Never throws.
  */
 export const shieldStrkNeed = (input: {
-  readonly amountIfStrk: bigint;
+  readonly amount: bigint | null;
   readonly balance: string | null;
-  readonly networkMaxFee: bigint | null;
-  readonly poolFee: bigint;
+  readonly networkFee: FeeEstimate | null;
+  readonly poolFeeFri: string | null;
+  readonly shieldsStrk: boolean;
 }): { readonly need: bigint; readonly short: bigint } | null => {
-  const balance = input.balance === null ? null : asBigInt(input.balance);
-  if (
-    balance === null ||
-    input.networkMaxFee === null ||
-    balance < 0n ||
-    input.networkMaxFee < 0n ||
-    input.poolFee < 0n ||
-    input.amountIfStrk < 0n
-  ) {
+  const balance =
+    input.balance !== null && isBaseUnitsAmount(input.balance) ? BigInt(input.balance) : null;
+  const poolFee = strictBaseUnits(input.poolFeeFri);
+  const network = input.networkFee?.unit === "FRI" ? reviewedFeeCeiling(input.networkFee) : null;
+  const amount = input.shieldsStrk ? input.amount : 0n;
+  if (balance === null || poolFee === null || network === null || amount === null || amount < 0n) {
     return null;
   }
-  const need = input.poolFee + input.networkMaxFee + input.amountIfStrk;
+  const need = poolFee + network + amount;
   return { need, short: need > balance ? need - balance : 0n };
 };
 

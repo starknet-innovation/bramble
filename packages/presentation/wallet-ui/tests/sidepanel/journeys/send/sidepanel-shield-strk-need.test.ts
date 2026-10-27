@@ -53,9 +53,13 @@ const preparation = (fee: { overallFee: string; unit: string } | null) =>
     tokenId: strkBalance.id,
   }) as unknown as PrivacyPreparation;
 const fri = (overallFee: bigint) => preparation({ overallFee: overallFee.toString(), unit: "FRI" });
-const balances = (raw: bigint) => [{ ...strkBalance, balance: raw.toString() }];
-const reviewOf = (fields: TransferFields, prep: PrivacyPreparation, balance: bigint) =>
-  preparedReview(prep, shieldStrkFunding(fields, balances(balance), prep.poolFeeFri));
+const balances = (raw: bigint | string) => [{ ...strkBalance, balance: raw.toString() }];
+const reviewOf = (
+  fields: TransferFields,
+  prep: PrivacyPreparation,
+  balance: bigint | string,
+  block?: boolean,
+) => preparedReview(prep, shieldStrkFunding(fields, balances(balance), prep.poolFeeFri), block);
 const cost = (review: ReturnType<typeof preparedReview>) =>
   reviewFeeSection(review, { id: "review-retry-fee" });
 
@@ -64,8 +68,10 @@ describe("a shield's STRK need at review", () => {
     // 2 STRK pool fee + a 1000 FRI estimate: the balance covers the estimate
     // (1000) but not the 1500 FRI ceiling the submission may sign for.
     const review = reviewOf(ethFields, fri(1000n), 2n * STRK + 1200n);
-    expect(review.feeAffordability).toBe("ok");
+    // One verdict: the generic predicate reads the same need, not the estimate.
+    expect(review.feeAffordability).toBe("insufficient");
     expect(review.shieldStrkNeed).toEqual({
+      blocksConfirm: false,
       includesAmount: false,
       need: 2n * STRK + 1500n,
       short: 300n,
@@ -78,6 +84,7 @@ describe("a shield's STRK need at review", () => {
   test("includes the amount for a STRK shield", () => {
     const review = reviewOf(shieldFields({ amount: "10" }), fri(STRK), 12n * STRK);
     expect(review.shieldStrkNeed).toEqual({
+      blocksConfirm: false,
       includesAmount: true,
       need: 12n * STRK + (3n * STRK) / 2n,
       short: (3n * STRK) / 2n,
@@ -124,16 +131,47 @@ describe("a shield's STRK need at review", () => {
         .shieldStrkNeed,
     ).toBeUndefined();
   });
+
+  test("identifies a STRK shield by address and reads its amount at 18 decimals", () => {
+    // Wrong decimals metadata on the field must not shrink the amount counted.
+    const misdeclared = shieldFields({ amount: "10", tokenDecimals: "6" });
+    expect(reviewOf(misdeclared, fri(STRK), 0n).shieldStrkNeed?.need).toBe(
+      12n * STRK + (3n * STRK) / 2n,
+    );
+    // A token that only calls itself STRK pays fees, not its amount, in STRK.
+    const lookalike = shieldFields({ amount: "10", tokenAddress: "0x9", tokenSymbol: "STRK" });
+    const review = reviewOf(lookalike, fri(STRK), 0n);
+    expect(review.shieldStrkNeed?.includesAmount).toBe(false);
+    expect(review.shieldStrkNeed?.need).toBe(2n * STRK + (3n * STRK) / 2n);
+    expect(cost(review)).toContain("in fees.");
+  });
+
+  test("a blank or malformed balance makes no claim at all, generic notice included", () => {
+    for (const balance of ["", " ", "0x", "1.5", "-1"]) {
+      const review = reviewOf(ethFields, fri(1000n), balance);
+      expect(review.shieldStrkNeed).toBeUndefined();
+      expect(review.feeAffordability).toBe("unknown");
+      expect(cost(review)).not.toContain("This shield needs");
+      expect(cost(review)).not.toContain(GENERIC);
+    }
+  });
+
+  test("an unreadable STRK amount makes no claim", () => {
+    const review = reviewOf(shieldFields({ amount: "1.2.3" }), fri(1000n), 0n);
+    expect(review.shieldStrkNeed).toBeUndefined();
+    expect(cost(review)).not.toContain(GENERIC);
+  });
 });
 
 describe("Confirm on a shield short of STRK", () => {
   const short = reviewOf(ethFields, fri(1000n), 0n);
-  const covered = reviewOf(ethFields, fri(1000n), 3n * STRK);
 
   test("stays warn-only by default: the reviewed key is kept", () => {
     expect(BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT).toBe(false);
     expect(shieldStrkBlocked(short)).toBe(false);
-    const state = preparedState(fri(1000n), ethFields, "key-1", balances(0n));
+    const state = preparedState(fri(1000n), ethFields, "key-1", {
+      publicBalances: () => balances(0n),
+    });
     expect(state.reviewedKey).toBe("key-1");
     expect(state.error).toBe("");
     expect(confirmBlocked(short)).toBe(false);
@@ -142,8 +180,15 @@ describe("Confirm on a shield short of STRK", () => {
   });
 
   test("blocks only a known shortfall when the owner turns blocking on", () => {
-    expect(shieldStrkBlocked(short, true)).toBe(true);
-    expect(shieldStrkBlocked(covered, true)).toBe(false);
-    expect(shieldStrkBlocked(reviewOf(ethFields, preparation(null), 0n), true)).toBe(false);
+    expect(shieldStrkBlocked(reviewOf(ethFields, fri(1000n), 0n, true))).toBe(true);
+    expect(confirmBlocked(reviewOf(ethFields, fri(1000n), 0n, true))).toBe(true);
+    expect(shieldStrkBlocked(reviewOf(ethFields, fri(1000n), 3n * STRK, true))).toBe(false);
+    expect(shieldStrkBlocked(reviewOf(ethFields, preparation(null), 0n, true))).toBe(false);
+    expect(shieldStrkBlocked(reviewOf(ethFields, fri(1000n), "", true))).toBe(false);
+    const state = preparedState(fri(1000n), ethFields, "key-1", {
+      blockShieldStrkShort: true,
+      publicBalances: () => balances(0n),
+    });
+    expect(state.reviewedKey).toBeNull();
   });
 });
