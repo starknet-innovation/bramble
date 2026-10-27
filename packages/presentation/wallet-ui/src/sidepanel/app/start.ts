@@ -381,6 +381,10 @@ export const startWalletUi = async (
     const generation = ++renderGeneration;
     const isCurrent = (): boolean => generation === renderGeneration;
     const scopeChanged = updateRenderScope(cache, status);
+    // Announced here, not only from paint(): a network switch in an unlocked
+    // wallet defers its paint until the new network's data loads, and a
+    // network-scoped form (the Ready-key picker) must drop its list now.
+    announceNetwork(status.networkId);
     if (scopeChanged && hasPaintedScope) {
       scopeAnnouncer.textContent = scopeChangeAnnouncement(scopeChanged);
     }
