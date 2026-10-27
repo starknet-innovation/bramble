@@ -5,6 +5,7 @@ import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   argentAccountAddress,
+  argentAccountConstructorCalldata,
   argentMultisigAddress,
 } from "@bramble/starknet/account-contracts";
 import {
@@ -13,12 +14,13 @@ import {
   requireLiveAuthorizableClass,
   submitAccountDeployment,
 } from "@bramble/starknet/deployment";
+import { XVERSE_ARGENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 
 // Argent 0.3.0: recognized by the catalog, but it expects a bare (r, s).
 const ARGENT_0_3_0 = "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003";
 
-import type { Account, RpcProvider } from "starknet";
+import { type Account, hash, type RpcProvider } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const RPC_URLS = ["https://rpc.example"];
@@ -165,6 +167,63 @@ test("settles ordinary Argent deployment bounds with validated query signing", a
   expect(request).toContain(`"signature":["1","0","${PUBLIC_KEY}","0x1","0x1"]`);
   expect(request).not.toContain("SKIP_VALIDATE");
   expect(signedBounds).toMatchObject({ resourceBounds: expect.any(Object) });
+});
+
+test("deploys a funded Xverse account at Xverse's class, with the 0.4.0 constructor", async () => {
+  // Issue 734: Xverse's build is Argent 0.4.0 under another class hash, so the
+  // same constructor at that class reproduces the Xverse address exactly.
+  const constructorCalldata = argentAccountConstructorCalldata(PUBLIC_KEY);
+  const address = hash.calculateContractAddressFromHash(
+    PUBLIC_KEY,
+    XVERSE_ARGENT_CLASS_HASH,
+    [...constructorCalldata],
+    0,
+  );
+  const xverse = {
+    ...account,
+    address,
+    classHash: XVERSE_ARGENT_CLASS_HASH,
+    id: `SN_MAIN:${address}`,
+  };
+  const { provider } = makeQueryProvider();
+  let deployed: { readonly classHash?: string; readonly contractAddress?: string } | undefined;
+  await expect(
+    submitAccountDeployment(
+      {
+        account: xverse,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
+        rpcUrls: RPC_URLS,
+        signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+      },
+      () => provider,
+      (_provider, _stored, guardedSignHash) =>
+        ({
+          async deployAccount(payload: typeof deployed) {
+            deployed = payload;
+            await guardedSignHash("0x123");
+            return { transaction_hash: "0x123" };
+          },
+        }) as unknown as Account,
+    ),
+  ).resolves.toEqual({ transactionHash: "0x123" });
+  expect(BigInt(deployed?.classHash ?? 0)).toBe(BigInt(XVERSE_ARGENT_CLASS_HASH));
+  expect(BigInt(deployed?.contractAddress ?? 0)).toBe(BigInt(address));
+});
+
+test("still refuses to deploy any other Argent release", async () => {
+  const { provider } = makeQueryProvider();
+  const old = { ...account, classHash: ARGENT_0_3_0 };
+  await expect(
+    submitAccountDeployment(
+      {
+        account: old,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
+        rpcUrls: RPC_URLS,
+        signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+      },
+      () => provider,
+    ),
+  ).rejects.toThrow("does not match the pinned release");
 });
 
 test("Argent deployment estimate and submission reject a different live class", async () => {
