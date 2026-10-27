@@ -23,6 +23,32 @@ describe("postGasless", () => {
     ).resolves.toBe(true);
   });
 
+  test("a lock during an execute retry refuses before the next broadcast", async () => {
+    let calls = 0;
+    let locked = false;
+    const http = async () => {
+      calls += 1;
+      locked = true;
+      return gateway(503, "screening_unavailable");
+    };
+    const error = await postGasless(
+      http,
+      url,
+      "paymaster_executeTransaction",
+      {},
+      {
+        executes: true,
+        isAuthorized: () => !locked,
+        sleep: async () => undefined,
+      },
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(Error);
+    if (error instanceof Error) {
+      expect(error.message).toBe("wallet locked");
+    }
+    expect(calls).toBe(1);
+  });
+
   test("retries screening_unavailable and does not treat it as a lost broadcast", async () => {
     let calls = 0;
     const http = async () => {

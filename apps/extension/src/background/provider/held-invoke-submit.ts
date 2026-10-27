@@ -3,6 +3,7 @@
  * picked. The gasless lane does not fall back to STRK.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import type { MultisigStore } from "@bramble/multisig/repository";
 import type { PriceService } from "@bramble/portfolio/prices";
 import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
@@ -80,8 +81,12 @@ export const submitHeldInvoke = async (input: {
     readonly tokenAddress: string;
   };
 }> => {
-  const prices = input.deps.prices;
   const gaslessFee = input.approval.gaslessFee;
+  // A pool batch cannot pay its fee on the gasless lane. Refusing here, rather
+  // than submitting the STRK20 proof, keeps the choice the card showed.
+  if (input.poolProof && gaslessFee) {
+    throw new WalletError("Paying the network fee in another token is unavailable.");
+  }
   if (input.poolProof) {
     return input.strk20.submitPrepared({
       ...input.context,
@@ -90,6 +95,7 @@ export const submitHeldInvoke = async (input: {
       ...input.ceiling,
     } as never);
   }
+  const prices = input.deps.prices;
   if (gaslessFee && prices) {
     return executeReviewedGasless({
       account: input.account,
@@ -98,7 +104,6 @@ export const submitHeldInvoke = async (input: {
       isAuthorized: input.unlocked,
       preferences: input.preferences,
       prices,
-      runtimeRpc: input.runtimeRpc,
       signHash: input.context.signHash,
       strkFee: input.approval.reviewedFee ?? null,
     });

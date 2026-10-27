@@ -16,17 +16,23 @@ import { sameFelt } from "@bramble/wallet-model/networks";
 /**
  * The class and deployment state a gasless quote needs. `deployed` is the
  * chain's answer, not the class's role in the catalog.
+ *
+ * For Braavos, `classHash` is the deployment class stored on the account.
+ * That class is not the implementation the account runs, so eligibility uses
+ * `liveClassHash` — the class at the address now — and ignores `classHash`.
  */
 export type GaslessAccountClass = {
   readonly accountContractType: string;
   readonly classHash: string;
   readonly deployed: boolean;
+  /** Live implementation class. Required for a deployed Braavos account. */
+  readonly liveClassHash?: string;
 };
 
 /**
  * Whether this account may be offered a gasless fee. False for multisig,
- * read-only, unknown classes, Argent 0.3.x, Braavos classes other than the
- * current implementation, and any undeployed Braavos account.
+ * read-only, unknown classes, Argent 0.3.x, Braavos accounts whose live class
+ * is not the current implementation, and any undeployed Braavos account.
  */
 export const accountSignsGaslessV2 = (account: GaslessAccountClass): boolean => {
   if (account.accountContractType === "argent-multisig") {
@@ -48,6 +54,7 @@ export const accountSignsGaslessV2 = (account: GaslessAccountClass): boolean => 
   return (
     account.accountContractType === "braavos" &&
     account.deployed &&
-    sameFelt(account.classHash, BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH)
+    account.liveClassHash !== undefined &&
+    sameFelt(account.liveClassHash, BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH)
   );
 };

@@ -7,6 +7,8 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { type FeeAffordability, resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import {
   isApproveEntrypoint,
   PLAIN_TRANSFER_FROM_ENTRYPOINTS,
@@ -310,4 +312,23 @@ export const gaslessTokenSpend = (calls: readonly Call[], token: string): bigint
     spent += amount;
   }
   return spent;
+};
+
+/**
+ * Whether STRK covers the fee plus the STRK the calls themselves spend.
+ *
+ * The card's warn-only verdict compares the fee alone. A transfer of the whole
+ * balance would then look payable, and no other fee token would be offered.
+ * An unrecognised call to STRK is "unknown" so the offer stays hidden.
+ */
+export const gaslessStrkAffordability = (
+  calls: readonly Call[],
+  balance: string | null,
+  fee: FeeEstimate | null,
+): FeeAffordability => {
+  const spent = gaslessTokenSpend(calls, STRK_TOKEN_ADDRESS);
+  if (spent === null) {
+    return "unknown";
+  }
+  return resolveFeeAffordability({ balance, fee, sendAmount: spent });
 };

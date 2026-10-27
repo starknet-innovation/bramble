@@ -16,6 +16,7 @@
  */
 
 import type { PriceService } from "@bramble/portfolio/prices";
+import { gaslessStrkAffordability } from "@bramble/privacy/gasless-request";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { UndeployedBraavosError } from "@bramble/starknet/deployment";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
@@ -27,6 +28,7 @@ import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { resolveReviewFee } from "../accounts/wallet-ops";
+import { isPoolShapedBatch } from "../privacy/strk20-account-context";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import { readStrkBalance } from "../transactions/fee-guard";
@@ -112,20 +114,21 @@ const gaslessOffersFor = async (
   input: {
     readonly account: InvokeFeeReviewTarget["account"];
     readonly calls: InvokeFeeReviewTarget["calls"];
-    readonly deployed: boolean;
     readonly fee: InvokeFeeReview["fee"];
     readonly feeAffordability: InvokeFeeReview["feeAffordability"];
     readonly preferences: InvokeFeeReviewTarget["preferences"];
   },
 ): Promise<NonNullable<InvokeFeeReview["gaslessFees"]>> => {
   const prices = deps.prices;
-  if (prices === undefined) {
+  if (
+    prices === undefined ||
+    isPoolShapedBatch(input.calls, input.preferences, input.account.networkId)
+  ) {
     return [];
   }
   return reviewGaslessOffers({
     account: input.account,
     calls: [...input.calls],
-    deployed: input.deployed,
     preferences: input.preferences,
     prices,
     runtimeRpc: deps.runtimeRpc,
@@ -177,16 +180,15 @@ export const estimateInvokeApprovalFee = async (
   // Fee-affordability guard (issue 191): compare the estimate against the
   // account's STRK balance via the shared predicate. Warn-only and fail-open —
   // an unreadable balance yields "unknown" and never blocks the approval.
-  const feeAffordability = resolveFeeAffordability({
-    balance: fee === null ? null : await readStrkBalance(deps, account, preferences),
-    fee,
-  });
+  const balance = fee === null ? null : await readStrkBalance(deps, account, preferences);
+  const feeAffordability = resolveFeeAffordability({ balance, fee });
+  // STRK the calls spend counts toward the shortfall the offer uses. The card's
+  // own verdict stays fee-only. Pool batches are omitted inside the helper.
   const gaslessFees = await gaslessOffersFor(deps, {
     account,
     calls,
-    deployed,
     fee,
-    feeAffordability,
+    feeAffordability: gaslessStrkAffordability(calls, balance, fee),
     preferences,
   });
   return {

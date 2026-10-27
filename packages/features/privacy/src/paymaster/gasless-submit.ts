@@ -409,6 +409,11 @@ export const submitReviewedGaslessInvoke = async (input: {
   readonly http: PaymasterHttp;
   readonly isAuthorized: () => boolean;
   readonly nowSeconds: number;
+  /**
+   * Clock read after signing, for the final execution-window check. The
+   * snapshot in `nowSeconds` is already stale once a signer prompt has waited.
+   */
+  readonly readNowSeconds: () => number;
   readonly referenceFor: GaslessPriceReference;
   readonly reviewed: GaslessFeeOffer;
   readonly route: GaslessRoute | null;
@@ -438,7 +443,7 @@ export const submitReviewedGaslessInvoke = async (input: {
         executeBefore: validated.executeBefore,
         publicCallCount: input.calls.length + 1,
       },
-      input.nowSeconds,
+      input.readNowSeconds(),
       GASLESS_SIGN_WINDOW_SECONDS,
     )
   ) {
@@ -460,7 +465,7 @@ export const submitReviewedGaslessInvoke = async (input: {
           ? { invoke, type: "invoke" }
           : { deployment, invoke, type: "deploy_and_invoke" },
     },
-    { executes: true },
+    { executes: true, isAuthorized: input.isAuthorized },
   );
   const accepted = readGaslessTransactionHash(result);
   const transactionHash = accepted === null ? null : canonicalFelt(accepted);

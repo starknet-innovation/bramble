@@ -90,7 +90,6 @@ const submitChosenTransfer = async (input: {
       isAuthorized: input.unlocked,
       preferences: input.preferences,
       prices,
-      runtimeRpc: input.deps.runtimeRpc,
       signHash: accountHashSigner(input.deps, input.account, input.vaultPassphrase),
       strkFee: input.reviewedFee ?? null,
     });
@@ -152,7 +151,6 @@ export const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
     ? await reviewGaslessOffers({
         account,
         calls: [call],
-        deployed: !fees.requiresDeployment,
         preferences,
         prices,
         runtimeRpc: deps.runtimeRpc,
@@ -210,7 +208,10 @@ const broadcastTransfer = async (
     return blocked;
   }
   const summary = feeSummary(ready.summary, input.gaslessFee?.label);
-  const activityFor = (hash: string) => ({
+  const activityFor = (
+    hash: string,
+    userFee?: { readonly amount: string; readonly token: string; readonly tokenAddress: string },
+  ) => ({
     accountId: ready.account.id,
     amount: input.amount,
     counterparty: input.recipient,
@@ -220,15 +221,7 @@ const broadcastTransfer = async (
     networkId: ready.account.networkId,
     summary,
     ...activityToken(ready.token),
-    ...(input.gaslessFee
-      ? {
-          userFee: {
-            amount: input.gaslessFee.amount,
-            token: input.gaslessFee.label,
-            tokenAddress: input.gaslessFee.tokenAddress,
-          },
-        }
-      : {}),
+    ...(userFee === undefined ? {} : { userFee }),
   });
   let signedHash: string | undefined;
   let transactionHash: string;
@@ -256,6 +249,12 @@ const broadcastTransfer = async (
     transactionHash = result.transactionHash;
     deploymentHash =
       "deploymentTransactionHash" in result ? result.deploymentTransactionHash : undefined;
+    const signedFee = "userFee" in result ? result.userFee : undefined;
+    await afterBroadcast(() => recordAutoDeployment(deps.activity, ready.account, deploymentHash));
+    await afterBroadcast(() =>
+      recordSubmittedActivity(deps.activity, activityFor(transactionHash, signedFee)),
+    );
+    return { ok: true, transactionHash };
   } catch (error) {
     await afterBroadcast(() => recordAutoDeployment(deps.activity, ready.account, error));
     if (!(error instanceof IndeterminateRpcWriteError)) {
@@ -267,9 +266,6 @@ const broadcastTransfer = async (
     }
     return submissionUnknownResponse(error.message, signedHash);
   }
-  await afterBroadcast(() => recordAutoDeployment(deps.activity, ready.account, deploymentHash));
-  await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(transactionHash)));
-  return { ok: true, transactionHash };
 };
 
 /**

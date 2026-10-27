@@ -9,6 +9,7 @@
  * `IndeterminateRpcWriteError`. A stated `{"error":"<code>"}` does not.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import { UNTRUSTED_REQUEST_INIT } from "@bramble/core/http-json";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
@@ -185,6 +186,8 @@ export const postGasless = async (
   params: unknown,
   options: {
     readonly executes: boolean;
+    /** Checked before each execute retry. A lock during the delay refuses. */
+    readonly isAuthorized?: () => boolean;
     readonly sleep?: (ms: number) => Promise<void>;
   },
 ): Promise<unknown> => {
@@ -195,6 +198,9 @@ export const postGasless = async (
     if (classified.kind === "retry" && attempt < GASLESS_SCREENING_RETRIES) {
       attempt += 1;
       await sleep(250 * attempt);
+      if (options.executes && options.isAuthorized && !options.isAuthorized()) {
+        throw new WalletError("wallet locked");
+      }
       continue;
     }
     if (classified.kind === "result") {

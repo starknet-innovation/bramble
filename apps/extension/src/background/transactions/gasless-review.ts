@@ -1,25 +1,36 @@
 /**
- * Builds the gasless fee choices a review may offer. The wallet flag and the
- * forwarder pin are read from config: while either refuses, this returns
- * nothing and does not call the gateway. STRK stays the fee unless the user
- * later picks one of these offers.
+ * Builds the gasless fee choices a review may offer, and submits one the user
+ * already chose. The wallet flag and the forwarder pin gate both. STRK stays
+ * the fee unless the user later picks an offer.
+ *
+ * Before anything is signed, the account is re-read with the same compatibility gate
+ * the ordinary invoke uses. A refusal or an unreachable node throws; it is
+ * never treated as "deployed". Braavos eligibility uses the live class, not
+ * the deployment class stored on the account.
  */
 
 import { untrustedFetch } from "@bramble/core/http-json";
 import type { PriceService } from "@bramble/portfolio/prices";
 import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { gaslessRoute, gaslessRouteReady } from "@bramble/privacy/config";
+import type { GaslessAccountClass } from "@bramble/privacy/gasless-account";
 import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { quoteGaslessOffers, submitReviewedGaslessInvoke } from "@bramble/privacy/gasless-submit";
 import type { WalletPreferences } from "@bramble/settings/preferences";
-import { accountDeployment } from "@bramble/starknet/deployment";
+import { accountDeployment, isCompatibleAccountDeployed } from "@bramble/starknet/deployment";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
+import { withRpcFallback } from "@bramble/starknet/provider";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { systemClock } from "@bramble/transactions/activity";
 import type { FeeAffordability } from "@bramble/transactions/fee-funds";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
-import type { Call } from "starknet";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
+import type { Call, RpcProvider } from "starknet";
 import { createStrk20FeeReference } from "../privacy/strk20-fee-reference";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
@@ -30,6 +41,83 @@ const gaslessHttp = (input: RequestInfo | URL, init: RequestInit = {}): Promise<
   return untrustedFetch(url, init);
 };
 
+type MakeProvider = (nodeUrl: string) => RpcProvider;
+
+const fallback = async <T>(
+  rpcUrls: readonly string[],
+  run: (provider: RpcProvider) => Promise<T>,
+  makeProvider?: MakeProvider,
+): Promise<T> =>
+  makeProvider === undefined
+    ? withRpcFallback(rpcUrls, run)
+    : withRpcFallback(rpcUrls, run, makeProvider);
+
+/**
+ * Deployment and, for Braavos, the class now at the address.
+ *
+ * Uses {@link isCompatibleAccountDeployed}: a guardian, a Braavos strong
+ * signer, or an unrecognised live class throws, and an unreachable node
+ * throws. Callers must not turn that into a deployed account. `liveClassHash`
+ * is set only for Braavos, and only when the read succeeds.
+ */
+export const gaslessAccountState = async (
+  account: AccountRef,
+  rpcUrls: readonly string[],
+  makeProvider?: MakeProvider,
+): Promise<{ readonly deployed: boolean; readonly liveClassHash: string | null }> => {
+  const deployed = await fallback(
+    rpcUrls,
+    (provider) => isCompatibleAccountDeployed(provider, account),
+    makeProvider,
+  );
+  if (account.accountContractType !== "braavos" || !deployed) {
+    return { deployed, liveClassHash: null };
+  }
+  try {
+    const raw = await fallback(
+      rpcUrls,
+      (provider) => provider.getClassHashAt(account.address, "latest"),
+      makeProvider,
+    );
+    const liveClassHash = canonicalFelt(String(raw));
+    return { deployed, liveClassHash: liveClassHash === "0x0" ? null : liveClassHash };
+  } catch {
+    return { deployed, liveClassHash: null };
+  }
+};
+
+const accountForGasless = (
+  account: AccountRef,
+  state: { readonly deployed: boolean; readonly liveClassHash: string | null },
+): GaslessAccountClass & {
+  readonly accountContractType: AccountRef["accountContractType"];
+  readonly address: string;
+} => ({
+  accountContractType: account.accountContractType,
+  address: account.address,
+  classHash: account.classHash,
+  deployed: state.deployed,
+  ...(account.accountContractType === "braavos" && state.liveClassHash !== null
+    ? { liveClassHash: state.liveClassHash }
+    : {}),
+});
+
+const deploymentFor = (
+  account: AccountRef,
+  deployed: boolean,
+): ReturnType<typeof accountDeployment> | null => {
+  if (deployed) {
+    return null;
+  }
+  try {
+    return accountDeployment(account);
+  } catch {
+    return null;
+  }
+};
+
+const nowSeconds = (): number => Math.floor(systemClock() / 1000);
+
 /**
  * Offers for one review. Empty when gasless is off, STRK covers the fee, the
  * account cannot sign SNIP-9 v2, or the route cannot be checked. Failures
@@ -38,7 +126,6 @@ const gaslessHttp = (input: RequestInfo | URL, init: RequestInit = {}): Promise<
 export const reviewGaslessOffers = async (input: {
   readonly account: AccountRef;
   readonly calls: readonly Call[];
-  readonly deployed: boolean;
   readonly preferences: WalletPreferences;
   readonly prices: PriceService;
   readonly runtimeRpc: Pick<RuntimeRpc, "getTokenBalances">;
@@ -66,33 +153,27 @@ export const reviewGaslessOffers = async (input: {
   if (known.length === 0 || strkFee <= 0n) {
     return [];
   }
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.account.networkId], input.preferences);
+  let state: Awaited<ReturnType<typeof gaslessAccountState>>;
+  try {
+    state = await gaslessAccountState(input.account, rpcUrls);
+  } catch {
+    return [];
+  }
   const balances = await input.runtimeRpc
     .getTokenBalances({
       accountAddress: input.account.address,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.account.networkId], input.preferences),
+      rpcUrls,
       tokens: [...known],
     })
     .catch(() => []);
-  let deployment: ReturnType<typeof accountDeployment> | null = null;
-  if (!input.deployed) {
-    try {
-      deployment = accountDeployment(input.account);
-    } catch {
-      deployment = null;
-    }
-  }
   const reference = createStrk20FeeReference(input.prices);
   return quoteGaslessOffers({
-    account: {
-      accountContractType: input.account.accountContractType,
-      address: input.account.address,
-      classHash: input.account.classHash,
-      deployed: input.deployed,
-    },
+    account: accountForGasless(input.account, state),
     calls: input.calls,
-    deployment,
+    deployment: deploymentFor(input.account, state.deployed),
     http: gaslessHttp,
-    nowSeconds: Math.floor(systemClock() / 1000),
+    nowSeconds: nowSeconds(),
     referenceFor: (token) =>
       reference({
         feeToken: token.address,
@@ -112,9 +193,9 @@ export const reviewGaslessOffers = async (input: {
 };
 
 /**
- * Submits a fee the user already chose. Throws the paymaster refusal or a
- * lost-reply error; it does not fall back to STRK, because that would sign
- * a different fee from the one on the control.
+ * Submits a fee the user already chose. Throws the paymaster refusal, a
+ * compatibility refusal, or a lost-reply error. It does not fall back to STRK,
+ * because that would sign a different fee from the one on the control.
  */
 export const executeReviewedGasless = async (input: {
   readonly account: AccountRef;
@@ -123,40 +204,25 @@ export const executeReviewedGasless = async (input: {
   readonly isAuthorized: () => boolean;
   readonly preferences: WalletPreferences;
   readonly prices: PriceService;
-  readonly runtimeRpc: Pick<RuntimeRpc, "getDeploymentStatus">;
   readonly signHash: StarkHashSigner;
   readonly strkFee: FeeEstimate | null;
 }): Promise<Awaited<ReturnType<typeof submitReviewedGaslessInvoke>>> => {
   const route = gaslessRoute(input.account.networkId);
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.account.networkId], input.preferences);
+  const state = gaslessRouteReady(route)
+    ? await gaslessAccountState(input.account, rpcUrls)
+    : { deployed: false, liveClassHash: null };
   const strkFee =
     input.strkFee !== null && input.strkFee.unit === "FRI" ? BigInt(input.strkFee.overallFee) : 0n;
   const reference = createStrk20FeeReference(input.prices);
-  const deployed = await input.runtimeRpc
-    .getDeploymentStatus({
-      accountAddress: input.account.address,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.account.networkId], input.preferences),
-    })
-    .catch(() => true);
-  let deployment: ReturnType<typeof accountDeployment> | null = null;
-  if (!deployed) {
-    try {
-      deployment = accountDeployment(input.account);
-    } catch {
-      deployment = null;
-    }
-  }
   return submitReviewedGaslessInvoke({
-    account: {
-      accountContractType: input.account.accountContractType,
-      address: input.account.address,
-      classHash: input.account.classHash,
-      deployed,
-    },
+    account: accountForGasless(input.account, state),
     calls: input.calls,
-    deployment,
+    deployment: deploymentFor(input.account, state.deployed),
     http: gaslessHttp,
     isAuthorized: input.isAuthorized,
-    nowSeconds: Math.floor(systemClock() / 1000),
+    nowSeconds: nowSeconds(),
+    readNowSeconds: nowSeconds,
     referenceFor: (token) =>
       reference({
         feeToken: token.address,

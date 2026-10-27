@@ -17,6 +17,8 @@ import { quoteGaslessOffers } from "@bramble/privacy/gasless-submit";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 
@@ -134,8 +136,9 @@ describe("accountSignsGaslessV2", () => {
     expect(
       accountSignsGaslessV2({
         accountContractType: "braavos",
-        classHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+        classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
         deployed: true,
+        liveClassHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
       }),
     ).toBe(true);
   });
@@ -158,8 +161,24 @@ describe("accountSignsGaslessV2", () => {
     expect(
       accountSignsGaslessV2({
         accountContractType: "braavos",
+        classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
+        deployed: true,
+      }),
+    ).toBe(false);
+    expect(
+      accountSignsGaslessV2({
+        accountContractType: "braavos",
+        classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
+        deployed: true,
+        liveClassHash: BRAAVOS_LEGACY_IMPLEMENTATION_CLASS_HASH,
+      }),
+    ).toBe(false);
+    expect(
+      accountSignsGaslessV2({
+        accountContractType: "braavos",
         classHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
         deployed: false,
+        liveClassHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
       }),
     ).toBe(false);
     expect(

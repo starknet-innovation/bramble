@@ -88,7 +88,7 @@ describe("post-broadcast outcome integrity", () => {
     const expectations: Readonly<Record<string, readonly string[]>> = {
       "apps/extension/src/background/accounts/transfer-ops.ts": [
         "await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(pending)));",
-        "await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(transactionHash)));",
+        "recordSubmittedActivity(deps.activity, activityFor(transactionHash, signedFee))",
       ],
       "apps/extension/src/background/privacy/strk20-wallet-execution.ts": [
         "await afterBroadcast(async () => {\n    // Entering the pool",
