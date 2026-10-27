@@ -11,6 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { account } from "@bramble/testkit/sidepanel";
 import type { AccountContractType } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import type { ReadyKeyCandidate } from "../../../../src/popup/responses/responses-onboarding";
 import { importKeyFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindImportKey } from "../../../../src/sidepanel/journeys/settings/import-key-ui";
 import type { SettingsUiDeps } from "../../../../src/sidepanel/journeys/settings/settings-ui";
@@ -20,6 +21,15 @@ beforeAll(registerDom);
 afterAll(unregisterDom);
 
 const PASTED_KEY = "0xfeedface";
+const ARGENT_031 = "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b";
+
+// A Ready-key discovery row: the key's 0.3.1 address, deployed.
+const DEPLOYED_031: ReadyKeyCandidate = {
+  accountId: "SN_MAIN:0xa031",
+  address: "0xa031",
+  classHash: ARGENT_031,
+  deployed: true,
+};
 
 const status: WalletStatus = {
   accountCount: 1,
@@ -35,6 +45,8 @@ const status: WalletStatus = {
 
 type Harness = {
   readonly container: HTMLElement;
+  readonly discoverCalls: ReadonlyArray<readonly [string, string, string | undefined]>;
+  readonly pickedCalls: ReadonlyArray<readonly string[] | undefined>;
   readonly importCalls: ReadonlyArray<
     readonly [string, string, AccountContractType, string | undefined]
   >;
@@ -54,6 +66,7 @@ const mount = (
     deploymentSalt?: string,
   ) => Promise<string>,
   repaint = true,
+  discover: () => Promise<readonly ReadyKeyCandidate[]> = () => Promise.resolve([DEPLOYED_031]),
 ): Harness => {
   document.body.replaceChildren();
   const container = document.createElement("div");
@@ -61,16 +74,28 @@ const mount = (
   document.body.append(container);
 
   const importCalls: Array<readonly [string, string, AccountContractType, string | undefined]> = [];
+  const discoverCalls: Array<readonly [string, string, string | undefined]> = [];
+  const pickedCalls: Array<readonly string[] | undefined> = [];
   let renders = 0;
 
   const wallet = {
+    discoverReadyKeyAccounts: (
+      networkId: string,
+      key: string,
+      deploymentSalt?: string,
+    ): Promise<readonly ReadyKeyCandidate[]> => {
+      discoverCalls.push([networkId, key, deploymentSalt]);
+      return discover();
+    },
     importAccount: (
       networkId: string,
       key: string,
       accountContractType: AccountContractType,
       deploymentSalt?: string,
+      classHashes?: readonly string[],
     ): Promise<string> => {
       importCalls.push([networkId, key, accountContractType, deploymentSalt]);
+      pickedCalls.push(classHashes);
       return importAccount(networkId, key, accountContractType, deploymentSalt);
     },
   };
@@ -97,7 +122,7 @@ const mount = (
   };
 
   paint();
-  return { container, importCalls, renderCount: () => renders };
+  return { container, discoverCalls, importCalls, pickedCalls, renderCount: () => renders };
 };
 
 const submitKey = (container: HTMLElement, key: string, deploymentSalt?: string): void => {
@@ -186,7 +211,7 @@ describe("Import private key form", () => {
     );
   });
 
-  test("forwards an explicit Argent deployment salt", async () => {
+  test("forwards an explicit Argent deployment salt to discovery and the import", async () => {
     const harness = mount(() => Promise.resolve(account.id));
     const contract = harness.container.querySelector<HTMLSelectElement>(
       'select[name="accountContractType"]',
@@ -195,10 +220,22 @@ describe("Import private key form", () => {
     contract.value = "argent";
     contract.dispatchEvent(new window.Event("change", { bubbles: true }));
 
-    submitKey(harness.container, PASTED_KEY, "0x777");
+    // A Ready key lists its accounts first, then imports the ticked ones.
+    const form = harness.container.querySelector<HTMLFormElement>("#import-key-form");
+    const salt = form?.querySelector<HTMLInputElement>('input[name="deploymentSalt"]');
+    const raw = form?.querySelector<HTMLTextAreaElement>('textarea[name="rawKey"]');
+    if (!form || !salt || !raw) throw new Error("import-key form missing");
+    raw.value = PASTED_KEY;
+    salt.value = "0x777";
+    form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+    await tick();
+    expect(harness.discoverCalls).toEqual([["SN_MAIN", PASTED_KEY, "0x777"]]);
+    expect(harness.importCalls).toEqual([]);
+    form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
     await tick();
 
     expect(harness.importCalls).toEqual([["SN_MAIN", PASTED_KEY, "argent", "0x777"]]);
+    expect(harness.pickedCalls).toEqual([[ARGENT_031]]);
   });
 
   test("clears and omits the Argent salt when OpenZeppelin is selected", async () => {

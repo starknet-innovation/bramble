@@ -8,6 +8,8 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
+[![CI](https://img.shields.io/github/actions/workflow/status/starknet-innovation/bramble/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/starknet-innovation/bramble/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/starknet-innovation/bramble?style=for-the-badge&label=Release)](https://github.com/starknet-innovation/bramble/releases/latest)
 
 </div>
 
