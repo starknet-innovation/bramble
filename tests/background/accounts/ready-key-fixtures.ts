@@ -17,7 +17,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { account, createWallet, vaultPassphrase } from "../../support/background-wallet-stub";
 
 // Clearly-fake test vector; not a real key.
-export const privateKey = "0xfeedface";
+const privateKey = "0xfeedface";
 
 const argentClass = (label: string): string => {
   const entry = deploymentClasses("argent").find((candidate) => candidate.label === label);
@@ -31,9 +31,7 @@ export const ARGENT_030 = argentClass("argent 0.3.0");
 export const addressFor = (classHash: string | undefined): string =>
   `0xa${(canonicalFelt(classHash ?? ARGENT_ACCOUNT_CLASS_HASH) ?? "").slice(2, 12)}`;
 
-export const previewImportedAccount = async (
-  input: PreviewImportedAccountInput,
-): Promise<AccountRef> => ({
+const previewImportedAccount = async (input: PreviewImportedAccountInput): Promise<AccountRef> => ({
   ...account,
   address: addressFor(input.classHash),
   id: `SN_MAIN:${addressFor(input.classHash)}`,

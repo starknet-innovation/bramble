@@ -60,9 +60,10 @@ export const mountReadyKeyPicker = (
     box.className = "select-check";
     box.type = "checkbox";
     box.disabled = duplicate;
-    // Deployed rows start ticked (owner decision, 2026-10-27, as #398): the
-    // evidence comes from the SNF-operated RPC by default, and a lying custom
-    // RPC can at worst pre-tick an empty address this key itself controls.
+    // Deployed rows start ticked (owner decision, 2026-10-27, as for issue
+    // 398): the evidence comes from the SNF-operated RPC by default, and a
+    // lying custom RPC can at worst pre-tick an empty address this key itself
+    // controls.
     box.checked = !duplicate && candidate.deployed;
     box.dataset["readyKeyClass"] = candidate.classHash;
     box.addEventListener("change", onChange);

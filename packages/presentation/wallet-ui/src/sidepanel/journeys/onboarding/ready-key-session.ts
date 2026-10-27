@@ -22,7 +22,7 @@ export type ReadyKeyInputs = {
  * superseded it (whoever did that owns the form now), or the inputs changed
  * without an edit event, such as the network, and the session was invalidated.
  */
-export type ReadyKeyDiscovery = "mounted" | "superseded" | "changed";
+type ReadyKeyDiscovery = "mounted" | "superseded" | "changed";
 
 /** The discovery/picker lifecycle a key-import form drives. */
 export type ReadyKeySession = {
@@ -50,7 +50,7 @@ export type ReadyKeySession = {
 };
 
 /** What an import sends: the picker's own snapshot and its ticks. */
-export type ReadyKeySelection = {
+type ReadyKeySelection = {
   readonly classHashes: readonly string[];
   readonly inputs: ReadyKeyInputs;
 };
