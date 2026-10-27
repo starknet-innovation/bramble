@@ -3,6 +3,7 @@
 import {
   accountClassEntry,
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  XVERSE_ARGENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
 import {
   type AccountContractType,
@@ -93,14 +94,15 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
   ...(candidate.byAddress ? { address: candidate.account.address } : {}),
 });
 
-// Only the class this wallet itself deploys can be brought on chain from here.
-// A funded Argent 0.3.x address is a real counterfactual account, but deployment
-// accepts only the pinned Argent release, so "ready to deploy" would promise a
-// transaction that is refused.
+// Only the classes this wallet deploys can be brought on chain from here: the
+// pinned Argent release and Xverse's build of it (issue 734). A funded Argent
+// 0.3.x address is a real counterfactual account, but deployment refuses its
+// class, so "ready to deploy" would promise a transaction that is refused.
 const deployableHere = (candidate: RecoveryAccountCandidate): boolean =>
   candidate.account.accountContractType === "openzeppelin" ||
   (candidate.account.accountContractType === "argent" &&
-    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH)) ||
+    (sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH) ||
+      sameFelt(candidate.account.classHash, XVERSE_ARGENT_CLASS_HASH))) ||
   (candidate.account.accountContractType === "braavos" &&
     sameFelt(candidate.account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH));
 

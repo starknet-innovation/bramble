@@ -39,6 +39,15 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   {
+    // Ready-key discovery carries the raw key and answers public rows only.
+    message: {
+      networkId: "SN_MAIN",
+      privateKey: SECRET_PRIVATE_KEY,
+      type: "wallet.discoverReadyKeyAccounts",
+    },
+    sender: extensionSender,
+  },
+  {
     message: {
       mnemonic: SECRET_MNEMONIC,
       networkId: "SN_MAIN",

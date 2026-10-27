@@ -248,6 +248,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     .querySelector('[id="add-existing-button"]')
     ?.addEventListener("click", () => showStep("method"));
   const keyImport = bindKeyImport({
+    app: deps.app,
     form,
     networkId: selectedNetworkId,
     onEnter: () => {

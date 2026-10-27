@@ -5,7 +5,8 @@
  * material into the UI.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { type AccountRef, isAccountRef } from "@bramble/wallet-model/accounts";
+import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-model/accounts";
+import { isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import {
   isRecoveryAccountCandidate,
   isRecoveryAccountIndex,
@@ -77,4 +78,69 @@ export const isRecoveredAccountsResponse = (value: unknown): value is RecoveredA
   hasOnlyKnownKeys(value, ["accounts", "ok"]) &&
   Array.isArray(value["accounts"]) &&
   value["accounts"].every(isAccountRef) &&
+  value["ok"] === true;
+
+/**
+ * One Argent release a raw Ready key controls an address at, as discovery
+ * reports it: public address, id and class, plus the evidence that the address
+ * is in use. A funded-only row lists what it holds, for display only. Never
+ * carries key material.
+ */
+export type ReadyKeyCandidate =
+  | {
+      readonly accountId: string;
+      readonly address: string;
+      readonly classHash: string;
+      readonly deployed: true;
+    }
+  | {
+      readonly accountId: string;
+      readonly address: string;
+      readonly classHash: string;
+      readonly deployed: false;
+      readonly holdings: readonly { readonly formatted: string; readonly symbol: string }[];
+    };
+
+const isShortText = (value: unknown, max: number): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= max;
+
+const isFelt = (value: unknown): value is string =>
+  typeof value === "string" && isNonZeroStarkFieldElement(value);
+
+const isHolding = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["formatted", "symbol"]) &&
+  isShortText(value["formatted"], 80) &&
+  isShortText(value["symbol"], 16);
+
+const isReadyKeyCandidate = (value: unknown): value is ReadyKeyCandidate => {
+  if (!isRecord(value)) return false;
+  const common =
+    isAccountId(value["accountId"]) && isFelt(value["address"]) && isFelt(value["classHash"]);
+  if (value["deployed"] === true) {
+    return common && hasOnlyKnownKeys(value, ["accountId", "address", "classHash", "deployed"]);
+  }
+  return (
+    common &&
+    value["deployed"] === false &&
+    hasOnlyKnownKeys(value, ["accountId", "address", "classHash", "deployed", "holdings"]) &&
+    Array.isArray(value["holdings"]) &&
+    value["holdings"].length > 0 &&
+    value["holdings"].every(isHolding)
+  );
+};
+
+/** Ready-key discovery: the releases the key controls an address in use at. */
+export type ReadyKeyDiscoveryResponse = {
+  readonly candidates: readonly ReadyKeyCandidate[];
+  readonly ok: true;
+};
+
+/** Validates Ready-key discovery before it reaches the picker; at least one row. */
+export const isReadyKeyDiscoveryResponse = (value: unknown): value is ReadyKeyDiscoveryResponse =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["candidates", "ok"]) &&
+  Array.isArray(value["candidates"]) &&
+  value["candidates"].length > 0 &&
+  value["candidates"].every(isReadyKeyCandidate) &&
   value["ok"] === true;

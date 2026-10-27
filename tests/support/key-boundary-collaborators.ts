@@ -135,6 +135,9 @@ export const walletStub = {
   async previewAccount() {
     return account;
   },
+  async previewImportedAccount() {
+    return account;
+  },
   async recoverAccounts() {
     return [account];
   },
