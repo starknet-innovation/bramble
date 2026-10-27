@@ -284,14 +284,16 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
 
   const afterClick = async (opening: Promise<void>, windowId: number): Promise<void> => {
     await ready;
-    if (!canLearn) return;
     // The toolbar only reaches this listener when no popup is set. With the
-    // popup in effect, that means applying it failed: apply it again.
+    // popup in effect, that means applying it failed: apply it again. This
+    // honors the user's choice, so it runs with or without storage.
     if (deps.surface() === "popup") {
       await succeeds(deps.configure());
       void browser?.action?.openPopup?.({ windowId }).catch(() => undefined);
       return;
     }
+    // Storage gates learning only.
+    if (!canLearn) return;
     if (learned.state !== "unknown" || learning) return;
     learning = true;
     await learnFromClick(opening, windowId).finally(() => {

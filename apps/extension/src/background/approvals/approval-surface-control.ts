@@ -85,7 +85,9 @@ export const createApprovalSurfaceControl = ({
   // One configuration at a time, each reading the state when it runs, so the
   // last one always applies the latest surface whatever order the browser
   // answers in. A refusal is retried once: a stale popup would otherwise hide
-  // the toolbar click that could repair it.
+  // the toolbar click that could repair it. Refused twice, a stale popup can
+  // stay until the next worker start, and `start` configures again then (the
+  // popup page messages the background, which wakes the worker).
   let configuring: Promise<void> = Promise.resolve();
   const configure = (): Promise<void> => {
     const run = async (): Promise<void> => {

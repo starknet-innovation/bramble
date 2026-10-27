@@ -92,6 +92,40 @@ describe("toolbar configuration", () => {
     expect(run.toolbar()).toEqual({ native: true, popup: "" });
   });
 
+  test("without storage, a click repairs the popup the user chose", async () => {
+    // Both configuration attempts at start are refused, so no popup is set.
+    let refusals = 2;
+    const run = surfaceHarness({
+      configureFails: () => refusals-- > 0,
+      preference: "popup",
+      store: null,
+    });
+    await run.load();
+    expect(run.toolbar().popup).toBe("");
+    await run.click();
+    expect(run.toolbar().popup).toBe("popup.html");
+    expect(run.calls.popups).toEqual([{ windowId: 7 }]);
+    expect(run.calls.queries).toBe(0);
+  });
+
+  test("a popup left by a double refusal is repaired by the next worker start", async () => {
+    const store = await unsupported();
+    let refuse = false;
+    const run = surfaceHarness({ configureFails: () => refuse, store });
+    await run.load();
+    // Every attempt now is refused, the retry included.
+    refuse = true;
+    run.userChooses("side-panel");
+    await settleAll();
+    // Stale for this worker: the popup still hides the learning click.
+    expect(run.toolbar().popup).toBe("popup.html");
+    const restarted = surfaceHarness({ persisted: run.toolbar(), store });
+    await restarted.load();
+    expect(restarted.toolbar()).toEqual({ native: false, popup: "" });
+    await restarted.click();
+    expect(restarted.calls.opens).toEqual([7]);
+  });
+
   test("a slow configuration can't land after a newer one", async () => {
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => {
