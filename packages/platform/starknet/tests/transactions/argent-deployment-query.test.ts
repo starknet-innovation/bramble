@@ -169,24 +169,39 @@ test("settles ordinary Argent deployment bounds with validated query signing", a
   expect(signedBounds).toMatchObject({ resourceBounds: expect.any(Object) });
 });
 
-test("deploys a funded Xverse account at Xverse's class, with the 0.4.0 constructor", async () => {
-  // Issue 734: Xverse's build is Argent 0.4.0 under another class hash, so the
-  // same constructor at that class reproduces the Xverse address exactly.
-  const constructorCalldata = argentAccountConstructorCalldata(PUBLIC_KEY);
-  const address = hash.calculateContractAddressFromHash(
-    PUBLIC_KEY,
-    XVERSE_ARGENT_CLASS_HASH,
-    [...constructorCalldata],
-    0,
-  );
-  const xverse = {
-    ...account,
-    address,
-    classHash: XVERSE_ARGENT_CLASS_HASH,
-    id: `SN_MAIN:${address}`,
-  };
-  const { provider } = makeQueryProvider();
-  let deployed: { readonly classHash?: string; readonly contractAddress?: string } | undefined;
+const deployedAs = (liveClassHash: string): RpcProvider =>
+  ({
+    callContract: async ({ entrypoint }: { readonly entrypoint: string }) =>
+      entrypoint === "get_owner" ? [PUBLIC_KEY] : ["0x0"],
+    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
+    getClassHashAt: async () => liveClassHash,
+  }) as unknown as RpcProvider;
+
+// Issue 734: Xverse's build is Argent 0.4.0 under another class hash, so the
+// same constructor at that class reproduces the Xverse address exactly.
+const xverseConstructor = argentAccountConstructorCalldata(PUBLIC_KEY);
+const xverseAddress = hash.calculateContractAddressFromHash(
+  PUBLIC_KEY,
+  XVERSE_ARGENT_CLASS_HASH,
+  [...xverseConstructor],
+  0,
+);
+const xverse: DerivedAccountRef = {
+  ...account,
+  address: xverseAddress,
+  classHash: XVERSE_ARGENT_CLASS_HASH,
+  id: `SN_MAIN:${xverseAddress}`,
+};
+
+test("deploys a funded Xverse account at Xverse's class, signed in Argent 0.4 format", async () => {
+  const { calls, provider } = makeQueryProvider();
+  let deployed:
+    | {
+        readonly classHash?: string;
+        readonly constructorCalldata?: readonly string[];
+        readonly contractAddress?: string;
+      }
+    | undefined;
   await expect(
     submitAccountDeployment(
       {
@@ -206,8 +221,26 @@ test("deploys a funded Xverse account at Xverse's class, with the 0.4.0 construc
         }) as unknown as Account,
     ),
   ).resolves.toEqual({ transactionHash: "0x123" });
+  // The production query signing encodes the Starknet signer the 0.4 way.
+  const request = requestFor(calls);
+  expect(request).toContain(`"signature":["1","0","${PUBLIC_KEY}","0x1","0x1"]`);
   expect(BigInt(deployed?.classHash ?? 0)).toBe(BigInt(XVERSE_ARGENT_CLASS_HASH));
-  expect(BigInt(deployed?.contractAddress ?? 0)).toBe(BigInt(address));
+  expect(BigInt(deployed?.contractAddress ?? 0)).toBe(BigInt(xverseAddress));
+  expect(deployed?.constructorCalldata?.map((value) => BigInt(value))).toEqual(
+    xverseConstructor.map((value) => BigInt(value)),
+  );
+});
+
+test("a deployed Xverse account passes the live-class checks; another class does not", async () => {
+  expect(await isCompatibleAccountDeployed(deployedAs(XVERSE_ARGENT_CLASS_HASH), xverse)).toBe(
+    true,
+  );
+  await expect(
+    requireLiveAuthorizableClass(deployedAs(XVERSE_ARGENT_CLASS_HASH), xverse),
+  ).resolves.toBeUndefined();
+  await expect(requireLiveAuthorizableClass(deployedAs(ARGENT_0_3_0), xverse)).rejects.toThrow(
+    "expects an authorization format this wallet does not produce",
+  );
 });
 
 test("still refuses to deploy any other Argent release", async () => {
@@ -249,13 +282,6 @@ test("Argent deployment estimate and submission reject a different live class", 
 
 // A provider reporting `liveClassHash` at the address, whose signer state
 // matches this wallet: owner is our key, plain Starknet signer, no guardian.
-const deployedAs = (liveClassHash: string): RpcProvider =>
-  ({
-    callContract: async ({ entrypoint }: { readonly entrypoint: string }) =>
-      entrypoint === "get_owner" ? [PUBLIC_KEY] : ["0x0"],
-    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
-    getClassHashAt: async () => liveClassHash,
-  }) as unknown as RpcProvider;
 
 test("accepts an account that upgraded to a class it can authorize for", async () => {
   // The address is fixed by the class the account was DEPLOYED with; the class
