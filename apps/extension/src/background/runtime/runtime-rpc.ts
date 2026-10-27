@@ -42,6 +42,7 @@ import {
 } from "@bramble/starknet/multisig-invoke";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import {
+  type AccountOwnerInput,
   type ArgentRecoveryInput,
   type BalanceInput,
   type BraavosRecoveryInput,
@@ -51,6 +52,7 @@ import {
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  getAccountOwner,
   getArgentRecoveryState,
   getArgentSigningRestriction,
   getBraavosRecoveryState,
@@ -178,6 +180,8 @@ export type RuntimeRpc = {
    * 542). Optional so narrow test doubles keep compiling; the scan treats an
    * absent member or a throw as "no verdict".
    */
+  /** Live class and owner key at an address, for importing it by address (issue 398). */
+  readonly getAccountOwner?: (input: AccountOwnerInput) => ReturnType<typeof getAccountOwner>;
   readonly getArgentSigningRestriction?: (
     input: SigningRestrictionInput,
   ) => ReturnType<typeof getArgentSigningRestriction>;
@@ -351,6 +355,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   estimateInvokeFee,
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
+  getAccountOwner,
   getArgentSigningRestriction,
   getArgentRecoveryState,
   getBraavosRecoveryState,

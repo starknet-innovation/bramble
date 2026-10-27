@@ -8,7 +8,7 @@ import {
   recoverySelectionKey,
   selectionDerivation,
 } from "@bramble/wallet-model/recovery";
-import { deriveAccount } from "../accounts/accounts";
+import { type AccountDerivationResult, deriveAccount } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { isVaultV12, type Vault } from "../schema/schema";
@@ -22,6 +22,36 @@ export type RecoverVaultAccountsInput = {
   readonly vaultPassphrase: string;
 };
 
+// A selection found by its address (issue 398) keeps that address: the
+// coordinate derives the signing key, and the background matched that key
+// against the account's live owner before this write. Every other selection
+// records the address its coordinate derives.
+const deriveSelection = async (
+  kms: KmsPort,
+  selection: RecoveryAccountSelection,
+  base: {
+    readonly mnemonic: string;
+    readonly networkId: StarknetNetworkId;
+    readonly seedId?: string;
+  },
+): Promise<AccountDerivationResult> => {
+  const { address, ...coordinate } = selection;
+  const derived = await deriveAccount(kms, {
+    ...coordinate,
+    // Stamp the family default (issue 505): the vault's own default stays
+    // this wallet's ladder so creation flows are untouched, but a restore
+    // means the vendor's scheme unless the selection spelled otherwise.
+    derivation: selectionDerivation(selection),
+    ...base,
+  });
+  return address === undefined
+    ? derived
+    : {
+        ...derived,
+        account: { ...derived.account, address, id: `${derived.account.networkId}:${address}` },
+      };
+};
+
 // Derives every selected coordinate with the seed handle stamped in, refusing
 // address collisions within the batch and with accounts already in the vault.
 const deriveSeedSelections = async (
@@ -33,12 +63,7 @@ const deriveSeedSelections = async (
   const derived = [];
   for (const selection of input.selections) {
     derived.push(
-      await deriveAccount(kms, {
-        ...selection,
-        // Stamp the family default (issue 505): the vault's own default stays
-        // this wallet's ladder so creation flows are untouched, but a restore
-        // means the vendor's scheme unless the selection spelled otherwise.
-        derivation: selectionDerivation(selection),
+      await deriveSelection(kms, selection, {
         mnemonic: input.mnemonic,
         networkId: input.networkId,
         ...(seedId === undefined ? {} : { seedId }),
@@ -91,9 +116,7 @@ export const recoverVaultAccounts = async (
   const derived = [];
   for (const selection of input.selections) {
     derived.push(
-      await deriveAccount(kms, {
-        ...selection,
-        derivation: selectionDerivation(selection),
+      await deriveSelection(kms, selection, {
         mnemonic: input.mnemonic,
         networkId: input.networkId,
       }),
