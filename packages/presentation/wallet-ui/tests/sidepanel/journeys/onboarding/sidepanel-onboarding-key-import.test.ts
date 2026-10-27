@@ -222,11 +222,12 @@ describe("onboarding private-key import", () => {
   test("a network change drops a listed picker and an answer still coming", async () => {
     const flow = mount();
     await readyKeyListed(flow);
-    expect(flow.app.querySelector("[data-ready-key-picker]")).not.toBeNull();
+    expect(flow.app.querySelectorAll("[data-ready-key-picker]").length).toBe(1);
     const announce = networkChangeAnnouncer(flow.app);
     announce("SN_MAIN");
     announce("SN_SEPOLIA");
-    expect(flow.app.querySelector("[data-ready-key-picker]")).toBeNull();
+    // Counted, not matched as a node: a failed match on a DOM node prints it.
+    expect(flow.app.querySelectorAll("[data-ready-key-picker]").length).toBe(0);
 
     let resolve: (rows: readonly (typeof DEPLOYED_031)[]) => void = () => undefined;
     const pending = mount({
@@ -246,7 +247,7 @@ describe("onboarding private-key import", () => {
     announcePending("SN_MAIN");
     resolve([DEPLOYED_031]);
     await tick();
-    expect(pending.app.querySelector("[data-ready-key-picker]")).toBeNull();
+    expect(pending.app.querySelectorAll("[data-ready-key-picker]").length).toBe(0);
     expect(pending.app.querySelector<HTMLButtonElement>("#import-key-continue")?.disabled).toBe(
       false,
     );
