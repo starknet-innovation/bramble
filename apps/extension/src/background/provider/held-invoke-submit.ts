@@ -82,9 +82,9 @@ export const submitHeldInvoke = async (input: {
   };
 }> => {
   const gaslessFee = input.approval.gaslessFee;
-  // A pool batch cannot pay its fee on the gasless lane. Refusing here, rather
-  // than submitting the STRK20 proof, keeps the choice the card showed.
-  if (input.poolProof && gaslessFee) {
+  // The gasless relay is given the calls only. A SNIP-36 proof, pool or not,
+  // would be dropped, so a choice on a proof-bearing invoke is refused.
+  if (gaslessFee && (input.poolProof !== undefined || input.approval.payload.proof !== undefined)) {
     throw new WalletError("Paying the network fee in another token is unavailable.");
   }
   if (input.poolProof) {

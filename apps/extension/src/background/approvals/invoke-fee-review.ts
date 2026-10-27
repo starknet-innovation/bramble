@@ -117,11 +117,15 @@ const gaslessOffersFor = async (
     readonly fee: InvokeFeeReview["fee"];
     readonly feeAffordability: InvokeFeeReview["feeAffordability"];
     readonly preferences: InvokeFeeReviewTarget["preferences"];
+    readonly proof?: InvokeFeeReviewTarget["proof"];
   },
 ): Promise<NonNullable<InvokeFeeReview["gaslessFees"]>> => {
   const prices = deps.prices;
+  // A proof is not representable on the gasless relay. Pool batches are the
+  // same refusal: they belong on the STRK20 lane.
   if (
     prices === undefined ||
+    input.proof !== undefined ||
     isPoolShapedBatch(input.calls, input.preferences, input.account.networkId)
   ) {
     return [];
@@ -135,6 +139,23 @@ const gaslessOffersFor = async (
     strkAffordability: input.feeAffordability,
     strkFee: input.fee,
   }).catch(() => []);
+};
+
+const reviewedGaslessFees = async (
+  deps: InvokeFeeReviewDeps,
+  review: InvokeFeeReviewTarget,
+  balance: string | null,
+  fee: FeeEstimate | null,
+): Promise<{ readonly gaslessFees: NonNullable<InvokeFeeReview["gaslessFees"]> } | undefined> => {
+  const gaslessFees = await gaslessOffersFor(deps, {
+    account: review.account,
+    calls: review.calls,
+    fee,
+    feeAffordability: gaslessStrkAffordability(review.calls, balance, fee),
+    preferences: review.preferences,
+    ...(review.proof ? { proof: review.proof } : {}),
+  });
+  return gaslessFees.length > 0 ? { gaslessFees } : undefined;
 };
 
 /**
@@ -183,20 +204,14 @@ export const estimateInvokeApprovalFee = async (
   const balance = fee === null ? null : await readStrkBalance(deps, account, preferences);
   const feeAffordability = resolveFeeAffordability({ balance, fee });
   // STRK the calls spend counts toward the shortfall the offer uses. The card's
-  // own verdict stays fee-only. Pool batches are omitted inside the helper.
-  const gaslessFees = await gaslessOffersFor(deps, {
-    account,
-    calls,
-    fee,
-    feeAffordability: gaslessStrkAffordability(calls, balance, fee),
-    preferences,
-  });
+  // own verdict stays fee-only. Proofs and pool batches are omitted inside the helper.
+  const gasless = await reviewedGaslessFees(deps, review, balance, fee);
   return {
     fee,
     feeAffordability,
     feeEstimateFailed,
     feeEstimatePending: false,
-    ...(gaslessFees.length > 0 ? { gaslessFees } : {}),
+    ...gasless,
     requiresDeployment: !deployed,
   };
 };

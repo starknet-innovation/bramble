@@ -12,7 +12,11 @@ import {
 } from "@bramble/privacy/config";
 import { accountSignsGaslessV2 } from "@bramble/privacy/gasless-account";
 import { convertStrkFeeToToken, gaslessFeeCeiling } from "@bramble/privacy/gasless-ceiling";
-import { gaslessBuildParams, gaslessDeploymentBody } from "@bramble/privacy/gasless-request";
+import {
+  gaslessBuildParams,
+  gaslessDeploymentBody,
+  readGaslessSupportedTokens,
+} from "@bramble/privacy/gasless-request";
 import { quoteGaslessOffers } from "@bramble/privacy/gasless-submit";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
@@ -249,5 +253,25 @@ describe("gaslessBuildParams", () => {
     });
     expect(params.transaction["type"]).toBe("deploy_and_invoke");
     expect(Object.keys(params)).toEqual(["parameters", "transaction", "userAddress"]);
+  });
+});
+
+describe("readGaslessSupportedTokens", () => {
+  const token = "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+
+  test("keeps one row when the same address is repeated", () => {
+    const row = { decimals: 6, token_address: token };
+    expect(
+      readGaslessSupportedTokens([row, row, { ...row, token_address: `0x0${token.slice(2)}` }]),
+    ).toEqual([{ address: token, decimals: 6 }]);
+  });
+
+  test("rejects one address quoted with two decimal counts", () => {
+    expect(
+      readGaslessSupportedTokens([
+        { decimals: 6, token_address: token },
+        { decimals: 18, token_address: token },
+      ]),
+    ).toBeNull();
   });
 });

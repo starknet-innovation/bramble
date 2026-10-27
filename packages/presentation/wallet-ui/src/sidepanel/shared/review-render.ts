@@ -64,7 +64,10 @@ const shortfallHtml = (state: ReviewFeeState): string =>
     : "";
 
 const gaslessChoiceHtml = (state: ReviewFeeState, attributes: UiAttributes): string => {
-  if (state.feeAffordability !== "insufficient" || state.gaslessFees === undefined) {
+  // Offers are attached only after the spend-aware shortfall check. The
+  // fee-only verdict can still be "ok" when the calls themselves spend the
+  // STRK a fee-only comparison ignores, so a present list is rendered as-is.
+  if (state.gaslessFees === undefined || state.gaslessFees.length === 0) {
     return "";
   }
   return state.gaslessFees

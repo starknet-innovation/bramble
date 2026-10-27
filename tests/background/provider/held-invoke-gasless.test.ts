@@ -31,6 +31,21 @@ describe("submitHeldInvoke gasless choice", () => {
     expect(prepared).toBe(0);
   });
 
+  test("refuses a gasless choice on a non-pool proof and does not submit it", async () => {
+    let prepared = 0;
+    const input = {
+      approval: { gaslessFee: offer, payload: { calls: [], proof: { mode: "execute" } } },
+      strk20: {
+        submitPrepared: async () => {
+          prepared += 1;
+          return { transactionHash: "0x2" };
+        },
+      },
+    } as unknown as Parameters<typeof submitHeldInvoke>[0];
+    await expect(submitHeldInvoke(input)).rejects.toThrow(WalletError);
+    expect(prepared).toBe(0);
+  });
+
   test("still submits a pool batch that did not choose a gasless fee", async () => {
     let prepared = 0;
     const input = {

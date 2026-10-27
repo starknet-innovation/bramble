@@ -99,9 +99,32 @@ export type GaslessListedToken = {
   readonly decimals: number;
 };
 
+const decimalCount = (value: unknown): number | null =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 36 ? value : null;
+
+const listedToken = (item: unknown): GaslessListedToken | null => {
+  if (!isRecord(item) || !hasOnlyKnownKeys(item, TOKEN_KEYS)) {
+    return null;
+  }
+  const price = item["price_in_strk"];
+  if (price !== undefined && (typeof price !== "string" || !isStarkFieldElement(price))) {
+    return null;
+  }
+  const canonical =
+    typeof item["token_address"] === "string" ? canonicalFelt(item["token_address"]) : null;
+  const decimals = decimalCount(item["decimals"]);
+  if (canonical === null || !isNonZeroStarkFieldElement(canonical) || decimals === null) {
+    return null;
+  }
+  return { address: canonical, decimals };
+};
+
 /**
  * Parses `paymaster_getSupportedTokens`. Null when the result is not a list
  * of address/decimals rows. `price_in_strk` may be present and is not read.
+ * One canonical address is kept once, the first row: a repeated token must
+ * not be quoted again. Two rows for one address with different decimals are
+ * a malformed list.
  */
 export const readGaslessSupportedTokens = (
   value: unknown,
@@ -111,25 +134,17 @@ export const readGaslessSupportedTokens = (
   }
   const tokens: GaslessListedToken[] = [];
   for (const item of value) {
-    if (!isRecord(item) || !hasOnlyKnownKeys(item, TOKEN_KEYS)) {
+    const token = listedToken(item);
+    if (token === null) {
       return null;
     }
-    const address = item["token_address"];
-    const decimals = item["decimals"];
-    const canonical = typeof address === "string" ? canonicalFelt(address) : null;
-    if (
-      canonical === null ||
-      !isNonZeroStarkFieldElement(canonical) ||
-      typeof decimals !== "number" ||
-      !Number.isInteger(decimals) ||
-      decimals < 0 ||
-      decimals > 36 ||
-      (item["price_in_strk"] !== undefined &&
-        (typeof item["price_in_strk"] !== "string" || !isStarkFieldElement(item["price_in_strk"])))
-    ) {
+    const prior = tokens.find((known) => known.address === token.address);
+    if (prior && prior.decimals !== token.decimals) {
       return null;
     }
-    tokens.push({ address: canonical, decimals });
+    if (!prior) {
+      tokens.push(token);
+    }
   }
   return tokens;
 };

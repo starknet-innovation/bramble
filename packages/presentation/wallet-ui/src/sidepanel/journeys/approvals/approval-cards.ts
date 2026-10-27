@@ -173,7 +173,18 @@ const connectCard = (
 // retry button targets this approval by data attribute. A failed or absent fee
 // estimate disables Approve exactly as Send does: without a displayed amount
 // there is no fee ceiling for the user's consent to bind.
-const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
+const gaslessChoiceAllowed = (approval: PendingApproval, status: WalletStatus): boolean =>
+  approval.gaslessFees !== undefined &&
+  !status.locked &&
+  !paysLookalike(approval) &&
+  approval.deployFirst !== true &&
+  approval.feeEstimatePending !== true &&
+  approval.feeEstimateFailed !== true &&
+  approval.fee != null;
+
+const invokeCard = (approval: PendingApproval, status: WalletStatus): string => {
+  const offerGasless = gaslessChoiceAllowed(approval, status);
+  return `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Transaction request")}
@@ -191,16 +202,20 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
           feeAffordability: approval.feeAffordability ?? "unknown",
           feeEstimateFailed: approval.feeEstimateFailed === true,
           feeEstimatePending: approval.feeEstimatePending === true,
-          ...(approval.gaslessFees ? { gaslessFees: approval.gaslessFees } : {}),
+          ...(offerGasless && approval.gaslessFees ? { gaslessFees: approval.gaslessFees } : {}),
           requiresDeployment: approval.requiresDeployment === true,
         },
         { "data-approval-retry-fee": approval.id },
         {
-          gaslessAttributes: {
-            "data-approval-action": "approve",
-            "data-approval-id": approval.id,
-            "data-approval-kind": approval.kind,
-          },
+          ...(offerGasless
+            ? {
+                gaslessAttributes: {
+                  "data-approval-action": "approve",
+                  "data-approval-id": approval.id,
+                  "data-approval-kind": approval.kind,
+                },
+              }
+            : {}),
         },
       ) ||
       reviewCostNote(
@@ -219,6 +234,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       approval.fee ?? undefined,
     )}
   </li>`;
+};
 
 // summaries[0] names the message; any further entries are the decoded calls an
 // OutsideExecution authorizes, listed with its risk flags (audit 144).
