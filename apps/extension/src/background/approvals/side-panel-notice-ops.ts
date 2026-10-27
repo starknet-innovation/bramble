@@ -26,7 +26,7 @@ export const handleSidePanelNoticeOps = async (
     return { error: "Invalid side panel notice request" };
   }
   if (messageType === "wallet.sidePanelNotice") {
-    return { notice: learner?.notice() ?? false, ok: true };
+    return { notice: (await learner?.notice()) ?? false, ok: true };
   }
   await learner?.dismissNotice();
   return { ok: true };

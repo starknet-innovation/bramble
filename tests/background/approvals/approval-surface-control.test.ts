@@ -112,14 +112,13 @@ describe("approval surface control: self-healing", () => {
     for (const userChoice of [false, true]) {
       const { browser, clicks } = chromium(false);
       const saved: unknown[] = [];
-      let control: ReturnType<typeof createApprovalSurfaceControl> | undefined;
-      control = createApprovalSurfaceControl({
+      // The learner's own saves go under the adapter, so they never come back
+      // through `update`; only the user's Settings choice does.
+      const control = createApprovalSurfaceControl({
         browser,
         extensionId: "bramble",
-        // The preferences store reports every save back, as the adapter does.
         saveSurface: async (surface) => {
           saved.push(surface);
-          control?.update(surface);
         },
         store: () => createMemoryStore(),
         wait: async () => undefined,
@@ -152,7 +151,7 @@ describe("side panel notice commands", () => {
           state.dismissed += 1;
           state.due = false;
         },
-        notice: () => state.due,
+        notice: async () => state.due,
       },
       state,
     };

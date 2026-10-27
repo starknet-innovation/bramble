@@ -28,26 +28,26 @@ export type ApprovalSurfaceControlBrowser = ApprovalSurfaceBrowser &
 
 /** The request-surface state the entrypoint and router share. */
 export type ApprovalSurfaceControl = {
+  /** Applies the stored choice at worker start. Browser failures are swallowed. */
+  readonly apply: (preference: ApprovalSurfacePreference) => void;
   /** Binds the toolbar listeners. Call once, at the top level of the worker. */
   readonly bind: () => void;
   readonly learner: SidePanelLearner;
-  /** Loads what was learned. Call once trusted storage is ready. */
+  /** Loads what was learned. Call once the stored choice has been applied. */
   readonly load: () => Promise<void>;
   readonly preference: () => ApprovalSurfacePreference;
-  /** Applies the stored choice at worker start. Browser failures are swallowed. */
-  readonly apply: (preference: ApprovalSurfacePreference) => void;
   /**
-   * Applies a choice the user just saved (Settings, a restored backup). It
-   * also tells the learner, so an automatic switch is never undone after it.
+   * Applies a choice the user just saved (Settings, a restored backup) and
+   * tells the learner, so an automatic switch is never undone after it.
+   * Only the preferences store's user-facing writes reach this.
    */
   readonly update: (preference: ApprovalSurfacePreference) => void;
 };
 
 /**
- * Creates the control. `saveSurface` stores a request surface through the
- * preferences store. The learner calls it only to switch to the popup after a
- * click proved the side panel never appears, and to switch back if a real
- * panel then renders; those saves are not the user's choice.
+ * Creates the control. `saveSurface` writes a request surface straight to the
+ * preferences store without reporting it back through `update`: the learner
+ * uses it only for its own automatic changes, which are never the user's.
  */
 export const createApprovalSurfaceControl = ({
   browser,
@@ -67,46 +67,38 @@ export const createApprovalSurfaceControl = ({
   const configure = (): Promise<void> =>
     configureApprovalSurface(browser, preference, learner?.nativeClick() ?? true);
   const reconfigure = (): void => void configure().catch(() => undefined);
-  // True while the learner's own save is in flight: the preferences store
-  // reports it back through `update`, and it must not read as the user's choice.
-  let saving = false;
-  const save = async (next: ApprovalSurfacePreference): Promise<void> => {
-    saving = true;
-    try {
-      await saveSurface(next);
-    } finally {
-      saving = false;
-    }
-    preference = next;
-    await configure();
-  };
   const control = (resolved: SidePanelLearner): ApprovalSurfaceControl => ({
-    bind() {
-      bindToolbarActivation(browser, () => preference);
-      resolved.bind();
-    },
     apply(next) {
       preference = next;
       reconfigure();
+    },
+    bind() {
+      bindToolbarActivation(browser, () => preference);
+      resolved.bind();
     },
     learner: resolved,
     load: () => resolved.load(),
     preference: () => preference,
     update(next) {
       preference = next;
-      if (!saving) resolved.userChose();
+      resolved.userChose(next);
       reconfigure();
     },
   });
   learner = createSidePanelLearner({
+    applySurface(next) {
+      preference = next;
+      return configure();
+    },
     browser,
     extensionId,
     preference: () => preference,
     reconfigure,
+    async saveSurface(next) {
+      await saveSurface(next);
+    },
     sidePanelUrl: browser?.runtime?.getURL?.("sidepanel.html") ?? "",
     store,
-    restoreSidePanel: () => save("side-panel"),
-    switchToPopup: () => save("popup"),
     wait,
   });
   return control(learner);

@@ -78,12 +78,12 @@ const tabs = extensionApi?.tabs;
 declare const __MC_BUILD_BRANCH__: string | undefined;
 let productAnalyticsEnabled = false;
 // The request surface, and the side-panel learning that moves a browser that
-// never draws side panels (Arc, #690) to the popup. `preferenceStore` is read
-// only when a toolbar click has proved that, long after it exists.
+// never draws side panels (Arc, #690) to the popup. Its own saves go to the
+// store underneath the adapter, so they never read as the user's choice.
 const approvalSurface = createApprovalSurfaceControl({
   browser: extensionApi,
   extensionId: runtime?.id ?? "",
-  saveSurface: (approvalSurface) => preferenceStore.setDisplay({ approvalSurface }),
+  saveSurface: async (approvalSurface) => (await preferences)?.setDisplay({ approvalSurface }),
   store: createBrowserLocalStore,
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 });
