@@ -5,7 +5,10 @@
  * `../index` so the entrypoint stays a wiring list.
  */
 
-import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
+import type {
+  ApprovalSurfacePreference,
+  WalletPreferencesStore,
+} from "@bramble/settings/preferences";
 import type { KeyValueStore } from "@bramble/store/kv";
 import {
   type ApprovalSurfaceBrowser,
@@ -45,20 +48,21 @@ export type ApprovalSurfaceControl = {
 };
 
 /**
- * Creates the control. `saveSurface` writes a request surface straight to the
- * preferences store without reporting it back through `update`: the learner
- * uses it only for its own automatic changes, which are never the user's.
+ * Creates the control. `preferences` is the preferences store underneath the
+ * background's adapter: the learner writes its own automatic changes there, so
+ * they never come back through `update` as the user's. Null means storage is
+ * unavailable, and then the learner changes nothing.
  */
 export const createApprovalSurfaceControl = ({
   browser,
   extensionId,
-  saveSurface,
+  preferences,
   store,
   wait,
 }: {
   readonly browser: ApprovalSurfaceControlBrowser | undefined;
   readonly extensionId: string;
-  readonly saveSurface: (preference: ApprovalSurfacePreference) => Promise<unknown>;
+  readonly preferences: () => Promise<Pick<WalletPreferencesStore, "setDisplay"> | null>;
   readonly store: () => KeyValueStore | null;
   readonly wait: (ms: number) => Promise<void>;
 }): ApprovalSurfaceControl => {
@@ -95,7 +99,9 @@ export const createApprovalSurfaceControl = ({
     preference: () => preference,
     reconfigure,
     async saveSurface(next) {
-      await saveSurface(next);
+      const saved = await preferences();
+      if (!saved) throw new Error("preferences unavailable");
+      await saved.setDisplay({ approvalSurface: next });
     },
     sidePanelUrl: browser?.runtime?.getURL?.("sidepanel.html") ?? "",
     store,

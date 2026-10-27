@@ -42,6 +42,14 @@ const chromium = (panelRenders: boolean) => {
   return { browser, clicks, toolbar };
 };
 
+// A preferences store that records each request surface written to it.
+const savingTo = (saved: unknown[]) => async () => ({
+  setDisplay: async (input: { readonly approvalSurface?: unknown }) => {
+    saved.push(input.approvalSurface);
+    return {} as never;
+  },
+});
+
 describe("approval surface control", () => {
   test("hands the panel click to Chromium only once the side panel is known", async () => {
     const { browser, clicks, toolbar } = chromium(true);
@@ -49,7 +57,7 @@ describe("approval surface control", () => {
     const control = createApprovalSurfaceControl({
       browser,
       extensionId: "bramble",
-      saveSurface: async (surface) => saved.push(surface),
+      preferences: savingTo(saved),
       store: () => createMemoryStore(),
       wait: async () => undefined,
     });
@@ -71,7 +79,7 @@ describe("approval surface control", () => {
     const control = createApprovalSurfaceControl({
       browser,
       extensionId: "bramble",
-      saveSurface: async (surface) => saved.push(surface),
+      preferences: savingTo(saved),
       store: () => createMemoryStore(),
       wait: async () => undefined,
     });
@@ -84,6 +92,25 @@ describe("approval surface control", () => {
     expect(control.preference()).toBe("popup");
     expect(toolbar.popup.at(-1)).toBe("popup.html");
     expect(toolbar.panel.at(-1)).toBe(false);
+  });
+
+  test("with the preferences store unavailable nothing switches", async () => {
+    const { browser, clicks, toolbar } = chromium(false);
+    const control = createApprovalSurfaceControl({
+      browser,
+      extensionId: "bramble",
+      preferences: async () => null,
+      store: () => createMemoryStore(),
+      wait: async () => undefined,
+    });
+    control.bind();
+    control.apply("side-panel");
+    await control.load();
+    for (const click of clicks) click({ windowId: 1 });
+    await flush();
+    expect(control.preference()).toBe("side-panel");
+    expect(control.learner.state()).toBe("unknown");
+    expect(toolbar.popup.at(-1)).toBe("");
   });
 
   test("configureApprovalSurface keeps the panel click off while learning", async () => {
@@ -117,9 +144,7 @@ describe("approval surface control: self-healing", () => {
       const control = createApprovalSurfaceControl({
         browser,
         extensionId: "bramble",
-        saveSurface: async (surface) => {
-          saved.push(surface);
-        },
+        preferences: savingTo(saved),
         store: () => createMemoryStore(),
         wait: async () => undefined,
       });

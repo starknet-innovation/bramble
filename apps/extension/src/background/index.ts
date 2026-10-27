@@ -83,7 +83,7 @@ let productAnalyticsEnabled = false;
 const approvalSurface = createApprovalSurfaceControl({
   browser: extensionApi,
   extensionId: runtime?.id ?? "",
-  saveSurface: async (approvalSurface) => (await preferences)?.setDisplay({ approvalSurface }),
+  preferences: () => preferences,
   store: createBrowserLocalStore,
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 });
