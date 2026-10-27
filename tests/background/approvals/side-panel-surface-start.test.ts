@@ -188,6 +188,7 @@ describe("opening the popup for the #707 rescue", () => {
 
   test("does nothing where the browser has no popup API", async () => {
     const control = createApprovalSurfaceControl({
+      approvals: () => [],
       browser: undefined,
       extensionId: "bramble",
       now: () => 0,
@@ -195,7 +196,31 @@ describe("opening the popup for the #707 rescue", () => {
       wait: async () => undefined,
     });
     await expect(control.showPopup(7)).resolves.toBeUndefined();
-    await expect(control.rescue(7)).resolves.toBeUndefined();
+    await expect(
+      control.rescue({ origin: "https://dapp.example", windowId: 7 })(),
+    ).resolves.toBeUndefined();
+  });
+
+  test("asks its admission when its turn comes, and opens nothing when refused", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    const before = run.calls.popupSet.length;
+    await run.control.showPopup(7, () => false);
+    expect(run.calls.popupSet.length).toBe(before);
+    expect(run.calls.popups).toEqual([]);
+  });
+
+  test("a restore refused twice is reported, not hidden", async () => {
+    let answers: boolean[] = [];
+    const run = surfaceHarness({ configureFails: () => answers.shift() ?? false });
+    await run.load();
+    answers = [false, true, true];
+    await expect(run.control.showPopup(7)).rejects.toThrow();
+    // The accepted limit: the borrowed popup stays until the next configuration.
+    expect(run.toolbar().popup).toBe("popup.html");
+    run.userChooses("side-panel");
+    await settleAll();
+    expect(run.toolbar().popup).toBe("");
   });
 
   test("a refused restore is retried once", async () => {

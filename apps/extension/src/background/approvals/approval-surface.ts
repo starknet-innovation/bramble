@@ -6,7 +6,7 @@ import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
 import { isSenderOrigin, type RuntimeSender, senderOrigins } from "../routing/senders";
 import { readApprovalSurfaceRequest } from "./approval-surface-request";
-import type { SurfaceRescue } from "./approval-surface-rescue";
+import type { RescueAttempt, SurfaceRescue } from "./approval-surface-rescue";
 
 /**
  * Minimal browser UI boundaries used to configure and open approval UI.
@@ -188,9 +188,9 @@ const raiseSurface = (
   preference: ApprovalSurfacePreference,
   tabId: number,
   windowId: number | undefined,
-  rescue: SurfaceRescue | undefined,
+  rescue: RescueAttempt | undefined,
 ): void => {
-  const panel = (): Promise<void> => openPanel(browser, tabId).catch(() => rescue?.(windowId));
+  const panel = (): Promise<void> => openPanel(browser, tabId).catch(() => rescue?.());
   if (preference === "popup" && browser.action?.openPopup) {
     const options = typeof windowId === "number" ? { windowId } : undefined;
     void browser.action
@@ -271,6 +271,9 @@ export const createApprovalSurfaceOpener = ({
     ) {
       return;
     }
-    raiseSurface(browser, preference(), request.tabId, sender?.tab?.windowId, rescue);
+    const windowId = sender?.tab?.windowId;
+    // Prepared now, before the request can queue its approval.
+    const attempt = rescue?.({ origin: request.origin, windowId });
+    raiseSurface(browser, preference(), request.tabId, windowId, attempt);
   };
 };

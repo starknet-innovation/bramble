@@ -129,6 +129,7 @@ export const surfaceHarness = (options: SurfaceHarnessOptions = {}) => {
   const panelShows = (): void => control.learner.observeVisible({ id: "bramble", url: PANEL_URL });
   let windowWaits = 0;
   const control = createApprovalSurfaceControl({
+    approvals: () => [],
     browser,
     extensionId: "bramble",
     now: () => 0,

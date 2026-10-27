@@ -80,6 +80,7 @@ let productAnalyticsEnabled = false;
 // The request surface: the user's choice, and the side-panel learning that
 // serves it as the popup on a browser that never draws side panels (Arc, #690).
 const approvalSurface = createApprovalSurfaceControl({
+  approvals: () => approvals.list(),
   browser: extensionApi,
   extensionId: runtime?.id ?? "",
   now: systemClock,
@@ -478,7 +479,6 @@ const openApprovalSurface = createApprovalSurfaceOpener({
   guard: originGuard,
   now: systemClock,
   preference: approvalSurface.effective,
-  // A side panel open Chrome refused for an expired gesture (#707).
   rescue: approvalSurface.rescue,
 });
 // Toolbar listeners (Firefox's sidebar, Chromium's side-panel learning), bound
