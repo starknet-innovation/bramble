@@ -25,6 +25,7 @@ import {
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "../approvals/approvals";
+import type { SidePanelNotice } from "../approvals/side-panel-notice-ops";
 import {
   createSignatureWaiters,
   releaseWaitersOnApprovalDrop,
@@ -102,6 +103,7 @@ export type RouterContext = {
   readonly swapPreparations: SwapPreparationStore;
   readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
+  readonly sidePanelLearning?: SidePanelNotice;
   readonly updates: UpdateReady;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
@@ -148,6 +150,8 @@ export type MessageHandlerOptions = {
    */
   readonly strk20Jobs?: Strk20JobRegistry;
   readonly strk20Preparations?: Strk20WalletPreparationStore;
+  /** The one-time "opens as a popup" notice (#690); absent, it is never due. */
+  readonly sidePanelLearning?: SidePanelNotice;
   readonly updates?: UpdateReady;
   /**
    * Held-response registry the router parks deferred sign requests in. The
@@ -231,6 +235,10 @@ const waitersFor = (provided: SignatureWaiters | undefined): SignatureWaiters =>
 // Inert when no browser runtime is wired (tests, tooling): never restarts.
 const updatesFor = (updates: UpdateReady | undefined): UpdateReady => updates ?? inertUpdateReady;
 
+const sidePanelLearningFor = (
+  learner: SidePanelNotice | undefined,
+): Pick<RouterContext, "sidePanelLearning"> => (learner ? { sidePanelLearning: learner } : {});
+
 // An unwired relay log keeps records for this worker's lifetime only.
 const relaySignaturesFor = (log: RelaySignatureLog | undefined): RelaySignatureLog =>
   log ?? memoryRelaySignatureLog();
@@ -284,6 +292,7 @@ export const routerContext = (
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),
     strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
+    ...sidePanelLearningFor(options.sidePanelLearning),
     updates: updatesFor(options.updates),
     waiters,
     wallet,
