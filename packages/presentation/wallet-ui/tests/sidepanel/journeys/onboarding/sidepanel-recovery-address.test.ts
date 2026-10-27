@@ -178,6 +178,8 @@ describe("finding an account by its address in the recovery picker", () => {
     expect(resultLine(app)).toBe("That link is for Starknet Sepolia, not Starknet Mainnet.");
     await find(app, "not an address");
     expect(resultLine(app)).toBe("That doesn't look like a Starknet address.");
+    await find(app, `http://starkscan.co/contract/${PASTED}`);
+    expect(resultLine(app)).toBe("Use the https:// link from the explorer.");
     expect(lookups).toEqual([]);
   });
 

@@ -27,10 +27,14 @@ const EXPLORER_NETWORKS: Readonly<Record<string, StarknetNetworkId>> = {
 // on Starkscan.
 const EXPLORER_PATH = /^\/(?:contract|account)\/(0x[0-9a-fA-F]{1,64})\/?$/;
 
-/** A pasted address read as a canonical felt, or why it cannot be. */
+/**
+ * A pasted address read as a canonical felt, or why it cannot be: not an
+ * address, or an explorer link copied over plain `http://`, which is refused
+ * but named, so the reader knows which link to copy instead.
+ */
 export type PastedAddress =
   | { readonly address: string; readonly network?: StarknetNetworkId }
-  | { readonly reason: "invalid" };
+  | { readonly reason: "insecure-link" | "invalid" };
 
 const asAddress = (value: string): string | null => {
   const felt = normalizeFeltInput(value);
@@ -48,9 +52,9 @@ const fromExplorerLink = (text: string): PastedAddress => {
   const network = EXPLORER_NETWORKS[url.hostname.toLowerCase()];
   const match = EXPLORER_PATH.exec(url.pathname);
   const address = match?.[1] === undefined ? null : asAddress(match[1]);
-  return url.protocol === "https:" && network !== undefined && address !== null
-    ? { address, network }
-    : { reason: "invalid" };
+  if (network === undefined || address === null) return { reason: "invalid" };
+  if (url.protocol === "http:") return { reason: "insecure-link" };
+  return url.protocol === "https:" ? { address, network } : { reason: "invalid" };
 };
 
 /**

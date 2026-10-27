@@ -69,7 +69,11 @@ export const bindRecoveryAddressFinder = (
     const networkId = deps.networkId();
     const pasted = readPastedAddress(input?.value ?? "");
     if ("reason" in pasted) {
-      say("That doesn't look like a Starknet address.");
+      say(
+        pasted.reason === "insecure-link"
+          ? "Use the https:// link from the explorer."
+          : "That doesn't look like a Starknet address.",
+      );
       return;
     }
     if (pasted.network !== undefined && pasted.network !== networkId) {

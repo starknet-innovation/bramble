@@ -33,7 +33,6 @@ describe("readPastedAddress", () => {
       "7e57ad0e55",
       "0xnothex",
       `0x${"f".repeat(70)}`,
-      `http://starkscan.co/contract/${ADDRESS}`,
       `https://starkscan.example/contract/${ADDRESS}`,
       `https://starkscan.co/tx/${ADDRESS}`,
       `https://starkscan.co/contract/${ADDRESS}/events`,
@@ -41,6 +40,21 @@ describe("readPastedAddress", () => {
     ]) {
       expect(readPastedAddress(text)).toEqual({ reason: "invalid" });
     }
+  });
+
+  test("an http:// explorer link is named, not read, and only for a known explorer", () => {
+    expect(readPastedAddress(`http://starkscan.co/contract/${ADDRESS}`)).toEqual({
+      reason: "insecure-link",
+    });
+    expect(readPastedAddress(`http://sepolia.voyager.online/contract/${ADDRESS}`)).toEqual({
+      reason: "insecure-link",
+    });
+    expect(readPastedAddress(`http://starkscan.example/contract/${ADDRESS}`)).toEqual({
+      reason: "invalid",
+    });
+    expect(readPastedAddress(`ftp://starkscan.co/contract/${ADDRESS}`)).toEqual({
+      reason: "invalid",
+    });
   });
 });
 
