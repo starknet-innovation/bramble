@@ -33,23 +33,33 @@ export type ApprovalSurfaceControlBrowser = ApprovalSurfaceBrowser &
 
 /** The request-surface state the entrypoint and router share. */
 export type ApprovalSurfaceControl = {
-  /** Applies the stored choice at worker start. Browser failures are swallowed. */
-  readonly apply: (preference: ApprovalSurfacePreference) => void;
   /** Binds the toolbar listeners. Call once, at the top level of the worker. */
   readonly bind: () => void;
   /** The surface in effect: the user's choice, after what was learned. */
   readonly effective: () => ApprovalSurfacePreference;
   readonly learner: SidePanelLearner;
-  /** Loads what was learned. Call once the stored choice has been applied. */
-  readonly load: () => Promise<void>;
   /** The user's own choice, as last saved. */
   readonly preference: () => ApprovalSurfacePreference;
+  /**
+   * Starts the surface once the stored choice is read: takes the choice (the
+   * side panel when the read fails), then loads what was learned and
+   * configures the toolbar. Runs once; later calls return the first run.
+   * Until then the toolbar is left as the browser kept it, so a click on a
+   * worker that just woke is never served by a half-loaded state.
+   */
+  readonly start: (stored: Promise<ApprovalSurfacePreference | undefined>) => Promise<void>;
   /**
    * Applies a choice the user just saved. Choosing the side panel again on a
    * browser learned not to draw it asks the learner to try once more.
    */
   readonly update: (preference: ApprovalSurfacePreference) => void;
 };
+
+const succeeds = (work: Promise<unknown>): Promise<boolean> =>
+  work.then(
+    () => true,
+    () => false,
+  );
 
 /** Creates the control. It never writes the user's choice. */
 export const createApprovalSurfaceControl = ({
@@ -64,31 +74,29 @@ export const createApprovalSurfaceControl = ({
   readonly wait: (ms: number) => Promise<void>;
 }): ApprovalSurfaceControl => {
   let preference: ApprovalSurfacePreference = "side-panel";
+  // A choice saved before the stored one was read is newer: keep it.
+  let chosen = false;
+  let started: Promise<void> | null = null;
   let learner: SidePanelLearner | null = null;
   const effective = (): ApprovalSurfacePreference =>
     preference === "popup" || learner?.state() === "unsupported" ? "popup" : "side-panel";
-  const configure = (): Promise<void> =>
+  const applyNow = (): Promise<void> =>
     configureApprovalSurface(browser, effective(), learner?.nativeClick() ?? true);
-  const reconfigure = (): void => void configure().catch(() => undefined);
-  const control = (resolved: SidePanelLearner): ApprovalSurfaceControl => ({
-    apply(next) {
-      preference = next;
-      reconfigure();
-    },
-    bind() {
-      bindToolbarActivation(browser, effective);
-      resolved.bind();
-    },
-    effective,
-    learner: resolved,
-    load: () => resolved.load(),
-    preference: () => preference,
-    update(next) {
-      preference = next;
-      if (next === "side-panel") resolved.retrySidePanel();
-      reconfigure();
-    },
-  });
+  // One configuration at a time, each reading the state when it runs, so the
+  // last one always applies the latest surface whatever order the browser
+  // answers in. A refusal is retried once: a stale popup would otherwise hide
+  // the toolbar click that could repair it.
+  let configuring: Promise<void> = Promise.resolve();
+  const configure = (): Promise<void> => {
+    const run = async (): Promise<void> => {
+      if (!(await succeeds(applyNow()))) await applyNow();
+    };
+    configuring = configuring.then(run, run);
+    return configuring;
+  };
+  const reconfigure = (): void => {
+    if (learner?.loaded()) void configure().catch(() => undefined);
+  };
   learner = createSidePanelLearner({
     browser,
     configure,
@@ -98,5 +106,29 @@ export const createApprovalSurfaceControl = ({
     surface: effective,
     wait,
   });
-  return control(learner);
+  const resolved = learner;
+  return {
+    bind() {
+      bindToolbarActivation(browser, effective);
+      resolved.bind();
+    },
+    effective,
+    learner: resolved,
+    preference: () => preference,
+    start(stored) {
+      started ??= stored
+        .catch(() => undefined)
+        .then((read) => {
+          if (!chosen) preference = read ?? "side-panel";
+          return resolved.load();
+        });
+      return started;
+    },
+    update(next) {
+      preference = next;
+      chosen = true;
+      if (next === "side-panel") resolved.retrySidePanel();
+      reconfigure();
+    },
+  };
 };

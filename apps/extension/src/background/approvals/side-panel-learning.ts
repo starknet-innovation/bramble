@@ -76,7 +76,10 @@ export type SidePanelLearningBrowser = {
 /** What the learner needs from the background. */
 export type SidePanelLearnerDeps = {
   readonly browser: SidePanelLearningBrowser | undefined;
-  /** Applies the surface in effect to the toolbar; rejects when the browser refuses. */
+  /**
+   * Applies the surface in effect as it is when the call runs, after any
+   * earlier one, retrying once; rejects when the browser refused both times.
+   */
   readonly configure: () => Promise<void>;
   readonly extensionId: string;
   /** The side panel page's URL, e.g. `chrome-extension://<id>/sidepanel.html`. */
@@ -99,6 +102,8 @@ export type SidePanelLearner = {
   readonly dismissNotice: () => Promise<void>;
   /** Loads what was learned before. Resolves even when storage fails. */
   readonly load: () => Promise<void>;
+  /** Whether `load` has run; the toolbar is left as the browser kept it until then. */
+  readonly loaded: () => boolean;
   /** Whether Chromium should open the panel on toolbar click by itself. */
   readonly nativeClick: () => boolean;
   /** Whether the popup should show the one-time notice, once loaded. */
@@ -157,18 +162,33 @@ const watchForSidePanel = async (
   return "absent";
 };
 
+// The page a URL names: scheme, host and path, without query or fragment.
+// Compared whole, so a lookalike path such as `sidepanel.html.x` never matches.
+const pageOf = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+  } catch {
+    return null;
+  }
+};
+
 // Only the side panel page runs at this URL without a tab: the options page
 // shows the same file in a tab, and the popup is another file.
 const isSidePanelSender = (
   sender: RuntimeSender | undefined,
   extensionId: string,
   sidePanelUrl: string,
-): boolean =>
-  sidePanelUrl !== "" &&
-  sender?.id === extensionId &&
-  sender.tab === undefined &&
-  typeof sender.url === "string" &&
-  sender.url.startsWith(sidePanelUrl);
+): boolean => {
+  const panel = pageOf(sidePanelUrl);
+  return (
+    panel !== null &&
+    sender?.id === extensionId &&
+    sender.tab === undefined &&
+    typeof sender.url === "string" &&
+    pageOf(sender.url) === panel
+  );
+};
 
 const succeeds = (work: Promise<unknown>): Promise<boolean> =>
   work.then(
@@ -268,7 +288,7 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     // The toolbar only reaches this listener when no popup is set. With the
     // popup in effect, that means applying it failed: apply it again.
     if (deps.surface() === "popup") {
-      if (!(await succeeds(deps.configure()))) await succeeds(deps.configure());
+      await succeeds(deps.configure());
       void browser?.action?.openPopup?.({ windowId }).catch(() => undefined);
       return;
     }
@@ -310,6 +330,8 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
         if (!learned.notice) return;
         const next = { ...learned, notice: false };
         // A dismissal that can't be stored still hides it for this session.
+        // The popup stays: the browser is known not to draw side panels, and
+        // a notice that comes back after a restart is the lesser harm.
         if (store) await succeeds(store.set(SIDE_PANEL_LEARNING_STORE_KEY, next));
         learned = next;
       });
@@ -325,6 +347,7 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
       }
       reconfigure();
     },
+    loaded: () => loaded,
     nativeClick: () => !canLearn || !loaded || learned.state !== "unknown",
     async notice() {
       await ready;

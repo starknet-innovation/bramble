@@ -192,9 +192,11 @@ observeTechnicalDataConsent(extensionApi?.permissions, () => {
 });
 const preferenceSignalsReady = preferences
   .then(async (store) => {
-    const stored = await store?.read();
-    approvalSurface.apply(stored?.approvalSurface ?? "side-panel");
-    void approvalSurface.load();
+    const reading = Promise.resolve(store).then((resolved) => resolved?.read() ?? null);
+    // Started exactly once whether or not the read succeeds: a failed read
+    // falls back to the side panel, and the learner still loads.
+    void approvalSurface.start(reading.then((stored) => stored?.approvalSurface));
+    const stored = await reading;
     productAnalyticsEnabled = store ? (stored?.productAnalytics ?? true) : false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
     await refreshTechnicalDataConsent();
