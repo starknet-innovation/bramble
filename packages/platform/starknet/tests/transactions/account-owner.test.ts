@@ -11,6 +11,7 @@ import {
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
   deploymentClasses,
 } from "@bramble/wallet-model/account-families";
+import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import type { RpcProvider } from "starknet";
 
 const ADDRESS = "0x123";
@@ -112,6 +113,14 @@ describe("getAccountOwner", () => {
     ).resolves.toEqual({
       kind: "unsupported-class",
     });
+  });
+
+  test("Bramble's own OpenZeppelin class is its own answer, read no further", async () => {
+    const calls: string[] = [];
+    await expect(read(providerOf(OPENZEPPELIN_ACCOUNT_CLASS_HASH, {}, calls))).resolves.toEqual({
+      kind: "bramble-account",
+    });
+    expect(calls).toEqual([]);
   });
 
   test("nothing deployed, or the zero class, is not deployed", async () => {

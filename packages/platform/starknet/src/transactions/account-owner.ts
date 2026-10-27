@@ -19,6 +19,7 @@ import {
   type AccountFamily,
   accountClassEntry,
 } from "@bramble/wallet-model/account-families";
+import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -37,6 +38,8 @@ import { readBraavosStarkSigners } from "./braavos-compatibility";
  */
 export type AccountOwnerReading =
   | { readonly kind: "not-deployed" }
+  /** Bramble's own OpenZeppelin account: the phrase scan finds it, not this. */
+  | { readonly kind: "bramble-account" }
   | { readonly kind: "unsupported-class" }
   | {
       readonly family: AccountFamily;
@@ -111,7 +114,11 @@ const readOwnerAt = async (
   const classHash = await liveClassAt(provider, address, blockIdentifier);
   if (classHash === null) return { kind: "not-deployed" };
   const entry = accountClassEntry(classHash);
-  if (entry === null) return { kind: "unsupported-class" };
+  if (entry === null) {
+    return sameFelt(classHash, OPENZEPPELIN_ACCOUNT_CLASS_HASH)
+      ? { kind: "bramble-account" }
+      : { kind: "unsupported-class" };
+  }
   const read = (entrypoint: string) =>
     provider.callContract({ calldata: [], contractAddress: address, entrypoint }, blockIdentifier);
   if (entry.family === "braavos") {

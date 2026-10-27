@@ -48,6 +48,7 @@ describe("ownership must be confirmed by two SNF-operated sources", () => {
       argentOwner(keyFor("argent", "starknet-bip44", 7)),
       { ...truth, classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH },
       { kind: "not-deployed" },
+      { kind: "bramble-account" },
       { family: "argent", kind: "non-stark-owner", ownerType: "0x2" },
     ];
     for (const lie of lies) {

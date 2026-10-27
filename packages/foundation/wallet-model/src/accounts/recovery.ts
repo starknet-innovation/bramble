@@ -274,6 +274,8 @@ export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAcc
  * the panel translates each; single-sourced so the two cannot drift.
  */
 export const ADDRESS_IMPORT_REFUSALS = {
+  // Bramble's own OpenZeppelin account, which "Find my accounts" recovers.
+  brambleAccount: "account is a bramble account",
   invalid: "invalid account address to import",
   noMatch: "recovery phrase does not control this account",
   nonStarkOwner: "account signer not supported for import",
@@ -281,7 +283,7 @@ export const ADDRESS_IMPORT_REFUSALS = {
   // The wallet's own vault or session changed between the check and the write.
   stale: "wallet changed during the account check",
   unavailable: "account lookup unavailable",
-  // Two independent endpoints answered differently about the account.
+  // The two SNF-operated sources answered differently about the account.
   unconfirmed: "account lookup sources disagree",
   unsupportedClass: "account class not supported for import",
 } as const;

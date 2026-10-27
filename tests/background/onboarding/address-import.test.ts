@@ -122,6 +122,7 @@ describe("finding an account by its address", () => {
     const cases: readonly (readonly [AccountOwnerReading, string])[] = [
       [{ kind: "not-deployed" }, ADDRESS_IMPORT_REFUSALS.notDeployed],
       [{ kind: "unsupported-class" }, ADDRESS_IMPORT_REFUSALS.unsupportedClass],
+      [{ kind: "bramble-account" }, ADDRESS_IMPORT_REFUSALS.brambleAccount],
       [
         { family: "argent", kind: "non-stark-owner", ownerType: "0x2" },
         ADDRESS_IMPORT_REFUSALS.nonStarkOwner,

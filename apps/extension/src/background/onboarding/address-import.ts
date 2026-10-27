@@ -127,6 +127,7 @@ const sameReading = (left: AccountOwnerReading, right: AccountOwnerReading): boo
 
 const verdictOf = (reading: AccountOwnerReading): OwnerFound | Refusal => {
   if (reading.kind === "not-deployed") return { error: ADDRESS_IMPORT_REFUSALS.notDeployed };
+  if (reading.kind === "bramble-account") return { error: ADDRESS_IMPORT_REFUSALS.brambleAccount };
   if (reading.kind === "unsupported-class") {
     return { error: ADDRESS_IMPORT_REFUSALS.unsupportedClass };
   }

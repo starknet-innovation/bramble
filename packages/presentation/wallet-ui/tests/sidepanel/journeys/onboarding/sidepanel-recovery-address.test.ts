@@ -202,6 +202,10 @@ describe("finding an account by its address in the recovery picker", () => {
         "Bramble doesn't support this account's contract version yet.",
       ],
       [
+        ADDRESS_IMPORT_REFUSALS.brambleAccount,
+        "This is a Bramble account. Use Find my accounts instead.",
+      ],
+      [
         ADDRESS_IMPORT_REFUSALS.nonStarkOwner,
         "This account is controlled by a signer Bramble can't use.",
       ],
