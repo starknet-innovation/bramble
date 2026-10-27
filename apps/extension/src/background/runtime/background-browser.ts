@@ -9,6 +9,7 @@
 
 import type { DataConsentPermissions } from "../analytics/data-consent";
 import type { ApprovalSurfaceBrowser } from "../approvals/approval-surface";
+import type { SurfaceRescueBrowser } from "../approvals/approval-surface-rescue";
 import type { SidePanelLearningBrowser } from "../approvals/side-panel-learning";
 import type { OnboardingSurfaceBrowser } from "../onboarding/onboarding-surface";
 import type { RuntimeSender } from "../routing/senders";
@@ -17,7 +18,7 @@ import type { SessionAlarmsApi } from "./session-expiry-alarm";
 import type { UpdateRuntime } from "./update-ready";
 
 type RuntimeApi = UpdateRuntime &
-  NonNullable<SidePanelLearningBrowser["runtime"]> & {
+  NonNullable<SurfaceRescueBrowser["runtime"]> & {
     readonly getManifest?: () => { readonly version?: string };
     readonly getPlatformInfo?: () => Promise<unknown>;
     readonly getURL?: (path: string) => string;

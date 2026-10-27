@@ -5,11 +5,16 @@
  * ever appears, so the API's own answer can't be trusted. Until a real side
  * panel has been seen, the toolbar click is routed here instead of Chromium's
  * built-in panel behavior. The panel is always asked to open first, exactly as
- * before, then the worker looks for a side-panel context. Seen, and the browser
- * is `verified`: the built-in behavior applies for good, which is what Chrome
- * users get on their first click. Never seen after the open resolved, and the
- * browser is `unsupported`: the side-panel choice is served as the compact
- * popup instead, which Arc does draw.
+ * before, then the worker waits for the side panel page to report that it is
+ * visible. Seen, and the browser is `verified`: the built-in behavior applies
+ * for good, which is what Chrome users get on their first click. Not seen after
+ * the open resolved, and the browser is `unsupported`: the side-panel choice is
+ * served as the compact popup instead, which Arc does draw.
+ *
+ * Only visibility counts. Arc may load the side panel document and keep it
+ * alive without ever drawing it, so neither a side panel context nor a message
+ * from that page proves anything; only `wallet.sidePanelVisible`, which the
+ * page sends while the document is visible, does.
  *
  * The learner writes only its own record. The user's request-surface choice
  * is never written here; the surface in effect is derived from both where the
@@ -63,11 +68,6 @@ export type SidePanelLearningBrowser = {
     };
     readonly openPopup?: (options?: { readonly windowId?: number }) => Promise<void>;
   };
-  readonly runtime?: {
-    readonly getContexts?: (filter: {
-      readonly contextTypes: readonly string[];
-    }) => Promise<readonly unknown[]>;
-  };
   readonly sidePanel?: {
     readonly open: (options: { readonly windowId: number }) => Promise<void>;
   };
@@ -108,8 +108,12 @@ export type SidePanelLearner = {
   readonly nativeClick: () => boolean;
   /** Whether the popup should show the one-time notice, once loaded. */
   readonly notice: () => Promise<boolean>;
-  /** Marks the side panel seen when its page talks to the worker. */
-  readonly observeSender: (sender: RuntimeSender | undefined) => void;
+  /**
+   * Marks the side panel seen: its page reported `wallet.sidePanelVisible`.
+   * Ignored unless the sender is exactly this extension's side panel page,
+   * outside any tab.
+   */
+  readonly observeVisible: (sender: RuntimeSender | undefined) => void;
   /**
    * The user chose the side panel in Settings. On a browser learned to be
    * `unsupported` that reads as "try again": the next click learns afresh.
@@ -143,23 +147,6 @@ const resolveStore = (
   } catch {
     return null;
   }
-};
-
-// After the open resolved: "seen" once a side panel context exists, "absent"
-// when none appeared in the whole window, and "unknown" when a query failed or
-// `decided()` reports that something else settled the answer first.
-const watchForSidePanel = async (
-  seen: () => Promise<boolean | null>,
-  wait: (ms: number) => Promise<void>,
-  decided: () => boolean,
-): Promise<"absent" | "seen" | "unknown"> => {
-  for (let waited = 0; waited <= SIDE_PANEL_LEARN_TIMEOUT_MS; waited += POLL_MS) {
-    if (decided()) return "unknown";
-    const answer = await seen();
-    if (answer !== false) return answer ? "seen" : "unknown";
-    await wait(POLL_MS);
-  }
-  return "absent";
 };
 
 // The page a URL names: scheme, host and path, without query or fragment.
@@ -203,8 +190,7 @@ const succeeds = (work: Promise<unknown>): Promise<boolean> =>
  */
 export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLearner => {
   const { browser } = deps;
-  const getContexts = browser?.runtime?.getContexts;
-  const canBind = Boolean(browser?.sidePanel?.open && getContexts && browser.action?.onClicked);
+  const canBind = Boolean(browser?.sidePanel?.open && browser.action?.onClicked);
   let store: KeyValueStore | null = null;
   // Learning runs only where the browser can be taught and storage keeps the
   // answer; everywhere else the built-in behavior stays, as before.
@@ -218,6 +204,8 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
   // Read through a call, so a check after an await sees the current value.
   const stateNow = (): SidePanelState => learned.state;
   let learning = false;
+  // Set when the side panel reported itself visible during this worker.
+  let shown = false;
   // Record changes run one at a time and check their condition when they run,
   // so a late learning result can't overwrite a newer observation.
   let queue: Promise<void> = Promise.resolve();
@@ -241,35 +229,25 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     reconfigure();
   };
 
-  // True when a side panel context exists now; null when the query failed,
-  // which is never read as "no panel".
-  const sidePanelSeen = async (): Promise<boolean | null> => {
-    try {
-      return ((await getContexts?.({ contextTypes: ["SIDE_PANEL"] })) ?? []).length > 0;
-    } catch {
-      return null;
-    }
-  };
-
-  // A real side panel rendered: the browser draws it, whatever was learned.
-  const sawSidePanel = (): Promise<void> =>
-    enqueue(async () => {
+  // A side panel was shown: the browser draws it, whatever was learned.
+  const sawSidePanel = (): Promise<void> => {
+    shown = true;
+    return enqueue(async () => {
       if (canLearn && learned.state !== "verified") await commit(VERIFIED);
     });
+  };
 
   const learnFromClick = async (opening: Promise<void>, windowId: number): Promise<void> => {
     // A refused open says nothing about whether panels render: learn nothing.
     if (!(await succeeds(opening))) return;
-    const outcome = await watchForSidePanel(
-      sidePanelSeen,
-      deps.wait,
-      () => stateNow() !== "unknown",
-    );
-    if (outcome === "seen") {
-      await sawSidePanel();
-      return;
+    // Waits for the page to report itself visible; that report, not this
+    // wait, records `verified`, and a report queued behind a write still wins.
+    shown = false;
+    for (let waited = 0; waited < SIDE_PANEL_LEARN_TIMEOUT_MS; waited += POLL_MS) {
+      if (shown || stateNow() !== "unknown") return;
+      await deps.wait(POLL_MS);
     }
-    if (outcome !== "absent") return;
+    if (shown) return;
     await enqueue(async () => {
       if (!canLearn || learned.state !== "unknown") return;
       await commit(UNSUPPORTED);
@@ -277,7 +255,9 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     // The popup now serves the side-panel choice, so the next click opens it
     // natively. Opening it here as well is best effort: browsers that still
     // tie `openPopup` to the click's gesture refuse it this long after.
+    // Chrome opens only a popup that is set: wait for the toolbar first.
     if (stateNow() === "unsupported") {
+      await succeeds(deps.configure());
       void browser?.action?.openPopup?.({ windowId }).catch(() => undefined);
     }
   };
@@ -343,10 +323,6 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
       if (store) await restore(store);
       loaded = true;
       markLoaded();
-      if (canLearn && learned.state !== "verified" && (await sidePanelSeen())) {
-        await sawSidePanel();
-        return;
-      }
       reconfigure();
     },
     loaded: () => loaded,
@@ -355,7 +331,7 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
       await ready;
       return learned.state === "unsupported" && learned.notice;
     },
-    observeSender(sender) {
+    observeVisible(sender) {
       if (!isSidePanelSender(sender, deps.extensionId, deps.sidePanelUrl)) return;
       void ready.then(sawSidePanel);
     },

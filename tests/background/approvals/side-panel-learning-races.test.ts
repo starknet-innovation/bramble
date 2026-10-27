@@ -45,8 +45,7 @@ describe("a choice saved while a learning write is held", () => {
     expect(run.control.effective()).toBe("popup");
     expect(await base.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(UNSUPPORTED);
     // Healing the record leaves the user's choice alone too.
-    run.render();
-    await run.sidePanelTalks();
+    await run.sidePanelShows();
     expect(run.control.preference()).toBe("popup");
     expect(run.toolbar().popup).toBe("popup.html");
   });
@@ -78,8 +77,7 @@ describe("a failed write after a side panel was seen", () => {
     });
     await run.load();
     expect(run.control.effective()).toBe("popup");
-    run.render();
-    await run.sidePanelTalks();
+    await run.sidePanelShows();
     // Today's behavior: the user's side panel, opened natively.
     expect(run.control.effective()).toBe("side-panel");
     expect(run.toolbar()).toEqual({ native: true, popup: "" });
@@ -145,8 +143,7 @@ describe("a restart at any step", () => {
     await restartAgrees();
     run.userChooses("side-panel");
     await restartAgrees();
-    run.render();
-    await run.sidePanelTalks();
+    await run.sidePanelShows();
     expect(run.learner.state()).toBe("verified");
     await restartAgrees();
   });

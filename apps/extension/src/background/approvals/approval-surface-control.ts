@@ -18,6 +18,11 @@ import {
   configureApprovalSurface,
 } from "./approval-surface";
 import {
+  createSurfaceRescue,
+  type SurfaceRescue,
+  type SurfaceRescueBrowser,
+} from "./approval-surface-rescue";
+import {
   createSidePanelLearner,
   type SidePanelLearner,
   type SidePanelLearningBrowser,
@@ -25,8 +30,9 @@ import {
 
 /** The browser slices the control reads. */
 export type ApprovalSurfaceControlBrowser = ApprovalSurfaceBrowser &
-  SidePanelLearningBrowser & {
-    readonly runtime?: SidePanelLearningBrowser["runtime"] & {
+  SidePanelLearningBrowser &
+  SurfaceRescueBrowser & {
+    readonly runtime?: {
       readonly getURL?: (path: string) => string;
     };
   };
@@ -53,6 +59,16 @@ export type ApprovalSurfaceControl = {
    * browser learned not to draw it asks the learner to try once more.
    */
   readonly update: (preference: ApprovalSurfacePreference) => void;
+  /**
+   * Opens the toolbar popup in a window without a gesture (the #707 rescue).
+   * Chrome opens only a popup that is set, so with the side panel in effect
+   * the popup is set for the moment it takes to open, then the surface in
+   * effect is applied again, all inside the toolbar's configuration queue.
+   * Rejects when the browser refused to open it; does nothing without the API.
+   */
+  readonly showPopup: (windowId: number) => Promise<void>;
+  /** The #707 rescue for a refused dapp-triggered side panel open. */
+  readonly rescue: SurfaceRescue;
 };
 
 const succeeds = (work: Promise<unknown>): Promise<boolean> =>
@@ -65,11 +81,14 @@ const succeeds = (work: Promise<unknown>): Promise<boolean> =>
 export const createApprovalSurfaceControl = ({
   browser,
   extensionId,
+  now,
   store,
   wait,
 }: {
   readonly browser: ApprovalSurfaceControlBrowser | undefined;
   readonly extensionId: string;
+  /** The clock the rescue's throttle reads. */
+  readonly now: () => number;
   readonly store: () => KeyValueStore | null;
   readonly wait: (ms: number) => Promise<void>;
 }): ApprovalSurfaceControl => {
@@ -96,6 +115,26 @@ export const createApprovalSurfaceControl = ({
     configuring = configuring.then(run, run);
     return configuring;
   };
+  const showPopup = (windowId: number): Promise<void> => {
+    const openPopup = browser?.action?.openPopup;
+    const setPopup = browser?.action?.setPopup;
+    // No popup API: nothing to open, and nothing to borrow.
+    if (!openPopup) return Promise.resolve();
+    const run = async (): Promise<void> => {
+      const borrowed = effective() !== "popup";
+      try {
+        if (borrowed) await setPopup?.({ popup: "popup.html" });
+        await openPopup({ windowId });
+      } finally {
+        // Retried once, as every configuration; refused twice, the next
+        // worker start applies the surface again.
+        if (borrowed && !(await succeeds(applyNow()))) await succeeds(applyNow());
+      }
+    };
+    const shown = configuring.then(run, run);
+    configuring = shown.catch(() => undefined);
+    return shown;
+  };
   const reconfigure = (): void => {
     if (learner?.loaded()) void configure().catch(() => undefined);
   };
@@ -117,6 +156,8 @@ export const createApprovalSurfaceControl = ({
     effective,
     learner: resolved,
     preference: () => preference,
+    rescue: createSurfaceRescue({ browser, now, showPopup }),
+    showPopup,
     start(stored) {
       started ??= stored
         .catch(() => undefined)

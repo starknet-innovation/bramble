@@ -82,6 +82,7 @@ let productAnalyticsEnabled = false;
 const approvalSurface = createApprovalSurfaceControl({
   browser: extensionApi,
   extensionId: runtime?.id ?? "",
+  now: systemClock,
   store: createBrowserLocalStore,
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 });
@@ -477,13 +478,14 @@ const openApprovalSurface = createApprovalSurfaceOpener({
   guard: originGuard,
   now: systemClock,
   preference: approvalSurface.effective,
+  // A side panel open Chrome refused for an expired gesture (#707).
+  rescue: approvalSurface.rescue,
 });
 // Toolbar listeners (Firefox's sidebar, Chromium's side-panel learning), bound
 // at the top level: an idle worker drops any listener added later.
 approvalSurface.bind();
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   openApprovalSurface(message, sender);
-  approvalSurface.learner.observeSender(sender);
   void updateReady.track(runtimeReady.then(() => handleMessage(message, sender))).then(
     (response) => {
       sendResponse(response);

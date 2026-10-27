@@ -7,7 +7,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@bramble/store/kv";
-import { SIDE_PANEL_LEARNING_STORE_KEY } from "../../../apps/extension/src/background/approvals/side-panel-learning";
+import {
+  createSidePanelLearner,
+  SIDE_PANEL_LEARNING_STORE_KEY,
+} from "../../../apps/extension/src/background/approvals/side-panel-learning";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import {
   contentSender,
@@ -50,8 +53,7 @@ describe("the surface in effect", () => {
     expect(run.control.effective()).toBe("popup");
     // Learning still recorded what it saw, in its own record only.
     expect(await run.stored()).toEqual(UNSUPPORTED);
-    run.render();
-    await run.sidePanelTalks();
+    await run.sidePanelShows();
     expect(run.control.preference()).toBe("popup");
     expect(run.control.effective()).toBe("popup");
   });
@@ -63,8 +65,7 @@ describe("self-healing", () => {
     await run.load();
     await run.click();
     expect(run.control.effective()).toBe("popup");
-    run.render();
-    await run.sidePanelTalks();
+    await run.sidePanelShows();
     expect(run.learner.state()).toBe("verified");
     expect(run.control.effective()).toBe("side-panel");
     expect(run.toolbar()).toEqual({ native: true, popup: "" });
@@ -72,12 +73,15 @@ describe("self-healing", () => {
     expect(await run.stored()).toEqual(VERIFIED);
   });
 
-  test("a panel already open at a restart corrects it too", async () => {
+  test("a panel document hidden at a restart and shown later corrects it then", async () => {
     const store = createMemoryStore();
     await store.set(SIDE_PANEL_LEARNING_STORE_KEY, UNSUPPORTED);
-    const run = surfaceHarness({ store });
-    run.render();
+    const run = surfaceHarness({ panelDocument: true, store });
     await run.load();
+    // Alive but hidden proves nothing.
+    expect(run.control.effective()).toBe("popup");
+    // Hidden, then visible.
+    await run.sidePanelShows();
     expect(run.control.effective()).toBe("side-panel");
     expect(await store.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(VERIFIED);
   });
@@ -86,7 +90,7 @@ describe("self-healing", () => {
     const run = surfaceHarness();
     await run.load();
     run.onWatch(() => {
-      run.learner.observeSender({
+      run.learner.observeVisible({
         id: "bramble",
         url: "chrome-extension://bramble/sidepanel.html",
       });
@@ -117,7 +121,7 @@ describe("record changes in order", () => {
     const run = surfaceHarness({ store });
     await run.load();
     run.onWatch(() => {
-      run.learner.observeSender({
+      run.learner.observeVisible({
         id: "bramble",
         url: "chrome-extension://bramble/sidepanel.html",
       });
@@ -128,6 +132,32 @@ describe("record changes in order", () => {
     expect(run.learner.state()).toBe("verified");
     expect(await base.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(VERIFIED);
     expect(run.calls.popups).toEqual([]);
+  });
+});
+
+describe("a report still being stored when a click is learned", () => {
+  test("the click's late 'unsupported' can't overwrite it", async () => {
+    const base = createMemoryStore();
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const store = {
+      ...base,
+      set: async (key: string, value: unknown) => {
+        if ((value as { state?: string }).state === "verified") await held;
+        return base.set(key, value as never);
+      },
+    };
+    const run = surfaceHarness({ store });
+    await run.load();
+    // Reported before the click; its write is held, so the click still learns.
+    await run.sidePanelShows();
+    await run.click();
+    release();
+    await settleAll();
+    expect(run.learner.state()).toBe("verified");
+    expect(await base.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(VERIFIED);
   });
 });
 
@@ -145,10 +175,10 @@ describe("choosing the side panel again where it was learned unsupported", () =>
     // The fresh click learns once more, and the popup serves it again.
     await run.click();
     expect(run.learner.state()).toBe("unsupported");
-    const queries = run.calls.queries;
+    const waits = run.calls.waits;
     // Without another explicit choice, later clicks don't learn again.
     await run.click();
-    expect(run.calls.queries).toBe(queries);
+    expect(run.calls.waits).toBe(waits);
   });
 
   test("choosing the popup, or the side panel on a verified browser, changes no record", async () => {
@@ -184,9 +214,9 @@ describe("an unwritable record", () => {
     expect(run.toolbar()).toEqual({ native: true, popup: "" });
     expect(run.calls.popups).toEqual([]);
     expect(await run.stored()).toBeUndefined();
-    const queries = run.calls.queries;
+    const waits = run.calls.waits;
     await run.click();
-    expect(run.calls.queries).toBe(queries);
+    expect(run.calls.waits).toBe(waits);
   });
 
   test("a retry that can't be stored keeps the side panel the user chose", async () => {
@@ -213,14 +243,32 @@ describe("an unwritable record", () => {
   });
 });
 
-describe("side panel notice commands through the router", () => {
-  const handler = (notice: boolean) =>
-    createMessageHandler(createWallet(), testExtension, {
-      sidePanelLearning: { dismissNotice: async () => undefined, notice: async () => notice },
+describe("side panel commands through the router", () => {
+  const PANEL = "chrome-extension://extension-id/sidepanel.html";
+  const routed = async () => {
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, UNSUPPORTED);
+    const learner = createSidePanelLearner({
+      browser: {
+        action: { onClicked: { addListener: () => undefined } },
+        sidePanel: { open: async () => undefined },
+      },
+      configure: async () => undefined,
+      extensionId: "extension-id",
+      sidePanelUrl: PANEL,
+      store: () => store,
+      surface: () => "popup",
+      wait: async () => undefined,
     });
+    await learner.load();
+    return {
+      learner,
+      run: createMessageHandler(createWallet(), testExtension, { sidePanelLearning: learner }),
+    };
+  };
 
   test("answer this extension's pages only", async () => {
-    const run = handler(true);
+    const { run } = await routed();
     expect(await run({ type: "wallet.sidePanelNotice" }, extensionSender)).toEqual({
       notice: true,
       ok: true,
@@ -228,13 +276,47 @@ describe("side panel notice commands through the router", () => {
     expect(await run({ type: "wallet.dismissSidePanelNotice" }, extensionSender)).toEqual({
       ok: true,
     });
-    const foreign = { id: "other-extension", url: "chrome-extension://other-extension/x.html" };
+    const foreign = {
+      id: "other-extension",
+      url: "chrome-extension://other-extension/sidepanel.html",
+    };
     for (const sender of [contentSender, foreign, undefined]) {
-      for (const type of ["wallet.sidePanelNotice", "wallet.dismissSidePanelNotice"]) {
+      for (const type of [
+        "wallet.sidePanelNotice",
+        "wallet.dismissSidePanelNotice",
+        "wallet.sidePanelVisible",
+      ]) {
         const response = (await run({ type }, sender as never)) as Record<string, unknown>;
         expect(response["ok"]).toBeUndefined();
         expect(typeof response["error"]).toBe("string");
       }
     }
+  });
+
+  test("only the visible report from the side panel page itself verifies the browser", async () => {
+    const { learner, run } = await routed();
+    // Another message from the panel page, the report from the popup or from
+    // the same page in a tab, and a report with extra fields prove nothing.
+    await run({ type: "wallet.status" }, { id: "extension-id", url: PANEL });
+    await run({ type: "wallet.sidePanelVisible" }, extensionSender);
+    await run({ type: "wallet.sidePanelVisible" }, {
+      id: "extension-id",
+      tab: { id: 3 },
+      url: PANEL,
+    } as never);
+    expect(
+      await run({ extra: 1, type: "wallet.sidePanelVisible" }, { id: "extension-id", url: PANEL }),
+    ).toEqual({
+      error: "Invalid side panel notice request",
+    });
+    await settleAll();
+    expect(learner.state()).toBe("unsupported");
+    expect(
+      await run({ type: "wallet.sidePanelVisible" }, { id: "extension-id", url: PANEL }),
+    ).toEqual({
+      ok: true,
+    });
+    await settleAll();
+    expect(learner.state()).toBe("verified");
   });
 });

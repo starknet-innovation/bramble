@@ -411,8 +411,8 @@ const HANDLERS: readonly RouterHandler[] = [
   handleGetGrantedAccounts,
   handleDiagnostics,
   async (ctx, messageType, message) => handleUpdateOps(ctx.updates, messageType, message),
-  (ctx, messageType, message) =>
-    handleSidePanelNoticeOps(ctx.sidePanelLearning, messageType, message),
+  (ctx, messageType, message, sender) =>
+    handleSidePanelNoticeOps(ctx.sidePanelLearning, messageType, message, sender),
   handlePendingApprovals,
   handleRequestAccounts,
   handleSetActiveAccount,

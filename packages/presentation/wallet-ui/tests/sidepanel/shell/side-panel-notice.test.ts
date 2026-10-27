@@ -9,6 +9,7 @@ import {
   SIDE_PANEL_NOTICE_DISMISS,
   SIDE_PANEL_NOTICE_TITLE,
   startSidePanelNotice,
+  startSidePanelVisibility,
 } from "../../../src/sidepanel/shell/side-panel-notice";
 import { registerDom, unregisterDom } from "../../support/groups-harness";
 
@@ -73,8 +74,66 @@ describe("side panel notice", () => {
     });
     expect(await failing.sidePanelNoticeDue()).toBe(false);
     await failing.dismissSidePanelNotice();
+    await failing.reportSidePanelVisible();
     await answering({ ok: true }).dismissSidePanelNotice();
+    await answering({ ok: true }).reportSidePanelVisible();
     expect(sent).toContainEqual({ type: "wallet.sidePanelNotice" });
     expect(sent).toContainEqual({ type: "wallet.dismissSidePanelNotice" });
+    expect(sent).toContainEqual({ type: "wallet.sidePanelVisible" });
+  });
+});
+
+describe("side panel visibility report", () => {
+  // A page whose visibility the test controls.
+  const page = (visible: boolean) => {
+    const listeners: (() => void)[] = [];
+    const state = { visible };
+    const doc = {
+      addEventListener: (type: string, listener: () => void) => {
+        if (type === "visibilitychange") listeners.push(listener);
+      },
+      body: document.body,
+      get visibilityState() {
+        return state.visible ? "visible" : "hidden";
+      },
+    } as unknown as Document;
+    const change = (next: boolean) => {
+      state.visible = next;
+      for (const listener of listeners) listener();
+    };
+    return { change, doc };
+  };
+
+  test("reports only while visible: on load, and each time it becomes visible", () => {
+    let reports = 0;
+    const report = async () => {
+      reports += 1;
+    };
+    const shown = page(true);
+    startSidePanelVisibility({ doc: shown.doc, report });
+    expect(reports).toBe(1);
+    // Arc: loaded but hidden reports nothing until it is actually shown.
+    reports = 0;
+    const hidden = page(false);
+    startSidePanelVisibility({ doc: hidden.doc, report });
+    expect(reports).toBe(0);
+    hidden.change(false);
+    expect(reports).toBe(0);
+    hidden.change(true);
+    expect(reports).toBe(1);
+  });
+
+  test("the popup never reports", () => {
+    document.body.classList.add("popup-surface");
+    let reports = 0;
+    const shown = page(true);
+    startSidePanelVisibility({
+      doc: shown.doc,
+      report: async () => {
+        reports += 1;
+      },
+    });
+    shown.change(true);
+    expect(reports).toBe(0);
   });
 });

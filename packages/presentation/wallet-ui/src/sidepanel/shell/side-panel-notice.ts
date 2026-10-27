@@ -1,7 +1,7 @@
 /**
  * The one-time notice after the toolbar click proved this browser never draws
- * side panels (issue 690, Arc), and the background switched the request surface to
- * the compact popup. Shown once, in the popup only, until the user dismisses
+ * side panels (issue 690, Arc), so the side-panel choice is served as the
+ * compact popup. Shown once, in the popup only, until the user dismisses
  * it. Built with DOM calls and text only, like the update banner.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
@@ -39,7 +39,32 @@ export const createSidePanelNoticeClient = (sendMessage: Send) => ({
   async dismissSidePanelNotice(): Promise<void> {
     await sendMessage({ type: "wallet.dismissSidePanelNotice" }).catch(() => undefined);
   },
+  async reportSidePanelVisible(): Promise<void> {
+    await sendMessage({ type: "wallet.sidePanelVisible" }).catch(() => undefined);
+  },
 });
+
+/**
+ * Tells the background this page is visible, now and each time it becomes
+ * visible again (issue 690). Arc may load the side panel page without ever drawing
+ * it, so the background learns that side panels work only from this report,
+ * never from the page merely running. The popup never reports; the background
+ * also ignores a report from a tab, such as the options page.
+ */
+export const startSidePanelVisibility = ({
+  doc,
+  report,
+}: {
+  readonly doc: Document;
+  readonly report: () => Promise<void>;
+}): void => {
+  if (isPopupSurface(doc.body)) return;
+  const reportIfVisible = (): void => {
+    if (doc.visibilityState === "visible") void report();
+  };
+  doc.addEventListener("visibilitychange", reportIfVisible);
+  reportIfVisible();
+};
 
 /**
  * Shows the notice when it is due and this page is the popup. The side panel
@@ -50,7 +75,10 @@ export const startSidePanelNotice = async ({
   notice,
 }: {
   readonly doc: Document;
-  readonly notice: ReturnType<typeof createSidePanelNoticeClient>;
+  readonly notice: Pick<
+    ReturnType<typeof createSidePanelNoticeClient>,
+    "dismissSidePanelNotice" | "sidePanelNoticeDue"
+  >;
 }): Promise<void> => {
   if (!isPopupSurface(doc.body) || doc.getElementById(NOTICE_ID)) return;
   if (!(await notice.sidePanelNoticeDue())) return;

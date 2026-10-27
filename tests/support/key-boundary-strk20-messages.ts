@@ -77,6 +77,8 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   // The one-time "opens as a popup" notice (#690): reads and clears a flag.
   { message: { type: "wallet.sidePanelNotice" }, sender: extensionSender },
   { message: { type: "wallet.dismissSidePanelNotice" }, sender: extensionSender },
+  // The side panel page reports itself visible (#690): marks a learning flag.
+  { message: { type: "wallet.sidePanelVisible" }, sender: extensionSender },
   // Settings → Privacy → Unlock anyway (#668): clears a stuck submitting
   // marker; it reads no key material.
   { message: { type: "wallet.strk20ReleasePendingWrite" }, sender: extensionSender },

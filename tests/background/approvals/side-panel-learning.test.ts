@@ -38,11 +38,13 @@ describe("side-panel learning", () => {
     expect(run.calls.popupSet).toEqual(["popup.html"]);
   });
 
-  test("a side panel that loads verifies the browser and restores the built-in behavior", async () => {
-    const run = surfaceHarness({ contexts: 2 });
+  test("a side panel shown during the window verifies the browser and restores the built-in behavior", async () => {
+    const run = surfaceHarness({ showsAfter: 2 });
     await run.load();
     expect(run.toolbar().native).toBe(false);
     await run.click();
+    // The window ended as soon as the page reported itself visible.
+    expect(run.calls.waits).toBe(2);
     expect(run.calls.opens).toEqual([7]);
     expect(run.learner.state()).toBe("verified");
     expect(run.toolbar()).toEqual({ native: true, popup: "" });
@@ -56,15 +58,33 @@ describe("side-panel learning", () => {
     await run.click();
     expect(run.calls.opens).toEqual([7]);
     // The whole window was watched before deciding.
-    expect(run.calls.queries).toBeGreaterThan(SIDE_PANEL_LEARN_TIMEOUT_MS / 250);
+    expect(run.calls.waits).toBe(SIDE_PANEL_LEARN_TIMEOUT_MS / 250);
     expect(run.learner.state()).toBe("unsupported");
     expect(await run.stored()).toEqual(UNSUPPORTED);
     expect(run.control.effective()).toBe("popup");
     expect(run.toolbar()).toEqual({ native: false, popup: "popup.html" });
     expect(run.calls.popups).toEqual([{ windowId: 7 }]);
+    // Opened once the popup was set, which Chrome requires.
+    expect(run.calls.shown).toEqual([7]);
     // The user's own choice is untouched.
     expect(run.control.preference()).toBe("side-panel");
     expect(await run.learner.notice()).toBe(true);
+  });
+
+  test("the popup is opened only once the toolbar has it, which Chrome requires", async () => {
+    // A slow browser: setting the popup takes a macrotask.
+    const run = surfaceHarness({
+      configureDelay: () => new Promise((resolve) => setTimeout(resolve, 0)),
+    });
+    await run.load();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    run.clickNow();
+    for (let i = 0; i < 5; i += 1) {
+      await settleAll();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(run.learner.state()).toBe("unsupported");
+    expect(run.calls.shown).toEqual([7]);
   });
 
   test("a cold worker woken by the click opens the panel first, then learns from it", async () => {
@@ -72,7 +92,7 @@ describe("side-panel learning", () => {
     // Nothing is loaded yet.
     run.clickNow();
     expect(run.calls.opens).toEqual([7]);
-    expect(run.calls.queries).toBe(0);
+    expect(run.calls.waits).toBe(0);
     await run.load();
     expect(run.learner.state()).toBe("unsupported");
   });
@@ -90,16 +110,14 @@ describe("side-panel learning", () => {
     expect(run.learner.state()).toBe("unknown");
   });
 
-  test("a refused open or a failed context query learns nothing", async () => {
-    for (const options of [{ openRejects: true }, { contexts: "fail" as const }]) {
-      const run = surfaceHarness(options);
-      await run.load();
-      await run.click();
-      expect(run.learner.state()).toBe("unknown");
-      expect(run.control.effective()).toBe("side-panel");
-      expect(run.calls.popups).toEqual([]);
-      expect(await run.stored()).toBeUndefined();
-    }
+  test("a refused open learns nothing", async () => {
+    const run = surfaceHarness({ openRejects: true });
+    await run.load();
+    await run.click();
+    expect(run.learner.state()).toBe("unknown");
+    expect(run.control.effective()).toBe("side-panel");
+    expect(run.calls.popups).toEqual([]);
+    expect(await run.stored()).toBeUndefined();
   });
 
   test("a click with no window opens nothing", async () => {
@@ -123,15 +141,24 @@ describe("side-panel learning", () => {
     const single = surfaceHarness();
     await single.load();
     await single.click();
-    expect(run.calls.queries).toBe(single.calls.queries);
+    expect(run.calls.waits).toBe(single.calls.waits);
     expect(run.calls.popups).toEqual([{ windowId: 7 }]);
   });
 
-  test("a panel already open when the worker starts verifies the browser", async () => {
-    const run = surfaceHarness({ contexts: 0 });
+  test("a side panel document alive but never shown proves nothing (Arc)", async () => {
+    // Arc may load sidepanel.html and keep it alive without drawing it.
+    const store = createMemoryStore();
+    const run = surfaceHarness({ panelDocument: true, store });
     await run.load();
-    expect(run.learner.state()).toBe("verified");
-    expect(run.toolbar().native).toBe(true);
+    expect(run.learner.state()).toBe("unknown");
+    await run.click();
+    expect(run.learner.state()).toBe("unsupported");
+    // Nor does it heal the record at the next worker start.
+    const restarted = surfaceHarness({ panelDocument: true, store });
+    await restarted.load();
+    expect(restarted.learner.state()).toBe("unsupported");
+    expect(restarted.control.effective()).toBe("popup");
+    expect(run.calls.queries + restarted.calls.queries).toBe(0);
   });
 
   test("what was learned before is kept across worker restarts", async () => {
@@ -166,9 +193,8 @@ describe("side-panel learning", () => {
       // Today's behavior: Chromium opens the panel by itself.
       expect(run.calls.nativeOpens).toEqual([7]);
       // Nothing is watched, and a panel seen writes nothing over the store.
-      expect(run.calls.queries).toBe(0);
-      run.render();
-      await run.sidePanelTalks();
+      expect(run.calls.waits).toBe(0);
+      await run.sidePanelShows();
       expect(run.learner.state()).not.toBe("unsupported");
       expect(run.control.effective()).toBe("side-panel");
       expect(run.toolbar().native).toBe(true);
@@ -182,7 +208,7 @@ describe("side-panel learning", () => {
     // Say the browser refused to restore its built-in click: the listener
     // still opens the panel, and watches nothing.
     let click: (tab?: { readonly windowId?: number }) => void = () => undefined;
-    const calls = { opens: 0, queries: 0 };
+    const calls = { opens: 0, waits: 0 };
     const learner = createSidePanelLearner({
       browser: {
         action: {
@@ -190,12 +216,6 @@ describe("side-panel learning", () => {
             addListener: (listener) => {
               click = listener;
             },
-          },
-        },
-        runtime: {
-          getContexts: async () => {
-            calls.queries += 1;
-            return [];
           },
         },
         sidePanel: {
@@ -209,13 +229,15 @@ describe("side-panel learning", () => {
       sidePanelUrl: PANEL_URL,
       store: () => null,
       surface: () => "side-panel",
-      wait: async () => undefined,
+      wait: async () => {
+        calls.waits += 1;
+      },
     });
     learner.bind();
     await learner.load();
     click({ windowId: 7 });
     await settleAll();
-    expect(calls).toEqual({ opens: 1, queries: 0 });
+    expect(calls).toEqual({ opens: 1, waits: 0 });
     expect(learner.state()).toBe("unknown");
   });
 
@@ -236,11 +258,11 @@ describe("side-panel learning", () => {
       { id: "bramble", url: "not a url" },
       undefined,
     ]) {
-      run.learner.observeSender(sender);
+      run.learner.observeVisible(sender);
       await settleAll();
       expect(run.learner.state()).toBe("unknown");
     }
-    run.learner.observeSender({ id: "bramble", url: `${PANEL_URL}?view=home` });
+    run.learner.observeVisible({ id: "bramble", url: `${PANEL_URL}?view=home` });
     await settleAll();
     expect(run.learner.state()).toBe("verified");
     expect(run.toolbar().native).toBe(true);
@@ -257,7 +279,7 @@ describe("side-panel learning", () => {
       wait: async () => undefined,
     });
     await learner.load();
-    learner.observeSender({ id: "bramble", url: PANEL_URL });
+    learner.observeVisible({ id: "bramble", url: PANEL_URL });
     await settleAll();
     expect(learner.state()).toBe("unknown");
   });

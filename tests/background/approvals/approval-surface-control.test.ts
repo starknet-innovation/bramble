@@ -33,7 +33,7 @@ describe("toolbar configuration", () => {
 
 describe("side panel notice commands", () => {
   const learner = (due: boolean) => {
-    const state = { dismissed: 0, due };
+    const state = { dismissed: 0, due, visible: [] as unknown[] };
     return {
       notice: {
         dismissNotice: async () => {
@@ -41,6 +41,9 @@ describe("side panel notice commands", () => {
           state.due = false;
         },
         notice: async () => state.due,
+        observeVisible: (sender: unknown) => {
+          state.visible.push(sender);
+        },
       },
       state,
     };
@@ -59,6 +62,17 @@ describe("side panel notice commands", () => {
       }),
     ).toEqual({ ok: true });
     expect(state.dismissed).toBe(1);
+    const panel = { id: "bramble", url: "chrome-extension://bramble/sidepanel.html" };
+    expect(
+      await handleSidePanelNoticeOps(
+        notice,
+        "wallet.sidePanelVisible",
+        { type: "wallet.sidePanelVisible" },
+        panel,
+      ),
+    ).toEqual({ ok: true });
+    // The sender goes to the learner, which checks it.
+    expect(state.visible).toEqual([panel]);
     expect(
       await handleSidePanelNoticeOps(notice, "wallet.sidePanelNotice", {
         type: "wallet.sidePanelNotice",
@@ -97,6 +111,7 @@ describe("no fallback windows", () => {
     for (const file of [
       "approval-surface.ts",
       "approval-surface-control.ts",
+      "approval-surface-rescue.ts",
       "side-panel-learning.ts",
       "side-panel-notice-ops.ts",
     ]) {
