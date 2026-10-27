@@ -13,6 +13,12 @@
  * re-read before anything is written, so a class is never taken from the
  * message on trust. Derivation goes through the vault's key-free preview: the
  * key never leaves the background and no answer carries it.
+ *
+ * Trust model (owner decision, 2026-10-27, the same as #398): the evidence is
+ * read from the configured RPC, which is SNF-operated by default. A malicious
+ * custom RPC could call an empty address "deployed" and so pre-tick its row,
+ * but every listed address is derived locally from this key, so the worst case
+ * is an empty account the user controls, never someone else's address.
  */
 import { RefusedBeforeWrite } from "@bramble/core/errors";
 import { recoveryProbeTokens, type WalletPreferencesStore } from "@bramble/settings/preferences";
@@ -128,6 +134,7 @@ export const verifyReadyKeyClasses = async (
   input: ReadyKeyInput,
   picked: readonly string[],
 ): Promise<readonly string[]> => {
+  if (picked.length === 0) throw new RefusedBeforeWrite(NO_READY_ACCOUNT_FOR_KEY);
   const table = deploymentClasses("argent");
   const classHashes = picked.map((classHash) => {
     const entry = table.find((candidate) => sameFelt(candidate.classHash, classHash));
@@ -135,7 +142,7 @@ export const verifyReadyKeyClasses = async (
     return canonicalFelt(entry.classHash) ?? entry.classHash;
   });
   const releases = await readReleases(deps, input, classHashes);
-  if (classHashes.length === 0 || releases.some((release) => release === null)) {
+  if (releases.some((release) => release === null)) {
     throw new RefusedBeforeWrite(NO_READY_ACCOUNT_FOR_KEY);
   }
   return classHashes;

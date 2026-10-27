@@ -20,6 +20,7 @@ import {
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization } from "../runtime/session";
 import type { RouterContext } from "./message-context";
 import { readAddAccountInput } from "./message-inputs";
 import type { RuntimeSender } from "./senders";
@@ -212,9 +213,19 @@ const handleImportAccount: RouterHandler = async (ctx, messageType, message) => 
     return { error: "wallet unavailable" };
   }
   // Probed outside the coordinator: the chain round-trips must not hold the
-  // serialized state boundary.
+  // serialized state boundary. The unlock that authorized the import must
+  // still be the current one when it writes: a lock, a re-unlock or a replaced
+  // vault during the reads refuses before the network preference or the vault
+  // is touched, and never locks the session.
+  const authorization = captureSessionAuthorization(ctx.session);
+  if (!authorization.isCurrent()) {
+    return { error: "wallet locked" };
+  }
   const classHashes = await pickedReadyReleases(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
+    if (!authorization.isCurrent()) {
+      return { error: "wallet locked" };
+    }
     const account = await runUnlockedNetworkMutation(
       ctx.session,
       ctx.preferencesStore,

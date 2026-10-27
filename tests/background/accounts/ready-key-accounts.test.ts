@@ -6,15 +6,11 @@
  * release's address can add a row, but never choose for the user.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@bramble/settings/preferences";
-import { createMemoryStore } from "@bramble/store/kv";
-import type { ImportRawKeyAccountInput, PreviewImportedAccountInput } from "@bramble/vault/service";
+import type { ImportRawKeyAccountInput } from "@bramble/vault/service";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   BRAAVOS_BASE_CLASS_HASH,
-  deploymentClasses,
 } from "@bramble/wallet-model/account-families";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
 import {
   discoverReadyKeyAccounts,
@@ -23,67 +19,25 @@ import {
   verifyReadyKeyClasses,
 } from "../../../apps/extension/src/background/accounts/ready-key-accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
   account,
   contentSender,
-  createWallet,
   extensionSender as sender,
   testExtension,
-  vaultPassphrase,
 } from "../../support/background-wallet-stub";
-
-// Clearly-fake test vector; not a real key.
-const privateKey = "0xfeedface";
-
-const argentClass = (label: string): string => {
-  const entry = deploymentClasses("argent").find((candidate) => candidate.label === label);
-  if (!entry) throw new Error(`missing ${label}`);
-  return entry.classHash;
-};
-const ARGENT_031 = argentClass("argent 0.3.1");
-const ARGENT_030 = argentClass("argent 0.3.0");
-
-// One distinct address per release, as real derivation gives.
-const addressFor = (classHash: string | undefined): string =>
-  `0xa${(canonicalFelt(classHash ?? ARGENT_ACCOUNT_CLASS_HASH) ?? "").slice(2, 12)}`;
-
-const previewImportedAccount = async (input: PreviewImportedAccountInput): Promise<AccountRef> => ({
-  ...account,
-  address: addressFor(input.classHash),
-  id: `SN_MAIN:${addressFor(input.classHash)}`,
-});
-
-type Evidence = { readonly deployed?: readonly string[]; readonly funded?: readonly string[] };
-
-const rpcWith = (evidence: Evidence, onRead?: () => void) => ({
-  ...defaultRuntimeRpc,
-  async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
-    onRead?.();
-    return (evidence.deployed ?? []).some((classHash) => accountAddress === addressFor(classHash));
-  },
-  async getTokenBalances({
-    accountAddress,
-    tokens,
-  }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
-    const funded = (evidence.funded ?? []).some(
-      (classHash) => accountAddress === addressFor(classHash),
-    );
-    return tokens.map((token, index) => ({
-      ...token,
-      balance: funded && index === 0 ? "1" : "0",
-      formatted: funded && index === 0 ? "0.000000000000000001" : "0",
-    }));
-  },
-});
-
-const deps = (evidence: Evidence) => ({
-  preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
-  runtimeRpc: rpcWith(evidence),
-  wallet: { previewImportedAccount },
-});
-const input = { networkId: "SN_MAIN" as const, privateKey };
+import {
+  ARGENT_030,
+  ARGENT_031,
+  addressFor,
+  capturingWallet,
+  deps,
+  discoverMessage,
+  importMessage,
+  input,
+  rpcWith,
+  unlocked,
+} from "./ready-key-fixtures";
 
 describe("Ready-key discovery", () => {
   test("lists the one release the account was deployed at", async () => {
@@ -164,40 +118,6 @@ describe("Ready-key re-proof before writing", () => {
       ]),
     ).rejects.toThrow(NO_READY_ACCOUNT_FOR_KEY);
   });
-});
-
-const unlocked = () => {
-  const session = createUnlockSession();
-  session.unlock(vaultPassphrase);
-  return session;
-};
-
-const capturingWallet = (captured: ImportRawKeyAccountInput[], hasVault = true) => {
-  const wallet = createWallet();
-  return {
-    ...wallet,
-    async importRawKeyAccount(request: ImportRawKeyAccountInput) {
-      captured.push(request);
-      return account;
-    },
-    previewImportedAccount,
-    async status() {
-      return { ...(await wallet.status()), hasVault };
-    },
-  };
-};
-
-const discoverMessage = {
-  networkId: "SN_MAIN",
-  privateKey,
-  type: "wallet.discoverReadyKeyAccounts",
-};
-const importMessage = (classHashes?: readonly string[]) => ({
-  accountContractType: "argent",
-  ...(classHashes === undefined ? {} : { classHashes }),
-  networkId: "SN_MAIN",
-  privateKey,
-  type: "wallet.importAccount",
 });
 
 describe("wallet.discoverReadyKeyAccounts", () => {

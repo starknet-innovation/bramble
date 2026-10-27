@@ -7,7 +7,9 @@
  *
  * It runs on first run, before any vault exists, and in the unlocked wallet.
  * Once a vault exists, a locked or changed session refuses before and after
- * the chain reads, so a lock during discovery returns nothing.
+ * the chain reads, so a lock during discovery returns nothing. A first-run
+ * read that ends after a vault was created meanwhile returns nothing either:
+ * that vault was never this request's to read for.
  */
 import { WalletError } from "@bramble/core/errors";
 import { readDiscoverReadyKeyAccountsInput } from "../accounts/import-inputs";
@@ -33,6 +35,9 @@ export const handleDiscoverReadyKeyAccounts: RouterHandler = async (ctx, message
   const candidates = await discoverReadyKeyAccounts(ctx, input);
   if (!authorized()) {
     throw new WalletError("wallet locked");
+  }
+  if (authorization === null && (await ctx.wallet.status()).hasVault) {
+    throw new WalletError("Wallet already exists");
   }
   return { candidates, ok: true };
 };
