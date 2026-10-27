@@ -32,4 +32,4 @@ already exists.
 
 | Advisory | Package | Path | Why it is accepted | Re-check by | Tracking | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) (high) | `node-forge` <=1.4.0 | dev-only: `web-ext` → `@devicefarmer/adbkit` → `node-forge@1.4.0` | `web-ext` is the Firefox lint and packaging tool. `node-forge` is not bundled into the extension, the website or the terminal app. npm has no patched release yet (latest 1.4.0). | 2026-11-02 | #495 | Removed 2026-10-27: the lockfile resolves `node-forge@1.4.2` (patched, published 2026-10-27) and the `--ignore` is gone. |
+| [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) (high) | `node-forge` <=1.4.0 | dev-only: `web-ext` → `@devicefarmer/adbkit` → `node-forge@1.4.0` | `web-ext` is the Firefox lint and packaging tool. `node-forge` is not bundled into the extension, the website or the terminal app. npm has no patched release yet (latest 1.4.0). | 2026-11-02 | #495 | Removed 2026-10-27: the lockfile resolves `node-forge@1.4.2` (patched, published 2026-10-27) and the `--ignore` is gone (#790). |
