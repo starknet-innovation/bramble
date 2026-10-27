@@ -93,29 +93,38 @@ const status: WalletStatus = {
   ready: true,
 };
 
-const mountSettings = (discover: () => Promise<readonly ReadyKeyCandidate[]>) => {
+const mountSettings = (
+  discover: (
+    networkId: string,
+    key: string,
+    salt?: string,
+  ) => Promise<readonly ReadyKeyCandidate[]>,
+) => {
   document.body.replaceChildren();
   const container = document.createElement("div");
   document.body.append(container);
   container.replaceChildren(document.createRange().createContextualFragment(importKeyFlow(status)));
   const imports: Array<readonly string[] | undefined> = [];
+  const sent: Array<readonly [string, string, string | undefined]> = [];
+  let networkId = "SN_MAIN";
   const wallet = {
     discoverReadyKeyAccounts: discover,
     importAccount: (
-      _networkId: string,
-      _key: string,
+      network: string,
+      key: string,
       _type: string,
-      _salt?: string,
+      salt?: string,
       classHashes?: readonly string[],
     ) => {
       imports.push(classHashes);
+      sent.push([network, key, salt]);
       return Promise.resolve(account.id);
     },
   };
   bindImportKey({
     app: container,
     expandedGroup: () => null,
-    networkId: () => "SN_MAIN",
+    networkId: () => networkId,
     refresh: () => Promise.resolve(status),
     render: async () => undefined,
     setExpandedGroup: () => undefined,
@@ -126,14 +135,24 @@ const mountSettings = (discover: () => Promise<readonly ReadyKeyCandidate[]>) =>
   const contract = form?.querySelector<HTMLSelectElement>('select[name="accountContractType"]');
   const raw = form?.querySelector<HTMLTextAreaElement>('textarea[name="rawKey"]');
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  if (!form || !contract || !raw || !submit) throw new Error("import-key form missing");
+  const salt = form?.querySelector<HTMLInputElement>('input[name="deploymentSalt"]');
+  if (!form || !contract || !raw || !submit || !salt) throw new Error("import-key form missing");
   contract.value = "argent";
   contract.dispatchEvent(new window.Event("change"));
   raw.value = PASTED_KEY;
   const send = (): void => {
     form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
   };
-  return { container, imports, raw, send, submit };
+  const edit = (field: "key" | "salt", value: string): void => {
+    const target = field === "key" ? raw : salt;
+    target.value = value;
+    target.dispatchEvent(new window.Event("input"));
+  };
+  const pickers = (): number => container.querySelectorAll("[data-ready-key-picker]").length;
+  const switchNetwork = (id: string): void => {
+    networkId = id;
+  };
+  return { container, edit, imports, pickers, raw, salt, send, sent, submit, switchNetwork };
 };
 
 describe("Settings → Import private key, Ready account", () => {
@@ -194,6 +213,100 @@ describe("Settings → Import private key, Ready account", () => {
       "Couldn't check this key's Ready accounts. Try again.",
     );
     expect(flow.imports).toEqual([]);
+  });
+});
+
+const deferred = () => {
+  let resolve: (value: readonly ReadyKeyCandidate[]) => void = () => undefined;
+  const promise = new Promise<readonly ReadyKeyCandidate[]>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+};
+
+describe("Settings → Import private key, stale lists", () => {
+  for (const input of ["key", "salt"] as const) {
+    test(`a ${input} edited during the check drops the late answer`, async () => {
+      const answer = deferred();
+      const flow = mountSettings(() => answer.promise);
+      flow.send();
+      flow.edit(input, "0xbeef");
+      expect(flow.submit.disabled).toBe(false);
+      answer.resolve([deployed]);
+      await tick();
+      expect(flow.pickers()).toBe(0);
+      expect(flow.submit.textContent).toContain("Import account");
+      // The next submit lists the accounts again rather than importing.
+      flow.send();
+      await tick();
+      expect(flow.imports).toEqual([]);
+    });
+  }
+
+  test("a network switched during the check drops the late answer", async () => {
+    const answer = deferred();
+    const flow = mountSettings(() => answer.promise);
+    flow.send();
+    flow.switchNetwork("SN_SEPOLIA");
+    answer.resolve([deployed]);
+    await tick();
+    expect(flow.pickers()).toBe(0);
+    expect(flow.submit.disabled).toBe(false);
+    expect(flow.submit.textContent).toContain("Import account");
+  });
+
+  test("out of order: only the answer for the current inputs is shown", async () => {
+    const answers = [deferred(), deferred()];
+    const asked: Array<string | undefined> = [];
+    const flow = mountSettings((_network, _key, salt) => {
+      asked.push(salt);
+      const answer = answers[asked.length - 1];
+      if (!answer) throw new Error("unexpected discovery");
+      return answer.promise;
+    });
+    flow.send();
+    flow.edit("salt", "0x777");
+    flow.send();
+    answers[1]?.resolve([dusted]);
+    await tick();
+    answers[0]?.resolve([deployed]);
+    await tick();
+    expect(asked).toEqual([undefined, "0x777"]);
+    expect(flow.pickers()).toBe(1);
+    expect(boxes(flow.container).map((box) => box.dataset["readyKeyClass"])).toEqual([ARGENT_030]);
+  });
+
+  test("a network switched after listing lists again instead of importing", async () => {
+    const asked: string[] = [];
+    const flow = mountSettings((network) => {
+      asked.push(network);
+      return Promise.resolve([deployed]);
+    });
+    flow.send();
+    await tick();
+    flow.switchNetwork("SN_SEPOLIA");
+    flow.send();
+    await tick();
+    expect(flow.imports).toEqual([]);
+    expect(asked).toEqual(["SN_MAIN", "SN_SEPOLIA"]);
+    expect(flow.pickers()).toBe(1);
+    flow.send();
+    await tick();
+    expect(flow.sent).toEqual([["SN_SEPOLIA", PASTED_KEY, undefined]]);
+  });
+
+  test("a value changed without an input event still refuses the old ticks", async () => {
+    const flow = mountSettings(() => Promise.resolve([deployed]));
+    flow.send();
+    await tick();
+    flow.raw.value = "0xbeef";
+    flow.send();
+    await tick();
+    expect(flow.imports).toEqual([]);
+    expect(flow.pickers()).toBe(1);
+    flow.send();
+    await tick();
+    expect(flow.sent).toEqual([["SN_MAIN", "0xbeef", undefined]]);
   });
 });
 

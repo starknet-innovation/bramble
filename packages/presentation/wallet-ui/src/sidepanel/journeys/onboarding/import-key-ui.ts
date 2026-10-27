@@ -11,7 +11,8 @@ import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
-import { mountReadyKeyPicker, type ReadyKeyPicker } from "./ready-key-picker";
+import { mountReadyKeyPicker } from "./ready-key-picker";
+import { type ReadyKeyInputs, readyKeySession } from "./ready-key-session";
 
 /** Dependencies the key-import binding closes over. */
 export type KeyImportUiDeps = {
@@ -51,19 +52,28 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
   const saltInput = form.querySelector<HTMLInputElement>('input[name="importKeySalt"]');
   const result = form.querySelector<HTMLElement>("#import-key-result");
   let active = false;
-  let picker: ReadyKeyPicker | null = null;
+  const salt = (): string | undefined => {
+    const value = saltInput?.value.trim() ?? "";
+    return contractSelect?.value === "argent" && value.length > 0 ? value : undefined;
+  };
+  const inputs = (): ReadyKeyInputs => ({
+    key: rawInput?.value.trim() ?? "",
+    networkId: deps.networkId(),
+    salt: salt(),
+  });
+  const session = readyKeySession(inputs);
 
   const refreshGate = (): void => {
     if (continueButton) {
       continueButton.disabled =
-        (rawInput?.value.trim() ?? "").length === 0 ||
-        (picker !== null && picker.picked().length === 0);
+        (rawInput?.value.trim() ?? "").length === 0 || session.picked()?.length === 0;
     }
   };
-  // A changed key, salt, or account type makes the listed accounts stale.
+  // A changed key, salt, or account type makes the listed accounts stale, and
+  // drops any list still on its way.
   const dropPicker = (): void => {
-    picker?.remove();
-    picker = null;
+    session.invalidate();
+    buttonBusy(continueButton, false);
     refreshGate();
   };
 
@@ -88,27 +98,28 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
   syncSaltField();
   rawInput?.addEventListener("input", dropPicker);
   saltInput?.addEventListener("input", dropPicker);
-  const salt = (): string | undefined => {
-    const value = saltInput?.value.trim() ?? "";
-    return contractSelect?.value === "argent" && value.length > 0 ? value : undefined;
-  };
   continueButton?.addEventListener("click", () => {
     if (continueButton.disabled) {
       return;
     }
-    if (contractSelect?.value !== "argent" || picker !== null) {
+    if (contractSelect?.value !== "argent" || session.matches()) {
       deps.showStep("password");
       return;
     }
     buttonBusy(continueButton, true);
-    void wallet
-      .discoverReadyKeyAccounts(deps.networkId(), rawInput?.value.trim() ?? "", salt())
-      .then(
+    void session
+      .discover(
+        (snapshot) =>
+          wallet.discoverReadyKeyAccounts(snapshot.networkId, snapshot.key, snapshot.salt),
         (candidates) => {
-          if (result) {
-            result.textContent = "";
-            picker = mountReadyKeyPicker(result, candidates, new Set(), refreshGate);
-          }
+          if (!result) return null;
+          result.textContent = "";
+          return mountReadyKeyPicker(result, candidates, new Set(), refreshGate);
+        },
+      )
+      .then(
+        (outcome) => {
+          if (outcome === "superseded") return;
           buttonBusy(continueButton, false);
           refreshGate();
         },
@@ -132,20 +143,29 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
       showToast("Enter the account's private key", "error", form);
       return;
     }
-    const picked = contract === "argent" ? picker?.picked() : undefined;
-    if (contract === "argent" && (picked === undefined || picked.length === 0)) {
-      showToast("Choose the accounts to import", "error", form);
-      return;
+    // Only ticks made for exactly this key, salt, and network are sent; a list
+    // built for other inputs is dropped and the user lists the accounts again.
+    const selection = contract === "argent" ? session.selection() : null;
+    if (contract === "argent") {
+      if (selection === null) {
+        dropPicker();
+        deps.showStep("import-key");
+      }
+      if (selection === null || selection.classHashes.length === 0) {
+        showToast("Choose the accounts to import", "error", form);
+        return;
+      }
     }
+    const sent = selection?.inputs ?? { key: rawKey, networkId: deps.networkId(), salt: salt() };
     buttonBusy(deps.passwordContinue, true);
     try {
       await wallet.createKeyVault(
-        deps.networkId(),
-        rawKey,
+        sent.networkId,
+        sent.key,
         deps.passphrase(),
         contract,
-        salt(),
-        picked,
+        sent.salt,
+        selection?.classHashes,
       );
       showToast("Wallet created", "success", form);
       await deps.render(await wallet.loadStatus());

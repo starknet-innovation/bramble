@@ -64,7 +64,10 @@ const DEPLOYED_031 = {
   deployed: true,
 } as const;
 
-const mount = (options?: { readonly createKeyVault?: () => Promise<string> }) => {
+const mount = (options?: {
+  readonly createKeyVault?: () => Promise<string>;
+  readonly discover?: () => Promise<readonly (typeof DEPLOYED_031)[]>;
+}) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
@@ -88,7 +91,7 @@ const mount = (options?: { readonly createKeyVault?: () => Promise<string> }) =>
     },
     discoverReadyKeyAccounts(networkId: string, privateKey: string, deploymentSalt?: string) {
       discovered.push([networkId, privateKey, deploymentSalt]);
-      return Promise.resolve([DEPLOYED_031]);
+      return options?.discover?.() ?? Promise.resolve([DEPLOYED_031]);
     },
     loadStatus: () => Promise.resolve({ ...status, accountCount: 1, hasVault: true }),
   } as unknown as SidepanelWallet;
@@ -176,5 +179,59 @@ describe("onboarding private-key import", () => {
     expect(flow.picked).toEqual([[ARGENT_031]]);
     expect(flow.renders()).toBe(0);
     expect(flow.app.querySelector("#import-key-result")?.textContent).toBe("Wallet already exists");
+  });
+
+  const readyKeyListed = async (flow: ReturnType<typeof mount>): Promise<void> => {
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#key-method-button");
+    setValue(flow.app, 'select[name="importKeyContractType"]', "argent");
+    setValue(flow.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
+    click(flow.app, "#import-key-continue");
+    await tick();
+  };
+
+  for (const [input, selector] of [
+    ["key", 'textarea[name="importKeyRaw"]'],
+    ["salt", 'input[name="importKeySalt"]'],
+  ] as const) {
+    test(`a ${input} edited during the check drops the late answer`, async () => {
+      let resolve: (rows: readonly (typeof DEPLOYED_031)[]) => void = () => undefined;
+      const flow = mount({
+        discover: () =>
+          new Promise((res) => {
+            resolve = res;
+          }),
+      });
+      click(flow.app, "#add-existing-button");
+      click(flow.app, "#key-method-button");
+      setValue(flow.app, 'select[name="importKeyContractType"]', "argent");
+      setValue(flow.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
+      click(flow.app, "#import-key-continue");
+      setValue(flow.app, selector, "0xbeef");
+      resolve([DEPLOYED_031]);
+      await tick();
+      expect(flow.app.querySelector("[data-ready-key-picker]")).toBeNull();
+      expect(flow.app.querySelector<HTMLButtonElement>("#import-key-continue")?.disabled).toBe(
+        false,
+      );
+      expect(activeStep(flow.app)).toBe("import-key");
+    });
+  }
+
+  test("a key changed after listing is refused at creation and listed again", async () => {
+    const flow = mount();
+    await readyKeyListed(flow);
+    click(flow.app, "#import-key-continue");
+    expect(activeStep(flow.app)).toBe("password");
+    // Changed without an input event, so only the snapshot check can see it.
+    const raw = flow.app.querySelector<HTMLTextAreaElement>('textarea[name="importKeyRaw"]');
+    if (raw) raw.value = "0xbeef";
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#password-continue-button");
+    await tick();
+    expect(flow.created).toEqual([]);
+    expect(activeStep(flow.app)).toBe("import-key");
+    expect(flow.app.querySelector("[data-ready-key-picker]")).toBeNull();
   });
 });

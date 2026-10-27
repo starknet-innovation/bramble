@@ -9,7 +9,8 @@
  */
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
-import { mountReadyKeyPicker, type ReadyKeyPicker } from "../onboarding/ready-key-picker";
+import { mountReadyKeyPicker } from "../onboarding/ready-key-picker";
+import { type ReadyKeyInputs, readyKeySession } from "../onboarding/ready-key-session";
 import type { SettingsUiDeps } from "./settings-ui";
 
 const IMPORT_LABEL = "Import account";
@@ -19,7 +20,8 @@ const IMPORT_PICKED_LABEL = "Import selected";
  * Binds the "Import private key" form: on submit, sends the pasted key to the
  * background import flow, then resets the form and re-renders on success. A
  * Ready key takes two submits: one to list its accounts, one to import the
- * ticked ones. Invalid keys, duplicates, and a locked wallet surface as a
+ * ticked ones, and only while the key, salt, and network are still the ones
+ * the list was built for. Invalid keys, duplicates, and a locked wallet surface as a
  * status message without adding an account.
  */
 export const bindImportKey = (deps: SettingsUiDeps): void => {
@@ -30,20 +32,30 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     'select[name="accountContractType"]',
   );
   const deploymentSaltInput = form?.querySelector<HTMLInputElement>('input[name="deploymentSalt"]');
-  let picker: ReadyKeyPicker | null = null;
+  const rawKeyInput = form?.querySelector<HTMLTextAreaElement>('textarea[name="rawKey"]');
+  const inputs = (): ReadyKeyInputs => ({
+    key: rawKeyInput?.value.trim() ?? "",
+    networkId: deps.networkId(),
+    salt:
+      accountContractSelect?.value === "argent"
+        ? deploymentSaltInput?.value.trim() || undefined
+        : undefined,
+  });
+  const session = readyKeySession(inputs);
 
   const setLabel = (label: string): void => {
     submitButton?.lastChild?.replaceWith(label);
   };
   const refreshGate = (): void => {
-    if (submitButton && picker) submitButton.disabled = picker.picked().length === 0;
+    const picked = session.picked();
+    if (submitButton && picked) submitButton.disabled = picked.length === 0;
   };
-  // A changed key, salt, or account type makes the listed accounts stale.
+  // A changed key, salt, or account type makes the listed accounts stale, and
+  // drops any list still on its way.
   const dropPicker = (): void => {
-    picker?.remove();
-    picker = null;
+    session.invalidate();
     setLabel(IMPORT_LABEL);
-    if (submitButton) submitButton.disabled = false;
+    buttonBusy(submitButton, false);
   };
 
   const syncDeploymentSalt = (): void => {
@@ -58,7 +70,7 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     dropPicker();
   });
   syncDeploymentSalt();
-  form?.querySelector('textarea[name="rawKey"]')?.addEventListener("input", dropPicker);
+  rawKeyInput?.addEventListener("input", dropPicker);
   deploymentSaltInput?.addEventListener("input", dropPicker);
 
   const fail = (error: unknown): void => {
@@ -87,18 +99,31 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
         : undefined;
 
     buttonBusy(submitButton, true);
-    if (accountContractType === "argent" && picker === null) {
-      void deps.wallet
-        .discoverReadyKeyAccounts(deps.networkId(), privateKey, deploymentSalt)
-        .then((candidates) => {
-          const before = submitButton ?? result;
-          if (before) {
-            picker = mountReadyKeyPicker(
-              before,
-              candidates,
-              deps.existingAccountIds?.() ?? new Set(),
-              refreshGate,
-            );
+    // No list, or one built for other inputs (the network can change under
+    // it): list the accounts for the inputs as they are now.
+    if (accountContractType === "argent" && !session.matches()) {
+      setLabel(IMPORT_LABEL);
+      void session
+        .discover(
+          (snapshot) =>
+            deps.wallet.discoverReadyKeyAccounts(snapshot.networkId, snapshot.key, snapshot.salt),
+          (candidates) => {
+            const before = submitButton ?? result;
+            return before
+              ? mountReadyKeyPicker(
+                  before,
+                  candidates,
+                  deps.existingAccountIds?.() ?? new Set(),
+                  refreshGate,
+                )
+              : null;
+          },
+        )
+        .then((outcome) => {
+          if (outcome === "superseded") return;
+          if (outcome === "changed") {
+            dropPicker();
+            return;
           }
           if (result) result.textContent = "";
           buttonBusy(submitButton, false);
@@ -107,14 +132,22 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
         }, fail);
       return;
     }
-    const picked = picker?.picked();
-    if (picked !== undefined && picked.length === 0) {
+    // A Ready import sends exactly the key, salt, and network its picker was
+    // built from, with the ticks made there; nothing is re-read from the form.
+    const selection = accountContractType === "argent" ? session.selection() : null;
+    const picked = selection?.classHashes;
+    if (accountContractType === "argent" && (picked === undefined || picked.length === 0)) {
       buttonBusy(submitButton, false);
       refreshGate();
       return;
     }
+    const sent = selection?.inputs ?? {
+      key: privateKey,
+      networkId: deps.networkId(),
+      salt: deploymentSalt,
+    };
     void deps.wallet
-      .importAccount(deps.networkId(), privateKey, accountContractType, deploymentSalt, picked)
+      .importAccount(sent.networkId, sent.key, accountContractType, sent.salt, picked)
       .then(async () => {
         // The paint loop skips the repaint when the flow's markup is
         // unchanged, so the form must not rely on it to leave the busy state
