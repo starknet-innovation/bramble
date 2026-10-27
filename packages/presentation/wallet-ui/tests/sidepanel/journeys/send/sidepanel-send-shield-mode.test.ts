@@ -231,13 +231,14 @@ describe("a shield shortcut", () => {
     expect(text(app, "#send-review-button")).toBe("Review send");
   });
 
-  test("warns in review when the public STRK cannot cover the pool and network fees", async () => {
+  test("says in review how much STRK the shield needs and how much to add", async () => {
     const { app } = open(shieldIntent, {
       async preparePrivacyDeposit() {
         return {
           id: `sha256:${"d".repeat(64)}`,
           kind: "deposit",
-          // The 50 STRK balance covers the network fee but not the pool fee too.
+          // The 50 STRK balance does not cover the pool fee and the network fee
+          // at its 75 STRK signing ceiling (issue 665).
           networkFee: { overallFee: "50000000000000000000", unit: "FRI" },
           payloadDigest: `sha256:${"d".repeat(64)}`,
           poolAddress: "0xabc",
@@ -255,8 +256,12 @@ describe("a shield shortcut", () => {
 
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("review");
     expect(app.textContent).toContain(
-      "This account's STRK balance is less than this transaction needs",
+      "This shield needs up to 75.000001 STRK in fees. Add 25.000001 STRK, then review again.",
     );
+    // One notice, not the generic one as well.
+    expect(app.textContent).not.toContain("This account's STRK balance is less than");
+    // Warn-only today: the owner has not chosen to block Confirm on a shortfall.
+    expect(app.querySelector<HTMLButtonElement>("#send-confirm-button")?.disabled).toBe(false);
   });
 
   test("fails a shield closed when its fee could not be estimated", async () => {

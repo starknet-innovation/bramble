@@ -27,6 +27,40 @@ const asBigInt = (value: string): bigint | null => {
 };
 
 /**
+ * What a shield needs from the public STRK balance, and how much of it is
+ * missing (issue 665). `need` is the pool fee, the most the network fee may
+ * be signed for (`networkMaxFee`, the reviewed ceiling rather than the bare
+ * estimate, so the figure is an upper bound and "up to" is true), and the
+ * amount when the shielded token is STRK itself (`amountIfStrk`, else `0n`).
+ * `short` is how far `balance` (raw STRK base units) falls below `need`, or
+ * `0n` when it covers it.
+ *
+ * Fails open like {@link resolveFeeAffordability}: an unknown or malformed
+ * balance, an unknown network ceiling, or any negative figure yields `null` —
+ * no claim, never a fabricated shortfall. Never throws.
+ */
+export const shieldStrkNeed = (input: {
+  readonly amountIfStrk: bigint;
+  readonly balance: string | null;
+  readonly networkMaxFee: bigint | null;
+  readonly poolFee: bigint;
+}): { readonly need: bigint; readonly short: bigint } | null => {
+  const balance = input.balance === null ? null : asBigInt(input.balance);
+  if (
+    balance === null ||
+    input.networkMaxFee === null ||
+    balance < 0n ||
+    input.networkMaxFee < 0n ||
+    input.poolFee < 0n ||
+    input.amountIfStrk < 0n
+  ) {
+    return null;
+  }
+  const need = input.poolFee + input.networkMaxFee + input.amountIfStrk;
+  return { need, short: need > balance ? need - balance : 0n };
+};
+
+/**
  * Decides whether `balance` (raw STRK base units) covers the estimated fee
  * plus, when the transaction itself spends STRK, the amount being sent
  * (`sendAmount`, raw base units). Only `FRI` estimates are comparable against

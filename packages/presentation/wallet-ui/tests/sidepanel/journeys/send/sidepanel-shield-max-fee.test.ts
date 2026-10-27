@@ -110,17 +110,26 @@ describe("the review of a shield", () => {
     shieldStrkFunding(shield({ amount }).fields, [strkBalance], preparation(null).poolFeeFri);
 
   test("warns when the balance cannot also cover the proved network fee", () => {
-    expect(funding("48")).toEqual({ balance: strkBalance.balance, spent: 50n * STRK });
+    expect(funding("48")).toEqual({
+      amountIfStrk: 48n * STRK,
+      balance: strkBalance.balance,
+      poolFee: 2n * STRK,
+    });
     expect(preparedReview(preparation("1000"), funding("48")).feeAffordability).toBe(
       "insufficient",
     );
   });
 
-  test("the shield's Cost box shows the existing shortfall notice", () => {
+  test("the shield's Cost box says what it needs and what to add, in place of the generic notice", () => {
+    // 2 STRK pool fee + 48 STRK + the 1000 FRI estimate's 1500 FRI ceiling,
+    // against 50 STRK: short by 1500 FRI, shown rounded up, never down to 0.
     const html = reviewFeeSection(preparedReview(preparation("1000"), funding("48")), {
       id: "review-retry-fee",
     });
-    expect(html).toContain("This account's STRK balance is less than this transaction needs");
+    expect(html).toContain(
+      "This shield needs up to 50.000001 STRK, including the amount. Add 0.000001 STRK, then review again.",
+    );
+    expect(html).not.toContain("This account's STRK balance is less than");
   });
 
   test("is satisfied when it can", () => {
@@ -130,8 +139,9 @@ describe("the review of a shield", () => {
   test("counts only the pool fee for a token other than STRK", () => {
     const ethShield = shield({ amount: "48", tokenAddress: "0x9" }).fields;
     expect(shieldStrkFunding(ethShield, [strkBalance], preparation(null).poolFeeFri)).toEqual({
+      amountIfStrk: 0n,
       balance: strkBalance.balance,
-      spent: 2n * STRK,
+      poolFee: 2n * STRK,
     });
   });
 

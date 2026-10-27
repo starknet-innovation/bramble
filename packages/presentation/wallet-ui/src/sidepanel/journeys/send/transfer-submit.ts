@@ -8,7 +8,8 @@
  * route rather than once per privacy feature.
  */
 
-import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { reviewedFeeCeiling } from "@bramble/starknet/fee-bounds";
+import { resolveFeeAffordability, shieldStrkNeed } from "@bramble/transactions/fee-funds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import type { TokenBalance } from "../../../popup/responses/responses";
@@ -16,7 +17,7 @@ import { friendlyError } from "../../runtime/friendly-error";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { errorDetails } from "../../shared/dom";
-import { reviewFeeBlocked } from "../../shared/review-render";
+import { type ReviewFeeState, reviewFeeBlocked } from "../../shared/review-render";
 import { knownNotSent, outcomeUnknownReason, priorWriteRefusal } from "../../shared/submit-outcome";
 import type { PreparationProgressSink, PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferFields, TransferState } from "./transfer-model";
@@ -28,7 +29,8 @@ type ShieldStrkFunding = ReturnType<typeof shieldStrkFunding>;
  * Review shape the Send screen renders. Structurally the public review, so the
  * pool routes synthesize one from their preparation.
  */
-export type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
+export type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>> &
+  Pick<ReviewFeeState, "shieldStrkNeed">;
 
 const preparePrivateRoute = (
   route: SendRoute,
@@ -98,8 +100,10 @@ export const preparationFailure = (route: SendRoute): string => {
  * charge from the private balance, so its `feeAffordability` is `"unknown"`
  * (no notice). A shield pays its network fee, the pool fee, and (for STRK) the
  * amount from the public STRK balance; with `funding` the review runs the
- * shared warn-only predicate over all three, so a Max shield whose network fee
- * the balance cannot cover is flagged before Confirm.
+ * shared predicate over all three, and `shieldStrkNeed` states what the
+ * shield needs and how much STRK to add, with the network fee at the ceiling
+ * the submission is held to (issue 665). Whether a shortfall also blocks
+ * Confirm is {@link BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT}.
  *
  * `flags` is empty by construction, not by omission. The only recipient flag
  * that can refuse a send — address poisoning — is applied in the background
@@ -112,22 +116,65 @@ export const preparationFailure = (route: SendRoute): string => {
 export const preparedReview = (
   preparation: PrivacyPreparation,
   funding: ShieldStrkFunding = null,
-): TransferReview =>
-  ({
-    fee: preparation.networkFee ?? null,
-    feeAffordability:
-      funding && preparation.route === "public-account"
-        ? resolveFeeAffordability({
-            balance: funding.balance,
-            fee: preparation.networkFee ?? null,
-            sendAmount: funding.spent,
-          })
-        : "unknown",
+): TransferReview => {
+  const shield = funding && preparation.route === "public-account" ? funding : null;
+  const networkFee = preparation.networkFee ?? null;
+  const need =
+    shield === null
+      ? null
+      : shieldStrkNeed({
+          amountIfStrk: shield.amountIfStrk,
+          balance: shield.balance,
+          networkMaxFee: networkFee?.unit === "FRI" ? reviewedFeeCeiling(networkFee) : null,
+          poolFee: shield.poolFee,
+        });
+  return {
+    fee: networkFee,
+    feeAffordability: shield
+      ? resolveFeeAffordability({
+          balance: shield.balance,
+          fee: networkFee,
+          sendAmount: shield.poolFee + shield.amountIfStrk,
+        })
+      : "unknown",
     feeEstimateFailed: preparation.route === "public-account" && !preparation.networkFee,
     flags: [],
     requiresDeployment: false,
+    ...(need === null || shield === null
+      ? {}
+      : { shieldStrkNeed: { ...need, includesAmount: shield.amountIfStrk > 0n } }),
     summaries: [...preparation.summaries],
-  }) as TransferReview;
+  } as TransferReview;
+};
+
+/**
+ * Owner decision for issue 665: whether a shield review that is short of
+ * public STRK may still be confirmed. `false` (today's behaviour) keeps it
+ * warn-only — the review names the figures and Confirm stays live, so the
+ * network refuses what the balance cannot pay. `true` disables Confirm and
+ * withholds the reviewed key until a fresh review fits the balance. Flipping
+ * this constant is the whole change.
+ */
+export const BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT = false;
+
+/**
+ * True when Confirm must stay disabled because a shield review is short of
+ * public STRK and `block` (default {@link BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT})
+ * says a shortfall blocks. False whenever no shortfall is known: an unknown
+ * balance or ceiling makes no claim and never blocks.
+ */
+export const shieldStrkBlocked = (
+  review: ReviewFeeState,
+  block: boolean = BLOCK_CONFIRM_WHEN_SHIELD_STRK_SHORT,
+): boolean => block && review.shieldStrkNeed !== undefined && review.shieldStrkNeed.short > 0n;
+
+/**
+ * Whether the review's Confirm stays disabled: no single fee figure to consent
+ * to ({@link reviewFeeBlocked}), or a shield shortfall the owner chose to block
+ * on ({@link shieldStrkBlocked}).
+ */
+export const confirmBlocked = (review: ReviewFeeState): boolean =>
+  reviewFeeBlocked(review) || shieldStrkBlocked(review);
 
 const FEE_UNAVAILABLE = "Fee estimate unavailable. Retry before authorizing this transaction.";
 
@@ -187,7 +234,7 @@ export const preparedState = (
     progress: null,
     requiresDeployment: false,
     review,
-    reviewedKey: review.feeEstimateFailed ? null : key,
+    reviewedKey: review.feeEstimateFailed || shieldStrkBlocked(review) ? null : key,
     stage: "review",
     submissionUnknown: false,
     transactionHash: null,

@@ -246,24 +246,28 @@ export const transferSpendable = (context: TransferRouteContext): bigint | null 
 
 /**
  * What a shield takes from the public STRK balance besides its network fee
- * (the pool fee, plus the amount when the shielded token is STRK) and that
- * balance, so the review can warn when the balance cannot cover all three.
- * Max holds back only the pool fee, because the network fee is not known
- * until the deposit is proved. Null off the shield route or while the pool
- * fee is unknown.
+ * (the pool fee, plus the amount when the shielded token is STRK; `0n`
+ * otherwise) and that balance, so the review can say what the shield needs
+ * and how much is missing. Max holds back only the pool fee, because the
+ * network fee is not known until the deposit is proved. Null off the shield
+ * route or while the pool fee is unknown.
  */
 export const shieldStrkFunding = (
   fields: TransferFields,
   publicBalances: readonly TokenBalance[] | undefined,
   poolFeeFri: string | undefined,
-): { readonly balance: string | null; readonly spent: bigint } | null => {
+): {
+  readonly amountIfStrk: bigint;
+  readonly balance: string | null;
+  readonly poolFee: bigint;
+} | null => {
   const poolFee = rawBalance(poolFeeFri);
   if (transferRoute(fields).id !== "public-private" || poolFee === null) return null;
   const strk = publicBalances?.find((entry) => sameFelt(entry.address, STRK_TOKEN_ADDRESS));
   const amount = sameFelt(fields.tokenAddress, STRK_TOKEN_ADDRESS)
     ? rawAmount(fields.amount, fields.tokenDecimals)
     : 0n;
-  return { balance: strk?.balance ?? null, spent: poolFee + amount };
+  return { amountIfStrk: amount, balance: strk?.balance ?? null, poolFee };
 };
 
 /**
