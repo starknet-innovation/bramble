@@ -354,6 +354,15 @@ export const recoveryScanFields = (): string => `
           <ul class="allowance-list" aria-label="Recovered Braavos accounts"></ul>
         </div>
       </details>
+      <details class="disclosure" data-recovery-address>
+        <summary>Can't find it? Paste the account address</summary>
+        <div class="disclosure-body onboarding-fields">
+          ${textField({ autocapitalize: "none", autocomplete: "off", label: "Address or explorer link", maxlength: 200, name: "recoveryAddress", spellcheck: false })}
+          <p class="hint" data-recovery-address-network></p>
+          ${button({ attributes: { id: "recovery-address-search" }, label: "Find account", variant: "secondary" })}
+          <p id="recovery-address-result" class="hint" role="status"></p>
+        </div>
+      </details>
       <details class="disclosure">
         <summary>Advanced manual index</summary>
         <div class="disclosure-body onboarding-fields">

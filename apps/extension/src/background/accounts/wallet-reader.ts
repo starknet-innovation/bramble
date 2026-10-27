@@ -27,6 +27,7 @@ import type {
   OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
+  PreviewImportedAccountInput,
   RevokeOriginInput,
   SetActiveAccountInput,
   SignHashInput,
@@ -94,6 +95,8 @@ export type WalletStatusReader = {
   ) => Promise<readonly AccountRef[]>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
+  /** Derives a raw key's public account without writing; optional only for partial test stubs. */
+  readonly previewImportedAccount?: (input: PreviewImportedAccountInput) => Promise<AccountRef>;
   /**
    * Records a used shadow-account scope in the encrypted vault (#443). Optional
    * only for partial test stubs; every shadow-account path fails closed
@@ -205,6 +208,9 @@ export const createWalletReader = (
     },
     async previewAccount(input) {
       return (await required()).previewAccount(input);
+    },
+    async previewImportedAccount(input) {
+      return (await required()).previewImportedAccount(input);
     },
     async recoverAccounts(input) {
       return (await required()).recoverAccounts(input);

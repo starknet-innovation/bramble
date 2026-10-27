@@ -105,6 +105,7 @@ const READER_SENTENCES = new Set([
   "Enter a secure WSS relay URL with no spaces, quotes, angle brackets or backticks",
   "Guardian removal is still in its waiting period",
   "Host permission controls are unavailable in this browser",
+  "No account to import",
   "No RPC endpoint answered on this network's chain",
   "Nostr coordination requires a recovery-phrase wallet",
   "Private pool fee changed. Review the transaction again.",
