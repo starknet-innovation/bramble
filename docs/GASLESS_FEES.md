@@ -7,15 +7,11 @@ permalink: /gasless-fees/
 # Gasless fees: pay gas in tokens other than STRK
 
 Design for issue #752. Status: **backend shipped, wallet not started**. The contract
-below is what [mc-backend #55](https://github.com/starknet-innovation/mc-backend/pull/55)
-deployed ("Add gasless paymaster routes for public transactions"). The wallet work
-is not in this pull request. It stays behind a wallet flag that is off until that
-work is reviewed. The backend switches are already on.
-
-This revision could not read mc-backend `INTEGRATION.md`. The codes below are the
-ones named with the #55 deployment. If `INTEGRATION.md` disagrees, it wins, and the
-wallet parser should be locked to that file before it hard-codes a status or a JSON
-shape.
+below is mc-backend's `docs/INTEGRATION.md` ("Gasless paymaster") and
+`src/gateway/gasless.rs`, as deployed by
+[mc-backend #55](https://github.com/starknet-innovation/mc-backend/pull/55). The
+wallet work is not in this pull request. It stays behind a wallet flag that is off
+until that work is reviewed. The backend switches are already on.
 
 ## Goal
 
@@ -44,11 +40,13 @@ and the maximum.
 ## Paymaster
 
 AVNU hosts the SNIP-29 paymaster. The bramble gateway proxies to it: mainnet through
-the backend's existing `PAYMASTER_URL`, Sepolia through
-`https://sepolia.paymaster.avnu.fi`. The wallet calls the gateway routes below and
+the backend's existing `PAYMASTER_URL`, Sepolia through `SEPOLIA_PAYMASTER_URL`
+(`https://sepolia.paymaster.avnu.fi`). That Sepolia host must serve Sepolia, because
+the Sepolia route is never screened. The wallet calls the gateway routes below and
 does not call those AVNU hosts itself. Supported tokens, prices, the relayer, the
-forwarder address, and the `buildTransaction` response shape are AVNU's. SNF does
-not configure them.
+forwarder, the `buildTransaction` response, and relay error codes are AVNU's. The
+gateway does not configure a token allowlist: `gas_token` only has to be a non-zero
+`0x` address, and AVNU accepts or refuses the token.
 
 Gasless mode is `fee_mode.mode` `default`. The user pays in `gas_token`. AVNU's
 relayer submits the transaction and fronts the STRK. The signed calls include the
@@ -84,31 +82,54 @@ the Sepolia gasless URL does not wait on one.
 | `paymaster_isAvailable` | none |
 | `paymaster_getSupportedTokens` | none |
 | `paymaster_buildTransaction` | the object below |
-| `paymaster_executeTransaction` | same object; execution is the returned typed data |
+| `paymaster_executeTransaction` | same `parameters`; invoke carries `typed_data` and `signature` |
 
-`build` and `execute` use the same JSON-RPC `params` nesting as
-`buildStrk20PaymasterPlan`: `parameters` carries `version`, `fee_mode`, and any
-`time_bounds`; `transaction` carries `type` plus the invoke, and the deployment
-when the type is `deploy_and_invoke`.
+`paymaster_isAvailable` and `paymaster_getSupportedTokens` take no parameters.
+`params` may be omitted, `[]`, or `{}`. Anything else is
+`400 {"error":"invalid_gasless_request"}`.
 
-- `version`: `0x1`.
-- `fee_mode`: `mode` `default`, `gas_token` a `0x` felt, optional `tip`. Omit
-  `tip`. The private `feeMode` helper in `paymaster.ts` sends `sponsored_private`
-  and `tip: "normal"`, and it stays on that route.
-- `time_bounds`: optional. Omit them unless a reviewed wallet change sets the
-  window itself. Every value in them is a `0x` felt.
-- transaction `type`: `invoke` or `deploy_and_invoke`.
+`build` and `execute` use the JSON-RPC `params` object `gasless.rs` checks.
+`parameters` and `transaction` are the only keys.
 
-A deployment deploys the invoking `user_address`. Build it with `accountDeployment`
-in `packages/platform/starknet/src/transactions/deployment.ts`, which throws when
-the payload does not reproduce the stored address. The deployment address and the
-invoke `user_address` are that address.
+`parameters`:
 
-Anything else is `400 invalid_gasless_request`. That includes `sponsored`,
-`sponsored_private`, `paymaster_getSupportedTokensAndPrices`, revision 0 typed
-data, a decimal or named felt, and a deployment of any other address.
+- `version`: the string `0x1`.
+- `fee_mode`: exactly `mode` and `gas_token`, plus optional `tip`. `mode` is
+  `default`. `gas_token` is a non-zero `0x` address. `tip` is `slow`, `normal`,
+  or `fast`, or `{"custom": <u64>}`. Omitting `tip` is valid. `sponsored`,
+  `sponsored_private`, a zero or decimal `gas_token`, and any other key (including
+  an API key) are `400 {"error":"invalid_gasless_request"}`. The private `feeMode`
+  helper in `paymaster.ts` sends `sponsored_private` and stays on that route. Its
+  `tip: "normal"` string is a legal gasless tip only when `mode` is `default`.
+- `time_bounds`: optional. Absent is valid. `null` is valid, because the relay
+  echoes an absent window that way and the client may send that object back. An
+  object has exactly `execute_after` and `execute_before`, each a JSON number
+  that fits in `u64`, not a `0x` felt and not a string.
 
-A blocklisted address is `403 address_not_allowed`.
+`transaction.type` is `invoke` or `deploy_and_invoke`. No other keys.
+
+- `invoke` carries `user_address`, a non-zero `0x` address.
+- A build's invoke also carries `calls`, and nothing else. `calls` is a non-empty
+  array. Each call is exactly `to`, `selector`, and `calldata`, all `0x` felts.
+  `to` is non-zero. `calldata` may be empty. An entrypoint name is rejected.
+- An execution's invoke also carries `typed_data` and `signature`, and nothing
+  else. `signature` is a non-empty array of `0x` felts. A build that already
+  includes `typed_data`, or an execution that still includes `calls`, is a 400.
+- `deploy_and_invoke` adds `deployment` with `address`, `class_hash`, `salt`,
+  `calldata`, and `version`. `address` is the invoking `user_address`.
+  `class_hash`, `salt`, and `calldata` are `0x` felts (`calldata` may be empty).
+  `version` is a JSON number from 0 through 255; the gateway's own fixture uses
+  `1`. Optional `sigdata` is `null` or an array of `0x` felts.
+
+Build the deployment from `accountDeployment` in
+`packages/platform/starknet/src/transactions/deployment.ts`, which throws when the
+payload does not reproduce the stored address. Map `contractAddress` to
+`address`, `classHash` to `class_hash`, `addressSalt` to `salt`, and
+`constructorCalldata` to `calldata`.
+
+A blocklisted `0x` address anywhere in the request, including a quoted call or a
+signed `Calls` entry, is `403 {"error":"address_not_allowed"}`. The scan reads
+`0x` values only, which is why any other encoding is a 400.
 
 ### Sponsor key (shipped)
 
@@ -119,62 +140,93 @@ only to the two routes above.
 
 ### Execution: SNIP-9 v2 only
 
-`paymaster_executeTransaction` accepts an outside execution only when it is the
-SNIP-9 v2 body AVNU's `buildTransaction` returned:
+`paymaster_executeTransaction` accepts `typed_data` only when it is exactly the
+SNIP-9 v2 object AVNU's `buildTransaction` returned. The gateway compares `types`,
+`primaryType`, and `domain` for equality, so the wallet passes that object back
+unchanged.
 
-- SNIP-12 revision 1. In this repo that is `TypedDataRevision.ACTIVE`, the v2
-  branch of `packages/features/transactions/src/routing/outside-execution-terms.ts`.
-- Domain name `Account.execute_from_outside` (`OUTSIDE_EXECUTION_DOMAIN` in that
-  file), version 2.
-- Domain chain `SN_MAIN` on the mainnet route and `SN_SEPOLIA` on the Sepolia
-  route. Those are `STARKNET_NETWORKS.SN_MAIN.chainId` (`0x534e5f4d41494e`) and
-  `STARKNET_NETWORKS.SN_SEPOLIA.chainId` (`0x534e5f5345504f4c4941`).
-- Five message fields: `Caller`, `Nonce`, `Execute After`, `Execute Before`,
-  `Calls`. Those are the v2 names the private parser and `outsideExecutionCalls`
-  already read.
-- Every value a `0x` felt.
+`types` is the pinned `starknet` package's `OutsideExecutionTypesV2`: `StarknetDomain`
+of shortstrings, `OutsideExecution` with `Calls: Call*`, and `Call` (not
+`OutsideCall`) of `To`, `Selector`, `Calldata`.
+`primaryType` is `OutsideExecution`. The domain is
 
-Revision 0, any other schema, and decimal, numeric, or named values are `400`.
-An account that cannot sign v2 pays in STRK through `submitInvokeTransaction`.
-The wallet does not call the gasless route for it.
+```json
+{"name": "Account.execute_from_outside", "version": "2", "chainId": "SN_MAIN", "revision": "1"}
+```
 
-The body that goes to `paymaster_executeTransaction` is AVNU's typed data, after
-the local hash matches. `outsideExecution.getTypedData` can emit a decimal or a
-shortstring that hashes the same and still draws a 400, so the wallet does not
-submit that rewrite. A body that is not already this shape is a refused quote.
+`chainId` is the shortstring `SN_MAIN` on the mainnet route and `SN_SEPOLIA` on
+the Sepolia route. It is not `STARKNET_NETWORKS[id].chainId`. Those felts
+(`0x534e5f4d41494e`, `0x534e5f5345504f4c4941`) are what the shortstrings hash to.
+A felt, or the other network's shortstring, is
+`400 {"error":"invalid_gasless_request"}`, so a mainnet signature cannot be
+relayed through the unscreened Sepolia route.
+
+The message has exactly five fields: `Caller`, `Nonce`, `Execute After`,
+`Execute Before`, `Calls`. `Calls` is non-empty. Every message value, including
+each call's `To`, `Selector`, and `Calldata`, is a `0x` felt string. `Execute After`
+and `Execute Before` must also fit in `u64`. Decimal strings, JSON numbers, and
+names such as `transfer` are `400 {"error":"invalid_gasless_request"}`. So is
+SNIP-9 v1 (revision 0, `StarkNetDomain`, snake_case fields).
+
+The gateway hashes that struct the way the account does: selectors stay raw felts
+and are not hashed again as function names, and the domain's version and revision
+are the felts 2 and 1. `typedData.getMessageHash` on this v2 object follows that
+rule. `outsideExecution.getTypedData` is for the local comparison only.
+`CallData.compile` emits decimals, and passing `STARKNET_NETWORKS[id].chainId`
+into `getTypedData` puts a felt in `domain.chainId`. Either one is a body the
+gateway rejects, even when the hash matches. An account that cannot sign v2 pays
+in STRK through `submitInvokeTransaction`.
 
 ### Mainnet screening
 
 While on-demand screening is on, a mainnet `paymaster_executeTransaction` is
-screened the way an RPC invoke is. The subject is the signed `user_address`.
+screened the way an RPC invoke is. Quotes, `paymaster_isAvailable`,
+`paymaster_getSupportedTokens`, and every Sepolia call are not screened. The
+subject is the signed `user_address`, canonicalized without leading zeros.
 
-The gateway checks that the signed Execute After / Execute Before window contains
-now, then makes one batched `starknet_call` of `is_valid_signature` (the result
-must be `VALID`) and `is_valid_outside_execution_nonce`. That happens before AVNU
-is asked to submit.
+Before any paid screening the gateway asks the configured mainnet node whether
+`is_valid_signature` accepts the signature over that SNIP-12 hash and whether
+`is_valid_outside_execution_nonce` still holds. The signed window must contain
+now strictly: `Execute After < now < Execute Before`. That stands in for the RPC
+path's simulation. An expired or already-spent signature is not replayed to
+screen someone else's wallet.
 
-An account refusal — no contract, no entrypoint, a revert, a spent nonce, a
-closed window — is `400 invalid_screening_transaction`. Any other node error is
-`503 screening_unavailable`. That 503 is retryable: screening did not finish, so
-nothing was submitted. Other screening failures use the same codes as a screened
-RPC invoke. This repository does not branch on those codes in the public invoke
-path. Confirm the list in `INTEGRATION.md`. Until the client knows that list, an
-unrecognised screening code is a determinate refusal: no retry, and no lost-write
-marker.
+An account refusal — no contract, no entrypoint, a reverted call, a failed
+unspent-nonce check, or a closed window — is
+`400 {"error":"invalid_screening_transaction"}`. Any other node error is
+`503 {"error":"screening_unavailable"}`. That 503 is retryable: screening did not
+finish, and AVNU was not asked to submit.
 
-**Mainnet `deploy_and_invoke` is `403 screening_subject_unverifiable`.** The
-account does not exist yet, so screening has no subject. A new mainnet account
-cannot deploy gaslessly while screening is on. The same call works on Sepolia.
+The other screening outcomes are the RPC path's: `address_not_allowed`,
+`screening_denied`, `screening_pending`, and `screening_unavailable`.
+`403 {"error":"screening_denied"}` means the account's evidence was not approved.
+The denial stands for 24 hours, is not a blocklist entry, and retrying sooner
+returns the same answer without a new screening. A mainnet STRK invoke goes
+through the same gate, so it is not a way around this denial. The gasless section
+names `screening_pending` and does not give it a separate HTTP status; the wallet
+keys off `{"error":"screening_pending"}` and treats it as not submitted.
+
+**A mainnet `deploy_and_invoke` execution is
+`403 {"error":"screening_subject_unverifiable"}`.** The account is not on chain
+yet, so it cannot vouch for its signature. It has to be deployed another way
+first. The same call is accepted on Sepolia, which is not screened. A quote of
+`deploy_and_invoke` is not an execution and is not refused for this reason.
 
 ### Switches, limits, monitoring (shipped)
 
-- `GASLESS_MAINNET_ENABLED` and `GASLESS_SEPOLIA_ENABLED` default on. A disabled
-  network answers `404 gasless_disabled`.
-- Rate limit: 20 requests per minute per IP per network. The HTTP status for that
-  limit was not in the summary available here. Back off, and confirm the status
-  in `INTEGRATION.md` before hard-coding it. An execute is retried on that
-  response only once the status is known to mean the gateway refused before
-  forwarding.
+- `GASLESS_MAINNET_ENABLED` and `GASLESS_SEPOLIA_ENABLED` default on. Each network
+  serves unless its variable is `false`. Any value other than `true` or `false`
+  stops the gateway at startup. `false` answers `404 {"error":"gasless_disabled"}`
+  and does not forward.
+- The gasless section defines no per-route quota and no throttle status.
+  `docs/INTEGRATION.md` and `gasless.rs` are the contract checked here; neither
+  states one. The gateway as a whole sits behind its WAF ceiling and per-client
+  application rate limits. The wallet does not hard-code a gasless quota. A
+  throttle that is not one of the codes below is not a submitted execution.
+- Relay JSON-RPC errors are returned verbatim with HTTP 200. A relay HTTP 4xx
+  becomes the code `upstream_rejected`, in the same `{"error"}` body as the other
+  refusals. The gasless section does not give that response a status code. Both
+  are stated refusals: the relay did not accept the call.
 - Monitoring, alarms, and a dashboard are in place in mc-backend. This repo's
   `.github/workflows` does not gain a gasless probe.
 
@@ -210,54 +262,32 @@ already uses for a private-relay approval. It is a different path from the dapp
 
 ## How the wallet handles each code
 
-`rpc` in `paymaster-rpc.ts` is the wrong classifier for these codes. On
-`paymaster_executeTransaction` (`BROADCAST_PAYMASTER_METHOD`) every 5xx becomes
-`IndeterminateRpcWriteError`, and every 4xx becomes
-`WalletError(STRK20_SUBMISSION_UNAVAILABLE)` with the body unread. A gasless
-`503 screening_unavailable` would then look like a lost broadcast. The gasless
-poster reads the status and the code first. The strk20 gateway in this repo
-answers `{ error: code }` from `reject` in `apps/terminal/api/_lib/security.ts`;
-confirm that shape against `INTEGRATION.md` before locking the parser. An
-unreadable body on a 4xx is a determinate refusal.
+Gateway refusals are `{"error":"<code>"}`. `rpc` maps every
+`paymaster_executeTransaction` 5xx to `IndeterminateRpcWriteError` and every 4xx
+to `STRK20_SUBMISSION_UNAVAILABLE` without reading the body, so a retryable
+`503 {"error":"screening_unavailable"}` would look like a lost broadcast. The
+gasless poster reads the JSON code, and a JSON-RPC `error` on HTTP 200, which is
+how AVNU refuses. An unreadable 4xx body is a determinate refusal. A 400 or 403
+on execute must not throw `IndeterminateRpcWriteError`
+(`INDETERMINATE_RPC_WRITE_MESSAGE` in `packages/platform/starknet/src/rpc/provider.ts`,
+already mapped by `friendly-error-copy.ts`).
 
-- **`400 invalid_gasless_request`.** The body is outside the contract above.
-  Determinate: the wallet does not retry that body and does not sign. On execute,
-  nothing was accepted.
-- **`403 address_not_allowed`.** The address is blocklisted. Tell the user. The
-  wallet does not retry and does not switch token on its own. STRK stays available
-  when the STRK balance covers the fee.
-- **`403 screening_subject_unverifiable`.** Mainnet `deploy_and_invoke` for an
-  account that does not exist yet. Tell the user. The wallet does not retry that
-  call. Sepolia is unaffected. A STRK deploy still goes through
-  `submitReviewedAccountDeployment`.
-- **`400 invalid_screening_transaction`.** The account refused the execution.
-  Determinate: the wallet does not resubmit that signature. A closed window is a
-  new quote. A spent nonce stops.
-- **`503 screening_unavailable`.** A node error during screening, before AVNU.
-  Retry with backoff. Nothing was submitted.
-- **Other screening codes.** The same codes as a screened RPC invoke. Determinate
-  refusal until `INTEGRATION.md` lists them. No retry, and no lost-write marker.
-- **`404 gasless_disabled`.** That network's switch is off. Hide gasless and pay
-  in STRK.
-- **v1-only, multisig, read-only, or an unknown class.** A v1 execution would be a
-  400. The wallet does not call the route. Pay in STRK.
-- **Rate limit, 20 per minute per IP per network.** The HTTP status was not in the
-  summary available here. Back off. Until that status is confirmed to be a refusal
-  from before AVNU was called, the wallet does not automatically retry an execute.
-- **Lost execute answer.** A timeout, an unreadable body, or a 5xx other than
-  `screening_unavailable`, after the request was sent.
-  `IndeterminateRpcWriteError` with `INDETERMINATE_RPC_WRITE_MESSAGE`. No blind
-  retry.
+- `400 {"error":"invalid_gasless_request"}`: do not retry that body or sign. Nothing was accepted.
+- `403 {"error":"address_not_allowed"}`: a blocklisted address is in the request, or screening refused the subject. Tell the user. Do not retry or switch token.
+- `403 {"error":"screening_denied"}`: stands for 24 hours and is not a blocklist entry. Do not retry sooner. A mainnet STRK invoke uses the same gate, so it is not a workaround.
+- `{"error":"screening_pending"}`: a screening outcome with no HTTP status in the gasless section. Treat it as not submitted.
+- `403 {"error":"screening_subject_unverifiable"}`: mainnet `deploy_and_invoke` execution. Tell the user. Do not retry. Sepolia still works. STRK deploy stays on `submitReviewedAccountDeployment`.
+- `400 {"error":"invalid_screening_transaction"}`: the account refused. Do not resubmit that signature. A closed window is a new quote. A spent nonce stops.
+- `503 {"error":"screening_unavailable"}`: node error before AVNU. Retry with backoff. Nothing was submitted.
+- `404 {"error":"gasless_disabled"}`: that network's switch is off. Hide gasless and pay in STRK.
+- HTTP 200 with the relay's JSON-RPC `error`, or `{"error":"upstream_rejected"}`: AVNU refused. Determinate. A new quote is allowed; the same body is not.
+- v1-only, multisig, read-only, or an unknown class: do not call the route. Pay in STRK.
+- Lost execute answer: timeout, unreadable body, or a 5xx other than `screening_unavailable` after the request was sent. `IndeterminateRpcWriteError`. No blind retry.
 
 Proposed copy, for the approval-copy review, not shipped strings:
-
-- `address_not_allowed`: "This account can't pay the network fee in another token."
-- `screening_subject_unverifiable`: "Deploying on Mainnet needs STRK."
-
-`INDETERMINATE_RPC_WRITE_MESSAGE` lives in `packages/platform/starknet/src/rpc/provider.ts`.
-The panel already maps that sentence through
-`packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy.ts`.
-A 400 or a 403 on execute must not throw `IndeterminateRpcWriteError`.
+`address_not_allowed` "This transaction can't be paid in another token.";
+`screening_subject_unverifiable` "Deploying on Mainnet needs STRK.";
+`screening_denied` "This transaction wasn't approved."
 
 ## Wallet plan
 
@@ -304,42 +334,39 @@ Constants next to `STRK20_GATEWAY_BASE` in `packages/features/privacy/src/config
 
 ### Quote, verify, sign
 
-1. `paymaster_isAvailable`, then `paymaster_getSupportedTokens`, both with no
-   parameters. The token list is that method's result. Parse it fail-closed, the
-   way `isQuoteFee` refuses an unknown quote. Leave the private `FEE_KEYS` list
-   on the private quote. A failure here hides gasless; STRK still works.
-2. `paymaster_buildTransaction` for the user's calls, with `version` `0x1` and
+1. `paymaster_isAvailable`, then `paymaster_getSupportedTokens`, with no
+   parameters. The token list is that result, parsed fail-closed the way
+   `isQuoteFee` refuses an unknown quote. Leave `FEE_KEYS` on the private quote.
+   A failure here hides gasless; STRK still works.
+2. `paymaster_buildTransaction` with the call shape above, `version` `0x1`, and
    `fee_mode.mode` `default`.
 3. A v2-only check in front of `bindPaymasterTypedData`
-   (`paymaster-typed-data.ts`). That function accepts v1
-   (`domain.version === "1"`) and numbers (`isJsonNumberish`). Gasless rejects
-   both before it hashes. Require revision 1, `OUTSIDE_EXECUTION_DOMAIN`, version
-   2, the route's chain felt, and the five v2 message fields.
-   `typedData.getMessageHash` on AVNU's body must equal the hash of
-   `outsideExecution.getTypedData` rebuilt from the user's calls plus the one fee
-   transfer. Sign only on a match.
-4. Read the calls with `outsideExecutionCalls`
-   (`packages/features/transactions/src/routing/outside-execution-calls.ts`), the
-   v2 branch (`Calls`). Accept the quote only when those calls are the user's
-   calls plus one fee transfer: the chosen token, the reviewed forwarder, and an
-   amount within the quoted maximum and the independent ceiling. A quote that
-   adds, reorders, or changes a call is refused.
-5. The forwarder is AVNU's. Pin it per network as a reviewed constant. A
-   recipient taken only from the quote would accept a substituted payee. The
-   address itself is an open input.
+   (`paymaster-typed-data.ts`), which today accepts v1 and numbers
+   (`isJsonNumberish`). Require the typed-data object in the contract above,
+   including the route's chain shortstring. `typedData.getMessageHash` on AVNU's
+   body must equal `outsideExecution.getTypedData` rebuilt from the user's calls
+   plus one fee transfer. Sign only on a match. Execute sends AVNU's object, not
+   the rebuild.
+4. Read the calls with `outsideExecutionCalls` (the v2 `Calls` branch). Accept
+   the quote only when they are the user's calls plus one fee transfer, in the
+   chosen token, to the reviewed forwarder, within the quoted maximum and the
+   independent ceiling.
+5. Pin the mainnet forwarder from the gateway's hash fixture, a real AVNU quote
+   for an Argent 0.4.0 account. `Caller` and the fee-transfer recipient are both
+   `0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f`. Sepolia's
+   forwarder is not in the gateway source. Do not take the recipient only from
+   the quote.
 6. The ceiling uses `PriceService.getPrices`
-   (`packages/features/portfolio/src/tokens/prices.ts`) against the STRK estimate
-   from `estimateInvokeApprovalFee`
-   (`apps/extension/src/background/approvals/invoke-fee-review.ts`). It does not
-   use AVNU's price. No price means that token is not offered. Wording is the
-   public equivalent of `STRK20_FEE_UNVERIFIABLE`, and it does not say "strk20".
-7. `isPaymasterAuthorizationLive` must still see a live window before the
-   signature is sent, with the ten-second floor `signedPublicInvoke` uses. The
-   gateway repeats the window check and returns
-   `400 invalid_screening_transaction` when it is closed.
-8. Sign the way `official-sdk-service.ts` signs a relay approval:
-   `typedData.getMessageHash`, then `signHash`. `paymaster_executeTransaction`
-   sends AVNU's typed data and that signature.
+   (`packages/features/portfolio/src/tokens/prices.ts`) against
+   `estimateInvokeApprovalFee`
+   (`apps/extension/src/background/approvals/invoke-fee-review.ts`), not AVNU's
+   price. No price means that token is not offered. The refusal must not say
+   "strk20".
+7. `isPaymasterAuthorizationLive` must see a live window before signing, with
+   the ten-second floor `signedPublicInvoke` uses. The gateway's check is the
+   strict window above.
+8. Sign as `official-sdk-service.ts` does: `typedData.getMessageHash`, then
+   `signHash`. Execute sends AVNU's typed data and that signature.
 
 ### Affordability and the approval card
 
@@ -387,8 +414,12 @@ without a second fee renderer.
 
 Sepolia only, and only while the Sepolia wallet flag is on.
 
-`accountDeployment` supplies the payload. Mainnet does not offer the call. A
-mainnet deploy that the user can pay in STRK stays on
+`accountDeployment` supplies the address, class hash, salt, and constructor
+calldata. The request uses the deployment object in the contract above, with
+`version` `1`, the number in the gateway's fixture, and never a value above 255.
+Mainnet does not offer the call. The gateway accepts a mainnet quote of that
+type and refuses the execution; the wallet offers neither. A mainnet deploy that
+the user can pay in STRK stays on
 `submitReviewedAccountDeployment`
 (`apps/extension/src/background/accounts/deployment-ops.ts`) and
 `submitAccountDeployment`.
@@ -420,7 +451,7 @@ the wallet flag turns on. The review covers:
 
 - a quote that adds calls, changes the token or the recipient, or inflates the fee;
 - typed-data substitution and replay across networks or accounts, including a v1
-  body, a decimal felt, or the other network's chain felt;
+  body, a decimal felt, or the other network's chain shortstring;
 - a price that pushes the fee past the reviewed maximum;
 - a client sending `sponsored` or `sponsored_private`, or posting to the strk20
   paymaster URL (the gateway refuses this; the wallet still must not send it);
@@ -448,29 +479,18 @@ the wallet flag turns on. The review covers:
   `STRK20_FEE_CEILING_MULTIPLIER` (2×) would be a separate decision.
 - Whether another token is offered when the user has enough STRK, or only when
   STRK is short. Proposed: only when short.
-- AVNU's forwarder address on each network, pinned before the fee-transfer check
-  is strict.
+- Sepolia's forwarder. Mainnet's, from the gateway hash fixture, is recorded
+  above. It is one quote's Caller, not a setting AVNU promised to keep.
 - A new mainnet account with no STRK. Gasless deploy cannot cover it while
   screening is on. Sponsored deployment (#768) is the other open path, and it is
   out of scope here.
-- The rate-limit HTTP status, and the JSON body of the error codes, against
-  mc-backend `INTEGRATION.md`.
 - Whether Argent 0.3.0 and 0.3.1 can sign SNIP-9 v2. Until that is checked they
   pay in STRK.
 
 ## Backend asks, and where they landed
 
-These were the open asks. They are shipped, or they are no longer ours to set.
-
-1. **Route.** The two `POST /api/paymaster/*` routes. Private routes unchanged.
-2. **Sponsor key.** Separate services. The key stays on the strk20 paymaster
-   service. Sponsored modes are refused.
-3. **Pause switch.** `GASLESS_MAINNET_ENABLED` / `GASLESS_SEPOLIA_ENABLED`,
-   default on. `404 gasless_disabled` when off.
-4. **Rate limit.** 20 requests per minute per IP per network.
-5. **Monitoring.** In place in mc-backend, with alarms and a dashboard.
-6. **Sepolia.** Shipped, and it is where `deploy_and_invoke` works while mainnet
-   screening is on.
-7. **Token list, prices, forwarder, relayer, response shape.** AVNU's.
-   `paymaster_getSupportedTokens` is the token list. The relayer fronts STRK;
-   what it loses on a revert is AVNU's exposure.
+The route, the sponsor-key split, the `GASLESS_*_ENABLED` pause switch, Sepolia,
+and monitoring are shipped and described above. The integration contract defines
+no gasless-specific quota; the gateway keeps its WAF ceiling and per-client
+limits. Tokens, prices, the forwarder, the relayer, and the response shape are
+AVNU's. `paymaster_getSupportedTokens` is the token list.
