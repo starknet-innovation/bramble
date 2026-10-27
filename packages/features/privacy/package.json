@@ -1,5 +1,6 @@
 {
   "name": "@bramble/privacy",
+  "description": "STRK20 private balances: schemas, the official SDK adapter, note discovery and proving, registration, recipient policy, preparation and proof-boundary submission.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

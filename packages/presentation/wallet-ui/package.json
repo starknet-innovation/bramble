@@ -1,5 +1,6 @@
 {
   "name": "@bramble/wallet-ui",
+  "description": "Production side-panel views, typed runtime clients, controllers, transitions and styles, shared with UI Lab.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

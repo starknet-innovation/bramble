@@ -23,6 +23,14 @@ export {
  * Re-exported advisory signability probe for recovery candidates (issue 542).
  */
 /**
+ * Re-exported owner read for importing an account by address (issue 398).
+ */
+export {
+  type AccountOwnerInput,
+  type AccountOwnerReading,
+  getAccountOwner,
+} from "../transactions/account-owner";
+/**
  * Re-exported phrase-driven Ready (Argent) guardian removal.
  */
 export {

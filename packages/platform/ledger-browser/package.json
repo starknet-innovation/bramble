@@ -1,5 +1,6 @@
 {
   "name": "@bramble/ledger-browser",
+  "description": "The pinned Ledger dependencies and browser transports (WebHID, WebUSB, WebBLE), the Buffer boundary and device lifecycle.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

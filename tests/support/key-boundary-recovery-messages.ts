@@ -70,6 +70,26 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     },
     sender: extensionSender,
   },
+  // Import by address (issue 398): the phrase-bearing lookup carries the
+  // phrase, and the own-phrase lookup reaches a vault read; both responses are
+  // scanned for secret material.
+  {
+    message: {
+      address: account.address,
+      mnemonic: SECRET_MNEMONIC,
+      networkId: "SN_MAIN",
+      type: "wallet.findRecoveryAccountByAddress",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      address: account.address,
+      networkId: "SN_MAIN",
+      type: "wallet.findOwnAccountByAddress",
+    },
+    sender: extensionSender,
+  },
   // Phrase-driven 2FA / guardian removal: reviews and confirmed submissions
   // (live payloads, so the scan reaches the handlers rather than refusals).
   { message: { type: "wallet.reviewArgentRecovery" }, sender: extensionSender },

@@ -1,5 +1,6 @@
 {
   "name": "@bramble/ui-lab",
+  "description": "Isolated Storybook of deterministic production wallet UI scenarios, hosted on access-controlled GitHub Pages.",
   "version": "0.1.0",
   "private": true,
   "type": "module",
