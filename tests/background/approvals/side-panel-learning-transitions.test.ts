@@ -1,8 +1,9 @@
 /**
- * Side-panel learning transitions (#690): automatic surface changes are
- * journaled before the preference changes and reconciled at start, a newer
- * user choice or panel render outranks an automatic write still in flight, and
- * the notice commands answer only this extension's own pages.
+ * The request surface in effect (#690) is derived from the user's choice and
+ * the learner's one record, and nothing else. The learner never writes the
+ * user's choice, a real side panel render corrects a wrong "unsupported" at
+ * any time, an unwritable record falls back to today's behavior, and the
+ * notice commands answer only this extension's own pages.
  */
 import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@bramble/store/kv";
@@ -14,195 +15,201 @@ import {
   extensionSender,
   testExtension,
 } from "../../support/background-wallet-stub";
-import { learningHarness, settleAll } from "../../support/side-panel-learning-harness";
+import { settleAll, surfaceHarness } from "../../support/side-panel-learning-harness";
 
-const ARC_SWITCH = { automatic: true, notice: true, state: "unsupported" };
-const VERIFIED = { automatic: false, notice: false, state: "verified" };
+const UNSUPPORTED = { notice: true, state: "unsupported" };
+const VERIFIED = { notice: false, state: "verified" };
 
-// An Arc-like click that reaches the point where the popup save is held.
-const switchHeld = async (run: ReturnType<typeof learningHarness>) => {
-  await run.learner.load();
-  run.hold();
-  await run.click();
-  expect(run.calls.saves).toEqual(["popup"]);
-};
-
-describe("an automatic switch overtaken while it is being written", () => {
-  test("a side panel render during the popup save keeps the side panel", async () => {
-    const run = learningHarness();
-    await switchHeld(run);
-    run.render();
-    await run.sidePanelTalks();
-    await run.release();
-    // The overtaken switch puts the side panel back itself: one write, not a
-    // second revert queued behind it.
-    expect(run.calls.saves).toEqual(["popup", "side-panel"]);
-    expect(run.saved()).toBe("side-panel");
-    expect(run.preference()).toBe("side-panel");
-    expect(run.learner.state()).toBe("verified");
-    expect(run.learner.nativeClick()).toBe(true);
-    expect(await run.learner.notice()).toBe(false);
-    expect(await run.stored()).toEqual(VERIFIED);
-    expect(run.calls.popups).toEqual([]);
-  });
-
-  test("a Settings choice during the popup save wins over the stale write", async () => {
-    for (const choice of ["side-panel", "popup"] as const) {
-      const run = learningHarness();
-      await switchHeld(run);
-      run.userChooses(choice);
-      await run.release();
-      expect(run.saved()).toBe(choice);
-      expect(run.preference()).toBe(choice);
-      expect(run.learner.state()).toBe("unsupported");
-      expect(await run.learner.notice()).toBe(false);
-      expect(await run.stored()).toEqual({ automatic: false, notice: false, state: "unsupported" });
-      expect(run.calls.popups).toEqual([]);
-      // The user's choice is never undone by a later render.
-      run.render();
-      await run.sidePanelTalks();
-      expect(run.saved()).toBe(choice);
+describe("the surface in effect", () => {
+  test("is derived from the user's choice and what was learned", async () => {
+    for (const [preference, stored, effective, toolbar] of [
+      ["popup", null, "popup", { native: false, popup: "popup.html" }],
+      ["popup", UNSUPPORTED, "popup", { native: false, popup: "popup.html" }],
+      ["popup", VERIFIED, "popup", { native: false, popup: "popup.html" }],
+      ["side-panel", null, "side-panel", { native: false, popup: "" }],
+      ["side-panel", VERIFIED, "side-panel", { native: true, popup: "" }],
+      ["side-panel", UNSUPPORTED, "popup", { native: false, popup: "popup.html" }],
+    ] as const) {
+      const store = createMemoryStore();
+      if (stored) await store.set(SIDE_PANEL_LEARNING_STORE_KEY, stored);
+      const run = surfaceHarness({ preference, store });
+      await run.load();
+      expect(run.control.effective()).toBe(effective);
+      expect(run.toolbar()).toEqual(toolbar);
+      expect(run.control.preference()).toBe(preference);
     }
   });
 
-  test("a Settings choice during an automatic revert wins over it", async () => {
-    const run = learningHarness();
-    await run.learner.load();
+  test("the learner never writes the user's choice, whatever they choose and when", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    // A choice made in the middle of a learning window stands.
+    run.onWatch(() => run.userChooses("popup"));
     await run.click();
-    run.hold();
+    expect(run.control.preference()).toBe("popup");
+    expect(run.control.effective()).toBe("popup");
+    // Learning still recorded what it saw, in its own record only.
+    expect(await run.stored()).toEqual(UNSUPPORTED);
     run.render();
     await run.sidePanelTalks();
-    expect(run.calls.saves).toEqual(["popup", "side-panel"]);
-    run.userChooses("popup");
-    await run.release();
-    expect(run.saved()).toBe("popup");
-    expect(run.preference()).toBe("popup");
-    expect(run.learner.state()).toBe("verified");
-    expect(await run.stored()).toEqual(VERIFIED);
+    expect(run.control.preference()).toBe("popup");
+    expect(run.control.effective()).toBe("popup");
   });
 });
 
-describe("self-healing across a restart", () => {
-  test("a panel already open when the worker restarts undoes an automatic switch", async () => {
-    const store = createMemoryStore();
-    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, ARC_SWITCH);
-    const run = learningHarness({ preference: "popup", store });
+describe("self-healing", () => {
+  test("a side panel render after a wrong 'unsupported' serves the side panel again", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    await run.click();
+    expect(run.control.effective()).toBe("popup");
     run.render();
-    await run.learner.load();
-    await settleAll();
-    expect(run.saved()).toBe("side-panel");
+    await run.sidePanelTalks();
     expect(run.learner.state()).toBe("verified");
-    expect(run.learner.nativeClick()).toBe(true);
+    expect(run.control.effective()).toBe("side-panel");
+    expect(run.toolbar()).toEqual({ native: true, popup: "" });
+    expect(await run.learner.notice()).toBe(false);
+    expect(await run.stored()).toEqual(VERIFIED);
+  });
+
+  test("a panel already open at a restart corrects it too", async () => {
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, UNSUPPORTED);
+    const run = surfaceHarness({ store });
+    run.render();
+    await run.load();
+    expect(run.control.effective()).toBe("side-panel");
     expect(await store.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(VERIFIED);
   });
 
-  test("a switch the user kept is only marked verified at restart, never undone", async () => {
-    const store = createMemoryStore();
-    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, {
-      ...ARC_SWITCH,
-      automatic: false,
-      notice: false,
+  test("a render during the learning window wins over the late result", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    run.onWatch(() => {
+      run.learner.observeSender({
+        id: "bramble",
+        url: "chrome-extension://bramble/sidepanel.html",
+      });
     });
-    const run = learningHarness({ preference: "popup", store });
-    run.render();
-    await run.learner.load();
-    await settleAll();
-    expect(run.calls.saves).toEqual([]);
-    expect(run.saved()).toBe("popup");
+    await run.click();
     expect(run.learner.state()).toBe("verified");
+    expect(await run.stored()).toEqual(VERIFIED);
+    expect(run.calls.popups).toEqual([]);
   });
 });
 
-describe("partial commits", () => {
-  test("a journal that can't be written changes nothing", async () => {
-    const run = learningHarness({ writeFails: () => true });
-    await run.learner.load();
-    await run.click();
-    expect(run.calls.saves).toEqual([]);
-    expect(run.saved()).toBe("side-panel");
-    expect(run.learner.state()).toBe("unknown");
-  });
-
-  test("an outcome that can't be recorded is recovered from the journal at the next start", async () => {
-    const store = createMemoryStore();
-    // Every write after the journal fails.
-    let writes = 0;
-    const run = learningHarness({ store, writeFails: () => ++writes > 1 });
-    await run.learner.load();
-    await run.click();
-    expect(run.saved()).toBe("popup");
-    expect(await store.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual({
-      automatic: false,
-      notice: false,
-      pending: "popup",
-      state: "unknown",
+describe("record changes in order", () => {
+  test("a learning result queued behind a render still being stored doesn't overwrite it", async () => {
+    const base = createMemoryStore();
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
     });
-    const restarted = learningHarness({ preference: "popup", store });
-    await restarted.learner.load();
-    expect(restarted.learner.state()).toBe("unsupported");
-    expect(await store.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(ARC_SWITCH);
-    // Self-healing still works: a slow Chrome's late render restores the panel.
-    restarted.render();
-    await restarted.sidePanelTalks();
-    expect(restarted.saved()).toBe("side-panel");
-    expect(restarted.learner.state()).toBe("verified");
-  });
-
-  test("a worker stopped between the journal and the preference write leaves no switch", async () => {
-    const store = createMemoryStore();
-    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, {
-      automatic: false,
-      notice: false,
-      pending: "popup",
-      state: "unknown",
+    // The render's "verified" write is held, so the window still sees
+    // "unknown" and ends "absent", queuing its result behind the render.
+    const store = {
+      ...base,
+      set: async (key: string, value: unknown) => {
+        if ((value as { state?: string }).state === "verified") await held;
+        return base.set(key, value as never);
+      },
+    };
+    const run = surfaceHarness({ store });
+    await run.load();
+    run.onWatch(() => {
+      run.learner.observeSender({
+        id: "bramble",
+        url: "chrome-extension://bramble/sidepanel.html",
+      });
     });
-    const run = learningHarness({ preference: "side-panel", store });
-    await run.learner.load();
-    expect(run.learner.state()).toBe("unknown");
-    expect(await store.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual({
-      automatic: false,
-      notice: false,
-      state: "unknown",
-    });
-  });
-
-  test("a worker stopped mid-revert finishes it, or keeps the automatic switch", async () => {
-    for (const [preference, expected] of [
-      ["side-panel", VERIFIED],
-      ["popup", ARC_SWITCH],
-    ] as const) {
-      const store = createMemoryStore();
-      await store.set(SIDE_PANEL_LEARNING_STORE_KEY, { ...ARC_SWITCH, pending: "side-panel" });
-      const run = learningHarness({ preference, store });
-      await run.learner.load();
-      expect(await store.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(expected);
-    }
-  });
-
-  test("a toolbar the browser refuses to configure is retried, then repaired on the next click", async () => {
-    let refusals = 2;
-    const run = learningHarness({ applyFails: () => refusals-- > 0 });
-    await run.learner.load();
     await run.click();
-    // Saved and recorded, but both attempts to apply the popup were refused.
-    expect(run.saved()).toBe("popup");
-    expect(run.calls.applied).toEqual([]);
-    expect(await run.stored()).toEqual(ARC_SWITCH);
-    // With no popup applied the click reaches the listener again: reapply it.
-    await run.click();
-    expect(run.calls.applied).toEqual(["popup"]);
-    expect(run.calls.popups.length).toBeGreaterThan(0);
+    release();
+    await settleAll();
+    expect(run.learner.state()).toBe("verified");
+    expect(await base.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(VERIFIED);
+    expect(run.calls.popups).toEqual([]);
   });
+});
 
-  test("a refused restore keeps the working popup and retries on the next render", async () => {
-    const run = learningHarness({ saveFails: (surface) => surface === "side-panel" });
-    await run.learner.load();
+describe("choosing the side panel again where it was learned unsupported", () => {
+  test("reads as 'try again': one fresh click, never a loop", async () => {
+    const run = surfaceHarness();
+    await run.load();
     await run.click();
-    run.render();
-    await run.sidePanelTalks();
-    expect(run.saved()).toBe("popup");
     expect(run.learner.state()).toBe("unsupported");
-    expect(await run.stored()).toEqual(ARC_SWITCH);
+    run.userChooses("side-panel");
+    await settleAll();
+    expect(run.learner.state()).toBe("unknown");
+    expect(run.control.effective()).toBe("side-panel");
+    expect(run.toolbar()).toEqual({ native: false, popup: "" });
+    // The fresh click learns once more, and the popup serves it again.
+    await run.click();
+    expect(run.learner.state()).toBe("unsupported");
+    const queries = run.calls.queries;
+    // Without another explicit choice, later clicks don't learn again.
+    await run.click();
+    expect(run.calls.queries).toBe(queries);
+  });
+
+  test("choosing the popup, or the side panel on a verified browser, changes no record", async () => {
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, VERIFIED);
+    const run = surfaceHarness({ store });
+    await run.load();
+    run.userChooses("popup");
+    run.userChooses("side-panel");
+    await settleAll();
+    expect(await store.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(VERIFIED);
+    expect(run.learner.state()).toBe("verified");
+  });
+
+  test("choosing the popup where the side panel was learned unsupported keeps the record", async () => {
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, UNSUPPORTED);
+    const run = surfaceHarness({ store });
+    await run.load();
+    run.userChooses("popup");
+    await settleAll();
+    expect(await store.get(SIDE_PANEL_LEARNING_STORE_KEY)).toEqual(UNSUPPORTED);
+    expect(run.control.effective()).toBe("popup");
+  });
+});
+
+describe("an unwritable record", () => {
+  test("falls back to today's behavior and stops learning", async () => {
+    const run = surfaceHarness({ writeFails: () => true });
+    await run.load();
+    await run.click();
+    expect(run.control.effective()).toBe("side-panel");
+    expect(run.toolbar()).toEqual({ native: true, popup: "" });
+    expect(run.calls.popups).toEqual([]);
+    expect(await run.stored()).toBeUndefined();
+    const queries = run.calls.queries;
+    await run.click();
+    expect(run.calls.queries).toBe(queries);
+  });
+
+  test("a retry that can't be stored keeps the side panel the user chose", async () => {
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, UNSUPPORTED);
+    const run = surfaceHarness({ store, writeFails: () => true });
+    await run.load();
+    run.userChooses("side-panel");
+    await settleAll();
+    expect(run.control.effective()).toBe("side-panel");
+    expect(run.toolbar()).toEqual({ native: true, popup: "" });
+  });
+
+  test("a toolbar the browser refuses to configure is repaired on the next click", async () => {
+    let refusals = 0;
+    const run = surfaceHarness({ configureFails: () => refusals-- > 0 });
+    await run.load();
+    refusals = 1;
+    await run.click();
+    // Learned, but the popup couldn't be applied: the next click reapplies it.
+    expect(run.learner.state()).toBe("unsupported");
+    await run.click();
+    expect(run.toolbar().popup).toBe("popup.html");
   });
 });
 
@@ -229,6 +236,5 @@ describe("side panel notice commands through the router", () => {
         expect(typeof response["error"]).toBe("string");
       }
     }
-    await settleAll();
   });
 });

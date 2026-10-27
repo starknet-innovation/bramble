@@ -1,118 +1,15 @@
 /**
- * The request-surface control (#690): the user's choice drives the toolbar,
- * the built-in panel click waits until the side panel is known to render, and
- * a browser that never draws it is moved to the popup through the preferences
- * store. The notice commands only read and clear a flag.
+ * The request-surface toolbar wiring (#690): the built-in panel click stays
+ * off while the side panel is being learned, the notice commands only read and
+ * clear a flag, and no approval-surface module ever opens or focuses a window.
+ * The surface rules themselves are driven through the real control in
+ * side-panel-learning*.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@bramble/store/kv";
 import { configureApprovalSurface } from "../../../apps/extension/src/background/approvals/approval-surface";
-import { createApprovalSurfaceControl } from "../../../apps/extension/src/background/approvals/approval-surface-control";
 import { handleSidePanelNoticeOps } from "../../../apps/extension/src/background/approvals/side-panel-notice-ops";
 
-const flush = async (): Promise<void> => {
-  for (let i = 0; i < 200; i += 1) await Promise.resolve();
-};
-
-const chromium = (panelRenders: boolean) => {
-  const toolbar = { panel: [] as boolean[], popup: [] as string[] };
-  const clicks: ((tab?: { readonly windowId?: number }) => void)[] = [];
-  const browser = {
-    action: {
-      onClicked: {
-        addListener: (listener: (tab?: { readonly windowId?: number }) => void) =>
-          clicks.push(listener),
-      },
-      openPopup: async () => undefined,
-      setPopup: async ({ popup }: { readonly popup: string }) => {
-        toolbar.popup.push(popup);
-      },
-    },
-    runtime: {
-      getContexts: async () => (panelRenders && toolbar.panel.length > 1 ? [{}] : []),
-      getURL: (path: string) => `chrome-extension://bramble/${path}`,
-    },
-    sidePanel: {
-      open: async () => undefined,
-      setPanelBehavior: async ({ openPanelOnActionClick }: { openPanelOnActionClick: boolean }) => {
-        toolbar.panel.push(openPanelOnActionClick);
-      },
-    },
-  };
-  return { browser, clicks, toolbar };
-};
-
-// A preferences store that records each request surface written to it.
-const savingTo = (saved: unknown[]) => async () => ({
-  setDisplay: async (input: { readonly approvalSurface?: unknown }) => {
-    saved.push(input.approvalSurface);
-    return {} as never;
-  },
-});
-
-describe("approval surface control", () => {
-  test("hands the panel click to Chromium only once the side panel is known", async () => {
-    const { browser, clicks, toolbar } = chromium(true);
-    const saved: unknown[] = [];
-    const control = createApprovalSurfaceControl({
-      browser,
-      extensionId: "bramble",
-      preferences: savingTo(saved),
-      store: () => createMemoryStore(),
-      wait: async () => undefined,
-    });
-    control.bind();
-    control.update("side-panel");
-    await control.load();
-    await flush();
-    expect(toolbar.panel.at(-1)).toBe(false);
-    for (const click of clicks) click({ windowId: 1 });
-    await flush();
-    expect(control.learner.state()).toBe("verified");
-    expect(toolbar.panel.at(-1)).toBe(true);
-    expect(saved).toEqual([]);
-  });
-
-  test("moves a browser that never draws the panel to the popup through preferences", async () => {
-    const { browser, clicks, toolbar } = chromium(false);
-    const saved: unknown[] = [];
-    const control = createApprovalSurfaceControl({
-      browser,
-      extensionId: "bramble",
-      preferences: savingTo(saved),
-      store: () => createMemoryStore(),
-      wait: async () => undefined,
-    });
-    control.bind();
-    control.update("side-panel");
-    await control.load();
-    for (const click of clicks) click({ windowId: 1 });
-    await flush();
-    expect(saved).toEqual(["popup"]);
-    expect(control.preference()).toBe("popup");
-    expect(toolbar.popup.at(-1)).toBe("popup.html");
-    expect(toolbar.panel.at(-1)).toBe(false);
-  });
-
-  test("with the preferences store unavailable nothing switches", async () => {
-    const { browser, clicks, toolbar } = chromium(false);
-    const control = createApprovalSurfaceControl({
-      browser,
-      extensionId: "bramble",
-      preferences: async () => null,
-      store: () => createMemoryStore(),
-      wait: async () => undefined,
-    });
-    control.bind();
-    control.apply("side-panel");
-    await control.load();
-    for (const click of clicks) click({ windowId: 1 });
-    await flush();
-    expect(control.preference()).toBe("side-panel");
-    expect(control.learner.state()).toBe("unknown");
-    expect(toolbar.popup.at(-1)).toBe("");
-  });
-
+describe("toolbar configuration", () => {
   test("configureApprovalSurface keeps the panel click off while learning", async () => {
     const panel: boolean[] = [];
     const browser = {
@@ -131,39 +28,6 @@ describe("approval surface control", () => {
     await configureApprovalSurface(browser, "side-panel", false);
     await configureApprovalSurface(browser, "popup", true);
     expect(panel).toEqual([true, false, false]);
-  });
-});
-
-describe("approval surface control: self-healing", () => {
-  test("undoes its own popup switch when a real panel renders, never a user's choice", async () => {
-    for (const userChoice of [false, true]) {
-      const { browser, clicks } = chromium(false);
-      const saved: unknown[] = [];
-      // The learner's own saves go under the adapter, so they never come back
-      // through `update`; only the user's Settings choice does.
-      const control = createApprovalSurfaceControl({
-        browser,
-        extensionId: "bramble",
-        preferences: savingTo(saved),
-        store: () => createMemoryStore(),
-        wait: async () => undefined,
-      });
-      control.bind();
-      control.apply("side-panel");
-      await control.load();
-      for (const click of clicks) click({ windowId: 1 });
-      await flush();
-      expect(control.preference()).toBe("popup");
-      if (userChoice) control.update("popup");
-      control.learner.observeSender({
-        id: "bramble",
-        url: "chrome-extension://bramble/sidepanel.html",
-      });
-      await flush();
-      expect(saved).toEqual(userChoice ? ["popup"] : ["popup", "side-panel"]);
-      expect(control.preference()).toBe(userChoice ? "popup" : "side-panel");
-      expect(control.learner.state()).toBe("verified");
-    }
   });
 });
 

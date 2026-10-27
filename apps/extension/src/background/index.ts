@@ -77,13 +77,11 @@ const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
 declare const __MC_BUILD_BRANCH__: string | undefined;
 let productAnalyticsEnabled = false;
-// The request surface, and the side-panel learning that moves a browser that
-// never draws side panels (Arc, #690) to the popup. Its own saves go to the
-// store underneath the adapter, so they never read as the user's choice.
+// The request surface: the user's choice, and the side-panel learning that
+// serves it as the popup on a browser that never draws side panels (Arc, #690).
 const approvalSurface = createApprovalSurfaceControl({
   browser: extensionApi,
   extensionId: runtime?.id ?? "",
-  preferences: () => preferences,
   store: createBrowserLocalStore,
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 });
@@ -476,7 +474,7 @@ const openApprovalSurface = createApprovalSurfaceOpener({
   extensionId: runtime?.id ?? "",
   guard: originGuard,
   now: systemClock,
-  preference: approvalSurface.preference,
+  preference: approvalSurface.effective,
 });
 // Toolbar listeners (Firefox's sidebar, Chromium's side-panel learning), bound
 // at the top level: an idle worker drops any listener added later.

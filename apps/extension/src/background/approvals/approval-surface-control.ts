@@ -1,14 +1,16 @@
 /**
  * The background's one handle on the request surface: the user's choice, the
- * toolbar wiring, and the side-panel learning that switches a browser that
- * never draws side panels (Arc, #690) to the compact popup. Split from
- * `../index` so the entrypoint stays a wiring list.
+ * side-panel learning (#690), and the surface in effect derived from both.
+ * Split from `../index` so the entrypoint stays a wiring list.
+ *
+ * The user's choice is written only by the user (Settings, a restored backup).
+ * The learner writes only its own record. The surface in effect is:
+ * - the popup when the user chose the popup;
+ * - the side panel when the user chose it, unless this browser was learned
+ *   not to draw side panels (Arc), where the popup serves it instead.
  */
 
-import type {
-  ApprovalSurfacePreference,
-  WalletPreferencesStore,
-} from "@bramble/settings/preferences";
+import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
 import type { KeyValueStore } from "@bramble/store/kv";
 import {
   type ApprovalSurfaceBrowser,
@@ -35,41 +37,38 @@ export type ApprovalSurfaceControl = {
   readonly apply: (preference: ApprovalSurfacePreference) => void;
   /** Binds the toolbar listeners. Call once, at the top level of the worker. */
   readonly bind: () => void;
+  /** The surface in effect: the user's choice, after what was learned. */
+  readonly effective: () => ApprovalSurfacePreference;
   readonly learner: SidePanelLearner;
   /** Loads what was learned. Call once the stored choice has been applied. */
   readonly load: () => Promise<void>;
+  /** The user's own choice, as last saved. */
   readonly preference: () => ApprovalSurfacePreference;
   /**
-   * Applies a choice the user just saved (Settings, a restored backup) and
-   * tells the learner, so an automatic switch is never undone after it.
-   * Only the preferences store's user-facing writes reach this.
+   * Applies a choice the user just saved. Choosing the side panel again on a
+   * browser learned not to draw it asks the learner to try once more.
    */
   readonly update: (preference: ApprovalSurfacePreference) => void;
 };
 
-/**
- * Creates the control. `preferences` is the preferences store underneath the
- * background's adapter: the learner writes its own automatic changes there, so
- * they never come back through `update` as the user's. Null means storage is
- * unavailable, and then the learner changes nothing.
- */
+/** Creates the control. It never writes the user's choice. */
 export const createApprovalSurfaceControl = ({
   browser,
   extensionId,
-  preferences,
   store,
   wait,
 }: {
   readonly browser: ApprovalSurfaceControlBrowser | undefined;
   readonly extensionId: string;
-  readonly preferences: () => Promise<Pick<WalletPreferencesStore, "setDisplay"> | null>;
   readonly store: () => KeyValueStore | null;
   readonly wait: (ms: number) => Promise<void>;
 }): ApprovalSurfaceControl => {
   let preference: ApprovalSurfacePreference = "side-panel";
   let learner: SidePanelLearner | null = null;
+  const effective = (): ApprovalSurfacePreference =>
+    preference === "popup" || learner?.state() === "unsupported" ? "popup" : "side-panel";
   const configure = (): Promise<void> =>
-    configureApprovalSurface(browser, preference, learner?.nativeClick() ?? true);
+    configureApprovalSurface(browser, effective(), learner?.nativeClick() ?? true);
   const reconfigure = (): void => void configure().catch(() => undefined);
   const control = (resolved: SidePanelLearner): ApprovalSurfaceControl => ({
     apply(next) {
@@ -77,34 +76,26 @@ export const createApprovalSurfaceControl = ({
       reconfigure();
     },
     bind() {
-      bindToolbarActivation(browser, () => preference);
+      bindToolbarActivation(browser, effective);
       resolved.bind();
     },
+    effective,
     learner: resolved,
     load: () => resolved.load(),
     preference: () => preference,
     update(next) {
       preference = next;
-      resolved.userChose(next);
+      if (next === "side-panel") resolved.retrySidePanel();
       reconfigure();
     },
   });
   learner = createSidePanelLearner({
-    applySurface(next) {
-      preference = next;
-      return configure();
-    },
     browser,
+    configure,
     extensionId,
-    preference: () => preference,
-    reconfigure,
-    async saveSurface(next) {
-      const saved = await preferences();
-      if (!saved) throw new Error("preferences unavailable");
-      await saved.setDisplay({ approvalSurface: next });
-    },
     sidePanelUrl: browser?.runtime?.getURL?.("sidepanel.html") ?? "",
     store,
+    surface: effective,
     wait,
   });
   return control(learner);

@@ -6,23 +6,22 @@
  * panel has been seen, the toolbar click is routed here instead of Chromium's
  * built-in panel behavior. The panel is always asked to open first, exactly as
  * before, then the worker looks for a side-panel context. Seen, and the browser
- * goes back to the built-in behavior for good, which is what Chrome users get
- * on their first click. Never seen after the open resolved, and the request
- * surface switches to the compact popup, which Arc does draw.
+ * is `verified`: the built-in behavior applies for good, which is what Chrome
+ * users get on their first click. Never seen after the open resolved, and the
+ * browser is `unsupported`: the side-panel choice is served as the compact
+ * popup instead, which Arc does draw.
  *
- * That switch heals itself. If a real side panel renders later (a slow Chrome
- * machine whose panel loaded after the wait), an automatic switch is undone. A
- * choice the user made in Settings is never undone, and any newer user choice
- * or panel render outranks an automatic change still being written.
- *
- * Automatic changes are journaled: the intent is stored before the preference
- * changes, so a worker that dies between the two writes is reconciled at the
- * next start instead of leaving a popup nobody can explain or undo.
+ * The learner writes only its own record. The user's request-surface choice
+ * is never written here; the surface in effect is derived from both where the
+ * toolbar is configured (./approval-surface-control). So nothing the learner
+ * does can overwrite a choice, and a restart at any point finds one coherent
+ * record. A real side panel seen at any time marks the browser `verified`,
+ * which undoes a wrong `unsupported` (a slow Chrome machine whose panel loaded
+ * after the wait).
  *
  * Only a click on Bramble's own toolbar action teaches this. Dapp requests
- * never do, and nothing here opens a window or moves focus. Every unknown
- * answer (a storage read or write that fails, a context query that fails, an
- * open that rejects) leaves today's behavior in place rather than switching.
+ * never do, and nothing here opens a window or moves focus. An unreadable or
+ * unwritable record stops learning and keeps today's behavior.
  */
 
 import { isRecord } from "@bramble/core/json";
@@ -37,7 +36,7 @@ export const SIDE_PANEL_LEARNING_STORE_KEY = "bramble:side-panel-learning";
  * How long a toolbar click waits for the side panel to load before deciding.
  * Chrome draws it well inside a second, and Arc never does, so a longer wait
  * costs only Arc's first click; it also leaves a slow Chrome machine room
- * before the self-healing switch above is ever needed.
+ * before a later render has to correct the answer.
  */
 export const SIDE_PANEL_LEARN_TIMEOUT_MS = 5_000;
 const POLL_MS = 250;
@@ -45,24 +44,16 @@ const POLL_MS = 250;
 /**
  * `unknown`: no side panel seen yet, so toolbar clicks are learned from.
  * `verified`: a real side panel was seen; the built-in behavior applies.
- * `unsupported`: a click opened no panel, so the surface switched to the popup.
- *   The switch is `automatic` until the user makes their own choice in Settings.
+ * `unsupported`: a click opened no panel; the side panel is served as the popup.
  */
 type SidePanelState = "unknown" | "unsupported" | "verified";
 
-/**
- * What is stored. `pending` journals an automatic preference write in flight:
- * it is written first, and reconciled at start against the saved preference.
- */
-type Learned = {
-  readonly automatic: boolean;
-  readonly notice: boolean;
-  readonly pending?: ApprovalSurfacePreference;
-  readonly state: SidePanelState;
-};
+/** The learner's one record: its state, and whether the popup notice is due. */
+type Learned = { readonly notice: boolean; readonly state: SidePanelState };
 
-const UNKNOWN: Learned = { automatic: false, notice: false, state: "unknown" };
-const VERIFIED: Learned = { automatic: false, notice: false, state: "verified" };
+const UNKNOWN: Learned = { notice: false, state: "unknown" };
+const VERIFIED: Learned = { notice: false, state: "verified" };
+const UNSUPPORTED: Learned = { notice: true, state: "unsupported" };
 
 /** The browser slices the learner reads. Every member is optional. */
 export type SidePanelLearningBrowser = {
@@ -84,19 +75,10 @@ export type SidePanelLearningBrowser = {
 
 /** What the learner needs from the background. */
 export type SidePanelLearnerDeps = {
-  /** Applies a request surface to the toolbar; rejects when the browser refuses. */
-  readonly applySurface: (preference: ApprovalSurfacePreference) => Promise<void>;
   readonly browser: SidePanelLearningBrowser | undefined;
+  /** Applies the surface in effect to the toolbar; rejects when the browser refuses. */
+  readonly configure: () => Promise<void>;
   readonly extensionId: string;
-  /** The request surface currently in effect. */
-  readonly preference: () => ApprovalSurfacePreference;
-  /** Re-applies the toolbar behavior after the learned state changes. */
-  readonly reconfigure: () => void;
-  /**
-   * Writes a request surface to the preferences store without reporting it as
-   * the user's choice. Used only for automatic changes and their corrections.
-   */
-  readonly saveSurface: (preference: ApprovalSurfacePreference) => Promise<void>;
   /** The side panel page's URL, e.g. `chrome-extension://<id>/sidepanel.html`. */
   readonly sidePanelUrl: string;
   /**
@@ -104,6 +86,8 @@ export type SidePanelLearnerDeps = {
    * ready. Null (or a throw) means nothing is learned.
    */
   readonly store: () => KeyValueStore | null;
+  /** The surface in effect: the user's choice, after what was learned. */
+  readonly surface: () => ApprovalSurfacePreference;
   readonly wait: (ms: number) => Promise<void>;
 };
 
@@ -113,34 +97,27 @@ export type SidePanelLearner = {
   readonly bind: () => void;
   /** Dismisses the one-time "opens as a popup" notice, once loaded. */
   readonly dismissNotice: () => Promise<void>;
-  /** Loads and reconciles what was learned before. Resolves even when storage fails. */
+  /** Loads what was learned before. Resolves even when storage fails. */
   readonly load: () => Promise<void>;
   /** Whether Chromium should open the panel on toolbar click by itself. */
   readonly nativeClick: () => boolean;
-  /** Whether the popup should show the one-time switch notice, once loaded. */
+  /** Whether the popup should show the one-time notice, once loaded. */
   readonly notice: () => Promise<boolean>;
   /** Marks the side panel seen when its page talks to the worker. */
   readonly observeSender: (sender: RuntimeSender | undefined) => void;
-  readonly state: () => SidePanelState;
   /**
-   * Records a request surface the user saved in Settings. After that, an
-   * automatic switch is the user's choice too, and is never undone.
+   * The user chose the side panel in Settings. On a browser learned to be
+   * `unsupported` that reads as "try again": the next click learns afresh.
    */
-  readonly userChose: (preference: ApprovalSurfacePreference) => void;
+  readonly retrySidePanel: () => void;
+  readonly state: () => SidePanelState;
 };
 
 const readLearned = (value: unknown): Learned | null => {
   if (!isRecord(value)) return null;
   const state = value["state"];
   if (state !== "unknown" && state !== "unsupported" && state !== "verified") return null;
-  const pending = value["pending"];
-  const unsupported = state === "unsupported";
-  return {
-    automatic: unsupported && value["automatic"] === true,
-    notice: unsupported && value["notice"] === true,
-    ...(pending === "popup" || pending === "side-panel" ? { pending } : {}),
-    state,
-  };
+  return { notice: state === "unsupported" && value["notice"] === true, state };
 };
 
 const loadLearned = async (store: KeyValueStore): Promise<Learned | "unreadable" | null> => {
@@ -149,20 +126,6 @@ const loadLearned = async (store: KeyValueStore): Promise<Learned | "unreadable"
   } catch {
     return "unreadable";
   }
-};
-
-const settled = ({ automatic, notice, state }: Learned): Learned => ({ automatic, notice, state });
-
-// A journaled automatic write whose worker stopped before it finished: the
-// saved preference says how far it got.
-const reconcile = (learned: Learned, preference: ApprovalSurfacePreference): Learned => {
-  if (learned.pending === undefined) return learned;
-  if (learned.pending === "popup") {
-    return preference === "popup"
-      ? { automatic: true, notice: true, state: "unsupported" }
-      : settled(learned);
-  }
-  return preference === "side-panel" ? VERIFIED : settled(learned);
 };
 
 const resolveStore = (
@@ -214,17 +177,17 @@ const succeeds = (work: Promise<unknown>): Promise<boolean> =>
   );
 
 /**
- * Creates the learner. It learns nothing (and never switches) where the
- * browser lacks the side panel, the context query or the toolbar event, or
- * where storage is unavailable: those browsers keep today's behavior.
+ * Creates the learner. It learns nothing (and never serves the popup in place
+ * of the side panel) where the browser lacks the side panel, the context query
+ * or the toolbar event, or where storage is unavailable.
  */
 export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLearner => {
   const { browser } = deps;
   const getContexts = browser?.runtime?.getContexts;
   const canBind = Boolean(browser?.sidePanel?.open && getContexts && browser.action?.onClicked);
   let store: KeyValueStore | null = null;
-  // Learning runs only where the browser can be taught and storage can keep
-  // the answer; everywhere else the built-in behavior stays, as before.
+  // Learning runs only where the browser can be taught and storage keeps the
+  // answer; everywhere else the built-in behavior stays, as before.
   let canLearn = false;
   let loaded = false;
   let markLoaded: () => void = () => undefined;
@@ -233,35 +196,29 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
   });
   let learned: Learned = UNKNOWN;
   // Read through a call, so a check after an await sees the current value.
-  const switchedAutomatically = (): boolean => learned.state === "unsupported" && learned.automatic;
+  const stateNow = (): SidePanelState => learned.state;
   let learning = false;
-  // Provenance: each user choice and each panel render bumps its counter, and
-  // an automatic change in flight compares them to know it was overtaken.
-  let userChoices = 0;
-  let lastUserChoice: ApprovalSurfacePreference | null = null;
-  let renders = 0;
-  // Automatic changes run one at a time, in the order they were decided.
+  // Record changes run one at a time and check their condition when they run,
+  // so a late learning result can't overwrite a newer observation.
   let queue: Promise<void> = Promise.resolve();
   const enqueue = (work: () => Promise<void>): Promise<void> => {
     queue = queue.then(work, work);
     return queue;
   };
 
-  // A strict write: false when storage refused, so a journal that can't be
-  // kept stops the change it would have described.
-  const write = (next: Learned): Promise<boolean> =>
-    store ? succeeds(store.set(SIDE_PANEL_LEARNING_STORE_KEY, next)) : Promise.resolve(false);
+  const reconfigure = (): void => void deps.configure().catch(() => undefined);
 
-  const record = (next: Learned): void => {
-    learned = next;
-    void write(next);
-    deps.reconfigure();
-  };
-
-  // The toolbar must end up matching the saved surface. A refusal is retried
-  // once; after that the next worker start applies the saved choice again.
-  const applyOrRetry = async (surface: ApprovalSurfacePreference): Promise<void> => {
-    if (!(await succeeds(deps.applySurface(surface)))) await succeeds(deps.applySurface(surface));
+  // Stores the record, then takes it. A write that fails stops learning: the
+  // browser falls back to today's behavior rather than act on an answer that
+  // a restart would lose.
+  const commit = async (next: Learned): Promise<void> => {
+    if (store && (await succeeds(store.set(SIDE_PANEL_LEARNING_STORE_KEY, next)))) {
+      learned = next;
+    } else {
+      canLearn = false;
+      learned = VERIFIED;
+    }
+    reconfigure();
   };
 
   // True when a side panel context exists now; null when the query failed,
@@ -274,113 +231,44 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     }
   };
 
-  // What an automatic change to `target` resolves to once its write lands: a
-  // newer user choice wins the surface, and a newer panel render proves the
-  // panel works.
-  const outcomeOf = (
-    target: ApprovalSurfacePreference,
-    userSince: boolean,
-    renderedSince: boolean,
-  ): { readonly learned: Learned; readonly surface: ApprovalSurfacePreference } => {
-    const surface =
-      userSince && lastUserChoice ? lastUserChoice : renderedSince ? "side-panel" : target;
-    if (renderedSince || target === "side-panel") return { learned: VERIFIED, surface };
-    return {
-      learned: { automatic: !userSince, notice: !userSince, state: "unsupported" },
-      surface,
-    };
-  };
-
-  // Journal, then preference, then outcome, then toolbar. Returns the surface
-  // now in effect, or null when nothing changed.
-  const automaticChange = async (
-    target: ApprovalSurfacePreference,
-  ): Promise<ApprovalSurfacePreference | null> => {
-    const users = userChoices;
-    const seen = renders;
-    if (!(await write({ ...learned, pending: target }))) return null;
-    if (!(await succeeds(deps.saveSurface(target)))) {
-      void write(learned);
-      return null;
-    }
-    const outcome = outcomeOf(target, userChoices !== users, renders !== seen);
-    // A newer intent overtook this write: put its surface back on top. If that
-    // save fails, the journal stays and the next start reconciles it.
-    if (outcome.surface !== target && !(await succeeds(deps.saveSurface(outcome.surface)))) {
-      return null;
-    }
-    learned = outcome.learned;
-    void write(learned);
-    await applyOrRetry(outcome.surface);
-    return outcome.surface;
-  };
-
-  const switchToPopup = async (windowId: number, users: number, seen: number): Promise<void> => {
-    const overtaken = userChoices !== users || renders !== seen;
-    if (overtaken || learned.state !== "unknown" || deps.preference() !== "side-panel") return;
-    // Only a switch that is still this learner's own opens the popup: a user
-    // choice that overtook it is the user's to act on.
-    if ((await automaticChange("popup")) !== "popup" || !switchedAutomatically()) return;
-    // The popup is now the toolbar's own surface, so the next click opens it
-    // natively. Opening it here as well is best effort: browsers that still
-    // tie `openPopup` to the click's gesture refuse it this long after.
-    void browser?.action?.openPopup?.({ windowId }).catch(() => undefined);
-  };
+  // A real side panel rendered: the browser draws it, whatever was learned.
+  const sawSidePanel = (): Promise<void> =>
+    enqueue(async () => {
+      if (canLearn && learned.state !== "verified") await commit(VERIFIED);
+    });
 
   const learnFromClick = async (opening: Promise<void>, windowId: number): Promise<void> => {
-    const users = userChoices;
-    const seen = renders;
     // A refused open says nothing about whether panels render: learn nothing.
     if (!(await succeeds(opening))) return;
     const outcome = await watchForSidePanel(
       sidePanelSeen,
       deps.wait,
-      () => learned.state !== "unknown" || userChoices !== users || renders !== seen,
+      () => stateNow() !== "unknown",
     );
     if (outcome === "seen") {
-      sawSidePanel();
+      await sawSidePanel();
       return;
     }
-    if (outcome === "absent") await enqueue(() => switchToPopup(windowId, users, seen));
-  };
-
-  // A real side panel rendered. Before any decision that is the answer; after
-  // an automatic switch it proves the switch wrong (a slow first load), so the
-  // side panel is saved back. A switch the user kept in Settings stays.
-  function sawSidePanel(): void {
-    renders += 1;
-    void enqueue(async () => {
-      if (learned.state === "verified") return;
-      if (learned.state === "unsupported" && learned.automatic) {
-        // Not saved: the popup keeps working, and the next render tries again.
-        await automaticChange("side-panel");
-        return;
-      }
-      record(VERIFIED);
+    if (outcome !== "absent") return;
+    await enqueue(async () => {
+      if (!canLearn || learned.state !== "unknown") return;
+      await commit(UNSUPPORTED);
     });
-  }
-
-  // Reads what was learned, finishing any journaled change a stopped worker
-  // left behind. Unreadable: behave as before this feature rather than learn
-  // on top of state that may already say otherwise.
-  const restore = async (from: KeyValueStore): Promise<void> => {
-    const stored = await loadLearned(from);
-    if (stored === "unreadable") {
-      learned = VERIFIED;
-    } else {
-      learned = reconcile(stored ?? UNKNOWN, deps.preference());
-      if (stored?.pending !== undefined) void write(learned);
+    // The popup now serves the side-panel choice, so the next click opens it
+    // natively. Opening it here as well is best effort: browsers that still
+    // tie `openPopup` to the click's gesture refuse it this long after.
+    if (stateNow() === "unsupported") {
+      void browser?.action?.openPopup?.({ windowId }).catch(() => undefined);
     }
-    canLearn = true;
   };
 
   const afterClick = async (opening: Promise<void>, windowId: number): Promise<void> => {
     await ready;
     if (!canLearn) return;
     // The toolbar only reaches this listener when no popup is set. With the
-    // popup as the surface, that means applying it failed: apply it again.
-    if (deps.preference() === "popup") {
-      await applyOrRetry("popup");
+    // popup in effect, that means applying it failed: apply it again.
+    if (deps.surface() === "popup") {
+      if (!(await succeeds(deps.configure()))) await succeeds(deps.configure());
       void browser?.action?.openPopup?.({ windowId }).catch(() => undefined);
       return;
     }
@@ -389,6 +277,15 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     await learnFromClick(opening, windowId).finally(() => {
       learning = false;
     });
+  };
+
+  // Reads what was learned. Unreadable: keep today's behavior rather than
+  // learn on top of state that may already say otherwise.
+  const restore = async (from: KeyValueStore): Promise<void> => {
+    const stored = await loadLearned(from);
+    if (stored === "unreadable") return;
+    learned = stored ?? UNKNOWN;
+    canLearn = true;
   };
 
   return {
@@ -409,8 +306,13 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     async dismissNotice() {
       await ready;
       if (!learned.notice) return;
-      learned = { ...learned, notice: false };
-      void write(learned);
+      await enqueue(async () => {
+        if (!learned.notice) return;
+        const next = { ...learned, notice: false };
+        // A dismissal that can't be stored still hides it for this session.
+        if (store) await succeeds(store.set(SIDE_PANEL_LEARNING_STORE_KEY, next));
+        learned = next;
+      });
     },
     async load() {
       store = resolveStore(canBind, deps.store);
@@ -418,10 +320,10 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
       loaded = true;
       markLoaded();
       if (canLearn && learned.state !== "verified" && (await sidePanelSeen())) {
-        sawSidePanel();
+        await sawSidePanel();
         return;
       }
-      deps.reconfigure();
+      reconfigure();
     },
     nativeClick: () => !canLearn || !loaded || learned.state !== "unknown",
     async notice() {
@@ -430,17 +332,15 @@ export const createSidePanelLearner = (deps: SidePanelLearnerDeps): SidePanelLea
     },
     observeSender(sender) {
       if (!isSidePanelSender(sender, deps.extensionId, deps.sidePanelUrl)) return;
-      void ready.then(() => {
-        if (canLearn && learned.state !== "verified") sawSidePanel();
-      });
+      void ready.then(sawSidePanel);
+    },
+    retrySidePanel() {
+      void ready.then(() =>
+        enqueue(async () => {
+          if (canLearn && learned.state === "unsupported") await commit(UNKNOWN);
+        }),
+      );
     },
     state: () => learned.state,
-    userChose(preference) {
-      userChoices += 1;
-      lastUserChoice = preference;
-      if (learned.state !== "unsupported" || !learned.automatic) return;
-      learned = { ...learned, automatic: false, notice: false };
-      void write(learned);
-    },
   };
 };

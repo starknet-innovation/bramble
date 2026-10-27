@@ -1,30 +1,27 @@
 /**
- * A browser and preferences store for driving the side-panel learner (#690):
- * a panel that renders after some queries or never, saves that can be held or
- * refused, storage writes that can be refused, and every call recorded.
+ * A fake Chromium for driving the request-surface control and its side-panel
+ * learner (#690): a panel that renders after some queries or never, a toolbar
+ * that records what it was configured to do, storage writes that can be
+ * refused, and every call recorded.
  */
 import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
-import {
-  createSidePanelLearner,
-  SIDE_PANEL_LEARNING_STORE_KEY,
-  type SidePanelLearnerDeps,
-} from "../../apps/extension/src/background/approvals/side-panel-learning";
+import { createApprovalSurfaceControl } from "../../apps/extension/src/background/approvals/approval-surface-control";
+import { SIDE_PANEL_LEARNING_STORE_KEY } from "../../apps/extension/src/background/approvals/side-panel-learning";
 
 export const PANEL_URL = "chrome-extension://bramble/sidepanel.html";
 
 type Click = (tab?: { readonly windowId?: number }) => void;
 
-export type LearningHarnessOptions = {
-  readonly applyFails?: () => boolean;
+export type SurfaceHarnessOptions = {
+  readonly configureFails?: () => boolean;
   readonly contexts?: "fail" | "never" | number;
   readonly openRejects?: boolean;
   readonly preference?: ApprovalSurfacePreference;
-  readonly saveFails?: (preference: ApprovalSurfacePreference) => boolean;
   readonly store?: KeyValueStore | null | "throws";
+  readonly withSidePanel?: boolean;
   /** Refuses a learning-record write when this returns true. */
   readonly writeFails?: (value: unknown) => boolean;
-  readonly withSidePanel?: boolean;
 };
 
 /** Lets every queued promise in a learning chain settle. */
@@ -32,22 +29,19 @@ export const settleAll = async (): Promise<void> => {
   for (let i = 0; i < 400; i += 1) await Promise.resolve();
 };
 
-/** Builds a learner over a fake Chromium and preferences store. */
-export const learningHarness = (options: LearningHarnessOptions = {}) => {
+/** Builds the control over a fake Chromium, with the user's choice applied. */
+export const surfaceHarness = (options: SurfaceHarnessOptions = {}) => {
   const calls = {
-    applied: [] as ApprovalSurfacePreference[],
+    native: [] as boolean[],
     opens: [] as number[],
+    popupSet: [] as string[],
     popups: [] as unknown[],
     queries: 0,
-    reconfigures: 0,
-    saves: [] as ApprovalSurfacePreference[],
   };
   const listeners: Click[] = [];
-  // What is in effect, and what the preferences store holds.
-  let preference: ApprovalSurfacePreference = options.preference ?? "side-panel";
-  let saved: ApprovalSurfacePreference = preference;
   let renders = false;
-  let held: (() => void)[] | null = null;
+  // Runs once on the next wait inside a learning window, then clears.
+  let duringWatch: (() => void) | null = null;
   const base = options.store === undefined ? createMemoryStore() : options.store;
   const store =
     base && base !== "throws" && options.writeFails
@@ -61,17 +55,16 @@ export const learningHarness = (options: LearningHarnessOptions = {}) => {
           },
         }
       : base;
-  const deps: SidePanelLearnerDeps = {
-    applySurface: async (next) => {
-      preference = next;
-      if (options.applyFails?.()) throw new Error("setPopup refused");
-      calls.applied.push(next);
-    },
+  const control = createApprovalSurfaceControl({
     browser: {
       action: {
         onClicked: { addListener: (listener) => listeners.push(listener) },
         openPopup: async (popup) => {
           calls.popups.push(popup);
+        },
+        setPopup: async ({ popup }) => {
+          if (options.configureFails?.()) throw new Error("setPopup refused");
+          calls.popupSet.push(popup);
         },
       },
       runtime: {
@@ -83,40 +76,41 @@ export const learningHarness = (options: LearningHarnessOptions = {}) => {
             ? [{ contextType: "SIDE_PANEL" }]
             : [];
         },
+        getURL: (path) => `chrome-extension://bramble/${path}`,
       },
       ...(options.withSidePanel === false
         ? {}
         : {
             sidePanel: {
-              open: ({ windowId }: { readonly windowId: number }) => {
-                calls.opens.push(windowId);
+              open: (target: { readonly tabId: number } | { readonly windowId: number }) => {
+                calls.opens.push("windowId" in target ? target.windowId : target.tabId);
                 return options.openRejects
                   ? Promise.reject(new Error("refused"))
                   : Promise.resolve();
+              },
+              setPanelBehavior: async ({ openPanelOnActionClick }) => {
+                calls.native.push(openPanelOnActionClick);
               },
             },
           }),
     },
     extensionId: "bramble",
-    preference: () => preference,
-    reconfigure: () => {
-      calls.reconfigures += 1;
-    },
-    saveSurface: async (next) => {
-      calls.saves.push(next);
-      if (options.saveFails?.(next)) throw new Error("preferences unavailable");
-      if (held) await new Promise<void>((resolve) => held?.push(resolve));
-      saved = next;
-    },
-    sidePanelUrl: PANEL_URL,
     store: () => {
       if (store === "throws") throw new Error("no storage.local");
       return store as KeyValueStore | null;
     },
-    wait: async () => undefined,
+    wait: async () => {
+      const hook = duringWatch;
+      duringWatch = null;
+      hook?.();
+    },
+  });
+  control.bind();
+  control.apply(options.preference ?? "side-panel");
+  const sidePanelTalks = async () => {
+    control.learner.observeSender({ id: "bramble", url: PANEL_URL });
+    await settleAll();
   };
-  const learner = createSidePanelLearner(deps);
-  learner.bind();
   return {
     calls,
     /** Clicks the toolbar action without waiting for anything. */
@@ -127,35 +121,26 @@ export const learningHarness = (options: LearningHarnessOptions = {}) => {
       for (const listener of listeners) listener({ windowId });
       await settleAll();
     },
-    /** Holds every later preference save until `release`. */
-    hold: () => {
-      held = [];
-    },
-    learner,
+    control,
+    learner: control.learner,
     listeners,
-    preference: () => preference,
-    release: async () => {
-      const waiting = held ?? [];
-      held = null;
-      for (const resolve of waiting) resolve();
+    load: async () => {
+      await control.load();
       await settleAll();
+    },
+    /** Runs `hook` once, inside the next learning window. */
+    onWatch: (hook: () => void) => {
+      duringWatch = hook;
     },
     render: () => {
       renders = true;
     },
-    saved: () => saved,
-    /** A message from the real side panel page. */
-    sidePanelTalks: async () => {
-      learner.observeSender({ id: "bramble", url: PANEL_URL });
-      await settleAll();
-    },
+    sidePanelTalks,
     stored: async () =>
       base && base !== "throws" ? base.get(SIDE_PANEL_LEARNING_STORE_KEY) : undefined,
-    /** The user saves a surface in Settings: the store, then the callback. */
-    userChooses: (next: ApprovalSurfacePreference) => {
-      saved = next;
-      preference = next;
-      learner.userChose(next);
-    },
+    /** What the toolbar was last configured to do. */
+    toolbar: () => ({ native: calls.native.at(-1), popup: calls.popupSet.at(-1) }),
+    /** The user saves a surface in Settings. */
+    userChooses: (next: ApprovalSurfacePreference) => control.update(next),
   };
 };
