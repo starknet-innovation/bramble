@@ -24,12 +24,12 @@ and the maximum.
 
 **In scope:**
 
-- public `invoke` on mainnet and Sepolia;
-- `deploy_and_invoke` on Sepolia, so a new Sepolia account with no STRK can deploy
-  and act in one step.
+- public `invoke` on mainnet, where the forwarder is pinned.
 
 **Out of scope.** These keep paying in STRK, or they are refused outright:
 
+- Sepolia, including `deploy_and_invoke`. The route exists and is not screened,
+  and there is no Sepolia forwarder. The wallet does not offer gasless there;
 - private STRK20 transactions, which stay on `sponsored_private`;
 - sponsored deployment (#431 / #768);
 - Argent multisigs and read-only accounts;
@@ -276,7 +276,7 @@ already mapped by `friendly-error-copy.ts`).
 - `403 {"error":"address_not_allowed"}`: a blocklisted address is in the request, or screening refused the subject. Tell the user. Do not retry or switch token.
 - `403 {"error":"screening_denied"}`: stands for 24 hours and is not a blocklist entry. Do not retry sooner. A mainnet STRK invoke uses the same gate, so it is not a workaround.
 - `{"error":"screening_pending"}`: a screening outcome with no HTTP status in the gasless section. Treat it as not submitted.
-- `403 {"error":"screening_subject_unverifiable"}`: mainnet `deploy_and_invoke` execution. Tell the user. Do not retry. Sepolia still works. STRK deploy stays on `submitReviewedAccountDeployment`.
+- `403 {"error":"screening_subject_unverifiable"}`: mainnet `deploy_and_invoke` execution. Tell the user. Do not retry. The gateway would accept it on Sepolia; the wallet does not offer that, because there is no Sepolia forwarder. STRK deploy stays on `submitReviewedAccountDeployment`.
 - `400 {"error":"invalid_screening_transaction"}`: the account refused. Do not resubmit that signature. A closed window is a new quote. A spent nonce stops.
 - `503 {"error":"screening_unavailable"}`: node error before AVNU. Retry with backoff. Nothing was submitted.
 - `404 {"error":"gasless_disabled"}`: that network's switch is off. Hide gasless and pay in STRK.
@@ -351,11 +351,12 @@ Constants next to `STRK20_GATEWAY_BASE` in `packages/features/privacy/src/config
    the quote only when they are the user's calls plus one fee transfer, in the
    chosen token, to the reviewed forwarder, within the quoted maximum and the
    independent ceiling.
-5. Pin the mainnet forwarder from the gateway's hash fixture, a real AVNU quote
-   for an Argent 0.4.0 account. `Caller` and the fee-transfer recipient are both
-   `0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f`. Sepolia's
-   forwarder is not in the gateway source. Do not take the recipient only from
-   the quote.
+5. The mainnet forwarder is confirmed as
+   `0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f`.
+   Adrien confirmed that address; it is also the Caller and the fee recipient
+   in the gateway's mainnet hash fixture. There is no Sepolia forwarder, so the
+   wallet does not offer gasless on Sepolia and those fees stay on STRK. Do not
+   take a recipient from the quote in place of the pin.
 6. The ceiling uses `PriceService.getPrices`
    (`packages/features/portfolio/src/tokens/prices.ts`) against
    `estimateInvokeApprovalFee`
@@ -412,7 +413,9 @@ without a second fee renderer.
 
 ### Deploy and invoke
 
-Sepolia only, and only while the Sepolia wallet flag is on.
+Not offered. Mainnet executions are `screening_subject_unverifiable`. Sepolia
+has no pinned forwarder, so that deploy stays on STRK too. The gateway would
+accept a Sepolia `deploy_and_invoke`; the wallet does not send one.
 
 `accountDeployment` supplies the address, class hash, salt, and constructor
 calldata. The request uses the deployment object in the contract above, with
@@ -463,8 +466,8 @@ the wallet flag turns on. The review covers:
 ## Rollout
 
 1. The gateway is live on both networks. The switches default on.
-2. Wallet implementation behind the flag, still off. QA on Sepolia, including
-   `deploy_and_invoke`.
+2. Wallet implementation behind the flag, still off. QA is mainnet `invoke`.
+   Sepolia stays on STRK until a forwarder is pinned.
 3. The mainnet flag enables `invoke` only, for as long as screening refuses
    `deploy_and_invoke`.
 4. The flag turns on in a reviewed release. Release notes name the tokens
@@ -479,8 +482,6 @@ the wallet flag turns on. The review covers:
   `STRK20_FEE_CEILING_MULTIPLIER` (2×) would be a separate decision.
 - Whether another token is offered when the user has enough STRK, or only when
   STRK is short. Proposed: only when short.
-- Sepolia's forwarder. Mainnet's, from the gateway hash fixture, is recorded
-  above. It is one quote's Caller, not a setting AVNU promised to keep.
 - A new mainnet account with no STRK. Gasless deploy cannot cover it while
   screening is on. Sponsored deployment (#768) is the other open path, and it is
   out of scope here.
