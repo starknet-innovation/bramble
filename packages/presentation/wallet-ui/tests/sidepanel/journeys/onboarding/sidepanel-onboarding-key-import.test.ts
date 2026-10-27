@@ -10,6 +10,7 @@ import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+import { networkChangeAnnouncer } from "../../../../src/sidepanel/shared/network-change";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -217,6 +218,39 @@ describe("onboarding private-key import", () => {
       expect(activeStep(flow.app)).toBe("import-key");
     });
   }
+
+  test("a network change drops a listed picker and an answer still coming", async () => {
+    const flow = mount();
+    await readyKeyListed(flow);
+    expect(flow.app.querySelector("[data-ready-key-picker]")).not.toBeNull();
+    const announce = networkChangeAnnouncer(flow.app);
+    announce("SN_MAIN");
+    announce("SN_SEPOLIA");
+    expect(flow.app.querySelector("[data-ready-key-picker]")).toBeNull();
+
+    let resolve: (rows: readonly (typeof DEPLOYED_031)[]) => void = () => undefined;
+    const pending = mount({
+      discover: () =>
+        new Promise((res) => {
+          resolve = res;
+        }),
+    });
+    const announcePending = networkChangeAnnouncer(pending.app);
+    announcePending("SN_MAIN");
+    click(pending.app, "#add-existing-button");
+    click(pending.app, "#key-method-button");
+    setValue(pending.app, 'select[name="importKeyContractType"]', "argent");
+    setValue(pending.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
+    click(pending.app, "#import-key-continue");
+    announcePending("SN_SEPOLIA");
+    announcePending("SN_MAIN");
+    resolve([DEPLOYED_031]);
+    await tick();
+    expect(pending.app.querySelector("[data-ready-key-picker]")).toBeNull();
+    expect(pending.app.querySelector<HTMLButtonElement>("#import-key-continue")?.disabled).toBe(
+      false,
+    );
+  });
 
   test("a key changed after listing is refused at creation and listed again", async () => {
     const flow = mount();

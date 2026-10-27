@@ -9,6 +9,7 @@
  */
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { onNetworkChange } from "../../shared/network-change";
 import { mountReadyKeyPicker } from "../onboarding/ready-key-picker";
 import { type ReadyKeyInputs, readyKeySession } from "../onboarding/ready-key-session";
 import type { SettingsUiDeps } from "./settings-ui";
@@ -70,6 +71,8 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     dropPicker();
   });
   syncDeploymentSalt();
+  // A list is for one network: a switch drops it and any answer still coming.
+  onNetworkChange(deps.app, form ?? null, dropPicker);
   rawKeyInput?.addEventListener("input", dropPicker);
   deploymentSaltInput?.addEventListener("input", dropPicker);
 

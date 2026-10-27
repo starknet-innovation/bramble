@@ -16,6 +16,7 @@ import { importKeyFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { mountReadyKeyPicker } from "../../../../src/sidepanel/journeys/onboarding/ready-key-picker";
 import { bindImportKey } from "../../../../src/sidepanel/journeys/settings/import-key-ui";
 import type { SettingsUiDeps } from "../../../../src/sidepanel/journeys/settings/settings-ui";
+import { networkChangeAnnouncer } from "../../../../src/sidepanel/shared/network-change";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -149,10 +150,30 @@ const mountSettings = (
     target.dispatchEvent(new window.Event("input"));
   };
   const pickers = (): number => container.querySelectorAll("[data-ready-key-picker]").length;
+  // Without an announcement, as a repaint that never ran; `moveNetwork`
+  // announces it the way the paint loop does.
   const switchNetwork = (id: string): void => {
     networkId = id;
   };
-  return { container, edit, imports, pickers, raw, salt, send, sent, submit, switchNetwork };
+  const announce = networkChangeAnnouncer(container);
+  announce(networkId);
+  const moveNetwork = (id: string): void => {
+    networkId = id;
+    announce(id);
+  };
+  return {
+    container,
+    edit,
+    imports,
+    moveNetwork,
+    pickers,
+    raw,
+    salt,
+    send,
+    sent,
+    submit,
+    switchNetwork,
+  };
 };
 
 describe("Settings → Import private key, Ready account", () => {
@@ -307,6 +328,45 @@ describe("Settings → Import private key, stale lists", () => {
     flow.send();
     await tick();
     expect(flow.sent).toEqual([["SN_MAIN", "0xbeef", undefined]]);
+  });
+});
+
+describe("Settings → Import private key, network switches", () => {
+  test("a switch takes a listed picker down at once", async () => {
+    const flow = mountSettings(() => Promise.resolve([deployed]));
+    flow.send();
+    await tick();
+    expect(flow.pickers()).toBe(1);
+    flow.moveNetwork("SN_SEPOLIA");
+    expect(flow.pickers()).toBe(0);
+    expect(flow.submit.disabled).toBe(false);
+    expect(flow.submit.textContent).toContain("Import account");
+  });
+
+  test("A to B to A drops the answer still coming for the first A", async () => {
+    const answer = deferred();
+    const flow = mountSettings(() => answer.promise);
+    flow.send();
+    flow.moveNetwork("SN_SEPOLIA");
+    flow.moveNetwork("SN_MAIN");
+    answer.resolve([deployed]);
+    await tick();
+    expect(flow.pickers()).toBe(0);
+    expect(flow.submit.disabled).toBe(false);
+    expect(flow.submit.textContent).toContain("Import account");
+    flow.send();
+    await tick();
+    expect(flow.imports).toEqual([]);
+  });
+
+  test("a form a repaint replaced stops listening", async () => {
+    const flow = mountSettings(() => Promise.resolve([deployed]));
+    flow.send();
+    await tick();
+    const form = flow.container.querySelector("#import-key-form");
+    form?.remove();
+    flow.moveNetwork("SN_SEPOLIA");
+    expect(form?.querySelectorAll("[data-ready-key-picker]").length).toBe(1);
   });
 });
 

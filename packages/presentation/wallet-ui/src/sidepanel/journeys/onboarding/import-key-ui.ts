@@ -11,11 +11,14 @@ import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { onNetworkChange } from "../../shared/network-change";
 import { mountReadyKeyPicker } from "./ready-key-picker";
 import { type ReadyKeyInputs, readyKeySession } from "./ready-key-session";
 
 /** Dependencies the key-import binding closes over. */
 export type KeyImportUiDeps = {
+  /** The long-lived root a network change is announced on. */
+  readonly app: Element | null;
   readonly form: HTMLFormElement;
   readonly networkId: () => string;
   readonly onEnter: () => void;
@@ -96,6 +99,8 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
     dropPicker();
   });
   syncSaltField();
+  // A list is for one network: a switch drops it and any answer still coming.
+  onNetworkChange(deps.app, form, dropPicker);
   rawInput?.addEventListener("input", dropPicker);
   saltInput?.addEventListener("input", dropPicker);
   continueButton?.addEventListener("click", () => {
