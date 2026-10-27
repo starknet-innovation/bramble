@@ -10,12 +10,17 @@
  * family, see `getAccountOwner`) must equal a key this phrase derives on one of
  * that family's ladders, within the recovery scan's own index bound. Nothing
  * else is trusted, and no single endpoint is either: the owner is read from two
- * independent sources (the configured endpoints and the network's bundled
- * Foundation-direct node, each proving it serves the expected chain), which
- * must agree on whether the account exists, its class, and its owner key. An
- * unreadable or disputed answer refuses rather than guesses, and the same
- * check runs again, at the selected coordinate, before any restore or import
- * writes the account.
+ * sources (the configured endpoints and the network's bundled Foundation-direct
+ * node, each proving it serves the expected chain), which must agree on whether
+ * the account exists, its class, and its owner key. An unreadable or disputed
+ * answer refuses rather than guesses, and the same check runs again, at the
+ * selected coordinate, before any restore or import writes the account.
+ *
+ * Trust assumption (owner decision, 2026-10-26): both sources are operated by
+ * the Starknet Foundation unless the user configured a custom endpoint. Their
+ * agreement stops a malicious custom or third-party RPC from choosing the
+ * account; it does not defend against a compromise of SNF's own nodes, which
+ * is the same trust the wallet places in those nodes everywhere else.
  */
 
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
@@ -77,8 +82,9 @@ const LADDERS: Record<"argent" | "braavos", readonly (RecoveryDerivationKind | u
 // record whose fields do not reproduce its address.
 const recordClassHash = (found: OwnerFound): string => {
   const entry = accountClassEntry(found.classHash);
+  // `found.classHash` is canonical already (see verdictOf).
   return entry?.roles.includes("deployment") && entry.family === found.family
-    ? (canonicalFelt(found.classHash) ?? found.classHash)
+    ? found.classHash
     : BRAAVOS_BASE_CLASS_HASH;
 };
 
@@ -86,7 +92,11 @@ const recordClassHash = (found: OwnerFound): string => {
 // the network's bundled Foundation-direct node, even under a custom endpoint,
 // so a lying configured node cannot answer for both. The primary is the
 // configured list without it (a custom endpoint, then the wallet gateway).
-// A network with no distinct Foundation-direct node has no second source.
+// Both are SNF-operated unless the user set a custom endpoint: accepted by the
+// owner (2026-10-26) as the wallet's existing trust in SNF nodes, so this guards
+// against a malicious custom or third-party RPC, not a compromise of SNF's own.
+// No third-party source is added. A network with no distinct Foundation-direct
+// node has no second source.
 const ownerSources = async (
   deps: AddressImportDeps,
   networkId: StarknetNetworkId,
@@ -110,7 +120,7 @@ const sameReading = (left: AccountOwnerReading, right: AccountOwnerReading): boo
     );
   }
   if (left.kind === "non-stark-owner" && right.kind === "non-stark-owner") {
-    return left.family === right.family;
+    return left.family === right.family && left.ownerType === right.ownerType;
   }
   return left.kind === right.kind;
 };
@@ -121,11 +131,12 @@ const verdictOf = (reading: AccountOwnerReading): OwnerFound | Refusal => {
     return { error: ADDRESS_IMPORT_REFUSALS.unsupportedClass };
   }
   if (reading.kind === "non-stark-owner") return { error: ADDRESS_IMPORT_REFUSALS.nonStarkOwner };
-  return {
-    classHash: reading.classHash,
-    family: reading.family,
-    ownerPublicKey: reading.ownerPublicKey,
-  };
+  // Kept only in canonical form. `sameReading` has already parsed it, so this
+  // cannot refuse today; it keeps a raw spelling out of the record if that
+  // order ever changes.
+  const classHash = canonicalFelt(reading.classHash);
+  if (classHash === null) return { error: ADDRESS_IMPORT_REFUSALS.unavailable };
+  return { classHash, family: reading.family, ownerPublicKey: reading.ownerPublicKey };
 };
 
 // Reads the owner from both sources and accepts only an answer they agree on.

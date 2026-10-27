@@ -1,6 +1,6 @@
 /**
  * Import by address (issue 398), the trust half: no single endpoint decides
- * ownership (two independent, chain-checked sources must agree), a lock ends
+ * ownership (two chain-checked SNF-operated sources must agree), a lock ends
  * an own-phrase search, an own-phrase proof is bound to the phrase and unlock
  * that write it, and only extension pages reach the lookups.
  */
@@ -9,7 +9,7 @@ import { createPreferencesStore } from "@bramble/settings/preferences";
 import type { AccountOwnerReading } from "@bramble/starknet/rpc";
 import { createMemoryStore } from "@bramble/store/kv";
 import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { ADDRESS_IMPORT_REFUSALS } from "@bramble/wallet-model/recovery";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
@@ -37,7 +37,7 @@ const primaryLies =
   (input: OwnerRead): AccountOwnerReading =>
     input.rpcUrls.includes(MAIN_FOUNDATION as string) ? truth : lie;
 
-describe("ownership must be confirmed by two independent sources", () => {
+describe("ownership must be confirmed by two SNF-operated sources", () => {
   test("both sources agreeing finds the account", async () => {
     const { handler } = harness(primaryLies(truth));
     await expect(handler(findMessage(), sender)).resolves.toMatchObject({ ok: true });
@@ -48,7 +48,7 @@ describe("ownership must be confirmed by two independent sources", () => {
       argentOwner(keyFor("argent", "starknet-bip44", 7)),
       { ...truth, classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH },
       { kind: "not-deployed" },
-      { family: "argent", kind: "non-stark-owner" },
+      { family: "argent", kind: "non-stark-owner", ownerType: "0x2" },
     ];
     for (const lie of lies) {
       const { handler } = harness(primaryLies(lie));
@@ -177,6 +177,51 @@ describe("an own-phrase proof is bound to the phrase and unlock that write it", 
       error: ADDRESS_IMPORT_REFUSALS.stale,
     });
     expect(seen.imports).toEqual([]);
+  });
+});
+
+describe("what two sources must agree on", () => {
+  const nonStark = (ownerType: string): AccountOwnerReading => ({
+    family: "argent",
+    kind: "non-stark-owner",
+    ownerType,
+  });
+
+  test("two sources naming different non-Stark owner types are unconfirmed", async () => {
+    const differ = harness((input) =>
+      nonStark(input.rpcUrls.includes(MAIN_FOUNDATION as string) ? "0x2" : "0x1"),
+    );
+    await expect(differ.handler(findMessage(), sender)).resolves.toEqual({
+      error: ADDRESS_IMPORT_REFUSALS.unconfirmed,
+    });
+    const agree = harness(nonStark("0x2"));
+    await expect(agree.handler(findMessage(), sender)).resolves.toEqual({
+      error: ADDRESS_IMPORT_REFUSALS.nonStarkOwner,
+    });
+  });
+
+  test("the recorded class is always the canonical spelling", async () => {
+    const padded = `0x${BRAAVOS_DEPLOYMENT_CLASS_HASH.slice(2).padStart(64, "0").toUpperCase()}`;
+    const { handler, seen } = harness({
+      classHash: padded,
+      family: "braavos",
+      kind: "owner",
+      ownerPublicKey: keyFor("braavos", undefined, 0),
+    });
+    const response = (await handler(findMessage(), sender)) as unknown as {
+      candidate: { account: { classHash: string } };
+    };
+    const canonical = canonicalFelt(BRAAVOS_DEPLOYMENT_CLASS_HASH) as string;
+    expect(response.candidate.account.classHash).toBe(canonical);
+    expect(seen.previews.map(({ classHash }) => classHash)).toEqual([canonical]);
+  });
+
+  test("a class hash that is not a felt is never recorded", async () => {
+    const { handler, seen } = harness({ ...truth, classHash: "not-a-felt" });
+    await expect(handler(findMessage(), sender)).resolves.toEqual({
+      error: ADDRESS_IMPORT_REFUSALS.unconfirmed,
+    });
+    expect(seen.previews).toEqual([]);
   });
 });
 

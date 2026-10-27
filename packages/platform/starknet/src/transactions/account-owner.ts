@@ -11,7 +11,7 @@
  * endpoint that first proves it serves the expected chain. A failed or
  * malformed read throws: the caller must not treat "unreadable" as "no match".
  * One endpoint's answer is not proof of ownership on its own; the caller
- * corroborates it against an independent source.
+ * corroborates it against a second source.
  */
 import { WalletError } from "@bramble/core/errors";
 import {
@@ -20,6 +20,7 @@ import {
   accountClassEntry,
 } from "@bramble/wallet-model/account-families";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   sameFelt,
@@ -37,7 +38,16 @@ import { readBraavosStarkSigners } from "./braavos-compatibility";
 export type AccountOwnerReading =
   | { readonly kind: "not-deployed" }
   | { readonly kind: "unsupported-class" }
-  | { readonly family: AccountFamily; readonly kind: "non-stark-owner" }
+  | {
+      readonly family: AccountFamily;
+      readonly kind: "non-stark-owner";
+      /**
+       * What controls it instead: the Argent owner type (canonical felt), or
+       * null for a Braavos account with no stark signer. Compared across
+       * sources, so two that disagree on it do not read as agreeing.
+       */
+      readonly ownerType: string | null;
+    }
   | {
       readonly classHash: string;
       readonly family: AccountFamily;
@@ -60,22 +70,22 @@ const ownerKey = (result: readonly string[]): string => {
   return key;
 };
 
-// Whether a release's owner is a Starknet signer. Argent 0.3.x predates signer
-// types: its owner is always a stark key, and it has no `get_owner_type` to
-// ask. Every later release must say Starknet (0). A malformed answer is
-// unreadable, not a verdict: only a well-formed nonzero type says another kind
-// of signer controls the account.
-const argentOwnerIsStark = async (
+// A release's owner type, canonical: Starknet is 0. Argent 0.3.x predates
+// signer types: its owner is always a stark key, and it has no
+// `get_owner_type` to ask. A malformed answer is unreadable, not a verdict:
+// only a well-formed nonzero type says another kind of signer controls it.
+const argentOwnerType = async (
   read: (entrypoint: string) => Promise<readonly string[]>,
   entry: AccountClassEntry,
-): Promise<boolean> => {
-  if (entry.authorizationShape !== "argent-signer-array") return true;
+): Promise<string> => {
+  if (entry.authorizationShape !== "argent-signer-array") return "0x0";
   const ownerType = await read("get_owner_type");
   const [type] = ownerType;
-  if (ownerType.length !== 1 || type === undefined || !isStarkFieldElement(type)) {
+  const canonical = type !== undefined && isStarkFieldElement(type) ? canonicalFelt(type) : null;
+  if (ownerType.length !== 1 || canonical === null) {
     throw new WalletError("Account returned a malformed owner type");
   }
-  return sameFelt(type, "0x0");
+  return canonical;
 };
 
 // The deployed class at `address`, or null when nothing is deployed there.
@@ -107,11 +117,11 @@ const readOwnerAt = async (
   if (entry.family === "braavos") {
     const [first] = await readBraavosStarkSigners(provider, address, blockIdentifier);
     return first === undefined
-      ? { family: "braavos", kind: "non-stark-owner" }
+      ? { family: "braavos", kind: "non-stark-owner", ownerType: null }
       : { classHash, family: "braavos", kind: "owner", ownerPublicKey: ownerKey([first]) };
   }
-  if (!(await argentOwnerIsStark(read, entry)))
-    return { family: "argent", kind: "non-stark-owner" };
+  const ownerType = await argentOwnerType(read, entry);
+  if (ownerType !== "0x0") return { family: "argent", kind: "non-stark-owner", ownerType };
   return {
     classHash,
     family: "argent",

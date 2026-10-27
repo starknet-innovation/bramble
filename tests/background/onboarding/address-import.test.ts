@@ -122,7 +122,10 @@ describe("finding an account by its address", () => {
     const cases: readonly (readonly [AccountOwnerReading, string])[] = [
       [{ kind: "not-deployed" }, ADDRESS_IMPORT_REFUSALS.notDeployed],
       [{ kind: "unsupported-class" }, ADDRESS_IMPORT_REFUSALS.unsupportedClass],
-      [{ family: "argent", kind: "non-stark-owner" }, ADDRESS_IMPORT_REFUSALS.nonStarkOwner],
+      [
+        { family: "argent", kind: "non-stark-owner", ownerType: "0x2" },
+        ADDRESS_IMPORT_REFUSALS.nonStarkOwner,
+      ],
       [argentOwner("0xdead"), ADDRESS_IMPORT_REFUSALS.noMatch],
     ];
     for (const [reading, refusal] of cases) {

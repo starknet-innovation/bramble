@@ -67,7 +67,7 @@ describe("getAccountOwner", () => {
     const calls: string[] = [];
     await expect(
       read(providerOf(ARGENT_ACCOUNT_CLASS_HASH, { get_owner_type: ["0x2"] }, calls)),
-    ).resolves.toEqual({ family: "argent", kind: "non-stark-owner" });
+    ).resolves.toEqual({ family: "argent", kind: "non-stark-owner", ownerType: "0x2" });
     expect(calls).toEqual(["get_owner_type"]);
   });
 
@@ -103,7 +103,7 @@ describe("getAccountOwner", () => {
           get_signers: ["0x0", "0x0", "0x1", "0x5"],
         }),
       ),
-    ).resolves.toEqual({ family: "braavos", kind: "non-stark-owner" });
+    ).resolves.toEqual({ family: "braavos", kind: "non-stark-owner", ownerType: null });
   });
 
   test("an unknown class, including a 2023-era contract, is unsupported", async () => {
@@ -163,10 +163,17 @@ describe("getAccountOwner", () => {
     }
   });
 
-  test("a well-formed nonzero owner type is another kind of signer", async () => {
-    await expect(
-      read(providerOf(ARGENT_ACCOUNT_CLASS_HASH, { get_owner_type: ["0x1"] })),
-    ).resolves.toEqual({ family: "argent", kind: "non-stark-owner" });
+  test("a well-formed nonzero owner type is another kind of signer, carried canonical", async () => {
+    const cases: readonly (readonly [string, string])[] = [
+      ["0x1", "0x1"],
+      ["0x02", "0x2"],
+    ];
+    for (const [answer, ownerType] of cases) {
+      resetRpcEndpointCooldownsForTests();
+      await expect(
+        read(providerOf(ARGENT_ACCOUNT_CLASS_HASH, { get_owner_type: [answer] })),
+      ).resolves.toEqual({ family: "argent", kind: "non-stark-owner", ownerType });
+    }
   });
 
   test("an address that is not a felt is refused before any read", async () => {
