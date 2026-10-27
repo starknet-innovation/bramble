@@ -1,11 +1,16 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
-import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import type { PriceService } from "@bramble/portfolio/prices";
+import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
-import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
+import {
+  type ActivityLog,
+  activityOrigin,
+  clampActivitySummary,
+} from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import {
@@ -27,6 +32,7 @@ import {
   FAILED_INVOKE_FEE,
   PENDING_INVOKE_FEE,
 } from "../approvals/invoke-fee-review";
+import { type InvokeExecuteDeps, submitHeldInvoke } from "./held-invoke-submit";
 import { type ResolvedOriginAccount, resolveOriginAccount } from "./provider-grant";
 import { invokeFailureResponse } from "./provider-invoke-failure";
 
@@ -80,6 +86,8 @@ export type ProviderOpsDeps = {
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
+  /** Fiat prices for a gasless fee offer. Absent in narrow test doubles. */
+  readonly prices?: PriceService;
   readonly runtimeRpc: RuntimeRpc;
   /**
    * Non-renewing session view: a dapp polls these handlers on its own cadence,
@@ -95,28 +103,7 @@ export type ProviderOpsDeps = {
 /**
  * Dependencies needed to execute a held invoke approval once the user signs off.
  */
-export type InvokeExecuteDeps = {
-  readonly activity: ActivityLog;
-  readonly allowanceStore: AllowanceStore;
-  /**
-   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
-   * stubs stay valid; a Ledger invoke with no queue wired fails closed.
-   */
-  readonly ledgerSignQueue?: LedgerSignQueue;
-  /**
-   * Watched shared accounts, read into the trusted set for the execution-time
-   * lookalike check (Sherlock 140). Omitted, that check skips them.
-   */
-  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
-  readonly preferencesStore: WalletPreferencesStore;
-  readonly runtimeRpc: RuntimeRpc;
-  /**
-   * Non-renewing session view: the user's approval click already renewed the
-   * window, so executing the held calls must not renew it for the dapp.
-   */
-  readonly session: PassiveUnlockSession;
-  readonly wallet: WalletStatusReader;
-};
+export type { InvokeExecuteDeps } from "./held-invoke-submit";
 
 const feeReviewTarget = (
   deps: Pick<ProviderOpsDeps, "ledgerSignQueue" | "session" | "wallet">,
@@ -131,11 +118,7 @@ const feeReviewTarget = (
   signer: () => accountHashSigner(deps, resolved.account, resolved.passphrase),
 });
 
-/**
- * Queues an exact invoke/proof batch and starts its fail-closed fee review.
- * Used both by wallet_addInvokeTransaction and the second stage of approved
- * public STRK20 operations so their reviewed and submitted calls cannot drift.
- */
+/** Queues an invoke and starts its fee review. */
 export const queueInvokeApproval = async (
   deps: Pick<
     ProviderOpsDeps,
@@ -332,10 +315,6 @@ const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
   return { ok: true };
 };
 
-/**
- * Dispatch table for dapp provider messages, keyed by message type. Each branch
- * is a self-contained handler, leaving the router a pure lookup.
- */
 const PROVIDER_OPS_HANDLERS: Readonly<Record<string, ProviderOpsHandler>> = {
   "wallet.addInvokeTransaction": handleAddInvokeTransaction,
   "wallet.getPermissions": handleGetPermissions,
@@ -361,21 +340,15 @@ export const handleProviderOps = async (
 };
 
 /**
- * Executes a user-approved invoke: re-resolves the currently active account for
- * the origin (a locked wallet or a revoked grant fails safely), submits the held
- * calls, and records the transaction and any approvals. Returns an error
- * response instead of throwing so the caller can keep the approval queued.
- *
- * `reviewedFee` is the estimate the approval card was showing when the user
- * approved. It travels into the submit boundary as a signing ceiling, so a
- * transaction whose cost has moved past it since the review is refused rather
- * than signed — the site that asked for the call also controls state the call's
- * gas can depend on, and can move it while the card is open.
+ * Executes a user-approved invoke. `reviewedFee` is the ceiling the card showed.
+ * A locked wallet or a revoked grant fails closed. Returns an error response
+ * instead of throwing so the caller can keep the approval queued.
  */
 export const executeInvokeApproval = async (
   deps: InvokeExecuteDeps,
   approval: {
     readonly context?: ApprovalContext;
+    readonly gaslessFee?: GaslessFeeOffer;
     readonly origin: string;
     readonly payload: ApprovalPayload;
     readonly reviewedFee?: FeeEstimate;
@@ -415,17 +388,27 @@ export const executeInvokeApproval = async (
   // approval, not of the lane, so it is decided once here rather than at each.
   const ceiling = approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {};
   const strk20 = runtimeRpc.strk20 ?? unavailableStrk20Service;
-  const activityFor = (hash: string) => ({
+  const baseSummary =
+    approval.payload.activitySummary ??
+    `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`;
+  const activityFor = (
+    hash: string,
+    userFee?: { readonly amount: string; readonly token: string; readonly tokenAddress: string },
+  ) => ({
     accountId: account.id,
     hash,
     kind: "invoke" as const,
     networkId: account.networkId,
-    summary:
-      approval.payload.activitySummary ??
-      `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
+    summary: userFee
+      ? clampActivitySummary(`${baseSummary} (network fee in ${userFee.token})`)
+      : baseSummary,
+    ...(userFee ? { userFee } : {}),
   });
   // Grants, then activity, for every hash that may be on chain (#678, ./allowance-recording).
-  const recordSubmitted = async (hash: string): Promise<void> => {
+  const recordSubmitted = async (
+    hash: string,
+    userFee?: { readonly amount: string; readonly token: string; readonly tokenAddress: string },
+  ): Promise<void> => {
     await recordApproveAllowances({
       assets: verificationContext(account, preferences),
       calls,
@@ -433,7 +416,7 @@ export const executeInvokeApproval = async (
       store: allowanceStore,
       transactionHash: hash,
     });
-    await recordSubmittedActivity(activity, activityFor(hash));
+    await recordSubmittedActivity(activity, activityFor(hash, userFee));
   };
   // A SNIP-36 app proof is a plain invoke proof; only a pool batch takes the pool lane.
   const poolProof = isPoolShapedBatch(calls, preferences, account.networkId)
@@ -449,25 +432,36 @@ export const executeInvokeApproval = async (
     // — a second local viewing-key reader here was the one copy that derived a
     // key for an already-locked wallet.
     const context = strk20AccountContext(deps, { ...resolved, rpcUrls });
-    const result = poolProof
-      ? await strk20.submitPrepared({ ...context, calls, proof: poolProof, ...ceiling })
-      : await runtimeRpc.submitInvokeTransaction({
-          account,
-          calls,
-          ...ceiling,
-          isAuthorized: authorized.isCurrent,
-          onSigned: async (signed) => {
-            signedHash = signed.transactionHash;
-          },
-          ...(approval.payload.proof ? { proof: approval.payload.proof } : {}),
-          rpcUrls,
-          signHash: context.signHash,
-        });
+    const result = await submitHeldInvoke({
+      account,
+      approval,
+      calls,
+      ceiling,
+      context,
+      deps,
+      poolProof,
+      preferences,
+      rememberHash: (hash) => {
+        signedHash = hash;
+      },
+      rpcUrls,
+      runtimeRpc,
+      strk20,
+      unlocked: authorized.isCurrent,
+    });
     // Only the public lane can deploy the account first (mc-wallet 719).
     const deployment =
       "deploymentTransactionHash" in result ? result.deploymentTransactionHash : undefined;
     await afterBroadcast(() => recordAutoDeployment(activity, account, deployment));
-    await afterBroadcast(() => recordSubmitted(result.transactionHash));
+    const signedFee =
+      "userFee" in result
+        ? (result.userFee as {
+            readonly amount: string;
+            readonly token: string;
+            readonly tokenAddress: string;
+          })
+        : undefined;
+    await afterBroadcast(() => recordSubmitted(result.transactionHash, signedFee));
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
     return invokeFailureResponse(

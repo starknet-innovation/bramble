@@ -11,6 +11,7 @@
  */
 import { escapeHtml } from "@bramble/core/html";
 import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
 import { button } from "@bramble/ui-kit/controls";
 import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
@@ -42,6 +43,16 @@ export type ReviewFeeState = {
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
   readonly feeEstimatePending?: boolean;
+  /**
+   * Explicit alternatives when STRK does not cover the fee. The wallet does
+   * not select one; each entry is a control the user can choose.
+   */
+  readonly gaslessFees?: readonly {
+    readonly amount: string;
+    readonly decimals: number;
+    readonly label: string;
+    readonly tokenAddress: string;
+  }[];
   readonly requiresDeployment?: boolean;
 };
 
@@ -51,6 +62,33 @@ const shortfallHtml = (state: ReviewFeeState): string =>
   state.feeAffordability === "insufficient"
     ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
     : "";
+
+const gaslessChoiceHtml = (state: ReviewFeeState, attributes: UiAttributes): string => {
+  if (state.feeAffordability !== "insufficient" || state.gaslessFees === undefined) {
+    return "";
+  }
+  return state.gaslessFees
+    .map((offer) => {
+      let formatted = "";
+      try {
+        formatted = formatTokenAmount(BigInt(offer.amount), offer.decimals);
+      } catch {
+        return "";
+      }
+      return button({
+        attributes: {
+          ...attributes,
+          "data-gasless-amount": offer.amount,
+          "data-gasless-decimals": String(offer.decimals),
+          "data-gasless-label": offer.label,
+          "data-gasless-token": offer.tokenAddress,
+        },
+        label: `Pay up to ${formatted} ${offer.label}`,
+        variant: "secondary",
+      });
+    })
+    .join("");
+};
 
 /**
  * Whether this review has no single figure the user can consent to.
@@ -146,6 +184,8 @@ export const reviewFeeSection = (
   retryAttributes: UiAttributes,
   options: {
     readonly extra?: string;
+    /** Attributes copied onto each gasless choice, such as the approval id. */
+    readonly gaslessAttributes?: UiAttributes;
     /**
      * The pool's own charge, in FRI. Given it, the section adds the total of
      * what will actually leave the account — the arithmetic belongs here
@@ -155,7 +195,7 @@ export const reviewFeeSection = (
     readonly rule?: boolean;
   } = {},
 ): string => {
-  const { extra = "", poolFeeFri, rule = true } = options;
+  const { extra = "", gaslessAttributes = {}, poolFeeFri, rule = true } = options;
   // Two fees on one screen is two numbers to add up. Stated only when both are
   // known and share a denomination; an unlike pair fails closed rather than
   // printing a total that means nothing.
@@ -226,7 +266,7 @@ export const reviewFeeSection = (
   }
   if (state.fee) {
     return boundary(
-      `<p class="review-fee">${escapeHtml(estimatedFeeText(state.fee))}</p>${shortfallHtml(state)}`,
+      `<p class="review-fee">${escapeHtml(estimatedFeeText(state.fee))}</p>${shortfallHtml(state)}${gaslessChoiceHtml(state, gaslessAttributes)}`,
       state.fee,
     );
   }

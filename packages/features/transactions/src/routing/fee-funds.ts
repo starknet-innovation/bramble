@@ -48,3 +48,26 @@ export const resolveFeeAffordability = (input: {
   const required = fee + (input.sendAmount ?? 0n);
   return balance >= required ? "ok" : "insufficient";
 };
+
+/**
+ * Whether `balance` covers a fee denominated in that same token, plus an
+ * optional amount of the token the transaction itself spends. STRK fees stay
+ * on {@link resolveFeeAffordability}. An unreadable balance or amount is
+ * "unknown" and must not be offered as a way to pay.
+ */
+export const resolveTokenFeeAffordability = (input: {
+  readonly amount: string | null;
+  readonly balance: string | null;
+  readonly sendAmount?: bigint | null;
+}): FeeAffordability => {
+  if (input.amount === null || input.balance === null) {
+    return "unknown";
+  }
+  const amount = asBigInt(input.amount);
+  const balance = asBigInt(input.balance);
+  if (amount === null || balance === null || amount < 0n || balance < 0n) {
+    return "unknown";
+  }
+  const required = amount + (input.sendAmount ?? 0n);
+  return balance >= required ? "ok" : "insufficient";
+};

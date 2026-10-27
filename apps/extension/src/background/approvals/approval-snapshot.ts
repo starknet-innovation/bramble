@@ -10,6 +10,7 @@
  * can never ride along, and every nested value is copied so a caller mutating
  * what it received cannot reach back into live queue state.
  */
+import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import type { FeeAffordability } from "@bramble/transactions/fee-funds";
 import type { PendingApproval } from "@bramble/wallet-protocol/extension-responses";
@@ -36,6 +37,8 @@ export type InvokeFeeReview = {
   readonly feeAffordability: FeeAffordability;
   readonly feeEstimateFailed: boolean;
   readonly feeEstimatePending: boolean;
+  /** Tokens the user may pick instead of STRK. Absent when none are offered. */
+  readonly gaslessFees?: readonly GaslessFeeOffer[];
   readonly requiresDeployment: boolean;
 };
 
@@ -67,6 +70,9 @@ const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> 
   ...(approval.feeEstimatePending === undefined
     ? {}
     : { feeEstimatePending: approval.feeEstimatePending }),
+  ...(approval.gaslessFees === undefined
+    ? {}
+    : { gaslessFees: approval.gaslessFees.map((fee) => ({ ...fee })) }),
   ...(approval.requiresDeployment === undefined
     ? {}
     : { requiresDeployment: approval.requiresDeployment }),

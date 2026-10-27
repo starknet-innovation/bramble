@@ -191,9 +191,17 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
           feeAffordability: approval.feeAffordability ?? "unknown",
           feeEstimateFailed: approval.feeEstimateFailed === true,
           feeEstimatePending: approval.feeEstimatePending === true,
+          ...(approval.gaslessFees ? { gaslessFees: approval.gaslessFees } : {}),
           requiresDeployment: approval.requiresDeployment === true,
         },
         { "data-approval-retry-fee": approval.id },
+        {
+          gaslessAttributes: {
+            "data-approval-action": "approve",
+            "data-approval-id": approval.id,
+            "data-approval-kind": approval.kind,
+          },
+        },
       ) ||
       reviewCostNote(
         "The network fee is unavailable. Approval remains disabled until a fee can be reviewed.",

@@ -61,8 +61,14 @@ const NO_GRANT_POSSIBLE: Readonly<Record<string, string>> = {
   "runtime-rpc.ts": "defines the seams; it wires the RPC functions and submits nothing itself",
   "strk20-shadow-sweep.ts":
     "relays the reviewed shadow-account sweep for the shared execution path in strk20-wallet-execution.ts, which records whatever grants the submission reports",
-  "wallet-ops.ts":
+  "transfer-ops.ts":
     "submits only the ERC20 transfer the wallet builds from the user's own inputs; it carries no approve",
+};
+
+// A submitter whose hash returns to a caller that files the grants. The caller
+// must name this module's function and call recordApproveAllowances itself.
+const RECORDED_BY_CALLER: Readonly<Record<string, readonly [string, string]>> = {
+  "held-invoke-submit.ts": ["submitHeldInvoke", "provider-ops.ts"],
 };
 
 // Recurses the background capability folders, keyed by file name: the
@@ -108,6 +114,7 @@ describe("allowance recording covers every submitting path", () => {
           submits(text) &&
           !text.includes("recordApproveAllowances") &&
           RECORDS_THROUGH[name] === undefined &&
+          RECORDED_BY_CALLER[name] === undefined &&
           NO_GRANT_POSSIBLE[name] === undefined,
       )
       .map(({ name }) => name);
@@ -145,6 +152,17 @@ describe("allowance recording covers every submitting path", () => {
         true,
       );
       expect(defining.includes("recordApproveAllowances("), `${home} files grants`).toBe(true);
+    }
+  });
+
+  test("a submitter that returns its hash is filed by the caller that awaits it", () => {
+    const sources = new Map(backgroundSources().map(({ name, text }) => [name, text]));
+    for (const [name, [fn, caller]] of Object.entries(RECORDED_BY_CALLER)) {
+      const text = sources.get(name) ?? "";
+      const parent = sources.get(caller) ?? "";
+      expect(submits(text), name).toBe(true);
+      expect(parent.includes(`${fn}(`), `${caller} awaits ${fn}`).toBe(true);
+      expect(parent.includes("recordApproveAllowances("), `${caller} files grants`).toBe(true);
     }
   });
 

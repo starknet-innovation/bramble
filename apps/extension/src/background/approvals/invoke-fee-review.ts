@@ -15,6 +15,7 @@
  * and every failure degrades to a retryable state rather than a guess.
  */
 
+import type { PriceService } from "@bramble/portfolio/prices";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { UndeployedBraavosError } from "@bramble/starknet/deployment";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
@@ -29,12 +30,14 @@ import { resolveReviewFee } from "../accounts/wallet-ops";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import { readStrkBalance } from "../transactions/fee-guard";
+import { reviewGaslessOffers } from "../transactions/gasless-review";
 import type { InvokeFeeReview } from "./approvals";
 
 /**
  * Dependencies needed to estimate the fee for a queued dapp invoke.
  */
 export type InvokeFeeReviewDeps = {
+  readonly prices?: PriceService;
   readonly runtimeRpc: RuntimeRpc;
 };
 
@@ -104,6 +107,33 @@ const DEPLOY_FIRST_INVOKE_FEE: InvokeFeeReview = {
   requiresDeployment: true,
 };
 
+const gaslessOffersFor = async (
+  deps: InvokeFeeReviewDeps,
+  input: {
+    readonly account: InvokeFeeReviewTarget["account"];
+    readonly calls: InvokeFeeReviewTarget["calls"];
+    readonly deployed: boolean;
+    readonly fee: InvokeFeeReview["fee"];
+    readonly feeAffordability: InvokeFeeReview["feeAffordability"];
+    readonly preferences: InvokeFeeReviewTarget["preferences"];
+  },
+): Promise<NonNullable<InvokeFeeReview["gaslessFees"]>> => {
+  const prices = deps.prices;
+  if (prices === undefined) {
+    return [];
+  }
+  return reviewGaslessOffers({
+    account: input.account,
+    calls: [...input.calls],
+    deployed: input.deployed,
+    preferences: input.preferences,
+    prices,
+    runtimeRpc: deps.runtimeRpc,
+    strkAffordability: input.feeAffordability,
+    strkFee: input.fee,
+  }).catch(() => []);
+};
+
 /**
  * Estimates the fee for a queued dapp invoke, mirroring the Send review's shape
  * (deployment status → estimate → `resolveReviewFee`) so both journeys classify
@@ -151,11 +181,20 @@ export const estimateInvokeApprovalFee = async (
     balance: fee === null ? null : await readStrkBalance(deps, account, preferences),
     fee,
   });
+  const gaslessFees = await gaslessOffersFor(deps, {
+    account,
+    calls,
+    deployed,
+    fee,
+    feeAffordability,
+    preferences,
+  });
   return {
     fee,
     feeAffordability,
     feeEstimateFailed,
     feeEstimatePending: false,
+    ...(gaslessFees.length > 0 ? { gaslessFees } : {}),
     requiresDeployment: !deployed,
   };
 };

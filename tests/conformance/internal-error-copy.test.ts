@@ -217,6 +217,7 @@ const SCANNED_SENTENCES = new Set([
   "Deploy this account first (Settings → Deploy account).",
   "Not enough x",
   "The network fee was not reviewed. Nothing was submitted — review the transaction again.",
+  "Paying the network fee in another token is unavailable.",
   "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.",
   "The transaction could not be recorded before sending. Nothing was submitted — try again.",
   "The account deployment fee rose above the amount you reviewed. Nothing was submitted — review it again.",

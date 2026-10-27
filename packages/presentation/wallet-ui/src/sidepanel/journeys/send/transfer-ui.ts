@@ -13,6 +13,7 @@ import { bindTransferBuckets } from "./transfer-buckets-ui";
 import { createComposeFee } from "./transfer-compose-fee";
 import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transfer-compose-ui";
 import { bindTransferExits } from "./transfer-exits-ui";
+import { bindGaslessFeeChoice } from "./transfer-gasless-choice";
 import { transferMaxSpendable } from "./transfer-max";
 import type { TransferExitView, TransferState } from "./transfer-model";
 import {
@@ -313,7 +314,9 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     if (rejection.follow) void confirmSubmitted(epoch);
   };
 
+  const gaslessChoice = bindGaslessFeeChoice(form);
   form.addEventListener("submit", (event) => {
+    const chosenGasless = gaslessChoice.take();
     event.preventDefault();
     if (!acceptsTransferSubmit(transferState.stage)) return;
     const fields = transferFields(form);
@@ -464,11 +467,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         fields.recipient,
         fields.amount,
         fields.speed,
-        // Exactly what the review step rendered. Sending it back is what lets
-        // the background refuse a send whose fee has moved since the user read
-        // it, instead of signing at a price they never saw.
+        // The reviewed figures, so a fee that moved since this was read is refused.
         reviewedFee,
         reviewedDeploymentFee,
+        chosenGasless ?? undefined,
       )
       .then(
         (transactionHash) => {

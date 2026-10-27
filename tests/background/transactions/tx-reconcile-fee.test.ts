@@ -194,6 +194,23 @@ describe("fee backfill for rows no longer observed", () => {
     expect((await stored(activity))?.feePaid).toEqual(FEE);
   });
 
+  test("does not store the relayer STRK on a row that already names the user's token fee", async () => {
+    const gasless = entry({
+      status: "accepted",
+      summary: "Sent 1 USDC (network fee in USDC)",
+      userFee: {
+        amount: "1200000",
+        token: "USDC",
+        tokenAddress: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+      },
+    });
+    const { activity, deps, feeReads } = await harness([gasless], "accepted", { "0xabc": FEE });
+    await reconcileScope(deps, SCOPE, NOW, true);
+    expect(feeReads).toEqual([]);
+    expect((await stored(activity))?.feePaid).toBeUndefined();
+    expect((await stored(activity))?.userFee).toEqual(gasless.userFee);
+  });
+
   test("does not run on fast passes", async () => {
     const { deps, feeReads } = await harness([entry({ status: "reverted" })], "reverted", {
       "0xabc": FEE,

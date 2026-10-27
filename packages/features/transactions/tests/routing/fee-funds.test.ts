@@ -5,7 +5,10 @@
  * "unknown", never a fabricated verdict and never a throw.
  */
 import { describe, expect, test } from "bun:test";
-import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import {
+  resolveFeeAffordability,
+  resolveTokenFeeAffordability,
+} from "@bramble/transactions/fee-funds";
 
 const FEE = { overallFee: "1000", unit: "FRI" };
 
@@ -49,5 +52,27 @@ describe("resolveFeeAffordability", () => {
       resolveFeeAffordability({ balance: "1000", fee: { overallFee: "0x?", unit: "FRI" } }),
     ).toBe("unknown");
     expect(resolveFeeAffordability({ balance: "-1", fee: FEE })).toBe("unknown");
+  });
+});
+
+describe("resolveTokenFeeAffordability", () => {
+  test("compares a token balance with that token's fee", () => {
+    expect(resolveTokenFeeAffordability({ amount: "10", balance: "10" })).toBe("ok");
+    expect(resolveTokenFeeAffordability({ amount: "11", balance: "10" })).toBe("insufficient");
+  });
+
+  test("adds the amount of the same token the transaction spends", () => {
+    expect(resolveTokenFeeAffordability({ amount: "10", balance: "15", sendAmount: 5n })).toBe(
+      "ok",
+    );
+    expect(resolveTokenFeeAffordability({ amount: "10", balance: "14", sendAmount: 5n })).toBe(
+      "insufficient",
+    );
+  });
+
+  test("an unreadable balance or amount is unknown", () => {
+    expect(resolveTokenFeeAffordability({ amount: "10", balance: null })).toBe("unknown");
+    expect(resolveTokenFeeAffordability({ amount: null, balance: "10" })).toBe("unknown");
+    expect(resolveTokenFeeAffordability({ amount: "1.2", balance: "10" })).toBe("unknown");
   });
 });

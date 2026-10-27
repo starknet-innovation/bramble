@@ -11,16 +11,7 @@
  * decision instead of substituting its own figure.
  */
 
-import type { MultisigStore } from "@bramble/multisig/repository";
-import type { OriginGuard } from "@bramble/permissions/blocklist";
-import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
-import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { sameFeeEstimate } from "@bramble/starknet/fee-bounds";
-import type { ActivityLog } from "@bramble/transactions/activity";
-import type { AllowanceStore } from "@bramble/transactions/allowance-store";
-import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
@@ -36,44 +27,27 @@ import {
 import { executeAddChainApproval } from "../provider/add-chain-ops";
 import { executeInvokeApproval } from "../provider/provider-ops";
 import { readApprovalIdInput } from "../routing/message-inputs";
-import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import type { ActiveStateCoordinator } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
+import { captureSessionAuthorization } from "../runtime/session";
 import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
 import { executeDeclareApproval } from "../transactions/declare-ops";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { type ApplyResult, type ApproveDecision, reject, settleExecutor } from "./approval-applier";
 import { settleClaimError, validateClaimContext } from "./approval-claim-context";
-import { pendingFeeRefusal } from "./approval-fee-refusal";
+import type { ApprovalDecisionDeps } from "./approval-decision-deps";
+import { pendingFeeRefusal, pendingGaslessRefusal } from "./approval-fee-refusal";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
 import { applyWatchAssetApproval, WATCH_ASSET_TRACKED_RESPONSE } from "./approval-watch-asset";
-import type { ApprovalClaim, ApprovalKind, ApprovalQueue } from "./approvals";
-import { DROPPED_APPROVAL_RESPONSE, type SignatureWaiters } from "./signature-waiters";
+import type { ApprovalClaim, ApprovalKind, PendingApproval } from "./approvals";
+import { applyGaslessInvoke } from "./gasless-approval";
+import { DROPPED_APPROVAL_RESPONSE } from "./signature-waiters";
 
 /**
  * Dependencies for resolving a queued approval into its settled result. These
  * collaborators stay inside the privileged background boundary.
  */
-export type ApprovalDecisionDeps = {
-  readonly activeStateCoordinator: ActiveStateCoordinator;
-  readonly activity: ActivityLog;
-  readonly allowanceStore: AllowanceStore;
-  readonly approvals: ApprovalQueue;
-  readonly guard: OriginGuard;
-  readonly ledgerSignQueue?: LedgerSignQueue;
-  /** Watched shared accounts, trusted by the execution-time lookalike check (Sherlock 140). */
-  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
-  readonly originHistory: OriginHistoryStore;
-  readonly preferencesStore: WalletPreferencesStore;
-  /** Signed OutsideExecution messages for Activity; optional for narrow test stubs. */
-  readonly relaySignatures?: RelaySignatureLog;
-  readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
-  readonly waiters: SignatureWaiters;
-  readonly wallet: WalletStatusReader;
-};
+export type { ApprovalDecisionDeps } from "./approval-decision-deps";
 
 const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
 const NO_LONGER_PENDING: RuntimeResponse = { error: "approval no longer pending" };
@@ -92,6 +66,9 @@ const applyWatchAsset: ApproveApplier = (deps, { approval }) =>
 const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (!payload) {
     return reject(NOT_FOUND);
+  }
+  if (decision.gaslessFee) {
+    return applyGaslessInvoke(deps, approval, payload, decision);
   }
   const reviewedFee = decision.reviewedFee;
   if (
@@ -359,6 +336,17 @@ const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
   "watch-asset": applyWatchAsset,
 };
 
+const echoedFeeRefusal = (
+  pending: PendingApproval | null,
+  input: {
+    readonly gaslessFee?: ApproveDecision["gaslessFee"];
+    readonly reviewedFee?: ApproveDecision["reviewedFee"];
+  },
+): RuntimeResponse | null =>
+  input.gaslessFee
+    ? pendingGaslessRefusal(pending, input.gaslessFee)
+    : pendingFeeRefusal(pending, input.reviewedFee);
+
 const applyApproveDecision = async (
   deps: ApprovalDecisionDeps,
   message: unknown,
@@ -368,7 +356,8 @@ const applyApproveDecision = async (
     return { error: "invalid approval request" };
   }
   // Refuse a missing or stale fee echo before consuming the queue entry.
-  const feeRefusal = pendingFeeRefusal(deps.approvals.get(input.id), input.reviewedFee);
+  const pending = deps.approvals.get(input.id);
+  const feeRefusal = echoedFeeRefusal(pending, input);
   if (feeRefusal) {
     return feeRefusal;
   }

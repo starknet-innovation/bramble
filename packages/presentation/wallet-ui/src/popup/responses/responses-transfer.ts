@@ -3,6 +3,7 @@
  */
 
 import { hasOnlyKnownKeys, isJson, isRecord, isRiskFlagCode } from "@bramble/core/json";
+import { isGaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 
 /**
@@ -21,6 +22,12 @@ export type TransferReviewResponse = {
      */
     readonly feeAffordability: "insufficient" | "ok" | "unknown";
     readonly feeEstimateFailed: boolean;
+    readonly gaslessFees?: readonly {
+      readonly amount: string;
+      readonly decimals: number;
+      readonly label: string;
+      readonly tokenAddress: string;
+    }[];
     readonly flags: readonly { readonly code: string; readonly message: string }[];
     readonly requiresDeployment: boolean;
     /** True when a device will be asked to sign both the deployment and the send. */
@@ -79,6 +86,7 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
       "feeAffordability",
       "feeEstimateFailed",
       "flags",
+      "gaslessFees",
       "requiresDeployment",
       "signsTwice",
       "summaries",
@@ -100,6 +108,11 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     // An affordability claim requires an estimate to compare against.
     (review["fee"] !== null || review["feeAffordability"] === "unknown") &&
     typeof review["feeEstimateFailed"] === "boolean" &&
+    (review["gaslessFees"] === undefined ||
+      (Array.isArray(review["gaslessFees"]) &&
+        review["gaslessFees"].length > 0 &&
+        review["gaslessFees"].length <= 3 &&
+        review["gaslessFees"].every(isGaslessFeeOffer))) &&
     Array.isArray(review["flags"]) &&
     review["flags"].every(isRiskFlagShape) &&
     typeof review["requiresDeployment"] === "boolean" &&

@@ -118,9 +118,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       reviewedFee?: PendingApproval["fee"],
       reviewedAccountId?: string,
       transaction = false,
+      gaslessFee?: NonNullable<PendingApproval["gaslessFees"]>[number],
     ): Promise<void> {
       const ownCode = approved && transaction;
       const response = await sendMessage({
+        ...(approved && gaslessFee ? { gaslessFee } : {}),
         id,
         ...(approved && reviewedAccountId ? { reviewedAccountId } : {}),
         ...(approved && reviewedFee ? { reviewedFee } : {}),
@@ -451,10 +453,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "network switch failed");
     },
-    /**
-     * Sends under the exact invoke and optional deployment fees displayed by
-     * the review. A missing required ceiling is refused before signing.
-     */
+    /** Sends under the reviewed fees. A missing ceiling is refused before signing. */
     async submitTransfer(
       accountId: string,
       tokenId: string,
@@ -463,10 +462,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       speed: "fast" | "standard" = "standard",
       reviewedFee: TransferReviewResponse["review"]["fee"] = null,
       reviewedDeploymentFee: TransferReviewResponse["review"]["deploymentFee"] = null,
+      gaslessFee?: NonNullable<TransferReviewResponse["review"]["gaslessFees"]>[number],
     ): Promise<string> {
       const response = await sendMessage({
         accountId,
         amount,
+        ...(gaslessFee ? { gaslessFee } : {}),
         recipient,
         ...(reviewedDeploymentFee == null ? {} : { reviewedDeploymentFee }),
         ...(reviewedFee === null ? {} : { reviewedFee }),

@@ -60,6 +60,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/approvals/approval-session.ts",
   "apps/extension/src/background/provider/add-chain-ops.ts",
   "apps/extension/src/background/approvals/approval-decisions.ts",
+  // Names the signature-waiter collaborator by its module path only. It holds
+  // no secret material and touches no key operations.
+  "apps/extension/src/background/approvals/approval-decision-deps.ts",
   "apps/extension/src/background/transactions/chain-ops.ts",
   "apps/extension/src/background/portfolio/discovery-ops.ts",
   "apps/extension/src/background/transactions/declare-ops.ts",
@@ -102,6 +105,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
   "apps/extension/src/background/accounts/wallet-ops.ts",
+  // Public-send review and broadcast split from wallet-ops. The session
+  // credential only transits into the hash signer; it is never logged,
+  // persisted, or returned.
+  "apps/extension/src/background/accounts/transfer-ops.ts",
   "apps/extension/src/background/accounts/wallet-reader.ts",
   "apps/extension/src/background/ledger/ledger-inputs.ts",
   "packages/platform/kms-krusty/src/adapter.ts",
@@ -191,6 +198,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // same Krusty-delegated boundary, no secret ever stored or logged here.
   "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
   "packages/features/privacy/src/paymaster/paymaster.ts",
+  // Posts the outside-execution signature the gasless gateway requires.
+  // The field is public; private signing stays in Krusty via signHash.
+  "packages/features/privacy/src/paymaster/gasless-submit.ts",
   "packages/features/privacy/src/service.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the
