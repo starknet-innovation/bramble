@@ -123,6 +123,7 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.diagnostics",
   "wallet.discoverNfts",
   "wallet.discoverOwnAccounts",
+  "wallet.discoverReadyKeyAccounts",
   "wallet.discoverRecoveryAccounts",
   "wallet.getBalances",
   "wallet.ledgerAccountStatus",

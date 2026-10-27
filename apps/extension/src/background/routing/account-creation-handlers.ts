@@ -14,11 +14,13 @@ import {
   readImportSeedAccountsInput,
 } from "../accounts/account-creation-inputs";
 import { readCreateKeyVaultInput, readImportAccountInput } from "../accounts/import-inputs";
+import { verifyReadyKeyClasses } from "../accounts/ready-key-accounts";
 import {
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { captureSessionAuthorization } from "../runtime/session";
 import type { RouterContext } from "./message-context";
 import { readAddAccountInput } from "./message-inputs";
 import type { RuntimeSender } from "./senders";
@@ -94,6 +96,24 @@ const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
   });
 };
 
+// A "Ready Account" key import names the releases the user picked; each is
+// re-proved on chain before the write, so the class is never the message's
+// word alone. Other families import at their default and name none.
+const pickedReadyReleases = async (
+  ctx: RouterContext,
+  input: NonNullable<ReturnType<typeof readImportAccountInput>>,
+): Promise<{ readonly classHashes?: readonly string[] }> => {
+  if (input.accountContractType !== "argent") return {};
+  const { classHashes = [], deploymentSalt, networkId, privateKey } = input;
+  return {
+    classHashes: await verifyReadyKeyClasses(
+      ctx,
+      { ...(deploymentSalt === undefined ? {} : { deploymentSalt }), networkId, privateKey },
+      classHashes,
+    ),
+  };
+};
+
 const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.createKeyVault") {
     return null;
@@ -106,12 +126,13 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
   if (!createKeyVault) {
     return { error: "wallet unavailable" };
   }
+  const classHashes = await pickedReadyReleases(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
     const account = await runVaultCreationWithNetwork(
       ctx.session,
       ctx.preferencesStore,
       input.networkId,
-      () => createKeyVault(input),
+      () => createKeyVault({ ...input, ...classHashes }),
     );
     ctx.session.unlock(input.vaultPassphrase);
     return { account, ok: true };
@@ -191,12 +212,25 @@ const handleImportAccount: RouterHandler = async (ctx, messageType, message) => 
   if (!importRawKeyAccount) {
     return { error: "wallet unavailable" };
   }
+  // Probed outside the coordinator: the chain round-trips must not hold the
+  // serialized state boundary. The unlock that authorized the import must
+  // still be the current one when it writes: a lock, a re-unlock or a replaced
+  // vault during the reads refuses before the network preference or the vault
+  // is touched, and never locks the session.
+  const authorization = captureSessionAuthorization(ctx.session);
+  if (!authorization.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  const classHashes = await pickedReadyReleases(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
+    if (!authorization.isCurrent()) {
+      return { error: "wallet locked" };
+    }
     const account = await runUnlockedNetworkMutation(
       ctx.session,
       ctx.preferencesStore,
       input.networkId,
-      (vaultPassphrase) => importRawKeyAccount({ ...input, vaultPassphrase }),
+      (vaultPassphrase) => importRawKeyAccount({ ...input, ...classHashes, vaultPassphrase }),
     );
     return account ? { account, ok: true } : { error: "wallet locked" };
   });
