@@ -7,16 +7,19 @@
  * passphrase because no session exists yet.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import {
   type AccountContractType,
   isCreatableAccountContractType,
 } from "@bramble/wallet-model/accounts";
 import {
+  isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   isStarkPrivateKey,
   normalizeFeltInput,
   type StarknetNetworkId,
+  sameFelt,
 } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 
@@ -39,6 +42,41 @@ type RawKeyAccountFields = {
   readonly networkId: StarknetNetworkId;
   readonly privateKey: string;
   readonly deploymentSalt?: string;
+};
+
+/**
+ * A raw-key import request. A "Ready Account" (Argent) import names the
+ * releases the user picked from discovery; every other family names none. The
+ * background re-proves each picked release before writing.
+ */
+type RawKeyImportFields = RawKeyAccountFields & { readonly classHashes?: readonly string[] };
+
+// The picked Argent releases: one to the table's size, unique, canonical felts.
+// Membership in the table is checked by the background re-proof, not here.
+const readClassHashes = (value: unknown): readonly string[] | null => {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  if (value.length > deploymentClasses("argent").length) return null;
+  const classHashes: string[] = [];
+  for (const raw of value) {
+    const classHash = typeof raw === "string" ? normalizeFeltInput(raw) : null;
+    if (classHash === null || !isNonZeroStarkFieldElement(classHash)) return null;
+    if (classHashes.some((seen) => sameFelt(seen, classHash))) return null;
+    classHashes.push(classHash);
+  }
+  return classHashes;
+};
+
+// Argent imports must name their picked releases; every other family must not.
+const withClassHashes = (
+  fields: RawKeyAccountFields | null,
+  message: Record<string, unknown>,
+): RawKeyImportFields | null => {
+  if (!fields) return null;
+  if (fields.accountContractType !== "argent") {
+    return message["classHashes"] === undefined ? fields : null;
+  }
+  const classHashes = readClassHashes(message["classHashes"]);
+  return classHashes ? { ...fields, classHashes } : null;
 };
 
 const readRawKeyAccountFields = (message: Record<string, unknown>): RawKeyAccountFields | null => {
@@ -82,17 +120,18 @@ const readRawKeyAccountFields = (message: Record<string, unknown>): RawKeyAccoun
  * the unlocked session rather than the message. Returns `null` for any
  * malformed message or invalid key so the caller adds no account.
  */
-export const readImportAccountInput = (message: unknown): RawKeyAccountFields | null =>
+export const readImportAccountInput = (message: unknown): RawKeyImportFields | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, [
     "accountContractType",
+    "classHashes",
     "deploymentSalt",
     "networkId",
     "privateKey",
     "type",
   ]) &&
   message["type"] === "wallet.importAccount"
-    ? readRawKeyAccountFields(message)
+    ? withClassHashes(readRawKeyAccountFields(message), message)
     : null;
 
 /**
@@ -104,11 +143,12 @@ export const readImportAccountInput = (message: unknown): RawKeyAccountFields | 
  */
 export const readCreateKeyVaultInput = (
   message: unknown,
-): (RawKeyAccountFields & { readonly vaultPassphrase: string }) | null => {
+): (RawKeyImportFields & { readonly vaultPassphrase: string }) | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountContractType",
+      "classHashes",
       "deploymentSalt",
       "networkId",
       "privateKey",
@@ -120,6 +160,28 @@ export const readCreateKeyVaultInput = (
   ) {
     return null;
   }
-  const fields = readRawKeyAccountFields(message);
+  const fields = withClassHashes(readRawKeyAccountFields(message), message);
   return fields ? { ...fields, vaultPassphrase: message["vaultPassphrase"] } : null;
+};
+
+/**
+ * Parses the Ready-key discovery request (`wallet.discoverReadyKeyAccounts`):
+ * the shared key/salt/network grammar for an Argent key, used by both the
+ * first-run and the in-wallet import before the user picks. Returns `null` for
+ * any malformed message without echoing secret material.
+ */
+export const readDiscoverReadyKeyAccountsInput = (
+  message: unknown,
+): Omit<RawKeyAccountFields, "accountContractType"> | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["deploymentSalt", "networkId", "privateKey", "type"]) ||
+    message["type"] !== "wallet.discoverReadyKeyAccounts"
+  ) {
+    return null;
+  }
+  const fields = readRawKeyAccountFields({ ...message, accountContractType: "argent" });
+  if (!fields) return null;
+  const { accountContractType: _argent, ...rest } = fields;
+  return rest;
 };

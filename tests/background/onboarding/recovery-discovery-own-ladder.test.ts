@@ -11,7 +11,10 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
-import { deploymentClasses } from "@bramble/wallet-model/account-families";
+import {
+  deploymentClasses,
+  XVERSE_ARGENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   type RecoverableAccountRef,
@@ -119,5 +122,55 @@ describe("recovery discovery on the wallet's own ladder", () => {
           account.address !== deployed.address,
       ),
     ).toEqual([]);
+  });
+
+  test("scans every Argent release on the own ladder and all but Xverse's on Ready's", async () => {
+    const own: string[] = [];
+    const ready: string[] = [];
+    const deps = {
+      activeStateCoordinator: createActiveStateCoordinator(),
+      preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+      recoveryDiscovery: createRecoveryDiscoveryCache(),
+      runtimeRpc: {
+        ...defaultRuntimeRpc,
+        async getDeploymentStatus() {
+          return false;
+        },
+        async getTokenBalances({
+          tokens,
+        }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
+          return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
+        },
+      },
+      session: createUnlockSession(),
+      wallet: {
+        ...walletStub,
+        async previewAccount(input: AccountDerivationInput) {
+          if (input.accountContractType === "argent") {
+            const classHash = canonicalFelt(input.classHash ?? "") ?? "";
+            (input.derivation === "argentx-bip44" ? ready : own).push(classHash);
+          }
+          return accountFor(input);
+        },
+      },
+    };
+    await handleOnboardingOps(deps, "wallet.discoverRecoveryAccounts", {
+      manualIndex: 0,
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      networkId: "SN_MAIN",
+      type: "wallet.discoverRecoveryAccounts",
+    });
+
+    const releases = deploymentClasses("argent").map(
+      (entry) => canonicalFelt(entry.classHash) ?? "",
+    );
+    const xverse = canonicalFelt(XVERSE_ARGENT_CLASS_HASH) ?? "";
+    // Each release exactly once per scanned index on the own ladder, Xverse's build included.
+    expect([...own].sort()).toEqual([...releases].sort());
+    expect(own.filter((classHash) => classHash === xverse)).toHaveLength(1);
+    // Ready's ladder takes every release except Xverse's build.
+    expect([...ready].sort()).toEqual(releases.filter((classHash) => classHash !== xverse).sort());
+    // Together the two ladders cover every Argent deployment class.
+    expect(new Set([...own, ...ready])).toEqual(new Set(releases));
   });
 });

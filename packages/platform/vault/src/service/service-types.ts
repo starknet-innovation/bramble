@@ -144,7 +144,13 @@ export type AddDerivedAccountInput = {
  * key is validated and routed to the encrypted vault; it is never persisted in
  * plain preferences or logged.
  */
-export type ImportRawKeyAccountInput = PreviewImportedAccountInput & {
+export type ImportRawKeyAccountInput = Omit<PreviewImportedAccountInput, "classHash"> & {
+  /**
+   * The releases to store, one account each, all signing with the same key.
+   * Absent means the family default. Each must be a class the family was
+   * deployed with; any account already stored refuses the whole import.
+   */
+  readonly classHashes?: readonly string[];
   readonly vaultPassphrase: string;
 };
 

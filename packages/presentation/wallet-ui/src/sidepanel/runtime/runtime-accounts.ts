@@ -4,8 +4,10 @@ import type { AccountContractType, AccountRef } from "@bramble/wallet-model/acco
 import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
 import { isCreateAccountResponse } from "../../popup/responses/responses";
 import {
+  isReadyKeyDiscoveryResponse,
   isRecoveredAccountsResponse,
   isRecoveryDiscoveryResponse,
+  type ReadyKeyCandidate,
 } from "../../popup/responses/responses-onboarding";
 import { responseError } from "./runtime-errors";
 
@@ -62,9 +64,11 @@ export const createAccountRuntimeClient = (
     vaultPassphrase: string,
     accountContractType: AccountContractType,
     deploymentSalt?: string,
+    classHashes?: readonly string[],
   ): Promise<string> {
     const response = await sendMessage({
       accountContractType,
+      ...(classHashes === undefined ? {} : { classHashes }),
       ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
       networkId,
       privateKey,
@@ -81,9 +85,11 @@ export const createAccountRuntimeClient = (
     privateKey: string,
     accountContractType: AccountContractType,
     deploymentSalt?: string,
+    classHashes?: readonly string[],
   ): Promise<string> {
     const response = await sendMessage({
       accountContractType,
+      ...(classHashes === undefined ? {} : { classHashes }),
       ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
       networkId,
       privateKey,
@@ -93,6 +99,25 @@ export const createAccountRuntimeClient = (
       return response.account.id;
     }
     throw responseError(response, "import account failed");
+  },
+  /**
+   * Lists the Argent releases a raw Ready key controls an address in use at,
+   * before the user picks which to import. The key travels only in this
+   * privileged request; the answer is public addresses and classes.
+   */
+  async discoverReadyKeyAccounts(
+    networkId: string,
+    privateKey: string,
+    deploymentSalt?: string,
+  ): Promise<readonly ReadyKeyCandidate[]> {
+    const response = await sendMessage({
+      ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
+      networkId,
+      privateKey,
+      type: "wallet.discoverReadyKeyAccounts",
+    });
+    if (isReadyKeyDiscoveryResponse(response)) return response.candidates;
+    throw responseError(response, "ready account check unavailable");
   },
   async discoverRecoveryAccounts(mnemonic: string, networkId: string, manualIndex?: number) {
     const response = await sendMessage({

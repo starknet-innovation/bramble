@@ -222,11 +222,13 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["account import failed", "Couldn't add those accounts. Try again."],
   ["import account failed", KEY_IMPORT_FAILED],
   ["create key vault failed", "Couldn't create your wallet. Try again."],
-  // A "Ready Account" key import only restores an account that exists.
+  // A "Ready Account" key import only restores an account the chain shows in
+  // use; the scan can't prove none exists, only that it found none.
   [
-    "no deployed or funded ready account uses this key",
-    "No Ready account uses this key on this network.",
+    "no ready account found for this key",
+    "Couldn't find a Ready account for this key on this network.",
   ],
+  ["ready account check unavailable", "Couldn't check this key's Ready accounts. Try again."],
   ["seed import failed", SEED_IMPORT_FAILED],
   ["mnemonic validation unavailable", "Couldn't check that recovery phrase. Try again."],
   ["reveal failed", "Couldn't reveal that. Re-enter your passphrase and try again."],
