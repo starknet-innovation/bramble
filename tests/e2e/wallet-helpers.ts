@@ -11,6 +11,14 @@ export const VAULT_PASSPHRASE = "correct horse battery staple";
 export const IMPORT_MNEMONIC =
   "habit hope tip crystal because grunt nation idea electric witness alert like";
 
+/**
+ * How long a test waits for the first-run recovery scan to report "Search complete".
+ * The scan derives and reads several account shapes per index (more since #777, which
+ * tries every Argent release on both key ladders), so under a loaded runner it can
+ * outlast Playwright's 5 s expect default. Kept below the 45 s test timeout.
+ */
+export const RECOVERY_SCAN_TIMEOUT_MS = 30_000;
+
 const phraseWords = (phrase: string): readonly string[] =>
   phrase.trim().split(/\s+/).filter(Boolean);
 
@@ -136,7 +144,9 @@ const protectAndRecoverAccounts = async (onboarding: Page, passphrase: string): 
   await onboarding.locator('input[name="vaultPassphraseConfirm"]').fill(passphrase);
   await onboarding.getByRole("button", { name: "Find my accounts" }).click();
   await expect(onboarding.getByRole("heading", { name: "Find your accounts" })).toBeVisible();
-  await expect(onboarding.locator("#recovery-scan-status")).toContainText("Search complete");
+  await expect(onboarding.locator("#recovery-scan-status")).toContainText("Search complete", {
+    timeout: RECOVERY_SCAN_TIMEOUT_MS,
+  });
   // The mocked chain reports no activity, so the Bramble group starts closed
   // with nothing auto-selected: open it and pick the first index by hand.
   const brambleGroup = onboarding.locator('[data-recovery-group="openzeppelin"]');

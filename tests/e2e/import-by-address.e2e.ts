@@ -9,7 +9,7 @@
 import type { Page, Route } from "@playwright/test";
 import { hash } from "starknet";
 import { expect, test } from "./fixtures";
-import { IMPORT_MNEMONIC, VAULT_PASSPHRASE } from "./wallet-helpers";
+import { IMPORT_MNEMONIC, RECOVERY_SCAN_TIMEOUT_MS, VAULT_PASSPHRASE } from "./wallet-helpers";
 
 const ARGENT_0_4_0 = "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f";
 const PASTED = "0x7e57ad0e55";
@@ -87,7 +87,9 @@ const reachPicker = async (page: Page): Promise<void> => {
   await page.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
   await page.locator('input[name="vaultPassphraseConfirm"]').fill(VAULT_PASSPHRASE);
   await page.getByRole("button", { name: "Find my accounts" }).click();
-  await expect(page.locator("#recovery-scan-status")).toContainText("Search complete");
+  await expect(page.locator("#recovery-scan-status")).toContainText("Search complete", {
+    timeout: RECOVERY_SCAN_TIMEOUT_MS,
+  });
   await page.getByText("Can't find it? Paste the account address").click();
 };
 
