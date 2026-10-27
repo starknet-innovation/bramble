@@ -1,5 +1,6 @@
 {
   "name": "@bramble/core",
+  "description": "Pure, environment-independent primitives: bounded JSON parsing, errors, identifiers, normalized origins, HTML text helpers, network-error classification and service URL validation.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

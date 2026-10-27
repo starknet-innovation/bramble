@@ -1,5 +1,6 @@
 {
   "name": "@bramble/extension",
+  "description": "The Manifest V3 Starknet wallet extension: static pages, entrypoints, the browser storage adapter, privileged background orchestration and the extension build.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

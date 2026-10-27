@@ -1,5 +1,6 @@
 {
   "name": "@bramble/wallet-model",
+  "description": "Public account, network, token, address-book, preference, passphrase-policy, Ledger-path and signing values, with their pure parsers and smart constructors.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
