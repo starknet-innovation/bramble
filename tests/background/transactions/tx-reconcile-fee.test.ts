@@ -5,7 +5,7 @@
  * the chain executed, and only for rows this wallet submitted: the sender pays
  * a receipt's fee, so on a discovered incoming transfer it is someone else's.
  * A missing or failed read records nothing, and a recorded fee is never read
- * or replaced again.
+ * or replaced again. A sponsored deployment (#431) never gets one.
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
@@ -110,6 +110,20 @@ describe("fee paid", () => {
     const { activity, deps } = await harness([entry()], "reverted", { "0xabc": FEE });
     await reconcileScope(deps, SCOPE, NOW, true);
     expect((await stored(activity))?.feePaid).toEqual(FEE);
+  });
+
+  test("is never read for a sponsored deployment, whose fee the sponsor paid", async () => {
+    const sponsored = entry({
+      feePayer: "sponsor",
+      kind: "deploy",
+      summary: "Deploy account contract",
+    });
+    const { activity, deps, feeReads } = await harness([sponsored], "accepted", { "0xabc": FEE });
+    await reconcileScope(deps, SCOPE, NOW, true);
+    expect(feeReads).toEqual([]);
+    const row = await stored(activity);
+    expect(row?.status).toBe("accepted");
+    expect(row?.feePaid).toBeUndefined();
   });
 
   test("is not read while the transaction is unresolved", async () => {

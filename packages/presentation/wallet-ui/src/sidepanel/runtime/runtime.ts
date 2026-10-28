@@ -54,6 +54,7 @@ export type {
 } from "./runtime-types";
 
 import { createAccountRuntimeClient } from "./runtime-accounts";
+import { createDeployRuntimeClient } from "./runtime-deploy";
 import { lostReplySend, refusalText, relabelLostReply, responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
@@ -82,6 +83,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createSidePanelNoticeClient(sendMessage),
     ...createShadowAccountsRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
+    ...createDeployRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
     ...createLookupRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
@@ -90,17 +92,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "add token failed");
-    },
-    async deployAccount(reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
-      const response = await sendMessage({
-        ...(reviewedFee ? { reviewedFee } : {}),
-        type: "wallet.deployAccount",
-      });
-      if (isFeeReviewResponse(response)) return response.feeReview;
-      if (isTransferResponse(response)) {
-        return response.transactionHash;
-      }
-      throw responseError(response, "deployment failed");
     },
     /**
      * Settles a pending approval. `reviewedFee` is the figure the deciding card

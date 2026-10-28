@@ -338,6 +338,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "Couldn't verify this account's contract. Check your connection and try again.",
   ],
   ["account already deployed", "This account is already deployed."],
+  [
+    "sponsored deployment unavailable",
+    "Sponsored deployment isn't available. Add STRK to deploy it yourself.",
+  ],
   ["deployment failed", SUBMISSION_UNKNOWN("The deployment")],
   ["deployment data not available", "Couldn't read this account's deployment details. Try again."],
   ["no account for selected network", "No account on this network yet. Add one to continue."],

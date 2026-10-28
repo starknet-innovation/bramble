@@ -109,6 +109,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
   "apps/extension/src/background/accounts/wallet-ops.ts",
+  // Deploy handlers split from wallet-ops (issue 431); the vault passphrase only
+  // transits into the protected hash-signer wiring, never logged or stored.
+  "apps/extension/src/background/accounts/deploy-account-ops.ts",
   // Public-send review and broadcast split from wallet-ops. The session
   // credential only transits into the hash signer; it is never logged,
   // persisted, or returned.

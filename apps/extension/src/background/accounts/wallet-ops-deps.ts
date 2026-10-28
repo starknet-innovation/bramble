@@ -17,6 +17,7 @@ import type { NftSnapshotStore } from "../portfolio/nft-snapshots";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { ActiveStateCoordinator } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";
+import type { PendingDeployments } from "./pending-deployments";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**
@@ -43,6 +44,8 @@ export type WalletOpsDeps = {
    * clock boundary.
    */
   readonly now?: () => number;
+  /** Shared deploy guard (issue 431); see `./pending-deployments`. */
+  readonly pendingDeployments?: PendingDeployments;
   readonly preferencesStore: WalletPreferencesStore;
   /** Fiat prices for the gasless fee ceiling. Absent in narrow test doubles. */
   readonly prices?: PriceService;

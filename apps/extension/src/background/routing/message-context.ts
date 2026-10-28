@@ -22,6 +22,11 @@ import {
   memoryRelaySignatureLog,
   type RelaySignatureLog,
 } from "@bramble/transactions/relay-signatures";
+import {
+  guardDeployments,
+  memoryPendingDeployments,
+  type PendingDeployments,
+} from "../accounts/pending-deployments";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "../approvals/approvals";
@@ -96,6 +101,8 @@ export type RouterContext = {
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
   readonly recoveryDiscovery: RecoveryDiscoveryCache;
+  /** Accounts whose deploy may be in flight; every deploy route consults it. */
+  readonly pendingDeployments: PendingDeployments;
   readonly relaySignatures: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -132,6 +139,8 @@ export type MessageHandlerOptions = {
   readonly now?: () => number;
   readonly originGuard?: OriginGuard;
   readonly originHistory?: OriginHistoryStore;
+  /** Durable pending-deployment store; defaults to an in-memory one. */
+  readonly pendingDeployments?: PendingDeployments;
   /** How current the live phishing list is, for support diagnostics; absent reports none. */
   readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore?: WalletPreferencesStore;
@@ -235,6 +244,21 @@ const waitersFor = (provided: SignatureWaiters | undefined): SignatureWaiters =>
 // Inert when no browser runtime is wired (tests, tooling): never restarts.
 const updatesFor = (updates: UpdateReady | undefined): UpdateReady => updates ?? inertUpdateReady;
 
+// The activity log, the pending-deployment store, and the RPC wrapped so every
+// deploy-capable submission refuses during a sponsored attempt's hold (issue 431).
+const deployGuardedRuntime = (
+  options: MessageHandlerOptions,
+): Pick<RouterContext, "activity" | "pendingDeployments" | "runtimeRpc"> => {
+  const activity = options.activity ?? memoryActivityLog();
+  const pendingDeployments = options.pendingDeployments ?? memoryPendingDeployments();
+  const runtimeRpc = guardDeployments(options.runtimeRpc ?? defaultRuntimeRpc, {
+    activity,
+    now: options.now ?? systemClock,
+    pendingDeployments,
+  });
+  return { activity, pendingDeployments, runtimeRpc };
+};
+
 const sidePanelLearningFor = (
   learner: SidePanelNotice | undefined,
 ): Pick<RouterContext, "sidePanelLearning"> => (learner ? { sidePanelLearning: learner } : {});
@@ -265,9 +289,10 @@ export const routerContext = (
   const waiters = waitersFor(options.waiters);
   const now = options.now ?? systemClock;
   releaseWaitersOnApprovalDrop(approvals, waiters, notifyApprovalsChanged);
+  const { activity, pendingDeployments, runtimeRpc } = deployGuardedRuntime(options);
   return {
     activeStateCoordinator: activeStateCoordinatorFor(options.activeStateCoordinator),
-    activity: options.activity ?? memoryActivityLog(),
+    activity,
     allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
     approvals,
     balanceSnapshots: balanceSnapshotsFor(options.balanceSnapshots),
@@ -281,12 +306,13 @@ export const routerContext = (
     ...nostrRelayTransportFor(options.nostrRelayTransport),
     now,
     originHistory: options.originHistory ?? memoryOriginHistory(),
+    pendingDeployments,
     ...phishingFeedHealthFor(options.phishingFeedHealth),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
     recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),
     relaySignatures: relaySignaturesFor(options.relaySignatures),
-    runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
+    runtimeRpc,
     session,
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),

@@ -58,6 +58,8 @@ const NO_GRANT_POSSIBLE: Readonly<Record<string, string>> = {
     "deploys the pinned Argent multisig account contract; a deployment carries no calls, so no allowance can be granted",
   "nft-transfer-submit.ts":
     "submits only the ERC721/ERC1155 transfer the wallet builds; an NFT approval's second argument is a token id, not an amount, and must never be filed as an ERC20 allowance",
+  "pending-deployments.ts":
+    "wraps the deploy-capable RPC seams with the pending-deployment refusal; it builds no calls and forwards each submission unchanged to the caller that records it",
   "runtime-rpc.ts": "defines the seams; it wires the RPC functions and submits nothing itself",
   "strk20-shadow-sweep.ts":
     "relays the reviewed shadow-account sweep for the shared execution path in strk20-wallet-execution.ts, which records whatever grants the submission reports",

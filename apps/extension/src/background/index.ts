@@ -34,6 +34,7 @@ import {
   requireTrustedStorageAccess,
 } from "../browser-storage";
 import { resolveExtensionApi } from "../extension-api";
+import { createPendingDeployments } from "./accounts/pending-deployments";
 import { createWalletReader } from "./accounts/wallet-reader";
 import { observeTechnicalDataConsent, technicalDataAllowed } from "./analytics/data-consent";
 import {
@@ -241,6 +242,7 @@ const activityLog = (() => {
 // Public chain data only. The adapter is restricted to trusted extension
 // contexts at startup; wallet secrets remain exclusively in the encrypted vault.
 const balanceSnapshots = createBalanceSnapshotStore(createBrowserLocalStore());
+const pendingDeployments = createPendingDeployments(createBrowserLocalStore());
 const nftSnapshots = createNftSnapshotStore(createBrowserLocalStore());
 const originHistory = (() => {
   try {
@@ -336,19 +338,15 @@ const runtimeReady = sessionReady.then(async () => {
 // the panel polls. While one runs, a cheap extension API call every 20 s is
 // what Chrome's lifecycle guidance prescribes to keep the worker from idling
 // out; the call's result is irrelevant and its failure is ignored.
-const strk20Jobs = createStrk20JobRegistry({
-  ...(runtime?.getPlatformInfo
-    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
-    : {}),
-  now: systemClock,
-});
+const workerKeepAlive = runtime?.getPlatformInfo
+  ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+  : {};
+const strk20Jobs = createStrk20JobRegistry({ ...workerKeepAlive, now: systemClock });
 // A reviewed preparation is held only in worker memory too, so the same
 // extension API call keeps the worker alive while a confirmation sits on
 // screen; an unconfirmed review retires after its lifetime and drops the hold.
 const strk20Preparations = createStrk20WalletPreparationStore({
-  ...(runtime?.getPlatformInfo
-    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
-    : {}),
+  ...workerKeepAlive,
   now: systemClock,
 });
 // This extension's own identity. The origin MUST come from the runtime: on
@@ -379,6 +377,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   waiters: signatureWaiters,
   balanceSnapshots,
   nftSnapshots,
+  pendingDeployments,
   session,
   preferencesStore: preferenceStore,
   runtimeRpc,

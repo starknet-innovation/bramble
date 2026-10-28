@@ -89,7 +89,9 @@ const SENSITIVE = new RegExp(
 // Already a sentence a reader can act on; shown as written by decision.
 const READER_SENTENCES = new Set([
   "A 2FA removal is already pending for this account",
+  "A sponsored deployment of this account may already be on its way. Check activity before trying again.",
   "Account already exists",
+  "Couldn't confirm whether this account is deployed. Check your connection and try again.",
   "Account deployment status is unknown. Check the account on-chain before retrying.",
   "Account is already deployed",
   "Account not found",
@@ -138,12 +140,15 @@ const READER_SENTENCES = new Set([
   "Wallet already exists",
   "Your browser did not grant access to that explorer host",
   "Your browser did not grant access to that service host",
+  "This account's sponsored deployment was already sent and may still land. Add STRK to deploy it yourself.",
+  "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.",
   "Your browser did not grant access to those service hosts",
 ]);
 
 // Facts that pass the guard unreviewed: a check that failed or could not run,
 // or a device answer. Shown as written; reviewed copy may reword, not hide.
 const GUARDED_FACTS = new Set([
+  "Account deployment parameters are invalid",
   "Account deployment requires exactly one signature",
   "Account public key unavailable for the live signer check",
   "Argent account class hash is not a release this wallet recognizes",

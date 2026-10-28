@@ -10,6 +10,7 @@ import type {
 } from "@bramble/multisig/repository";
 import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { DeploySponsorship } from "@bramble/privacy/sponsored-deploy";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
@@ -335,10 +336,7 @@ type DeploymentDataResponse = {
  */
 type RequestAccountsResponse =
   | AccountsResponse
-  | {
-      readonly ok: false;
-      readonly pending: PendingApproval;
-    };
+  | { readonly ok: false; readonly pending: PendingApproval };
 
 /**
  * Fresh chain view paired with immutable Argent account provenance.
@@ -468,6 +466,7 @@ export type RuntimeResponse =
   | { readonly notice: boolean; readonly ok: true }
   | { readonly ok: true; readonly restarting: boolean }
   | { readonly ok: true; readonly released: boolean }
+  | { readonly ok: true; readonly sponsorship: DeploySponsorship }
   | MultisigsResponse
   | { readonly ok: true }
   | PendingApprovalResponse
