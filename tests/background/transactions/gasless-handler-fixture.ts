@@ -1,7 +1,7 @@
 /**
- * Handler harness for gasless fees. Mainnet's shipped flag is on. The
- * transport, class read, and clock installed here keep a case off the network.
- * Sepolia stays off.
+ * Handler harness for gasless fees. The shipped flags stay off. The route,
+ * transport, class read, and clock installed here keep a case off the network
+ * and turn the mainnet path on only inside the test. Sepolia stays off.
  */
 import type { PriceService } from "@bramble/portfolio/prices";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";

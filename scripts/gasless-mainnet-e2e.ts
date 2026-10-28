@@ -41,13 +41,14 @@ const redact = (message: string, key: string): string => message.split(key).join
 const requireRoute = (): ReadyRoute => {
   const route = gaslessRoute("SN_MAIN");
   if (
+    GASLESS_FEES_ENABLED.SN_MAIN !== false ||
     GASLESS_FEES_ENABLED.SN_SEPOLIA !== false ||
     route === null ||
-    route.enabled !== true ||
     route.forwarder !== PIN
   ) {
-    throw new Error("Mainnet gasless route is not the pinned, enabled route.");
+    throw new Error("Shipped gasless flags must stay off, with the mainnet forwarder pinned.");
   }
+  // The shipped flag stays off. This opt-in script enables the pinned route for itself.
   return { ...route, enabled: true, forwarder: PIN };
 };
 

@@ -5,8 +5,7 @@
  *
  * Before anything is signed, the account is re-read with the same compatibility gate
  * the ordinary invoke uses. A refusal or an unreachable node throws; it is
- * never treated as "deployed". Braavos eligibility uses the live class, not
- * the deployment class stored on the account.
+ * never treated as "deployed". Braavos is not offered a gasless fee.
  */
 
 import { untrustedFetch } from "@bramble/core/http-json";

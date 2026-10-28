@@ -1,7 +1,7 @@
 /**
  * The send path does not take a gasless ceiling from the side-panel message.
- * Mainnet gasless is on. A review whose deployment read fails stays on STRK,
- * and a gasless choice that does not match the stored offer is not submitted.
+ * The shipped gasless flags are off. A review stays on STRK, and a gasless
+ * choice that does not match the stored offer is not submitted.
  */
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { PriceService } from "@bramble/portfolio/prices";
@@ -145,7 +145,7 @@ describe("held gasless send", () => {
   });
 });
 
-describe("gasless send messages with mainnet enabled", () => {
+describe("gasless send messages while the shipped flag is off", () => {
   const harness = () => {
     const session = createUnlockSession();
     session.unlock("correct horse battery staple");
@@ -181,7 +181,7 @@ describe("gasless send messages with mainnet enabled", () => {
     return { feed, handler, submitted };
   };
 
-  test("a failed deployment read hides gasless and the STRK send still goes out", async () => {
+  test("the shipped flag hides gasless and the STRK send still goes out", async () => {
     const { feed, handler, submitted } = harness();
     const urls = await withBlockedFetch(async () => {
       const review = await handler(
@@ -208,8 +208,7 @@ describe("gasless send messages with mainnet enabled", () => {
         sender,
       );
     });
-    expect(paymasterCalls(urls)).toEqual([]);
-    expect(urls.length).toBeGreaterThan(0);
+    expect(urls).toEqual([]);
     expect(feed.calls()).toBe(0);
     expect(submitted).toHaveLength(1);
   });
@@ -233,7 +232,7 @@ describe("gasless send messages with mainnet enabled", () => {
     expect(submitted).toEqual([]);
   });
 
-  test("a matching echo does not fall back to STRK when the deployment read fails", async () => {
+  test("a gasless choice is refused while the shipped flag is off and does not send in STRK", async () => {
     const { handler, submitted } = harness();
     rememberGaslessSendReview({ ...transfer, offers: [offer], strkFee });
     const urls = await withBlockedFetch(async () => {
@@ -246,7 +245,9 @@ describe("gasless send messages with mainnet enabled", () => {
         },
         sender,
       );
-      expect(response).toEqual({ error: "fetch" });
+      expect(response).toEqual({
+        error: "Paying the network fee in another token is unavailable.",
+      });
     });
     expect(paymasterCalls(urls)).toEqual([]);
     expect(submitted).toEqual([]);

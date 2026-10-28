@@ -208,4 +208,55 @@ describe("gasless nonce recorded before execute", () => {
     }
     expect(methods).toEqual(["paymaster_buildTransaction"]);
   });
+
+  test("a lock after the relay row is stored does not post execute", async () => {
+    const log = memoryRelaySignatureLog(() => 5_000);
+    let authorized = true;
+    const methods: string[] = [];
+    const run = submitReviewedGaslessInvoke({
+      account: {
+        accountContractType: "argent",
+        address: ACCOUNT,
+        classHash: ARGENT_ACCOUNT_CLASS_HASH,
+        deployed: true,
+      },
+      beforeExecute: async (signed) => {
+        await recordRequiredRelaySignature(log, {
+          account: {
+            accountContractType: "argent",
+            id: scope.accountId,
+            networkId: "SN_MAIN",
+          },
+          messageHash: signed.messageHash,
+          origin: "Bramble",
+          typedData: signed.typedData,
+          userFee: { amount: signed.userFee.amount, decimals: 6, token: "USDC" },
+        });
+        authorized = false;
+      },
+      calls: [userCall()],
+      deployment: null,
+      http: async (_url, init) => {
+        const body = JSON.parse(String(init?.body)) as { method?: string };
+        methods.push(body.method ?? "");
+        return json(quoteBody());
+      },
+      isAuthorized: () => authorized,
+      nowSeconds: NOW,
+      readNowSeconds: () => NOW,
+      referenceFor: async () => 1000n,
+      reviewed: { amount: "2000", decimals: 6, label: "USDC", tokenAddress: USDC },
+      route: { chainId: "SN_MAIN", enabled: true, forwarder: FORWARDER, url: URL },
+      signHash: async () => ({ publicKey: "0x3", r: "0x1", s: "0x2" }),
+    });
+    const error = await run.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(WalletError);
+    if (error instanceof WalletError) {
+      expect(error.message).toBe("wallet locked");
+    }
+    expect(methods).toEqual(["paymaster_buildTransaction"]);
+    const rows = await log.list(scope);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("signed");
+  });
 });

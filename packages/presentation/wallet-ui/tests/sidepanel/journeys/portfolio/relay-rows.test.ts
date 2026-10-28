@@ -88,6 +88,13 @@ describe("relay rows", () => {
     expect(html).not.toContain("Not seen on chain");
   });
 
+  test("an unchecked row whose deadline has passed reads as expired", () => {
+    const html = relayRow(relay({ checkable: false, status: "expired" }));
+    expect(html).toContain("Expired");
+    expect(html).toContain("It passed its deadline unused and can no longer run.");
+    expect(html).not.toContain("Not tracked");
+  });
+
   test("a message without a deadline shows no expiry", () => {
     const { executeBefore: _deadline, ...open } = relay();
     const html = relayRow(open);

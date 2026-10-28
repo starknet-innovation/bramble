@@ -1,7 +1,7 @@
 /**
  * The gasless signing gate reuses the ordinary invoke compatibility check.
  * A probe failure is not a deployed account, and a Braavos account is judged
- * by the class at its address.
+ * by the class at its address. Braavos is not offered gasless.
  */
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@bramble/core/errors";
@@ -99,6 +99,7 @@ describe("gaslessAccountState", () => {
       () => live,
     );
     expect(state.deployed).toBe(true);
+    expect(state.liveClassHash).not.toBeNull();
     expect(
       accountSignsGaslessV2({
         accountContractType: "braavos",
@@ -106,6 +107,6 @@ describe("gaslessAccountState", () => {
         deployed: state.deployed,
         ...(state.liveClassHash === null ? {} : { liveClassHash: state.liveClassHash }),
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

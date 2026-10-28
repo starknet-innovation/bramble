@@ -38,9 +38,9 @@ describe("gasless route", () => {
     expect(GASLESS_FORWARDER_ADDRESS.SN_SEPOLIA).toBeNull();
   });
 
-  test("mainnet is enabled and Sepolia stays off, so only mainnet is ready", () => {
-    expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: true, SN_SEPOLIA: false });
-    expect(gaslessRouteReady(gaslessRoute("SN_MAIN"))).toBe(true);
+  test("both networks stay off, so neither route is ready", () => {
+    expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: false, SN_SEPOLIA: false });
+    expect(gaslessRouteReady(gaslessRoute("SN_MAIN"))).toBe(false);
     expect(gaslessRouteReady(gaslessRoute("SN_SEPOLIA"))).toBe(false);
     expect(gaslessRoute("SN_DEVNET")).toBeNull();
   });
@@ -123,7 +123,7 @@ describe("gaslessFeeCeiling", () => {
 });
 
 describe("accountSignsGaslessV2", () => {
-  test("allows Argent 0.4, Xverse, OpenZeppelin, and deployed current Braavos", () => {
+  test("allows Argent 0.4, Xverse, and OpenZeppelin", () => {
     expect(
       accountSignsGaslessV2({
         accountContractType: "argent",
@@ -138,17 +138,9 @@ describe("accountSignsGaslessV2", () => {
         deployed: false,
       }),
     ).toBe(true);
-    expect(
-      accountSignsGaslessV2({
-        accountContractType: "braavos",
-        classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
-        deployed: true,
-        liveClassHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
-      }),
-    ).toBe(true);
   });
 
-  test("leaves Argent 0.3, undeployed Braavos, and multisig on STRK", () => {
+  test("leaves Argent 0.3, Braavos, and multisig on STRK", () => {
     expect(
       accountSignsGaslessV2({
         accountContractType: "argent",
@@ -168,6 +160,14 @@ describe("accountSignsGaslessV2", () => {
         accountContractType: "braavos",
         classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
         deployed: true,
+      }),
+    ).toBe(false);
+    expect(
+      accountSignsGaslessV2({
+        accountContractType: "braavos",
+        classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
+        deployed: true,
+        liveClassHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
       }),
     ).toBe(false);
     expect(
