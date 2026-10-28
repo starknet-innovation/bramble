@@ -75,6 +75,14 @@ const relayReportedError = (method: string, reported: unknown): WalletError => {
     : new WalletError(message);
 };
 
+// A JSON-RPC error object the relay stated for itself: an integer code and a
+// string message, as JSON-RPC 2.0 requires.
+const isRpcError = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["code"] === "number" &&
+  Number.isInteger(value["code"]) &&
+  typeof value["message"] === "string";
+
 // A relay answer the wallet could not read is not the same thing as a relay
 // refusal. Once `paymaster_executeTransaction` has left the wallet, the relay
 // may already have forwarded the transaction while its reply was truncated,
@@ -98,6 +106,15 @@ const lostAnswer = (method: string): WalletError =>
   method === BROADCAST_PAYMASTER_METHOD
     ? new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE)
     : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+
+// A broadcast is refused only by a JSON-RPC error object stated alone. A
+// malformed error (null, a string, no code or message) or one beside a result
+// does not say the relay stopped, so it is a lost answer.
+const reportedAnswer = (method: string, body: Readonly<Record<string, unknown>>): WalletError =>
+  method === BROADCAST_PAYMASTER_METHOD &&
+  (!isRpcError(body["error"]) || Object.hasOwn(body, "result"))
+    ? lostAnswer(method)
+    : relayReportedError(method, body["error"]);
 
 // Once a broadcast's request has been handed to the transport, no rejection
 // from it proves the relay never received the request: a connection reset or
@@ -151,9 +168,8 @@ export const rpc = async (
   ) {
     throw lostAnswer(method);
   }
-  const reported = body["error"];
-  if (reported !== undefined) {
-    throw relayReportedError(method, reported);
+  if (Object.hasOwn(body, "error")) {
+    throw reportedAnswer(method, body);
   }
   if (!Object.hasOwn(body, "result")) {
     throw lostAnswer(method);
