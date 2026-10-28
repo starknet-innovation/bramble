@@ -12,8 +12,9 @@ const FORWARDER = "0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51
 const STRK = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const USDC = "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const RECIPIENT = "0x5ef2de1a7ccc0e9ef8d1a1e6e9c4c2b5d6a7f8e9d0c1b2a3f4e5d6c7b8a9f01";
-const NOW = 1_700_000_000;
 const BEFORE = "0x6ae06b9d";
+/** Inside the ten-minute cap, with the ten-second floor still remaining. */
+const NOW = Number(BigInt(BEFORE)) - 120;
 
 const userCall = (): Call => ({
   calldata: [RECIPIENT, "0x10", "0x0"],
@@ -205,5 +206,19 @@ describe("validateGaslessTypedData", () => {
       ok: false,
       reason: "window",
     });
+  });
+
+  test("rejects an execution window longer than ten minutes", () => {
+    const fee: Call = {
+      calldata: [FORWARDER, "0x3e8", "0x0"],
+      contractAddress: USDC,
+      entrypoint: "transfer",
+    };
+    const body = quote([userCall(), fee]);
+    expect(check(body, { nowSeconds: Number(BigInt(BEFORE)) - 601 })).toEqual({
+      ok: false,
+      reason: "window",
+    });
+    expect(check(body, { nowSeconds: Number(BigInt(BEFORE)) - 600 }).ok).toBe(true);
   });
 });

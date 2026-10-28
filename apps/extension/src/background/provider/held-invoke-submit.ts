@@ -12,6 +12,7 @@ import type { StarkHashSigner } from "@bramble/starknet/provider";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -20,6 +21,7 @@ import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { PassiveUnlockSession } from "../runtime/session";
 import { executeReviewedGasless } from "../transactions/gasless-review";
+import { recordRequiredRelaySignature } from "../transactions/relay-record";
 
 /**
  * Dependencies needed to execute a held invoke approval once the user signs off.
@@ -40,6 +42,11 @@ export type InvokeExecuteDeps = {
   readonly preferencesStore: WalletPreferencesStore;
   /** Fiat prices for a gasless fee the user chose. Absent in narrow test doubles. */
   readonly prices?: PriceService;
+  /**
+   * Outside-execution rows. A gasless submit records its nonce here before
+   * posting, and refuses to post when the row cannot be stored.
+   */
+  readonly relaySignatures?: Pick<RelaySignatureLog, "list" | "record">;
   readonly runtimeRpc: RuntimeRpc;
   /**
    * Non-renewing session view: the user's approval click already renewed the
@@ -64,6 +71,8 @@ export const submitHeldInvoke = async (input: {
   readonly context: { readonly signHash: StarkHashSigner };
   readonly deps: InvokeExecuteDeps;
   readonly poolProof: ApprovalPayload["proof"];
+  /** Site the outside-execution row is attributed to. Wallet sends use Bramble. */
+  readonly origin?: string;
   readonly preferences: WalletPreferences;
   readonly rememberHash: (hash: string) => void;
   readonly rpcUrls: readonly string[];
@@ -99,6 +108,23 @@ export const submitHeldInvoke = async (input: {
   if (gaslessFee && prices) {
     return executeReviewedGasless({
       account: input.account,
+      beforeExecute: async (signed) => {
+        await recordRequiredRelaySignature(input.deps.relaySignatures, {
+          account: {
+            accountContractType: input.account.accountContractType,
+            id: input.account.id,
+            networkId: input.account.networkId,
+          },
+          messageHash: signed.messageHash,
+          origin: input.origin ?? "Bramble",
+          typedData: signed.typedData,
+          userFee: {
+            amount: signed.userFee.amount,
+            decimals: gaslessFee.decimals,
+            token: gaslessFee.label,
+          },
+        });
+      },
       calls: input.calls,
       gaslessFee,
       isAuthorized: input.unlocked,

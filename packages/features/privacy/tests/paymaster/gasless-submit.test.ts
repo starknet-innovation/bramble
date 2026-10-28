@@ -12,8 +12,9 @@ const ACCOUNT = "0x5dccf9cfdcabb9e4ef45814bda1b056bb23063d0e9b64e5a845e9dfb3d23f
 const FORWARDER = "0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f";
 const USDC = "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const RECIPIENT = "0x5ef2de1a7ccc0e9ef8d1a1e6e9c4c2b5d6a7f8e9d0c1b2a3f4e5d6c7b8a9f01";
-const NOW = 1_700_000_000;
 const BEFORE = "0x6ae06b9d";
+/** Inside the ten-minute cap, with the ten-second floor still remaining. */
+const NOW = Number(BigInt(BEFORE)) - 120;
 const URL = "https://wallet.example/api/paymaster/mainnet";
 
 const userCall = (): Call => ({
@@ -50,7 +51,14 @@ const quoteBody = () => ({
   typed_data: typed(),
 });
 
-const submit = (readNowSeconds: () => number, onCall: (method: string) => Response) => {
+const submit = (
+  readNowSeconds: () => number,
+  onCall: (method: string) => Response,
+  beforeExecute?: (signed: {
+    readonly messageHash: string;
+    readonly typedData: unknown;
+  }) => Promise<void>,
+) => {
   let signed = 0;
   const methods: string[] = [];
   const run = submitReviewedGaslessInvoke({
@@ -74,6 +82,7 @@ const submit = (readNowSeconds: () => number, onCall: (method: string) => Respon
     referenceFor: async () => 1000n,
     reviewed: { amount: "2000", decimals: 6, label: "USDC", tokenAddress: USDC },
     route: { chainId: "SN_MAIN", enabled: true, forwarder: FORWARDER, url: URL },
+    ...(beforeExecute ? { beforeExecute } : {}),
     signHash: async () => {
       signed += 1;
       return { publicKey: "0x3", r: "0x1", s: "0x2" };
@@ -93,6 +102,50 @@ describe("submitReviewedGaslessInvoke", () => {
     );
     await expect(run).rejects.toMatchObject({ code: "invalid_screening_transaction" });
     expect(signed()).toBe(1);
+    expect(methods).toEqual(["paymaster_buildTransaction"]);
+  });
+
+  test("refuses a window longer than ten minutes after signing and does not execute", async () => {
+    const { methods, run, signed } = submit(
+      () => Number(BigInt(BEFORE)) - 601,
+      () => json(quoteBody()),
+    );
+    await expect(run).rejects.toMatchObject({ code: "invalid_screening_transaction" });
+    expect(signed()).toBe(1);
+    expect(methods).toEqual(["paymaster_buildTransaction"]);
+  });
+
+  test("persists the outside execution before execute", async () => {
+    const order: string[] = [];
+    const posted = submit(
+      () => NOW,
+      (method) => {
+        order.push(method);
+        return method === "paymaster_executeTransaction"
+          ? json({ transaction_hash: "0x3" })
+          : json(quoteBody());
+      },
+      async () => {
+        order.push("record");
+      },
+    );
+    await expect(posted.run).resolves.toMatchObject({ transactionHash: "0x3" });
+    expect(order).toEqual(["paymaster_buildTransaction", "record", "paymaster_executeTransaction"]);
+  });
+
+  test("a failure while persisting skips the execute post", async () => {
+    const methods: string[] = [];
+    const blocked = submit(
+      () => NOW,
+      (method) => {
+        methods.push(method);
+        return json(quoteBody());
+      },
+      async () => {
+        throw new Error("not stored");
+      },
+    );
+    await expect(blocked.run).rejects.toThrow("not stored");
     expect(methods).toEqual(["paymaster_buildTransaction"]);
   });
 

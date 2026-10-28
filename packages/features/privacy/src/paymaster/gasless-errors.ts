@@ -9,8 +9,9 @@
 import { WalletError } from "@bramble/core/errors";
 
 /**
- * Gateway `error` strings this client understands. Anything else is still a
- * determinate refusal, reported as `unrecognised`.
+ * Gateway `error` strings this client understands. On a quote, anything else
+ * is still a determinate refusal, reported as `unrecognised`. On execute,
+ * only the pre-forward allowlist is a refusal.
  */
 export const GASLESS_GATEWAY_CODES = [
   "address_not_allowed",
@@ -54,9 +55,8 @@ export const isGaslessGatewayCode = (
 const messageFor = (code: GaslessRefusalCode): string => {
   switch (code) {
     case "address_not_allowed":
-      return "This account can't pay the network fee in another token.";
     case "screening_denied":
-      return "This account can't pay the network fee in another token today.";
+      return "This account can't pay the network fee in another token.";
     case "screening_pending":
       return "The network fee check is still pending. Nothing was submitted.";
     case "screening_subject_unverifiable":

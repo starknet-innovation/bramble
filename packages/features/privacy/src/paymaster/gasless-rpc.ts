@@ -5,8 +5,9 @@
  * `screening_unavailable` means screening stopped before the relay was asked.
  *
  * Trust boundary: the URL is the wallet's own route, never a dapp field.
- * Responses are untrusted. An execute whose answer cannot be read throws
- * `IndeterminateRpcWriteError`. A stated `{"error":"<code>"}` does not.
+ * Responses are untrusted. An execute is a determinate refusal only for an
+ * allowlisted pre-forward code with no transaction result beside it.
+ * Everything else on execute throws `IndeterminateRpcWriteError`.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -36,6 +37,21 @@ export const GASLESS_RPC_ID = 1;
 export const GASLESS_SCREENING_RETRIES = 2;
 
 const CODE_PATTERN = /^[a-z0-9_]{1,64}$/;
+
+/**
+ * Execute codes that mean the relay was not asked. Any other execute answer
+ * can already be on its way, so it is not a refusal to retry.
+ */
+const PRE_FORWARD_EXECUTE_CODES: ReadonlySet<GaslessGatewayCode> = new Set([
+  "address_not_allowed",
+  "gasless_disabled",
+  "invalid_gasless_request",
+  "screening_denied",
+  "screening_unavailable",
+]);
+
+const executeAnswer = (code: GaslessGatewayCode, clean: boolean): Classified =>
+  clean && PRE_FORWARD_EXECUTE_CODES.has(code) ? { kind: "refused", code } : { kind: "lost" };
 
 const pause = (ms: number): Promise<void> =>
   new Promise((resolve) => {
@@ -84,10 +100,10 @@ const statusClass = (
     return executes ? { kind: "lost" } : { kind: "refused", code: code ?? "unrecognised" };
   }
   if (code !== null) {
-    return { kind: "refused", code };
+    return executes ? executeAnswer(code, true) : { kind: "refused", code };
   }
   if (status >= 400) {
-    return { kind: "refused", code: "unrecognised" };
+    return executes ? { kind: "lost" } : { kind: "refused", code: "unrecognised" };
   }
   return null;
 };
@@ -102,7 +118,12 @@ const resultClass = (body: unknown, executes: boolean): Classified => {
     return executes ? { kind: "lost" } : { kind: "refused", code: "unrecognised" };
   }
   if (body["error"] !== undefined) {
-    return { kind: "refused", code: relayCode(body["error"]) };
+    if (!executes) {
+      return { kind: "refused", code: relayCode(body["error"]) };
+    }
+    // A result beside the error means the envelope does not prove the relay
+    // stopped before forwarding.
+    return executeAnswer(relayCode(body["error"]), !Object.hasOwn(body, "result"));
   }
   if (!Object.hasOwn(body, "result")) {
     return executes ? { kind: "lost" } : { kind: "refused", code: "unrecognised" };

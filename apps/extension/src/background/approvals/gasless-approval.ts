@@ -31,6 +31,7 @@ export const applyGaslessInvoke = async (
       ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
       preferencesStore: deps.preferencesStore,
       prices,
+      ...(deps.relaySignatures ? { relaySignatures: deps.relaySignatures } : {}),
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,

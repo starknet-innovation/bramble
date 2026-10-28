@@ -6,11 +6,7 @@ import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
-import {
-  type ActivityLog,
-  activityOrigin,
-  clampActivitySummary,
-} from "@bramble/transactions/activity";
+import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import {
@@ -32,6 +28,7 @@ import {
   FAILED_INVOKE_FEE,
   PENDING_INVOKE_FEE,
 } from "../approvals/invoke-fee-review";
+import { gaslessFeeSummary } from "../transactions/gasless-review";
 import { type InvokeExecuteDeps, submitHeldInvoke } from "./held-invoke-submit";
 import { type ResolvedOriginAccount, resolveOriginAccount } from "./provider-grant";
 import { invokeFailureResponse } from "./provider-invoke-failure";
@@ -399,9 +396,14 @@ export const executeInvokeApproval = async (
     hash,
     kind: "invoke" as const,
     networkId: account.networkId,
-    summary: userFee
-      ? clampActivitySummary(`${baseSummary} (network fee in ${userFee.token})`)
-      : baseSummary,
+    summary:
+      userFee && approval.gaslessFee
+        ? gaslessFeeSummary(baseSummary, {
+            amount: userFee.amount,
+            decimals: approval.gaslessFee.decimals,
+            token: userFee.token,
+          })
+        : baseSummary,
     ...(userFee ? { userFee } : {}),
   });
   // Grants, then activity, for every hash that may be on chain (#678, ./allowance-recording).
@@ -437,6 +439,7 @@ export const executeInvokeApproval = async (
       approval,
       calls,
       ceiling,
+      origin: approval.origin,
       context,
       deps,
       poolProof,

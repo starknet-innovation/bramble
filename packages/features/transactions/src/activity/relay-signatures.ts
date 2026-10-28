@@ -58,6 +58,16 @@ export type RelaySignature = {
   readonly revision: "1" | "2";
   readonly signedAt: number;
   readonly status: RelaySignatureStatus;
+  /**
+   * The fee the user signed when this message pays the network fee in a token
+   * other than the receipt's STRK. Absent for older rows and for messages
+   * that were not a gasless fee.
+   */
+  readonly userFee?: {
+    readonly amount: string;
+    readonly decimals: number;
+    readonly token: string;
+  };
 };
 
 const isTimestamp = (value: unknown): value is number =>
@@ -65,6 +75,18 @@ const isTimestamp = (value: unknown): value is number =>
   Number.isSafeInteger(value) &&
   value >= 0 &&
   value <= MAX_ACTIVITY_TIMESTAMP_MS;
+
+const isRelayUserFee = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["amount", "decimals", "token"]) &&
+  typeof value["amount"] === "string" &&
+  /^[1-9][0-9]{0,77}$/.test(value["amount"]) &&
+  typeof value["decimals"] === "number" &&
+  Number.isInteger(value["decimals"]) &&
+  value["decimals"] >= 0 &&
+  value["decimals"] <= 36 &&
+  typeof value["token"] === "string" &&
+  /^[A-Za-z0-9.]{1,32}$/.test(value["token"]);
 
 /** Checks a stored or transmitted record before it is trusted. */
 export const isRelaySignature = (value: unknown): value is RelaySignature =>
@@ -82,6 +104,7 @@ export const isRelaySignature = (value: unknown): value is RelaySignature =>
     "revision",
     "signedAt",
     "status",
+    "userFee",
   ]) &&
   isStarknetNetworkId(value["networkId"]) &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
@@ -106,7 +129,8 @@ export const isRelaySignature = (value: unknown): value is RelaySignature =>
   isTimestamp(value["signedAt"]) &&
   (value["status"] === "signed" ||
     value["status"] === "nonce-used" ||
-    value["status"] === "expired");
+    value["status"] === "expired") &&
+  (value["userFee"] === undefined || isRelayUserFee(value["userFee"]));
 
 /** The record a signing path hands over; status and timing are the store's. */
 export type RelaySignatureInput = Omit<RelaySignature, "checkedAt" | "signedAt" | "status">;

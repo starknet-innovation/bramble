@@ -32,6 +32,12 @@ import {
 import { isPaymasterAuthorizationLive } from "./paymaster-typed-data";
 
 /**
+ * Longest execution window this wallet will sign. A longer `Execute Before`
+ * would leave a lost reply executable long after Activity could show it.
+ */
+export const GASLESS_MAX_WINDOW_SECONDS = 600n;
+
+/**
  * Why a gasless typed-data body was refused. `ceiling` means the fee transfer
  * is above the quoted maximum or the independent price ceiling.
  */
@@ -211,6 +217,33 @@ const shapedMessage = (value: unknown, chainId: string): Record<string, unknown>
   return message;
 };
 
+/**
+ * Whether the outside-execution window is still live and no longer than
+ * {@link GASLESS_MAX_WINDOW_SECONDS}. False when the clock or the bounds
+ * cannot be read.
+ */
+export const gaslessAuthorizationWindow = (
+  executeAfter: string,
+  executeBefore: string,
+  nowSeconds: number,
+  minimumRemainingSeconds: bigint,
+): boolean => {
+  if (
+    !isPaymasterAuthorizationLive(
+      { caller: "0x1", executeAfter, executeBefore, publicCallCount: 1 },
+      nowSeconds,
+      minimumRemainingSeconds,
+    )
+  ) {
+    return false;
+  }
+  try {
+    return BigInt(executeBefore) - BigInt(nowSeconds) <= GASLESS_MAX_WINDOW_SECONDS;
+  } catch {
+    return false;
+  }
+};
+
 const matchingFeeCall = (
   calls: readonly ParsedCall[],
   userCalls: readonly Call[],
@@ -326,13 +359,9 @@ export const validateGaslessTypedData = (input: {
     return refused("forwarder");
   }
   if (
-    !isPaymasterAuthorizationLive(
-      {
-        caller,
-        executeAfter: message["Execute After"] as string,
-        executeBefore: message["Execute Before"] as string,
-        publicCallCount: calls.length,
-      },
+    !gaslessAuthorizationWindow(
+      message["Execute After"] as string,
+      message["Execute Before"] as string,
       input.nowSeconds,
       input.minimumRemainingSeconds,
     )

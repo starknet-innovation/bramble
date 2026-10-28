@@ -77,9 +77,13 @@ const refresh = async (
 beforeEach(() => resetRpcEndpointCooldownsForTests());
 
 describe("refreshRelaySignatures", () => {
-  test("a used nonce marks the row nonce-used", async () => {
-    const { calls, result } = await refresh({ nonce: ["0x0"] }, [input({ executeBefore: 2e9 })]);
+  test("a used nonce marks the row nonce-used and keeps the signed fee", async () => {
+    const userFee = { amount: "1000", decimals: 6, token: "USDC" };
+    const { calls, result } = await refresh({ nonce: ["0x0"] }, [
+      input({ executeBefore: 2e9, userFee }),
+    ]);
     expect(result[0]?.status).toBe("nonce-used");
+    expect(result[0]?.userFee).toEqual(userFee);
     expect(result[0]?.checkedAt).toBe(NOW);
     // Before the deadline no block is read; the nonce is asked at "latest".
     expect(calls).toEqual([

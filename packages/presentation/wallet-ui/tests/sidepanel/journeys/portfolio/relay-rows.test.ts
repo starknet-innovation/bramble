@@ -50,6 +50,7 @@ describe("relay rows", () => {
     expect(html).not.toContain("can still submit");
     expect(html).toContain("Valid until");
     expect(html).toContain("0xabc");
+    expect(html).not.toContain("Network fee");
     // A message hash has no transaction page.
     expect(html).not.toContain("starkscan");
     expect(html).not.toContain("<a ");
@@ -99,6 +100,12 @@ describe("relay rows", () => {
     const html = relayRow(relay({ origin: "https://x.example/<script>" }));
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
+  });
+
+  test("shows the signed network fee", () => {
+    const html = relayRow(relay({ userFee: { amount: "1000", decimals: 6, token: "USDC" } }));
+    expect(html).toContain("Network fee");
+    expect(html).toContain("0.001 USDC");
   });
 
   test("renders no section without records", () => {

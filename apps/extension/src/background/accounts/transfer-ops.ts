@@ -8,7 +8,7 @@ import { WalletError } from "@bramble/core/errors";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@bramble/starknet/rpc";
-import { activityToken, clampActivitySummary } from "@bramble/transactions/activity";
+import { activityToken } from "@bramble/transactions/activity";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import {
   refuseOnPoisonedRecipient,
@@ -26,7 +26,16 @@ import { captureSessionAuthorization } from "../runtime/session";
 import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
-import { executeReviewedGasless, reviewGaslessOffers } from "../transactions/gasless-review";
+import {
+  rememberGaslessSendReview,
+  takeMatchingGaslessSend,
+} from "../transactions/gasless-held-send";
+import {
+  executeReviewedGasless,
+  gaslessFeeSummary,
+  reviewGaslessOffers,
+} from "../transactions/gasless-review";
+import { recordRequiredRelaySignature } from "../transactions/relay-record";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import { recordAutoDeployment } from "./deployment-ops";
@@ -76,9 +85,39 @@ const submitChosenTransfer = async (input: {
 }) => {
   const prices = input.deps.prices;
   const gaslessFee = input.gaslessFee;
-  if (gaslessFee && prices) {
+  if (gaslessFee) {
+    const held = takeMatchingGaslessSend(
+      {
+        accountId: input.account.id,
+        amount: input.amount,
+        recipient: input.recipient,
+        speed: input.speed,
+        tokenId: input.token.id,
+      },
+      gaslessFee,
+    );
+    if (!held || !prices) {
+      throw new WalletError("the fee changed since this request was reviewed");
+    }
     return executeReviewedGasless({
       account: input.account,
+      beforeExecute: async (signed) => {
+        await recordRequiredRelaySignature(input.deps.relaySignatures, {
+          account: {
+            accountContractType: input.account.accountContractType,
+            id: input.account.id,
+            networkId: input.account.networkId,
+          },
+          messageHash: signed.messageHash,
+          origin: "Bramble",
+          typedData: signed.typedData,
+          userFee: {
+            amount: signed.userFee.amount,
+            decimals: held.offer.decimals,
+            token: held.offer.label,
+          },
+        });
+      },
       calls: [
         buildErc20TransferCall(
           input.token.address,
@@ -86,12 +125,12 @@ const submitChosenTransfer = async (input: {
           parseTokenAmount(input.amount, input.token.decimals),
         ),
       ],
-      gaslessFee,
+      gaslessFee: held.offer,
       isAuthorized: input.unlocked,
       preferences: input.preferences,
       prices,
       signHash: accountHashSigner(input.deps, input.account, input.vaultPassphrase),
-      strkFee: input.reviewedFee ?? null,
+      strkFee: held.strkFee,
     });
   }
   const reviewedFee = input.reviewedFee;
@@ -158,6 +197,15 @@ export const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
         strkFee: fees.totalFee,
       }).catch(() => [])
     : [];
+  rememberGaslessSendReview({
+    accountId: account.id,
+    amount: input.amount,
+    offers: gaslessFees,
+    recipient: input.recipient,
+    speed: input.speed,
+    strkFee: fees.totalFee,
+    tokenId: token.id,
+  });
   return {
     ok: true,
     review: {
@@ -188,9 +236,6 @@ const transferFeeBlock = (
   return null;
 };
 
-const feeSummary = (base: string, label: string | undefined): string =>
-  label === undefined ? base : clampActivitySummary(`${base} (network fee in ${label})`);
-
 const broadcastTransfer = async (
   deps: WalletOpsDeps,
   input: NonNullable<ReturnType<typeof readTransferInput>>,
@@ -207,7 +252,6 @@ const broadcastTransfer = async (
   if (blocked) {
     return blocked;
   }
-  const summary = feeSummary(ready.summary, input.gaslessFee?.label);
   const activityFor = (
     hash: string,
     userFee?: { readonly amount: string; readonly token: string; readonly tokenAddress: string },
@@ -219,7 +263,14 @@ const broadcastTransfer = async (
     hash,
     kind: "transfer" as const,
     networkId: ready.account.networkId,
-    summary,
+    summary:
+      userFee && input.gaslessFee
+        ? gaslessFeeSummary(ready.summary, {
+            amount: userFee.amount,
+            decimals: input.gaslessFee.decimals,
+            token: userFee.token,
+          })
+        : ready.summary,
     ...activityToken(ready.token),
     ...(userFee === undefined ? {} : { userFee }),
   });

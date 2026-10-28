@@ -20,8 +20,8 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { accountDeployment, isCompatibleAccountDeployed } from "@bramble/starknet/deployment";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
 import { withRpcFallback } from "@bramble/starknet/provider";
-import type { FeeEstimate } from "@bramble/starknet/rpc";
-import { systemClock } from "@bramble/transactions/activity";
+import { type FeeEstimate, formatTokenAmount } from "@bramble/starknet/rpc";
+import { clampActivitySummary, systemClock } from "@bramble/transactions/activity";
 import type { FeeAffordability } from "@bramble/transactions/fee-funds";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
@@ -200,6 +200,15 @@ export const reviewGaslessOffers = async (input: {
 export const executeReviewedGasless = async (input: {
   readonly account: AccountRef;
   readonly calls: readonly Call[];
+  readonly beforeExecute?: (signed: {
+    readonly messageHash: string;
+    readonly typedData: unknown;
+    readonly userFee: {
+      readonly amount: string;
+      readonly token: string;
+      readonly tokenAddress: string;
+    };
+  }) => Promise<void>;
   readonly gaslessFee: GaslessFeeOffer;
   readonly isAuthorized: () => boolean;
   readonly preferences: WalletPreferences;
@@ -219,6 +228,7 @@ export const executeReviewedGasless = async (input: {
     account: accountForGasless(input.account, state),
     calls: input.calls,
     deployment: deploymentFor(input.account, state.deployed),
+    ...(input.beforeExecute ? { beforeExecute: input.beforeExecute } : {}),
     http: gaslessHttp,
     isAuthorized: input.isAuthorized,
     nowSeconds: nowSeconds(),
@@ -233,4 +243,22 @@ export const executeReviewedGasless = async (input: {
     route,
     signHash: input.signHash,
   });
+};
+
+/**
+ * Activity summary for a send whose network fee was a signed token amount.
+ * The amount is the one in the signed transfer. Summaries stay specific so
+ * two different fees do not read as the same send.
+ */
+export const gaslessFeeSummary = (
+  base: string,
+  fee: { readonly amount: string; readonly decimals: number; readonly token: string },
+): string => {
+  let shown = fee.token;
+  try {
+    shown = `${formatTokenAmount(BigInt(fee.amount), fee.decimals)} ${fee.token}`;
+  } catch {
+    shown = fee.token;
+  }
+  return clampActivitySummary(`${base} (network fee ${shown})`);
 };

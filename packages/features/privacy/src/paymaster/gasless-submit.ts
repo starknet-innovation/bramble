@@ -46,9 +46,8 @@ import {
   readGaslessTransactionHash,
 } from "./gasless-request";
 import { postGasless } from "./gasless-rpc";
-import { validateGaslessTypedData } from "./gasless-typed-data";
+import { gaslessAuthorizationWindow, validateGaslessTypedData } from "./gasless-typed-data";
 import type { PaymasterHttp } from "./paymaster-rpc";
-import { isPaymasterAuthorizationLive } from "./paymaster-typed-data";
 
 /**
  * Seconds the execution window must still have when the signature is sent.
@@ -418,6 +417,15 @@ export const submitReviewedGaslessInvoke = async (input: {
   readonly reviewed: GaslessFeeOffer;
   readonly route: GaslessRoute | null;
   readonly signHash: StarkHashSigner;
+  /**
+   * Runs after the window check and before execute. Used to persist the
+   * outside-execution nonce. A throw here means execute was not posted.
+   */
+  readonly beforeExecute?: (signed: {
+    readonly messageHash: string;
+    readonly typedData: unknown;
+    readonly userFee: GaslessSubmission["userFee"];
+  }) => Promise<void>;
 }): Promise<GaslessSubmission> => {
   const prepared = await prepareSubmission(input);
   const { deployment, params, validated } = prepared;
@@ -436,18 +444,28 @@ export const submitReviewedGaslessInvoke = async (input: {
     throw new WalletError("wallet locked");
   }
   if (
-    !isPaymasterAuthorizationLive(
-      {
-        caller: validated.caller,
-        executeAfter: validated.executeAfter,
-        executeBefore: validated.executeBefore,
-        publicCallCount: input.calls.length + 1,
-      },
+    !gaslessAuthorizationWindow(
+      validated.executeAfter,
+      validated.executeBefore,
       input.readNowSeconds(),
       GASLESS_SIGN_WINDOW_SECONDS,
     )
   ) {
     throw new GaslessRefusal("invalid_screening_transaction");
+  }
+  if (!input.isAuthorized()) {
+    throw new WalletError("wallet locked");
+  }
+  const userFee = {
+    amount: validated.feeAmount.toString(),
+    token: input.reviewed.label,
+    tokenAddress: input.reviewed.tokenAddress,
+  };
+  if (input.beforeExecute) {
+    await input.beforeExecute({ messageHash, typedData: validated.typedData, userFee });
+  }
+  if (!input.isAuthorized()) {
+    throw new WalletError("wallet locked");
   }
   const invoke = {
     signature,
@@ -472,12 +490,5 @@ export const submitReviewedGaslessInvoke = async (input: {
   if (transactionHash === null || !isNonZeroStarkFieldElement(transactionHash)) {
     throw new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE);
   }
-  return {
-    transactionHash,
-    userFee: {
-      amount: validated.feeAmount.toString(),
-      token: input.reviewed.label,
-      tokenAddress: input.reviewed.tokenAddress,
-    },
-  };
+  return { transactionHash, userFee };
 };
