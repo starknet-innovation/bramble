@@ -7,6 +7,7 @@
 
 use krusty_kms::{OzAccountClassConfig, STARKNET_COIN_TYPE};
 use krusty_kms_common::{ChainId, SecretFelt};
+use serde::{Deserialize, Serialize};
 use starknet_types_core::felt::Felt;
 use zeroize::Zeroizing;
 
@@ -90,27 +91,81 @@ fn check_derivation_input(phrase: &str, passphrase: Option<&str>) -> Result<(), 
     Ok(())
 }
 
-/// Derives the Starknet signing key at `m/44'/9004'/account'/0/index` (Krusty's layout).
+/// Which key tree an account's index walks (the extension's issue 505). Each wallet app steps a
+/// different field, so one index names a different key on each; an account record keeps the path
+/// it was derived on, and every key is derived through it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, uniffi::Enum)]
+#[serde(rename_all = "kebab-case")]
+pub enum Ladder {
+    /// This wallet's own ladder, `m/44'/9004'/index'/0/0`: the extension's `starknet-bip44` on
+    /// the hardened account field. Every record written before vault version 5 is on it.
+    Account,
+    /// Braavos's ladder, `m/44'/9004'/0'/0/index`: `starknet-bip44` on the address field.
+    Address,
+    /// Ready (Argent X), the extension's `argentx-bip44`: the Ethereum key at `m/44'/60'/0'/0/0`
+    /// seeds `m/44'/9004'/0'/0/index`. Ready takes no BIP-39 passphrase, so neither does this.
+    #[serde(rename = "argentx")]
+    ArgentX,
+}
+
+impl Ladder {
+    /// The extension's derivation kind, as its selection keys spell it.
+    pub(crate) fn kind(self) -> &'static str {
+        match self {
+            Self::Account | Self::Address => "starknet-bip44",
+            Self::ArgentX => "argentx-bip44",
+        }
+    }
+}
+
+/// Derives the Starknet signing key at `index` on `path`. Every account key goes through here.
 pub(crate) fn private_key(
     phrase: &str,
     passphrase: Option<&str>,
-    account_index: u32,
+    path: Ladder,
+    index: u32,
 ) -> Result<SecretFelt, CoreError> {
     check_derivation_input(phrase, passphrase)?;
-    let pair = krusty_kms::derive_keypair_with_coin_type(
-        phrase,
-        0,
-        account_index,
-        STARKNET_COIN_TYPE,
-        passphrase,
-    )
-    .map_err(kms_error("derive"))?;
-    if !felt::is_private_key(pair.private_key.expose_secret()) {
+    let key = match path {
+        // Krusty's order is (address index, account index).
+        Ladder::Account | Ladder::Address => {
+            let (address, account) = if path == Ladder::Account {
+                (0, index)
+            } else {
+                (index, 0)
+            };
+            krusty_kms::derive_keypair_with_coin_type(
+                phrase,
+                address,
+                account,
+                STARKNET_COIN_TYPE,
+                passphrase,
+            )
+            .map_err(kms_error("derive"))?
+            .private_key
+        }
+        Ladder::ArgentX => {
+            if passphrase.is_some() {
+                return Err(CoreError::InvalidInput {
+                    reason: "Ready accounts take no passphrase".into(),
+                });
+            }
+            // Ready fixes the hardened account field at zero, as the extension's adapter pins it.
+            // Krusty 0.11.0 returns this key as a plain `Felt`, so the copy it hands back is not
+            // wiped; it is moved straight into a `SecretFelt` (the same residual as the viewing
+            // key, mobile/docs/privacy.md §5).
+            SecretFelt::new(
+                krusty_kms::derive_argent_legacy_private_key(phrase, index, 0)
+                    .map_err(kms_error("derive"))?,
+            )
+        }
+    };
+    if !felt::is_private_key(key.expose_secret()) {
         return Err(CoreError::Kms {
             operation: "derive".into(),
         });
     }
-    Ok(pair.private_key)
+    Ok(key)
 }
 
 /// The OpenZeppelin account class the wallet deploys, from Krusty's checked-in manifest.
@@ -130,13 +185,14 @@ pub fn oz_class_hash(chain: ChainId) -> Result<Felt, CoreError> {
 pub fn sign_hash(
     phrase: &str,
     passphrase: Option<&str>,
+    path: Ladder,
     account_index: u32,
     message_hash: &str,
 ) -> Result<Signature, CoreError> {
     let hash = felt::parse(message_hash).ok_or_else(|| CoreError::InvalidInput {
         reason: "message hash is not a felt".into(),
     })?;
-    let key = private_key(phrase, passphrase, account_index)?;
+    let key = private_key(phrase, passphrase, path, account_index)?;
     let signature =
         krusty_kms::sign_stark_hash(key.expose_secret(), &hash).map_err(kms_error("sign"))?;
     if !felt::is_private_key(&signature.r) || !felt::is_private_key(&signature.s) {
@@ -159,6 +215,7 @@ pub fn sign_hash(
 pub fn derive_scoped_viewing_key(
     phrase: &str,
     passphrase: Option<&str>,
+    path: Ladder,
     account_index: u32,
     chain_id: &str,
     pool_address: &str,
@@ -171,7 +228,7 @@ pub fn derive_scoped_viewing_key(
             reason: "invalid viewing-key scope".into(),
         });
     }
-    let key = private_key(phrase, passphrase, account_index)?;
+    let key = private_key(phrase, passphrase, path, account_index)?;
     let viewing_key =
         krusty_kms::derive_scoped_strk20_viewing_key(key.expose_secret(), chain_id, pool_address)
             .map_err(kms_error("viewing key"))?;

@@ -169,6 +169,8 @@ class RecoveryScanDriver(
                     } else {
                         it.classHash
                     },
+                    // The ladder the row was found on, so the core re-derives that account.
+                    it.ladder,
                 )
             }
 

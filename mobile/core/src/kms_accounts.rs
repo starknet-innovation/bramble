@@ -40,13 +40,14 @@ fn checked(value: Felt, operation: &str) -> Result<Felt, CoreError> {
     Ok(value)
 }
 
-/// The account public key at `m/44'/9004'/index'/0/0`, shared by every family at that index.
+/// The account public key at `index` on `path`, shared by every family on that coordinate.
 pub(crate) fn public_key(
     phrase: &str,
     passphrase: Option<&str>,
-    account_index: u32,
+    path: kms::Ladder,
+    index: u32,
 ) -> Result<Felt, CoreError> {
-    let key = kms::private_key(phrase, passphrase, account_index)?;
+    let key = kms::private_key(phrase, passphrase, path, index)?;
     let public_key =
         krusty_kms::stark_public_key(key.expose_secret()).map_err(kms_error("public key"))?;
     checked(public_key, "public key")

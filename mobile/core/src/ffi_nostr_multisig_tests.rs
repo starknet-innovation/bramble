@@ -44,6 +44,7 @@ fn wallet(phrase: &str, passphrase: Option<&str>) -> (tempfile::TempDir, Arc<Wal
         vec![crate::RecoverySelection {
             family: crate::AccountFamily::OpenZeppelin,
             account_index: 0,
+            ladder: None,
             class_hash: None,
         }],
     )

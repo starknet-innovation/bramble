@@ -83,6 +83,7 @@ pub fn wallet() -> (tempfile::TempDir, Arc<WalletCore>) {
         vec![RecoverySelection {
             family: AccountFamily::OpenZeppelin,
             account_index: 0,
+            ladder: None,
             class_hash: None,
         }],
     )

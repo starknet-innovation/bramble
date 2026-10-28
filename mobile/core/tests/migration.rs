@@ -57,7 +57,7 @@ fn an_old_v1_vault_migrates_on_unlock_and_opens_again() {
 
     let migrated = read(&dir);
     assert_eq!(migrated["format"], "bramble.mobile.vault");
-    assert_eq!(migrated["version"], 4);
+    assert_eq!(migrated["version"], 5);
     for network in [NetworkId::Mainnet, NetworkId::Sepolia] {
         let indices: Vec<u32> = core
             .account_records(network)
@@ -146,7 +146,7 @@ fn a_failed_migration_write_keeps_v1_and_the_next_write_commits_it() {
     assert!(core.add_account(NetworkId::Sepolia).is_err());
     std::fs::remove_dir(&blocker).unwrap();
     core.add_account(NetworkId::Sepolia).unwrap();
-    assert_eq!(read(&dir)["version"], 4);
+    assert_eq!(read(&dir)["version"], 5);
     core.lock();
     core.unlock(V1_PASSWORD.into()).unwrap();
     assert_eq!(core.accounts(NetworkId::Sepolia).unwrap().len(), 3);
@@ -156,7 +156,7 @@ fn a_failed_migration_write_keeps_v1_and_the_next_write_commits_it() {
 fn a_current_vault_round_trips() {
     let (dir, clock, core) = imported();
     let first = read(&dir);
-    assert_eq!(first["version"], 4);
+    assert_eq!(first["version"], 5);
     assert_eq!(first["biometricSlot"], Value::Null);
     core.lock();
     let reopened = open(dir.path(), &clock);
@@ -191,9 +191,10 @@ fn invalid_containers_fail_closed() {
         cases.push(value);
     };
     edit(&|v| v["format"] = json!("bramble.other"));
-    edit(&|v| v["version"] = json!(5));
-    edit(&|v| v["version"] = json!(3)); // a v4 payload under a v3 label
-    edit(&|v| v["version"] = json!(2)); // a v4 payload under a v2 label
+    edit(&|v| v["version"] = json!(6));
+    edit(&|v| v["version"] = json!(4)); // a v5 payload under a v4 label
+    edit(&|v| v["version"] = json!(3)); // a v5 payload under a v3 label
+    edit(&|v| v["version"] = json!(2)); // a v5 payload under a v2 label
     edit(&|v| v["version"] = json!(1));
     edit(&|v| v["extra"] = json!(true));
     edit(&|v| v["lineage"] = json!("00".repeat(16)));
@@ -272,7 +273,7 @@ fn a_vault_security_v2_container_migrates_in_place_on_passphrase_unlock() {
     core.unlock(V2_CONTAINER_PASSWORD.into()).unwrap();
 
     let after = read(&dir);
-    assert_eq!(after["version"], 4);
+    assert_eq!(after["version"], 5);
     assert_eq!(after["lineage"], before["lineage"]);
     assert_eq!(
         after["passwordSlot"], before["passwordSlot"],
@@ -307,7 +308,7 @@ fn a_vault_security_v2_container_migrates_on_biometric_unlock_too() {
     core.unlock_with_biometric(V2_WRAP_SECRET.to_vec()).unwrap();
     assert_eq!(
         read(&dir)["version"],
-        4,
+        5,
         "no passphrase needed: the DEK re-seals it"
     );
     assert_eq!(core.account_records(NetworkId::Sepolia).unwrap().len(), 2);
@@ -327,7 +328,7 @@ fn an_accounts_branch_records_vault_migrates_into_a_container() {
 
     let after = read(&dir);
     assert_eq!(after["format"], "bramble.mobile.vault");
-    assert_eq!(after["version"], 4);
+    assert_eq!(after["version"], 5);
     assert_eq!(after["lineage"], envelope["lineage"], "lineage is kept");
     let sepolia = core.account_records(NetworkId::Sepolia).unwrap();
     let families: Vec<_> = sepolia
@@ -421,6 +422,16 @@ fn each_layout_refuses_payloads_it_was_never_written_with() {
             "a v4 container never held a count",
             Some(4),
             payload_count(4),
+        ),
+        (
+            "a v4 container's records never carried ladder",
+            Some(4),
+            with_version(4),
+        ),
+        (
+            "a v5 container never held a count",
+            Some(5),
+            payload_count(5),
         ),
     ];
     for (why, container, payload) in cases {

@@ -7,7 +7,7 @@ mod common;
 
 use bramble_core::testing::{open_vault, seal_container_vault, seal_envelope_vault};
 use bramble_core::{account_classes, AccountFamily, CoreError, NetworkId};
-use common::{core, open, oz, pending, selection, PASSWORD, PHRASE};
+use common::{core, open, own, oz, pending, selection, PASSWORD, PHRASE};
 use serde_json::Value;
 
 fn class_of(label: &str) -> String {
@@ -36,14 +36,23 @@ fn view_only_is_enforced_per_record_even_when_the_key_is_shared() {
                 oz(0),
                 selection(AccountFamily::Braavos, 0, Some(&braavos_class)),
                 selection(AccountFamily::Braavos, 1, Some(&braavos_class)),
+                own(AccountFamily::Argent, 0, Some(&argent_class)),
                 selection(AccountFamily::Argent, 0, Some(&argent_class)),
             ],
         )
         .unwrap();
-    let (ozr, braavos0, argent0) = (&restored[0], &restored[1], &restored[3]);
+    let (ozr, braavos0, argent0, ready0) = (&restored[0], &restored[1], &restored[3], &restored[4]);
     assert_eq!(
         ozr.public_key, braavos0.public_key,
-        "one key per index for every family"
+        "index 0 is the same key on this wallet's ladder and Braavos's"
+    );
+    assert_ne!(
+        ready0.public_key, ozr.public_key,
+        "Ready's ETH-seeded ladder is a different key (issue 505)"
+    );
+    assert_ne!(
+        restored[2].public_key, ozr.public_key,
+        "Braavos's index 1 is on its own address ladder"
     );
     assert!(braavos0.view_only && !ozr.view_only);
     assert_eq!(braavos0.type_label.as_deref(), Some("Braavos Account"));
@@ -56,8 +65,8 @@ fn view_only_is_enforced_per_record_even_when_the_key_is_shared() {
         .sign_hash_for_account(ozr.id.clone(), "0x1".into())
         .unwrap();
     assert_eq!(signed.public_key, ozr.public_key);
-    // Argent (Ready) shares index 0's key too and passes the same gate: the plan wraps its
-    // signature in the `argent-signer-array` layout (`transactions_argent_parity.rs`).
+    // Argent on this wallet's ladder shares index 0's key too and passes the same gate: the plan
+    // wraps its signature in the `argent-signer-array` layout (`transactions_argent_parity.rs`).
     assert_eq!(argent0.public_key, ozr.public_key);
     assert_eq!(argent0.authorization_shape, "argent-signer-array");
     let ready = core
@@ -171,7 +180,9 @@ fn regular_accounts_take_the_lowest_free_index_and_become_active() {
         NetworkId::Sepolia,
         vec![
             oz(0),
-            selection(AccountFamily::Argent, 1, Some(&argent)),
+            own(AccountFamily::Argent, 1, Some(&argent)),
+            // Ready's ladder is a separate ETH-seeded tree: its index 2 holds no index here.
+            selection(AccountFamily::Argent, 2, Some(&argent)),
             oz(3),
         ],
     )
@@ -179,7 +190,7 @@ fn regular_accounts_take_the_lowest_free_index_and_become_active() {
     let added = core.add_regular_account(NetworkId::Sepolia).unwrap();
     assert_eq!(
         added.account_index, 2,
-        "index 1 is held by the Ready account"
+        "index 1 is held by the own-ladder Argent account; Ready's index 2 is not"
     );
     assert!(added.active);
     assert_eq!(added.family, AccountFamily::OpenZeppelin);
@@ -280,7 +291,7 @@ fn a_version_one_vault_migrates_to_records_on_every_network() {
         NetworkId::Mainnet
     );
     let payload: Value = serde_json::from_str(&open_vault(&path, PASSWORD).unwrap()).unwrap();
-    assert_eq!(payload["version"], 4, "the migration was written back");
+    assert_eq!(payload["version"], 5, "the migration was written back");
     assert_eq!(payload["accounts"].as_array().unwrap().len(), 4);
 
     let (bad, _clock, core) = common::core();

@@ -33,6 +33,7 @@ fn accounts_and_signatures_match_the_extension() {
     let oz = |account_index| RecoverySelection {
         family: AccountFamily::OpenZeppelin,
         account_index,
+        ladder: None,
         class_hash: None,
     };
     let restored = core

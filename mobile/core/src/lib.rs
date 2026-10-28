@@ -30,6 +30,7 @@ mod groups;
 mod history;
 mod js;
 mod kms;
+pub use kms::Ladder;
 mod kms_accounts;
 mod migrations;
 mod multisig_constants;
@@ -312,8 +313,15 @@ pub mod testing {
         chain_id: &str,
         pool_address: &str,
     ) -> Result<String, crate::CoreError> {
-        crate::kms::derive_scoped_viewing_key(mnemonic, None, account_index, chain_id, pool_address)
-            .map(|key| crate::felt::canonical(&key))
+        crate::kms::derive_scoped_viewing_key(
+            mnemonic,
+            None,
+            crate::kms::Ladder::Account,
+            account_index,
+            chain_id,
+            pool_address,
+        )
+        .map(|key| crate::felt::canonical(&key))
     }
 
     /// Opens a raw envelope JSON string, as the extension would.
@@ -406,6 +414,7 @@ pub mod testing {
     /// Words one discovery row exactly as the scan would.
     pub fn recovery_candidate(
         family: crate::AccountFamily,
+        ladder: crate::kms::Ladder,
         class_hash: &str,
         account_index: u32,
         address: &str,
@@ -414,6 +423,7 @@ pub mod testing {
     ) -> crate::RecoveryCandidate {
         crate::recovery::candidate(&crate::recovery::Found {
             family,
+            ladder,
             class_hash: crate::felt::parse(class_hash).expect("class hash is a felt"),
             account_index,
             address: crate::felt::parse(address).expect("address is a felt"),

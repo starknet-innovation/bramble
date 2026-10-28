@@ -14,13 +14,14 @@ use starknet_types_core::felt::Felt;
 
 use crate::account_catalog::catalog;
 use crate::account_store::{is_usable_account_index, VaultPayload};
+use crate::kms::Ladder;
 use crate::kms_accounts::family_address;
 use crate::networks::{self, NetworkId};
 use crate::recovery::{candidate, keep, scan_shapes, Found, RecoveryCandidate};
 use crate::rpc::{self, rpc_error, RpcRequest, RpcResponse, MAX_RESPONSE_BYTES};
 use crate::{felt, CoreError};
 
-/// Candidates one scan may accumulate (manual checks add up to six each).
+/// Candidates one scan may accumulate (a manual check adds at most one per scan shape).
 const MAX_CANDIDATES: usize = 512;
 /// JSON-RPC error code for "contract not found".
 const CONTRACT_NOT_FOUND: i64 = 20;
@@ -166,7 +167,7 @@ pub(crate) fn next(
     network: NetworkId,
     manual_index: Option<u32>,
 ) -> Result<RecoveryScanStep, CoreError> {
-    let fingerprint = payload.public_key(0)?;
+    let fingerprint = payload.public_key(Ladder::Account, 0)?;
     let same =
         matches!(state, Some(scan) if scan.fingerprint == fingerprint && scan.network == network);
     if !same {
@@ -198,12 +199,21 @@ pub(crate) fn next(
         });
     }
     let chain = network.chain();
+    let shapes = scan_shapes(payload.mnemonic_passphrase.is_none());
     let mut probes = Vec::new();
     // The walk stays far below the reserved index and a manual one is refused above; this only
     // holds the line if either bound ever moves.
     for account_index in (start..=end).filter(|index| is_usable_account_index(*index)) {
-        let public_key = payload.public_key(account_index)?;
-        for shape in scan_shapes() {
+        let mut keys: HashMap<Ladder, Felt> = HashMap::new();
+        for shape in &shapes {
+            let public_key = match keys.get(&shape.ladder) {
+                Some(key) => *key,
+                None => {
+                    let key = payload.public_key(shape.ladder, account_index)?;
+                    keys.insert(shape.ladder, key);
+                    key
+                }
+            };
             let placed = family_address(
                 shape.family,
                 shape.class_hash.as_ref(),
@@ -214,6 +224,7 @@ pub(crate) fn next(
             probes.push(Probe {
                 found: Found {
                     family: shape.family,
+                    ladder: shape.ladder,
                     class_hash: placed.class_hash,
                     account_index,
                     address: placed.address,
@@ -364,6 +375,7 @@ mod tests {
     fn at(account_index: u32, deployed: bool, funded: bool) -> Found {
         Found {
             family: crate::account_catalog::AccountFamily::OpenZeppelin,
+            ladder: Ladder::Account,
             class_hash: catalog().open_zeppelin_class,
             account_index,
             address: Felt::from(u64::from(account_index) + 1),

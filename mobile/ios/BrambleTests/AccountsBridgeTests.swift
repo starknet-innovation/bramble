@@ -23,6 +23,8 @@ final class AccountsBridgeTests: XCTestCase {
             let networkId: String
             let passphrase: String?
             let requestedClassHash: String?
+            /// The extension's derivation kind; Braavos's `starknet-bip44` is its address ladder.
+            let derivation: String
         }
 
         let vectors: [Family]
@@ -67,7 +69,10 @@ final class AccountsBridgeTests: XCTestCase {
             RecoverySelection(
                 family: try XCTUnwrap(families[vector.accountContractType]),
                 accountIndex: vector.accountIndex,
-                classHash: vector.requestedClassHash
+                classHash: vector.requestedClassHash,
+                ladder: vector.derivation == "argentx-bip44"
+                    ? .argentX
+                    : vector.accountContractType == "braavos" ? .address : .account
             )
         }
         let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: selections)

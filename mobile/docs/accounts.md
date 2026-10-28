@@ -32,7 +32,7 @@ the difference with **Decision**.
 | Restore | 1-40 selections, all distinct by `type:class:index`. Every selection is re-derived through Krusty, and derived addresses must be unique. The set is committed atomically. The first selection becomes active. | `vault/src/service/recovery.ts` |
 | Groups | `{id, name, icon, accountIds}`. Name 1-64 characters. Id = slug. Icon from `GROUP_ICONS` (18). An account is in at most one group. **There are no default groups**: "Operations" and "Long term" are ui-lab fixtures. | `features/settings/src/groups.ts`; `ui-lab/src/fixtures/journey-fixtures.ts:41-54` |
 | Network switch | One `activeAccountId` for the whole vault. Switching network keeps the active account if it is on the target network, else takes the first account there, else projects the active account (same family, `accountIndex`, class for non-OZ, salt) onto the target network, stores it and makes it active. | `runtime/runtime-state.ts:125-132,280-307`; `vault/src/accounts/network-account.ts`; `vault/src/service/service.ts:119-150` |
-| Signing key | One key per index for every family: `m/44'/9004'/i'/0/0`. OZ, Argent and Braavos records at index `i` share it. | `vault/src/accounts/accounts.ts` (`deriveAccount`); mobile `kms.rs::private_key` |
+| Signing key | Each family's own ladder (issue 505). Bramble's: `m/44'/9004'/i'/0/0` (OZ, and Argent this wallet made). Braavos's: `m/44'/9004'/0'/0/i`. Ready's: the ETH key at `m/44'/60'/0'/0/0` seeds `m/44'/9004'/0'/0/i`, never under a BIP-39 passphrase. Each record stores its `ladder` (vault v5); records from v4 and earlier are all on Bramble's ladder and keep their addresses. Only index 0 is shared between Bramble's and Braavos's ladders. | `vault/src/accounts/accounts.ts` (`deriveAccount`), `derivation-core.ts`; mobile `kms.rs::private_key` (`Ladder`) |
 
 ## 2. User-visible behaviour, screen by screen
 
@@ -125,7 +125,9 @@ checkpoint labels. The rendered step is `recovery-accounts`:
 - Back button "Back to passphrase". Title "Find your accounts". Lede "Bramble checks the first 20
   account indices for Bramble, Ready, and Braavos accounts. Accounts with on-chain activity are
   selected automatically."
-- Status line: "Ready to search." → "Searching every account type…" → "Checked N of 20 indices…"
+- Status line: "Ready to search." → "Searching every account type…" → "Checked N of T indices…",
+  where T is the gap-limit target (`recoveryScanTarget`: 20 past the last index with activity, at
+  least 20, at most 200)
   → "Search complete. Checked N indices across every account type." On error: "Account search
   paused. Check the network and retry." A refresh icon button is labelled "Retry account search".
 - Three disclosures: "Bramble accounts", "Ready accounts", "Braavos accounts". Each shows "N
