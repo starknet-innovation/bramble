@@ -15,7 +15,7 @@ use crate::argent_multisig;
 use crate::contacts;
 use crate::multisig_store::{self, Authority, Record};
 use crate::nostr::{self, ApplicationData};
-use crate::nostr_relay::is_relay_url;
+use crate::nostr_relay::{is_relay_url, stored_relay_url};
 use crate::{multisig_constants, public_store, CoreError};
 
 /// Held packages remembered across all shared accounts.
@@ -90,12 +90,25 @@ fn is_held(held: &Held) -> bool {
 
 /// Reads and validates the file; missing means empty, invalid fails closed.
 pub fn load(dir: &Path) -> Result<File, CoreError> {
-    let Some(file) = public_store::read::<File>(dir, public_store::COORDINATION)? else {
+    let Some(mut file) = public_store::read::<File>(dir, public_store::COORDINATION)? else {
         return Ok(File {
             version: 1,
             ..File::default()
         });
     };
+    // Relay URLs an earlier build stored are brought to the current rule before validation, as
+    // the extension's preferences reader does. A custom relay with no current spelling falls back
+    // to the reviewed defaults; a checkpoint whose relays have none is dropped, so the next sync
+    // reads that account from the start instead of the whole file failing closed.
+    file.relay_url = file.relay_url.as_deref().and_then(stored_relay_url);
+    file.checkpoints.retain_mut(|checkpoint| {
+        let urls: Option<Vec<String>> = checkpoint
+            .relay_urls
+            .iter()
+            .map(|url| stored_relay_url(url))
+            .collect();
+        urls.map(|urls| checkpoint.relay_urls = urls).is_some()
+    });
     let valid = file.version == 1
         && file.relay_url.as_deref().is_none_or(is_relay_url)
         && file.checkpoints.len() <= multisig_constants::get().coordination.max_checkpoints
@@ -301,4 +314,39 @@ pub fn is_trusted(
                     .and_then(|key| argent_multisig::signer_guid_hex(key).ok())
                     .is_some_and(|guid| snapshot.signer_guids.contains(&guid))
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // An earlier build accepted any case and the default port; reading its file back must not
+    // fail closed and take every multisig's coordination with it.
+    #[test]
+    fn a_file_with_an_earlier_relay_spelling_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let checkpoint = |urls: &[&str]| Checkpoint {
+            account_id: format!("SN_SEPOLIA:0x{}", "1".repeat(63)),
+            event_ids: Vec::new(),
+            relay_urls: urls.iter().map(|url| (*url).to_string()).collect(),
+            synced_at: 1,
+        };
+        let stored = File {
+            version: 1,
+            relay_url: Some("WSS://Relay.Example:443".into()),
+            checkpoints: vec![
+                checkpoint(&["WSS://Relay.Example:443"]),
+                checkpoint(&["wss://relay.example/a/../b"]),
+            ],
+            held: Vec::new(),
+        };
+        public_store::write(dir.path(), public_store::COORDINATION, &stored).unwrap();
+        let loaded = load(dir.path()).unwrap();
+        assert_eq!(loaded.relay_url.as_deref(), Some("wss://relay.example"));
+        assert_eq!(
+            loaded.checkpoints,
+            vec![checkpoint(&["wss://relay.example"])],
+            "a checkpoint with no current spelling is dropped, so it resyncs"
+        );
+    }
 }
