@@ -37,6 +37,7 @@ import {
   type GaslessFeeOffer,
   gaslessBuildParams,
   gaslessDeploymentBody,
+  gaslessInvokeUserAddress,
   gaslessTokenSpend,
   isGaslessFeeOffer,
   MAX_GASLESS_OFFERS,
@@ -120,6 +121,7 @@ const heldOffer = async (input: {
     calls: input.calls,
     deployment: input.deployment,
     gasToken: input.held.address,
+    nowSeconds: input.nowSeconds,
     userAddress: input.userAddress,
   });
   const quote = readGaslessQuote(
@@ -360,6 +362,7 @@ const prepareSubmission = async (
     calls: input.calls,
     deployment,
     gasToken: input.reviewed.tokenAddress,
+    nowSeconds: input.nowSeconds,
     userAddress: input.account.address,
   });
   const quote = readGaslessQuote(
@@ -471,7 +474,7 @@ export const submitReviewedGaslessInvoke = async (input: {
   const invoke = {
     signature,
     typed_data: validated.typedData,
-    user_address: params.userAddress,
+    user_address: gaslessInvokeUserAddress(params.transaction),
   };
   const result = await postGasless(
     input.http,

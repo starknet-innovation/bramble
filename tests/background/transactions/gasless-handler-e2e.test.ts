@@ -14,6 +14,7 @@ import {
   gaslessFeeCeiling,
 } from "@bramble/transactions/gasless-ceiling";
 import { GASLESS_FEES_ENABLED, GASLESS_PAYMASTER_URLS } from "@bramble/transactions/gasless-config";
+import { GASLESS_MAX_WINDOW_SECONDS } from "@bramble/transactions/gasless-typed-data";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { createStrk20FeeReference } from "../../../apps/extension/src/background/privacy/strk20-fee-reference";
 import {
@@ -25,6 +26,7 @@ import {
   account,
   byMethod,
   extensionSender,
+  NOW,
   OVER_CEILING,
   RECIPIENT,
   REFERENCE,
@@ -70,13 +72,18 @@ const chooseUsdc = async (harness: GaslessHarness) => {
 
 const expectInvokeBuild = (params: unknown): void => {
   expect(params).toMatchObject({
-    parameters: { fee_mode: { gas_token: USDC, mode: "default" }, version: "0x1" },
+    parameters: {
+      fee_mode: { gas_token: USDC, mode: "default" },
+      time_bounds: { execute_after: 1, execute_before: NOW + Number(GASLESS_MAX_WINDOW_SECONDS) },
+      version: "0x1",
+    },
     transaction: { type: "invoke" },
   });
+  expect(params).not.toHaveProperty("userAddress");
   const encoded = JSON.stringify(params);
   expect(encoded).not.toContain("sponsored");
   expect(encoded).not.toContain("deploy_and_invoke");
-  expect(encoded).not.toContain("time_bounds");
+  expect(encoded).not.toContain('"tip"');
 };
 
 describe("gasless send with the mainnet route enabled only in the test", () => {

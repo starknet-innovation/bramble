@@ -18,6 +18,7 @@ import {
   readGaslessSupportedTokens,
 } from "@bramble/transactions/gasless-request";
 import { quoteGaslessOffers } from "@bramble/transactions/gasless-submit";
+import { GASLESS_MAX_WINDOW_SECONDS } from "@bramble/transactions/gasless-typed-data";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
@@ -198,7 +199,8 @@ describe("accountSignsGaslessV2", () => {
 describe("gaslessBuildParams", () => {
   const user = "0x213c67ed78bc280887234fe5ed5e77272465317978ae86c25a71531d9332a2d";
 
-  test("sends default mode only, with 0x felts and no tip or time bounds", () => {
+  test("sends default mode only, with 0x felts, no tip, and a numeric ten-minute window", () => {
+    const nowSeconds = 1_700_000_000;
     const params = gaslessBuildParams({
       calls: [
         {
@@ -208,16 +210,24 @@ describe("gaslessBuildParams", () => {
         },
       ],
       gasToken: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+      nowSeconds,
       userAddress: user,
     });
-    expect(Object.keys(params.parameters)).toEqual(["fee_mode", "version"]);
+    expect(Object.keys(params)).toEqual(["parameters", "transaction"]);
+    expect(Object.keys(params.parameters)).toEqual(["fee_mode", "time_bounds", "version"]);
     expect(params.parameters.fee_mode).toEqual({
       gas_token: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
       mode: "default",
     });
+    expect(Object.keys(params.parameters.fee_mode)).toEqual(["gas_token", "mode"]);
+    expect(params.parameters.time_bounds).toEqual({
+      execute_after: 1,
+      execute_before: nowSeconds + Number(GASLESS_MAX_WINDOW_SECONDS),
+    });
     expect(params.parameters.version).toBe("0x1");
     expect(params.transaction["type"]).toBe("invoke");
     expect(JSON.stringify(params)).not.toContain("sponsored");
+    expect(JSON.stringify(params)).not.toContain("userAddress");
     const invoke = params.transaction["invoke"] as { calls: { calldata: string[] }[] };
     expect(invoke.calls[0]?.calldata).toEqual(["0x1", "0x2"]);
   });
@@ -249,10 +259,11 @@ describe("gaslessBuildParams", () => {
       calls: [{ calldata: [], contractAddress: user, entrypoint: "transfer" }],
       deployment,
       gasToken: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+      nowSeconds: 1_700_000_000,
       userAddress: user,
     });
     expect(params.transaction["type"]).toBe("deploy_and_invoke");
-    expect(Object.keys(params)).toEqual(["parameters", "transaction", "userAddress"]);
+    expect(Object.keys(params)).toEqual(["parameters", "transaction"]);
   });
 });
 

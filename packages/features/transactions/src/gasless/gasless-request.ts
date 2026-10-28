@@ -1,8 +1,11 @@
 /**
- * Gasless request and response shapes. Build requests are the ones
- * `inspect_gasless` accepts: version `0x1`, fee mode `default` only, no tip
- * unless a caller adds one (this client does not), no `time_bounds`, and
- * calls whose felts are already `0x`. Execute posts AVNU's typed data
+ * Gasless request and response shapes. The posted params are
+ * `{ parameters, transaction }` only: a top-level `userAddress` is rejected
+ * as `invalid_gasless_request`. Version is `0x1`, fee mode is `default`
+ * with no tip (the gateway fills `normal`), and `time_bounds` are JSON
+ * numbers inside the ten-minute window this wallet will sign. An omitted
+ * bound comes back as a one-hour window, and a string timestamp is rejected.
+ * Calls' felts are already `0x`. Execute posts the gateway's typed data
  * unchanged. Sponsored modes are not representable here.
  */
 
@@ -20,6 +23,7 @@ import { type Call, CallData, hash } from "starknet";
 import { type FeeAffordability, resolveFeeAffordability } from "../routing/fee-funds";
 import { isApproveEntrypoint, PLAIN_TRANSFER_FROM_ENTRYPOINTS } from "../routing/verify-selectors";
 import { GaslessRefusal } from "./gasless-errors";
+import { GASLESS_MAX_WINDOW_SECONDS } from "./gasless-typed-data";
 
 /**
  * How many tokens a review may offer. Bounds the build calls one review makes.
@@ -198,22 +202,35 @@ export const gaslessDeploymentBody = (
   };
 };
 
+const executionWindow = (
+  nowSeconds: number,
+): { readonly execute_after: 1; readonly execute_before: number } => {
+  const executeBefore = nowSeconds + Number(GASLESS_MAX_WINDOW_SECONDS);
+  if (!Number.isSafeInteger(nowSeconds) || nowSeconds < 0 || !Number.isSafeInteger(executeBefore)) {
+    throw new GaslessRefusal("unavailable");
+  }
+  return { execute_after: 1, execute_before: executeBefore };
+};
+
 /**
  * `paymaster_buildTransaction` params for fee mode `default`. Throws when a
- * call cannot be encoded as `0x` felts. Omits tip and time bounds.
+ * call cannot be encoded as `0x` felts or `nowSeconds` is not a safe
+ * non-negative integer. The returned object is the JSON-RPC `params` value:
+ * it does not repeat the account address, and its `time_bounds` are numbers.
  */
 export const gaslessBuildParams = (input: {
   readonly calls: readonly Call[];
   readonly deployment?: ReturnType<typeof gaslessDeploymentBody>;
   readonly gasToken: string;
+  readonly nowSeconds: number;
   readonly userAddress: string;
 }): {
   readonly parameters: {
     readonly fee_mode: { readonly gas_token: string; readonly mode: "default" };
+    readonly time_bounds: { readonly execute_after: 1; readonly execute_before: number };
     readonly version: "0x1";
   };
   readonly transaction: Record<string, unknown>;
-  readonly userAddress: string;
 } => {
   if (input.calls.length === 0) {
     throw new GaslessRefusal("unavailable");
@@ -230,11 +247,23 @@ export const gaslessBuildParams = (input: {
   return {
     parameters: {
       fee_mode: { gas_token: felt(input.gasToken, false), mode: "default" },
+      time_bounds: executionWindow(input.nowSeconds),
       version: "0x1",
     },
     transaction,
-    userAddress,
   };
+};
+
+/**
+ * Account address stored on a build's invoke. Callers read it from here
+ * because the posted params do not repeat it.
+ */
+export const gaslessInvokeUserAddress = (transaction: Record<string, unknown>): string => {
+  const invoke = transaction["invoke"];
+  if (!isRecord(invoke) || typeof invoke["user_address"] !== "string") {
+    throw new GaslessRefusal("unavailable");
+  }
+  return invoke["user_address"];
 };
 
 /**

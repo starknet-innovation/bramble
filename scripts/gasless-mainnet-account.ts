@@ -24,6 +24,8 @@ export type LoadedMainnetAccount = {
   readonly label: string;
   readonly privateKey: string;
   readonly publicKey: string | null;
+  /** Where `rpcUrl` was read from, before the chain-id check. */
+  readonly rpcSource: string;
   readonly rpcUrl: string;
 };
 
@@ -158,14 +160,22 @@ const findNamed = (
   };
 };
 
-const rpcUrlFor = (env: GaslessE2eEnv, sections: TomlSections, profile: string | null): string => {
-  if (env.rpcUrl && env.rpcUrl.length > 0) return env.rpcUrl;
+const rpcUrlFor = (
+  env: GaslessE2eEnv,
+  sections: TomlSections,
+  profile: string | null,
+): { readonly source: string; readonly url: string } => {
+  if (env.rpcUrl && env.rpcUrl.length > 0) {
+    return { source: "GASLESS_E2E_RPC_URL", url: env.rpcUrl };
+  }
   const section = profile === null ? undefined : sections.get(`sncast.${profile}`);
-  if (section?.["url"]) return section["url"];
+  if (section?.["url"]) return { source: "snfoundry url", url: section["url"] };
   const networks = profile === null ? undefined : sections.get(`sncast.${profile}.networks`);
-  if (networks?.["mainnet"]) return networks["mainnet"];
-  if (DEFAULT_RPC === undefined) return "";
-  return DEFAULT_RPC;
+  if (networks?.["mainnet"]) {
+    return { source: "snfoundry networks.mainnet", url: networks["mainnet"] };
+  }
+  if (DEFAULT_RPC === undefined) return { source: "wallet default", url: "" };
+  return { source: "wallet default", url: DEFAULT_RPC };
 };
 
 const walkSnfoundry = async (
@@ -185,12 +195,12 @@ const walkSnfoundry = async (
 };
 
 const ready = (
-  account: Omit<LoadedMainnetAccount, "rpcUrl">,
-  rpcUrl: string,
+  account: Omit<LoadedMainnetAccount, "rpcSource" | "rpcUrl">,
+  rpc: { readonly source: string; readonly url: string },
 ): MainnetAccountLoad =>
-  rpcUrl.length === 0
+  rpc.url.length === 0
     ? { kind: "error", message: "No mainnet RPC URL is configured." }
-    : { account: { ...account, rpcUrl }, kind: "ready" };
+    : { account: { ...account, rpcSource: rpc.source, rpcUrl: rpc.url }, kind: "ready" };
 
 /**
  * Resolves the mainnet account from `env`, an sncast file, and `snfoundry.toml`.
@@ -215,7 +225,7 @@ export const loadGaslessMainnetAccount = async (input: {
   if (profile === "sepolia" || profile === "alpha-sepolia") {
     return { kind: "error", message: "This test runs on Starknet mainnet only." };
   }
-  const rpcUrl = rpcUrlFor(input.env, sections, profile);
+  const rpc = rpcUrlFor(input.env, sections, profile);
   const directAddress = input.env.address;
   const directKey = input.env.privateKey;
   if ((directAddress && directAddress.length > 0) || (directKey && directKey.length > 0)) {
@@ -227,7 +237,7 @@ export const loadGaslessMainnetAccount = async (input: {
         message: "GASLESS_E2E_ADDRESS and GASLESS_E2E_PRIVATE_KEY must both be non-zero felts.",
       };
     }
-    return ready({ address, label: `env ${address}`, privateKey, publicKey: null }, rpcUrl);
+    return ready({ address, label: `env ${address}`, privateKey, publicKey: null }, rpc);
   }
   const profileSection = profile === null ? undefined : sections.get(`sncast.${profile}`);
   const name = input.env.account ?? profileSection?.["account"];
@@ -257,7 +267,7 @@ export const loadGaslessMainnetAccount = async (input: {
       privateKey: found.privateKey,
       publicKey: found.publicKey,
     },
-    rpcUrl,
+    rpc,
   );
 };
 

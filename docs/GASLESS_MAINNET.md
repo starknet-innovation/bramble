@@ -117,6 +117,18 @@ accounts-file = "~/.starknet_accounts/starknet_open_zeppelin_accounts.json"
 url = "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10"
 ```
 
+The script prints the full RPC URL and where it came from: `GASLESS_E2E_RPC_URL`,
+`snfoundry url`, `snfoundry networks.mainnet`, or `wallet default`. A URL that
+does not return mainnet's chain id is not used. `http://wallet.nodes.starknet.org`
+has no RPC path and answers `route_not_allowed`; the script then uses
+`https://wallet.nodes.starknet.org/rpc/mainnet/v0_10` and says so. The STRK
+estimate passes tip `0x0`, the same as the wallet, so starknet.js does not
+scan blocks for a tip.
+
+Each curated token prints why it was skipped, or the quoted fee against the
+6/5 ceiling. A build that returns `invalid_gasless_request` prints the request
+and the gateway body. The private key is not in either.
+
 On success the script prints the transaction hash, a Voyager link, and a
 Starkscan link. A quote that fails the forwarder pin or the 6/5 ceiling is
 refused before execute and does not spend. A malformed build is checked only

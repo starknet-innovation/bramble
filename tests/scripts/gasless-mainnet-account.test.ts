@@ -9,11 +9,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { hash } from "starknet";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "../../packages/foundation/wallet-model/src/accounts/accounts";
+import { STARKNET_NETWORKS } from "../../packages/foundation/wallet-model/src/networks/networks";
 import {
   GASLESS_MAINNET_SKIP_MESSAGE,
   loadGaslessMainnetAccount,
 } from "../../scripts/gasless-mainnet-account";
 import { receiptSucceeded, transferredAmount } from "../../scripts/gasless-mainnet-receipt";
+import { displayRpcUrl, selectMainnetRpc } from "../../scripts/gasless-mainnet-rpc";
 
 const KEY = "0x333333333333333333333333333333333333333333333333333333333333333";
 const ADDRESS = "0x1234";
@@ -72,6 +74,7 @@ describe("gasless mainnet account loader", () => {
     expect(loaded.account.address).toBe(ADDRESS);
     expect(loaded.account.privateKey).toBe(KEY);
     expect(loaded.account.rpcUrl).toBe("https://rpc.example/mainnet");
+    expect(loaded.account.rpcSource).toBe("snfoundry url");
     expect(loaded.account.label).toContain("gasless");
     expect(loaded.account.label).not.toContain(KEY);
   });
@@ -84,6 +87,36 @@ describe("gasless mainnet account loader", () => {
       readText,
     });
     expect(loaded).toEqual({ kind: "error", message: "This test runs on Starknet mainnet only." });
+  });
+});
+
+describe("gasless mainnet RPC", () => {
+  const json = (status: number, body: unknown): Response =>
+    new Response(JSON.stringify(body), { status });
+
+  test("keeps an RPC that answers mainnet and hides a query key when printing", async () => {
+    const url = "https://rpc.example/mainnet?api_key=secret";
+    const chosen = await selectMainnetRpc({
+      configuredSource: "GASLESS_E2E_RPC_URL",
+      configuredUrl: url,
+      fetchImpl: async () =>
+        json(200, { id: 1, jsonrpc: "2.0", result: STARKNET_NETWORKS.SN_MAIN.chainId }),
+    });
+    expect(chosen).toEqual({ note: null, source: "GASLESS_E2E_RPC_URL", url });
+    expect(displayRpcUrl(url)).toBe("https://rpc.example/mainnet");
+    expect(displayRpcUrl(url)).not.toContain("secret");
+  });
+
+  test("replaces a host that is not a Starknet RPC with the wallet default", async () => {
+    const chosen = await selectMainnetRpc({
+      configuredSource: "snfoundry url",
+      configuredUrl: "http://wallet.nodes.starknet.org",
+      fetchImpl: async () => json(404, { error: "route_not_allowed" }),
+    });
+    expect(chosen.source).toBe("wallet default");
+    expect(chosen.url).toBe(STARKNET_NETWORKS.SN_MAIN.rpcUrls[0]);
+    expect(chosen.note).toContain("http://wallet.nodes.starknet.org");
+    expect(chosen.note).toContain("did not answer starknet_chainId");
   });
 });
 
