@@ -1,8 +1,8 @@
 /**
- * Gasless send through the real transfer handlers, with SN_MAIN enabled only
- * on the test hooks. The shipped flags stay false and fetch cannot leave the
- * process. Mainnet never builds deploy_and_invoke: an undeployed account is
- * refused before that request exists.
+ * Gasless send through the real transfer handlers. Mainnet's shipped flag is
+ * on; the test hooks still replace the transport and the clock so fetch cannot
+ * leave the process. Sepolia stays off. Mainnet never builds deploy_and_invoke:
+ * an undeployed account is refused before that request exists.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { isRecord } from "@bramble/core/json";
@@ -52,7 +52,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: false, SN_SEPOLIA: false });
+  expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: true, SN_SEPOLIA: false });
 });
 
 afterEach(closeGaslessHarness);

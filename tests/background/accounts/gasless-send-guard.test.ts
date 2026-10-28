@@ -1,7 +1,7 @@
 /**
  * The send path does not take a gasless ceiling from the side-panel message.
- * With the wallet flag off, a short-STRK review and a later send make no
- * paymaster request.
+ * Mainnet gasless is on. A review whose deployment read fails stays on STRK,
+ * and a gasless choice that does not match the stored offer is not submitted.
  */
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { PriceService } from "@bramble/portfolio/prices";
@@ -109,11 +109,11 @@ const prices = (): PriceService & { readonly calls: () => number } => {
   };
 };
 
-const withFetchCount = async (run: () => Promise<void>): Promise<number> => {
+const withBlockedFetch = async (run: () => Promise<void>): Promise<readonly string[]> => {
   const original = globalThis.fetch;
-  let fetches = 0;
-  globalThis.fetch = (async () => {
-    fetches += 1;
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    urls.push(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     throw new Error("fetch");
   }) as unknown as typeof fetch;
   try {
@@ -121,8 +121,11 @@ const withFetchCount = async (run: () => Promise<void>): Promise<number> => {
   } finally {
     globalThis.fetch = original;
   }
-  return fetches;
+  return urls;
 };
+
+const paymasterCalls = (urls: readonly string[]): readonly string[] =>
+  urls.filter((url) => url.includes("/api/paymaster/"));
 
 beforeEach(() => clearGaslessSendReview());
 
@@ -142,7 +145,7 @@ describe("held gasless send", () => {
   });
 });
 
-describe("gasless send messages with the flag off", () => {
+describe("gasless send messages with mainnet enabled", () => {
   const harness = () => {
     const session = createUnlockSession();
     session.unlock("correct horse battery staple");
@@ -178,9 +181,9 @@ describe("gasless send messages with the flag off", () => {
     return { feed, handler, submitted };
   };
 
-  test("a short-STRK review and a STRK send make no paymaster request", async () => {
+  test("a failed deployment read hides gasless and the STRK send still goes out", async () => {
     const { feed, handler, submitted } = harness();
-    const fetches = await withFetchCount(async () => {
+    const urls = await withBlockedFetch(async () => {
       const review = await handler(
         {
           accountId: account.id,
@@ -205,7 +208,8 @@ describe("gasless send messages with the flag off", () => {
         sender,
       );
     });
-    expect(fetches).toBe(0);
+    expect(paymasterCalls(urls)).toEqual([]);
+    expect(urls.length).toBeGreaterThan(0);
     expect(feed.calls()).toBe(0);
     expect(submitted).toHaveLength(1);
   });
@@ -213,7 +217,7 @@ describe("gasless send messages with the flag off", () => {
   test("a tampered gasless fee is refused before any submission", async () => {
     const { handler, submitted } = harness();
     rememberGaslessSendReview({ ...transfer, offers: [offer], strkFee });
-    const fetches = await withFetchCount(async () => {
+    const urls = await withBlockedFetch(async () => {
       const response = await handler(
         {
           ...transfer,
@@ -225,14 +229,14 @@ describe("gasless send messages with the flag off", () => {
       );
       expect(response).toEqual({ error: "the fee changed since this request was reviewed" });
     });
-    expect(fetches).toBe(0);
+    expect(urls).toEqual([]);
     expect(submitted).toEqual([]);
   });
 
-  test("a matching echo still does not submit in STRK or call the paymaster", async () => {
+  test("a matching echo does not fall back to STRK when the deployment read fails", async () => {
     const { handler, submitted } = harness();
     rememberGaslessSendReview({ ...transfer, offers: [offer], strkFee });
-    const fetches = await withFetchCount(async () => {
+    const urls = await withBlockedFetch(async () => {
       const response = await handler(
         {
           ...transfer,
@@ -242,11 +246,9 @@ describe("gasless send messages with the flag off", () => {
         },
         sender,
       );
-      expect(response).toEqual({
-        error: "Paying the network fee in another token is unavailable.",
-      });
+      expect(response).toEqual({ error: "fetch" });
     });
-    expect(fetches).toBe(0);
+    expect(paymasterCalls(urls)).toEqual([]);
     expect(submitted).toEqual([]);
   });
 });

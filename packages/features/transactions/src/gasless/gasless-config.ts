@@ -26,11 +26,12 @@ export const GASLESS_PAYMASTER_URLS: Readonly<Record<GaslessNetworkId, string>> 
 };
 
 /**
- * Wallet-side switches. Both stay off until an independent security review
- * turns one on.
+ * Wallet-side switches. Mainnet is enabled per the product owner's decision.
+ * The independent security review is still pending. Sepolia stays off: that
+ * network has no forwarder, so the route refuses.
  */
 export const GASLESS_FEES_ENABLED: Readonly<Record<GaslessNetworkId, boolean>> = {
-  SN_MAIN: false,
+  SN_MAIN: true,
   SN_SEPOLIA: false,
 };
 

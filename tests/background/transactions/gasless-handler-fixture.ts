@@ -1,7 +1,7 @@
 /**
- * Handler harness for gasless fees with the wallet flag left off. The route,
- * transport, class read, and clock are installed only on the review module's
- * test hooks, and global fetch rejects, so a case cannot reach a live host.
+ * Handler harness for gasless fees. Mainnet's shipped flag is on. The
+ * transport, class read, and clock installed here keep a case off the network.
+ * Sepolia stays off.
  */
 import type { PriceService } from "@bramble/portfolio/prices";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";

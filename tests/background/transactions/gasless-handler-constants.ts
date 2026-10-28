@@ -16,7 +16,7 @@ if (pinned === null) {
   throw new Error("mainnet forwarder pin is unset");
 }
 
-/** Pinned mainnet forwarder. The harness route uses it; the shipped flag stays off. */
+/** Pinned mainnet forwarder. The harness route uses this pin. */
 export const FORWARDER: string = pinned;
 
 const canonicalUsdc = canonicalFelt(USDC_TOKEN_ADDRESS);
