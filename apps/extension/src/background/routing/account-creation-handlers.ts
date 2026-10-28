@@ -5,7 +5,7 @@
  * return null without echoing secrets, and every handler fails closed when
  * the wallet surface is unavailable.
  */
-import { RefusedBeforeWrite } from "@bramble/core/errors";
+import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
 import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
 import { DEFAULT_NETWORK, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
@@ -19,6 +19,7 @@ import {
 } from "../accounts/account-creation-inputs";
 import { readCreateKeyVaultInput, readImportAccountInput } from "../accounts/import-inputs";
 import { verifyReadyKeyClasses } from "../accounts/ready-key-accounts";
+import { verifyKeyAddressPick } from "../accounts/ready-key-address";
 import { verifyAddressSelections } from "../onboarding/address-import";
 import {
   runUnlockedNetworkMutation,
@@ -101,22 +102,29 @@ const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
   });
 };
 
-// A "Ready Account" key import names the releases the user picked; each is
-// re-proved on chain before the write, so the class is never the message's
-// word alone. Other families import at their default and name none.
-const pickedReadyReleases = async (
+// A "Ready Account" key import names the releases the user picked, or one
+// account found by its pasted address (issue 779); either is re-proved on chain
+// before the write, so the class and the address are never the message's word
+// alone. Other families import at their default and name neither.
+const provedReadyPick = async (
   ctx: RouterContext,
   input: NonNullable<ReturnType<typeof readImportAccountInput>>,
-): Promise<{ readonly classHashes?: readonly string[] }> => {
+): Promise<{
+  readonly address?: string;
+  readonly classHash?: string;
+  readonly classHashes?: readonly string[];
+}> => {
   if (input.accountContractType !== "argent") return {};
-  const { classHashes = [], deploymentSalt, networkId, privateKey } = input;
-  return {
-    classHashes: await verifyReadyKeyClasses(
-      ctx,
-      { ...(deploymentSalt === undefined ? {} : { deploymentSalt }), networkId, privateKey },
-      classHashes,
-    ),
+  const { address, classHash, classHashes = [], deploymentSalt, networkId, privateKey } = input;
+  const key = {
+    ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
+    networkId,
+    privateKey,
   };
+  if (address !== undefined && classHash !== undefined) {
+    return verifyKeyAddressPick(ctx, { ...key, address, classHash });
+  }
+  return { classHashes: await verifyReadyKeyClasses(ctx, key, classHashes) };
 };
 
 const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) => {
@@ -131,13 +139,20 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
   if (!createKeyVault) {
     return { error: "wallet unavailable" };
   }
-  const classHashes = await pickedReadyReleases(ctx, input);
+  const pick = await provedReadyPick(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
+    // The proof read the chain for a wallet that did not exist yet; one
+    // created meanwhile (or queued ahead of this task) was never this
+    // request's to write into. Refused inside the coordinator, before the
+    // network preference or the session is touched.
+    if (pick.address !== undefined && (await ctx.wallet.status()).hasVault) {
+      throw new WalletError("Wallet already exists");
+    }
     const account = await runVaultCreationWithNetwork(
       ctx.session,
       ctx.preferencesStore,
       input.networkId,
-      () => createKeyVault({ ...input, ...classHashes }),
+      () => createKeyVault({ ...input, ...pick }),
     );
     ctx.session.unlock(input.vaultPassphrase);
     return { account, ok: true };
@@ -267,7 +282,7 @@ const handleImportAccount: RouterHandler = async (ctx, messageType, message) => 
   if (!authorization.isCurrent()) {
     return { error: "wallet locked" };
   }
-  const classHashes = await pickedReadyReleases(ctx, input);
+  const pick = await provedReadyPick(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
     if (!authorization.isCurrent()) {
       return { error: "wallet locked" };
@@ -276,7 +291,7 @@ const handleImportAccount: RouterHandler = async (ctx, messageType, message) => 
       ctx.session,
       ctx.preferencesStore,
       input.networkId,
-      (vaultPassphrase) => importRawKeyAccount({ ...input, ...classHashes, vaultPassphrase }),
+      (vaultPassphrase) => importRawKeyAccount({ ...input, ...pick, vaultPassphrase }),
     );
     return account ? { account, ok: true } : { error: "wallet locked" };
   });

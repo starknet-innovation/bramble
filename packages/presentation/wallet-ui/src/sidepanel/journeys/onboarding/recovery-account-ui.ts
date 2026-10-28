@@ -415,7 +415,6 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       : `Found ${title}.`;
   };
   const addressFinder = bindRecoveryAddressFinder({
-    form: deps.form,
     lookup: (address) =>
       deps.findByAddress !== undefined
         ? deps.findByAddress(address)
@@ -426,6 +425,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
           ),
     networkId: deps.networkId,
     onFound: addFound,
+    root: deps.form.querySelector<HTMLElement>('[data-recovery-address="recovery"]'),
   });
 
   retry?.addEventListener("click", () => void scan());

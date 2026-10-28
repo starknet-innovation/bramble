@@ -83,3 +83,73 @@ describe("Ready-key runtime client", () => {
     ]);
   });
 });
+
+describe("private-key import by address (issue 779)", () => {
+  const FOUND = {
+    ...ROW,
+    accountId: "SN_MAIN:0x7e57",
+    address: "0x7e57",
+    byAddress: true as const,
+  };
+
+  test("the lookup sends the key, salt and address in its own request and validates the row", async () => {
+    const { client, sent } = clientReplying({
+      candidate: { ...FOUND, restriction: "guardian" },
+      ok: true,
+    });
+    expect(await client.findKeyAccountByAddress("SN_MAIN", "0xfeed", "0x7", "0x7e57")).toEqual({
+      ...FOUND,
+      restriction: "guardian" as const,
+    });
+    expect(sent).toEqual([
+      {
+        address: "0x7e57",
+        deploymentSalt: "0x7",
+        networkId: "SN_MAIN",
+        privateKey: "0xfeed",
+        type: "wallet.findKeyAccountByAddress",
+      },
+    ]);
+  });
+
+  test("a refusal, or an answer that is not one found deployed row, throws", async () => {
+    await expect(
+      clientReplying({
+        error: "private key does not control this account",
+      }).client.findKeyAccountByAddress("SN_MAIN", "0xfeed", undefined, "0x7e57"),
+    ).rejects.toThrow("private key does not control this account");
+    const malformed = [
+      { candidate: ROW, ok: true },
+      { candidate: { ...FOUND, deployed: false, holdings: [] }, ok: true },
+      { candidate: { ...FOUND, restriction: "nope" }, ok: true },
+      { candidate: { ...FOUND, privateKey: "0xfeed" }, ok: true },
+      { candidate: FOUND, extra: 1, ok: true },
+    ];
+    for (const reply of malformed) {
+      await expect(
+        clientReplying(reply).client.findKeyAccountByAddress(
+          "SN_MAIN",
+          "0xfeed",
+          undefined,
+          "0x7e57",
+        ),
+      ).rejects.toThrow("account lookup unavailable");
+    }
+  });
+
+  test("both imports name an address pick by address and class, never a release list", async () => {
+    const pick = { address: "0x7e57", classHash: ARGENT_031 };
+    const imported = clientReplying({ ok: true });
+    await imported.client
+      .importAccount("SN_MAIN", "0xfeed", "argent", undefined, pick)
+      .catch(() => undefined);
+    const created = clientReplying({ ok: true });
+    await created.client
+      .createKeyVault("SN_MAIN", "0xfeed", "pass phrase", "argent", undefined, pick)
+      .catch(() => undefined);
+    for (const message of [...imported.sent, ...created.sent]) {
+      expect(message).toMatchObject(pick);
+      expect(message).not.toHaveProperty("classHashes");
+    }
+  });
+});

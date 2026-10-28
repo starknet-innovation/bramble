@@ -25,8 +25,8 @@
 import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
-import { ADDRESS_IMPORT_REFUSALS } from "@bramble/wallet-model/recovery";
 
+import { ADDRESS_IMPORT_ERROR_COPY } from "./friendly-error-copy-address";
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
 import { PRIVACY_ERROR_COPY } from "./friendly-error-copy-privacy";
 import { INTERNAL_ERROR_COPY } from "./friendly-error-internal";
@@ -269,32 +269,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "account recovery unavailable",
     "Couldn't recover accounts. Check your connection and try again.",
   ],
-  // Finding an account by its pasted address (issue 398). The panel names the
-  // network in the not-found sentence itself; this is the fallback wording.
-  [ADDRESS_IMPORT_REFUSALS.invalid, "That doesn't look like a Starknet address."],
-  [
-    ADDRESS_IMPORT_REFUSALS.notDeployed,
-    "No account found at this address on this network. Check the address and network.",
-  ],
-  [
-    ADDRESS_IMPORT_REFUSALS.unsupportedClass,
-    "Bramble doesn't support this account's contract version yet.",
-  ],
-  [
-    ADDRESS_IMPORT_REFUSALS.brambleAccount,
-    "This is a Bramble account. Use Find my accounts instead.",
-  ],
-  [
-    ADDRESS_IMPORT_REFUSALS.nonStarkOwner,
-    "This account is controlled by a signer Bramble can't use.",
-  ],
-  [ADDRESS_IMPORT_REFUSALS.noMatch, "This recovery phrase doesn't control that account."],
-  [ADDRESS_IMPORT_REFUSALS.unavailable, "Couldn't check this account. Try again."],
-  [ADDRESS_IMPORT_REFUSALS.unconfirmed, "Couldn't confirm this account. Try again."],
-  [
-    ADDRESS_IMPORT_REFUSALS.stale,
-    "This wallet changed while the account was being checked. Search for it again.",
-  ],
+  ...ADDRESS_IMPORT_ERROR_COPY,
   // The 2FA / guardian removal flow's own fallbacks (runtime-recovery.ts and
   // account-recovery.ts), worded apart from the account-discovery flow above.
   [

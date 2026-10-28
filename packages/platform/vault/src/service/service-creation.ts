@@ -10,7 +10,11 @@
 
 import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
 import { type DerivedAccountRef, NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
-import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  type StarknetNetworkId,
+} from "@bramble/wallet-model/networks";
 import {
   deriveAccount,
   deriveImportedAccount,
@@ -47,23 +51,50 @@ export const writeVault = async (
   await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
 };
 
+// The address an address import stores (issue 779), canonical; undefined for
+// a derived import. A class without an address, or an address with a release
+// list, is refused: neither says which one account to store.
+const pastedAddress = (input: Omit<ImportRawKeyAccountInput, "vaultPassphrase">) => {
+  if (input.address === undefined && input.classHash === undefined) return undefined;
+  const address = input.address === undefined ? null : canonicalFelt(input.address);
+  if (
+    address === null ||
+    !isNonZeroStarkFieldElement(address) ||
+    input.classHash === undefined ||
+    input.classHashes !== undefined
+  ) {
+    throw new RefusedBeforeWrite("Invalid account address");
+  }
+  return address;
+};
+
 // Derives one account per picked release (the family default when none is
 // named) from a single raw key, refusing any id already stored or picked twice
-// before anything is written. Every account signs with the same key.
+// before anything is written. Every account signs with the same key. An
+// address import derives its key at the recorded class and keeps the address.
 const deriveRawKeyAccounts = async (
   kms: KmsPort,
   input: Omit<ImportRawKeyAccountInput, "vaultPassphrase">,
   stored: Vault["accounts"],
 ): Promise<readonly Awaited<ReturnType<typeof deriveImportedAccount>>[]> => {
   const derived: Awaited<ReturnType<typeof deriveImportedAccount>>[] = [];
-  for (const classHash of input.classHashes ?? [undefined]) {
-    const result = await deriveImportedAccount(kms, {
+  const address = pastedAddress(input);
+  const classes = address === undefined ? (input.classHashes ?? [undefined]) : [input.classHash];
+  for (const classHash of classes) {
+    const keyed = await deriveImportedAccount(kms, {
       accountContractType: input.accountContractType,
       ...(classHash === undefined ? {} : { classHash }),
       ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
       networkId: input.networkId,
       privateKey: input.privateKey,
     });
+    const result =
+      address === undefined
+        ? keyed
+        : {
+            ...keyed,
+            account: { ...keyed.account, address, id: `${keyed.account.networkId}:${address}` },
+          };
     const id = result.account.id;
     if (stored.some((account) => account.id === id) || derived.some((d) => d.account.id === id)) {
       throw new RefusedBeforeWrite("Account already exists");

@@ -22,6 +22,7 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isAddressInput } from "./account-creation-inputs";
 
 /**
  * Parsed raw-key import request: a valid target network plus a private key
@@ -45,11 +46,21 @@ type RawKeyAccountFields = {
 };
 
 /**
- * A raw-key import request. A "Ready Account" (Argent) import names the
- * releases the user picked from discovery; every other family names none. The
- * background re-proves each picked release before writing.
+ * A raw-key import request. A "Ready Account" (Argent) import names either the
+ * releases the user picked from discovery, or the account found by its pasted
+ * address (issue 779) with the class that lookup recorded, never both; every
+ * other family names neither. The background re-proves the pick before writing.
  */
-type RawKeyImportFields = RawKeyAccountFields & { readonly classHashes?: readonly string[] };
+type RawKeyImportFields = RawKeyAccountFields & {
+  readonly address?: string;
+  readonly classHash?: string;
+  readonly classHashes?: readonly string[];
+};
+
+const readFelt = (value: unknown): string | null => {
+  const felt = typeof value === "string" ? normalizeFeltInput(value) : null;
+  return felt !== null && isNonZeroStarkFieldElement(felt) ? felt : null;
+};
 
 // The picked Argent releases: one to the table's size, unique, canonical felts.
 // Membership in the table is checked by the background re-proof, not here.
@@ -58,22 +69,39 @@ const readClassHashes = (value: unknown): readonly string[] | null => {
   if (value.length > deploymentClasses("argent").length) return null;
   const classHashes: string[] = [];
   for (const raw of value) {
-    const classHash = typeof raw === "string" ? normalizeFeltInput(raw) : null;
-    if (classHash === null || !isNonZeroStarkFieldElement(classHash)) return null;
+    const classHash = readFelt(raw);
+    if (classHash === null) return null;
     if (classHashes.some((seen) => sameFelt(seen, classHash))) return null;
     classHashes.push(classHash);
   }
   return classHashes;
 };
 
-// Argent imports must name their picked releases; every other family must not.
+// An address pick: the pasted address, bounded only (the background
+// canonicalizes it), and the one class its lookup recorded.
+const withAddress = (
+  fields: RawKeyAccountFields,
+  message: Record<string, unknown>,
+): RawKeyImportFields | null => {
+  const classHash = readFelt(message["classHash"]);
+  return isAddressInput(message["address"]) && classHash !== null
+    ? { ...fields, address: message["address"], classHash }
+    : null;
+};
+
+// Argent imports must name their picked releases or one address pick, not
+// both; every other family names neither.
 const withClassHashes = (
   fields: RawKeyAccountFields | null,
   message: Record<string, unknown>,
 ): RawKeyImportFields | null => {
   if (!fields) return null;
+  const byAddress = message["address"] !== undefined || message["classHash"] !== undefined;
   if (fields.accountContractType !== "argent") {
-    return message["classHashes"] === undefined ? fields : null;
+    return message["classHashes"] === undefined && !byAddress ? fields : null;
+  }
+  if (byAddress) {
+    return message["classHashes"] === undefined ? withAddress(fields, message) : null;
   }
   const classHashes = readClassHashes(message["classHashes"]);
   return classHashes ? { ...fields, classHashes } : null;
@@ -124,6 +152,8 @@ export const readImportAccountInput = (message: unknown): RawKeyImportFields | n
   isRecord(message) &&
   hasOnlyKnownKeys(message, [
     "accountContractType",
+    "address",
+    "classHash",
     "classHashes",
     "deploymentSalt",
     "networkId",
@@ -148,6 +178,8 @@ export const readCreateKeyVaultInput = (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountContractType",
+      "address",
+      "classHash",
       "classHashes",
       "deploymentSalt",
       "networkId",
@@ -184,4 +216,27 @@ export const readDiscoverReadyKeyAccountsInput = (
   if (!fields) return null;
   const { accountContractType: _argent, ...rest } = fields;
   return rest;
+};
+
+/**
+ * Parses the private-key import-by-address lookup
+ * (`wallet.findKeyAccountByAddress`, issue 779): the Ready-key grammar above
+ * plus one pasted address, bounded as every address lookup bounds it. Returns
+ * `null` for any malformed message without echoing secret material.
+ */
+export const readFindKeyAccountByAddressInput = (
+  message: unknown,
+): (Omit<RawKeyAccountFields, "accountContractType"> & { readonly address: string }) | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["address", "deploymentSalt", "networkId", "privateKey", "type"]) ||
+    message["type"] !== "wallet.findKeyAccountByAddress" ||
+    !isAddressInput(message["address"])
+  ) {
+    return null;
+  }
+  const fields = readRawKeyAccountFields({ ...message, accountContractType: "argent" });
+  if (!fields) return null;
+  const { accountContractType: _argent, ...rest } = fields;
+  return { ...rest, address: message["address"] };
 };

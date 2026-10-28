@@ -125,6 +125,7 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.discoverOwnAccounts",
   "wallet.discoverReadyKeyAccounts",
   "wallet.discoverRecoveryAccounts",
+  "wallet.findKeyAccountByAddress",
   "wallet.findOwnAccountByAddress",
   "wallet.findRecoveryAccountByAddress",
   "wallet.getBalances",

@@ -49,7 +49,10 @@ import {
   readTypeOnlyInput,
   readUnlockInput,
 } from "./message-inputs";
-import { handleDiscoverReadyKeyAccounts } from "./ready-key-handlers";
+import {
+  handleDiscoverReadyKeyAccounts,
+  handleFindKeyAccountByAddress,
+} from "./ready-key-handlers";
 import {
   type ExtensionIdentity,
   isClaimedSenderOrigin,
@@ -406,6 +409,7 @@ const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleTokenOps(ctx, messageType, message),
   handleAccountCreationOps,
   handleDiscoverReadyKeyAccounts,
+  handleFindKeyAccountByAddress,
   (ctx, messageType, message) => handleApprovalDecision(ctx, messageType, message),
   handleGenerateMnemonic,
   (ctx, messageType, message) => handleOnboardingOps(ctx, messageType, message),

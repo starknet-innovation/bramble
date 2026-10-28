@@ -11,10 +11,10 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { ImportRawKeyAccountInput } from "@bramble/vault/service";
+import { NO_READY_ACCOUNT_FOR_KEY } from "@bramble/wallet-model/recovery";
 import { readAccountActivity } from "../../../apps/extension/src/background/accounts/account-activity";
 import {
   discoverReadyKeyAccounts,
-  NO_READY_ACCOUNT_FOR_KEY,
   READY_KEY_CHECK_UNAVAILABLE,
   verifyReadyKeyClasses,
 } from "../../../apps/extension/src/background/accounts/ready-key-accounts";

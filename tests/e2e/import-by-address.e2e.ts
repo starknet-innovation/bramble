@@ -90,14 +90,19 @@ const reachPicker = async (page: Page): Promise<void> => {
   await expect(page.locator("#recovery-scan-status")).toContainText("Search complete", {
     timeout: RECOVERY_SCAN_TIMEOUT_MS,
   });
-  await page.getByText("Can't find it? Paste the account address").click();
+  await page
+    .locator('[data-recovery-address="recovery"]')
+    .getByText("Can't find it? Paste the account address")
+    .click();
 };
 
 test("finds a Ready account by its address and restores it", async ({ extension }) => {
   const page = await extension.openExtensionPage("onboarding.html");
   await mockChain(page, await ownLadderKey(page));
   await reachPicker(page);
-  await expect(page.locator("[data-recovery-address-network]")).toHaveText("On Starknet Mainnet");
+  await expect(
+    page.locator('[data-recovery-address="recovery"] [data-recovery-address-network]'),
+  ).toHaveText("On Starknet Mainnet");
   await page
     .locator('input[name="recoveryAddress"]')
     .fill(`https://starkscan.co/contract/${PASTED}`);

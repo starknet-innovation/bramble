@@ -17,7 +17,7 @@ import { createEncryptedStore } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
-import { NO_READY_ACCOUNT_FOR_KEY } from "../../../apps/extension/src/background/accounts/ready-key-accounts";
+import { NO_READY_ACCOUNT_FOR_KEY } from "@bramble/wallet-model/recovery";
 import { createWalletReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
