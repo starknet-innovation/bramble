@@ -465,6 +465,7 @@ export type RuntimeResponse =
   | NostrCoordinationResponse
   | { readonly ok: true; readonly signer: MultisigSignerAccount }
   | { readonly ok: true; readonly updateReady: boolean }
+  | { readonly notice: boolean; readonly ok: true }
   | { readonly ok: true; readonly restarting: boolean }
   | { readonly ok: true; readonly released: boolean }
   | MultisigsResponse
