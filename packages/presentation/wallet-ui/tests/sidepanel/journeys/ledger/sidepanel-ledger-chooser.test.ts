@@ -101,15 +101,26 @@ describe("add-account chooser routing", () => {
     expect(pickerIndexes(h.views.at(-1), "braavos")).toEqual([0, 1, 2, 3]);
   });
 
-  test("the first-run device setup stays on Bramble's scheme after a Ready restore", async () => {
-    const { enumerated, h } = schemeSpy();
+  test("first-run device setup reads Bramble's and Ready's schemes, even after a Ready restore", async () => {
+    // A new Ledger wallet finds what a recovery-phrase setup finds: Bramble
+    // accounts at Bramble's path, Ready and Braavos accounts at Ready's.
+    const { derived, enumerated, h } = schemeSpy();
     const controller = createLedgerOnboardController(h.deps);
     controller.choose("restore-ready-ledger");
     controller.cancel();
     controller.start();
     controller.connect();
     await tick();
-    expect(enumerated).toEqual(["LedgerW"]);
+    expect(enumerated).toEqual(["LedgerW", "argentx"]);
+    expect(derived.sort()).toEqual([
+      ["argent", "LedgerW"],
+      ["argent", "argentx"],
+      ["braavos", "argentx"],
+      ["openzeppelin", "LedgerW"],
+    ]);
+    // The grouped (Bramble-layout) picker, not Ready's flat list.
+    const final = h.views.at(-1);
+    expect(final?.kind === "picker" && final.application).toBe("LedgerW");
   });
 
   test("one click routes Multisig without mutating the wallet", () => {

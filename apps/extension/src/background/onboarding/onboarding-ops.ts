@@ -8,6 +8,7 @@ import {
 } from "@bramble/settings/preferences";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
   deploymentClasses,
   XVERSE_ARGENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
@@ -143,17 +144,20 @@ const recoveryScanShapes = (): readonly {
   })),
 ];
 
-// Whether this wallet would itself create an account at this candidate's class:
-// its own OpenZeppelin account, or Argent at the release it deploys. Only those
-// are worth showing before they exist on chain — index zero is where a new
-// wallet's first account lives. A Braavos account, or Argent at any other
-// release, is only ever found; undeployed and unfunded, it is an address that
-// belongs to nobody, and offering it would import an account that does not exist.
+// Whether this candidate is listed before it exists on chain: one row per
+// family at the class it creates today (its own OpenZeppelin account, Argent at
+// the release it deploys, Braavos at the current app's deployment class), so
+// every group shows its index-zero address. Only OpenZeppelin is selectable
+// unused; the picker shows the other two view-only, since an undeployed,
+// unfunded Ready or Braavos address belongs to nobody. Older releases and
+// classes are only ever found.
 const isCreatableCandidate = (account: RecoverableAccountRef): boolean =>
   account.derivation.kind === "starknet-bip44" &&
   (account.accountContractType === "openzeppelin" ||
     (account.accountContractType === "argent" &&
-      sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)));
+      sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)) ||
+    (account.accountContractType === "braavos" &&
+      sameFelt(account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH)));
 
 const scanRecoveryIndex = async (
   deps: OnboardingOpsDeps,

@@ -11,8 +11,8 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
-import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
-import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
@@ -22,6 +22,7 @@ import type { LedgerConnector } from "../../../../src/sidepanel/journeys/ledger/
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
+import { candidateAccount } from "../../../support/ledger-onboard-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -199,28 +200,7 @@ const enumerateClient: LedgerDeviceClient = {
   signHash: () => Promise.reject(new Error("unused")),
 };
 
-const candidate = (
-  index: number,
-  accountContractType: "argent" | "openzeppelin" = "openzeppelin",
-): LedgerAccountRef => {
-  const address = `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
-  return {
-    ...(accountContractType === "argent"
-      ? ({ accountContractType, deploymentSalt: "0x1" } as const)
-      : ({ accountContractType } as const)),
-    address,
-    classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    derivation: {
-      accountIndex: index,
-      eip2645application: "LedgerW",
-      kind: "ledger",
-      path: ledgerAccountPath(index),
-    },
-    id: `SN_MAIN:${address}`,
-    networkId: "SN_MAIN",
-    publicKeyX: `0x${index + 1}`,
-  };
-};
+const candidate = candidateAccount;
 
 const entryHarness = () => {
   document.body.replaceChildren();
@@ -251,8 +231,13 @@ const entryHarness = () => {
     deriveLedgerAccounts: (
       _networkId: string,
       _entries: readonly unknown[],
-      accountContractType: "argent" | "openzeppelin",
-    ) => Promise.resolve([candidate(0, accountContractType), candidate(1, accountContractType)]),
+      accountContractType: AccountContractType,
+      application: LedgerEip2645Application,
+    ) =>
+      Promise.resolve([
+        candidate(0, accountContractType, application),
+        candidate(1, accountContractType, application),
+      ]),
     ledgerAccountStatus: () => Promise.resolve({ balance: null, deployed: null }),
     loadStatus: () => Promise.resolve(mainnetStatus),
   } as unknown as SidepanelWallet;

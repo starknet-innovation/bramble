@@ -121,7 +121,8 @@ export const createLedgerOnboardRuntime = (
   const bindGroups = (): void => {
     for (const group of mount.querySelectorAll<HTMLDetailsElement>("[data-account-group]")) {
       const key = group.dataset["accountGroup"] ?? "";
-      const detected = group.querySelector("summary .hint") !== null;
+      const detected =
+        Number(group.querySelector("[data-detected]")?.getAttribute("data-detected")) > 0;
       if (detected && !autoOpened.has(key)) {
         autoOpened.add(key);
         openGroups.add(key);

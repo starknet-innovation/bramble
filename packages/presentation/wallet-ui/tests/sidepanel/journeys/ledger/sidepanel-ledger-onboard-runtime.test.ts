@@ -10,14 +10,13 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
-import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
-import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   createLedgerOnboardRuntime,
   type LedgerOnboardRuntimeDeps,
 } from "../../../../src/sidepanel/journeys/ledger/onboard-runtime";
 import type { LedgerConnector } from "../../../../src/sidepanel/journeys/ledger/sign-session";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
+import { candidateAccount } from "../../../support/ledger-onboard-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -47,30 +46,7 @@ const enumerateClient: LedgerDeviceClient = {
   signHash: () => Promise.reject(new Error("unused")),
 };
 
-const candidate = (
-  index: number,
-  accountContractType: AccountContractType = "openzeppelin",
-): LedgerAccountRef => {
-  const address = `0x${accountContractType === "argent" ? "e" : ""}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
-  return {
-    // A device account is never Braavos; anything not Argent is this wallet's
-    // own OpenZeppelin account, which carries no deployment salt.
-    ...(accountContractType === "argent"
-      ? ({ accountContractType, deploymentSalt: "0x1" } as const)
-      : ({ accountContractType: "openzeppelin" } as const)),
-    address,
-    classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    derivation: {
-      accountIndex: index,
-      eip2645application: "LedgerW",
-      kind: "ledger",
-      path: ledgerAccountPath(index),
-    },
-    id: `SN_MAIN:${address}`,
-    networkId: "SN_MAIN",
-    publicKeyX: `0x${index + 1}`,
-  };
-};
+const candidate = candidateAccount;
 
 const idOf = (index: number, accountContractType: "argent" | "openzeppelin" = "openzeppelin") =>
   candidate(index, accountContractType).id;
@@ -128,8 +104,10 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
       return Promise.resolve();
     },
     wallet: {
-      deriveLedgerAccounts: (_networkId, entries, accountContractType) =>
-        Promise.resolve(entries.map((entry) => candidate(entry.accountIndex, accountContractType))),
+      deriveLedgerAccounts: (_networkId, entries, accountContractType, application) =>
+        Promise.resolve(
+          entries.map((entry) => candidate(entry.accountIndex, accountContractType, application)),
+        ),
     },
     ...overrides,
   });
@@ -166,6 +144,11 @@ const check = (root: ParentNode, selector: string): void => {
   input.dispatchEvent(new window.Event("change", { bubbles: true }));
 };
 
+// The trigger opens first-run setup, which reads both paths: per index, one
+// Bramble, one Ready and one Braavos row (an unused Argent account at
+// Bramble's path stays hidden), so a 5-index page is 15 rows.
+const ROWS_PER_PAGE = 15;
+
 const toggleCount = (root: ParentNode): number =>
   root.querySelectorAll("[data-ledger-toggle]").length;
 
@@ -183,7 +166,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
     // One page (5) of selectable candidates rendered.
-    expect(toggleCount(h.mount)).toBe(10);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE);
 
     check(h.mount, `[data-ledger-toggle="${idOf(1)}"]`);
     click(h.mount, "[data-ledger-add-selected]");
@@ -210,7 +193,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    expect(toggleCount(h.mount)).toBe(10);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE);
     expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(4)}"]`)).not.toBeNull();
     expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(5)}"]`)).toBeNull();
 
@@ -222,9 +205,9 @@ describe("Ledger onboarding runtime (DOM)", () => {
     );
     await tick();
     // Page 2 (indexes 5-9) is appended to the existing page (indexes 0-4).
-    expect(toggleCount(h.mount)).toBe(20);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE * 2);
     const groups = Array.from(h.mount.querySelectorAll<HTMLDetailsElement>("[data-account-group]"));
-    expect(groups.length).toBe(2);
+    expect(groups.length).toBe(3);
     expect(groups.every((group) => group.open)).toBe(true);
     for (let index = 5; index <= 9; index += 1) {
       expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(index)}"]`)).not.toBeNull();
@@ -262,7 +245,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, '[data-ledger-device="second"]');
     await tick();
     expect(openedId).toBe("second");
-    expect(toggleCount(h.mount)).toBe(10);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE);
   });
 
   test("Add selected adds exactly the checked accounts, in order", async () => {
@@ -306,7 +289,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    expect(toggleCount(h.mount)).toBe(10);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE);
     expect(h.mount.querySelector("[data-ledger-onboard-cancel]")).not.toBeNull();
 
     click(h.mount, "[data-ledger-onboard-cancel]");
