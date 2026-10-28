@@ -160,7 +160,9 @@ const heldOffer = async (input: {
     amount,
     decimals: input.held.decimals,
     label: input.held.label,
-    tokenAddress: input.held.address,
+    // Registry addresses are padded. The offer grammar is the short felt, so a
+    // padded address is not an offer and the token is never shown.
+    tokenAddress: canonicalFelt(input.held.address) ?? input.held.address,
   };
   return isGaslessFeeOffer(offer) ? offer : null;
 };

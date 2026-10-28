@@ -20,17 +20,23 @@ import { type FeeEstimate, formatTokenAmount } from "@bramble/starknet/rpc";
 import { clampActivitySummary, systemClock } from "@bramble/transactions/activity";
 import type { FeeAffordability } from "@bramble/transactions/fee-funds";
 import type { GaslessAccountClass } from "@bramble/transactions/gasless-account";
-import { gaslessRoute, gaslessRouteReady } from "@bramble/transactions/gasless-config";
+import {
+  type GaslessRoute,
+  gaslessRoute,
+  gaslessRouteReady,
+} from "@bramble/transactions/gasless-config";
 import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import {
   quoteGaslessOffers,
   submitReviewedGaslessInvoke,
 } from "@bramble/transactions/gasless-submit";
+import type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   STARKNET_NETWORKS,
   STRK_TOKEN_ADDRESS,
+  type StarknetNetworkId,
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { Call, RpcProvider } from "starknet";
@@ -122,6 +128,40 @@ const deploymentFor = (
 const nowSeconds = (): number => Math.floor(systemClock() / 1000);
 
 /**
+ * Stand-in for the bundled gasless route. Production leaves this unset, so
+ * the wallet flag and the forwarder pin stay in force. `http` and
+ * `makeProvider` keep a test off the network, and `nowSeconds` is the clock
+ * the execution window is checked against.
+ */
+export type GaslessReviewTestHooks = {
+  readonly http: PaymasterHttp;
+  readonly makeProvider: (nodeUrl: string) => RpcProvider;
+  readonly nowSeconds: () => number;
+  readonly route: (networkId: StarknetNetworkId) => GaslessRoute | null;
+};
+
+let testHooks: GaslessReviewTestHooks | null = null;
+
+/**
+ * Installs {@link GaslessReviewTestHooks}, or clears them when `hooks` is
+ * null. Unset, {@link reviewGaslessOffers} and {@link executeReviewedGasless}
+ * use the bundled route and the real transport.
+ */
+export const setGaslessReviewHooksForTests = (hooks: GaslessReviewTestHooks | null): void => {
+  testHooks = hooks;
+};
+
+const routeFor = (networkId: StarknetNetworkId): GaslessRoute | null =>
+  testHooks === null ? gaslessRoute(networkId) : testHooks.route(networkId);
+
+const httpFor = (): PaymasterHttp => (testHooks === null ? gaslessHttp : testHooks.http);
+
+const nowFor = (): number => (testHooks === null ? nowSeconds() : testHooks.nowSeconds());
+
+const providerFor = (): MakeProvider | undefined =>
+  testHooks === null ? undefined : testHooks.makeProvider;
+
+/**
  * Offers for one review. Empty when gasless is off, STRK covers the fee, the
  * account cannot sign SNIP-9 v2, or the route cannot be checked. Failures
  * hide the choice; they do not fail the STRK review.
@@ -135,7 +175,7 @@ export const reviewGaslessOffers = async (input: {
   readonly strkAffordability: FeeAffordability;
   readonly strkFee: FeeEstimate | null;
 }): Promise<readonly GaslessFeeOffer[]> => {
-  const route = gaslessRoute(input.account.networkId);
+  const route = routeFor(input.account.networkId);
   if (
     !gaslessRouteReady(route) ||
     input.strkAffordability !== "insufficient" ||
@@ -159,7 +199,7 @@ export const reviewGaslessOffers = async (input: {
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.account.networkId], input.preferences);
   let state: Awaited<ReturnType<typeof gaslessAccountState>>;
   try {
-    state = await gaslessAccountState(input.account, rpcUrls);
+    state = await gaslessAccountState(input.account, rpcUrls, providerFor());
   } catch {
     return [];
   }
@@ -175,8 +215,8 @@ export const reviewGaslessOffers = async (input: {
     account: accountForGasless(input.account, state),
     calls: input.calls,
     deployment: deploymentFor(input.account, state.deployed),
-    http: gaslessHttp,
-    nowSeconds: nowSeconds(),
+    http: httpFor(),
+    nowSeconds: nowFor(),
     referenceFor: (token) =>
       reference({
         feeToken: token.address,
@@ -219,10 +259,10 @@ export const executeReviewedGasless = async (input: {
   readonly signHash: StarkHashSigner;
   readonly strkFee: FeeEstimate | null;
 }): Promise<Awaited<ReturnType<typeof submitReviewedGaslessInvoke>>> => {
-  const route = gaslessRoute(input.account.networkId);
+  const route = routeFor(input.account.networkId);
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.account.networkId], input.preferences);
   const state = gaslessRouteReady(route)
-    ? await gaslessAccountState(input.account, rpcUrls)
+    ? await gaslessAccountState(input.account, rpcUrls, providerFor())
     : { deployed: false, liveClassHash: null };
   const strkFee =
     input.strkFee !== null && input.strkFee.unit === "FRI" ? BigInt(input.strkFee.overallFee) : 0n;
@@ -232,10 +272,10 @@ export const executeReviewedGasless = async (input: {
     calls: input.calls,
     deployment: deploymentFor(input.account, state.deployed),
     ...(input.beforeExecute ? { beforeExecute: input.beforeExecute } : {}),
-    http: gaslessHttp,
+    http: httpFor(),
     isAuthorized: input.isAuthorized,
-    nowSeconds: nowSeconds(),
-    readNowSeconds: nowSeconds,
+    nowSeconds: nowFor(),
+    readNowSeconds: nowFor,
     referenceFor: (token) =>
       reference({
         feeToken: token.address,
