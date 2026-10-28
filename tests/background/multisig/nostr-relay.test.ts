@@ -6,44 +6,9 @@ import {
   MULTISIG_NOSTR_RELAYS,
   publishManyNostrGiftWraps,
   publishNostrGiftWrap,
-  type RelaySocketFactory,
   syncNostrGiftWraps,
 } from "../../../apps/extension/src/background/multisig/nostr-relay";
-
-const RECIPIENT = "44".repeat(32);
-const event = (id: string, recipient = RECIPIENT) => ({
-  content: "ciphertext",
-  created_at: 1,
-  id,
-  kind: 1_059,
-  pubkey: "22".repeat(32),
-  sig: "33".repeat(64),
-  tags: [["p", recipient]],
-});
-
-const socketFactory =
-  (
-    sent: string[],
-    respond: (frame: readonly unknown[], socket: WebSocket, url: string) => void,
-    connections: string[] = [],
-  ): RelaySocketFactory =>
-  (url) => {
-    connections.push(url);
-    const socket = {
-      close() {},
-      onclose: null,
-      onerror: null,
-      onmessage: null,
-      onopen: null,
-      send(value: string) {
-        sent.push(`${url}|${value}`);
-        const frame = JSON.parse(value) as readonly unknown[];
-        if (frame[0] !== "CLOSE") respond(frame, socket as WebSocket, url);
-      },
-    } as unknown as WebSocket;
-    queueMicrotask(() => socket.onopen?.(new Event("open")));
-    return socket;
-  };
+import { event, RECIPIENT, socketFactory } from "../../support/nostr-relay-sockets";
 
 describe("Nostr multisig relay", () => {
   test("publishes a recipient-bound gift wrap to each reviewed default relay", async () => {

@@ -1,5 +1,12 @@
 /** Strict response validators for privileged Argent multisig messages. */
-import { hasOnlyKnownKeys, isJson, isRecord } from "@bramble/core/json";
+import {
+  hasOnlyArrayEntries,
+  hasOnlyKnownKeys,
+  isJson,
+  isOwnDataProperty,
+  isRecord,
+  JSON_BUDGETS,
+} from "@bramble/core/json";
 import type {
   ArgentMultisigAuthorityStatus,
   ArgentMultisigConfig,
@@ -190,6 +197,67 @@ export const isArgentMultisigsResponse = (value: unknown): value is ArgentMultis
   value["multisigs"].every(isView) &&
   Array.isArray(value["intents"]) &&
   value["intents"].every(isArgentMultisigSigningIntent);
+
+// Each entry is budgeted and validated on its own. A co-signer can share
+// several individually legal intents whose sum passes the per-message JSON
+// budget; a whole-envelope gate then blanked every multisig and every saved
+// transaction for the user (Sherlock 160). The list keeps the two bounds that
+// gate used to supply: the provider array cap and the indices-only shape.
+const readEntries = <T>(
+  value: unknown,
+  valid: (entry: unknown) => entry is T,
+): readonly T[] | null => {
+  if (
+    !Array.isArray(value) ||
+    value.length > JSON_BUDGETS.provider.maxArrayLength ||
+    !hasOnlyArrayEntries(value)
+  ) {
+    return null;
+  }
+  const entries: T[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (!isOwnDataProperty(descriptor)) continue;
+    const entry: unknown = descriptor.value;
+    if (isJson(entry) && valid(entry)) entries.push(entry);
+  }
+  return entries;
+};
+
+/**
+ * Reads the watched accounts and saved transactions a `wallet.multisigs`
+ * answer carries. Returns `null` when the envelope itself is malformed or past
+ * the provider array bound; otherwise every returned entry was validated and
+ * budgeted on its own, and an entry that fails is dropped while the rest stay
+ * usable. A co-signer's oversized proposals cannot blank the multisig screens.
+ */
+export const readArgentMultisigs = (
+  value: unknown,
+): Pick<ArgentMultisigsResponse, "intents" | "multisigs"> | null => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, ["intents", "multisigs", "ok"])) return null;
+  const multisigs = readEntries(value["multisigs"], isView);
+  const intents = readEntries(value["intents"], isArgentMultisigSigningIntent);
+  return value["ok"] === true && multisigs && intents ? { intents, multisigs } : null;
+};
+
+/**
+ * Reads one add or refresh answer under the same rules as
+ * `readArgentMultisigs`: the account must validate, and each saved
+ * transaction is budgeted on its own and dropped when it fails.
+ */
+export const readArgentMultisig = (
+  value: unknown,
+): {
+  readonly intents: readonly ArgentMultisigSigningIntent[];
+  readonly multisig: ArgentMultisigView;
+} | null => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, ["intents", "multisig", "ok"])) return null;
+  const multisig = value["multisig"];
+  const intents = readEntries(value["intents"], isArgentMultisigSigningIntent);
+  return value["ok"] === true && isJson(multisig) && isView(multisig) && intents
+    ? { intents, multisig }
+    : null;
+};
 
 /**
  * Validates one add or refresh result and rejects unknown fields.

@@ -7,11 +7,25 @@
 import { BRAMBLE_WORDMARK } from "@bramble/ui-kit/brand-mark";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { inputControl, selectField, textareaField, textField } from "@bramble/ui-kit/fields";
+import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "./backup-verify";
+
+/**
+ * The consequence of the network every first-run wallet is created on. The
+ * binder pins onboarding to DEFAULT_NETWORK, so the line follows it: on Starknet
+ * Mainnet it says the wallet holds real funds; on a testnet default there is no
+ * such consequence to state. It replaces the old acknowledgement tickbox with a
+ * stated fact on each step that creates, imports or restores accounts.
+ */
+const MAINNET_CONSEQUENCE = "This wallet is on Starknet Mainnet and holds real funds.";
+const networkConsequence = (): string =>
+  DEFAULT_NETWORK.id === "SN_MAIN"
+    ? `<p class="hint onboarding-network-consequence">${MAINNET_CONSEQUENCE}</p>`
+    : "";
 
 const flowBack = (label: string): string =>
   iconButton({
@@ -149,7 +163,7 @@ const welcomeStep = (ready: boolean): string => `
     </div>
   </section>`;
 
-const methodStep = (): string => `
+const methodStep = (ledgerAvailable = true): string => `
   <section class="onboarding-step" data-onboarding-step="method" hidden>
     ${flowBack("Back to welcome")}
     ${stepHead("wallet", "Import wallet")}
@@ -160,7 +174,7 @@ const methodStep = (): string => `
         "Recovery phrase",
         "Import a recovery phrase from a Bramble, Ready or Braavos wallet.",
       )}
-      ${option("ledger-method-button", "shield", "Ledger hardware wallet")}
+      ${ledgerAvailable ? option("ledger-method-button", "shield", "Ledger hardware wallet") : ""}
       ${option(
         "key-method-button",
         "link",
@@ -176,7 +190,10 @@ const recoveryStep = (): string => `
     ${stepHead("book", "Enter your recovery phrase")}
     <div class="onboarding-fields recovery-fields">
       <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
-      <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+      <div class="recovery-actions">
+        <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+        <button class="onboarding-inline-action" id="phrase-clear" type="button">Clear</button>
+      </div>
       <p id="recovery-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -201,13 +218,13 @@ const generatedStep = (): string => `
       >${recoveryWordInputs("generated")}</div>
       <div class="button-row">
         ${button({
-          attributes: { id: "phrase-toggle" },
+          attributes: { "aria-label": "Show recovery phrase", id: "phrase-toggle" },
           icon: "book",
           label: "Show",
           variant: "secondary",
         })}
         ${button({
-          attributes: { id: "generated-copy-phrase" },
+          attributes: { "aria-label": "Copy recovery phrase", id: "generated-copy-phrase" },
           disabled: true,
           icon: "copy",
           label: "Copy",
@@ -268,6 +285,7 @@ const importKeyStep = (): string => `
     ${flowBack("Back to wallet methods")}
     ${stepHead("wallet", "Import from a private key")}
     <div class="onboarding-fields">
+      <p class="review-flag" role="note">Anyone with this key controls the account.</p>
       ${selectField({
         label: "Account type",
         name: "importKeyContractType",
@@ -295,13 +313,7 @@ const importKeyStep = (): string => `
           spellcheck: false,
         })}
       </div>
-      ${textField({
-        autocomplete: "off",
-        label: "Account address (optional)",
-        name: "importKeyAddress",
-        placeholder: "0x…",
-        spellcheck: false,
-      })}
+      ${networkConsequence()}
       <p id="import-key-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -357,6 +369,7 @@ const recoveryAccountsStep = (): string => `
     ${stepHead("wallet", "Find your accounts")}
     <div class="onboarding-fields">
 ${recoveryScanFields()}
+      ${networkConsequence()}
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -372,37 +385,36 @@ const accountStep = (): string => `
     ${flowBack("Back to passphrase")}
     ${stepHead("wallet", "Review your account")}
     <div class="onboarding-fields">
-      <button
-        class="onboarding-account"
-        id="account-preview"
-        type="button"
-        aria-pressed="false"
-      >
+      <div class="onboarding-account" id="account-preview">
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
           <strong data-preview-label>Primary Bramble account</strong>
           <span data-preview-address>Deriving account…</span>
         </span>
-        <span class="onboarding-account-check">${icon("check")}</span>
-      </button>
+        <span class="onboarding-account-check" aria-hidden="true">${icon("check")}</span>
+      </div>
+      ${networkConsequence()}
       <p id="form-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
         attributes: { id: "create-wallet-button" },
         disabled: true,
-        label: "Add selected account",
+        label: "Finish setup",
         type: "submit",
       })}
     </div>
   </section>`;
 
-const ledgerStep = (status: WalletStatus): string => `
+const ledgerStep = (status: WalletStatus, ledgerAvailable = true): string =>
+  ledgerAvailable
+    ? `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
     ${flowBack("Back to wallet methods")}
     ${stepHead("lock", "Choose a password")}
     <form id="ledger-setup-form" class="onboarding-fields">
       ${passwordFields("ledger")}
+      ${networkConsequence()}
       <p id="ledger-passphrase-result" role="status"></p>
       <div class="onboarding-step-cta">
         ${button({
@@ -412,13 +424,19 @@ const ledgerStep = (status: WalletStatus): string => `
         })}
       </div>
     </form>
-  </section>`;
+  </section>`
+    : "";
 
 /**
  * First-run wizard. It preserves Bramble's real creation and Ledger paths
  * while presenting each decision as one focused, reversible step.
+ *
+ * `ledgerAvailable` false omits the Ledger method and its passphrase step
+ * entirely, so a runtime with no Web Bluetooth, WebUSB or WebHID (Gecko) is
+ * never offered a flow it cannot finish. It defaults to true so a caller that
+ * does not report capability keeps the offered state.
  */
-export const onboardingWizard = (status: WalletStatus): string => `
+export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): string => `
   <!--
   THESIS: First-run security is a short sequence of explicit choices, never one long form.
   OWN-WORLD: Neutral panel over the brand landscape, the wordmark lockup at its centre, one accent for the primary action, semantic green/red only.
@@ -426,10 +444,10 @@ export const onboardingWizard = (status: WalletStatus): string => `
   FIRST VIEWPORT: One centered wallet stage; the Bramble wordmark leads to two full-width actions at the foot.
   FORM: Staged wallet setup based on the supplied reference flow, adapted to Bramble trust boundaries.
   -->
-  <main class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
+  <section class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
     <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready}" novalidate>
       ${welcomeStep(status.ready)}
-      ${methodStep()}
+      ${methodStep(ledgerAvailable)}
       ${recoveryStep()}
       ${generatedStep()}
       ${verifyStep()}
@@ -438,5 +456,5 @@ export const onboardingWizard = (status: WalletStatus): string => `
       ${recoveryAccountsStep()}
       ${accountStep()}
     </form>
-    ${ledgerStep(status)}
-  </main>`;
+    ${ledgerStep(status, ledgerAvailable)}
+  </section>`;

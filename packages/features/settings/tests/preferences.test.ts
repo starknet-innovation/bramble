@@ -176,7 +176,7 @@ describe("createPreferencesStore", () => {
       },
       poolAddress: "0x1",
       proverUrl: "https://prover.example/strk20",
-      subaccountAnonymizerAddress: "0x2",
+      shadowAccountAnonymizerAddress: "0x2",
     };
     await preferences.setStrk20NetworkConfig({ config, networkId: "SN_MAIN" });
     await expect(preferences.read()).resolves.toMatchObject({
@@ -196,7 +196,7 @@ describe("createPreferencesStore", () => {
           discoveryUrl: "https://discovery.example",
           poolAddress: "0x1",
           proverUrl: "http://prover.example",
-          subaccountAnonymizerAddress: "0x2",
+          shadowAccountAnonymizerAddress: "0x2",
         },
         networkId: "SN_MAIN",
       }),
@@ -369,6 +369,24 @@ describe("createPreferencesStore", () => {
     delete (legacy as Record<string, unknown>)["hiddenTokens"];
     await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
     expect((await createPreferencesStore({ store }).read()).hiddenTokens).toBeUndefined();
+  });
+
+  test("hides and reveals accounts and stays compatible with legacy backups", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+    const accountId = "SN_MAIN:0x1";
+
+    await preferences.setAccountHidden({ accountId, hidden: true });
+    expect((await preferences.read()).hiddenAccountIds).toEqual([accountId]);
+    await preferences.setAccountHidden({ accountId, hidden: true });
+    expect((await preferences.read()).hiddenAccountIds).toEqual([accountId]);
+    await preferences.setAccountHidden({ accountId, hidden: false });
+    expect((await preferences.read()).hiddenAccountIds).toEqual([]);
+
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["hiddenAccountIds"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+    expect((await createPreferencesStore({ store }).read()).hiddenAccountIds).toBeUndefined();
   });
 
   test("creates, edits, assigns, and removes account groups", async () => {

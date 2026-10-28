@@ -52,12 +52,20 @@ fn is_dotted_quad(host: &str) -> bool {
         })
 }
 
+// The host as the extension's WHATWG parser would print it back: lowercase names, an IPv4 address
+// in plain dotted-quad form, an IPv6 literal in its compressed RFC 5952 form. Any other spelling
+// the parser would rewrite is refused, so mobile accepts a subset of the extension's canonical
+// relay URLs.
 fn is_host(host: &str) -> bool {
     if let Some(inner) = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
-        return inner.contains(':')
+        // An embedded IPv4 tail prints differently in the two serializers; refuse it.
+        return !inner.contains('.')
             && inner
-                .bytes()
-                .all(|b| b.is_ascii_hexdigit() || b == b':' || b == b'.');
+                .parse::<std::net::Ipv6Addr>()
+                .is_ok_and(|address| address.to_string() == inner);
+    }
+    if host.bytes().any(|b| b.is_ascii_uppercase()) {
+        return false;
     }
     let name = host.strip_suffix('.').unwrap_or(host);
     let labels: Vec<&str> = name.split('.').collect();
@@ -70,20 +78,32 @@ fn is_host(host: &str) -> bool {
     labels.iter().all(|label| is_host_label(label))
 }
 
+// Whether the path and query are already in the parser's canonical form: a query follows a path
+// (it prints `host/?q`, never `host?q`), no `.` or `..` segment (it resolves them, `%2e` spellings
+// included) and no `'` in the query (it percent-encodes it).
+fn is_canonical_tail(tail: &str) -> bool {
+    if tail.starts_with('?') {
+        return false;
+    }
+    let (path, query) = tail.split_once('?').unwrap_or((tail, ""));
+    let dot_segment = path.split('/').any(|segment| {
+        let lowered = segment.to_ascii_lowercase().replace("%2e", ".");
+        lowered == "." || lowered == ".."
+    });
+    !dot_segment && !query.contains('\'')
+}
+
 /// Whether `value` is a relay URL mobile can connect to: `wss://host[:port][/path][?query]` in
-/// plain ASCII, with no credentials or fragment. This is a strict subset of the extension's
-/// `isNostrRelayUrl` (WHATWG parsing, `wss:` anywhere, `ws:` on loopback). Mobile refuses `ws:`
+/// plain ASCII, with no credentials or fragment, spelled exactly as the extension's WHATWG parser
+/// prints it. This is a strict subset of the extension's `isNostrRelayUrl`, which accepts only a
+/// URL already in canonical form (`wss:` anywhere, `ws:` on loopback). Mobile refuses `ws:`
 /// because App Transport Security and `usesCleartextTraffic=false` would block it, and refuses the
 /// exotic spellings WHATWG repairs (IDN hosts, `@`, an empty `#`); the parity vectors list both.
 pub fn is_relay_url(value: &str) -> bool {
     if value.is_empty() || value.len() > 2048 || !value.is_ascii() {
         return false;
     }
-    let Some(rest) = value
-        .get(..6)
-        .filter(|scheme| scheme.eq_ignore_ascii_case("wss://"))
-        .map(|_| &value[6..])
-    else {
+    let Some(rest) = value.strip_prefix("wss://") else {
         return false;
     };
     let split = rest.find(['/', '?']).unwrap_or(rest.len());
@@ -92,16 +112,49 @@ pub fn is_relay_url(value: &str) -> bool {
         Some(index) => (&authority[..index], Some(&authority[index + 1..])),
         None => (authority, None),
     };
+    // The parser drops the default port and leading zeros.
     let port_ok = port.is_none_or(|port| {
         !port.is_empty()
             && port.len() <= 5
             && port.bytes().all(|b| b.is_ascii_digit())
-            && port.parse::<u32>().is_ok_and(|n| n <= 65_535)
+            && (port == "0" || !port.starts_with('0'))
+            && port.parse::<u32>().is_ok_and(|n| n <= 65_535 && n != 443)
     });
     let tail_ok = tail
         .bytes()
         .all(|b| b.is_ascii_alphanumeric() || b"-._~!$&'()*+,;=:@/?%".contains(&b));
-    is_host(host) && port_ok && tail_ok
+    is_host(host) && port_ok && tail_ok && is_canonical_tail(tail)
+}
+
+/// Brings a relay URL an earlier build stored to the current rule, as the extension's
+/// `normalizeStoredWebSocketServiceUrl` does: earlier builds accepted any case in the scheme and
+/// host and the default port. Lowercasing those and dropping `:443` (or a zero-padded port) makes
+/// the same connection; `None` when even that spelling is refused, so the caller falls back.
+pub fn stored_relay_url(value: &str) -> Option<String> {
+    if is_relay_url(value) {
+        return Some(value.to_string());
+    }
+    let rest = value
+        .get(6..)
+        .filter(|_| value[..6].eq_ignore_ascii_case("wss://"))?;
+    let split = rest.find(['/', '?']).unwrap_or(rest.len());
+    let (authority, tail) = rest.split_at(split);
+    let authority = authority.to_ascii_lowercase();
+    let authority = match authority
+        .rsplit_once(':')
+        .filter(|_| !authority.ends_with(']'))
+    {
+        Some((host, port)) if port.bytes().all(|b| b.is_ascii_digit()) && !port.is_empty() => {
+            match port.parse::<u32>().ok()? {
+                443 => host.to_string(),
+                number => format!("{host}:{number}"),
+            }
+        }
+        _ => authority,
+    };
+    let slash = if tail.starts_with('?') { "/" } else { "" };
+    let candidate = format!("wss://{authority}{slash}{tail}");
+    is_relay_url(&candidate).then_some(candidate)
 }
 
 /// Trims a relay URL typed in settings. `Ok(None)` restores the reviewed defaults.

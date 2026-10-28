@@ -77,6 +77,20 @@ describe("account drawer folder edge cases", () => {
     expect(home?.querySelectorAll(".drawer-account-item").length).toBe(2);
   });
 
+  test("keeps hidden accounts out of the drawer's account list", () => {
+    const rendered = document
+      .createRange()
+      .createContextualFragment(
+        accountDrawer(status, acctA, { ...preferences, hiddenAccountIds: [acctB.id] }),
+      );
+
+    // The wallet still holds the account; the drawer just stops listing it, so
+    // hiding is not a removal and nothing on this surface offers to reveal it.
+    expect(rendered.querySelectorAll(".drawer-account-item").length).toBe(1);
+    expect(rendered.querySelector(`[data-switch-account="${acctB.id}"]`)).toBeNull();
+    expect(rendered.querySelector(`[data-switch-account="${acctA.id}"]`)).not.toBeNull();
+  });
+
   test("the drawer keeps no group-CRUD controls of its own", () => {
     const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer");
 

@@ -6,6 +6,7 @@ import {
   isDetectTokensResponse,
   isPricesResponse,
   isTokenChartResponse,
+  readDetectedTokens,
 } from "../../../src/popup/responses/responses";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
@@ -28,6 +29,23 @@ describe("isDetectTokensResponse", () => {
       isDetectTokensResponse({ ok: true, suggestions: [{ ...suggestion, symbol: "bad!" }] }),
     ).toBe(false);
     expect(isDetectTokensResponse({ ok: true, suggestions: "nope" })).toBe(false);
+  });
+});
+
+describe("readDetectedTokens", () => {
+  test("keeps valid rows, drops refused or repeated ones, and refuses a malformed envelope", () => {
+    expect<unknown>(
+      readDetectedTokens({
+        ok: true,
+        suggestions: [{ ...suggestion, symbol: "bad!" }, suggestion],
+      }),
+    ).toEqual([suggestion]);
+    expect<unknown>(
+      readDetectedTokens({ ok: true, suggestions: [suggestion, suggestion] }),
+    ).toEqual([suggestion]);
+    expect<unknown>(readDetectedTokens({ ok: true, suggestions: "nope" })).toBeNull();
+    expect<unknown>(readDetectedTokens({ ok: false, suggestions: [] })).toBeNull();
+    expect<unknown>(readDetectedTokens({ extra: 1, ok: true, suggestions: [] })).toBeNull();
   });
 });
 

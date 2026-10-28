@@ -6,6 +6,12 @@ import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { STARK_CURVE_ORDER } from "@bramble/wallet-model/networks";
 
 const createModule = (signatureR = "0x1") => ({
+  deriveArgentLegacyKeypair() {
+    return {
+      private_key: "0x321",
+      public_key_x: "0xcba",
+    };
+  },
   deriveNostrPublicKey() {
     return { public_key: "11".repeat(32) };
   },

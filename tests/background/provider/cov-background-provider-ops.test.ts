@@ -72,6 +72,7 @@ const providerDeps = (locked: boolean): ProviderOpsDeps => {
     session.unlock(vaultPassphrase);
   }
   return {
+    activity: { list: async () => [] },
     allowanceStore: memoryAllowanceStore(),
     approvals: createApprovalQueue(),
     extension: chromiumExtension(EXTENSION_ID),
@@ -85,6 +86,42 @@ const providerDeps = (locked: boolean): ProviderOpsDeps => {
 };
 
 const invoke = { calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "do_thing" }] };
+
+const POOL = "0x123";
+const proof = { data: "opaque", output: ["0x1"], proof_facts: ["0x2"] };
+const poolBatch = { calls: [{ calldata: [], contractAddress: POOL, entrypoint: "apply_actions" }] };
+
+// Unlocked, connected, with STRK20 routing on the account's network.
+const proofDeps = (runtimeRpc: object): InvokeExecuteDeps => {
+  const session = createUnlockSession();
+  session.unlock(vaultPassphrase);
+  return {
+    activity: memoryActivityLog(),
+    allowanceStore: memoryAllowanceStore(),
+    preferencesStore: {
+      async read() {
+        // Complete enough for the shared trusted-set builder every submit path
+        // runs (verificationContext): a stub missing these lists would fail the
+        // bookkeeping rather than the behaviour under test.
+        return {
+          activeNetworkId: "SN_MAIN",
+          addressBook: [],
+          nfts: [],
+          strk20Networks: { SN_MAIN: { poolAddress: POOL } },
+          tokens: [],
+        };
+      },
+    } as unknown as InvokeExecuteDeps["preferencesStore"],
+    runtimeRpc: runtimeRpc as unknown as RuntimeRpc,
+    session,
+    wallet: {
+      ...(wallet as object),
+      async getGrantedAccounts() {
+        return [account];
+      },
+    } as unknown as InvokeExecuteDeps["wallet"],
+  };
+};
 
 describe("handleProviderOps guards", () => {
   test("rejects a malformed getPermissions request", async () => {
@@ -348,48 +385,67 @@ describe("executeInvokeApproval failure branches", () => {
     ).resolves.toEqual({ error: "origin not connected" });
   });
 
-  test("preserves a sanitized RPC reason for a proof-bearing invoke failure", async () => {
-    const session = createUnlockSession();
-    session.unlock(vaultPassphrase);
+  test("preserves a sanitized RPC reason for a proof-bearing pool batch failure", async () => {
     const rpcFailure = Object.assign(new Error("request body must not surface"), {
       baseError: { code: -32_005, data: null, message: "rate limit exceeded" },
     });
-    const deps: InvokeExecuteDeps = {
-      activity: memoryActivityLog(),
-      allowanceStore: memoryAllowanceStore(),
-      preferencesStore: {
-        async read() {
-          // Complete enough for the shared trusted-set builder every submit path
-          // runs (verificationContext): a stub missing these lists would fail the
-          // bookkeeping rather than the behaviour under test.
-          return { activeNetworkId: "SN_MAIN", addressBook: [], nfts: [], tokens: [] };
+    const deps = proofDeps({
+      strk20: {
+        async submitPrepared() {
+          throw rpcFailure;
         },
-      } as unknown as InvokeExecuteDeps["preferencesStore"],
-      runtimeRpc: {
-        strk20: {
-          async submitPrepared() {
-            throw rpcFailure;
-          },
-        },
-      } as unknown as RuntimeRpc,
-      session,
-      wallet: {
-        ...(wallet as object),
-        async getGrantedAccounts() {
-          return [account];
-        },
-      } as unknown as InvokeExecuteDeps["wallet"],
-    };
+      },
+    });
     await expect(
-      executeInvokeApproval(deps, {
-        origin: ORIGIN,
-        payload: {
-          ...invoke,
-          proof: { data: "opaque", output: ["0x1"], proof_facts: ["0x2"] },
-        },
-      }),
+      executeInvokeApproval(deps, { origin: ORIGIN, payload: { ...poolBatch, proof } }),
     ).resolves.toEqual({
       error: "strk20 services unavailable (submission/rate-limited): -32005 rate limit exceeded",
     });
+  });
+});
+
+// A SNIP-36 app proof (e.g. a CoinFlip `settle`) is not a privacy batch: only a
+// batch that touches the configured pool goes to the STRK20 lane.
+describe("executeInvokeApproval proof routing", () => {
+  const routed = () => {
+    const lanes: { lane: string; calls: unknown; proof: unknown }[] = [];
+    const deps = proofDeps({
+      strk20: {
+        async submitPrepared(input: { calls: unknown; proof: unknown }) {
+          lanes.push({ calls: input.calls, lane: "strk20", proof: input.proof });
+          return { transactionHash: "0xa1" };
+        },
+      },
+      async submitInvokeTransaction(input: { calls: unknown; proof: unknown }) {
+        lanes.push({ calls: input.calls, lane: "rpc", proof: input.proof });
+        return { transactionHash: "0xb2" };
+      },
+    });
+    return { deps, lanes };
+  };
+
+  test("submits a non-pool proof-bearing invoke on the normal lane with its proof", async () => {
+    const { deps, lanes } = routed();
+    await expect(
+      executeInvokeApproval(deps, { origin: ORIGIN, payload: { ...invoke, proof } }),
+    ).resolves.toEqual({ ok: true, transactionHash: "0xb2" });
+    expect(lanes).toEqual([{ calls: invoke.calls, lane: "rpc", proof }]);
+  });
+
+  test("still sends a pool apply_actions batch to the STRK20 lane", async () => {
+    const { deps, lanes } = routed();
+    await expect(
+      executeInvokeApproval(deps, { origin: ORIGIN, payload: { ...poolBatch, proof } }),
+    ).resolves.toEqual({ ok: true, transactionHash: "0xa1" });
+    expect(lanes).toEqual([{ calls: poolBatch.calls, lane: "strk20", proof }]);
+  });
+
+  test("keeps a mis-addressed apply_actions batch on the STRK20 lane, which refuses it", async () => {
+    const { deps, lanes } = routed();
+    const stray = {
+      calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "apply_actions" }],
+    };
+    await executeInvokeApproval(deps, { origin: ORIGIN, payload: { ...stray, proof } });
+    expect(lanes.map(({ lane }) => lane)).toEqual(["strk20"]);
   });
 });

@@ -80,7 +80,7 @@ const dashboardWithNft = (
     {},
     [],
     null,
-    [],
+    { entries: [], notices: [], unavailable: false },
     selectedNftId,
     {},
     [],
@@ -162,7 +162,7 @@ describe("cluster views", () => {
       {},
       [],
       null,
-      [allowance],
+      { entries: [allowance], notices: [], unavailable: false },
     );
     expect(html).toContain('data-revoke-allowance="SN_MAIN:0x49d3657:0x5abcdef1234"');
     expect(html).toContain("Revoke");
@@ -195,7 +195,7 @@ describe("cluster views", () => {
         {},
         [],
         null,
-        [view],
+        { entries: [view], notices: [], unavailable: false },
       );
 
     expect(listing({ ...allowance, lowerBound: true })).toContain("at least 1,000");
@@ -229,7 +229,7 @@ describe("cluster views", () => {
       {},
       [],
       null,
-      [{ ...allowance, unconfirmedToken: true }],
+      { entries: [{ ...allowance, unconfirmedToken: true }], notices: [], unavailable: false },
     );
     expect(html).toContain("may be an NFT item id");
     expect(html).not.toContain("data-revoke-allowance");

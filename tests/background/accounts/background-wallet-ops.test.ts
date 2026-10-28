@@ -168,15 +168,23 @@ describe("wallet operations", () => {
     expect(activity[0]?.hash).toBe("0x7ab");
     expect(activity[0]?.status).toBe("accepted");
     expect(activity[0]?.summary).toContain("Send 1.5 ETH");
+    // Recorded as outgoing, so the feed never reads the direction from the
+    // symbol in the summary (Sherlock 196).
+    expect((activity[0] as { direction?: string } | undefined)?.direction).toBe("out");
     expect(statusRequests).toEqual([["0x7ab"]]);
     const stored = await activityLog.list();
     expect(stored.find((entry) => entry.hash === "0x8ab")?.status).toBe("pending");
     expect(stored.find((entry) => entry.hash === "0x9ab")?.status).toBe("pending");
+    // The sent token's address is recorded with its symbol (issue 643), so two
+    // tracked tokens that share a symbol stay apart in the feed.
+    expect(stored.find((entry) => entry.hash === "0x7ab")?.tokenAddress).toBe(
+      `0x${BigInt(tokenId.split(":")[2] ?? "").toString(16)}`,
+    );
   });
 
   test("surfaces a pre-confirmed transaction as provisional in the feed", async () => {
     const { handler } = makeHarness({
-      statusReport: { finalizedOnL1: false, found: true, status: "preconfirmed" },
+      statusReport: { finalizedOnL1: false, found: true, seen: true, status: "preconfirmed" },
     });
     await handler(
       {
@@ -197,7 +205,7 @@ describe("wallet operations", () => {
 
   test("drains a late-failure notice exactly once through wallet.transactionAlerts", async () => {
     const { activity: activityLog, handler } = makeHarness({
-      statusReport: { finalizedOnL1: false, found: true, status: "reverted" },
+      statusReport: { finalizedOnL1: false, found: true, seen: true, status: "reverted" },
     });
     await activityLog.record({
       accountId: account.id,

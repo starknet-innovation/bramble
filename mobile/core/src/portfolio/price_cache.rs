@@ -39,8 +39,13 @@ pub(super) struct PriceCache {
     pub(super) attempted: Option<OrderedMap<f64>>,
     pub(super) changes: Option<OrderedMap<f64>>,
     pub(super) checked: Option<Vec<String>>,
+    /// The last write; kept for the stored shape only, never for freshness.
     pub(super) fetched_at: f64,
     pub(super) prices: OrderedMap<Entry>,
+    /// Per normalized address, when the feed last answered for it (`prices-cache.ts`). An
+    /// address absent here has no vouched age and is never fresh, including every address in a
+    /// cache written before per-address tracking (mc-wallet #357).
+    pub(super) refreshed: Option<OrderedMap<f64>>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,7 +98,14 @@ pub(super) fn parse_price_cache(value: Option<&JsValue>) -> Option<PriceCache> {
     let value = value?;
     if !has_only_keys(
         value,
-        &["attempted", "changes", "checked", "fetchedAt", "prices"],
+        &[
+            "attempted",
+            "changes",
+            "checked",
+            "fetchedAt",
+            "prices",
+            "refreshed",
+        ],
     ) {
         return None;
     }
@@ -115,6 +127,10 @@ pub(super) fn parse_price_cache(value: Option<&JsValue>) -> Option<PriceCache> {
                 .collect::<Option<Vec<_>>>()?,
         ),
     };
+    let refreshed = match optional("refreshed") {
+        None => None,
+        Some(v) => Some(number_map(v)?),
+    };
     let mut prices = OrderedMap::default();
     for (key, entry) in value.get("prices")?.as_object()? {
         prices.insert(key.clone(), entry_of(entry)?);
@@ -125,6 +141,57 @@ pub(super) fn parse_price_cache(value: Option<&JsValue>) -> Option<PriceCache> {
         checked,
         fetched_at: finite(value.get("fetchedAt"))?,
         prices,
+        refreshed,
+    })
+}
+
+// `withinWindow`: a time not in the future and less than `window_ms` old.
+pub(super) fn within_window(at: Option<&f64>, now_ms: f64, window_ms: f64) -> bool {
+    at.is_some_and(|at| *at <= now_ms && now_ms - *at < window_ms)
+}
+
+/// `pricesFresh`: the feed answered for every wanted address within `ttl_ms`.
+pub(super) fn prices_fresh(
+    cache: &PriceCache,
+    wanted: &[String],
+    now_ms: f64,
+    ttl_ms: f64,
+) -> bool {
+    wanted.iter().all(|address| {
+        within_window(
+            cache.refreshed.as_ref().and_then(|r| r.get(address)),
+            now_ms,
+            ttl_ms,
+        )
+    })
+}
+
+/// `oldestRefresh`: the capture time to report, the oldest refresh among the wanted addresses
+/// that contribute a price (or, when none is priced, among the refreshed ones). `None` when a
+/// contributing price has no vouched age.
+pub(super) fn oldest_refresh(cache: &PriceCache, wanted: &[String]) -> Option<f64> {
+    let refreshed = |address: &String| cache.refreshed.as_ref().and_then(|r| r.get(address));
+    let priced: Vec<&String> = wanted
+        .iter()
+        .filter(|address| cache.prices.get(address).is_some())
+        .collect();
+    let basis: Vec<&String> = if priced.is_empty() {
+        wanted.iter().filter(|a| refreshed(a).is_some()).collect()
+    } else {
+        priced
+    };
+    let oldest = basis
+        .iter()
+        .map(|address| refreshed(address).copied().unwrap_or(0.0))
+        .reduce(f64::min)?;
+    (oldest > 0.0).then_some(oldest)
+}
+
+/// `cacheCovers`: every wanted address is priced or known to be unlisted.
+pub(super) fn cache_covers(cache: &PriceCache, wanted: &[String]) -> bool {
+    wanted.iter().all(|address| {
+        cache.prices.get(address).is_some()
+            || cache.checked.as_ref().is_some_and(|c| c.contains(address))
     })
 }
 
@@ -178,10 +245,6 @@ pub(super) fn project(
         as_of_ms: as_of,
         stale,
     }
-}
-
-pub(super) fn snapshot_as_of(fetched_at: f64) -> Option<f64> {
-    (fetched_at > 0.0).then_some(fetched_at)
 }
 
 pub(super) fn wanted_addresses(addresses: &[String]) -> Vec<String> {
@@ -326,6 +389,9 @@ pub(super) fn state_document(state: &State) -> String {
     }
     price_doc.insert("fetchedAt".into(), to_value(cache.fetched_at));
     price_doc.insert("prices".into(), Value::Object(prices));
+    if let Some(refreshed) = &cache.refreshed {
+        price_doc.insert("refreshed".into(), map_value(refreshed));
+    }
     let mut charts = Map::new();
     for (key, c) in state.charts.entries() {
         let mut entry = Map::new();

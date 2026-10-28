@@ -103,14 +103,16 @@ version **must be strictly greater** than the currently published one.
 ```sh
 bun install --frozen-lockfile
 bun run vendor:argent      # verifies the pinned official Argent release
-bun run build              # writes dist/
-bun run package:extension  # writes artifacts/bramble-<version>.zip (+ .sha256)
+bun run package:extension           # writes artifacts/bramble-<version>.zip (+ .sha256)
+bun run package:extension:firefox   # writes artifacts/bramble-firefox-<version>.zip (+ .sha256)
+bun run check:firefox               # AMO's validator over dist-firefox/
 ```
 
 `scripts/package-extension.ts` produces a **reproducible** zip (normalized
-mtimes, pinned file set) plus a matching `.sha256`. The bytes on the Release
-page, in the Chrome Web Store, and in the CI `bramble-extension` artifact are
-therefore identical for a given commit.
+mtimes, pinned file set) plus a matching `.sha256`, so a rebuild of the same
+commit on the same toolchain should give the same bytes. No workflow compares
+the Release zip with the CI `bramble-extension` artifact: the release build's
+checksum step only checks the zip against the `.sha256` it wrote itself.
 
 Verify the checksum before trusting a zip:
 
@@ -145,11 +147,13 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
    idempotent, so a re-run never double-cuts);
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
-   as CI does, runs `vendor:argent`/`build`/`package:extension`, re-asserts the
-   tag ↔ version gate, verifies the `.zip` matches its `.sha256`, and uploads the
-   `bramble-release` artifact. A separate hosted job that never checks out
-   wallet source creates the **GitHub Release** with the zip + `.sha256`
-   attached.
+   as CI does, runs `vendor:argent`, builds and packages both browser targets,
+   runs AMO's validator (`check:firefox`) over the Gecko build, re-asserts the
+   tag ↔ version gate, verifies each `.zip` matches its `.sha256`, and uploads
+   the `bramble-release` artifact. A separate hosted job that never checks out
+   wallet source creates the **GitHub Release** with both zips and their
+   `.sha256` files attached: `bramble-<version>.zip` for Chromium and
+   `bramble-firefox-<version>.zip` for addons.mozilla.org.
 
 Release notes come from the matching `CHANGELOG.md` section (issue #60) — kept
 current on the release branch via `bun run changelog` — falling back to a
@@ -170,7 +174,8 @@ A tag that does not match `v*` triggers nothing.
 ### Cutting a release (manual fallback)
 
 Run steps 1-2 locally, then create the Release by hand (Releases → Draft a new
-release), attaching `artifacts/bramble-<version>.zip` and its `.sha256`.
+release), attaching `artifacts/bramble-<version>.zip`,
+`artifacts/bramble-firefox-<version>.zip`, and their `.sha256` files.
 
 Creating the release via the GitHub UI is also supported: the release step is
 create-or-upload, so it attaches the built assets to an existing (UI-created)
@@ -332,6 +337,23 @@ window) is a dashboard-only option and is intentionally not automated.
   goes through review, so expect the same latency.
 - **User impact:** users on the bad version keep it until the corrected version
   passes review and their browser auto-updates the extension.
+
+### Never roll back; roll forward
+
+Upgrades are one-way. Once a user unlocks a new version, the wallet migrates
+their vault and preferences, and an older build can't open them: v0.10.5, for
+example, refuses a v0.10.6 vault as an unsupported schema. The vault and
+preferences stay intact while it is refused, and installing the current version
+again over the old one reopens them; removing the extension deletes them.
+Activity is not protected the same way: an older build drops activity rows it
+can't parse, and its next activity write (status reconciliation runs without an
+unlock) stores the list without them.
+
+So never republish, re-tag or attach an older version, on any channel. To pull
+a bad release, ship a patch with a higher version (vX.Y.Z+1) that contains the
+fix or the last good code. The Chrome Web Store refuses a lower version, but
+AMO and self-hosted zips don't, so this rule is the only guard there. User-facing
+recovery steps are in the README ("Upgrading") and on the website support page.
 
 ## 9. Where automation hooks in
 

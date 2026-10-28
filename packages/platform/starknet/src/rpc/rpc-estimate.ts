@@ -2,7 +2,7 @@
 
 import { WalletError } from "@bramble/core/errors";
 import type { RpcProvider } from "starknet";
-import { isCompatibleAccountDeployed } from "../transactions/deployment";
+import { isCompatibleAccountDeployed, refuseUndeployedBraavos } from "../transactions/deployment";
 import { type FeeEstimate, reviewedSpendFor } from "./fee-bounds";
 import { estimateExactInvokeFee } from "./invoke-fee";
 import { argentQueryAccount, krustyAccount, withRpcFallback } from "./provider";
@@ -29,6 +29,7 @@ export const estimateInvokeFee = async (
         ? argentQueryAccount(provider, account)
         : krustyAccount(provider, account, signHash);
       const deployed = await isCompatibleAccountDeployed(provider, account);
+      refuseUndeployedBraavos(account, deployed);
       const estimate = await estimateExactInvokeFee(
         starknetAccount,
         account,

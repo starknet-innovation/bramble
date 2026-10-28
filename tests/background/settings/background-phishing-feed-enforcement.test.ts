@@ -58,7 +58,8 @@ const walletStub = {
       importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 10 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

@@ -12,8 +12,10 @@
  * call is reported as opaque rather than as safe.
  */
 
+import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-discovery";
-import { asFelt, sameFelt } from "@bramble/wallet-model/networks";
+import { AVNU_MULTI_ROUTE_SWAP } from "@bramble/wallet-model/avnu-route";
+import { asFelt, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import {
   canonical,
@@ -42,6 +44,7 @@ export type {
  */
 export {
   isWatchedNftContract,
+  trustedTokens,
   verificationContext,
 } from "./verify-decode";
 
@@ -50,8 +53,11 @@ export {
  */
 export type RiskFlagCode =
   | "address-poisoning"
+  | "foreign-beneficiary"
   | "operator-approval"
   | "self-transfer"
+  | "token-contract-recipient"
+  | "undecoded-swap"
   | "unknown-contract"
   | "unlimited-approval";
 
@@ -108,14 +114,41 @@ export const refuseOnAccountSelfCall = (
     ? { error: "Dapps cannot call the wallet account contract itself" }
     : null;
 
+// The visible `0x` + four digits a felt shows in each zero-padded spelling,
+// from the canonical form up to the 64-digit padded one. Past four leading
+// zeros every spelling renders `0x0000`, so the set is at most five windows.
+const displayPrefixes = (value: string): ReadonlySet<string> => {
+  const digits = value.startsWith("0x") ? value.slice(2) : value;
+  const maxZeros = Math.min(4, Math.max(0, 64 - digits.length));
+  const prefixes = new Set<string>();
+  for (let zeros = 0; zeros <= maxZeros; zeros += 1) {
+    prefixes.add(`${"0".repeat(zeros)}${digits}`.slice(0, 4));
+  }
+  return prefixes;
+};
+
 /**
  * Detects address poisoning: a candidate that visually mimics a trusted
  * address (same leading and trailing digits) while being a different account.
+ * Every spelling the wallet can render is compared, not only the canonical
+ * form (accounts) and the 64-digit padded form (contacts): a typed recipient is
+ * labelled with the spelling the user pasted, so an attacker who hands out a
+ * partially zero-padded address controls which window is displayed. Matching
+ * only the canonical window let 15 of every 16 twins of a padded contact pass,
+ * and matching canonical plus padded still let a one-leading-zero spelling
+ * render exactly like the padded contact (audit #242).
  */
 export const isLookalikeAddress = (candidate: string, trusted: string): boolean => {
-  const left = canonical(candidate);
-  const right = canonical(trusted);
-  return left !== right && shortAddress(left) === shortAddress(right);
+  const left = canonical(candidate).toLowerCase();
+  const right = canonical(trusted).toLowerCase();
+  if (left === right) {
+    return false;
+  }
+  if (left.slice(-4) !== right.slice(-4)) {
+    return false;
+  }
+  const trustedPrefixes = displayPrefixes(right);
+  return [...displayPrefixes(left)].some((prefix) => trustedPrefixes.has(prefix));
 };
 
 // Each rule is a pure predicate returning the flag it raises or null; the
@@ -279,19 +312,96 @@ const selfTransferFlag = (recipient: string, context: VerificationContext): Risk
     ? { code: "self-transfer", message: "The recipient is this wallet's own address." }
     : null;
 
+const TOKEN_CONTRACT_RECIPIENT_FLAG: RiskFlag = {
+  code: "token-contract-recipient",
+  message: "This is a token contract, not a wallet. Tokens sent here are usually lost.",
+};
+
+// A payment whose recipient is a token contract the wallet knows (STRK, a
+// curated token on this network, or one this account tracks) almost always
+// strands the funds: a token contract holds no keys to send them back (QA I10).
+// A warning, not a refusal: only address poisoning refuses.
+const tokenContractRecipientFlag = (
+  recipient: string,
+  context: VerificationContext,
+): RiskFlag | null => {
+  if (!recipient) {
+    return null;
+  }
+  const tokens = [
+    STRK_TOKEN_ADDRESS,
+    ...knownTokensForNetwork(context.account.networkId).map((token) => token.address),
+    ...context.tokens.map((token) => token.address),
+  ];
+  return tokens.some((token) => sameFelt(recipient, token)) ? TOKEN_CONTRACT_RECIPIENT_FLAG : null;
+};
+
 const addressPoisoningFlag = (recipient: string, context: VerificationContext): RiskFlag | null => {
   if (!recipient) {
     return null;
   }
-  const trusted = [context.account.address, ...context.addressBook.map((entry) => entry.address)];
+  // Every address the user can be expected to recognize: this account, their
+  // other accounts, saved contacts, and recipients this wallet has paid (audit
+  // #163). Chain-discovered history is deliberately absent — see
+  // `walletPaidRecipients`.
+  const trusted = [
+    context.account.address,
+    ...(context.ownAccounts ?? []),
+    ...context.addressBook.map((entry) => entry.address),
+    ...(context.recentRecipients ?? []),
+  ];
   return trusted.some((known) => isLookalikeAddress(recipient, known))
     ? {
         code: "address-poisoning",
         message:
-          "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending.",
+          "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
       }
     : null;
 };
+
+// A swap that pays its proceeds anywhere but the signing account is how a
+// connected page takes the whole output of a swap the user approves, behind a
+// line naming the genuine router. Read from the selector's beneficiary felt,
+// not from the decode, so it still fires on a span the decoder refused.
+const foreignBeneficiaryFlag = (
+  beneficiary: string,
+  context: VerificationContext,
+): RiskFlag | null =>
+  beneficiary && !sameFelt(beneficiary, context.account.address)
+    ? {
+        code: "foreign-beneficiary",
+        message: `This swap pays its proceeds to ${shortAddress(canonical(beneficiary))}, not to this account. Reject it unless you meant to send them there.`,
+      }
+    : null;
+
+const UNDECODED_SWAP_FLAG: RiskFlag = {
+  code: "undecoded-swap",
+  message:
+    "The wallet could not read this swap's payee or minimum output. Reject it unless you trust this site.",
+};
+
+// The payee rules for one call. A swap into the signing account is the ordinary
+// case, so on the swap selector the self-send note gives way to the
+// foreign-beneficiary warning and, when the pinned decoder refused the span, to
+// the flag saying the payee and floor were never shown. Poisoning applies to
+// every selector that names a payee.
+const recipientFlags = (
+  call: Call,
+  decoded: DecodedCall,
+  recipient: string,
+  context: VerificationContext,
+): readonly (RiskFlag | null)[] =>
+  call.entrypoint === AVNU_MULTI_ROUTE_SWAP
+    ? [
+        decoded.kind === "swap" ? null : UNDECODED_SWAP_FLAG,
+        foreignBeneficiaryFlag(recipient, context),
+        addressPoisoningFlag(recipient, context),
+      ]
+    : [
+        selfTransferFlag(recipient, context),
+        tokenContractRecipientFlag(recipient, context),
+        addressPoisoningFlag(recipient, context),
+      ];
 
 // `unlimitedApproval` and `operatorApproval` are decided across the whole
 // transaction rather than from this call alone, so a grant split into several
@@ -315,8 +425,7 @@ const flagsForCall = (
     unknownContractFlag(call, known),
     raised.unlimitedApproval ? UNLIMITED_APPROVAL_FLAG : null,
     raised.operatorApproval ? OPERATOR_APPROVAL_FLAG : null,
-    selfTransferFlag(recipient, context),
-    addressPoisoningFlag(recipient, context),
+    ...recipientFlags(call, decoded, recipient, context),
   ];
   return candidates.filter((flag): flag is RiskFlag => flag !== null);
 };

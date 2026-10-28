@@ -23,7 +23,7 @@ export const ELEVATION_COMPONENTS = {
   approvalLive: ".approval-live",
   dock: ".wallet-dock",
   nftArtPressed: "button.nft-open:not(:disabled):active .nft-art",
-  onboardingAccountSelected: '.onboarding-account[aria-pressed="true"]',
+  onboardingAccountSelected: ".onboarding-account",
   onboardingComplete: ".onboarding-complete",
   onboardingContractSelected: '.onboarding-contract[aria-pressed="true"]',
   onboardingWizard: ".onboarding-wizard",

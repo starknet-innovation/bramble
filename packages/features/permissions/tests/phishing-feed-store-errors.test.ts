@@ -1,7 +1,8 @@
 /**
  * createPhishingFeed swallows storage failures rather than letting them break a
  * refresh: a rejecting store.get is treated as "no cache" and a rejecting
- * store.set still lets the freshly fetched list become the live snapshot. These
+ * store.set still lets the freshly fetched list become the live snapshot (and is
+ * reported through cacheWriteFailed). These
  * exercise the two best-effort .catch handlers on the storage boundary.
  */
 import { describe, expect, test } from "bun:test";
@@ -55,5 +56,7 @@ describe("createPhishingFeed storage failures", () => {
     expect([...feed.blockedDomains()]).toEqual(["feed-bad.com"]);
     expect(failing.gets).toBe(1);
     expect(failing.sets).toBe(1);
+    // Audit #184: the write failure is recorded, not silently swallowed.
+    expect(feed.cacheWriteFailed()).toBe(true);
   });
 });

@@ -11,7 +11,7 @@
         "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
         "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\"},\"reply\":{\"result\":\"0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b\"}}"
       ],
-      "reviewMessage": "Deployed Argent account class (argent 0.3.1) expects an authorization format this wallet does not produce",
+      "reviewMessage": "Deployed Argent account class expects an authorization format this wallet does not produce",
       "reviewState": {
         "deployed": true,
         "nonce": "0x5"
@@ -53,7 +53,7 @@
         "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
         "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b\"}}"
       ],
-      "submitMessage": "Deployed Argent account class (argent 0.3.1) expects an authorization format this wallet does not produce",
+      "submitMessage": "Deployed Argent account class expects an authorization format this wallet does not produce",
       "submitState": {
         "deployed": true,
         "nonce": "0x5",

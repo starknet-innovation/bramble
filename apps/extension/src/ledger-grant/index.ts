@@ -44,7 +44,7 @@ import {
   transportForConnectionMethod,
 } from "./grant-flow";
 import { LEDGER_GRANT_STYLES } from "./styles";
-import { ledgerTransitionProgress } from "./transition-progress";
+import { LEDGER_HANDSHAKE_PROGRESS, ledgerTransitionProgress } from "./transition-progress";
 
 type GrantChrome = {
   readonly tabs?: {
@@ -136,7 +136,7 @@ const render = (): void => {
     textElement(
       "p",
       "",
-      "Chrome needs this tab open to reach your Ledger. It closes when the wallet is done.",
+      "Your browser needs this tab open to reach your Ledger. It closes when the wallet is done.",
     ),
   );
   hero.append(ledgerVisual(), copy);
@@ -148,7 +148,7 @@ const render = (): void => {
   const validationNotice = textElement(
     "p",
     "grant-footnote",
-    "Hardware preview · Bramble has not been tested against every Ledger model.",
+    "Hardware preview · Bramble has not been tested against every Ledger model. Use test funds only.",
   );
   const methodOptions = element("div", "grant-method-options");
   const cableMethod = element("button", "grant-method");
@@ -225,11 +225,11 @@ const render = (): void => {
       ...(selectedMethod === "ble"
         ? [
             readinessStep("1", "Enable Bluetooth, then power your Ledger off and back on"),
-            readinessStep("2", "Stay on the Ledger dashboard and pair it in Chrome"),
+            readinessStep("2", "Stay on the Ledger dashboard and pair it in your browser"),
           ]
         : [
             readinessStep("1", "Unlock your Ledger and connect a data-capable USB cable"),
-            readinessStep("2", "Choose your Ledger in Chrome, then press Connect"),
+            readinessStep("2", "Choose your Ledger in your browser, then press Connect"),
           ]),
     );
   };
@@ -306,8 +306,8 @@ const render = (): void => {
       setStatus(
         "No Ledger selected",
         transport === "ble"
-          ? "Chrome found no Ledger to pair with. Choose USB above if the device is cabled."
-          : "Chrome found no Ledger. Unlock the device, open the Starknet app, and try again.",
+          ? "No Ledger was found to pair with. Choose USB above if the device is cabled."
+          : "No Ledger was found. Unlock the device, open the Starknet app, and try again.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "PICKER"), diagnostics),
       );
@@ -315,8 +315,8 @@ const render = (): void => {
       return;
     } else if (failure === "permission-blocked") {
       setStatus(
-        "Chrome blocked device access",
-        "Reconnect the Ledger, then allow device access for Bramble in Chrome.",
+        "Device access blocked",
+        "Reconnect the Ledger, then allow device access for Bramble in your browser.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "POLICY"), diagnostics),
       );
@@ -326,7 +326,7 @@ const render = (): void => {
       setStatus(
         `${transportLabel(transport)} couldn't open the Ledger`,
         alternate
-          ? `Chrome couldn't open that connection. Try ${transportLabel(alternate)} instead.`
+          ? `Your browser couldn't open that connection. Try ${transportLabel(alternate)} instead.`
           : "Reconnect the Ledger, close other wallet apps, and try again.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "INTERFACE"), diagnostics),
@@ -370,8 +370,8 @@ const render = (): void => {
     buttonLabel.textContent = `Waiting for ${transportLabel(transport)}…`;
     const chooserAction = transport === "ble" ? "Pair" : "Connect";
     setStatus(
-      "Choose your device in Chrome",
-      `Select your Ledger in Chrome's ${transportLabel(transport)} device list, then click ${chooserAction}.`,
+      "Choose your device in your browser",
+      `Select your Ledger in your browser's ${transportLabel(transport)} device list, then click ${chooserAction}.`,
       "info",
       `Transport · ${transportLabel(transport)}`,
     );
@@ -382,8 +382,8 @@ const render = (): void => {
         activeTransportKind = transport;
       }
       setStatus(
-        "Checking firmware and Starknet",
-        "",
+        LEDGER_HANDSHAKE_PROGRESS.title,
+        LEDGER_HANDSHAKE_PROGRESS.message,
         "info",
         `Transport · ${transportLabel(transport)} · Firmware, app, and key handshake`,
       );

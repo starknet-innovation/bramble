@@ -62,6 +62,7 @@ fn derives_the_configured_mainnet_account() {
         vec![RecoverySelection {
             family: AccountFamily::OpenZeppelin,
             account_index: 0,
+            ladder: None,
             class_hash: None,
         }],
     )

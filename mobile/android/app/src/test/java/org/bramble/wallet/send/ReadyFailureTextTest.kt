@@ -6,14 +6,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
-/** Ready (Argent) refusals read as the extension's own text, with the class label filled in. */
+/** Ready (Argent) refusals read as the extension's own text, which no longer names the class. */
 class ReadyFailureTextTest {
     @Test
-    fun namesTheUnsupportedClass() {
+    fun matchesExtensionClassCopy() {
         val failure = SendFailure(SendFailureCode.ACCOUNT_CLASS_UNSUPPORTED, null, "argent 0.3.1")
         assertEquals(
             SendCopy.failurePrefix +
-                "Deployed Argent account class (argent 0.3.1) " +
+                "Deployed Argent account class " +
                 "expects an authorization format this wallet does not produce",
             SendFailureText.message(failure),
         )

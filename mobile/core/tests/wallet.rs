@@ -23,6 +23,7 @@ fn restore_first(core: &WalletCore, network: NetworkId) {
         vec![RecoverySelection {
             family: AccountFamily::OpenZeppelin,
             account_index: 0,
+            ladder: None,
             class_hash: None,
         }],
     )

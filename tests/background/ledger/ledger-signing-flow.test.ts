@@ -9,6 +9,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
 import type { Vault } from "@bramble/vault/schema";
 import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
@@ -140,6 +141,10 @@ const handlerWith = (ledgerSignQueue: LedgerSignQueue) => {
   const handler = createMessageHandler(walletStub, testExtension, {
     ledgerSignQueue,
     runtimeRpc: makeRuntimeRpc({
+      // An undeployed account, as a deployment needs (mc-wallet 712).
+      async getDeploymentStatus() {
+        return false;
+      },
       async submitAccountDeployment(input) {
         // Stand in for the real deploy-hash signing: hand the signer the hash and
         // capture the verified signature it returns before "broadcasting".
@@ -206,6 +211,9 @@ describe("Ledger signing flow through the dispatcher", () => {
         },
       },
       runtimeRpc: makeRuntimeRpc({
+        async getDeploymentStatus() {
+          return false;
+        },
         async submitAccountDeployment(input) {
           await input.signHash(DEPLOY_HASH);
           return { transactionHash: "0x0" };
@@ -381,6 +389,7 @@ describe("privileged Ledger messages", () => {
     session.unlock(vaultPassphrase);
     const result = await executeSignApproval(
       {
+        activity: memoryActivityLog(),
         ledgerSignQueue: deviceQueue(PRIVATE_KEY),
         preferencesStore: {
           async read() {
@@ -408,6 +417,7 @@ describe("privileged Ledger messages", () => {
     // did). No signature is leaked to the dapp on error.
     const result = await executeSignApproval(
       {
+        activity: memoryActivityLog(),
         ledgerSignQueue: deviceQueue("0xdeadbeef"),
         preferencesStore: {
           async read() {
@@ -435,6 +445,7 @@ describe("privileged Ledger messages", () => {
     // applier settles the dapp waiter rather than hanging on an unhandled throw.
     const result = await executeSignApproval(
       {
+        activity: memoryActivityLog(),
         preferencesStore: {
           async read() {
             return { activeNetworkId: "SN_MAIN" } as unknown as WalletPreferences;

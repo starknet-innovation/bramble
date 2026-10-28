@@ -288,7 +288,7 @@ export const computePresentationVectors = () => ({
       ...token,
       id: `${networkId}:${token.address}`,
     }));
-    const account = { address: MAINNET_ACCOUNT } as never;
+    const account = { address: MAINNET_ACCOUNT, networkId } as never;
     return [RECIPIENT, MAINNET_ACCOUNT, LOOKALIKE].flatMap((recipient) =>
       tokens.map((token) => {
         const report = verifyCalls(

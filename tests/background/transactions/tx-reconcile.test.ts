@@ -32,7 +32,7 @@ const preferences: WalletPreferences = {
 const found = (
   status: TransactionStatusReport["status"],
   finalizedOnL1 = false,
-): TransactionStatusReport => ({ finalizedOnL1, found: true, status });
+): TransactionStatusReport => ({ finalizedOnL1, found: true, seen: true, status });
 
 const makeDeps = (
   entries: readonly ActivityEntry[],
@@ -129,6 +129,25 @@ describe("background reconciliation", () => {
     expect(polled).toEqual([["0xabc"]]);
   });
 
+  // Audit #247: three quick not-found answers (a lagging node right after
+  // broadcast) must not permanently reject a send that later lands.
+  test("keeps a just-broadcast send pending through early misses until it lands", async () => {
+    const reports: Record<string, TransactionStatusReport> = {
+      "0xabc": { finalizedOnL1: false, found: false, seen: false, status: "pending" },
+    };
+    const { deps } = makeDeps([entry({ status: "pending" })], reports);
+    const scope = { accountId: ACCOUNT, networkId: "SN_MAIN" as const };
+    for (const at of [0, 250, 750]) {
+      await reconcileScope(deps, scope, at);
+    }
+    expect((await statusOf(deps, "0xabc"))?.status).toBe("pending");
+    reports["0xabc"] = found("accepted");
+    await reconcileScope(deps, scope, 1_000);
+    const stored = await statusOf(deps, "0xabc");
+    expect(stored?.status).toBe("accepted");
+    expect(stored?.failureNotice).toBeUndefined();
+  });
+
   test("records a notice when an accepted transaction later reverts", async () => {
     const { deps } = makeDeps([entry({ status: "accepted" })], { "0xabc": found("reverted") });
     await reconcileObserved(deps, "slow", 1_000);
@@ -207,7 +226,7 @@ describe("background reconciliation", () => {
             return { "0xabc": found("accepted") };
           }
           return {
-            "0xabc": { finalizedOnL1: false, found: false, status: "pending" },
+            "0xabc": { finalizedOnL1: false, found: false, seen: false, status: "pending" },
           };
         },
       } as unknown as ReconcileDeps["runtimeRpc"],
@@ -302,5 +321,95 @@ describe("background reconciliation", () => {
       "0xabc",
       "0xdef",
     ]);
+  });
+
+  test("history merge purges rows planted before the decoder filter (audit #163)", async () => {
+    const LOOKALIKE = "0x49d3ff1111111111111111111111111111111111111111111111111114dc8";
+    const planted = entry({
+      amount: "0",
+      counterparty: LOOKALIKE,
+      hash: "0x501",
+      status: "accepted",
+      summary: "Sent 0 ETH to 0x49d3…4dc8",
+      token: "ETH",
+    });
+    const spam = entry({
+      amount: "9",
+      counterparty: LOOKALIKE,
+      hash: "0x502",
+      status: "accepted",
+      summary: "Received 9 TOKEN from 0x49d3…4dc8",
+      token: "TOKEN",
+    });
+    const { deps } = makeDeps([planted, spam], {});
+    const scope = { accountId: ACCOUNT, networkId: "SN_MAIN" } as const;
+
+    const merged = await mergeReconciledHistory(deps, scope, []);
+
+    expect(merged.map((row) => row.hash)).toEqual(["0x502"]);
+    const stored = await deps.activity.list();
+    expect(stored.map((row) => row.hash)).toEqual(["0x502"]);
+    expect(stored.some((row) => row.counterparty === LOOKALIKE)).toBe(false);
+  });
+});
+
+// #656: a reverted transaction still pays its fee, and that payment emits a
+// Transfer from the account, so a chain-only outgoing leg alone must not read
+// as a completed send.
+describe("discovered history and reverted transactions", () => {
+  const scope = { accountId: ACCOUNT, networkId: "SN_MAIN" as const };
+  const feeLeg = (overrides: Partial<ActivityEntry> = {}): ActivityEntry =>
+    entry({
+      amount: "0.02",
+      counterparty: "0x1176",
+      direction: "out",
+      hash: "0x656",
+      status: "accepted",
+      summary: "Sent 0.02 STRK to 0x1176",
+      token: "STRK",
+      ...overrides,
+    });
+
+  test("stores a chain-only outgoing leg the receipt shows reverted as reverted", async () => {
+    const { deps, polled } = makeDeps([], { "0x656": found("reverted") });
+    const merged = await mergeReconciledHistory(deps, scope, [feeLeg()]);
+
+    expect(polled).toEqual([["0x656"]]);
+    expect(merged.map((row) => [row.hash, row.status, row.amount])).toEqual([
+      ["0x656", "reverted", "0.02"],
+    ]);
+    expect((await statusOf(deps, "0x656"))?.status).toBe("reverted");
+  });
+
+  test("keeps a succeeded leg accepted and never reads incoming legs", async () => {
+    const { deps, polled } = makeDeps([], { "0x657": found("accepted") });
+    const merged = await mergeReconciledHistory(deps, scope, [
+      feeLeg({ hash: "0x657" }),
+      feeLeg({ direction: "in", hash: "0x658", summary: "Received 1 STRK from 0x9" }),
+    ]);
+
+    expect(polled).toEqual([["0x657"]]);
+    expect(merged.every((row) => row.status === "accepted")).toBe(true);
+  });
+
+  test("reads a transaction once: one already stored is not read again", async () => {
+    const { deps, polled } = makeDeps([feeLeg({ status: "reverted" })], {});
+    await mergeReconciledHistory(deps, scope, [feeLeg()]);
+    expect(polled).toEqual([]);
+    expect((await statusOf(deps, "0x656"))?.status).toBe("reverted");
+  });
+
+  test("a failed status read leaves the leg as found", async () => {
+    const { deps } = makeDeps([], {});
+    const failing = {
+      ...deps,
+      runtimeRpc: {
+        async getTransactionStatuses() {
+          throw new Error("node down");
+        },
+      } as unknown as ReconcileDeps["runtimeRpc"],
+    };
+    const merged = await mergeReconciledHistory(failing, scope, [feeLeg()]);
+    expect(merged.map((row) => row.status)).toEqual(["accepted"]);
   });
 });

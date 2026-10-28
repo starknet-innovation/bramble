@@ -32,7 +32,7 @@ const REPAINT_DRAFT_NAMES = new Set([
   "salt",
   "signature",
   "signerPublicKeys",
-  "subaccountAnonymizerAddress",
+  "shadowAccountAnonymizerAddress",
   "threshold",
   "tokenId",
 ]);

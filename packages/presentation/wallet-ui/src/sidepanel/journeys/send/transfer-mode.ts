@@ -134,12 +134,29 @@ const COPY: Readonly<Record<TransferMode, TransferModeCopy>> = {
 };
 
 /**
- * Heading of the failure receipt, in every mode. The flow header above it
- * already names the operation ("Shield failed"), so this line carries the fact
- * the header does not: nothing was submitted. Mode-independent on purpose —
+ * Heading of the failure receipt, in every mode, when nothing was submitted.
+ * The flow header above it already names the operation ("Shield failed"), so
+ * this line carries the fact the header does not. Mode-independent on purpose:
  * "Shield not completed" under "Shield failed" said one thing twice.
  */
 export const TRANSFER_FAILURE_TITLE = "Transaction not sent";
+
+/**
+ * Heading of the failure receipt once a transaction was submitted and the chain
+ * then rejected or reverted it. It was sent, its hash is shown, and a fee may
+ * have been paid, so "not sent" would be false.
+ */
+export const TRANSFER_SENT_FAILURE_TITLE = "Transaction failed";
+
+/**
+ * Heading of the receipt when the submission's reply was lost: it may or may
+ * not be on chain, so neither "not sent" nor "failed" is true.
+ */
+export const TRANSFER_UNKNOWN_TITLE = "Status unknown";
+
+/** Default reason for a submitted transaction that failed without its own message. */
+export const TRANSFER_SENT_FAILURE_REASON =
+  "The transaction was sent but did not complete. Check its status in Activity.";
 
 /**
  * The copy table for one mode. Total over the union, so no caller falls back

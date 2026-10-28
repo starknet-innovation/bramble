@@ -56,7 +56,7 @@
     },
     "refusals": {
       "selfTransfer": "The recipient is this wallet's own address.",
-      "poisonedRecipient": "The recipient closely mimics one of your saved addresses but is a different account. Re-check every character before sending.",
+      "poisonedRecipient": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
       "indeterminateWrite": "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
       "invalidRecipient": "Enter a valid Starknet address.",
       "reviewedDeploymentFeeExceeded": "The account deployment fee rose above the amount you reviewed. Nothing was submitted — review it again.",
@@ -154,7 +154,7 @@
       "deploymentUnconfirmed": "Account deployment was broadcast as {hash}, but confirmation is unknown. The following transaction was not submitted; check the deployment on-chain before retrying.",
       "deploymentThenInvokeUnconfirmed": "Account deployment {hash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying.",
       "alreadyDeployed": "Account is already deployed",
-      "accountClassUnsupported": "Deployed Argent account class ({label}) expects an authorization format this wallet does not produce",
+      "accountClassUnsupported": "Deployed Argent account class expects an authorization format this wallet does not produce",
       "accountClassUnrecognised": "Deployed Argent account class is not a release this wallet recognizes",
       "accountNotDeployable": "Argent account class hash does not match the pinned release",
       "accountOwnerMismatch": "Deployed Argent account owner does not match the wallet signer",
@@ -171,9 +171,10 @@
         ],
         "text": [
           "Sent 1.5 STRK",
-          "0x2270…f099",
           "Pending",
           "STR",
+          "Transaction",
+          "0x2270…f099",
           "Recipient",
           "0x3fa7…41a3",
           "Status",
@@ -203,7 +204,9 @@
           "Account already deployed",
           "Transaction",
           "View in Activity tab",
-          "Back"
+          "Back",
+          "Try again",
+          "View in Activity tab"
         ],
         "estimateFailed": "Could not estimate the deployment fee",
         "estimating": "Estimating fee…",
@@ -219,10 +222,13 @@
           "0x2083…98d9",
           "Network",
           "Sepolia",
+          "This account is not deployed yet; the first send also submits its deployment.",
           "Deploy",
           "Transaction",
           "View in Activity tab",
-          "Back"
+          "Back",
+          "Try again",
+          "View in Activity tab"
         ]
       },
       "review": {
@@ -240,9 +246,13 @@
           "From",
           "Account 1",
           "0x2083…98d9",
+          "Show full sender address",
+          "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
           "To",
           "0x3fa7…41a3",
           "0x3fa7…41a3",
+          "Show full recipient address",
+          "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
           "Amount",
           "1.5 STRK",
           "Fiat estimate unavailable"
@@ -354,11 +364,12 @@
           "text": ["Send complete", "Transaction", "View in Activity tab", "Back"]
         },
         "send-failure": {
-          "ariaLabels": ["Copy the error", "Copy transaction hash"],
+          "ariaLabels": ["Copy error details", "Copy transaction hash"],
           "placeholders": [],
           "text": [
             "Transaction not sent",
             "The transaction was not sent. Your balance is unchanged.",
+            "View in Activity tab",
             "Try again",
             "Edit transaction"
           ]

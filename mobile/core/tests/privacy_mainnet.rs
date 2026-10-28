@@ -125,6 +125,7 @@ fn reads_private_balances_on_mainnet() {
             vec![bramble_core::RecoverySelection {
                 family: bramble_core::AccountFamily::OpenZeppelin,
                 account_index: 0,
+                ladder: None,
                 class_hash: None,
             }],
         )

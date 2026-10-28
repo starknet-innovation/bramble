@@ -9,8 +9,15 @@
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { type AccountGroups, createGroup } from "@bramble/settings/groups";
 import { deriveAccount } from "@bramble/vault/accounts";
-import { deploymentClasses } from "@bramble/wallet-model/account-families";
-import type { AccountContractType, AccountRef } from "@bramble/wallet-model/accounts";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
+import {
+  type AccountContractType,
+  type AccountRef,
+  recoveryLadderIndex,
+} from "@bramble/wallet-model/accounts";
 import { isLabel } from "@bramble/wallet-model/preferences";
 import {
   type RecoveryAccountCandidate,
@@ -38,17 +45,28 @@ const PARITY_PASSPHRASE = "parity passphrase";
 const INDICES = [0, 3, 19] as const;
 const NETWORKS = ["SN_MAIN", "SN_SEPOLIA"] as const;
 
-type Shape = { readonly accountContractType: AccountContractType; readonly classHash?: string };
+type Shape = {
+  readonly accountContractType: AccountContractType;
+  readonly classHash?: string;
+  readonly derivation?: "argentx-bip44";
+};
 
-// The discovery shapes, in the order `recoveryScanShapes` scans them.
+// The discovery shapes, in the order `recoveryScanShapes` scans them (issue 505): OZ and the
+// Argent release this wallet creates on its own ladder, every Argent release on Ready's
+// ETH-seeded ladder, and every Braavos class, which `deriveAccount` maps to Braavos's address
+// ladder by family.
 const SHAPES: readonly Shape[] = [
   { accountContractType: "openzeppelin" },
-  ...(["argent", "braavos"] as const).flatMap((family) =>
-    deploymentClasses(family).map((entry) => ({
-      accountContractType: family,
-      classHash: entry.classHash,
-    })),
-  ),
+  { accountContractType: "argent", classHash: ARGENT_ACCOUNT_CLASS_HASH },
+  ...deploymentClasses("argent").map((entry) => ({
+    accountContractType: "argent" as const,
+    classHash: entry.classHash,
+    derivation: "argentx-bip44" as const,
+  })),
+  ...deploymentClasses("braavos").map((entry) => ({
+    accountContractType: "braavos" as const,
+    classHash: entry.classHash,
+  })),
 ];
 
 /** One derived account as the extension stores it. */
@@ -58,6 +76,8 @@ export type ParityFamilyVector = {
   readonly address: string;
   readonly classHash: string;
   readonly deploymentSalt: string | null;
+  /** The extension's derivation kind for the stored account. */
+  readonly derivation: "argentx-bip44" | "starknet-bip44";
   readonly networkId: string;
   readonly passphrase: string | null;
   readonly publicKeyX: string;
@@ -78,7 +98,8 @@ const familyVectors = async (): Promise<{
   const accounts: AccountRef[] = [];
   const vectors: ParityFamilyVector[] = [];
   for (const { accountIndex, networkId, passphrase } of cases) {
-    for (const shape of SHAPES) {
+    // Ready takes no BIP-39 passphrase, so its ladder has no vectors under one.
+    for (const shape of SHAPES.filter((s) => passphrase === null || s.derivation === undefined)) {
       const { account } = await deriveAccount(kms, {
         ...shape,
         accountIndex,
@@ -93,6 +114,7 @@ const familyVectors = async (): Promise<{
         address: account.address,
         classHash: account.classHash,
         deploymentSalt: account.deploymentSalt ?? null,
+        derivation: account.derivation.kind,
         networkId,
         passphrase,
         publicKeyX: account.publicKeyX,
@@ -189,18 +211,24 @@ const recoveryVectors = (accounts: readonly AccountRef[], vectors: readonly Pari
           deployed,
           funded,
         } as RecoveryAccountCandidate;
-        const accountIndex =
-          account.derivation.kind === "starknet-bip44" ? account.derivation.accountIndex : -1;
+        // The ladder position the row names, on whichever axis its family walks (issue 505).
+        const { derivation } = account;
+        if (derivation.kind !== "starknet-bip44" && derivation.kind !== "argentx-bip44") {
+          throw new Error(`discovery never derives ${derivation.kind}`);
+        }
+        const accountIndex = recoveryLadderIndex({ derivation });
         return {
           accountContractType: account.accountContractType,
           accountIndex,
           classHash: account.classHash,
           deployed,
+          derivation: account.derivation.kind,
           funded,
           hint: candidateState(candidate, false),
           key: recoverySelectionKey({
             accountContractType: account.accountContractType,
             accountIndex,
+            derivation: derivation.kind,
             ...(account.accountContractType === "openzeppelin"
               ? {}
               : { classHash: account.classHash }),

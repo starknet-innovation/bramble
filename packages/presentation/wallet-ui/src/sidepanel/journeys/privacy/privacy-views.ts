@@ -13,10 +13,14 @@ import { button } from "@bramble/ui-kit/controls";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
-import { flowHeader, flowScreen, formatFri } from "../../shared/parts";
+import { flowHeader, flowScreen, formatFri, inlineCopyButton } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
-import { reviewPanel } from "../../shared/review-render";
-import type { PrivacyBlockerKind, PrivacyJourneyState } from "./privacy-model";
+import { formatFeeEstimate, reviewPanel } from "../../shared/review-render";
+import type {
+  PrivacyBlockerKind,
+  PrivacyDisclosureState,
+  PrivacyJourneyState,
+} from "./privacy-model";
 import { type PreparationProgress, preparationProgressText } from "./privacy-preparation-job";
 
 /**
@@ -49,7 +53,8 @@ type PreparingStep = Extract<PrivacyJourneyState, { readonly stage: "preparing" 
 // what the list cannot and is empty when there is nothing to add. Backing out
 // is safe — the background finishes the proof it started and never executes an
 // abandoned preparation — but the proof is discarded, which is worth a line
-// before someone spends minutes on it twice.
+// before someone spends minutes on it twice. The proof wait also says nothing
+// is signed yet: minutes of "preparing" otherwise read as signing underway.
 const PREPARING_COPY: Readonly<
   Record<PreparingStep, { readonly body: string; readonly hint: string; readonly title: string }>
 > = {
@@ -59,7 +64,7 @@ const PREPARING_COPY: Readonly<
     title: "Checking private balances",
   },
   proving: {
-    body: "Going back discards this preparation.",
+    body: "No transaction is signed or sent until you confirm the review. Going back discards this preparation.",
     hint: PROVING_HINT,
     title: "Preparing to go private",
   },
@@ -91,6 +96,17 @@ const preparing = (
 const shortAddress = (value: string): string =>
   value.length <= 15 ? value : `${value.slice(0, 8)}…${value.slice(-5)}`;
 
+// Owner-approved consent copy (issue 438). The fee sentence rides on the same
+// condition as the Cost section's "Pool fee … from public STRK" line, so the
+// two never disagree; the amount itself stays only in Cost. Registration from
+// the background always takes the public-account route with a pool fee.
+const activationOutcome = (
+  preparation: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>["preparation"],
+): string =>
+  preparation.poolFeeFri
+    ? "Going private sets up a private balance for this account. Registering costs a one-time pool fee, paid from your public STRK."
+    : "Going private sets up a private balance for this account.";
+
 const preparationDetails = (
   journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>,
   status: WalletStatus,
@@ -103,7 +119,7 @@ const preparationDetails = (
     </header>
     <section class="decision-layer decision-outcome" aria-label="What will happen">
       <p class="decision-label">What will happen</p>
-      <p>This one-time registration lets this account discover and use its private notes.</p>
+      <p>${escapeHtml(activationOutcome(preparation))}</p>
     </section>
     ${reviewPanel([
       "Registration is public. It stores this account's viewing-key commitment on-chain and opens its private channel. It does not reveal the viewing key or your private balance.",
@@ -114,7 +130,7 @@ const preparationDetails = (
         {
           label: "Maximum network fee",
           value: preparation.networkFee
-            ? formatFri(preparation.networkFee.overallFee)
+            ? formatFeeEstimate(preparation.networkFee)
             : preparation.route === "private-relay"
               ? "Sponsored"
               : "Unavailable",
@@ -207,17 +223,40 @@ const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "succes
     </div>
   </section>`;
 
-const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failure" }>): string => `
-  <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive">
-    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg></span>
-    <h2>Private transaction not completed</h2>
-    <p>${escapeHtml(journey.error)}</p>
-    <p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>
+const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failure" }>): string => {
+  // A submission whose reply was lost is a warning, not a failure: it may still
+  // be on chain, so it leads with Activity rather than the Try again a failure
+  // offers (issue 382). The mark switches to the "!" the send receipt uses.
+  // Either way the sentence is the friendly one, and the control beside it
+  // copies the complete diagnostic for support, as an error toast's does.
+  const warning = journey.severity === "warning";
+  return `
+  <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive" data-severity="${journey.severity}">
+    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /><path class="privacy-unknown-mark" d="M28 17v13m0 8v1" /></svg></span>
+    <h2>${warning ? "Status unknown" : "Private transaction not completed"}</h2>
+    <span class="privacy-outcome-reason">
+      <p>${escapeHtml(journey.error)}</p>
+      ${inlineCopyButton(journey.errorDetails || journey.error, "Copy error details", { id: "privacy-failure-copy-error" })}
+    </span>
+    ${
+      warning
+        ? ""
+        : '<p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>'
+    }
     <div class="privacy-actions">
-      ${button({ attributes: { id: "privacy-retry" }, label: "Try again" })}
+      ${
+        warning
+          ? button({
+              attributes: { "data-view": "activity" },
+              icon: "activity",
+              label: "View activity",
+            })
+          : button({ attributes: { id: "privacy-retry" }, label: "Try again" })
+      }
       ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
     </div>
   </section>`;
+};
 
 type BlockedCopy = {
   readonly action: string;
@@ -277,14 +316,27 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
   },
 };
 
-const blocked = (journey: Extract<PrivacyJourneyState, { readonly stage: "blocked" }>): string => {
+const blocked = (
+  journey: Extract<PrivacyJourneyState, { readonly stage: "blocked" }>,
+  disclosure: PrivacyDisclosureState | null,
+): string => {
   const copy = BLOCKED_COPY[journey.blocker.kind];
+  // The refusal names the missing STRK but not the amount. The fund screen is
+  // the one place the reader can act on a number, so it states the pool fee the
+  // registration needs when the disclosure has read one; a network-fee estimate
+  // does not exist yet, so that cost is named without a figure.
+  const poolFeeFri = journey.blocker.kind === "fund" ? disclosure?.value?.poolFeeFri : undefined;
+  const requirement =
+    poolFeeFri === undefined
+      ? ""
+      : `<p class="hint">Registration needs ${escapeHtml(formatFri(poolFeeFri))} for the pool fee, plus a network fee.</p>`;
   return `
   <section class="privacy-outcome privacy-blocked" role="status" aria-live="polite" data-privacy-blocker="${journey.blocker.kind}">
     <span class="privacy-outcome-mark" aria-hidden="true">${icon("shield")}</span>
     <h2>${escapeHtml(copy.title)}</h2>
     <p>${escapeHtml(copy.body)}</p>
     <p class="hint">${escapeHtml(journey.blocker.message)}</p>
+    ${requirement}
     <div class="privacy-actions">
       ${copy.action}
       ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
@@ -299,6 +351,7 @@ export const privacyFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
   journey: PrivacyJourneyState,
+  disclosure: PrivacyDisclosureState | null = null,
 ): string => {
   const tokenId = journey.stage === "idle" ? null : journey.tokenId;
   const token =
@@ -309,7 +362,7 @@ export const privacyFlow = (
     journey.stage === "activate-review"
       ? preparationDetails(journey, status)
       : journey.stage === "blocked"
-        ? blocked(journey)
+        ? blocked(journey, disclosure)
         : journey.stage === "preparing"
           ? preparing(journey)
           : journey.stage === "working"

@@ -71,7 +71,7 @@ const drawerAccountRow = (
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
-          <code title="${escapeHtml(stored.address)}">${accountLabel(stored.address)}</code>
+          <code title="${escapeHtml(stored.address)}">${escapeHtml(accountLabel(stored.address))}</code>
           ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.record.name ?? "selected multisig")}</span>` : ""}
         </span>
         ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
@@ -87,19 +87,22 @@ const drawerAccountRow = (
  * settings; the option ids are distinct from the settings picker's so the two
  * bindings never claim each other's buttons — that picker returns to settings
  * after a switch, which is wrong from inside the drawer.
+ *
+ * The list is a plain disclosure of ordinary buttons, with the network in force
+ * marked `aria-current`. It was a `listbox` of `option`s, which promises arrow
+ * key navigation and single tab stop it never had (mc-wallet issue 476).
  */
 const networkControl = (status: WalletStatus): string => `
   <div class="drawer-network">
     <button class="drawer-network-pill" type="button" data-drawer-network-toggle
-      aria-expanded="false" aria-haspopup="listbox" aria-controls="drawer-network-menu">
+      aria-expanded="false" aria-controls="drawer-network-menu">
       ${pill(networkDisplayName(status.network), { dot: true })}${icon("chevronDown")}
     </button>
-    <div class="drawer-network-menu" id="drawer-network-menu" role="listbox" aria-label="Network" hidden>
+    <div class="drawer-network-menu" id="drawer-network-menu" role="group" aria-label="Network" hidden>
       ${status.networks
         .map(
-          (network) => `<button class="drawer-network-option" type="button" role="option"
-            data-drawer-network-id="${escapeHtml(network.id)}"
-            aria-selected="${network.id === status.networkId}">
+          (network) => `<button class="drawer-network-option" type="button"
+            data-drawer-network-id="${escapeHtml(network.id)}"${network.id === status.networkId ? ' aria-current="true"' : ""}>
             <span>${escapeHtml(network.name)}</span>
             ${network.id === status.networkId ? icon("check") : ""}
           </button>`,
@@ -131,7 +134,10 @@ export const accountDrawer = (
   selectedMultisigId: string | null = null,
 ): string => {
   const groups = withDefaultGroups(preferences?.groups ?? []);
-  const accounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
+  const hidden = new Set(preferences?.hiddenAccountIds ?? []);
+  const accounts = status.accounts.filter(
+    (stored) => stored.networkId === status.networkId && !hidden.has(stored.id),
+  );
   const shared = multisigs.filter((view) => view.record.networkId === status.networkId);
   const selectedMultisig = shared.find((view) => view.record.id === selectedMultisigId) ?? null;
   const sections = folderSections(groups, accounts);

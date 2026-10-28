@@ -10,6 +10,7 @@
 import type { DisplayCurrency, TokenConfig } from "@bramble/settings/preferences";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { IconName } from "@bramble/ui-kit/icons";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
 import { compactAmount } from "./token-row";
@@ -45,8 +46,8 @@ export const compactActivityAmount = (amount: string): string => {
 
 /**
  * Prices and tracked tokens the feed needs to price a row. Prices are keyed by
- * token address while an entry only records a symbol, so the tracked-token
- * list is the bridge between them.
+ * token address; a row recorded before it carried one has only a symbol, so
+ * the tracked-token list is the bridge between them.
  */
 export type ActivityPricing = {
   readonly currency: DisplayCurrency;
@@ -104,12 +105,37 @@ const privateAppearance = (summary: string): ActivityAppearance => {
   return { ...base, direction: null, title: "Private transaction" };
 };
 
+const transferAppearance = (direction: "in" | "out"): ActivityAppearance => ({
+  direction,
+  icon: direction === "in" ? "arrowDownLeft" : "arrowDownRight",
+  label: "Transfer",
+  title: direction === "in" ? "Received" : "Sent",
+  type: "transfer",
+});
+
+// The direction of a transfer row, read from what the wallet recorded rather
+// than from words anywhere in the summary. A summary embeds the token symbol,
+// which a third party chooses, so "SWAP" or "RECEIVED" as a symbol must not
+// change the verb or the arrow (Sherlock 196). Discovered rows written before
+// `direction` existed begin with the wallet's own "Received " or "Sent ".
+const recordedTransferDirection = (entry: ActivityEntry): "in" | "out" | null => {
+  if (entry.kind !== "transfer") return null;
+  if (entry.direction !== undefined) return entry.direction;
+  if (entry.origin === "wallet") return null;
+  if (entry.summary.startsWith("Received ")) return "in";
+  if (entry.summary.startsWith("Sent ")) return "out";
+  return null;
+};
+
 /**
- * Classifies an entry from its summary and kind. The summary wording is the
- * only signal for swaps, staking, rewards, privacy, and approvals; the stored
- * kind decides the rest, so a transfer always reads as Received or Sent.
+ * Classifies an entry. A transfer whose direction the wallet recorded reads as
+ * Received or Sent from that alone. Otherwise the summary wording is the only
+ * signal for swaps, staking, rewards, privacy, and approvals, and the stored
+ * kind decides the rest.
  */
 export const activityAppearance = (entry: ActivityEntry): ActivityAppearance => {
+  const recorded = recordedTransferDirection(entry);
+  if (recorded !== null) return transferAppearance(recorded);
   const summary = entry.summary.toLowerCase();
   if (SWAP.test(summary))
     return {
@@ -152,16 +178,7 @@ export const activityAppearance = (entry: ActivityEntry): ActivityAppearance => 
       title: /\brevok/.test(summary) ? "Revoked" : "Approved",
       type: "approval",
     };
-  if (entry.kind === "transfer") {
-    const received = RECEIVED.test(summary);
-    return {
-      direction: received ? "in" : "out",
-      icon: received ? "arrowDownLeft" : "arrowDownRight",
-      label: "Transfer",
-      title: received ? "Received" : "Sent",
-      type: "transfer",
-    };
-  }
+  if (entry.kind === "transfer") return transferAppearance(RECEIVED.test(summary) ? "in" : "out");
   if (entry.kind === "deploy")
     return {
       direction: null,
@@ -269,9 +286,8 @@ const activityDetail = (
  * Everything one Activity row displays, derived from the entry and the current
  * prices. The asset amount needs the recorded amount and symbol; the fiat
  * figure additionally needs a direction (signed in or out, unsigned when the
- * value only moved between the owner's own balances), exactly one tracked
- * token with that symbol on the entry's network (a symbol shared by two
- * tracked tokens is ambiguous and yields nothing), and a price for it.
+ * value only moved between the owner's own balances), the tracked token the
+ * row resolves to (see {@link activityTrackedToken}), and a price for it.
  */
 export type ActivityRowModel = ActivityAppearance & {
   readonly amount: string | null;
@@ -280,6 +296,30 @@ export type ActivityRowModel = ActivityAppearance & {
   readonly fiat: string | null;
   readonly tokenAddress: string | null;
   readonly tokenSymbol: string | null;
+};
+
+/**
+ * The tracked token an entry names. A row that recorded its token's address
+ * (issue 643) resolves to the tracked token at that address on the entry's
+ * network, and only while its symbol still agrees with the recorded one: a
+ * likely-spam token is recorded under the untracked symbol, and must not be
+ * priced or shown by its own (Sherlock 249). A legacy row with only a symbol
+ * resolves to the one tracked token with that symbol, or `null` when none or
+ * several match, so an ambiguous symbol is never guessed.
+ */
+export const activityTrackedToken = (
+  entry: Pick<ActivityEntry, "networkId" | "token" | "tokenAddress">,
+  pricing?: ActivityPricing,
+): ActivityPricing["tokens"][number] | null => {
+  const symbol = entry.token?.trim().toLowerCase();
+  if (!symbol || !pricing) return null;
+  const matches = pricing.tokens.filter(
+    (token) =>
+      token.networkId === entry.networkId &&
+      token.symbol.toLowerCase() === symbol &&
+      (entry.tokenAddress === undefined || sameFelt(token.address, entry.tokenAddress)),
+  );
+  return matches.length === 1 ? (matches[0] ?? null) : null;
 };
 
 /**
@@ -294,15 +334,7 @@ export const activityRowModel = (
   const symbol = entry.token?.trim() || null;
   const rawAmount = entry.amount?.trim() || null;
   const amount = symbol && rawAmount ? `${compactActivityAmount(rawAmount)} ${symbol}` : null;
-  const matches =
-    symbol && pricing
-      ? pricing.tokens.filter(
-          (token) =>
-            token.networkId === entry.networkId &&
-            token.symbol.toLowerCase() === symbol.toLowerCase(),
-        )
-      : [];
-  const token = matches.length === 1 ? (matches[0] ?? null) : null;
+  const token = activityTrackedToken(entry, pricing);
   const price = token ? pricing?.prices[token.address] : undefined;
   const value =
     appearance.direction !== null && rawAmount !== null && price !== undefined

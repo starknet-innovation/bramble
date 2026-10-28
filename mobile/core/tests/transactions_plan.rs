@@ -337,16 +337,19 @@ fn braavos_records_cannot_send_or_deploy() {
                 bramble_core::RecoverySelection {
                     family: bramble_core::AccountFamily::OpenZeppelin,
                     account_index: 0,
+                    ladder: None,
                     class_hash: None,
                 },
                 bramble_core::RecoverySelection {
                     family: bramble_core::AccountFamily::Argent,
                     account_index: 0,
+                    ladder: None,
                     class_hash: Some(class("argent 0.4.0")),
                 },
                 bramble_core::RecoverySelection {
                     family: bramble_core::AccountFamily::Braavos,
                     account_index: 0,
+                    ladder: None,
                     class_hash: Some(class("braavos 1.0.0")),
                 },
             ],

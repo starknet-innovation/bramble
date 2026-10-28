@@ -1,6 +1,10 @@
 /** Owns validation for external destinations reached from the public website. */
 
-/** Safe fallback when the exact published extension listing is not configured. */
+/** The published Bramble extension listing — the default download destination. */
+export const CHROME_STORE_LISTING =
+  "https://chromewebstore.google.com/detail/bramble-starknet-wallet/jcfafpefcpcejehepoednnollpeenpop";
+
+/** Safe fallback when a configured override is invalid or missing. */
 export const CHROME_STORE_ROOT = "https://chromewebstore.google.com/";
 
 /** Public source and support destination for Bramble. */
@@ -9,7 +13,7 @@ export const REPOSITORY_URL = "https://github.com/starknet-innovation/mc-wallet"
 /** Accepts only an HTTPS Chrome Web Store URL and otherwise fails to the store root. */
 export const resolveChromeStoreUrl = (configuredUrl: string | undefined): string => {
   if (configuredUrl === undefined) {
-    return CHROME_STORE_ROOT;
+    return CHROME_STORE_LISTING;
   }
 
   try {

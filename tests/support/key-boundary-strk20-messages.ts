@@ -33,7 +33,7 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
         ohttpEnabled: false,
         poolAddress: "0x1",
         proverUrl: "https://prover.example",
-        subaccountAnonymizerAddress: "0x2",
+        shadowAccountAnonymizerAddress: "0x2",
       },
       networkId: "SN_SEPOLIA",
       type: "wallet.setStrk20NetworkConfig",
@@ -65,11 +65,35 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: {
       dappName: "bramble-terminal",
       origin,
-      type: "wallet.strk20SubaccountCommitment",
+      type: "wallet.strk20ShadowAccountCommitment",
     },
     sender: contentSender,
   },
   { message: { type: "wallet.strk20State" }, sender: extensionSender },
+  // The update prompt (#708): neither touches key material. `applyUpdate`
+  // answers "nothing to restart" in the harness, which has no browser runtime.
+  { message: { type: "wallet.updateStatus" }, sender: extensionSender },
+  { message: { type: "wallet.applyUpdate" }, sender: extensionSender },
+  // Settings → Privacy → Unlock anyway (#668): clears a stuck submitting
+  // marker; it reads no key material.
+  { message: { type: "wallet.strk20ReleasePendingWrite" }, sender: extensionSender },
+  // The Shadow accounts view (#443). The commitment entry above records the
+  // scope these name, so each reaches the vault's records and, for the last
+  // two, the viewing-key-derived listing.
+  { message: { type: "wallet.strk20ShadowAccounts" }, sender: extensionSender },
+  {
+    message: { label: "bramble-terminal", origin, type: "wallet.strk20ShadowAccountBalances" },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      label: "bramble-terminal",
+      nonce: "0x0",
+      origin,
+      type: "wallet.strk20PrepareShadowSweep",
+    },
+    sender: extensionSender,
+  },
   {
     live: async (ids) => ({ tokenId: ids.tokenId }),
     message: {

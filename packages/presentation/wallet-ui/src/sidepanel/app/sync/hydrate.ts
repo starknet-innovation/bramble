@@ -10,9 +10,11 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { RenderData } from "../rendering/render-cache";
+import type { ConnectedSitesState } from "../screens/support-flows";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
 import type { RefreshReason } from "./refresh-scheduler";
+import type { SignabilityCache } from "./signability-cache";
 
 /**
  * Inputs `hydrateView` needs: the current status/view, the shared render cache,
@@ -28,6 +30,7 @@ export type HydrateDeps = {
   readonly wallet: SidepanelWallet;
   readonly multisig: MultisigClient;
   readonly deployment: DeploymentCache;
+  readonly signability: SignabilityCache;
   readonly paint: () => void;
   readonly refreshReason?: RefreshReason;
 };
@@ -117,6 +120,22 @@ const shouldRefreshSelectedMultisig = (
   multisigsNetworkId === networkId &&
   SELECTED_MULTISIG_VIEWS.has(activeView);
 
+// A paint that throws on the data it was given must not stop hydration: the
+// live jobs that follow are what replace bad cached data, so aborting before
+// they start would leave the panel stuck on the value that broke it
+// (Sherlock 239). The failed paint leaves the previous screen in place, and
+// the next successful paint replaces it.
+const paintIfCurrent = (isCurrent: () => boolean, paint: () => void): void => {
+  if (!isCurrent()) {
+    return;
+  }
+  try {
+    paint();
+  } catch {
+    // Kept on the previous screen; the next paint retries with fresh data.
+  }
+};
+
 const hydrateCachedView = async (
   deps: HydrateDeps,
   walletBalanceView: boolean,
@@ -193,7 +212,7 @@ const hydrateCachedView = async (
   }
   if (jobs.length > 0) {
     await Promise.all(jobs);
-    if (isCurrent()) paint();
+    paintIfCurrent(isCurrent, paint);
   }
 };
 
@@ -212,6 +231,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     wallet,
     multisig,
     deployment,
+    signability,
     refreshReason,
     isCurrent = () => true,
     paint,
@@ -292,11 +312,29 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.priceStale = value.stale;
     });
   }
+  // The deploy screen reads deployment fresh, before it paints Deploy: Home's
+  // 60-second undeployed snapshot can outlive a send that deployed the account
+  // (mc-wallet 712).
+  if (activeView === "deploy-account") {
+    fill(
+      () => deployment.load(status, activeView, true),
+      (value) => {
+        cache.deployment = value;
+      },
+    );
+  }
   if (activeView === "home") {
     fill(
       () => deployment.load(status, activeView, refreshReason === "action"),
       (value) => {
         cache.deployment = value;
+      },
+      true,
+    );
+    fill(
+      () => signability.load(status, activeView, refreshReason === "action"),
+      (value) => {
+        cache.signability = value;
       },
       true,
     );
@@ -322,9 +360,18 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     });
   }
   if (activeView === "connected-sites") {
-    fill(wallet.connectedSites(), (value) => {
-      cache.connectedSites = value;
-    });
+    // A failed read keeps a list already shown (revoking still validates on
+    // the background) and otherwise shows the failure, never an empty list.
+    fill(
+      wallet.connectedSites().then(
+        (sites): ConnectedSitesState => sites,
+        (): ConnectedSitesState =>
+          Array.isArray(cache.connectedSites) ? cache.connectedSites : "error",
+      ),
+      (value) => {
+        cache.connectedSites = value;
+      },
+    );
   }
   if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {
@@ -367,14 +414,23 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (multisigBalanceView && selectedMultisigId) {
     fill(multisig.loadBalances(selectedMultisigId, false, refreshReason === "action"), (value) => {
+      // A failed read keeps only this account's own last balances, marked
+      // stale. Another account's balances must never be relabelled as this
+      // one's (Sherlock 209).
+      const previous = cache.multisigBalances;
+      const ownPrevious =
+        cache.multisigBalanceId === selectedMultisigId &&
+        "balances" in previous &&
+        previous.accountId === selectedMultisigId &&
+        previous.networkId === status.networkId;
       cache.multisigBalanceId = selectedMultisigId;
       if ("balances" in value) {
         cache.multisigBalances =
           value.accountId !== selectedMultisigId || value.networkId !== status.networkId
             ? { error: "multisig balances unavailable" }
             : value;
-      } else if (!("error" in cache.multisigBalances)) {
-        cache.multisigBalances = { ...cache.multisigBalances, stale: true };
+      } else if (ownPrevious) {
+        cache.multisigBalances = { ...previous, stale: true };
       } else {
         cache.multisigBalances = value;
       }
@@ -390,15 +446,14 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     if (selected) {
       fill(wallet.loadTokenChart(selected.address), (value) => {
         cache.chart = value;
+        cache.chartTokenId = selected.id;
       });
     }
   }
   const flush = async (jobs: readonly Promise<unknown>[]): Promise<void> => {
     if (jobs.length > 0) {
       await Promise.all(jobs);
-      if (isCurrent()) {
-        paint();
-      }
+      paintIfCurrent(isCurrent, paint);
     }
   };
   await flush(primaryJobs);

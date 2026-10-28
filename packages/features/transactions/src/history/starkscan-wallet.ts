@@ -35,29 +35,49 @@ import {
 
 import type { StarkscanClient } from "./starkscan";
 import type { StarkscanTransfer } from "./starkscan-types";
-import { MAX_HISTORY_ENTRIES, onChainActivityEntry, type TransferDirection } from "./tx-history";
+import {
+  type HistoryLane,
+  MAX_HISTORY_ENTRIES,
+  onChainActivityEntry,
+  type TransferDirection,
+} from "./tx-history";
 import { scanTransactionHistory, type TransactionHistoryScan } from "./tx-history-scan";
 
+// The token a transfer moved, and whether the user tracks it. An untracked
+// token is any contract that emitted a Transfer naming the account, so nothing
+// it reports about the other party is trustworthy.
 const matchingToken = (
   tokens: readonly TokenConfig[],
   transfer: StarkscanTransfer,
   networkId: TransactionHistoryScan["networkId"],
-): TokenConfig | null => {
+): { readonly token: TokenConfig; readonly tracked: boolean } | null => {
   const configured = tokens.find((token) => sameFelt(token.address, transfer.tokenAddress));
   if (configured !== undefined) {
-    return configured;
+    return { token: configured, tracked: true };
   }
   if (!isSafeDecimals(transfer.tokenDecimals)) {
     return null;
   }
+  const address = canonicalFelt(transfer.tokenAddress) ?? transfer.tokenAddress;
   return {
-    address: canonicalFelt(transfer.tokenAddress) ?? transfer.tokenAddress,
-    decimals: transfer.tokenDecimals,
-    id: `starkscan:${networkId}:${canonicalFelt(transfer.tokenAddress) ?? transfer.tokenAddress}`,
-    name: "Untracked token",
-    networkId,
-    symbol: "TOKEN",
+    token: {
+      address,
+      decimals: transfer.tokenDecimals,
+      id: `starkscan:${networkId}:${address}`,
+      name: "Untracked token",
+      networkId,
+      symbol: "TOKEN",
+    },
+    tracked: false,
   };
+};
+
+const isZeroAmount = (value: string): boolean => {
+  try {
+    return BigInt(value) === 0n;
+  } catch {
+    return true;
+  }
 };
 
 const transferDirection = (
@@ -80,12 +100,18 @@ const toActivity = (
   if (transfer.standard !== "erc20") {
     return null;
   }
-  const token = matchingToken(input.tokens, transfer, input.networkId);
+  const matched = matchingToken(input.tokens, transfer, input.networkId);
   const direction = transferDirection(transfer, input.account);
   const timestampMs = Date.parse(transfer.timestampIso);
+  const amountRaw = transfer.amount ?? transfer.rawValue;
+  // Audit #163: a zero-amount leg (either direction) and an outgoing leg of an
+  // untracked token are both free for a third party to fabricate, and exist
+  // only to plant a lookalike "Sent to" / "Received from" row in the feed.
   if (
-    token === null ||
+    matched === null ||
     direction === null ||
+    isZeroAmount(amountRaw) ||
+    (!matched.tracked && direction.direction === "out") ||
     !Number.isSafeInteger(timestampMs) ||
     timestampMs < 0
   ) {
@@ -94,7 +120,7 @@ const toActivity = (
   const entry = onChainActivityEntry({
     accountId: input.accountId,
     decoded: {
-      amountRaw: transfer.amount ?? transfer.rawValue,
+      amountRaw,
       blockNumber: transfer.blockNumber,
       counterparty: canonicalFelt(direction.counterparty) ?? direction.counterparty,
       direction: direction.direction,
@@ -102,9 +128,14 @@ const toActivity = (
     },
     networkId: input.networkId,
     timestampMs,
-    token,
+    token: matched.token,
   });
-  return isActivityEntry(entry) ? entry : null;
+  // An incoming untracked-token row stays visible, but without a stored
+  // counterparty the feed offers no one-click copy of whatever address the
+  // arbitrary contract named as the sender.
+  const { counterparty: _untrusted, ...withoutCounterparty } = entry;
+  const kept = matched.tracked ? entry : withoutCounterparty;
+  return isActivityEntry(kept) ? kept : null;
 };
 
 /**
@@ -137,9 +168,12 @@ export const getStarkscanTransactionHistory = async (
 };
 
 /**
- * Serves an exact, complete indexed holdings snapshot as the wallet balance
- * response. Any incomplete or mismatched snapshot throws so callers can fall
- * back to latest-state RPC rather than silently treating missing rows as zero.
+ * Serves the gateway's latest balance of each tracked token as the wallet
+ * balance response, one `balance-of` read per token (#650: Starkscan retired
+ * the indexed token-holdings snapshot this lane used to read). Every answer
+ * must echo the requested network, token, owner and `latest` block tag, and
+ * any token that cannot be read fails the whole read: a missing row never
+ * becomes a zero balance, so callers keep the RPC failure instead.
  */
 export const getStarkscanTokenBalances = async (
   client: StarkscanClient,
@@ -156,28 +190,25 @@ export const getStarkscanTokenBalances = async (
   ) {
     throw new Error("Starkscan balance input must contain one indexed network");
   }
-  const snapshot = await client.getTokenHoldings(networkId, input.accountAddress, { limit: 200 });
-  if (
-    snapshot.chainId !== networkId ||
-    !sameFelt(snapshot.ownerAddress, input.accountAddress) ||
-    !snapshot.exact ||
-    snapshot.truncated ||
-    !snapshot.completeness.exact ||
-    snapshot.completeness.truncated ||
-    !snapshot.completeness.complete ||
-    snapshot.completeness.reasonCode !== "complete"
-  ) {
-    throw new Error("Starkscan holdings snapshot is incomplete");
-  }
-  return input.tokens.map((token) => {
-    const holding = snapshot.items.find((item) => sameFelt(item.tokenAddress, token.address));
-    const raw = BigInt(holding?.indexedBalanceRaw ?? "0");
-    return {
-      ...token,
-      balance: raw.toString(),
-      formatted: formatTokenAmount(raw, token.decimals),
-    };
-  });
+  return Promise.all(
+    input.tokens.map(async (token) => {
+      const reply = await client.getTokenBalance(networkId, token.address, input.accountAddress);
+      if (
+        reply.chainId !== networkId ||
+        reply.blockTag !== "latest" ||
+        !sameFelt(reply.tokenAddress, token.address) ||
+        !sameFelt(reply.ownerAddress, input.accountAddress)
+      ) {
+        throw new Error("Starkscan balance does not match the request");
+      }
+      const raw = BigInt(reply.balanceRaw);
+      return {
+        ...token,
+        balance: raw.toString(),
+        formatted: formatTokenAmount(raw, token.decimals),
+      };
+    }),
+  );
 };
 
 /**
@@ -265,6 +296,16 @@ export const createRpcFirstBalances =
   };
 
 /**
+ * Discovered history rows and the lane that produced them. The lane is
+ * provenance only: no discovered row settles the status of a transaction the
+ * wallet is still observing (see `mergeActivity`).
+ */
+export type DiscoveredHistory = {
+  readonly entries: readonly ActivityEntry[];
+  readonly lane: HistoryLane;
+};
+
+/**
  * Serves activity from the explorer gateway first and falls back to the RPC
  * transfer scan when the gateway cannot be used or does not answer.
  *
@@ -287,24 +328,31 @@ export const createRpcFirstBalances =
  * rate limit or its cooldown, malformed body — is silently replaced by the RPC
  * scan, whose own failure propagates so the caller degrades to the local log
  * with an honest "history unavailable" indicator. The feed is therefore marked
- * unavailable only when no permitted lane answered.
+ * unavailable only when no permitted lane answered. The result names the lane
+ * that answered.
  */
 export const createExplorerFirstHistory =
-  (options: ExplorerLaneReadOptions): typeof scanTransactionHistory =>
+  (
+    options: ExplorerLaneReadOptions,
+  ): ((
+    input: TransactionHistoryScan,
+    makeProvider?: Parameters<typeof scanTransactionHistory>[1],
+  ) => Promise<DiscoveredHistory>) =>
   async (input, makeProvider) => {
     if (input.networkId !== "SN_DEVNET") {
       const preferences = await gatewayPreferencesFor(options.readPreferences, input.networkId);
       if (preferences !== null) {
         try {
-          return await getStarkscanTransactionHistory(
+          const entries = await getStarkscanTransactionHistory(
             gatewayClientFor(options, input.networkId, preferences),
             input,
           );
+          return { entries, lane: "explorer" };
         } catch {
           // The gateway's failure is not the user's endpoint's failure: fall
           // through to the RPC scan and let its outcome speak.
         }
       }
     }
-    return scanTransactionHistory(input, makeProvider);
+    return { entries: await scanTransactionHistory(input, makeProvider), lane: "chain-events" };
   };

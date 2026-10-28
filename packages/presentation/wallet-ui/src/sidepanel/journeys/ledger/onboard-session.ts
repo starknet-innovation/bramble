@@ -40,6 +40,8 @@ import {
   MAX_LEDGER_ACCOUNT_BATCH,
   READY_EIP2645_APPLICATION,
 } from "@bramble/wallet-model/ledger-path";
+import { friendlyError } from "../../runtime/friendly-error";
+import { ADD_ACCOUNT_FAILED } from "../../runtime/friendly-error-shared";
 import {
   type LedgerCandidate,
   type LedgerCandidateState,
@@ -228,13 +230,19 @@ export const createLedgerOnboardController = (
       );
       await closeLedgerSessionQuietly(session);
       session = null;
-      // Ready deploys only Argent accounts for a Ledger, so a key read at its
-      // scheme derives that one family. Under Bramble's scheme both families
-      // derive from the same device key, so the picker can group Bramble and
-      // Argent-model accounts side by side.
+      // Ready and Braavos both own their Ledger accounts at the `argentx`
+      // scheme, so a key read there derives one account of each family — the
+      // same device key, two classes, two addresses — and the on-chain probe
+      // reveals which is live. Under Bramble's scheme the device key derives an
+      // OpenZeppelin and an Argent account, grouped side by side.
       const accounts =
         application === READY_EIP2645_APPLICATION
-          ? await deps.derive(entries, "argent", application)
+          ? (
+              await Promise.all([
+                deps.derive(entries, "argent", application),
+                deps.derive(entries, "braavos", application),
+              ])
+            ).flat()
           : (
               await Promise.all([
                 deps.derive(entries, "openzeppelin", application),
@@ -364,9 +372,14 @@ export const createLedgerOnboardController = (
       await deps.refresh();
     } catch (error) {
       // Creating a keyless account is a background op (no device), so a failure
-      // here is a wallet error (duplicate, locked) — surface its message, not a
-      // device-catalog message.
-      const message = error instanceof Error ? error.message : "Could not add the account.";
+      // here is a wallet error (duplicate, locked, a Braavos key with no
+      // account), never a device-catalog message. The background replies with
+      // a raw diagnostic, so it is translated before it reaches the picker;
+      // the wallet's own plumbing reads as "couldn't add that account".
+      const message = friendlyError(
+        error instanceof Error ? error.message : "",
+        ADD_ACCOUNT_FAILED,
+      ).message;
       await deps.refresh().catch(() => undefined);
       if (epoch === flowEpoch) {
         renderPicker(message);
@@ -392,7 +405,10 @@ export const createLedgerOnboardController = (
       deps.render(null);
       await deps.refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not add the account.";
+      const message = friendlyError(
+        error instanceof Error ? error.message : "",
+        ADD_ACCOUNT_FAILED,
+      ).message;
       deps.render({ kind: "error", message });
     } finally {
       busy = false;
@@ -418,6 +434,10 @@ export const createLedgerOnboardController = (
       void runChooseHd("openzeppelin");
     } else if (kind === "import") {
       deps.render({ kind: "import-chooser" });
+    } else if (kind === "find-accounts") {
+      // Rescans the phrase this wallet already holds; the panel types nothing.
+      deps.render(null);
+      deps.openFindAccounts();
     } else if (kind === "import-phrase") {
       deps.render(null);
       deps.openImportSeed();

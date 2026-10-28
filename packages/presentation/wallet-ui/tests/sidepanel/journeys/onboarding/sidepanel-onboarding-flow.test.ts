@@ -471,6 +471,7 @@ describe("staged onboarding", () => {
     await tick();
     expect(flow.validations).toEqual([MNEMONIC]);
     expect(activeStep(flow.app)).toBe("password");
+    expect(document.querySelector(".toast.success")?.textContent).toBe("Valid recovery phrase");
   });
 
   test("keeps an invalid checksum phrase on the recovery step", async () => {

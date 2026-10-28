@@ -6,7 +6,7 @@
  * and is never logged, echoed, or stored in preferences. Reuses the first-run
  * scan binder so detection, grouping, and selection behave identically.
  */
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { bindRecoveryAccountUi } from "../onboarding/recovery-account-ui";
 import { bindRecoveryWordAssist } from "../onboarding/recovery-word-assist";
 import {
@@ -37,6 +37,9 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
   const lengthToggle = form.querySelector<HTMLButtonElement>("#phrase-length-toggle");
   let wordCount: 12 | 24 = 12;
   let mnemonic = "";
+  // Bumped by the post-import wipe, so a validation still in flight from a
+  // Search pressed during the import cannot put the phrase back afterwards.
+  let searchGeneration = 0;
 
   const wordAssist = bindRecoveryWordAssist(inputs, form);
   const refreshWords = (): void => {
@@ -62,7 +65,9 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
       wordCount === 12 ? "Use a 24-word phrase" : "Use a 12-word phrase",
     );
   };
+  const clear = form.querySelector<HTMLButtonElement>("#phrase-clear");
   bindRecoveryWordEntry({
+    clear,
     fillWords: (words) => {
       wordCount = fillRecoveryWords(form, inputs, words, "import");
       syncToggleLabel();
@@ -77,11 +82,32 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
     refreshWords();
   });
 
+  // Drops the validated copy and closes the picker, so neither a pending
+  // Search nor "Import selected accounts" can act on a phrase that was wiped.
+  const forgetPhrase = (): void => {
+    mnemonic = "";
+    searchGeneration += 1;
+    if (scanSection) {
+      scanSection.hidden = true;
+    }
+  };
+  // Runs after the shared binder has emptied the cells.
+  clear?.addEventListener("click", forgetPhrase);
+
   const scan = bindRecoveryAccountUi({
     existingIds: () => deps.existingAccountIds?.() ?? new Set<string>(),
     form,
     mnemonic: () => mnemonic,
     networkId: deps.networkId,
+    // This screen survives a successful import unchanged, so wipe the phrase
+    // here: every cell, the retained copy, and the account picker.
+    onRestored: () => {
+      forgetPhrase();
+      wordAssist.hideSuggestions();
+      // Back to 12 cells; the fill also resets the length toggle label.
+      wordCount = fillRecoveryWords(form, inputs, [], "import");
+      refreshWords();
+    },
     render: deps.render,
     restore: (phrase, networkId, selections) =>
       deps.wallet.importSeedAccounts(phrase, networkId, selections),
@@ -95,8 +121,20 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
       return;
     }
     buttonBusy(search, true);
+    const attempt = searchGeneration;
+    const superseded = (): boolean => {
+      if (attempt === searchGeneration) {
+        return false;
+      }
+      buttonBusy(search, false);
+      refreshWords();
+      return true;
+    };
     void deps.wallet.validateMnemonic(phrase).then(
       (valid) => {
+        if (superseded()) {
+          return;
+        }
         buttonBusy(search, false);
         if (!valid) {
           if (result) {
@@ -109,17 +147,21 @@ export const bindImportPhrase = (deps: SettingsUiDeps): void => {
         if (result) {
           result.textContent = "";
         }
+        showToast("Valid recovery phrase", "success", form);
         if (scanSection) {
           scanSection.hidden = false;
         }
         scan.start();
       },
       (error: unknown) => {
+        if (superseded()) {
+          return;
+        }
         buttonBusy(search, false);
         if (result) {
           result.textContent = errorLine(error, "Phrase validation is unavailable");
         }
-        showToast(errorMessage(error, "Phrase validation is unavailable"), "error", form);
+        showToast(errorDetails(error, "Phrase validation is unavailable"), "error", form);
       },
     );
   });

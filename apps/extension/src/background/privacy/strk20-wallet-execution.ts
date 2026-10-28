@@ -27,14 +27,20 @@ import {
   type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@bramble/privacy/service";
+import { SHADOW_SWEEP_ACTIVITY } from "@bramble/privacy/shadow-account-copy";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { activityToken } from "@bramble/transactions/activity";
 import { verificationContext } from "@bramble/transactions/verify";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { PrivacyBlockerError, privacyShortfall } from "@bramble/wallet-protocol/privacy-blocker";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { approvalPayloadMatchesContext } from "../approvals/approval-context";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import type { Strk20WalletExecuteResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
@@ -47,6 +53,7 @@ import {
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
+import { submitShadowSweep } from "./strk20-shadow-sweep";
 import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
@@ -81,9 +88,25 @@ const preparationStillMatches = async (
   );
 };
 
-// What the activity log records for a settled privacy operation. A deposit
-// crediting someone else names them, because "Shield 5 STRK" in a history beside
-// a payment to a friend is the same ambiguity that once hid a misdirected send.
+const counterpartyOf = (payee: string | undefined): { readonly counterparty?: string } =>
+  payee === undefined ? {} : { counterparty: payee };
+
+// The other party a privacy operation pays, or undefined when it stays within
+// the account. Recorded as the activity counterparty, so a payee joins the
+// paid-recipient trust set like any other wallet-submitted payment.
+const otherParty = (
+  preparation: Strk20WalletPreparation,
+  context: ActivePrivacyContext,
+): string | undefined =>
+  preparation.kind === "register" ||
+  sameFelt(preparation.recipient, context.accountContext.account.address)
+    ? undefined
+    : preparation.recipient;
+
+// What the activity log records for a settled privacy operation. A shield or
+// unshield crediting someone else names them, because "Unshield 5 STRK" in a
+// history beside a payment to a friend reads as a move between the owner's own
+// balances: the same ambiguity that once hid a misdirected send (Sherlock 201).
 const activitySummary = (
   preparation: Strk20WalletPreparation,
   context: ActivePrivacyContext,
@@ -91,16 +114,18 @@ const activitySummary = (
   if (preparation.kind === "register") {
     return STRK20_REGISTRATION_SUMMARY;
   }
+  if (preparation.kind === "shadow-sweep") {
+    // Generic on purpose: activity is plain browser storage and CSV export,
+    // and the scope's site, label, and nonce stay in the encrypted vault.
+    return SHADOW_SWEEP_ACTIVITY;
+  }
   const value = `${preparation.amount} ${preparation.token.symbol}`;
   if (preparation.kind === "transfer") {
     return `Send ${value} privately`;
   }
-  if (preparation.kind === "withdraw") {
-    return `Unshield ${value}`;
-  }
-  return sameFelt(preparation.recipient, context.accountContext.account.address)
-    ? `Shield ${value}`
-    : `Shield ${value} to ${preparation.recipient}`;
+  const verb = preparation.kind === "withdraw" ? "Unshield" : "Shield";
+  const payee = otherParty(preparation, context);
+  return payee === undefined ? `${verb} ${value}` : `${verb} ${value} to ${payee}`;
 };
 
 // A third-party private credit can only be encoded for a recipient whose
@@ -130,9 +155,15 @@ const assertCurrentRecipientPolicy = async (
   preparation: Exclude<Strk20WalletPreparation, { readonly kind: "register" }>,
   context: ActivePrivacyContext,
 ): Promise<void> => {
+  // Fresh preferences (a contact saved since review counts), with the same
+  // own-account and paid-recipient trust inputs the context was built with.
   const refusal = refusePoisonedStrk20Actions(
     context.accountContext.account,
-    await deps.preferencesStore.read(),
+    await withTrustedRecipients(
+      deps,
+      await deps.preferencesStore.read(),
+      context.preferences.ownAccounts,
+    ),
     preparation.actions,
   );
   if (refusal) {
@@ -162,7 +193,7 @@ const submitPreparedPrivateBatch = async (
     tokens: [context.token.address],
   });
   if (BigInt(privateBalance?.balance ?? "0x0") < BigInt(preparation.amountRaw)) {
-    throw new WalletError(`Not enough private ${preparation.token.symbol}`);
+    throw new WalletError(privacyShortfall(preparation.token.symbol, "private"));
   }
   return submitStrk20Actions(service, {
     ...context.accountContext,
@@ -250,6 +281,9 @@ const submitPreparation = (
   if (preparation.kind === "transfer" || preparation.kind === "withdraw") {
     return submitPreparedPrivateBatch(deps, service, preparation, context);
   }
+  if (preparation.kind === "shadow-sweep") {
+    return submitShadowSweep(service, preparation, context);
+  }
   return submitPreparedRegistration(deps, service, preparation, context);
 };
 
@@ -263,9 +297,27 @@ const executionWork = async (
   report: Strk20PhaseSink,
 ): Promise<RuntimeResponse> => {
   const context = reportingPrivacyContext(resolved, report);
+  let result: Strk20SubmissionResult;
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
-    const result = await submitPreparation(deps, service, preparation, context);
+    result = await submitPreparation(deps, service, preparation, context);
+  } catch (error) {
+    // A lost relay or RPC reply may still land: say so instead of "failed",
+    // so the panel does not report it as not sent (audit #173).
+    if (error instanceof IndeterminateRpcWriteError) {
+      return submissionUnknownResponse(errorText(error, "Private transaction failed"));
+    }
+    // A curated prerequisite (the pool-fee balance check, a deploy-first
+    // refusal) is raised before anything is signed, so its kind travels with
+    // it and the panel reads it as not sent rather than as unknown (#679).
+    if (error instanceof PrivacyBlockerError) {
+      return { error: errorText(error, "Private transaction failed"), privacyBlocker: error.kind };
+    }
+    return { error: errorText(error, "Private transaction failed") };
+  }
+  // The hash exists from here on, so the reply carries it whatever the
+  // bookkeeping does (errors audit F1).
+  await afterBroadcast(async () => {
     // Entering the pool approves it to pull the deposit and its fee from the
     // account's PUBLIC balance, so those grants are tracked exactly like any
     // other approval this wallet submits — see `Strk20SubmissionResult`. Filed
@@ -276,20 +328,24 @@ const executionWork = async (
       calls: result.allowanceGrants ?? [],
       owner: allowanceOwner(context.accountContext.account),
       store: deps.allowanceStore,
+      transactionHash: result.transactionHash,
     });
     await recordSubmittedActivity(deps.activity, {
       accountId: context.accountContext.account.id,
-      ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
+      ...(preparation.kind === "register" || preparation.kind === "shadow-sweep"
+        ? {}
+        : { amount: preparation.amount }),
+      ...counterpartyOf(otherParty(preparation, context)),
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.accountContext.account.networkId,
       summary: activitySummary(preparation, context),
-      ...(preparation.kind === "register" ? {} : { token: preparation.token.symbol }),
+      ...(preparation.kind === "register" || preparation.kind === "shadow-sweep"
+        ? {}
+        : activityToken(preparation.token)),
     });
-    return { ok: true, transactionHash: result.transactionHash };
-  } catch (error) {
-    return { error: errorText(error, "Private transaction failed") };
-  }
+  });
+  return { ok: true, transactionHash: result.transactionHash };
 };
 
 /**

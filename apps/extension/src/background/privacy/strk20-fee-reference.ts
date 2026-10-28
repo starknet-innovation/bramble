@@ -8,8 +8,9 @@
  * so this must never consult the paymaster.
  *
  * Every unknown fails closed by returning `null`: an unlisted token, a missing
- * or non-positive price, or decimals outside the range a real ERC20 declares.
- * The caller turns that into a refused route, never an unbounded quote.
+ * or non-positive price, a price snapshot the feed could not refresh, or
+ * decimals outside the range a real ERC20 declares. The caller turns that into
+ * a refused route, never an unbounded quote.
  */
 
 import type { PriceService } from "@bramble/portfolio/prices";
@@ -82,6 +83,14 @@ export const createStrk20FeeReference = (prices: PriceService): Strk20FeeReferen
       currency: REFERENCE_CURRENCY,
       networkId,
     });
+    // When the feed is unreachable it serves its last-known-good snapshot with
+    // `stale` set and no age limit. A months-old high STRK rate would let the
+    // relay charge far above the intended ceiling, so only a snapshot the feed
+    // vouches for as current may bound a fee; the route then falls back to
+    // the configured token's exact bound.
+    if (quote.stale || quote.asOf === null) {
+      return null;
+    }
     const strkPrice = scaledPrice(priceFor(quote.prices, strk.address));
     const feePrice = scaledPrice(priceFor(quote.prices, fee.address));
     if (strkPrice === null || feePrice === null || poolFeeFri <= 0n) {

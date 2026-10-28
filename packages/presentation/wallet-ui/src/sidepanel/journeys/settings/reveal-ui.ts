@@ -16,8 +16,8 @@ import { textField } from "@bramble/ui-kit/fields";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
-import { bindGuardedCopy } from "../../shared/guarded-copy";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { bindGuardedCopy, GUARDED_COPY_NOTE, guardedCopyNote } from "../../shared/guarded-copy";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen } from "../../shared/parts";
 
@@ -51,7 +51,7 @@ export const revealFlow = (status: WalletStatus): string => {
         "reveal",
         `<section class="section" role="note">
           <p class="eyebrow">Recovery</p>
-          <p class="hint">This account’s key is on your Ledger. Recover it with the device.</p>
+          <p class="hint" id="reveal-ledger-note">This account's key is on your Ledger. To recover it, use the Ledger's own recovery phrase.</p>
         </section>`,
       )
     );
@@ -87,9 +87,15 @@ export const revealFlow = (status: WalletStatus): string => {
           label: "Copy recovery phrase",
           variant: "ghost",
         })}
-        <p class="hint" id="reveal-copy-note">Copy at your own risk</p>
-        <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
-        <code class="reveal-value is-masked" id="reveal-key"></code>
+        <p class="hint" id="reveal-copy-note">${GUARDED_COPY_NOTE}</p>
+        ${
+          // With no account on this network there is no active key: the
+          // background reveals the recovery phrase alone.
+          activeAccount
+            ? `<p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
+        <code class="reveal-value is-masked" id="reveal-key"></code>`
+            : ""
+        }
         ${
           activeIsImported
             ? '<p class="hint" id="reveal-imported-note">This account was imported from a raw key, so the wallet recovery phrase above does not restore it — its private key shown here is its only backup.</p>'
@@ -126,6 +132,11 @@ export const bindReveal = (deps: RevealUiDeps): void => {
   // the DOM. Putting it in a data attribute — as the shared inline copy control
   // does — would mint a second copy that outlives the mask.
   bindGuardedCopy(copyPhrase ?? null, () => phraseEl?.textContent ?? "");
+  // The markup promises the one-minute clear; where it cannot run, say so.
+  const copyNote = deps.app?.querySelector<HTMLElement>("#reveal-copy-note");
+  if (copyNote) {
+    copyNote.textContent = guardedCopyNote(copyNote.ownerDocument.defaultView);
+  }
 
   toggle?.addEventListener("click", () => {
     const masked = phraseEl?.classList.toggle("is-masked") ?? true;
@@ -144,7 +155,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
             secrets.mnemonic ?? "No recovery phrase is stored for this wallet.";
         }
         if (keyEl) {
-          keyEl.textContent = secrets.privateKey;
+          keyEl.textContent = secrets.privateKey ?? "";
         }
         output?.removeAttribute("hidden");
         if (result) {
@@ -154,7 +165,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
         buttonBusy(submitButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Reveal failed"), "error", form);
+        showToast(errorDetails(error, "Reveal failed"), "error", form);
         if (result) {
           result.textContent = errorLine(error, "Reveal failed");
         }

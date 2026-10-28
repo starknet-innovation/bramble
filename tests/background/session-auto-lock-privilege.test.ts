@@ -80,6 +80,10 @@ const makeHarness = async () => {
       async estimateAccountDeploymentFee() {
         return { overallFee: "1", unit: "FRI" };
       },
+      // An undeployed account, as a deployment needs (mc-wallet 712).
+      async getDeploymentStatus() {
+        return false;
+      },
     }),
     session,
   });

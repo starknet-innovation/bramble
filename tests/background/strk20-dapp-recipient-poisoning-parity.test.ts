@@ -9,14 +9,16 @@
  * two did not — same product line, same recipient semantics, opposite policy,
  * and the unenforced side was the attacker-controlled one.
  *
- * Two enforcement points, both pinned here: the request-time gate, so no confirm
- * button is ever raised for a poisoned payment, and the post-consent gate in
- * ./strk20-approval-execution, which is the last thing that runs before a proof
- * is produced or a transaction is broadcast. The second is not redundant — the
- * contact a recipient mimics can be saved while the prompt is on screen.
+ * Two enforcement points, both pinned here. At request time a poisoned payment
+ * is queued with an `address-poisoning` flag, whose card offers Deny only,
+ * rather than refused on arrival: an instant refusal told the site which
+ * addresses the user has saved or paid (Sherlock 140). The post-consent gate in
+ * ./strk20-approval-execution, the last thing that runs before a proof is
+ * produced or a transaction is broadcast, refuses it even if it is approved,
+ * and also catches a contact saved while the prompt is on screen.
  *
  * Flat invokes have no selector, so their calldata is conservatively scanned;
- * subaccount invokes carry full calls and use the exact shared decoder.
+ * shadow account invokes carry full calls and use the exact shared decoder.
  */
 import { describe, expect, test } from "bun:test";
 import type { Strk20Service } from "@bramble/privacy/service";
@@ -26,7 +28,7 @@ import {
   CLEAN_RECIPIENT,
   POISONED_RECIPIENT,
   poolPreferences,
-  subaccountPoolPreferences,
+  shadowAccountPoolPreferences,
 } from "../support/poisoned-recipients";
 import {
   approveHeldStrk20,
@@ -61,23 +63,36 @@ const prepareMessage = (type: "transfer" | "withdraw", recipient: string) => ({
 
 const routes = ["transfer", "withdraw"] as const;
 
-const expectRefusedWithoutPrompt = async (
+type ListedApproval = {
+  readonly flags?: readonly { readonly code: string; readonly message: string }[];
+  readonly id: string;
+};
+
+// Queued with the poisoning flag instead of refused on arrival, so the answer
+// reveals nothing about the address book until the user acts; even a forced
+// approve is refused at the post-consent gate, before anything is proved.
+const expectFlaggedAndRefusedOnApprove = async (
   handler: Strk20Handler,
   message: Readonly<Record<string, unknown>>,
+  proveCalls: { value: number },
 ): Promise<void> => {
   const response = handler(message, STRK20_CONTENT_SENDER);
   await flushHeld();
-  await expect(
-    handler({ type: "wallet.pendingApprovals" }, STRK20_EXTENSION_SENDER),
-  ).resolves.toMatchObject({ pending: [] });
+  const listed = await waitForPendingApprovals<ListedApproval>(handler, STRK20_EXTENSION_SENDER);
+  const approval = listed.at(-1);
+  expect(approval?.flags).toEqual([
+    { code: "address-poisoning", message: expect.stringContaining("closely mimics") },
+  ]);
+  await handler({ id: approval?.id, type: "wallet.approveOrigin" }, STRK20_EXTENSION_SENDER);
   await expect(response).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
+  expect(proveCalls.value).toBe(0);
 };
 
-// A `subaccount_invoke` carries full spec INVOKE_CALLs — contract, entry point,
+// A `shadow_account_invoke` carries full spec INVOKE_CALLs — contract, entry point,
 // and felt calldata — which is exactly the shape `wallet.addInvokeTransaction`
 // accepts and the shared verifier decodes. The recipient below therefore sits in
 // the same calldata slot the public dapp route refuses on.
-const subaccountInvokeMessage = (recipient: string) => ({
+const shadowAccountInvokeMessage = (recipient: string) => ({
   actions: [
     {
       calls: [
@@ -90,31 +105,41 @@ const subaccountInvokeMessage = (recipient: string) => ({
       collect_policy: { type: "all" },
       dapp_name: "Example",
       nonce: "0x7",
-      type: "subaccount_invoke",
+      type: "shadow_account_invoke",
     },
   ],
   origin: STRK20_ORIGIN,
   type: "wallet.strk20InvokeTransaction",
 });
 
-const subaccountPrepareMessage = (recipient: string) => ({
-  ...subaccountInvokeMessage(recipient),
+const shadowAccountPrepareMessage = (recipient: string) => ({
+  ...shadowAccountInvokeMessage(recipient),
   simulate: false,
   type: "wallet.strk20PrepareInvoke",
 });
 
 describe("dapp-facing STRK20 invoke", () => {
   for (const kind of routes) {
-    test(`refuses a poisoned ${kind} instead of queueing a prompt to confirm`, async () => {
-      const handler = buildStrk20Handler({ preferences: poolPreferences() });
+    test(`flags a poisoned ${kind} and refuses it even when approved`, async () => {
+      const proveCalls = { value: 0 };
+      const handler = buildStrk20Handler({ preferences: poolPreferences(), proveCalls });
 
-      await expectRefusedWithoutPrompt(handler, invokeMessage(kind, POISONED_RECIPIENT));
+      await expectFlaggedAndRefusedOnApprove(
+        handler,
+        invokeMessage(kind, POISONED_RECIPIENT),
+        proveCalls,
+      );
     });
 
-    test(`refuses a poisoned ${kind} preparation`, async () => {
-      const handler = buildStrk20Handler({ preferences: poolPreferences() });
+    test(`flags a poisoned ${kind} preparation and refuses it even when approved`, async () => {
+      const proveCalls = { value: 0 };
+      const handler = buildStrk20Handler({ preferences: poolPreferences(), proveCalls });
 
-      await expectRefusedWithoutPrompt(handler, prepareMessage(kind, POISONED_RECIPIENT));
+      await expectFlaggedAndRefusedOnApprove(
+        handler,
+        prepareMessage(kind, POISONED_RECIPIENT),
+        proveCalls,
+      );
     });
 
     test(`still submits a ${kind} to a recipient the wallet does not recognize`, async () => {
@@ -128,45 +153,75 @@ describe("dapp-facing STRK20 invoke", () => {
     });
   }
 
-  test("refuses a poisoned sub-account invoke instead of queueing a prompt to confirm", async () => {
-    const handler = buildStrk20Handler({ preferences: subaccountPoolPreferences() });
+  test("flags a poisoned shadow account invoke and refuses it even when approved", async () => {
+    const proveCalls = { value: 0 };
+    const handler = buildStrk20Handler({ preferences: shadowAccountPoolPreferences(), proveCalls });
 
-    await expectRefusedWithoutPrompt(handler, subaccountInvokeMessage(POISONED_RECIPIENT));
+    await expectFlaggedAndRefusedOnApprove(
+      handler,
+      shadowAccountInvokeMessage(POISONED_RECIPIENT),
+      proveCalls,
+    );
   });
 
-  test("refuses a poisoned sub-account invoke preparation", async () => {
-    const handler = buildStrk20Handler({ preferences: subaccountPoolPreferences() });
+  test("flags a poisoned shadow account invoke preparation and refuses it even when approved", async () => {
+    const proveCalls = { value: 0 };
+    const handler = buildStrk20Handler({ preferences: shadowAccountPoolPreferences(), proveCalls });
 
-    await expectRefusedWithoutPrompt(handler, subaccountPrepareMessage(POISONED_RECIPIENT));
+    await expectFlaggedAndRefusedOnApprove(
+      handler,
+      shadowAccountPrepareMessage(POISONED_RECIPIENT),
+      proveCalls,
+    );
   });
 
-  test("still submits a sub-account invoke paying a recipient the wallet does not recognize", async () => {
+  test("answers a denied poisoned request exactly as a denied clean one (Sherlock 140)", async () => {
+    const denied = async (recipient: string): Promise<unknown> => {
+      const handler = buildStrk20Handler({ preferences: poolPreferences() });
+      const response = handler(invokeMessage("transfer", recipient), STRK20_CONTENT_SENDER);
+      await flushHeld();
+      const listed = await waitForPendingApprovals<ListedApproval>(
+        handler,
+        STRK20_EXTENSION_SENDER,
+      );
+      await handler({ id: listed.at(-1)?.id, type: "wallet.denyOrigin" }, STRK20_EXTENSION_SENDER);
+      return response;
+    };
+    expect(await denied(POISONED_RECIPIENT)).toEqual(await denied(CLEAN_RECIPIENT));
+  });
+
+  test("still submits a shadow account invoke paying a recipient the wallet does not recognize", async () => {
     const proveCalls = { value: 0 };
     const handler = buildStrk20Handler({
-      preferences: subaccountPoolPreferences(),
+      preferences: shadowAccountPoolPreferences(),
       proveCalls,
     });
 
     await expect(
-      approveHeldStrk20(handler, subaccountInvokeMessage(CLEAN_RECIPIENT), "strk20-invoke"),
+      approveHeldStrk20(handler, shadowAccountInvokeMessage(CLEAN_RECIPIENT), "strk20-invoke"),
     ).resolves.toMatchObject({ ok: true });
     expect(proveCalls.value).toBe(1);
   });
 
-  test("refuses a poisoned felt hidden in selector-free flat invoke calldata", async () => {
-    const handler = buildStrk20Handler({ preferences: poolPreferences() });
+  test("flags a poisoned felt hidden in selector-free flat invoke calldata", async () => {
+    const proveCalls = { value: 0 };
+    const handler = buildStrk20Handler({ preferences: poolPreferences(), proveCalls });
 
-    await expectRefusedWithoutPrompt(handler, {
-      actions: [
-        {
-          calldata: ["0x1", POISONED_RECIPIENT, "0x0"],
-          contract: STRK20_TOKEN,
-          type: "invoke",
-        },
-      ],
-      origin: STRK20_ORIGIN,
-      type: "wallet.strk20InvokeTransaction",
-    });
+    await expectFlaggedAndRefusedOnApprove(
+      handler,
+      {
+        actions: [
+          {
+            calldata: ["0x1", POISONED_RECIPIENT, "0x0"],
+            contract: STRK20_TOKEN,
+            type: "invoke",
+          },
+        ],
+        origin: STRK20_ORIGIN,
+        type: "wallet.strk20InvokeTransaction",
+      },
+      proveCalls,
+    );
   });
 });
 
@@ -229,8 +284,8 @@ describe("post-consent enforcement", () => {
     expect(proveCalls.value).toBe(0);
   });
 
-  test("refuses to submit an approved sub-account invoke whose recipient became a lookalike", async () => {
-    const clean: WalletPreferences = { ...subaccountPoolPreferences(), addressBook: [] };
+  test("refuses to submit an approved shadow account invoke whose recipient became a lookalike", async () => {
+    const clean: WalletPreferences = { ...shadowAccountPoolPreferences(), addressBook: [] };
     let current = clean;
     const proveCalls = { value: 0 };
     const handler = buildStrk20Handler({ preferencesRead: () => current, proveCalls });
@@ -238,10 +293,10 @@ describe("post-consent enforcement", () => {
     await expect(
       approveHeldStrk20(
         handler,
-        subaccountInvokeMessage(POISONED_RECIPIENT),
+        shadowAccountInvokeMessage(POISONED_RECIPIENT),
         "strk20-invoke",
         () => {
-          current = subaccountPoolPreferences();
+          current = shadowAccountPoolPreferences();
         },
       ),
     ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });

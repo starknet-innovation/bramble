@@ -115,7 +115,7 @@ final class ReadyTransferBridgeTests: XCTestCase {
         let unsupported = SendFailure(code: .accountClassUnsupported, hash: nil, detail: "argent 0.3.1")
         XCTAssertEqual(
             SendFailureText.message(unsupported),
-            SendCopy.failurePrefix + "Deployed Argent account class (argent 0.3.1) "
+            SendCopy.failurePrefix + "Deployed Argent account class "
                 + "expects an authorization format this wallet does not produce"
         )
         let codes: [SendFailureCode] = [

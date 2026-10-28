@@ -196,6 +196,40 @@ describe("readProviderWatchAsset", () => {
       readProviderWatchAsset({ chainId: "0x1", options: { address: tokenAddress }, type: "ERC20" }),
     ).toBeNull();
   });
+
+  test("accepts the wallet-API image field and drops it (Sherlock 252)", () => {
+    expect(
+      readProviderWatchAsset({
+        ...watchParams,
+        options: { ...watchParams.options, image: "https://example.com/usdc.png" },
+      }),
+    ).toEqual({ address: tokenAddress, decimals: 6, symbol: "USDC" });
+    expect(
+      readProviderWatchAsset({ ...watchParams, options: { ...watchParams.options, image: 7 } }),
+    ).toBeNull();
+  });
+
+  test("accepts the optional api_version beside type and drops it", () => {
+    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+      expect(readProviderWatchAsset({ ...watchParams, api_version })).toEqual({
+        address: tokenAddress,
+        decimals: 6,
+        symbol: "USDC",
+      });
+    }
+  });
+
+  test("rejects a malformed api_version, or one nested inside options", () => {
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+      expect(readProviderWatchAsset({ ...watchParams, api_version })).toBeNull();
+    }
+    expect(
+      readProviderWatchAsset({
+        options: { ...watchParams.options, api_version: "0.10.4" },
+        type: "ERC20",
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("background provider input readers", () => {
@@ -255,16 +289,18 @@ describe("watchAssetToken", () => {
     });
   });
 
-  test("falls back to dapp options when metadata is missing", () => {
+  test("refuses a token with no on-chain metadata rather than trust the dapp's decimals (Sherlock 125)", () => {
     expect(
       watchAssetToken({ address: tokenAddress, decimals: 6, symbol: "USDC" }, null, "SN_SEPOLIA"),
-    ).toEqual({
-      address: tokenAddress,
-      decimals: 6,
-      name: "USDC",
-      networkId: "SN_SEPOLIA",
-      symbol: "USDC",
-    });
+    ).toBeNull();
+    // The dapp's decimals never override the chain's, whatever it declares.
+    expect(
+      watchAssetToken(
+        { address: tokenAddress, decimals: 0, symbol: "USDC" },
+        { decimals: 18, name: "Token", symbol: "TKN" },
+        "SN_MAIN",
+      )?.decimals,
+    ).toBe(18);
   });
 
   test("rejects unusable tokens", () => {
@@ -278,6 +314,24 @@ describe("watchAssetToken", () => {
         null,
         "SN_MAIN",
       ),
+    ).toBeNull();
+  });
+});
+
+describe("request arguments with params set to undefined (Sherlock 254)", () => {
+  test("read the same as leaving params out, in both call forms", () => {
+    expect(
+      readProviderRequestArguments({ method: "wallet_requestChainId", params: undefined }),
+    ).toEqual({ method: "wallet_requestChainId" });
+    expect(
+      readProviderRequestArguments({ params: undefined, type: "wallet_requestChainId" }),
+    ).toEqual({ method: "wallet_requestChainId" });
+  });
+
+  test("still refuse a params value a method does not take, and unknown keys", () => {
+    expect(readProviderRequestArguments({ method: "mc_accounts", params: [] })).toBeNull();
+    expect(
+      readProviderRequestArguments({ extra: undefined, method: "wallet_requestChainId" }),
     ).toBeNull();
   });
 });

@@ -6,7 +6,8 @@
 import { describe, expect, test } from "bun:test";
 import type { Json } from "@bramble/core/json";
 import { providerInvokeCalls } from "@bramble/wallet-protocol/invoke";
-import { readApiVersionParam, readTypedDataParam } from "@bramble/wallet-protocol/results";
+import { readApiVersionParam } from "@bramble/wallet-protocol/results";
+import { readTypedDataParam } from "@bramble/wallet-protocol/typed-data-params";
 
 const asJson = (value: unknown): Json => value as Json;
 

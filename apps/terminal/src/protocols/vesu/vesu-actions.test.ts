@@ -4,15 +4,24 @@ import {
   buildVesuRewardClaimCalls,
   buildVesuVaultDepositCalls,
   buildVesuVaultRedeemCalls,
+  VESU_VAULT_DEPOSITS_PAUSED,
 } from "./vesu-actions";
 
 describe("Vesu vault and reward actions", () => {
+  it("refuses a vault deposit while deposits are paused (Sherlock 169)", () => {
+    // Nothing verifies the API-named vault address yet, so the default refuses.
+    expect(() =>
+      buildVesuVaultDepositCalls("0x123", MAINNET_TOKEN_ADDRESSES.USDC, 1_000_000n, "0x456"),
+    ).toThrow(VESU_VAULT_DEPOSITS_PAUSED);
+  });
+
   it("revokes the exact vault allowance after deposit", () => {
     const calls = buildVesuVaultDepositCalls(
       "0x123",
       MAINNET_TOKEN_ADDRESSES.USDC,
       1_000_000n,
       "0x456",
+      true,
     );
     expect(calls.map((call) => call.entrypoint)).toEqual(["approve", "deposit", "approve"]);
   });

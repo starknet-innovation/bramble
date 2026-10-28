@@ -36,6 +36,8 @@ fn ready_wallet(scenario: &Value) -> (tempfile::TempDir, Arc<WalletCore>, String
             vec![RecoverySelection {
                 family: AccountFamily::Argent,
                 account_index: 0,
+                // The capture signs as `deriveAccount` derives by default: this wallet's ladder.
+                ladder: Some(bramble_core::Ladder::Account),
                 class_hash: Some(class_hash),
             }],
         )

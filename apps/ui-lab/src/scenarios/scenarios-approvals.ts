@@ -79,6 +79,12 @@ export const approvalsScenario: WalletScenario = {
       requiredApproval("sign"),
     ),
     approvalCheckpoint(
+      "typed-data-nested",
+      "Nested typed-data signature",
+      "Long nested field paths wrap beside their values, so every signed value stays visible.",
+      requiredApproval("signNested"),
+    ),
+    approvalCheckpoint(
       "private-invoke",
       "Private transaction",
       "Private actions and the frozen execution boundary remain inspectable before proof submission.",

@@ -118,7 +118,11 @@ export const recipientStage = (
   preferences: WalletPreferences | null,
   multisigs: readonly ArgentMultisigRecord[],
 ): string => {
-  const accounts = sendRecipientAccounts(status.accounts, status.networkId);
+  const accounts = sendRecipientAccounts(
+    status.accounts,
+    status.networkId,
+    preferences?.hiddenAccountIds ?? [],
+  );
   const sharedAccounts = multisigs.filter((record) => record.networkId === status.networkId);
   const contacts =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
@@ -145,6 +149,7 @@ export const recipientStage = (
         type: "search",
       })}</span>
     </label>
+    <p class="send-recipient-note" id="send-recipient-note" aria-live="polite" hidden></p>
     <div class="send-recipient-list" data-send-recipient-panel="contacts">
       <div class="send-list-heading">${icon("book")}<strong>Address book</strong></div>
       ${contacts.map(addressBookRow).join("")}

@@ -45,6 +45,24 @@ export const MAINNET_TOKEN_DECIMALS: Readonly<Record<MainnetTokenSymbol, number>
 } as const;
 
 /**
+ * The largest token precision the terminal accepts from a market API. Decimals
+ * drive string padding while a screen renders, so an unbounded value from an
+ * API (`Infinity`, `1e9`, a negative or fractional number) would throw inside
+ * React and blank the screen (Sherlock 155).
+ */
+export const MAX_TOKEN_DECIMALS = 36;
+
+/**
+ * Whether an untrusted value is a usable token precision: an integer from 0 to
+ * {@link MAX_TOKEN_DECIMALS}.
+ */
+export const isTokenDecimals = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= 0 &&
+  value <= MAX_TOKEN_DECIMALS;
+
+/**
  * Ekubo concentrated-liquidity AMM mainnet contracts. Verified in the Ekubo MCP
  * repo constants; re-check against docs.ekubo.org before mainnet swaps.
  */
@@ -105,6 +123,15 @@ export const VESU_ADDRESSES = {
  * Transactions still pass through the terminal review and connected wallet.
  */
 export const VESU_LENDING_ENABLED = true;
+
+/**
+ * Gate for curated Vesu vault deposits. Off: a deposit approves and pays the
+ * vault address the Vesu API names, and nothing on chain or pinned here proves
+ * that address is a Vesu vault (Sherlock 169). Redeem and claim stay available,
+ * since they only move the user's own shares out and approve nothing. Turn
+ * this on only with a pinned or on-chain-verified vault list.
+ */
+export const VESU_VAULT_DEPOSITS_ENABLED: boolean = false;
 
 /**
  * Vesu API base. The recon repo pointed at STAGING; mainnet integrations must

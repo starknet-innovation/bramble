@@ -1,31 +1,54 @@
 /** Bounded account discovery and confirmation for phrase recovery, per family. */
 
-import { accountClassEntry } from "@bramble/wallet-model/account-families";
+import {
+  accountClassEntry,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
 import {
   type AccountContractType,
   ARGENT_ACCOUNT_CLASS_HASH,
+  recoveryLadderIndex,
 } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type {
   RecoveryAccountCandidate,
   RecoveryAccountSelection,
+  RecoverySigningRestriction,
 } from "@bramble/wallet-model/recovery";
 import {
   isRecoveryAccountIndex,
   RECOVERY_SCAN_LIMITS,
+  recoveryScanTarget,
   recoverySelectionKey,
 } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
 
+/** One bounded discovery page as the runtime returns it. */
+type DiscoveryResult = Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>;
+
 type RecoveryAccountUiDeps = {
+  /**
+   * Injected discovery page. The settings rescan of the wallet's own phrase has
+   * no phrase in the panel and supplies this; the phrase-bearing flows omit it
+   * and the picker calls `wallet.discoverRecoveryAccounts` with `mnemonic`.
+   */
+  readonly discover?: (manualIndex?: number) => Promise<DiscoveryResult>;
   /** Accounts already in the vault; scan candidates matching them are shown but locked. */
   readonly existingIds?: () => ReadonlySet<string>;
   readonly form: HTMLFormElement;
-  readonly mnemonic: () => string;
+  /** The typed phrase; absent when `discover` supplies the page instead. */
+  readonly mnemonic?: () => string;
   readonly networkId: () => string;
+  /**
+   * Runs after a successful restore, before the repaint, once the picker has
+   * been emptied. The in-wallet import uses it to wipe the typed phrase: its
+   * screen does not change on success, so the repaint would keep the words in
+   * plain inputs. First-run omits it; success there tears the screen down.
+   */
+  readonly onRestored?: () => void;
   readonly render: (status: WalletStatus) => Promise<void>;
   /** Overrides first-run `recoverAccounts` — the in-wallet seed import commits here. */
   readonly restore?: (
@@ -33,7 +56,8 @@ type RecoveryAccountUiDeps = {
     networkId: string,
     selections: readonly RecoveryAccountSelection[],
   ) => Promise<unknown>;
-  readonly vaultPassphrase: () => string;
+  /** The typed unlock credential; absent when `restore` commits instead. */
+  readonly vaultPassphrase?: () => string;
   readonly wallet: SidepanelWallet;
 };
 
@@ -48,10 +72,15 @@ const selectionKey = recoverySelectionKey;
 // at the family default and restores a different account than the one shown.
 const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelection => ({
   accountContractType: candidate.account.accountContractType,
-  accountIndex: candidate.account.derivation.accountIndex,
+  accountIndex: recoveryLadderIndex(candidate.account),
   ...(candidate.account.accountContractType === "openzeppelin"
     ? {}
     : { classHash: candidate.account.classHash }),
+  // Argent walks two ladders (issue 505); every other family has one, so the
+  // scheme only needs spelling out where re-deriving could pick the wrong one.
+  ...(candidate.account.accountContractType === "argent"
+    ? { derivation: candidate.account.derivation.kind }
+    : {}),
 });
 
 // Only the class this wallet itself deploys can be brought on chain from here.
@@ -61,10 +90,26 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
 const deployableHere = (candidate: RecoveryAccountCandidate): boolean =>
   candidate.account.accountContractType === "openzeppelin" ||
   (candidate.account.accountContractType === "argent" &&
-    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH));
+    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH)) ||
+  (candidate.account.accountContractType === "braavos" &&
+    sameFelt(candidate.account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH));
+
+// The scan's advisory verdict, in the reader's terms: why this account is
+// watch-only here, said before they pick it rather than after a send fails.
+const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
+  guardian: "has a guardian",
+  "owner-changed": "owner key changed",
+  "owner-type": "unsupported signer",
+  release: "unsupported release",
+  "strong-signer": "2FA active",
+};
 
 const activityState = (candidate: RecoveryAccountCandidate): string => {
-  if (candidate.deployed) return "Deployed on Starknet";
+  if (candidate.deployed) {
+    return candidate.restriction
+      ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
+      : "Deployed on Starknet";
+  }
   if (candidate.funded) {
     return deployableHere(candidate)
       ? "Funded and ready to deploy"
@@ -76,15 +121,24 @@ const activityState = (candidate: RecoveryAccountCandidate): string => {
 };
 
 /**
- * The hint under one discovered account row. A Braavos account is restored to be seen, not yet
- * used: say so before the user picks it, rather than after a send fails. It is never offered for
- * deployment either, since Bramble does not deploy Braavos accounts. Exported so the mobile parity
+ * The hint under one discovered account row. A deployed Braavos account is usable exactly when
+ * its advisory verdict says so (stark key only, no strong signer); an undeployed one stays
+ * view-only, since Bramble cannot deploy Braavos accounts yet. Exported so the mobile parity
  * fixture pins the native apps to the same wording.
  */
 export const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
   if (duplicate) return "Already in this wallet";
   if (candidate.account.accountContractType !== "braavos") return activityState(candidate);
-  return `${candidate.deployed ? "Deployed on Starknet" : "Funded, not deployed"} · view only for now`;
+  if (!candidate.deployed) {
+    // The modern deployment class deploys from here like any other account;
+    // an older base-class counterfactual still cannot.
+    return deployableHere(candidate)
+      ? "Funded and ready to deploy"
+      : "Funded, not deployed · view only for now";
+  }
+  return candidate.restriction
+    ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
+    : "Deployed on Starknet";
 };
 
 /**
@@ -93,7 +147,7 @@ export const candidateState = (candidate: RecoveryAccountCandidate, duplicate: b
  */
 export const candidateTitle = (candidate: RecoveryAccountCandidate): string => {
   const { account } = candidate;
-  const title = `Account ${account.derivation.accountIndex}`;
+  const title = `Account ${recoveryLadderIndex(account)}`;
   if (
     account.accountContractType !== "argent" ||
     sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)
@@ -216,10 +270,19 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       const rows = [...candidates]
         .filter((candidate) => candidate.account.accountContractType === contractType)
         .sort(
-          (left, right) =>
-            left.account.derivation.accountIndex - right.account.derivation.accountIndex,
+          (left, right) => recoveryLadderIndex(left.account) - recoveryLadderIndex(right.account),
         );
-      listElement.replaceChildren(...rows.map(candidateRow));
+      // Discovery omits unused addresses a type this wallet never creates (e.g.
+      // Braavos), so a finished search still needs a line or the group opens
+      // onto nothing. Mid-search the list stays empty: more may yet be found.
+      if (rows.length === 0 && complete) {
+        const empty = deps.form.ownerDocument.createElement("li");
+        empty.className = "empty";
+        empty.textContent = "No accounts with on-chain activity.";
+        listElement.replaceChildren(empty);
+      } else {
+        listElement.replaceChildren(...rows.map(candidateRow));
+      }
       const detected = rows.filter((candidate) => candidate.deployed || candidate.funded).length;
       const detectedSlot = group.querySelector<HTMLElement>("[data-detected]");
       if (detectedSlot) {
@@ -233,7 +296,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     refreshGate();
   };
 
-  const apply = (next: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>): void => {
+  const apply = (next: DiscoveryResult): void => {
     for (const candidate of next.candidates) {
       const key = selectionKey(selectionFor(candidate));
       const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
@@ -247,7 +310,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     renderCandidates();
     scanStatus = complete
       ? `Search complete. Checked ${next.nextIndex} indices across every account type.`
-      : `Checked ${next.nextIndex} of ${RECOVERY_SCAN_LIMITS.defaultCount} indices…`;
+      : `Checked ${next.nextIndex} of ${recoveryScanTarget(next.candidates)} indices…`;
     renderStatus();
   };
 
@@ -260,21 +323,33 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     buttonBusy(activeButton, true);
     if (inactiveButton) inactiveButton.disabled = true;
     try {
-      let next: Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>;
+      let next: DiscoveryResult;
       do {
-        next = await deps.wallet.discoverRecoveryAccounts(
-          deps.mnemonic(),
-          deps.networkId(),
-          manualIndex,
-        );
+        next =
+          deps.discover !== undefined
+            ? await deps.discover(manualIndex)
+            : await deps.wallet.discoverRecoveryAccounts(
+                deps.mnemonic?.() ?? "",
+                deps.networkId(),
+                manualIndex,
+              );
         if (generation !== activeGeneration) return;
         apply(next);
       } while (manualIndex === undefined && !next.complete);
     } catch (error) {
       if (generation !== activeGeneration) return;
       const message = errorMessage(error, "Account search paused. Check the network and retry.");
-      if (status) status.textContent = message;
-      showToast(message, "error", deps.form);
+      if (status)
+        status.textContent = errorLine(
+          error,
+          "Account search paused. Check the network and retry.",
+        );
+      showToast(
+        message,
+        "error",
+        deps.form,
+        errorDetails(error, "Account search paused. Check the network and retry."),
+      );
     } finally {
       scanning = false;
       buttonBusy(activeButton, false);
@@ -289,6 +364,19 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const stop = (): void => {
     generation += 1;
     restartOnIdle = false;
+  };
+
+  // Drops every candidate and pick, and makes any scan still in flight discard
+  // its results. Callers set the status line; the gate follows the empty pick.
+  const reset = (): void => {
+    generation += 1;
+    candidates = [];
+    complete = false;
+    scanStatus = "";
+    selected.clear();
+    seen.clear();
+    if (result) result.textContent = "";
+    renderCandidates();
   };
 
   retry?.addEventListener("click", () => void scan());
@@ -313,34 +401,37 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     const commit =
       deps.restore ??
       ((mnemonic: string, networkId: string, picks: readonly RecoveryAccountSelection[]) =>
-        deps.wallet.recoverAccounts(mnemonic, networkId, deps.vaultPassphrase(), picks));
-    void commit(deps.mnemonic(), deps.networkId(), selections)
+        deps.wallet.recoverAccounts(mnemonic, networkId, deps.vaultPassphrase?.() ?? "", picks));
+    void commit(deps.mnemonic?.() ?? "", deps.networkId(), selections)
       .then(async () => {
         showToast(
           `${selections.length} account${selections.length === 1 ? "" : "s"} restored`,
           "success",
           restore,
         );
+        if (deps.onRestored) {
+          // Release busy first: it re-enables the button, and the reset's
+          // gate must be what disables it again over an empty pick.
+          buttonBusy(restore, false);
+          restartOnIdle = false;
+          reset();
+          if (status) status.textContent = "";
+          deps.onRestored();
+        }
         await deps.render(await deps.wallet.loadStatus());
       })
       .catch((error: unknown) => {
         const message = errorMessage(error, "Account recovery failed");
-        if (result) result.textContent = message;
-        showToast(message, "error", restore);
+        if (result) result.textContent = errorLine(error, "Account recovery failed");
+        showToast(message, "error", restore, errorDetails(error, "Account recovery failed"));
         buttonBusy(restore, false);
       });
   });
 
   return {
     start() {
-      generation += 1;
-      candidates = [];
-      complete = false;
-      selected.clear();
-      seen.clear();
       if (status) status.textContent = "Searching every account type…";
-      if (result) result.textContent = "";
-      renderCandidates();
+      reset();
       if (scanning) restartOnIdle = true;
       else void scan();
     },

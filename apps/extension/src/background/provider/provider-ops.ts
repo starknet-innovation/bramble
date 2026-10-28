@@ -1,12 +1,11 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
-import { walletErrorMessage } from "@bramble/core/errors";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
-import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
-import type { ActivityLog } from "@bramble/transactions/activity";
+import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import {
@@ -17,6 +16,7 @@ import {
 } from "@bramble/transactions/verify";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
+import { recordAutoDeployment } from "../accounts/deployment-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
@@ -28,6 +28,7 @@ import {
   PENDING_INVOKE_FEE,
 } from "../approvals/invoke-fee-review";
 import { type ResolvedOriginAccount, resolveOriginAccount } from "./provider-grant";
+import { invokeFailureResponse } from "./provider-invoke-failure";
 
 /** Re-exports the grant-resolution surface from its size-budget split. */
 export type { ResolvedOriginAccount } from "./provider-grant";
@@ -36,7 +37,7 @@ import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
-import { strk20AccountContext } from "../privacy/strk20-account-context";
+import { isPoolShapedBatch, strk20AccountContext } from "../privacy/strk20-account-context";
 import { readAddInvokeTransactionInput } from "../routing/message-inputs";
 import {
   type ExtensionIdentity,
@@ -47,7 +48,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import {
   readGetPermissionsInput,
   readRetryApprovalFeeInput,
@@ -59,6 +60,11 @@ import { trackWatchAsset, type WatchAssetAdmission } from "./watch-asset";
  * Dependencies shared by the dapp provider operation handlers.
  */
 export type ProviderOpsDeps = {
+  /**
+   * Activity log, read only for the address-poisoning trust inputs (recipients
+   * this wallet has paid, audit #163) when an origin's account is resolved.
+   */
+  readonly activity: Pick<ActivityLog, "list">;
   /**
    * Allowance log, read (never written) here: it is what the pre-sign review
    * knows already stands for a `(token, spender)` pair, so an increase is judged
@@ -97,6 +103,11 @@ export type InvokeExecuteDeps = {
    * stubs stay valid; a Ledger invoke with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /**
+   * Watched shared accounts, read into the trusted set for the execution-time
+   * lookalike check (Sherlock 140). Omitted, that check skips them.
+   */
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**
@@ -147,9 +158,12 @@ export const queueInvokeApproval = async (
     trusted,
   );
   const report = verifyCalls(input.calls, trusted, standing);
-  const refusal =
-    refuseOnAccountSelfCall(input.calls, resolved.account.address) ??
-    refuseOnPoisonedRecipient(report);
+  // The self-call refusal depends only on the connected account, which the site
+  // already knows. A poisoned recipient is not refused here: an instant refusal
+  // told the site which addresses the user has saved or paid (Sherlock 140).
+  // Its flag rides on the approval, whose card then offers Deny only, and the
+  // execution-time check below still refuses it.
+  const refusal = refuseOnAccountSelfCall(input.calls, resolved.account.address);
   if (refusal) {
     return refusal;
   }
@@ -192,18 +206,6 @@ export const queueInvokeApproval = async (
   return { approval };
 };
 
-const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
-  if (!hasProof) {
-    return walletErrorMessage(error, "invoke request failed");
-  }
-  try {
-    mapStrk20StageError("submission", error);
-  } catch (mapped) {
-    return walletErrorMessage(mapped, "invoke request failed");
-  }
-  return "invoke request failed";
-};
-
 // Fail-closed perimeter shared by the dapp surfaces that error on a blocked
 // origin: a claimed-origin mismatch or a blocklisted origin yields the error
 // response, otherwise null so the caller proceeds.
@@ -243,7 +245,10 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   const passphrase = deps.session.peekPassphrase();
   const authorized = captureSessionAuthorization(deps.session);
   const granted = passphrase ? await deps.wallet.getGrantedAccounts(input.origin, passphrase) : [];
-  if (passphrase && !authorized.isCurrent()) return { error: "wallet locked" };
+  // A lock that lands during the read answers what a locked wallet answers,
+  // never an error only that race produces: a polling page would otherwise
+  // learn when each lock happened (Sherlock 148).
+  if (passphrase && !authorized.isCurrent()) return { ok: true, permissions: [] };
   return { ok: true, permissions: granted.length > 0 ? ["accounts"] : [] };
 };
 
@@ -265,7 +270,6 @@ const handleWatchAsset: ProviderOpsHandler = async (deps, message, sender) => {
     },
     input,
   );
-  if (approval === true) return { ok: true, watched: true };
   return approval ? deps.waiters.register(approval.id) : { error: "invalid watch asset metadata" };
 };
 
@@ -411,6 +415,32 @@ export const executeInvokeApproval = async (
   // approval, not of the lane, so it is decided once here rather than at each.
   const ceiling = approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {};
   const strk20 = runtimeRpc.strk20 ?? unavailableStrk20Service;
+  const activityFor = (hash: string) => ({
+    accountId: account.id,
+    hash,
+    kind: "invoke" as const,
+    networkId: account.networkId,
+    summary:
+      approval.payload.activitySummary ??
+      `${activityOrigin(approval.origin)} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
+  });
+  // Grants, then activity, for every hash that may be on chain (#678, ./allowance-recording).
+  const recordSubmitted = async (hash: string): Promise<void> => {
+    await recordApproveAllowances({
+      assets: verificationContext(account, preferences),
+      calls,
+      owner: allowanceOwner(account),
+      store: allowanceStore,
+      transactionHash: hash,
+    });
+    await recordSubmittedActivity(activity, activityFor(hash));
+  };
+  // A SNIP-36 app proof is a plain invoke proof; only a pool batch takes the pool lane.
+  const poolProof = isPoolShapedBatch(calls, preferences, account.networkId)
+    ? approval.payload.proof
+    : undefined;
+  // The public lane's hash as signed, captured before it is sent (audit M4).
+  let signedHash: string | undefined;
   try {
     const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
     // One protected-account boundary for both lanes. The signing thunk and the
@@ -419,39 +449,33 @@ export const executeInvokeApproval = async (
     // — a second local viewing-key reader here was the one copy that derived a
     // key for an already-locked wallet.
     const context = strk20AccountContext(deps, { ...resolved, rpcUrls });
-    const result = approval.payload.proof
-      ? await strk20.submitPrepared({
-          ...context,
-          calls,
-          proof: approval.payload.proof,
-          ...ceiling,
-        })
+    const result = poolProof
+      ? await strk20.submitPrepared({ ...context, calls, proof: poolProof, ...ceiling })
       : await runtimeRpc.submitInvokeTransaction({
           account,
           calls,
           ...ceiling,
           isAuthorized: authorized.isCurrent,
+          onSigned: async (signed) => {
+            signedHash = signed.transactionHash;
+          },
+          ...(approval.payload.proof ? { proof: approval.payload.proof } : {}),
           rpcUrls,
           signHash: context.signHash,
         });
-    // Recorded before the activity line: see ./allowance-recording.
-    await recordApproveAllowances({
-      assets: verificationContext(account, preferences),
-      calls,
-      owner: allowanceOwner(account),
-      store: allowanceStore,
-    });
-    await recordSubmittedActivity(activity, {
-      accountId: account.id,
-      hash: result.transactionHash,
-      kind: "invoke",
-      networkId: account.networkId,
-      summary:
-        approval.payload.activitySummary ??
-        `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
-    });
+    // Only the public lane can deploy the account first (mc-wallet 719).
+    const deployment =
+      "deploymentTransactionHash" in result ? result.deploymentTransactionHash : undefined;
+    await afterBroadcast(() => recordAutoDeployment(activity, account, deployment));
+    await afterBroadcast(() => recordSubmitted(result.transactionHash));
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return { error: invokeFailureMessage(error, approval.payload.proof !== undefined) };
+    return invokeFailureResponse(
+      error,
+      poolProof !== undefined,
+      signedHash,
+      recordSubmitted,
+      (source) => recordAutoDeployment(activity, account, source),
+    );
   }
 };

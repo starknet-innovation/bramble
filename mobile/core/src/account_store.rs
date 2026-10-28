@@ -13,10 +13,11 @@ use serde::{Deserialize, Serialize};
 use starknet_types_core::felt::Felt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::account_catalog::AccountFamily;
+use crate::account_catalog::{catalog, AccountFamily};
 use crate::account_names::{is_label, js_trim};
 use crate::files::storage;
 use crate::groups::{self, StoredGroup};
+use crate::kms::Ladder;
 use crate::kms_accounts::{self, family_address};
 use crate::migrations::VAULT_VERSION;
 use crate::networks::NetworkId;
@@ -26,6 +27,12 @@ use crate::{felt, kms, CoreError};
 pub(crate) const MAX_ACCOUNT_RECORDS: usize = 128;
 /// Highest account index (`RECOVERY_SCAN_LIMITS.maxIndex`, Krusty's unhardened bound).
 pub(crate) const MAX_ACCOUNT_INDEX: u32 = 0x7fff_ffff;
+
+/// An index this wallet may derive, restore or create at (the extension's
+/// `isRecoveryAccountIndex`): in range, and never strkd's reserved agent index.
+pub(crate) fn is_usable_account_index(index: u32) -> bool {
+    index <= MAX_ACCOUNT_INDEX && index != catalog().reserved_agent_index
+}
 
 /// One account as sealed in the vault. Public data only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +44,11 @@ pub(crate) struct StoredAccount {
     pub deployment_salt: Option<String>,
     pub family: String,
     pub id: String,
+    /// The key tree `account_index` walks. Absent before vault version 5 and required from 5 on:
+    /// every earlier record was derived on this wallet's own ladder, and the 4 → 5 step labels it
+    /// so, which keeps every record at the address it already had. Read it through `ladder()`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ladder: Option<Ladder>,
     pub network: String,
     pub public_key: String,
 }
@@ -58,6 +70,10 @@ impl StoredAccount {
         self.deployment_salt
             .as_deref()
             .map(|salt| felt::parse(salt).expect("validated on open"))
+    }
+
+    pub(crate) fn ladder(&self) -> Ladder {
+        self.ladder.expect("validated on open")
     }
 
     pub(crate) fn view_only(&self) -> bool {
@@ -121,7 +137,14 @@ impl VaultPayload {
             version: VAULT_VERSION,
         };
         if let Some(network) = first_account {
-            let record = payload.derive(AccountFamily::OpenZeppelin, 0, None, None, network)?;
+            let record = payload.derive(
+                AccountFamily::OpenZeppelin,
+                Ladder::Account,
+                0,
+                None,
+                None,
+                network,
+            )?;
             payload.active_account_id = Some(record.id.clone());
             payload.accounts.push(record);
         }
@@ -134,26 +157,30 @@ impl VaultPayload {
             .map_err(|_| storage("serialise vault"))
     }
 
-    pub(crate) fn public_key(&self, account_index: u32) -> Result<Felt, CoreError> {
+    pub(crate) fn public_key(&self, path: Ladder, index: u32) -> Result<Felt, CoreError> {
         kms_accounts::public_key(
             &self.mnemonic,
             self.mnemonic_passphrase.as_deref(),
-            account_index,
+            path,
+            index,
         )
     }
 
-    /// Derives one record from the phrase. Nothing here comes from the host except coordinates.
+    /// Derives one record at `index` on `path`. Nothing here comes from the host except
+    /// coordinates. New accounts are only ever created on `Ladder::Account`.
     pub(crate) fn derive(
         &self,
         family: AccountFamily,
+        path: Ladder,
         account_index: u32,
         class_hash: Option<&Felt>,
         salt: Option<&Felt>,
         network: NetworkId,
     ) -> Result<StoredAccount, CoreError> {
-        let public_key = self.public_key(account_index)?;
+        let public_key = self.public_key(path, account_index)?;
         record_at(
             family,
+            path,
             account_index,
             class_hash,
             salt,
@@ -190,13 +217,14 @@ impl VaultPayload {
 /// Places an already-derived public key under a family, class, and salt on one network.
 pub(crate) fn record_at(
     family: AccountFamily,
+    ladder: Ladder,
     account_index: u32,
     class_hash: Option<&Felt>,
     salt: Option<&Felt>,
     public_key: &Felt,
     network: NetworkId,
 ) -> Result<StoredAccount, CoreError> {
-    if account_index > MAX_ACCOUNT_INDEX {
+    if !is_usable_account_index(account_index) {
         return Err(CoreError::InvalidInput {
             reason: "account index out of range".into(),
         });
@@ -207,6 +235,7 @@ pub(crate) fn record_at(
         account_index,
         id: format!("{}:{address}", network.catalog_id()),
         address,
+        ladder: Some(ladder),
         class_hash: felt::canonical(&placed.class_hash),
         deployment_salt: placed.deployment_salt.as_ref().map(felt::canonical),
         family: family.wire().into(),
@@ -225,6 +254,43 @@ fn is_canonical_felt(value: &str, non_zero: bool) -> bool {
         .is_some_and(|parsed| felt::canonical(&parsed) == value)
 }
 
+/// Which ladders a family's records may sit on. Every family may be on this wallet's own ladder,
+/// where every record before vault version 5 was derived; Braavos may also be on its vendor's
+/// address ladder, and Argent on Ready's.
+pub(crate) fn ladder_fits(family: AccountFamily, path: Ladder) -> bool {
+    match path {
+        Ladder::Account => true,
+        Ladder::Address => family == AccountFamily::Braavos,
+        Ladder::ArgentX => family == AccountFamily::Argent,
+    }
+}
+
+// Lowest unused hardened account index on `network` (`nextAccountIndex`). Only this wallet's
+// BIP-44 tree is counted: an own-ladder record holds its index, a Braavos vendor-ladder record
+// holds account 0 (it sits at `0'/0/index`), and a Ready record, on its own ETH-seeded tree,
+// holds none.
+pub(crate) fn next_account_index(
+    payload: &VaultPayload,
+    network: NetworkId,
+) -> Result<u32, CoreError> {
+    let used: HashSet<u32> = payload
+        .accounts
+        .iter()
+        .filter(|record| record.network() == network)
+        .filter_map(|record| match record.ladder() {
+            Ladder::Account => Some(record.account_index),
+            Ladder::Address => Some(0),
+            Ladder::ArgentX => None,
+        })
+        .collect();
+    (0..=MAX_ACCOUNT_INDEX)
+        .filter(|index| is_usable_account_index(*index))
+        .find(|index| !used.contains(index))
+        .ok_or_else(|| CoreError::InvalidInput {
+            reason: "account limit reached".into(),
+        })
+}
+
 // Field grammar of one record, before any derivation.
 fn is_well_formed(record: &StoredAccount) -> bool {
     let (Some(family), Some(network)) = (
@@ -239,6 +305,7 @@ fn is_well_formed(record: &StoredAccount) -> bool {
         (_, Some(salt)) => is_canonical_felt(salt, false),
     };
     record.account_index <= MAX_ACCOUNT_INDEX
+        && record.ladder.is_some_and(|path| ladder_fits(family, path))
         && is_canonical_felt(&record.address, true)
         && is_canonical_felt(&record.public_key, true)
         && is_canonical_felt(&record.class_hash, true)
@@ -256,6 +323,11 @@ fn is_consistent(payload: &VaultPayload) -> bool {
         && ids.len() == payload.accounts.len()
         && payload.recovery_pending == payload.accounts.is_empty()
         && payload.accounts.iter().all(is_well_formed)
+        && (payload.mnemonic_passphrase.is_none()
+            || payload
+                .accounts
+                .iter()
+                .all(|r| r.ladder != Some(Ladder::ArgentX)))
         && match &payload.active_account_id {
             None => payload.accounts.is_empty(),
             Some(id) => ids.contains(id.as_str()),
@@ -269,13 +341,14 @@ fn is_consistent(payload: &VaultPayload) -> bool {
 
 // Re-derives every record from the phrase; any difference is tampering or corruption.
 fn rederives(payload: &VaultPayload) -> Result<bool, CoreError> {
-    let mut keys: HashMap<u32, Felt> = HashMap::new();
+    let mut keys: HashMap<(Ladder, u32), Felt> = HashMap::new();
     for record in &payload.accounts {
-        let public_key = match keys.get(&record.account_index) {
+        let coordinate = (record.ladder(), record.account_index);
+        let public_key = match keys.get(&coordinate) {
             Some(key) => *key,
             None => {
-                let key = payload.public_key(record.account_index)?;
-                keys.insert(record.account_index, key);
+                let key = payload.public_key(record.ladder(), record.account_index)?;
+                keys.insert(coordinate, key);
                 key
             }
         };
@@ -283,6 +356,7 @@ fn rederives(payload: &VaultPayload) -> Result<bool, CoreError> {
         let class_hash = (family != AccountFamily::OpenZeppelin).then(|| record.class_felt());
         let expected = record_at(
             family,
+            record.ladder(),
             record.account_index,
             class_hash.as_ref(),
             record.salt_felt().as_ref(),

@@ -28,6 +28,7 @@ describe("cached hydration resilience", () => {
         activeView: "activity",
         cache,
         deployment: {},
+        signability: {},
         multisig: {},
         paint: () => undefined,
         ...(refreshReason ? { refreshReason } : {}),
@@ -53,6 +54,62 @@ describe("cached hydration resilience", () => {
     ]);
   });
 
+  test("starts the live refresh even when the cached paint throws", async () => {
+    // Bad cached data that breaks the paint is exactly what the live refresh
+    // replaces, so a throwing paint must not stop the live jobs (Sherlock 239).
+    const loads: Array<boolean | undefined> = [];
+    let paints = 0;
+    const cache = emptyRenderCache();
+    cache.multisigsNetworkId = "SN_MAIN";
+    await expect(
+      hydrateView({
+        activeView: "activity",
+        cache,
+        deployment: {},
+        signability: {},
+        multisig: {},
+        paint: () => {
+          paints += 1;
+          if (paints === 1) throw new RangeError("Invalid time value");
+        },
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadActivity: async (_accountId?: string, cached?: boolean) => {
+            loads.push(cached);
+            return { entries: [], historyUnavailable: false };
+          },
+        },
+      } as never),
+    ).resolves.toBeUndefined();
+    expect(loads).toEqual([true, false]);
+    expect(paints).toBe(2);
+  });
+
+  test("finishes hydration when the live paint throws", async () => {
+    const cache = emptyRenderCache();
+    cache.multisigsNetworkId = "SN_MAIN";
+    await expect(
+      hydrateView({
+        activeView: "activity",
+        cache,
+        deployment: {},
+        signability: {},
+        multisig: {},
+        paint: () => {
+          throw new RangeError("Invalid time value");
+        },
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+        },
+      } as never),
+    ).resolves.toBeUndefined();
+  });
+
   test("verifies the class hash for Receive, the screen that shows it", async () => {
     // The verdict renders beside the class hash in Receive's Pro fields. Loading
     // it anywhere else is an RPC nothing displays, so the lane follows the
@@ -65,6 +122,7 @@ describe("cached hydration resilience", () => {
         activeView,
         cache,
         deployment: {},
+        signability: {},
         multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
         paint: () => undefined,
         selectedMultisigId: null,
@@ -91,6 +149,7 @@ describe("cached hydration resilience", () => {
         activeView: "allowances",
         cache: emptyRenderCache(),
         deployment: {},
+        signability: {},
         multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
         paint: () => undefined,
         ...(refreshReason ? { refreshReason } : {}),
@@ -204,6 +263,7 @@ describe("cached hydration resilience", () => {
         activeView: "multisig-home",
         cache,
         deployment: {},
+        signability: {},
         multisig: {
           loadBalances: async () => ({ error: "offline" }),
           loadMultisigs: async () => cache.multisigs,

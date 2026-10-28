@@ -59,7 +59,11 @@ afterAll(unregisterDom);
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-const mountOutcome = (chainStatus: ActivityStatus, prefs: WalletPreferences = preferences) => {
+const mountOutcome = (
+  chainStatus: ActivityStatus,
+  prefs: WalletPreferences = preferences,
+  submit: () => Promise<string> = async () => HASH,
+) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(
@@ -97,7 +101,7 @@ const mountOutcome = (chainStatus: ActivityStatus, prefs: WalletPreferences = pr
       };
     },
     async submitTransfer() {
-      return HASH;
+      return submit();
     },
   };
   const deps: TransferUiDeps = {
@@ -208,7 +212,9 @@ describe("Send confirmation outcomes", () => {
     expect(reason.length).toBeGreaterThan(0);
     // What is worth taking to support is the reason, not the identifier — this
     // control used to copy the hash, which a failure usually does not have.
-    app.querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy the error"]')?.click();
+    app
+      .querySelector<HTMLButtonElement>('#send-failure [aria-label="Copy error details"]')
+      ?.click();
     await flush();
     expect(copied).toEqual([reason]);
     // A chain rejection does have a hash, so its row stays.
@@ -267,6 +273,8 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("failed");
     expect(app.querySelector("#send-failure-copy")?.textContent).toContain("rejected");
+    // It was submitted (the hash is shown), so the heading must not say "not sent".
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction failed");
   });
 
   test("shows the failure recovery state when Starknet reverts", async () => {
@@ -275,6 +283,18 @@ describe("Send confirmation outcomes", () => {
     expect(form.dataset["stage"]).toBe("failed");
     expect(app.querySelector("#send-failure-copy")?.textContent).toContain("reverted");
     expect(app.querySelector("#send-failure")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction failed");
+  });
+
+  test("a failure before anything was submitted still says it was not sent", async () => {
+    const { app, form } = mountOutcome("accepted", preferences, async () => {
+      throw new Error(
+        "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.",
+      );
+    });
+    await submitTwice(form);
+    expect(form.dataset["stage"]).toBe("failed");
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Transaction not sent");
   });
 
   test("keeps an unconfirmed hash in an honest pending state", async () => {

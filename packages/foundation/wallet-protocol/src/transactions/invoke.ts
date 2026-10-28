@@ -4,6 +4,7 @@
 import { hasOnlyKnownKeys, isRecord, type Json } from "@bramble/core/json";
 import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import { isStrk20Proof, type Strk20Proof } from "../privacy/strk20";
+import { isOptionalApiVersion } from "../provider/versions";
 import { INVOKE_LIMITS } from "./invoke-limits";
 
 /**
@@ -16,7 +17,7 @@ export type ProviderInvokeCall = {
 };
 
 /**
- * Parsed invoke request, including optional STRK20 proof material.
+ * Parsed invoke request, including an optional SNIP-36 proof (the Wallet API types it STRK20_PROOF).
  */
 export type ProviderInvokeRequest = {
   readonly calls: readonly ProviderInvokeCall[];
@@ -91,12 +92,15 @@ export const readProviderInvokeCall = (call: unknown): ProviderInvokeCall | null
 
 /**
  * Parses invoke params in spec or legacy shape. The exact call/calldata limits
- * are enforced before mapping, and malformed inputs fail closed as `null`.
+ * are enforced before mapping, and malformed inputs fail closed as `null`. The
+ * spec's optional `api_version` sits beside the call list, never inside a call;
+ * a well-formed one is dropped and a malformed one rejects the request.
  */
 export const providerInvokeRequest = (params: Json | undefined): ProviderInvokeRequest | null => {
   if (
     !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["calls", "invoke_transaction", "proof"]) ||
+    !hasOnlyKnownKeys(params, ["api_version", "calls", "invoke_transaction", "proof"]) ||
+    !isOptionalApiVersion(params["api_version"]) ||
     (Object.hasOwn(params, "calls") && Object.hasOwn(params, "invoke_transaction"))
   ) {
     return null;

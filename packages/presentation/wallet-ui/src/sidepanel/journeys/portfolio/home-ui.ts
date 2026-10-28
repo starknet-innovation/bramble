@@ -8,9 +8,11 @@
 
 import { resolveSpring } from "@bramble/ui-kit/spring";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { prefersReducedMotion, projectMomentum } from "../../shared/motion";
+import { bindRecoverAccount } from "./recovery-ui";
 
 /**
  * State accessors and services the home bindings close over. State lives in
@@ -21,7 +23,7 @@ export type HomeUiDeps = {
   readonly drawerOpen: () => boolean;
   readonly setDrawerOpen: (open: boolean) => void;
   readonly networkId: () => string;
-  readonly render: (status: WalletStatus) => Promise<void>;
+  readonly render: (status: WalletStatus, refreshReason?: RefreshReason) => Promise<void>;
   readonly selectPortfolio?: (multisigId: string | null) => void;
   readonly startAddAccount?: () => void;
   readonly wallet: SidepanelWallet;
@@ -248,7 +250,7 @@ const bindDrawer = (deps: HomeUiDeps): void => {
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Account switch failed"), "error", button);
+          showToast(errorDetails(error, "Account switch failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -367,11 +369,9 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
   }
 };
 
-/**
- * Binds the account drawer and portfolio menu on the home screen. Safe to call
- * on every render; screens without these regions are skipped.
- */
+/** Wires the Home drawer, portfolio menu, and the read-only recover-account entry. */
 export const bindHomeUi = (deps: HomeUiDeps): void => {
   bindDrawer(deps);
   bindPortfolioMenu(deps);
+  bindRecoverAccount(deps);
 };

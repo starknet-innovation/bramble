@@ -36,6 +36,7 @@ impl WalletCore {
             kms::derive_scoped_viewing_key(
                 &payload.mnemonic,
                 payload.mnemonic_passphrase.as_deref(),
+                record.ladder(),
                 record.account_index,
                 chain_id,
                 pool_address,

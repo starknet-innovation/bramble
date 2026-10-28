@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/html-vite";
-import { expect, waitFor } from "storybook/test";
+import { expect, userEvent, waitFor } from "storybook/test";
 import { createUiLab } from "./lab-runtime";
 
 type LabArgs = {
@@ -64,4 +64,167 @@ export const checkpointStory = (
   args: { checkpointId, scenarioId },
   name,
   play: async ({ canvasElement }) => assertCheckpointReady(canvasElement),
+});
+
+/**
+ * A receipt checkpoint the chain refused: beyond rendering, the failure mark
+ * shows and the success mark does not, under the failure heading and the
+ * chain's reason, and Try again is the one primary action. Guards the shared
+ * receipt against painting "complete" over a transaction that did not land.
+ */
+export const failedReceiptStory = (
+  name: string,
+  scenarioId: string,
+  checkpointId: string,
+  receipt: { readonly id: string; readonly reason: string; readonly title: string },
+): LabStory => ({
+  args: { checkpointId, scenarioId },
+  name,
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const section = body?.querySelector(`#${receipt.id}`);
+    await expect(section?.querySelector('[data-outcome-mark="failed"]')).toBeVisible();
+    await expect(section?.querySelector('[data-outcome-mark="succeeded"]')).not.toBeVisible();
+    await expect(body?.querySelector(`#${receipt.id}-title`)).toHaveTextContent(receipt.title);
+    await expect(body?.querySelector(`#${receipt.id}-description`)).toHaveTextContent(
+      receipt.reason,
+    );
+    const actions = section?.querySelector('[data-outcome-actions="failed"]');
+    await expect(actions).toBeVisible();
+    await expect(section?.querySelector('[data-outcome-actions="succeeded"]')).not.toBeVisible();
+    const primary = Array.from(actions?.querySelectorAll("button:not(.secondary)") ?? []);
+    await expect(primary.map((control) => control.textContent?.trim())).toEqual(["Try again"]);
+  },
+});
+
+/**
+ * The width the extension is laid out at in the browser side panel. The project
+ * documents 320 CSS px as that panel's minimum width (with 256 px under zoom),
+ * so this is the narrowest width a screen has to survive.
+ */
+const MINIMUM_SIDEPANEL_WIDTH = 320;
+
+type LabFrameView = {
+  readonly frame: HTMLIFrameElement;
+  readonly document: Document;
+  readonly body: HTMLElement;
+};
+
+const labFrameView = (canvasElement: HTMLElement): LabFrameView => {
+  const frame = canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]");
+  const document = frame?.contentDocument ?? null;
+  if (!frame || !document?.body) {
+    throw new Error("UI Lab wallet frame is unavailable");
+  }
+  return { body: document.body, document, frame };
+};
+
+/**
+ * The side panel has no horizontal scrollbar, so anything past the right edge
+ * is simply unreachable. Both the root element and the body are checked because
+ * a positioned or grid child can widen either one.
+ */
+const assertNoHorizontalOverflow = (document: Document): void => {
+  const root = document.documentElement;
+  expect(root.scrollWidth, "the panel scrolls horizontally").toBeLessThanOrEqual(root.clientWidth);
+  expect(document.body.scrollWidth, "the panel body scrolls horizontally").toBeLessThanOrEqual(
+    root.clientWidth,
+  );
+};
+
+/**
+ * Every element a selector matches, checked individually. A selector aimed at a
+ * list (for example `.token-amount`) must be checked on each row: a single
+ * `querySelector` would let a clipped later row pass behind a healthy first one.
+ * An empty match is an error, because a selector that matches nothing asserts
+ * nothing.
+ */
+const eachMatch = (document: Document, selector: string): readonly HTMLElement[] => {
+  const elements = document.querySelectorAll<HTMLElement>(selector);
+  if (elements.length === 0) {
+    throw new Error(`Expected ${selector} at the minimum side-panel width`);
+  }
+  return Array.from(elements);
+};
+
+const label = (selector: string, index: number, count: number): string =>
+  count === 1 ? selector : `${selector} [${index}]`;
+
+/**
+ * A value the user must read at the minimum width, such as an amount or a fee:
+ * its box stays inside the panel edge and its own text is not clipped away.
+ * Every element the selector matches is checked, so a list fails on any clipped
+ * row, not only the first. Addresses the design deliberately truncates behind a
+ * copy control are checked with {@link assertInsidePanel} instead.
+ */
+export const assertValueFits = (document: Document, selector: string): void => {
+  const width = document.documentElement.clientWidth;
+  const elements = eachMatch(document, selector);
+  elements.forEach((element, index) => {
+    const name = label(selector, index, elements.length);
+    const rect = element.getBoundingClientRect();
+    expect(rect.left, `${name} starts left of the panel`).toBeGreaterThanOrEqual(-1);
+    expect(rect.right, `${name} runs past the panel edge`).toBeLessThanOrEqual(width + 1);
+    expect(element.scrollWidth, `${name} clips its own value`).toBeLessThanOrEqual(
+      element.clientWidth + 1,
+    );
+  });
+};
+
+/**
+ * A value that may truncate by design but must still sit inside the panel: only
+ * the element's box is checked, not its internal overflow. Every element the
+ * selector matches is checked, as in {@link assertValueFits}.
+ */
+export const assertInsidePanel = (document: Document, selector: string): void => {
+  const width = document.documentElement.clientWidth;
+  const elements = eachMatch(document, selector);
+  elements.forEach((element, index) => {
+    const name = label(selector, index, elements.length);
+    const rect = element.getBoundingClientRect();
+    expect(rect.left, `${name} starts left of the panel`).toBeGreaterThanOrEqual(-1);
+    expect(rect.right, `${name} runs past the panel edge`).toBeLessThanOrEqual(width + 1);
+  });
+};
+
+export type NarrowStoryCheck = (document: Document, body: HTMLElement) => void;
+
+/**
+ * Renders one checkpoint at the browser side panel's minimum width and asserts
+ * the panel neither scrolls horizontally nor loses the values the caller names.
+ * It drives the review bench's own surface control, so the check exercises the
+ * same rendering path a reviewer sees rather than a bespoke fixture width.
+ */
+export const narrowSidepanelStory = (
+  name: string,
+  scenarioId: string,
+  checkpointId: string,
+  checks: readonly NarrowStoryCheck[] = [],
+): LabStory => ({
+  args: { checkpointId, scenarioId },
+  name,
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const control = canvasElement.querySelector<HTMLButtonElement>(
+      '[data-surface="sidepanel-min"]',
+    );
+    if (!control) {
+      throw new Error("The minimum-width surface control is missing from the review bench");
+    }
+    await userEvent.click(control);
+    await assertCheckpointReady(canvasElement);
+    const { body, document, frame } = labFrameView(canvasElement);
+    // Guard the bench arithmetic: a device that does not lay the frame out at
+    // the minimum width would silently widen every assertion below.
+    expect(
+      Math.round(frame.getBoundingClientRect().width),
+      "the review bench does not render the minimum side-panel width",
+    ).toBe(MINIMUM_SIDEPANEL_WIDTH);
+    assertNoHorizontalOverflow(document);
+    for (const check of checks) {
+      check(document, body);
+    }
+  },
 });

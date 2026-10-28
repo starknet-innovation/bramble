@@ -13,6 +13,7 @@ import type { WalletStatus } from "../../../packages/presentation/wallet-ui/src/
 import { emptyRenderCache } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/rendering/render-cache";
 import { createDeploymentCache } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/sync/deployment-cache";
 import { hydrateView } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/sync/hydrate";
+import { createSignabilityCache } from "../../../packages/presentation/wallet-ui/src/sidepanel/app/sync/signability-cache";
 
 const token = defaultWalletPreferences().tokens[0];
 if (!token) throw new Error("token fixture unavailable");
@@ -107,7 +108,8 @@ describe("balance snapshots", () => {
     const tokens = defaultWalletPreferences().tokens.filter(
       (candidate) => candidate.networkId === "SN_MAIN",
     );
-    expect(tokens).toHaveLength(2);
+    // ETH, STRK and native USDC (issue 663).
+    expect(tokens).toHaveLength(3);
     let rpcReads = 0;
     const load = () =>
       getTokenBalances(
@@ -131,16 +133,16 @@ describe("balance snapshots", () => {
 
     await cachedBalances(snapshots, input, load);
     await cachedBalances(snapshots, { ...input, now: 59_999 }, load);
-    expect(rpcReads).toBe(2);
+    expect(rpcReads).toBe(3);
 
     await cachedBalances(snapshots, { ...input, now: 60_001 }, load);
-    expect(rpcReads).toBe(4);
+    expect(rpcReads).toBe(6);
 
     await cachedBalances(snapshots, { ...input, force: true, now: 60_002 }, load);
-    expect(rpcReads).toBe(6);
+    expect(rpcReads).toBe(9);
   });
 
-  test("keeps repeated Home hydration below ten Starknet RPC reads", async () => {
+  test("keeps repeated Home hydration to one Starknet RPC read per tracked token per fetch", async () => {
     const tokens = defaultWalletPreferences().tokens.filter(
       (candidate) => candidate.networkId === "SN_MAIN",
     );
@@ -192,6 +194,11 @@ describe("balance snapshots", () => {
         rpcReads += 1;
         return { accountId: status.activeAccountId ?? "", deployed: false };
       },
+      // The fixture account is the wallet's own: the background answers its
+      // signability from the family alone, with no chain read to count.
+      async loadAccountSignability() {
+        return { accountId: status.activeAccountId ?? "", ok: true, readOnly: false };
+      },
       async loadPrices() {
         return { asOf: null, changes: {}, prices: {}, stale: false };
       },
@@ -200,12 +207,14 @@ describe("balance snapshots", () => {
       },
     };
     const deployment = createDeploymentCache(wallet as never, () => now);
+    const signability = createSignabilityCache(wallet as never, () => now);
     const cache = emptyRenderCache();
     const run = (refreshReason?: "action" | "ambient" | "event") =>
       hydrateView({
         activeView: "home",
         cache,
         deployment,
+        signability,
         multisig: {
           async loadMultisigs() {
             return { intents: [], multisigs: [] };
@@ -219,17 +228,20 @@ describe("balance snapshots", () => {
         wallet,
       } as never);
 
+    // One read per tracked token per fetch (ETH, STRK and, since issue 663,
+    // native USDC), plus one deployment-status read per fresh fetch.
+    const perFetch = tokens.length;
     await run();
-    expect(rpcReads).toBe(3);
+    expect(rpcReads).toBe(perFetch + 1);
     await run("event");
-    expect(rpcReads).toBe(3);
+    expect(rpcReads).toBe(perFetch + 1);
     await run("action");
-    expect(rpcReads).toBe(6);
+    expect(rpcReads).toBe(2 * (perFetch + 1));
     await run("ambient");
-    expect(rpcReads).toBe(6);
+    expect(rpcReads).toBe(2 * (perFetch + 1));
     now = 60_002;
     await run("ambient");
-    expect(rpcReads).toBe(9);
+    expect(rpcReads).toBe(3 * (perFetch + 1));
     expect(historyScans).toBe(0);
   });
 });

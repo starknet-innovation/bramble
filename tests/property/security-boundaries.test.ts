@@ -142,6 +142,7 @@ describe("vault migration property boundary", () => {
 });
 
 const validModule = (overrides: Record<string, unknown> = {}) => ({
+  deriveArgentLegacyKeypair: () => ({ private_key: "0x321", public_key_x: "0xcba" }),
   deriveNostrPublicKey: () => ({ public_key: "11".repeat(32) }),
   deriveOzAccountAddress: () => "0xabc",
   deriveScopedStrk20ViewingKey: () => "0x456",

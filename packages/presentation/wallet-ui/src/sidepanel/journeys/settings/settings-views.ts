@@ -12,6 +12,8 @@ import { menuLink } from "@bramble/ui-kit/navigation";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { type BuildInfo, buildInfo } from "../../shell/build-info";
+import { SHADOW_ACCOUNTS_TITLE } from "../privacy/shadow-accounts-copy";
+import { PRIVACY_UNLOCK_TITLE } from "./privacy-unlock";
 
 // The build stamp under the menu: extension version, plus the source branch
 // when the bundle was built from an unreleased branch. Empty outside a built
@@ -47,6 +49,7 @@ export const settingsScreen = (
       <p class="eyebrow">This account</p>
       <div class="menu-list" role="group" aria-label="This account">
         ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
+        ${walletMenuRow("privacy-unlock", PRIVACY_UNLOCK_TITLE, "lock")}
       </div>
     </section>
     <section class="section">
@@ -54,6 +57,7 @@ export const settingsScreen = (
       <div class="menu-list" role="group" aria-label="Access and permissions">
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
+        ${walletMenuRow("shadow-accounts", SHADOW_ACCOUNTS_TITLE, "shield")}
         ${walletMenuRow(
           "request-settings",
           "Request display",
@@ -181,7 +185,7 @@ export const backupHubFlow = (status: WalletStatus): string => {
  * Renders the non-secret preference export task.
  */
 export const backupExportFlow = (status: WalletStatus): string =>
-  flowHeader("Download backup", status, "Your settings, folders, and address book") +
+  flowHeader("Download backup", status, "Your settings and folders") +
   flowScreen(
     "backup-export",
     `<section class="section">

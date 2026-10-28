@@ -42,25 +42,37 @@ import {
 } from "@bramble/starknet/multisig-invoke";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import {
+  type ArgentRecoveryInput,
   type BalanceInput,
+  type BraavosRecoveryInput,
   type DeclareInput,
   type DeployAccountInput,
   type DeploymentStatusInput,
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  getArgentRecoveryState,
+  getArgentSigningRestriction,
+  getBraavosRecoveryState,
+  getBraavosSigningRestriction,
   getDeploymentStatus,
   getNftOwner,
   getNftOwnership,
   getNftTokenUri,
   type getTokenBalances,
   getTokenMetadata,
+  getTransactionFees,
   getTransactionStatuses,
   type InvokeInput,
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  reviewArgentRecovery,
+  reviewBraavosRecovery,
+  type SigningRestrictionInput,
   submitAccountDeployment,
+  submitArgentRecovery,
+  submitBraavosRecovery,
   submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
@@ -68,6 +80,7 @@ import {
   type TransactionStatusInput,
   type TransferInput,
 } from "@bramble/starknet/rpc";
+import { type ResolveStarkNameInput, resolveStarkName } from "@bramble/starknet/stark-name";
 import {
   type ExternalAllowanceScan,
   readTrackedAllowances,
@@ -78,11 +91,9 @@ import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions
 import {
   createExplorerFirstHistory,
   createRpcFirstBalances,
+  type DiscoveredHistory,
 } from "@bramble/transactions/starkscan-wallet";
-import type {
-  scanTransactionHistory,
-  TransactionHistoryScan,
-} from "@bramble/transactions/tx-history-scan";
+import type { TransactionHistoryScan } from "@bramble/transactions/tx-history-scan";
 import { canonicalFelt, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { ExplorerLanePreferences } from "@bramble/wallet-model/preferences";
 
@@ -161,6 +172,42 @@ export type RuntimeRpc = {
   readonly getTrackedAllowances?: (
     input: TrackedAllowanceScan,
   ) => ReturnType<typeof readTrackedAllowances>;
+  /**
+   * Advisory signability probe for deployed Argent recovery candidates (issue
+   * 542). Optional so narrow test doubles keep compiling; the scan treats an
+   * absent member or a throw as "no verdict".
+   */
+  readonly getArgentSigningRestriction?: (
+    input: SigningRestrictionInput,
+  ) => ReturnType<typeof getArgentSigningRestriction>;
+  /** Braavos sibling of the Argent probe; same advisory contract. */
+  readonly getBraavosSigningRestriction?: (
+    input: SigningRestrictionInput,
+  ) => ReturnType<typeof getBraavosSigningRestriction>;
+  /** Pending-state read for the Ready recovery flow; advisory, read-only. */
+  readonly getArgentRecoveryState?: (
+    input: Parameters<typeof getArgentRecoveryState>[0],
+  ) => ReturnType<typeof getArgentRecoveryState>;
+  /** Estimates the Ready recovery's next escape step. */
+  readonly reviewArgentRecovery?: (
+    input: ArgentRecoveryInput,
+  ) => ReturnType<typeof reviewArgentRecovery>;
+  /** Submits the reviewed Ready recovery step. */
+  readonly submitArgentRecovery?: (
+    input: ArgentRecoveryInput,
+  ) => ReturnType<typeof submitArgentRecovery>;
+  /** Pending-state read for the Braavos recovery flow; advisory, read-only. */
+  readonly getBraavosRecoveryState?: (
+    input: Parameters<typeof getBraavosRecoveryState>[0],
+  ) => ReturnType<typeof getBraavosRecoveryState>;
+  /** Estimates the Braavos recovery request for its review card. */
+  readonly reviewBraavosRecovery?: (
+    input: BraavosRecoveryInput,
+  ) => ReturnType<typeof reviewBraavosRecovery>;
+  /** Submits the reviewed Braavos recovery request. */
+  readonly submitBraavosRecovery?: (
+    input: BraavosRecoveryInput,
+  ) => ReturnType<typeof submitBraavosRecovery>;
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -186,12 +233,24 @@ export type RuntimeRpc = {
    * answered and is treated by the handler as "history unavailable", degrading
    * to the local log.
    */
-  readonly getTransactionHistory?: (
-    input: TransactionHistoryScan,
-  ) => ReturnType<typeof scanTransactionHistory>;
+  readonly getTransactionHistory?: (input: TransactionHistoryScan) => Promise<DiscoveredHistory>;
+  /**
+   * Reads the fee each transaction's receipt reports it paid, for the activity
+   * log. Optional so existing RPC stubs stay valid; when absent no fee is
+   * recorded. A hash with no usable receipt fee is absent from the answer.
+   */
+  readonly getTransactionFees?: (
+    input: TransactionStatusInput,
+  ) => ReturnType<typeof getTransactionFees>;
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;
+  /**
+   * Resolves a Starknet ID name (a typed `name.stark`) to an account address on
+   * the active network's endpoints. Optional so existing RPC stubs stay valid;
+   * when absent the name resolution handler reports the surface unavailable.
+   */
+  readonly resolveStarkName?: (input: ResolveStarkNameInput) => ReturnType<typeof resolveStarkName>;
   readonly submitAccountDeployment: (
     input: DeployAccountInput,
   ) => ReturnType<typeof submitAccountDeployment>;
@@ -290,7 +349,15 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   estimateInvokeFee,
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
+  getArgentSigningRestriction,
+  getArgentRecoveryState,
+  getBraavosRecoveryState,
+  getBraavosSigningRestriction,
   getDeploymentStatus,
+  reviewArgentRecovery,
+  reviewBraavosRecovery,
+  submitArgentRecovery,
+  submitBraavosRecovery,
   getNftMetadata,
   getNftOwner,
   getNftOwnership,
@@ -305,6 +372,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     clientFor: configuredStarkscanClient,
     readPreferences,
   }),
+  getTransactionFees,
   getTransactionStatuses,
   multisig: {
     getConfig: getArgentMultisigConfig,
@@ -316,6 +384,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),
+  resolveStarkName,
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,

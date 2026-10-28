@@ -5,15 +5,19 @@ import { WalletError } from "@bramble/core/errors";
 
 /**
  * Requires that the unlock capability which authorized a grant is current.
- * A stale or revoked capability fails before any durable vault mutation.
+ * Run before the vault is read and again right before the grant's commit starts,
+ * so a capability that lapses before the commit starts leaves nothing stored.
  */
 export const requireGrantAuthorization = (isAuthorized: () => boolean): void => {
   if (!isAuthorized()) throw new WalletError("wallet locked");
 };
 
 /**
- * Restores the serialized pre-write snapshot when authorization expires while
- * the grant commit is in flight, then fails the caller closed.
+ * Restores the serialized pre-write snapshot when authorization expired during
+ * the grant's storage writes, then fails the caller closed. The restore is a
+ * second write, so it is best effort: if it fails, its storage error reaches
+ * the caller instead of "wallet locked", and the user-approved grant remains;
+ * a worker stopped between the two writes leaves it too (Sherlock 255).
  */
 export const rollbackRevokedGrant = async (
   isAuthorized: () => boolean,

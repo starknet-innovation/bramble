@@ -36,6 +36,7 @@
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
     "@vitest/runner": "4.1.11",
+    "axe-core": "4.13.0",
     "chromatic": "18.9.4",
     "playwright": "1.63.0",
     "storybook": "10.6.0",

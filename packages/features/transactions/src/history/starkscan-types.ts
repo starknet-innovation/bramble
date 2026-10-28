@@ -91,44 +91,6 @@ export type StarkscanTransfer = {
 };
 
 /**
- * One fungible-token balance in an indexed holdings snapshot.
- */
-export type StarkscanTokenHolding = {
-  readonly tokenAddress: string;
-  readonly normalizedTokenAddress: string;
-  readonly indexedBalanceRaw: string;
-  readonly symbol: string | null;
-  readonly name: string | null;
-  readonly decimals: number | null;
-};
-
-/**
- * Completeness proof attached to an indexed holdings snapshot.
- */
-export type StarkscanHoldingsCompleteness = {
-  readonly exact: boolean;
-  readonly truncated: boolean;
-  readonly complete: boolean;
-  readonly reasonCode: string;
-  readonly reason: string;
-  readonly lagBlocks: number | null;
-  readonly capped: boolean;
-  readonly cap: number | null;
-};
-
-/**
- * Indexed fungible-token holdings for one address.
- */
-export type StarkscanTokenHoldings = {
-  readonly chainId: StarkscanChainId;
-  readonly ownerAddress: string;
-  readonly items: readonly StarkscanTokenHolding[];
-  readonly exact: boolean;
-  readonly truncated: boolean;
-  readonly completeness: StarkscanHoldingsCompleteness;
-};
-
-/**
  * Current or block-pinned balance for one token and owner.
  */
 export type StarkscanTokenBalance = {

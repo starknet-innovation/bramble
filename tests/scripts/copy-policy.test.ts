@@ -13,6 +13,7 @@ import {
   COPY_EXEMPT_PATHS,
   COPY_EXEMPT_STRINGS,
   COPY_PATTERNS,
+  copyLiterals,
   isProse,
   textRuns,
 } from "../../scripts/copy-policy";
@@ -137,5 +138,35 @@ describe("what counts as copy", () => {
     expect(isProse("https://example.com/a/b")).toBe(false);
     expect(isProse("abandon ability able ".repeat(40))).toBe(false);
     expect(isProse("Reveal only in private.")).toBe(true);
+  });
+});
+
+describe("where copy is read from", () => {
+  const values = (source: string): readonly string[] =>
+    copyLiterals("example.ts", source).map(({ value }) => value);
+
+  // A quote inside a regular-expression literal used to open a string that ran
+  // to the next quote, so every sentence after it in the file went unread
+  // (mc-wallet issue 476).
+  test("reads past a regular expression that holds a quote", () => {
+    const source = [
+      'const escape = (value: string) => value.replace(/["\\\\]/g, "\\\\$&");',
+      'const hint = "Rest assured, nothing changes.";',
+    ].join("\n");
+    expect(values(source)).toContain("Rest assured, nothing changes.");
+  });
+
+  test("reads every literal chunk of a template and never a comment", () => {
+    const source = [
+      "// Rest assured this comment is not copy.",
+      `const line = \`Sent \${amount} to \${name}. Done.\`;`,
+    ].join("\n");
+    expect(values(source)).toEqual(["Sent ", " to ", ". Done."]);
+  });
+
+  test("points at where the text starts", () => {
+    const source = 'const a = 1;\nconst b = "Hello there";';
+    const [found] = copyLiterals("example.ts", source);
+    expect(source.slice(found?.index ?? 0).startsWith("Hello there")).toBe(true);
   });
 });

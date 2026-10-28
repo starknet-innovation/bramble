@@ -48,6 +48,7 @@ const fields = (route: SendRoute): TransferFields => ({
   fiatEstimate: "",
   recipient: RECIPIENT,
   recipientLabel: "",
+  recipientResolvedFrom: "",
   signer: "software",
   source: route.source,
   speed: "standard",

@@ -17,6 +17,11 @@ import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/mul
 import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
 import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
 import type { Vault } from "@bramble/vault/schema";
+import {
+  canonicalShadowAccountScope,
+  type ShadowAccountScopeRef,
+  withShadowAccountScope,
+} from "@bramble/vault/shadow-account-scopes";
 import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
@@ -53,7 +58,8 @@ const vault = {
   importedSeeds: [],
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 10,
+  schemaVersion: 12,
+  shadowAccountScopes: [],
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -87,6 +93,9 @@ const ledgerAccount: LedgerAccountRef = {
  * across one request rather than as an absolute.
  */
 export const viewingKeyDerivations = { value: 0 };
+
+// Shadow-account scopes the key-boundary wallet double has recorded.
+const recordedScopes: { value: readonly ShadowAccountScopeRef[] } = { value: [] };
 
 /** The salted stub vault service the scan runs the router against. */
 export const walletStub = {
@@ -148,11 +157,36 @@ export const walletStub = {
   async grantOrigin() {
     return [account];
   },
+  // Recorded through the vault's own merge, so the scan exercises the real
+  // record shape; the records are not secret but must stay privileged.
+  async recordShadowAccountScope({
+    vaultPassphrase,
+    ...input
+  }: { readonly vaultPassphrase: string } & ShadowAccountScopeRef) {
+    if (vaultPassphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
+    const scope = canonicalShadowAccountScope(input);
+    const next = scope ? withShadowAccountScope(recordedScopes.value, scope) : null;
+    if (next) {
+      recordedScopes.value = next;
+    }
+  },
+  async listShadowAccountScopes() {
+    return recordedScopes.value;
+  },
   async readVault(passphrase: string) {
     if (passphrase !== SECRET_PASSPHRASE) {
       throw new Error("bad passphrase");
     }
     return vault;
+  },
+  // Accepts like a vault awaiting recovery, so the scan reads the unlocked
+  // status that "Unlock anyway" returns rather than a refusal.
+  async recoverUnverifiedVault(passphrase: string) {
+    if (passphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
   },
   async revokeOrigin() {
     return [];
@@ -287,9 +321,9 @@ const required = <Method>(method: Method | undefined, name: string): Method => {
  * method whose real implementation reaches the key: the official adapter builds
  * its transfers client with a `viewingKeyProvider` (see
  * @bramble/privacy's official-sdk-transfers), and `prepare`,
- * `privateBalances`, `registrationStatus`, `register`, `subaccountCommitment`
- * `prepareRegistration`, `prepareAccountActions`, `subaccountCommitment` and
- * `submitActions` all go through that client. `poolFee`, `quoteActions` and
+ * `privateBalances`, `registrationStatus`, `register`, `shadowAccountCommitment`
+ * `prepareRegistration`, `prepareAccountActions`, `shadowAccountCommitment`,
+ * `shadowAccounts` and `submitActions` all go through that client. `poolFee`, `quoteActions` and
  * `submitPrepared` do not, so they are left unwrapped rather than over-claiming.
  */
 const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
@@ -320,9 +354,14 @@ const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
       await input.viewingKey();
       return state.strk20Registered ? ("registered" as const) : ("unregistered" as const);
     },
-    async subaccountCommitment(input) {
+    async shadowAccountCommitment(input) {
       await input.viewingKey();
-      return base.subaccountCommitment(input);
+      return base.shadowAccountCommitment(input);
+    },
+    // The real listing derives the partial commitment from the viewing key.
+    async shadowAccounts(input) {
+      await input.viewingKey();
+      return required(base.shadowAccounts, "shadowAccounts")(input);
     },
     async submitActions(input) {
       await input.viewingKey();
@@ -343,6 +382,41 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     async submitAccountDeployment() {
       Object.assign(state, { accountDeployed: true });
       return { transactionHash: "0x7de" };
+    },
+    async reviewBraavosRecovery() {
+      return {
+        delaySeconds: 345_600,
+        effectiveAfter: 1_000,
+        fee: { overallFee: "1", unit: "FRI" },
+      };
+    },
+    async submitBraavosRecovery() {
+      return { pendingUntil: 1_000, transactionHash: "0x7ec" };
+    },
+    async getBraavosRecoveryState() {
+      return { delaySeconds: 345_600, pendingUntil: null };
+    },
+    async reviewArgentRecovery() {
+      return {
+        expiresAt: 2_000,
+        fee: { overallFee: "1", unit: "FRI" as const },
+        readyAt: 1_000,
+        replaces: null,
+        step: "start" as const,
+      };
+    },
+    async submitArgentRecovery() {
+      return { expiresAt: 2_000, readyAt: 1_000, transactionHash: "0x7ed" };
+    },
+    async getArgentRecoveryState() {
+      return {
+        expiresAt: null,
+        guardianBackup: "absent" as const,
+        pendingChange: null,
+        readyAt: null,
+        securityPeriodSeconds: 604_800,
+        status: "none" as const,
+      };
     },
     async getNftOwner() {
       return account.address;
@@ -382,5 +456,8 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     strk20: strk20ServiceFor(state),
     async verifyAccountClassHash() {
       return { onChainClassHash: account.classHash, status: "verified" };
+    },
+    async resolveStarkName() {
+      return { address: account.address, status: "resolved" };
     },
   });

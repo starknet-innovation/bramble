@@ -63,9 +63,12 @@ describe("onboarding views", () => {
     expect(html).not.toContain("aria-pressed");
   });
 
-  test("importing an existing account offers the phrase, a key, and a Ready Ledger", () => {
+  test("importing an existing account offers a rescan, the phrase, a key, and a Ready Ledger", () => {
     const html = importAccountChooser();
 
+    // The wallet's own accounts: one scan of the phrase it already holds, which
+    // is the only route here that imports without asking the reader to type one.
+    expect(html).toContain('data-add-kind="find-accounts"');
     expect(html).toContain('data-add-kind="import-phrase"');
     expect(html).toContain('data-add-kind="import-key"');
     expect(html).toContain('data-add-kind="restore-ready-ledger"');
@@ -73,7 +76,7 @@ describe("onboarding views", () => {
     // it is read from is the wallet's business, not the reader's.
     expect(html).toContain("Ready (Argent X)");
     expect(html).not.toContain("derivation path");
-    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(3);
+    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(4);
   });
 
   test("connect, reading, and error device states render their controls", () => {
@@ -185,6 +188,33 @@ describe("onboarding views", () => {
     expect(ledgerAccountPicker([], [], undefined, "argentx")).toContain("No accounts read");
   });
 
+  test("an idle Braavos index is listed but not selectable, like an idle Ready one", () => {
+    // Importing a Braavos index with no on-chain activity would deploy a new
+    // Braavos account, and Bramble only creates Bramble accounts.
+    const braavos = (index: number): LedgerAccountRef => {
+      const base = candidateAccount(index, "argent");
+      return {
+        ...base,
+        accountContractType: "braavos",
+        address: base.address.replace("0xe", "0xb"),
+        derivation: {
+          accountIndex: index,
+          eip2645application: "argentx",
+          kind: "ledger",
+          path: ledgerAccountPath(index, "argentx"),
+        },
+        id: base.id.replace(":0xe", ":0xb"),
+      };
+    };
+    const candidates: LedgerCandidate[] = [
+      { account: braavos(1), balance: "3 STRK", deployed: true, duplicate: false, funded: true },
+      { account: braavos(2), balance: "0 STRK", deployed: false, duplicate: false, funded: false },
+    ];
+    const html = ledgerAccountPicker(candidates, [], undefined, "argentx");
+    expect(html).toMatch(new RegExp(`data-ledger-toggle="${braavos(2).id}"[^>]*disabled`));
+    expect(html).not.toMatch(new RegExp(`data-ledger-toggle="${braavos(1).id}"[^>]*disabled`));
+  });
+
   test('"Add selected" is disabled until at least one index is picked', () => {
     const html = ledgerAccountPicker(
       [
@@ -243,5 +273,23 @@ describe("onboarding views", () => {
 
   test("an empty candidate list renders the empty state", () => {
     expect(ledgerAccountPicker([])).toContain("No accounts read");
+  });
+
+  test("omits the Ledger routes when the runtime cannot reach a device", () => {
+    const chooser = addAccountChooser(false);
+    expect(chooser).not.toContain('data-add-kind="ledger"');
+    expect(chooser).not.toContain("Ledger account");
+    expect(chooser).toContain('data-add-kind="regular"');
+    expect(chooser).toContain('data-add-kind="multisig"');
+    expect(chooser).toContain('data-add-kind="import"');
+    expect((chooser.match(/data-add-kind="/g) ?? []).length).toBe(3);
+
+    const importChooser = importAccountChooser(false);
+    expect(importChooser).not.toContain('data-add-kind="restore-ready-ledger"');
+    expect(importChooser).not.toContain("Ready Ledger account");
+    expect(importChooser).toContain('data-add-kind="find-accounts"');
+    expect(importChooser).toContain('data-add-kind="import-phrase"');
+    expect(importChooser).toContain('data-add-kind="import-key"');
+    expect((importChooser.match(/data-add-kind="/g) ?? []).length).toBe(3);
   });
 });

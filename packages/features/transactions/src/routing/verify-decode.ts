@@ -11,16 +11,11 @@
  */
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
-import {
-  asFelt,
-  canonicalFelt,
-  type StarknetNetworkId,
-  sameFelt,
-  uint256Felts,
-} from "@bramble/wallet-model/networks";
-import type { AddressBookEntry, TokenConfig } from "@bramble/wallet-model/preferences";
+import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/avnu-route";
+import { asFelt, canonicalFelt, sameFelt, uint256Felts } from "@bramble/wallet-model/networks";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { Call } from "starknet";
+import type { VerificationContext } from "./verification-context";
 import {
   APPROVE_ENTRYPOINTS,
   BATCH_TRANSFER_FROM_ENTRYPOINTS,
@@ -35,7 +30,8 @@ import {
  * `approve` grants or raises an ERC20 spending allowance, `nft-approval` grants
  * transfer rights over ONE item of a collection the wallet watches,
  * `operator-approval` grants transfer rights over an ENTIRE collection,
- * `transfer` moves value, and `unknown` is a call the wallet cannot describe.
+ * `transfer` moves value, `swap` is an AVNU route whose payee and minimum
+ * output were decoded, and `unknown` is a call the wallet cannot describe.
  * Each grant has its own kind so no risk rule has to infer authority from a
  * summary string.
  */
@@ -43,6 +39,7 @@ export type DecodedCallKind =
   | "approve"
   | "nft-approval"
   | "operator-approval"
+  | "swap"
   | "transfer"
   | "unknown";
 
@@ -57,59 +54,13 @@ export type DecodedCall = {
 };
 
 /**
- * Wallet context the verifier checks calls against: the acting account, the
- * contacts and tokens it trusts, and the NFT collections it watches. The
- * collection list is what lets an ERC721 `approve(to, token_id)` be told apart
- * from an ERC20 `approve(spender, amount)` — the two are indistinguishable by
- * calldata alone.
+ * Re-exported verifier context so callers keep importing it from this module.
  */
-export type VerificationContext = {
-  readonly account: Pick<AccountRef, "address" | "networkId">;
-  readonly addressBook: readonly AddressBookEntry[];
-  /** Wallet-pinned application contracts that should not raise an unknown-contract warning. */
-  readonly knownContracts?: readonly string[];
-  /**
-   * Collections this account watches. Optional because a context can be built
-   * where the wallet holds no NFT knowledge at all; absent means "no collection
-   * is known", under which an ERC721 `approve` is indistinguishable from an
-   * ERC20 one and is described in ERC20 terms. Every production context comes
-   * from {@link verificationContext}, which always fills it in.
-   */
-  readonly nftContracts?: readonly string[];
-  readonly tokens: readonly TokenConfig[];
-};
-
-/**
- * Builds the wallet context the verifier checks calls against, scoped to the
- * account's network.
- *
- * This is the single definition of "which contacts, tokens, and collections does
- * this account trust". It lives beside the verifier rather than in one product
- * line's handler so the ERC20 send, the NFT send, the allowance flows, the swap,
- * the dapp invoke, and the privacy pool routes all scope the trusted set the
- * same way; a fourth local copy of these filters is how a contact saved on
- * another network once made a foreign recipient read as trusted. Pure — it only
- * filters the preferences it is handed and never reads storage itself.
- */
-export const verificationContext = (
-  account: Pick<AccountRef, "address" | "networkId">,
-  preferences: {
-    readonly addressBook: readonly AddressBookEntry[];
-    // Structurally typed rather than importing `WatchedNft`: the watched-NFT
-    // record lives in the portfolio package, which the transactions package
-    // does not depend on. Only these two fields are read, and a `WatchedNft`
-    // still satisfies the shape at every call site.
-    readonly nfts?: readonly { readonly contract: string; readonly networkId: StarknetNetworkId }[];
-    readonly tokens: readonly TokenConfig[];
-  },
-): VerificationContext => ({
-  account,
-  addressBook: preferences.addressBook.filter((entry) => entry.networkId === account.networkId),
-  nftContracts: (preferences.nfts ?? [])
-    .filter((nft) => nft.networkId === account.networkId)
-    .map((nft) => nft.contract),
-  tokens: preferences.tokens.filter((token) => token.networkId === account.networkId),
-});
+export {
+  trustedTokens,
+  type VerificationContext,
+  verificationContext,
+} from "./verification-context";
 
 /**
  * Abbreviates an address for display as `0x1234…abcd`.
@@ -381,6 +332,36 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
   };
 };
 
+// A route amount with the token it is in: decimals and symbol for a tracked
+// token, base units and the token's address otherwise, so the line never
+// states a quantity without saying what it is a quantity of.
+const routeAmountLabel = (amount: bigint, tokenAddress: string, context: VerificationContext) => {
+  const token = tokenFor(context.tokens, tokenAddress);
+  return token ? amountLabel(amount, token) : `${amount} units of ${shortAddress(tokenAddress)}`;
+};
+
+// AVNU multi_route_swap, read through the wallet's one pinned route decoder —
+// the same one the wallet-built swap is bound with — so a dapp-sent swap states
+// the payee and the floor the chain will enforce instead of "Call
+// multi_route_swap on 0x…". Calldata that is not all strings, or that the
+// decoder cannot consume exactly, returns null and stays opaque; the verifier
+// flags that fallback rather than letting it read as an ordinary call.
+const decodeAvnuSwapCall: CallDecoder = (call, calldata, context) => {
+  const felts = calldata.filter((felt): felt is string => typeof felt === "string");
+  const route = felts.length === calldata.length ? decodeAvnuRoute(call.entrypoint, felts) : null;
+  if (route === null) {
+    return null;
+  }
+  const sell = routeAmountLabel(route.sellAmount, route.sellToken, context);
+  const floor = routeAmountLabel(route.minBuyAmount, route.buyToken, context);
+  return {
+    contractAddress: call.contractAddress,
+    entrypoint: call.entrypoint,
+    kind: "swap",
+    summary: `Swap ${sell} for at least ${floor}, paid to ${shortAddress(route.beneficiary)}`,
+  };
+};
+
 const decodeUnknownCall = (call: Call): DecodedCall => ({
   contractAddress: call.contractAddress,
   entrypoint: call.entrypoint,
@@ -412,8 +393,16 @@ const CALL_DECODERS: Readonly<Record<string, CallDecoder>> = {
       decodeErc1155BatchTransferCall,
     ]),
   ),
+  [AVNU_MULTI_ROUTE_SWAP]: decodeAvnuSwapCall,
   transfer: decodeTransferOrApproveCall,
 };
+
+/**
+ * Every entrypoint name the decoder table recognizes, derived from its keys so a
+ * spelling added to ./verify-selectors reaches selector-hash lookups (for
+ * example the SNIP-9 OutsideExecution reader) with no second edit.
+ */
+export const DECODED_ENTRYPOINTS: readonly string[] = Object.keys(CALL_DECODERS);
 
 /**
  * Decodes one call against the wallet context. Total: an unrecognized selector
@@ -422,7 +411,12 @@ const CALL_DECODERS: Readonly<Record<string, CallDecoder>> = {
  */
 export const decodeCall = (call: Call, context: VerificationContext): DecodedCall => {
   const calldata = Array.isArray(call.calldata) ? call.calldata : [];
-  const decoder = CALL_DECODERS[call.entrypoint];
+  // Own keys only: the table is a plain object, and an entrypoint a co-signer
+  // or dapp names, such as `toString` or `constructor`, must not resolve
+  // through Object.prototype to a function that is not a decoder (Sherlock 193).
+  const decoder = Object.hasOwn(CALL_DECODERS, call.entrypoint)
+    ? CALL_DECODERS[call.entrypoint]
+    : undefined;
   return decoder?.(call, calldata, context) ?? decodeUnknownCall(call);
 };
 

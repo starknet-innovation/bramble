@@ -12,14 +12,15 @@
 
 use crate::account_catalog::{authorization_shape, type_label, AccountFamily};
 use crate::account_names::{display_name, normalise_label, short_label};
-use crate::account_store::{StoredAccount, VaultPayload, MAX_ACCOUNT_INDEX, MAX_ACCOUNT_RECORDS};
+use crate::account_store::{next_account_index, StoredAccount, VaultPayload, MAX_ACCOUNT_RECORDS};
 use crate::groups::{self, AccountGroup};
+use crate::kms::{self, Ladder};
 use crate::networks::NetworkId;
 use crate::recovery::{derive_selections, RecoverySelection};
 use crate::recovery_scan::{self, RecoveryScanStep};
 use crate::rpc::RpcResponse;
 use crate::wallet::{Session, StarkSignature, WalletCore};
-use crate::{kms, CoreError};
+use crate::CoreError;
 
 /// One account as the UI renders it. Public data only; safe to render and log.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -121,7 +122,7 @@ pub(crate) fn signing_record<'a>(
     }
 }
 
-/// Signs `message_hash` with the key at the record's index and checks the signer is the record's
+/// Signs `message_hash` with the key at the record's index on its ladder and checks the signer is the record's
 /// public key, so a record that no longer matches its phrase can never sign. The key is derived,
 /// used, and wiped inside this call.
 pub(crate) fn sign_for(
@@ -132,6 +133,7 @@ pub(crate) fn sign_for(
     let signature = kms::sign_hash(
         &payload.mnemonic,
         payload.mnemonic_passphrase.as_deref(),
+        record.ladder(),
         record.account_index,
         message_hash,
     )?;
@@ -148,18 +150,6 @@ fn require_record<'a>(
     account_id: &str,
 ) -> Result<&'a StoredAccount, CoreError> {
     payload.record(account_id).ok_or_else(unknown_account)
-}
-
-// Lowest unused account index on `network` (`nextAccountIndex`): every family occupies its index.
-fn next_account_index(payload: &VaultPayload, network: NetworkId) -> Result<u32, CoreError> {
-    (0..=MAX_ACCOUNT_INDEX)
-        .find(|index| {
-            !payload
-                .accounts
-                .iter()
-                .any(|record| record.network() == network && record.account_index == *index)
-        })
-        .ok_or_else(|| invalid("account limit reached"))
 }
 
 fn push_active(payload: &mut VaultPayload, record: StoredAccount) -> Result<(), CoreError> {
@@ -279,8 +269,11 @@ impl WalletCore {
                     let family = source.family();
                     let class_hash =
                         (family != AccountFamily::OpenZeppelin).then(|| source.class_felt());
+                    // The same key on the other network: the source's own path, never a
+                    // different ladder's key at the same index.
                     let projected = payload.derive(
                         family,
+                        source.ladder(),
                         source.account_index,
                         class_hash.as_ref(),
                         source.salt_felt().as_ref(),
@@ -305,10 +298,14 @@ impl WalletCore {
                 return Err(invalid("finish finding your accounts first"));
             }
             let index = next_account_index(&session.payload, network)?;
-            let record =
-                session
-                    .payload
-                    .derive(AccountFamily::OpenZeppelin, index, None, None, network)?;
+            let record = session.payload.derive(
+                AccountFamily::OpenZeppelin,
+                Ladder::Account,
+                index,
+                None,
+                None,
+                network,
+            )?;
             let id = record.id.clone();
             self.commit(session, |payload| push_active(payload, record))?;
             let payload = &session.payload;

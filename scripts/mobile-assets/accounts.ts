@@ -7,7 +7,7 @@
 import { GROUP_ICONS } from "@bramble/settings/groups";
 import { ACCOUNT_CLASSES, ARGENT_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
-import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
+import { RECOVERY_SCAN_LIMITS, RESERVED_AGENT_ACCOUNT_INDEX } from "@bramble/wallet-model/recovery";
 // The side-panel modules below are not package exports: read here only to pin the mobile port.
 import {
   COPY_CONFIRM_MS,
@@ -59,6 +59,7 @@ export const renderAccountsCatalog = (): string => {
       typeLabel: knownAccountType(OPENZEPPELIN_ACCOUNT_CLASS_HASH),
     },
     recoveryLimits: RECOVERY_SCAN_LIMITS,
+    reservedAgentIndex: RESERVED_AGENT_ACCOUNT_INDEX,
   };
   return `${JSON.stringify(catalog, null, 2)}\n`;
 };

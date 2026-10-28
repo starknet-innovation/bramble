@@ -14,16 +14,21 @@ const UNDEPLOYED_FRESH_MS = 60_000;
 
 type DeploymentSnapshot = { readonly checkedAt: number; readonly deployed: boolean };
 
+// The views that read deployment: Home's "deploy now" notice, and the deploy
+// screen, which must never offer Deploy from another view's stale snapshot
+// (mc-wallet 712).
+const DEPLOYMENT_VIEWS: ReadonlySet<WalletView> = new Set<WalletView>(["home", "deploy-account"]);
+
 /**
  * Deployment-status cache handle bound to one wallet client.
  */
 export type DeploymentCache = {
   /**
-   * Resolves the active account's on-chain deployment for Home: true when
-   * deployed (from cache or a fresh query), false when confirmed undeployed,
-   * and null when it does not apply (not Home, locked, or no vault) or is
-   * unknown. A completed action forces a fresh negative result while a positive
-   * result remains safe for the session.
+   * Resolves the active account's on-chain deployment for Home and the deploy
+   * screen: true when deployed (from cache or a fresh query), false when
+   * confirmed undeployed, and null when it does not apply (another view,
+   * locked, or no vault) or is unknown. A completed action forces a fresh
+   * negative result while a positive result remains safe for the session.
    */
   readonly load: (
     status: WalletStatus,
@@ -47,7 +52,7 @@ export const createDeploymentCache = (
   const snapshots = new Map<string, DeploymentSnapshot>();
   return {
     async load(status, activeView, force = false) {
-      if (activeView !== "home" || !status.hasVault || status.locked) {
+      if (!DEPLOYMENT_VIEWS.has(activeView) || !status.hasVault || status.locked) {
         return null;
       }
       const known = `${status.networkId}:${status.activeAccountId ?? ""}`;
@@ -65,12 +70,15 @@ export const createDeploymentCache = (
         return false;
       }
       const result = await wallet.loadDeploymentStatus();
-      if (result) {
-        const snapshot = { checkedAt, deployed: result.deployed };
-        snapshots.set(`${status.networkId}:${result.accountId}`, snapshot);
-        snapshots.set(known, snapshot);
+      // The background answers for whichever account is active when it handles
+      // the request, so a switch that lands mid-flight returns another
+      // account's verdict. Drop it rather than key it under this account: a
+      // foreign `true` would hide the deploy notice for the whole session.
+      if (!result || result.accountId !== status.activeAccountId) {
+        return null;
       }
-      return result ? result.deployed : null;
+      snapshots.set(known, { checkedAt, deployed: result.deployed });
+      return result.deployed;
     },
     noteDeployed(networkId, accountId) {
       const snapshot = { checkedAt: now(), deployed: true };

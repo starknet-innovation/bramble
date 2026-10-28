@@ -241,6 +241,28 @@ describe("Ledger onboard controller", () => {
     expect(h.refreshed()).toBe(1);
   });
 
+  test("a vault input check reads as the add-account sentence, a bad device key keeps its fact (#652)", async () => {
+    for (const [raw, shown] of [
+      ["Invalid Ledger account index", "Couldn't add that account. Try again."],
+      ["Invalid Ledger path application", "Couldn't add that account. Try again."],
+      ["Invalid Starknet network", "Couldn't add that account. Try again."],
+      [
+        "Invalid Ledger public key",
+        "Your Ledger returned a public key Bramble can't use. Nothing was added.",
+      ],
+    ] as const) {
+      const h = onboardHarness({ create: () => Promise.reject(new Error(raw)) });
+      const controller = createLedgerOnboardController(h.deps);
+      controller.connect();
+      await tick();
+      controller.toggle(idOf(0));
+      controller.addSelected();
+      await tick();
+      const final = h.views.at(-1);
+      expect(final?.kind === "picker" && final.message).toBe(shown);
+    }
+  });
+
   test("a partial batch marks completed accounts and leaves only the failed remainder retryable", async () => {
     let attempts = 0;
     const h = onboardHarness({
@@ -265,7 +287,8 @@ describe("Ledger onboard controller", () => {
     expect(h.created).toEqual([0]);
     expect(final?.kind).toBe("picker");
     if (final?.kind === "picker") {
-      expect(final.message).toBe("temporary write failure");
+      // An unmapped lowercase diagnostic is never shown raw in the picker.
+      expect(final.message).toBe("Couldn't add that account. Try again.");
       expect(final.selected).toEqual([idOf(1)]);
       expect(final.candidates[0]?.duplicate).toBe(true);
       expect(final.candidates[1]?.duplicate).toBe(false);

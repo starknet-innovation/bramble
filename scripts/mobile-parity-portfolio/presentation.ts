@@ -232,18 +232,21 @@ const fact = (body: string, label: string): string | null => {
 };
 
 // The row as `transactionRow` renders it: a disclosure whose summary carries the heading, the
-// hash and its copy control, the status word and the token mark, and whose body holds the
-// counterparty (or detail), the submission time and the provisional-status hint.
+// status word and the token mark, and whose body holds the hash and its copy control (the
+// "Transaction" fact, since 93826d23), the counterparty (or detail), the submission time and the
+// provisional-status hint.
 const readRow = (html: string) => {
   const summaryTag = /<summary[^>]*>/.exec(html)?.[0] ?? "";
   const summary = /<summary[^>]*>([\s\S]*?)<\/summary>/.exec(html)?.[1] ?? "";
   const body = /<div class="disclosure-body">([\s\S]*?)<\/div>\s*<\/details>/.exec(html)?.[1] ?? "";
-  const hashLink = /<a class="tx-hash"[^>]*>/.exec(summary)?.[0] ?? "";
+  const hashRow = /<dd class="tx-hash-row">([\s\S]*?)<\/dd>/.exec(body)?.[1] ?? "";
+  const facts = body.replace(/<dd class="tx-hash-row">[\s\S]*?<\/dd>/, "");
+  const hashLink = /<a class="tx-hash"[^>]*>/.exec(hashRow)?.[0] ?? "";
   const counterparty = /<div><dt>([A-Z][a-z]+)<\/dt><dd><code title="([^"]*)">([^<]*)<\/code>/.exec(
     body,
   );
-  const hash = copyControl(summary);
-  const peer = copyControl(body);
+  const hash = copyControl(hashRow);
+  const peer = copyControl(facts);
   return {
     accessible: attr(summaryTag, "aria-label"),
     avatar: readGlyph(
@@ -265,7 +268,7 @@ const readRow = (html: string) => {
       summary,
       /<span class="tx-kind-icon[^"]*" aria-hidden="true" title="([^"]*)"/,
     ),
-    hash: firstMatch(summary, /class="tx-hash(?: is-plain)?"[^>]*>(?:<code>)?([^<]*)</),
+    hash: firstMatch(hashRow, /class="tx-hash(?: is-plain)?"[^>]*>(?:<code>)?([^<]*)</),
     hashCopyLabel: hash.label,
     hashCopyValue: hash.value,
     href: attr(hashLink, "href"),

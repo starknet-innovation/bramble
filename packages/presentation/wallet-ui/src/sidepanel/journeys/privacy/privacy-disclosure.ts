@@ -7,7 +7,7 @@
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { errorMessage, showToast } from "../../shared/dom";
+import { errorDetails, errorLine, showToast } from "../../shared/dom";
 import type { SendIntent } from "../send/send-model";
 import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
 import { privacyBlockerFor } from "./privacy-model";
@@ -37,6 +37,23 @@ export type PrivacyUiDeps = {
   readonly preferences: () => WalletPreferences | null;
   readonly setDisclosure: (state: PrivacyDisclosureState) => void;
   readonly setJourney: (state: PrivacyJourneyState) => void;
+  /**
+   * Start time of a private operation whose settled balance the privacy
+   * indexer may not yet reflect, or null when none is being watched. The
+   * settle poll re-reads while it is set; a caller that omits it never polls.
+   */
+  readonly settledAt?: () => number | null;
+  /**
+   * Drops the settling time above once the settle watch's bounded window has
+   * closed, so later repaints bind with no watch rather than re-entering with a
+   * stale one. The controller that armed the watch supplies it.
+   */
+  readonly clearSettledAt?: () => void;
+  /**
+   * The app's injected wall clock. The settle watch measures its bounded window
+   * with it; without a clock the watch is not armed.
+   */
+  readonly now?: (() => number) | null;
   readonly status: () => WalletStatus;
   readonly wallet: SidepanelWallet;
 };
@@ -144,7 +161,7 @@ export const loadPrivacyDisclosure = (
       return true;
     } catch (error) {
       if (deps.disclosure() === pending && scopeMatches(deps, scope)) {
-        const message = errorMessage(error, "Private balances unavailable");
+        const message = errorLine(error, "Private balances unavailable");
         deps.setDisclosure({
           error: message,
           blockerKind: privacyBlockerFor(error).kind,
@@ -152,7 +169,13 @@ export const loadPrivacyDisclosure = (
           value: null,
         });
         deps.paint();
-        if (!record.silent) showToast(message, "error", deps.app);
+        if (!record.silent)
+          showToast(
+            message,
+            "error",
+            deps.app,
+            errorDetails(error, "Private balances unavailable"),
+          );
       }
       return false;
     } finally {

@@ -1,6 +1,7 @@
 /** Pure stable Argent multisig deployment form. */
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { selectField, textField } from "@bramble/ui-kit/fields";
@@ -17,6 +18,7 @@ import {
   accountDisplayName,
   accountFamilyName,
   accountLabel,
+  copyButton,
   flowHeader,
   flowScreen,
   hardwareBadge,
@@ -24,7 +26,12 @@ import {
   noAccountEmpty,
 } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
-import { formatFeeEstimate } from "../../shared/review-render";
+import {
+  formatFeeEstimate,
+  reviewCostNote,
+  reviewOutcome,
+  reviewPanel,
+} from "../../shared/review-render";
 import { type MultisigParticipantOption, multisigParticipantScreen } from "./multisig-participant";
 
 /**
@@ -64,6 +71,41 @@ export const deploymentFundingStage = (
       variant: "secondary",
     })}
   </section>`;
+
+/**
+ * Renders the reviewed deployment: the outcome line, the predicted address, the
+ * irreversible-authority consequences, the fee ceiling, and the exact
+ * constructor. Shared by the live approval quote and the submit path so both
+ * paint the same review.
+ */
+export const deploymentReviewMarkup = (review: ArgentMultisigDeploymentReview): string =>
+  `${reviewOutcome(`Deploy a ${review.threshold}-of-${review.signerPublicKeys.length} Ready multisig.`)}
+    <div class="multisig-deployment-target" aria-label="Predicted multisig address">
+      <span>Predicted address</span>
+      <code title="${escapeHtml(review.address)}">${escapeHtml(accountLabel(review.address))}</code>
+      ${copyButton(review.address, "Copy predicted multisig address")}
+    </div>
+    ${reviewPanel([], "Deployment creates a new on-chain multisig account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
+    ${reviewCostNote(`Maximum network fee: ${formatFeeEstimate(review.fee)}`)}
+    <details class="disclosure" data-disclosure="multisig-deployment-technical">
+      <summary>
+        <span class="menu-copy"><strong>Technical details</strong><small>Exact constructor authority and signer</small></span>
+        <span class="disclosure-mark">${icon("chevronRight")}</span>
+      </summary>
+      <div class="disclosure-body">
+        <dl class="request-detail">
+          <div><dt>Address</dt><dd><code>${escapeHtml(review.address)}</code>${copyButton(review.address, "Copy multisig address")}</dd></div>
+          <div><dt>Contract</dt><dd>Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
+          <div><dt>Class hash</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, "Copy Ready Multisig class hash")}</dd></div>
+          <div><dt>Network</dt><dd><code>${escapeHtml(review.networkId)}</code></dd></div>
+          <div><dt>Signers</dt><dd>${review.signerPublicKeys.length}</dd></div>
+          <div><dt>Public keys</dt><dd><code>${escapeHtml(review.signerPublicKeys.join(" "))}</code></dd></div>
+          <div><dt>Threshold</dt><dd>${review.threshold}</dd></div>
+          <div><dt>Salt</dt><dd><code>${escapeHtml(review.salt)}</code></dd></div>
+          <div><dt>Deployment signer</dt><dd><code>${escapeHtml(review.signerAccountId)}</code></dd></div>
+        </dl>
+      </div>
+    </details>`;
 
 const deploymentSignerCopy = (
   account: AccountRef,
@@ -161,8 +203,9 @@ export const multisigDeployFlow = (
     return flowHeader(flowTitle, status) + flowScreen("multisig-deploy", noAccountEmpty(status));
   }
   const accounts = status.accounts.filter((candidate) => candidate.networkId === status.networkId);
-  // Braavos is restored view-only. A transfer from it is refused before
-  // submission, so it cannot be a funding source for this deployment.
+  // Braavos stays out of the funding list: whether this wallet can sign for
+  // one (no active 2FA, wallet key as first stark signer) is only known from a
+  // live read at submission, so it is not offered as a funding source here.
   const fundingAccounts = accounts.filter(
     (candidate) => candidate.accountContractType !== "braavos",
   );

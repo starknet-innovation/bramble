@@ -70,12 +70,36 @@ pub(crate) fn with_token_id(
     }
 }
 
-/// `isTokenSymbol`: `^[A-Z0-9]{2,12}$`.
+/// `isTokenSymbol`: `^[A-Z0-9]{2,12}(?:\.e)?$`, a ticker with at most one bridged `.e` suffix
+/// (`USDC.e`, #645). Nothing else widens: no `.E`, no second suffix, no other dotted form.
 pub(crate) fn is_token_symbol(symbol: &str) -> bool {
-    (2..=12).contains(&symbol.len())
-        && symbol
+    let base = symbol.strip_suffix(".e").unwrap_or(symbol);
+    (2..=12).contains(&base.len())
+        && base
             .bytes()
             .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+}
+
+/// `normalizeTokenSymbol`: trimmed and uppercased, except a bridged `.e` suffix keeps its
+/// lowercase `e`, so chain metadata `ETH.e` reaches the grammar and the spoof check as `ETH.e`
+/// rather than a refused `ETH.E`. Does not validate.
+pub(crate) fn normalize_token_symbol(value: &str) -> String {
+    let upper = js_trim(value).to_uppercase();
+    match upper.strip_suffix(".E") {
+        Some(base) => format!("{base}.e"),
+        None => upper,
+    }
+}
+
+// Each fold a ticker is compared in: its full fold and, for a bridged `.e` ticker, its base's, so
+// a dapp's `ETH.e` reads as ETH and a dotless `USDCE` still reads as `USDC.e` (#645).
+fn symbol_folds(symbol: &str) -> Vec<String> {
+    let mut folds = vec![fold_symbol(symbol)];
+    let lower = symbol.to_ascii_lowercase();
+    if let Some(base) = lower.strip_suffix(".e") {
+        folds.push(fold_symbol(&symbol[..base.len()]));
+    }
+    folds
 }
 
 /// `isTokenName`: 1–64 printable ASCII characters without angle brackets.
@@ -161,17 +185,30 @@ pub fn spam_reasons(
     if decimals > MAX_PLAUSIBLE_DECIMALS {
         reasons.push(SpamReason::AbsurdDecimals);
     }
-    let folded = fold_symbol(symbol);
-    let spoofs = known_tokens(network).iter().any(|known| {
-        if fold_symbol(&known.symbol) != folded || same_felt(&known.address, address) {
-            return false;
-        }
-        let aliases = LEGITIMATE_ALIASES
-            .iter()
-            .find(|(s, _)| *s == known.symbol)
-            .map_or(&[][..], |(_, a)| *a);
-        !aliases.iter().any(|alias| same_felt(alias, address))
-    });
+    let folds = symbol_folds(symbol);
+    let known = known_tokens(network);
+    let lookalikes: Vec<_> = known
+        .iter()
+        .filter(|known| {
+            symbol_folds(&known.symbol)
+                .iter()
+                .any(|fold| folds.contains(fold))
+        })
+        .collect();
+    // A curated contract is never a spoof of a curated sibling whose ticker folds alike (native
+    // USDC beside bridged USDC.e). Any other contract is genuine only when it is an explicitly
+    // allowlisted alternate deployment.
+    let curated = lookalikes
+        .iter()
+        .any(|known| same_felt(&known.address, address));
+    let spoofs = !curated
+        && lookalikes.iter().any(|known| {
+            let aliases = LEGITIMATE_ALIASES
+                .iter()
+                .find(|(s, _)| *s == known.symbol)
+                .map_or(&[][..], |(_, a)| *a);
+            !aliases.iter().any(|alias| same_felt(alias, address))
+        });
     if spoofs {
         reasons.push(SpamReason::SymbolSpoof);
     }

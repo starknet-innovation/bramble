@@ -11,6 +11,7 @@ import {
   type Json,
 } from "@bramble/core/json";
 import { isStarkFieldElement } from "@bramble/wallet-model/networks";
+import { isOptionalApiVersion } from "../provider/versions";
 
 /**
  * A declare transaction a dapp asks the wallet to submit, after bridge
@@ -28,12 +29,14 @@ const isFelt = (value: unknown): value is string =>
 /**
  * Parses a `{ declare_transaction: { compiled_class_hash, contract_class, ... } }`
  * payload, requiring the compiled class hash and a non-empty contract class.
- * Returns the internal camelCase declare, or null for any malformed payload.
+ * Returns the internal camelCase declare, or null for any malformed payload. The
+ * spec's optional top-level `api_version` is dropped when well-formed.
  */
 export const readProviderDeclare = (params: Json | undefined): ProviderDeclare | null => {
   if (
     !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["declare_transaction"]) ||
+    !hasOnlyKnownKeys(params, ["api_version", "declare_transaction"]) ||
+    !isOptionalApiVersion(params["api_version"]) ||
     !isRecord(params["declare_transaction"])
   ) {
     return null;

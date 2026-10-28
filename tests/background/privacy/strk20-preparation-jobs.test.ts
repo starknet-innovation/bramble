@@ -15,11 +15,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import { isStrk20JobId } from "@bramble/core/ids";
+import { STRK20_JOB_INTERRUPTED } from "@bramble/privacy/phases";
 import type { Strk20Service } from "@bramble/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import {
   createStrk20JobRegistry,
-  STRK20_JOB_INTERRUPTED,
   STRK20_JOB_KEEPALIVE_MS,
 } from "../../../apps/extension/src/background/privacy/strk20-preparation-jobs";
 import type { RuntimeResponse } from "../../../apps/extension/src/background/runtime/runtime-types";

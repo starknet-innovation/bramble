@@ -51,6 +51,11 @@ describe("active account selection", () => {
     let selections = 0;
     let activeNetworkId = sepoliaAccount.networkId;
     const preferencesStore = {
+      // The guard reads the active network first, to undo it on a refusal
+      // the vault raises before writing.
+      async read() {
+        return defaultWalletPreferences();
+      },
       async setActiveNetwork(networkId: typeof activeNetworkId) {
         activeNetworkId = networkId;
         throw new Error("injected preference failure");
@@ -78,6 +83,9 @@ describe("active account selection", () => {
       const session = createUnlockSession();
       session.unlock(vaultPassphrase);
       const preferencesStore = {
+        async read() {
+          return defaultWalletPreferences();
+        },
         async setActiveNetwork() {
           return defaultWalletPreferences();
         },
@@ -100,6 +108,9 @@ describe("active account selection", () => {
     session.unlock(vaultPassphrase);
     let activeNetworkId = sepoliaAccount.networkId;
     const preferencesStore = {
+      async read() {
+        return defaultWalletPreferences();
+      },
       async setActiveNetwork(networkId: typeof activeNetworkId) {
         activeNetworkId = networkId;
         return defaultWalletPreferences();
@@ -127,6 +138,9 @@ describe("active account selection", () => {
     const releaseWrite = Promise.withResolvers<void>();
     let selections = 0;
     const preferencesStore = {
+      async read() {
+        return defaultWalletPreferences();
+      },
       async setActiveNetwork() {
         writeStarted.resolve();
         await releaseWrite.promise;
@@ -160,6 +174,9 @@ describe("active account selection", () => {
     session.unlock("replacement horse battery staple");
     let preferenceWrites = 0;
     const preferencesStore = {
+      async read() {
+        return defaultWalletPreferences();
+      },
       async setActiveNetwork() {
         preferenceWrites += 1;
         return defaultWalletPreferences();

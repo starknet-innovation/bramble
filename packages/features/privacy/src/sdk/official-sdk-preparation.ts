@@ -114,45 +114,40 @@ const prepareOnce = async (input: {
     maturityScope(input.preparation, input.config.poolAddress),
     historicalReadiness(readinessKind, input.provider, input.preparation),
   );
-  let result: unknown;
-  if (input.preparation.simulate) {
-    reportStrk20Phase(onPhase, "building the proof request", input.round);
-    result = await withinStrk20WaitBudget(
-      "building the proof request",
-      budgets.proofRequest,
-      () =>
-        input.builder.simulate({
-          provider: input.provider,
-          provingBlockId: block,
-          validateSignature: false,
-        }),
-      schedule,
-    );
-  } else {
-    // This is the last asynchronous wallet-policy boundary before the SDK
-    // starts creating a proof. It runs after discovery and maturity waits, so
-    // mutable chain state cannot become stale during those preflights. The
-    // reads it makes report their own phases.
+  // A simulation runs down the same prover path as a real proof. The pinned
+  // SDK's own `simulate` sends the `compile_actions` invocation, which carries
+  // the account's viewing key, to `input.provider` as a view call, and that
+  // provider is the user's RPC node (an override when one is set). Routing it
+  // through `executeWithInvocation` keeps the key with the configured prover,
+  // which already receives it for every real proof; `readCallAndProof` then
+  // blanks the proof, so a simulation still cannot be submitted.
+  //
+  // `beforeProof` is the last wallet-policy boundary before a submittable proof
+  // is created. A simulation creates none, so it keeps skipping that gate.
+  if (!input.preparation.simulate) {
+    // This runs after discovery and maturity waits, so mutable chain state
+    // cannot become stale during those preflights. The reads it makes report
+    // their own phases.
     await input.beforeProof();
-    // Building the invocation refreshes discovery (indexer pagination with no
-    // transport deadline) and fetches the pool nonce, so it is the wait most
-    // likely to park without a budget.
-    reportStrk20Phase(onPhase, "building the proof request", input.round);
-    const invocation = await withinStrk20WaitBudget(
-      "building the proof request",
-      budgets.proofRequest,
-      () => input.builder.createProofInvocation({ provingBlockId: block }),
-      schedule,
-    );
-    assertNoSdkWarnings(invocation);
-    reportStrk20Phase(onPhase, "proving", input.round);
-    result = await withinStrk20WaitBudget(
-      "proving",
-      budgets.proving,
-      () => input.transfers.executeWithInvocation(invocation, block),
-      schedule,
-    );
   }
+  // Building the invocation refreshes discovery (indexer pagination with no
+  // transport deadline) and fetches the pool nonce, so it is the wait most
+  // likely to park without a budget.
+  reportStrk20Phase(onPhase, "building the proof request", input.round);
+  const invocation = await withinStrk20WaitBudget(
+    "building the proof request",
+    budgets.proofRequest,
+    () => input.builder.createProofInvocation({ provingBlockId: block }),
+    schedule,
+  );
+  assertNoSdkWarnings(invocation);
+  reportStrk20Phase(onPhase, "proving", input.round);
+  const result = await withinStrk20WaitBudget(
+    "proving",
+    budgets.proving,
+    () => input.transfers.executeWithInvocation(invocation, block),
+    schedule,
+  );
   assertNoSdkWarnings(result);
   return readCallAndProof(result, input.config, input.preparation.simulate);
 };
@@ -173,8 +168,8 @@ export const prepareWith = async (
 ): Promise<Strk20CallAndProof> => {
   const config = requireStrk20Config(input);
   if (
-    input.actions.some((action) => action.type === "subaccount_invoke") &&
-    !config.subaccountAnonymizerAddress
+    input.actions.some((action) => action.type === "shadow_account_invoke") &&
+    !config.shadowAccountAnonymizerAddress
   ) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }

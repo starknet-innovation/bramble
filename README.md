@@ -23,8 +23,10 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Multisig** — create or import true Argent M-of-N account contracts, collect exact-hash signatures from local owners, and submit from the shared account.
 - **STRK20 privacy** — explicitly activate private balances, shield tracked ERC-20 assets through a
   reviewed public deposit, read private note totals on demand, submit private action batches, and
-  derive chain/pool-scoped viewing identities and dapp-scoped sub-account commitments through the
-  pinned official Privacy SDK.
+  derive chain/pool-scoped viewing identities and dapp-scoped shadow-account commitments through the
+  pinned official Privacy SDK. The wallet keeps an encrypted record of every shadow account a site
+  drove, lists them under Settings → Shadow accounts (balances read only on request), and can sweep
+  what a site left back into private notes.
 - **Anti-phishing** — domain blocklist plus lookalike / punycode detection and per-origin connection history.
 - **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap. An
   approval on a contract the wallet cannot confirm is a token is listed without an amount claim and
@@ -85,6 +87,11 @@ raising this floor back to 154 and excluding ESR again.
 **Ledger is not supported on Firefox.** Gecko implements no WebHID, WebUSB or Web Bluetooth, so no
 hardware transport exists.
 
+**Arc never shows the side panel.** It accepts `sidePanel.open` and draws nothing (#690). On Arc,
+open the wallet from the extension's details page (**Extension options** opens it in a tab), then
+choose **Settings → Request display → Compact popup**. The toolbar button and site requests then
+open the popup.
+
 One security difference is worth stating plainly: Firefox implements no `storage.setAccessLevel`, so
 `storage.local` and `storage.sync` stay reachable from this extension's own content script and
 cannot be closed off. The encrypted vault stays unreadable without the unlock credential, but the
@@ -121,6 +128,19 @@ remaining outputs with `bun run vendor:argent` (network) and `bun run vendor:pri
 npm). `build`, packaging, and browser E2E also require the Argent and Privacy outputs; Playwright
 needs its Chromium install once per machine.
 
+## Upgrading
+
+Upgrades are one-way. Once you unlock a newer version, an older build can't open your wallet: it
+refuses the newer vault and settings. An older build can also delete recent activity history it
+doesn't recognize.
+
+If you installed an older build by mistake:
+
+- **Install the newer version again, over the old one.** Your wallet opens as before. Don't remove
+  Bramble first: removing the extension deletes the wallet from this browser.
+- **Or restore from your recovery phrase.** Anything not derived from the phrase has to be added
+  again: imported keys and phrases, Ledger accounts, site connections and settings.
+
 ## Built with
 
 Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · [Starknet Privacy SDK](https://github.com/starkware-libs/starknet-privacy) · Biome · Krusty KMS (WASM) · Ledger hardware preview · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
@@ -153,7 +173,7 @@ access only the validated provider protocol. The package graph and its enforced 
 - **[Wallet store architecture](docs/WALLET_STORE.md)** — persistence layout, account scoping, Chrome update migrations, and Ledger viewing-key custody.
 - **[Security audit](docs/security-audit/index.md)** — baseline, threat model, review sequence, and sanitized findings ledger.
 - **[Source package audit](docs/security-audit/src-package-audit.md)** — package-by-package controls, resolved findings, and validation evidence.
-- **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**
+- **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Building from source](BUILDING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**
 
 ## License
 

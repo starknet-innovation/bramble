@@ -15,6 +15,12 @@ const ZERO_DECIMALS = "0x0123";
 const UNTRACKED = "0x0999";
 const SPENDER = "0x0abc";
 
+const listed = (entries: readonly AllowanceView[]) => ({
+  entries,
+  notices: [],
+  unavailable: false,
+});
+
 const tokens = [
   {
     address: USDC,
@@ -67,7 +73,7 @@ const allowance = (
 });
 
 const amountText = (view: AllowanceView): string => {
-  const html = allowancesFlow(status, account, [view], { ...preferences, tokens });
+  const html = allowancesFlow(status, account, listed([view]), { ...preferences, tokens });
   const match = html.match(/<span class="allowance-amount"[^>]*>([^<]*)<\/span>/);
   if (!match?.[1]) {
     throw new Error("allowance amount not rendered");
@@ -113,7 +119,7 @@ describe("allowance amounts", () => {
   });
 
   test("keeps the token contract address reachable beside a known symbol", () => {
-    const html = allowancesFlow(status, account, [allowance({ amount: "1000000000" })], {
+    const html = allowancesFlow(status, account, listed([allowance({ amount: "1000000000" })]), {
       ...preferences,
       tokens,
     });

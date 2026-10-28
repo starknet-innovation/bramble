@@ -41,6 +41,12 @@ export type SupportDiagnostics = {
     readonly latencyMs: number;
     readonly outcome: "ok" | "rate-limited" | "timeout" | "transport-error";
   }[];
+  /** Local store writes that trimmed rows to fit their budget, or failed. */
+  readonly storage: readonly {
+    readonly count: number;
+    readonly outcome: "trimmed" | "write-failed";
+    readonly store: "activity";
+  }[];
 };
 
 // A phase label is one of the fixed strings the background's job registry
@@ -80,6 +86,13 @@ const isRpcDiagnosticRow = (value: unknown): boolean =>
     value["outcome"] === "timeout" ||
     value["outcome"] === "transport-error");
 
+const isStorageDiagnosticRow = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["count", "outcome", "store"]) &&
+  Number.isInteger(value["count"]) &&
+  value["store"] === "activity" &&
+  (value["outcome"] === "trimmed" || value["outcome"] === "write-failed");
+
 /** Validates the exact privacy-safe support diagnostic wire shape. */
 export const isSupportDiagnosticsResponse = (
   value: unknown,
@@ -104,6 +117,7 @@ export const isSupportDiagnosticsResponse = (
       "privacy",
       "ready",
       "rpc",
+      "storage",
     ]) &&
     Number.isInteger(diagnostics["accountCount"]) &&
     typeof diagnostics["collectionEnabled"] === "boolean" &&
@@ -116,6 +130,8 @@ export const isSupportDiagnosticsResponse = (
     diagnostics["privacy"].every(isPrivacyDiagnosticRow) &&
     typeof diagnostics["ready"] === "boolean" &&
     Array.isArray(diagnostics["rpc"]) &&
-    diagnostics["rpc"].every(isRpcDiagnosticRow)
+    diagnostics["rpc"].every(isRpcDiagnosticRow) &&
+    Array.isArray(diagnostics["storage"]) &&
+    diagnostics["storage"].every(isStorageDiagnosticRow)
   );
 };

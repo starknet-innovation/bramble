@@ -8,6 +8,7 @@
 //! | 2 | bare envelope, scope `bramble.mobile.vault.v1` | account records (the accounts branch, before the merge) |
 //! | 3 | DEK container, `version: 3` | account records (`account_store.rs`) |
 //! | 4 | DEK container, `version: 4` | account records and `backupPending` |
+//! | 5 | DEK container, `version: 5` | records carry `ladder` (issue 505's key ladders) |
 //!
 //! Both branches minted "version 2" independently from version 1, so version 2 has two historical
 //! payload shapes. The step from 2 accepts either; nothing else in the chain branches. The layout
@@ -28,14 +29,17 @@ use crate::container::{
     self, Dek, Randomness, StoredVault, VaultFile, FIRST_CONTAINER_VERSION, V1_SCOPE,
 };
 use crate::files::storage;
+use crate::kms::Ladder;
 use crate::networks;
 use crate::vault::{self, SealingKey};
 use crate::{kms, CoreError};
 
 /// The vault version this core writes: the container's `version` and the payload's.
-pub(crate) const VAULT_VERSION: u32 = 4;
+pub(crate) const VAULT_VERSION: u32 = 5;
 /// The first vault version whose payload carries `backupPending`.
 const BACKUP_PENDING_VERSION: u32 = 4;
+/// The first vault version whose account records carry `ladder`.
+const KEY_PATH_VERSION: u32 = 5;
 /// Accounts an account-count payload (versions 1 and 2) could hold.
 const MAX_COUNTED_ACCOUNTS: u32 = 32;
 
@@ -95,6 +99,15 @@ pub(crate) fn stage(plaintext: &[u8]) -> Result<Staged, CoreError> {
         if payload.version < BACKUP_PENDING_VERSION && payload.backup_pending.is_some() {
             return Err(invalid_payload());
         }
+        // Likewise `ladder` from version 5 on.
+        if payload.version < KEY_PATH_VERSION
+            && payload
+                .accounts
+                .iter()
+                .any(|record| record.ladder.is_some())
+        {
+            return Err(invalid_payload());
+        }
     }
     Ok(staged)
 }
@@ -102,7 +115,8 @@ pub(crate) fn stage(plaintext: &[u8]) -> Result<Staged, CoreError> {
 type Step = fn(Staged) -> Result<Staged, CoreError>;
 
 /// `(from version, step to from + 1)`. The last step ends at `VAULT_VERSION`.
-pub(crate) const VAULT_MIGRATIONS: [(u32, Step); 3] = [(1, v1_to_v2), (2, v2_to_v3), (3, v3_to_v4)];
+pub(crate) const VAULT_MIGRATIONS: [(u32, Step); 4] =
+    [(1, v1_to_v2), (2, v2_to_v3), (3, v3_to_v4), (4, v4_to_v5)];
 
 /// 1 → 2 (vault-security): the same account count, phrase and passphrase. The move from the bare
 /// envelope into the DEK container happens when the migrated payload is sealed.
@@ -128,8 +142,14 @@ fn v2_to_v3(staged: Staged) -> Result<Staged, CoreError> {
                 VaultPayload::new(mnemonic, counted.mnemonic_passphrase.take(), None)?;
             for network in networks::all().iter().map(|info| info.network) {
                 for index in 0..counted.account_count {
-                    let record =
-                        payload.derive(AccountFamily::OpenZeppelin, index, None, None, network)?;
+                    let record = payload.derive(
+                        AccountFamily::OpenZeppelin,
+                        Ladder::Account,
+                        index,
+                        None,
+                        None,
+                        network,
+                    )?;
                     payload.accounts.push(record);
                 }
             }
@@ -156,6 +176,22 @@ fn v3_to_v4(staged: Staged) -> Result<Staged, CoreError> {
     };
     payload.backup_pending = Some(false);
     payload.version = 4;
+    Ok(Staged::Records(payload))
+}
+
+/// 4 → 5: each record names the key tree its index walks. Every record before version 5 was
+/// derived on this wallet's own ladder (the scan and every creation path used no other), so each
+/// is labelled `Account`. That includes any Braavos record at a non-zero index, which an earlier
+/// scan found on this ladder rather than Braavos's own: it is kept where it is, never moved to
+/// the vendor ladder, so no record changes address. Re-derivation on open proves the label.
+fn v4_to_v5(staged: Staged) -> Result<Staged, CoreError> {
+    let Staged::Records(mut payload) = staged else {
+        return Err(invalid_payload());
+    };
+    for record in &mut payload.accounts {
+        record.ladder = Some(Ladder::Account);
+    }
+    payload.version = 5;
     Ok(Staged::Records(payload))
 }
 

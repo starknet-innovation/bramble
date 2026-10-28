@@ -53,7 +53,8 @@ describe("createSidepanelRuntime — emptyStatus and no-runtime fallback", () =>
     expect(await wallet.loadStatus()).toEqual(unavailableStatus());
     expect((await wallet.loadStatus()).hasVault).toBe(true);
     expect(await wallet.loadBalances()).toEqual({ error: "balances unavailable" });
-    expect(await wallet.connectedSites()).toEqual([]);
+    // A failed read is a failure, never an empty list (Sherlock 234).
+    await expect(wallet.connectedSites()).rejects.toThrow("connected sites unavailable");
     await expect(wallet.generateMnemonic()).rejects.toThrow("wallet unavailable");
   });
 });
@@ -270,11 +271,12 @@ describe("approvals and connected sites", () => {
     );
   });
 
-  test("connectedSites returns the sites, or [] when the guard fails", async () => {
+  test("connectedSites returns the sites, and throws when the guard fails", async () => {
     expect(await runtimeReturning(connectedSitesResponse).connectedSites()).toEqual(
       connectedSitesResponse.sites,
     );
-    expect(await runtimeReturning(errorEnvelope).connectedSites()).toEqual([]);
+    // Sherlock 234: an empty list would read as "no site is connected".
+    await expect(runtimeReturning(errorEnvelope).connectedSites()).rejects.toThrow();
   });
 
   test("revokeOrigin returns the remaining sites and throws on failure", async () => {
@@ -438,6 +440,7 @@ describe("token and preference wrappers", () => {
       ],
       ready: true,
       rpc: [{ count: 3, endpoint: "wallet-gateway", latencyMs: 42, outcome: "ok" }],
+      storage: [{ count: 1, outcome: "trimmed", store: "activity" }],
     } as const;
     await expect(runtimeReturning({ diagnostics, ok: true }).loadDiagnostics()).resolves.toEqual(
       diagnostics,
@@ -480,7 +483,7 @@ describe("token and preference wrappers", () => {
       discoveryUrl: "https://discovery.example",
       poolAddress: "0x1",
       proverUrl: "https://prover.example",
-      subaccountAnonymizerAddress: "0x2",
+      shadowAccountAnonymizerAddress: "0x2",
     };
     await expect(
       runtimeReturning(preferencesResponse).setStrk20NetworkConfig("SN_MAIN", config),

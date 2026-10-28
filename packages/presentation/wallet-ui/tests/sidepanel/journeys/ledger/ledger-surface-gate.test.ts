@@ -42,6 +42,7 @@ const mountEntry = (surface: "popup" | "side-panel") => {
     connector: hostileConnector,
     mount,
     openImport: () => undefined,
+    openFindAccounts: () => undefined,
     openImportSeed: () => undefined,
     openMultisig: () => undefined,
     refresh: () => Promise.resolve(),

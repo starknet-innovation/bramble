@@ -98,6 +98,22 @@ export const readSetAccountLabelInput = (
     : null;
 
 /**
+ * Parses account hide/reveal toggles from extension pages. Whether the account
+ * may be hidden (it must not be the last one a network still shows) is decided
+ * by the background handler, so the reader only checks the id is well formed.
+ */
+export const readSetAccountHiddenInput = (
+  message: unknown,
+): { readonly accountId: string; readonly hidden: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["accountId", "hidden", "type"]) &&
+  message["type"] === "wallet.setAccountHidden" &&
+  isAccountId(message["accountId"]) &&
+  typeof message["hidden"] === "boolean"
+    ? { accountId: message["accountId"], hidden: message["hidden"] }
+    : null;
+
+/**
  * Parses new-group creation messages from extension pages.
  */
 export const readCreateGroupInput = (

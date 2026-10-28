@@ -52,12 +52,12 @@ export const strk20ServicesForm = (
   ${textField({
     autocomplete: "off",
     className: "mono",
-    hint: "Optional SDK module for subaccount_invoke. Dapp anonymizers are reviewed transaction targets, not network settings.",
-    label: "SDK sub-account module",
-    name: "subaccountAnonymizerAddress",
+    hint: "Optional SDK module for shadow_account_invoke. Dapp anonymizers are reviewed transaction targets, not network settings.",
+    label: "SDK shadow account module",
+    name: "shadowAccountAnonymizerAddress",
     placeholder: "0x…",
     spellcheck: false,
-    value: config?.subaccountAnonymizerAddress ?? "",
+    value: config?.shadowAccountAnonymizerAddress ?? "",
   })}
   ${textField({
     autocomplete: "off",

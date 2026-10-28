@@ -22,6 +22,7 @@ const client = (getAppVersion: LedgerDeviceClient["getAppVersion"]): LedgerDevic
       r: unusedBytes.slice(0, 32),
       returnCode: 0x9000,
       s: unusedBytes.slice(0, 32),
+      v: 1,
     }),
 });
 

@@ -11,17 +11,17 @@ import {
   isArgentMultisigDeploymentReviewResponse,
   isArgentMultisigDeployResponse,
   isArgentMultisigIntentResponse,
-  isArgentMultisigResponse,
-  isArgentMultisigsResponse,
   isMultisigSignerResponse,
   isNostrShareResponse,
   isNostrSyncResponse,
   isOkResponse,
   type MultisigSignerAccount,
+  readArgentMultisig,
+  readArgentMultisigs,
 } from "../../../popup/responses/multisig-responses";
-import { isBalancesResponse, isErrorResponse } from "../../../popup/responses/responses";
+import { isBalancesResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
-import { responseError } from "../../runtime/runtime-errors";
+import { lostReplySend, refusalText, responseError } from "../../runtime/runtime-errors";
 
 /**
  * Address and active network required to sync an existing Argent multisig.
@@ -64,7 +64,7 @@ export type MultisigClient = ReturnType<typeof createMultisigClient>;
  * Creates a runtime client that rejects every malformed background response.
  */
 export const createMultisigClient = (runtime?: RuntimeApi) => {
-  const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  const sendMessage = lostReplySend(runtime);
   type RefreshResult =
     | {
         readonly intents: readonly ArgentMultisigSigningIntent[];
@@ -95,10 +95,11 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     async addMultisig(input: ArgentMultisigSetup): Promise<ArgentMultisigView> {
       invalidateRefreshes();
       const response = await sendMessage({ ...input, type: "wallet.addMultisig" });
-      if (!isArgentMultisigResponse(response)) {
+      const added = readArgentMultisig(response);
+      if (!added) {
         throw responseError(response, "add Ready multisig failed");
       }
-      return response.multisig;
+      return added.multisig;
     },
     async deployMultisig(review: ArgentMultisigDeploymentReview) {
       invalidateRefreshes();
@@ -140,9 +141,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
           ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
-      return {
-        error: isErrorResponse(response) ? response.error : "multisig balances unavailable",
-      };
+      return { error: refusalText(response, "multisig balances unavailable") };
     },
     async loadClassStatus(): Promise<boolean | "error"> {
       try {
@@ -164,15 +163,23 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
           ...(cached ? { cached: true } : {}),
           type: "wallet.multisigs",
         });
-        if (!isArgentMultisigsResponse(response)) return "error";
-        return { intents: response.intents, multisigs: response.multisigs };
+        return readArgentMultisigs(response) ?? "error";
       } catch {
         return "error";
       }
     },
-    async prepareIntent(multisigId: string, calls: readonly ArgentMultisigCall[]) {
+    async prepareIntent(
+      multisigId: string,
+      calls: readonly ArgentMultisigCall[],
+      confirmResend = false,
+    ) {
       return intentResult(
-        { calls, multisigId, type: "wallet.prepareArgentMultisigIntent" },
+        {
+          calls,
+          ...(confirmResend ? { confirmResend: true } : {}),
+          multisigId,
+          type: "wallet.prepareArgentMultisigIntent",
+        },
         "prepare Ready multisig intent failed",
       );
     },
@@ -192,12 +199,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       const existing = refreshes.get(multisigId);
       if (existing) return existing;
       const refresh = sendMessage({ multisigId, type: "wallet.refreshMultisig" })
-        .then(
-          (response): RefreshResult =>
-            isArgentMultisigResponse(response)
-              ? { intents: response.intents, multisig: response.multisig }
-              : "error",
-        )
+        .then((response): RefreshResult => readArgentMultisig(response) ?? "error")
         .catch((): RefreshResult => "error");
       refreshes.set(multisigId, refresh);
       // A successful confirmed authority is stable until a multisig action.

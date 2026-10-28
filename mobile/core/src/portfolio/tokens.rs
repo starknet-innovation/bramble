@@ -13,7 +13,8 @@ pub use super::registry::{
     SpamReason, TokenGlyph,
 };
 pub(crate) use super::registry::{
-    is_token_name, is_token_symbol, starknet_glyph, strk_address, with_token_id,
+    is_token_name, is_token_symbol, normalize_token_symbol, starknet_glyph, strk_address,
+    with_token_id,
 };
 use crate::js::felt::same_felt;
 use crate::js::json::{self, JsValue};

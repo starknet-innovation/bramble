@@ -72,7 +72,7 @@ describe("add-account chooser routing", () => {
     expect(final?.kind === "picker" && final.application).toBe("LedgerW");
   });
 
-  test("restoring a Ready Ledger account reads Ready's scheme and derives Argent only", async () => {
+  test("restoring a Ready Ledger account reads Ready's scheme and derives Argent and Braavos", async () => {
     const { derived, enumerated, h } = schemeSpy();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
@@ -81,10 +81,16 @@ describe("add-account chooser routing", () => {
     controller.connect();
     await tick();
     expect(enumerated).toEqual(["argentx"]);
-    expect(derived).toEqual([["argent", "argentx"]]);
+    // Ready and Braavos both own their Ledger accounts at `argentx`, so the same
+    // device key derives one of each family — the picker probes which is live.
+    expect(derived.sort()).toEqual([
+      ["argent", "argentx"],
+      ["braavos", "argentx"],
+    ]);
     const final = h.views.at(-1);
     expect(final?.kind === "picker" && final.application).toBe("argentx");
     expect(pickerIndexes(final, "argent")).toEqual([0, 1]);
+    expect(pickerIndexes(final, "braavos")).toEqual([0, 1]);
     expect(pickerIndexes(final, "openzeppelin")).toEqual([]);
     // "Show more" keeps reading the scheme the route chose.
     controller.loadMore();
@@ -92,6 +98,7 @@ describe("add-account chooser routing", () => {
     expect(enumerated).toEqual(["argentx", "argentx"]);
     expect(derived.every(([, application]) => application === "argentx")).toBe(true);
     expect(pickerIndexes(h.views.at(-1), "argent")).toEqual([0, 1, 2, 3]);
+    expect(pickerIndexes(h.views.at(-1), "braavos")).toEqual([0, 1, 2, 3]);
   });
 
   test("the first-run device setup stays on Bramble's scheme after a Ready restore", async () => {
@@ -146,6 +153,24 @@ describe("add-account chooser routing", () => {
     expect(h.refreshed()).toBe(1);
   });
 
+  // Issue 652: the wallet's own plumbing reads as the add-account sentence,
+  // while a failed key check keeps its fact.
+  test("a regular-account choice never shows a vault or KMS diagnostic as written", async () => {
+    for (const [raw, shown] of [
+      ["Krusty KMS returned invalid class hash JSON", "Couldn't add that account. Try again."],
+      ["Unlock session changed during vault creation", "Couldn't add that account. Try again."],
+      ["Invalid account public key", "That public key isn't valid, so the account wasn't added."],
+    ] as const) {
+      const h = onboardHarness({ addHd: () => Promise.reject(new Error(raw)) });
+      const controller = createLedgerOnboardController(h.deps);
+      controller.showChooser();
+      controller.choose("regular");
+      await tick();
+      const final = h.views.at(-1);
+      expect(final?.kind === "error" && final.message).toBe(shown);
+    }
+  });
+
   test("a regular-account choice surfaces the wallet error when derivation fails", async () => {
     const h = onboardHarness({ addHd: () => Promise.reject(new Error("wallet locked")) });
     const controller = createLedgerOnboardController(h.deps);
@@ -153,6 +178,8 @@ describe("add-account chooser routing", () => {
     controller.choose("regular");
     await tick();
     const final = h.views.at(-1);
-    expect(final?.kind === "error" && final.message).toBe("wallet locked");
+    expect(final?.kind === "error" && final.message).toBe(
+      "The wallet is locked or unavailable. Unlock it and try again.",
+    );
   });
 });

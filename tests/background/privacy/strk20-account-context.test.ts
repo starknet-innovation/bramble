@@ -19,7 +19,7 @@ const resolved = {
         discoveryUrl: "https://discovery.example",
         poolAddress: "0x0123",
         proverUrl: "https://prover.example",
-        subaccountAnonymizerAddress: "0x456",
+        shadowAccountAnonymizerAddress: "0x456",
       },
     },
   },

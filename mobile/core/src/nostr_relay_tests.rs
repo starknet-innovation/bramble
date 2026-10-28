@@ -275,9 +275,12 @@ fn relay_urls_are_secure_ascii_and_trimmed() {
     );
     for good in [
         "wss://relay.example",
-        "WSS://relay.example:443",
+        "wss://relay.example/",
+        "wss://relay.example:0",
         "wss://127.0.0.1:7000",
         "wss://[::1]:7000/nostr",
+        "wss://[2001:db8::1]",
+        "wss://relay.example/a/b?q=Upper%2F",
     ] {
         assert!(is_relay_url(good), "{good}");
     }
@@ -290,8 +293,48 @@ fn relay_urls_are_secure_ascii_and_trimmed() {
         "wss://999.1.1.1",
         "wss://relay.example:70000",
         "wss://réseau.example",
+        // Spellings the extension's parser would rewrite, so it refuses them (canonical only).
+        "WSS://relay.example",
+        "wss://Relay.Example",
+        "wss://relay.example:443",
+        "wss://relay.example:0443",
+        "wss://relay.example/a/../b",
+        "wss://relay.example/./b",
+        "wss://relay.example/%2E%2e/b",
+        "wss://relay.example/?q='x'",
+        "wss://[0:0::1]",
+        "wss://[::FFFF]",
+        "wss://[::ffff:127.0.0.1]",
+        "wss://relay.example?q=1",
     ] {
         assert!(!is_relay_url(bad), "{bad}");
+    }
+}
+
+// `normalizeStoredWebSocketServiceUrl`: an earlier build's spelling reads back as the same
+// connection, and one with no current spelling reads back as nothing.
+#[test]
+fn stored_relay_urls_are_brought_to_the_current_rule() {
+    for (stored, current) in [
+        ("wss://relay.example", Some("wss://relay.example")),
+        ("WSS://Relay.Example", Some("wss://relay.example")),
+        (
+            "wss://relay.example:443/nostr",
+            Some("wss://relay.example/nostr"),
+        ),
+        (
+            "Wss://Relay.Example:0443?Q=1",
+            Some("wss://relay.example/?Q=1"),
+        ),
+        (
+            "wss://relay.example:07447",
+            Some("wss://relay.example:7447"),
+        ),
+        ("wss://relay.example/a/../b", None),
+        ("ws://relay.example", None),
+        ("not a url", None),
+    ] {
+        assert_eq!(stored_relay_url(stored).as_deref(), current, "{stored}");
     }
 }
 

@@ -25,9 +25,10 @@ import {
   isNonZeroStarkFieldElement,
   sameFelt,
 } from "@bramble/wallet-model/networks";
+import { privacyShortfall } from "@bramble/wallet-protocol/privacy-blocker";
 import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
 import { createApprovalContext } from "../approvals/approval-context";
-import { activeAccountContext } from "../runtime/runtime-state";
+import { observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 
 import { strk20ServiceForRuntime } from "./strk20-account-context";
@@ -35,6 +36,7 @@ import { depositPreparation } from "./strk20-deposit-ops";
 import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import { errorText, resolvePrivacyContext, type Strk20WalletOpsDeps } from "./strk20-op-context";
 import { openPoolRoute } from "./strk20-pool-route";
+import { handleStrk20ShadowOps } from "./strk20-shadow-ops";
 import {
   readStrk20DepositPreparationInput,
   readStrk20PreparationStatusInput,
@@ -52,10 +54,13 @@ const recipientStatus = async (
   if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
     return { error: "Enter a valid Starknet address" };
   }
-  // User-initiated: this probe is debounced behind the recipient the user is
-  // typing, so it only ever runs because the user acted.
+  // The Send form re-checks the recipient it already holds every time a repaint
+  // rebinds it, so ambient price, balance or wallet-event changes re-issue this
+  // probe with no user input. It reads only the pool's public registration
+  // state, so it observes the unlock window and never extends it — otherwise a
+  // panel left on Send would keep the wallet unlocked forever.
   const context = await resolvePrivacyContext(deps, {
-    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    active: await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
     tokenId: input.tokenId,
   });
   if ("error" in context) {
@@ -113,7 +118,7 @@ const transferPreparation = async (
       tokens: [context.token.address],
     });
     if (amountRaw > BigInt(privateBalance?.balance ?? "0x0")) {
-      return { error: `Not enough private ${context.token.symbol}` };
+      return { error: privacyShortfall(context.token.symbol, "private") };
     }
     const actions = [
       {
@@ -193,7 +198,7 @@ const withdrawPreparation = async (
       tokens: [context.token.address],
     });
     if (amountRaw > BigInt(privateBalance?.balance ?? "0x0")) {
-      return { error: `Not enough private ${context.token.symbol}` };
+      return { error: privacyShortfall(context.token.symbol, "private") };
     }
     const actions = [
       {
@@ -298,5 +303,5 @@ export const handleStrk20SendOps = async (
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
   const op = SEND_OPS.get(messageType);
-  return op ? op(deps, message) : null;
+  return op ? op(deps, message) : handleStrk20ShadowOps(deps, messageType, message);
 };

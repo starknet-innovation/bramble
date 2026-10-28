@@ -21,7 +21,8 @@ use crate::portfolio::tokens::{starknet_glyph, token_glyph, TokenGlyph};
 const HISTORY_UNAVAILABLE_NOTICE: &str = "Couldn't load on-chain history. Showing transactions recorded on this device only — check your connection or RPC endpoint and refresh.";
 /// `PROVISIONAL_TX_HINT`: pending has not executed; pre-confirmed has, in a block not yet final.
 const PENDING_HINT: &str = "Broadcast accepted. It can't be fee-bumped, replaced, or cancelled.";
-const PRECONFIRMED_HINT: &str = "Pre-confirmed by the block proposer: the result is known, the block is not final. The wallet keeps checking and will tell you if it does not settle.";
+const PRECONFIRMED_HINT: &str =
+    "Pre-confirmed, not final yet. Bramble tells you if it doesn't settle.";
 const HASH_COPY_LABEL: &str = "Copy transaction hash";
 
 /// The status hue of a row's glyph and status word.

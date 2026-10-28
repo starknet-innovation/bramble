@@ -91,7 +91,7 @@ const service = (capture: {
     }
     return "registered";
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return STRK20_RECIPIENT;
   },
   async submitActions({ actions, beforeProof, plan }) {
@@ -274,6 +274,15 @@ describe("background private-send operations", () => {
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "Enter a valid Starknet address" });
+    // The check observes the session rather than renewing it, so it still
+    // answers only while the wallet is unlocked.
+    await handler({ type: "wallet.lock" }, STRK20_EXTENSION_SENDER);
+    await expect(
+      handler(
+        { address: STRK20_RECIPIENT, tokenId: token.id, type: "wallet.strk20RecipientStatus" },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: "wallet locked" });
   });
 
   test("prepares and executes a relay-only private send with the frozen batch", async () => {

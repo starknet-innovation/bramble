@@ -6,7 +6,9 @@
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
+import { verificationContext, verifyCalls } from "@bramble/transactions/verify";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
@@ -232,10 +234,18 @@ describe("watch-asset approval lifecycle", () => {
     expect(
       preferences.tokens.some((token) => token.address === USDC && token.symbol === "USDC"),
     ).toBe(true);
-    // The token is already tracked, so a repeat request resolves immediately.
+    // The token is already tracked, so a repeat request is held on a
+    // close-only notice and resolves only when the user closes it (audit M1).
+    const repeat = handler(
+      { asset: { address: USDC }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
+    const noticeId = await pendingId(handler);
     await expect(
-      handler({ asset: { address: USDC }, origin, type: "wallet.watchAsset" }, contentSender),
-    ).resolves.toEqual({ ok: true, watched: true });
+      handler({ id: noticeId, type: "wallet.denyOrigin" }, extensionSender),
+    ).resolves.toEqual({ ok: true, pending: [] });
+    await expect(repeat).resolves.toEqual({ ok: true, watched: true });
   });
 
   test("denying leaves the token untracked", async () => {
@@ -270,21 +280,17 @@ describe("watch-asset approval lifecycle", () => {
     await expect(held2).resolves.toEqual({ error: "request rejected" });
   });
 
-  test("falls back to dapp options when on-chain metadata is unavailable", async () => {
+  test("refuses the card when on-chain metadata is unavailable (Sherlock 125)", async () => {
     const { handler } = makeHandler(throwingRpc().getTokenMetadata);
 
-    const held = handler(
-      { asset: { address: DAI, decimals: 18, symbol: "DAI" }, origin, type: "wallet.watchAsset" },
-      contentSender,
-    );
-    await flushHeld();
+    await expect(
+      handler(
+        { asset: { address: DAI, decimals: 2, symbol: "DAI" }, origin, type: "wallet.watchAsset" },
+        contentSender,
+      ),
+    ).resolves.toEqual({ error: "invalid watch asset metadata" });
     const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-    expect((listed as { pending: readonly unknown[] }).pending.at(-1)).toMatchObject({
-      token: { address: DAI, decimals: 18, name: "DAI", symbol: "DAI" },
-    });
-    const id = await pendingId(handler);
-    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
-    await expect(held).resolves.toEqual({ error: "request rejected" });
+    expect((listed as { pending: readonly unknown[] }).pending).toEqual([]);
   });
 
   test("rejects unusable metadata and origin mismatches", async () => {
@@ -314,5 +320,129 @@ describe("watch-asset approval lifecycle", () => {
       { event: "accountsChanged", type: "wallet.event" },
       { event: "approvalsChanged", type: "wallet.event" },
     ]);
+  });
+});
+
+// A dapp-watched token that borrows a known ticker is stored hidden, exactly as
+// wallet.addToken stores it (audit 171); an ordinary token stays visible.
+describe("watch-asset spoof handling (audit 171)", () => {
+  const SPOOF = "0x0bad00000000000000000000000000000000000000000000000000000000001";
+  const PLAIN = "0x0777000000000000000000000000000000000000000000000000000000000002";
+
+  const approveWatch = async (address: string, symbol: string) => {
+    const { handler, preferencesStore } = makeHandler(async () => ({
+      decimals: 6,
+      name: `${symbol} Token`,
+      symbol,
+    }));
+    const held = handler({ asset: { address }, origin, type: "wallet.watchAsset" }, contentSender);
+    await flushHeld();
+    const id = await pendingId(handler);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await held;
+    return preferencesStore.read();
+  };
+
+  test("hides a token that spoofs a curated ticker", async () => {
+    const preferences = await approveWatch(SPOOF, "USDC");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, SPOOF));
+    if (!stored) throw new Error("token not stored");
+    expect(preferences.hiddenTokens ?? []).toContain(stored.id);
+  });
+
+  test("hides a bridged-suffix token that spoofs a curated ticker (issue 645)", async () => {
+    const preferences = await approveWatch(SPOOF, "eth.e");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, SPOOF));
+    if (!stored) throw new Error("token not stored");
+    expect(stored.symbol).toBe("ETH.e");
+    expect(preferences.hiddenTokens ?? []).toContain(stored.id);
+  });
+
+  test("keeps a non-colliding token visible", async () => {
+    const preferences = await approveWatch(PLAIN, "PLAIN");
+    const stored = preferences.tokens.find((token) => sameFelt(token.address, PLAIN));
+    if (!stored) throw new Error("token not stored");
+    expect(preferences.hiddenTokens ?? []).not.toContain(stored.id);
+  });
+});
+
+// A dapp-watched token lends nothing to the call reviewer unless it is exactly
+// a curated token, on every network: the spam heuristic only knows the curated
+// tickers (none on Sepolia), so a site-named "STRK" there, or an uncurated
+// mainnet ticker, must stay an unknown contract summarized in units (audit 171).
+describe("watch-asset tokens are not trusted by the call reviewer (audit 171)", () => {
+  const SPOOF = "0x0bad00000000000000000000000000000000000000000000000000000000001";
+  const PAYEE = "0x0abc000000000000000000000000000000000000000000000000000000000de1";
+
+  const watchAndReview = async (input: {
+    readonly address: string;
+    readonly metadata: {
+      readonly decimals: number;
+      readonly name: string;
+      readonly symbol: string;
+    };
+    readonly networkId: "SN_MAIN" | "SN_SEPOLIA";
+  }) => {
+    const { handler, preferencesStore } = makeHandler(async () => input.metadata);
+    await preferencesStore.setActiveNetwork(input.networkId);
+    const held = handler(
+      { asset: { address: input.address }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
+    await handler({ id: await pendingId(handler), type: "wallet.approveOrigin" }, extensionSender);
+    await held;
+    const preferences = await preferencesStore.read();
+    // The review the invoke route runs (provider-ops queueInvokeApproval).
+    const report = verifyCalls(
+      [
+        {
+          calldata: [PAYEE, "0x3b9aca00", "0x0"],
+          contractAddress: input.address,
+          entrypoint: "transfer",
+        },
+      ],
+      verificationContext({ address: account.address, networkId: input.networkId }, preferences),
+    );
+    return {
+      codes: report.flags.map((flag) => flag.code),
+      preferences,
+      summary: report.calls[0]?.summary,
+    };
+  };
+
+  test("a Sepolia token named after default-tracked STRK stays unknown", async () => {
+    const { codes, preferences, summary } = await watchAndReview({
+      address: SPOOF,
+      metadata: { decimals: 18, name: "Starknet Token", symbol: "STRK" },
+      networkId: "SN_SEPOLIA",
+    });
+    expect(preferences.dappTokenIds).toHaveLength(1);
+    expect(codes).toContain("unknown-contract");
+    expect(summary).toContain("units");
+    expect(summary).not.toContain("STRK");
+  });
+
+  test("an uncurated mainnet ticker stays unknown", async () => {
+    const { codes, summary } = await watchAndReview({
+      address: SPOOF,
+      metadata: { decimals: 6, name: "Lords", symbol: "LORDS" },
+      networkId: "SN_MAIN",
+    });
+    expect(codes).toContain("unknown-contract");
+    expect(summary).not.toContain("LORDS");
+  });
+
+  test("a curated token watched by a dapp stays trusted", async () => {
+    // Bridged USDC.e: native USDC is already tracked on a new wallet (issue
+    // 663), so watching it would raise no card.
+    const REAL_USDC_E = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+    const { codes, summary } = await watchAndReview({
+      address: REAL_USDC_E,
+      metadata: { decimals: 6, name: "Bridged USDC", symbol: "USDC.e" },
+      networkId: "SN_MAIN",
+    });
+    expect(codes).not.toContain("unknown-contract");
+    expect(summary).toContain("1000 USDC.e");
   });
 });

@@ -5,12 +5,12 @@
  * encrypted vault) and is never logged, echoed, or stored in preferences.
  */
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
-import { buttonBusy, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import type { SettingsUiDeps } from "./settings-ui";
 
 /**
  * Binds the "Import private key" form: on submit, sends the pasted key to the
- * background import flow, then re-renders on success. Invalid keys, duplicates,
+ * background import flow, then resets the form and re-renders on success. Invalid keys, duplicates,
  * and a locked wallet surface as a status message without adding an account.
  */
 export const bindImportKey = (deps: SettingsUiDeps): void => {
@@ -55,12 +55,19 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
       .importAccount(deps.networkId(), privateKey, accountContractType, deploymentSalt)
       .then(
         async () => {
+          // The paint loop skips the repaint when the flow's markup is
+          // unchanged, so the form must not rely on it to leave the busy state
+          // or drop an earlier attempt's error.
           form.reset();
+          buttonBusy(submitButton, false);
+          if (result) {
+            result.textContent = "";
+          }
           showToast("Account imported", "success", form);
           await deps.render(await deps.refresh());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Import failed"), "error", form);
+          showToast(errorDetails(error, "Import failed"), "error", form);
           if (result) {
             result.textContent = errorLine(error, "Import failed");
           }

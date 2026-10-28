@@ -12,14 +12,10 @@ import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isAccountId } from "@bramble/wallet-model/accounts";
-import {
-  isCustomNetwork,
-  isCustomRpcUrl,
-  normalizeChainId,
-} from "@bramble/wallet-model/custom-network";
+import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
 import {
   DEFAULT_NETWORK,
-  DEFAULT_TOKENS,
+  DEFAULT_TRACKED_TOKENS,
   isStarknetNetworkId,
   STRK_TOKEN_ADDRESS,
 } from "@bramble/wallet-model/networks";
@@ -30,12 +26,14 @@ import {
   isDisplayCurrency,
   isLabel,
   isThemeChoice,
-  isTokenConfig,
   isTokenId,
   withAddressBookId,
   withTokenId,
 } from "@bramble/wallet-model/preferences";
 import { normalizeAccountGroups } from "./groups";
+import { withAccountHidden } from "./preferences-accounts";
+import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
+import { withCustomNetwork } from "./preferences-custom-networks";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
   withAccountInGroup,
@@ -50,6 +48,7 @@ import {
   normalizeStoredPreferences,
   pickImportablePreferences,
 } from "./preferences-stored";
+import { withoutToken, withUpsertedToken } from "./preferences-tokens";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /** Re-exported entry types so callers keep importing them from this store. */
@@ -67,11 +66,16 @@ export type {
 } from "@bramble/wallet-model/preferences";
 /** Explorer-lane resolver colocated with the preferences it reads. */
 export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
+/** Custom-network count bound, re-exported with the store that applies it. */
+export { MAX_CUSTOM_NETWORKS } from "./preferences-custom-networks";
+/** Added-token bound, recovery-scan probe set and removal check, re-exported with their store. */
+export {
+  MAX_ADDED_TOKENS_PER_NETWORK,
+  recoveryProbeTokens,
+  wasTokenRemoved,
+} from "./preferences-tokens";
 /** Re-exported store schema and capability types. */
-export type {
-  WalletPreferences,
-  WalletPreferencesStore,
-} from "./preferences-types";
+export type { TokenSource, WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /**
  * Browser storage key for non-secret wallet preferences.
@@ -123,6 +127,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   explorerFallback: {},
   explorerApiUrls: {},
   groups: [],
+  hiddenAccountIds: [],
   hiddenTokens: [],
   nfts: [],
   productAnalytics: true,
@@ -131,7 +136,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   schemaVersion: 1,
   strk20Networks: DEFAULT_STRK20_NETWORKS,
   theme: "dark",
-  tokens: DEFAULT_TOKENS.map(withTokenId),
+  tokens: DEFAULT_TRACKED_TOKENS.map(withTokenId),
 });
 
 const RETIRED_STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
@@ -147,7 +152,7 @@ const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined)
   config.paymaster.url === `${RETIRED_STRK20_GATEWAY_BASE}/paymaster` &&
   config.poolAddress === STRK20_MAINNET_POOL &&
   config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
-  config.subaccountAnonymizerAddress === undefined;
+  config.shadowAccountAnonymizerAddress === undefined;
 
 const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => {
   const current = { ...preferences, productAnalytics: preferences.productAnalytics ?? true };
@@ -215,15 +220,7 @@ export const createPreferencesStore = ({
   return serializeStoreMutations<WalletPreferencesStore>(
     {
       async addCustomNetwork(network) {
-        if (!isCustomNetwork(network)) {
-          throw new WalletError("Invalid custom network");
-        }
-        const preferences = await read();
-        const key = normalizeChainId(network.chainId);
-        const existing = (preferences.customNetworks ?? []).filter(
-          (stored) => normalizeChainId(stored.chainId) !== key,
-        );
-        const next = { ...preferences, customNetworks: [...existing, network] };
+        const next = withCustomNetwork(await read(), network);
         await writePreferences(store, next);
         return next;
       },
@@ -278,6 +275,11 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
+      async removeToken({ tokenId }) {
+        const next = withoutToken(await read(), tokenId);
+        await writePreferences(store, next);
+        return next;
+      },
       async removeGroup({ id }) {
         const next = withoutGroup(await read(), id);
         await writePreferences(store, next);
@@ -302,6 +304,11 @@ export const createPreferencesStore = ({
       },
       async setAccountInGroup({ accountId, groupId, member }) {
         const next = withAccountInGroup(await read(), { accountId, groupId, member });
+        await writePreferences(store, next);
+        return next;
+      },
+      async setAccountHidden({ accountId, hidden }) {
+        const next = withAccountHidden(await read(), accountId, hidden);
         await writePreferences(store, next);
         return next;
       },
@@ -379,6 +386,12 @@ export const createPreferencesStore = ({
         }
         const preferences = await read();
         const previous = preferences.addressBook.find((stored) => stored.id === nextEntry.id);
+        // A stored key is replaced only by removing the contact first: the
+        // multisig flow trusts these keys, and a card for a known address must
+        // not swap them under its label (Sherlock 258).
+        if (contactKeysChange(previous, nextEntry)) {
+          throw new WalletError(CONTACT_KEYS_CHANGED);
+        }
         const savedEntry = {
           ...nextEntry,
           ...(nextEntry.nostrPublicKey || !previous?.nostrPublicKey
@@ -471,15 +484,12 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
-      async upsertToken(token) {
-        const nextToken = withTokenId(token);
-        if (!isTokenConfig(nextToken)) {
-          throw new WalletError("Invalid token");
-        }
+      async upsertToken(token, source) {
         const preferences = await read();
-        const tokens = preferences.tokens.filter((stored) => stored.id !== nextToken.id);
-        const next = { ...preferences, tokens: [...tokens, nextToken] };
-        await writePreferences(store, next);
+        const next = withUpsertedToken(preferences, token, source);
+        if (next !== preferences) {
+          await writePreferences(store, next);
+        }
         return next;
       },
     },

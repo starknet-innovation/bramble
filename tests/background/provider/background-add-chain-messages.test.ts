@@ -67,7 +67,8 @@ const walletStub = () => ({
       importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 10 as const,
+      schemaVersion: 12 as const,
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -194,6 +195,47 @@ describe("wallet_addStarknetChain held approval", () => {
 
     const stored = (await preferencesStore.read()).customNetworks ?? [];
     expect(stored[0]).toMatchObject({ id: "katana", name: "Katana" });
+  });
+
+  test("refuses an oversized URL list before any approval is queued", async () => {
+    // Sherlock audit 153: 80 RPC URLs of about 2 KB each, nearly the whole
+    // 1 MiB preferences budget in one card.
+    const { handler, preferencesStore } = makeHarness();
+    const rpcUrls = Array.from(
+      { length: 80 },
+      (_, index) => `https://rpc.example/${index}/${"a".repeat(2000)}`,
+    );
+    const response = handler(addChainMessage({ rpcUrls }), contentSender);
+    await flushHeld();
+    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
+    expect((listed as { pending: readonly unknown[] }).pending).toHaveLength(0);
+    await expect(response).resolves.toEqual({ error: "invalid add chain request" });
+    expect((await preferencesStore.read()).customNetworks ?? []).toHaveLength(0);
+  });
+
+  test("an approved chain stores one RPC URL and no explorer or icon lists", async () => {
+    const { handler, preferencesStore } = makeHarness();
+    const held = handler(
+      addChainMessage({
+        blockExplorerUrls: ["https://explorer.katana.example"],
+        iconUrls: ["https://icons.katana.example/a.png", "https://icons.katana.example/b.png"],
+        rpcUrls: ["https://rpc.katana.example", "https://rpc2.katana.example"],
+      }),
+      contentSender,
+    );
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ added: true, ok: true });
+
+    expect((await preferencesStore.read()).customNetworks).toEqual([
+      {
+        chainId: chain.chainId,
+        id: "katana",
+        name: "Katana",
+        rpcUrls: ["https://rpc.katana.example"],
+      },
+    ]);
   });
 
   test("rejects a malformed chain payload", async () => {

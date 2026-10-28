@@ -1,6 +1,6 @@
 /**
  * Receive shows the plain Starknet address first — as a visible string and as
- * the default QR payload — and offers the Bramble contact card as a second
+ * the default QR payload — and offers the wallet card as a second
  * choice only once it is complete. A slow or failed coordination-key
  * derivation therefore never blocks receiving, and a partial card is never
  * offered (spec item 3). Receive also carries the account's contract
@@ -111,7 +111,7 @@ describe("Receive address and wallet card", () => {
     expect(option(app, "card").disabled).toBe(false);
 
     option(app, "card").click();
-    expect(qrLabel(app)).toBe("QR code for wallet contact card");
+    expect(qrLabel(app)).toBe("QR code for wallet card");
     expect(app.querySelector<HTMLElement>("[data-receive-qr]")?.dataset["qrPayload"]).toBe("card");
     expect(option(app, "card").getAttribute("aria-pressed")).toBe("true");
     expect(option(app, "address").getAttribute("aria-pressed")).toBe("false");
@@ -202,6 +202,34 @@ describe("Receive address and wallet card", () => {
     expect(
       app.querySelector('[data-receive-payload="address"]')?.getAttribute("aria-pressed"),
     ).toBe("true");
+  });
+
+  test("shows the wrong-network warning by default, outside the Advanced fields", () => {
+    const app = render();
+    bindReceiveWalletCard({
+      app,
+      render: async () => undefined,
+      wallet: { loadNostrPublicKey: async () => "11".repeat(32) } as unknown as SidepanelWallet,
+    });
+
+    const hints = [...app.querySelectorAll<HTMLElement>("p.hint")].filter(
+      (hint) => hint.textContent === "Share this account.",
+    );
+    // Rendered once, and not inside anything hidden: sending on the wrong
+    // network loses funds, so the warning never waits behind Advanced.
+    expect(hints).toHaveLength(1);
+    expect(hints[0]?.closest("[hidden]")).toBeNull();
+    expect(hints[0]?.closest("#receive-advanced-fields")).toBeNull();
+  });
+
+  test("shows the warning for an account without a signer key too", () => {
+    const html = receiveAddressView({
+      address: account.address,
+      copyLabel: "Copy address",
+      hint: "Multisig.",
+      networkId: account.networkId,
+    });
+    expect(html.match(/Multisig\./g)).toHaveLength(1);
   });
 
   test("keeps the contact card and the keys behind the Advanced switch", () => {

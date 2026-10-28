@@ -1,8 +1,11 @@
+import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { SidepanelWallet } from "@bramble/wallet-ui/lab";
 import {
   bindAddressBook,
   bindHomeUi,
   bindReceiveWalletCard,
+  confirmationOutcome,
+  DEPLOY_RECEIPT_COPY,
   outcomeReceiptFor,
   paintOutcomeReceipt,
 } from "@bramble/wallet-ui/lab";
@@ -21,6 +24,24 @@ import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 
 const NOSTR_PUBLIC_KEY = "22".repeat(32);
+const DEPLOY_HASH = "0x5f2a7c19b4e86d30af51c8b27e94d6013a8f45c2e7b91d0a3c6e8f24b71d9053";
+
+// The stage the binder reveals once the chain answers the deployment, painted
+// through the writer and the copy the binder uses, because the fixture runtime
+// submits nothing. The answer comes off the production status table, so a
+// failure checkpoint shows the reason a reader would.
+const paintDeployAnswer =
+  (chainStatus: ActivityEntry["status"]) =>
+  (context: FrameContext): void => {
+    context.app.querySelector("#deploy-review-stage")?.setAttribute("hidden", "");
+    context.app.querySelector("#deploy-success")?.removeAttribute("hidden");
+    paintOutcomeReceipt(
+      context.app,
+      "deploy-success",
+      outcomeReceiptFor(confirmationOutcome(chainStatus), DEPLOY_RECEIPT_COPY, DEPLOY_HASH),
+      "SN_MAIN",
+    );
+  };
 
 const hydrateReceiveCard = async (context: FrameContext): Promise<void> => {
   bindReceiveWalletCard({
@@ -199,6 +220,21 @@ export const portfolioScenario: WalletScenario = {
           deployment: false,
           preferences: journeyPreferences,
           prices: journeyPrices,
+          signability: { readOnly: true, reason: "undeployed" },
+        }),
+      id: "undeployed-braavos",
+      label: "Undeployed Braavos account",
+      narrative:
+        "A Braavos counterfactual deploys only through its own step, so Send and Swap wait for it and Home says where to deploy.",
+      state: { accountDeployment: "required", send: "disabled", signability: "undeployed" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
           view: "deploy-account",
         }),
       id: "deploy-account",
@@ -220,29 +256,24 @@ export const portfolioScenario: WalletScenario = {
       label: "Account deployed",
       narrative:
         "The receipt every settled transaction ends on: what happened, one line saying what it means, and the identifier.",
-      // The stage the binder reveals once the chain confirms the deployment.
-      // Painted through the same writer the binder uses, because the fixture
-      // runtime submits nothing.
-      prepare: (context) => {
-        context.app.querySelector("#deploy-review-stage")?.setAttribute("hidden", "");
-        context.app.querySelector("#deploy-success")?.removeAttribute("hidden");
-        paintOutcomeReceipt(
-          context.app,
-          "deploy-success",
-          outcomeReceiptFor(
-            { kind: "succeeded", toast: "" },
-            {
-              confirmedDescription: "This account is on Starknet and can submit transactions.",
-              confirmedTitle: "Account deployed",
-              failedTitle: "Deployment failed",
-              submittedTitle: "Deployment submitted",
-            },
-            "0x5f2a7c19b4e86d30af51c8b27e94d6013a8f45c2e7b91d0a3c6e8f24b71d9053",
-          ),
-          "SN_MAIN",
-        );
-      },
+      prepare: paintDeployAnswer("preconfirmed"),
       state: { accountDeployment: "confirmed", task: "receipt" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          deployment: false,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          view: "deploy-account",
+        }),
+      id: "deploy-failed",
+      label: "Deployment failed",
+      narrative:
+        'A deployment the chain rejects turns the same receipt into the failure: its mark, the chain\'s reason, and the hash to look it up by — never "Account deployed".',
+      prepare: paintDeployAnswer("rejected"),
+      state: { accountDeployment: "required", chain: "rejected", task: "receipt" },
     },
     {
       content: () =>
@@ -431,6 +462,33 @@ export const assetsScenario: WalletScenario = {
       label: "No allowances",
       narrative: "The empty state accurately scopes what the wallet scans.",
       state: { outstanding: 0 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          allowanceNotices: ["scan-incomplete", "multisig-unread", "retention-full"],
+          allowances,
+          preferences: journeyPreferences,
+          view: "allowances",
+        }),
+      id: "allowances-partial",
+      label: "Partial allowance listing",
+      narrative:
+        "A scan that stopped early, an unread multisig, and a full log are each stated above the list.",
+      state: { notices: 3 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          allowances: [],
+          allowancesUnavailable: true,
+          preferences: journeyPreferences,
+          view: "allowances",
+        }),
+      id: "allowances-unavailable",
+      label: "Allowances not loaded",
+      narrative: "A failed listing says so instead of claiming nothing is outstanding.",
+      state: { loaded: false },
     },
   ],
   description:

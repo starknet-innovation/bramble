@@ -41,6 +41,7 @@ import {
 } from "@bramble/ledger-protocol/session";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { LedgerSignRequestSummary } from "../../../popup/responses/responses";
+import { LEDGER_SIGN_UNFINISHED } from "../../runtime/friendly-error-copy";
 import type { LedgerSignOutcome } from "./runtime-client";
 
 /**
@@ -62,7 +63,12 @@ export type LedgerSignPhase =
   | { readonly kind: "confirming" }
   | { readonly kind: "discovering" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
-  | { readonly kind: "error"; readonly code: LedgerRejectionCode; readonly message: string }
+  | {
+      readonly kind: "error";
+      /** The device catalog code, or `null` when the wallet failed after the device signed. */
+      readonly code: LedgerRejectionCode | null;
+      readonly message: string;
+    }
   | { readonly kind: "submitting" }
   | { readonly kind: "verifying" };
 
@@ -95,9 +101,26 @@ export type LedgerSignController = {
   readonly activeId: () => string | null;
   readonly cancel: () => Promise<void>;
   readonly chooseDevice: (deviceId: string) => void;
+  /**
+   * Takes down a request whose signature the device already gave but the
+   * wallet could not finish, reporting nothing; it is not offered again here.
+   */
+  readonly close: () => void;
+  /** Whether `id` was closed with {@link LedgerSignController.close}. */
+  readonly closed: (id: string) => boolean;
   readonly connect: () => void;
+  readonly dismiss: () => void;
   readonly present: (request: LedgerSignRequestSummary) => void;
   readonly retry: () => void;
+  readonly whenIdle: () => Promise<void>;
+};
+
+// A wallet-side failure after the device signed (`completeLedgerSign`): the
+// reviewed sentence for it, never a device rejection.
+const UNFINISHED_PHASE: LedgerSignPhase = {
+  code: null,
+  kind: "error",
+  message: LEDGER_SIGN_UNFINISHED,
 };
 
 const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
@@ -114,7 +137,10 @@ const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
  * silent reconnect. `connect` runs the gesture-gated grant flow for the connect
  * state; `retry` repeats discovery after a recoverable error (unlock, enable
  * blind signing) against the SAME parked request; `cancel` reports a clean
- * rejection.
+ * rejection; `dismiss` drops a request the background no longer holds (a lock
+ * or the queue's timeout settled it) without reporting anything. `present`
+ * ignores a request while an earlier device operation is still winding down;
+ * `whenIdle` resolves once it has, so the caller can offer the request again.
  */
 export const createLedgerSignController = (
   deps: LedgerSignControllerDeps,
@@ -123,6 +149,20 @@ export const createLedgerSignController = (
   let devices: readonly LedgerDeviceChoice[] = [];
   let busy = false;
   let operationEpoch = 0;
+  let idleWaiters: Array<() => void> = [];
+  // Requests closed after an unfinished signature. The background still holds
+  // each until it settles or times out; re-presenting it would start a second
+  // device prompt for a hash that may already be on its way.
+  const closedIds = new Set<string>();
+
+  const settle = (): void => {
+    busy = false;
+    const waiters = idleWaiters;
+    idleWaiters = [];
+    for (const resolve of waiters) {
+      resolve();
+    }
+  };
 
   const show = (phase: LedgerSignPhase): void => {
     if (current) {
@@ -164,7 +204,15 @@ export const createLedgerSignController = (
       return;
     }
     show({ kind: "submitting" });
-    await deps.report({ id: request.id, r: signature.r, s: signature.s });
+    try {
+      await deps.report({ id: request.id, r: signature.r, s: signature.s });
+    } catch {
+      // The device signed; the wallet's half did not finish. That is not a
+      // device fault, and the transaction may already be on its way (errors
+      // audit F9), so it reads as the reviewed outcome-unknown line.
+      if (isActive()) show(UNFINISHED_PHASE);
+      return;
+    }
     current = null;
     devices = [];
     operationEpoch += 1;
@@ -197,11 +245,20 @@ export const createLedgerSignController = (
       if (session) {
         await closeLedgerSessionQuietly(session);
       }
-      busy = false;
+      settle();
     }
   };
 
   const discover = async (): Promise<void> => {
+    // A Ledger account in a browser that cannot reach a Ledger (Firefox) gets
+    // the browser-support message straight away; the request stays parked so
+    // Cancel still rejects it cleanly.
+    if (deps.connector.isAvailable?.() === false) {
+      if (!busy) {
+        show(errorPhase("webhid-unavailable"));
+      }
+      return;
+    }
     const list = deps.connector.listConnected;
     if (!list) {
       await drive(() => deps.connector.openConnected());
@@ -222,9 +279,21 @@ export const createLedgerSignController = (
       show(errorPhase(asLedgerRejection(error).code));
       return;
     } finally {
-      busy = false;
+      settle();
     }
     await drive(() => deps.connector.openConnected(devices[0]?.id));
+  };
+
+  const dismiss = (): void => {
+    if (!current) {
+      return;
+    }
+    // The epoch bump stops an in-flight device operation from reporting or
+    // repainting; its session is still closed by `drive`'s finally.
+    current = null;
+    devices = [];
+    operationEpoch += 1;
+    deps.render(null);
   };
 
   return {
@@ -254,8 +323,16 @@ export const createLedgerSignController = (
       show({ kind: "connecting" });
       void drive(deps.connector.request);
     },
+    close() {
+      if (current) {
+        closedIds.add(current.id);
+      }
+      dismiss();
+    },
+    closed: (id) => closedIds.has(id),
+    dismiss,
     present(request) {
-      if (current || busy) {
+      if (current || busy || closedIds.has(request.id)) {
         return;
       }
       current = request;
@@ -265,5 +342,7 @@ export const createLedgerSignController = (
     retry() {
       void discover();
     },
+    whenIdle: () =>
+      busy ? new Promise<void>((resolve) => idleWaiters.push(resolve)) : Promise.resolve(),
   };
 };

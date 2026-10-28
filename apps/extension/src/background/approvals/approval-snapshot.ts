@@ -30,6 +30,8 @@ export type {
  * Display-only invoke fee state, aligned with Send review classification.
  */
 export type InvokeFeeReview = {
+  /** The account must be deployed through its own step first; no fee. */
+  readonly deployFirst?: true;
   readonly fee: FeeEstimate | null;
   readonly feeAffordability: FeeAffordability;
   readonly feeEstimateFailed: boolean;
@@ -44,9 +46,17 @@ export type InvokeFeeReview = {
  */
 export type ApprovalRequest = PendingApproval & ApprovalPayload;
 
+// A notice's wallet-chosen reason, and a watch-asset card's already-tracked
+// mark (audit M1); both absent for every other approval.
+const noticeSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.alreadyTracked === true ? { alreadyTracked: true } : {}),
+  ...(approval.notice === undefined ? {} : { notice: approval.notice }),
+});
+
 // Copies an invoke entry's fee review onto its snapshot without materializing
 // absent fields, so non-invoke snapshots stay byte-identical to before.
 const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.deployFirst === true ? { deployFirst: true } : {}),
   ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
   ...(approval.feeAffordability === undefined
     ? {}
@@ -111,6 +121,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
   ...(approval.existingGrant === undefined ? {} : { existingGrant: approval.existingGrant }),
   id: approval.id,
   kind: approval.kind,
+  ...noticeSnapshot(approval),
   origin: approval.origin,
   ...(approval.relayFeeAction === undefined
     ? {}

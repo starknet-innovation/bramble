@@ -13,7 +13,11 @@
  * `isTypedDataShape` in `@bramble/starknet/typed-data` is that gate.
  */
 import { isOwnDataProperty, isRecord, JSON_BUDGETS } from "@bramble/core/json";
-import type { Snip12Field, Snip12Revision } from "@bramble/starknet/snip12-vocabulary";
+import {
+  SNIP12_MAX_NAME_LENGTH,
+  type Snip12Field,
+  type Snip12Revision,
+} from "@bramble/starknet/snip12-vocabulary";
 import { signNameText } from "./sign-request-text";
 
 /**
@@ -87,12 +91,27 @@ export type Split = {
 export const emptySplit = (): Split => ({ signed: [], unresolved: [], unsigned: [] });
 
 /**
+ * The longest row key the card will print: four maximum-length SNIP-12 names
+ * and their separators. Each name is bounded, but a key composes one name per
+ * nesting level, so without this bound a deep message prints keys of well over
+ * a thousand characters (Sherlock 257). A payload with a longer key is reported
+ * unclassified, so the card withholds signing rather than show a key that
+ * buries its value.
+ */
+export const SIGN_KEY_MAX_LENGTH = 4 * SNIP12_MAX_NAME_LENGTH + 3;
+
+const hasOverlongKey = (rows: readonly SignRequestRow[]): boolean =>
+  rows.some(([key]) => key.length > SIGN_KEY_MAX_LENGTH);
+
+/**
  * Freezes an accumulator into the readonly split a caller may hold, collapsing
- * the unresolved-path list into the single `unclassified` verdict.
+ * the unresolved-path list, and any key longer than {@link SIGN_KEY_MAX_LENGTH},
+ * into the single `unclassified` verdict.
  */
 export const sealed = (split: Split): SignRequestSplit => ({
   signed: split.signed,
-  unclassified: split.unresolved.length > 0,
+  unclassified:
+    split.unresolved.length > 0 || hasOverlongKey(split.signed) || hasOverlongKey(split.unsigned),
   unsigned: split.unsigned,
 });
 

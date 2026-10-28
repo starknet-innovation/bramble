@@ -118,7 +118,7 @@ describe("sidepanel home", () => {
 
     const portfolio = html.slice(
       html.indexOf('<section class="home-tabs"'),
-      html.indexOf("</main>"),
+      html.indexOf('<nav class="wallet-dock"'),
     );
     expect(portfolio).toContain("<h2>Tokens</h2>");
     // The wallet dock is the only tablist left; the portfolio section is a heading
@@ -213,7 +213,7 @@ describe("sidepanel home", () => {
       prices,
       [],
       null,
-      [],
+      { entries: [], notices: [], unavailable: false },
       null,
       {},
       [],
@@ -340,5 +340,126 @@ describe("shield tile", () => {
 
     expect(html).not.toContain(">Explorer<");
     expect(html).not.toContain("starkscan.co/contract");
+  });
+});
+
+describe("home read-only flag", () => {
+  const idlePrivacy: Parameters<typeof homeScreen>[9] = {
+    error: null,
+    loading: false,
+    value: null,
+  };
+  const render = (signability: Parameters<typeof homeScreen>[10]) =>
+    homeScreen(
+      status,
+      account,
+      { balances: [] },
+      0,
+      true,
+      defaultWalletPreferences(),
+      {},
+      {},
+      "usd",
+      idlePrivacy,
+      signability,
+    );
+
+  test("says Read only under the total and greys the signing actions", () => {
+    const markup = render({ readOnly: true, reason: "braavos" });
+    expect(markup).toContain('data-read-only="true"');
+    expect(markup).toContain("Read only");
+    const tile = (id: string): string => {
+      const start = markup.indexOf(`data-view="${id}"`);
+      expect(start).toBeGreaterThan(-1);
+      const open = markup.lastIndexOf("<button", start);
+      return markup.slice(open, markup.indexOf(">", start) + 1);
+    };
+    expect(tile("send")).toContain("disabled");
+    expect(tile("swap")).toContain("disabled");
+    // Receiving needs no signature; it stays live.
+    expect(tile("receive")).not.toContain("disabled");
+    // Shield must be a true disabled control, not a link into a signing flow
+    // (the privacy activation a read-only account cannot complete).
+    const shield = markup.slice(
+      markup.indexOf("Shield unavailable") - 120,
+      markup.indexOf("Shield unavailable"),
+    );
+    expect(markup).toContain("Shield unavailable — this account is read only");
+    expect(shield).toContain("disabled");
+    expect(markup).not.toContain('data-privacy-open="SN_MAIN:STRK');
+  });
+
+  test("asks an undeployed Braavos account to deploy first, not to read only", () => {
+    const markup = render({ readOnly: true, reason: "undeployed" });
+    expect(markup).toContain('data-read-only="undeployed"');
+    expect(markup).toContain("Not deployed");
+    expect(markup).toContain("Deploy this account first (Settings → Deploy account).");
+    expect(markup).not.toContain("Read only");
+    for (const id of ["send", "swap"]) {
+      const start = markup.indexOf(`data-view="${id}"`);
+      const open = markup.lastIndexOf("<button", start);
+      expect(markup.slice(open, markup.indexOf(">", start) + 1)).toContain("disabled");
+    }
+    // Shield keeps its own deploy-first route rather than a dead control.
+    expect(markup).not.toContain("Shield unavailable — this account is read only");
+  });
+
+  test("renders a normal account when signable or unknown", () => {
+    for (const signability of [{ readOnly: false as const }, null]) {
+      const markup = render(signability);
+      expect(markup).not.toContain('data-read-only="true"');
+      expect(markup).not.toContain("Read only");
+    }
+  });
+
+  test("offers recovery for a Braavos 2FA account with no request pending", () => {
+    const markup = render({ readOnly: true, reason: "strong-signer" });
+    expect(markup).toContain("Read only");
+    expect(markup).toContain('id="recover-account"');
+    expect(markup).toContain("Recover account");
+  });
+
+  test("shows the unlock time and the device-cancel note while a removal is pending", () => {
+    const markup = render({
+      readOnly: true,
+      reason: "strong-signer",
+      recovery: { delaySeconds: 345_600, pendingUntil: 1_900_000_000 },
+    });
+    // Stays read only with the buttons greyed even mid-removal.
+    expect(markup).toContain("Read only");
+    expect(markup).toContain("Removing 2FA");
+    // 1_900_000_000 = 17/03/30 17h46 UTC — rendered absolute, no live clock.
+    expect(markup).toContain("usable on 17/03/30 at 17h46 UTC");
+    expect(markup).toContain("device can still stop this");
+    // No recover button once a request is under way.
+    expect(markup).not.toContain('id="recover-account"');
+  });
+
+  test("offers recovery for a Ready account with a guardian", () => {
+    const markup = render({ readOnly: true, reason: "guardian" });
+    expect(markup).toContain('id="recover-account"');
+    expect(markup).toContain('data-recover-kind="argent"');
+    expect(markup).toContain("Recover account");
+  });
+
+  test("offers to complete a Ready guardian escape once it is ready", () => {
+    const markup = render({
+      readOnly: true,
+      reason: "guardian",
+      recovery: {
+        delaySeconds: 604_800,
+        expiresAt: 1_900_604_800,
+        pendingUntil: 1_900_000_000,
+        stage: "ready",
+      },
+    });
+    expect(markup).toContain("Complete recovery");
+    expect(markup).toContain('data-recover-kind="argent"');
+  });
+
+  test("does not offer recovery for a restriction the phrase cannot lift", () => {
+    const markup = render({ readOnly: true, reason: "release" });
+    expect(markup).toContain("Read only");
+    expect(markup).not.toContain('id="recover-account"');
   });
 });

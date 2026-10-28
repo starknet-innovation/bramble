@@ -58,7 +58,7 @@ fn a_created_wallet_stays_backup_pending_until_confirmed() {
     let again = open(dir.path(), &clock);
     again.unlock(PASSWORD.into()).unwrap();
     assert!(!again.backup_pending().unwrap(), "cleared for good");
-    assert_eq!(read(&dir)["version"], 4);
+    assert_eq!(read(&dir)["version"], 5);
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn a_version_three_container_migrates_in_place_with_no_backup_owed() {
     core.unlock(V3_PASSWORD.into()).unwrap();
 
     let after = read(&dir);
-    assert_eq!(after["version"], 4);
+    assert_eq!(after["version"], 5);
     assert_eq!(after["lineage"], before["lineage"]);
     assert_eq!(
         after["passwordSlot"], before["passwordSlot"],
@@ -99,7 +99,7 @@ fn a_version_three_container_migrates_in_place_with_no_backup_owed() {
     assert!(!core.backup_pending().unwrap());
     assert_eq!(core.account_records(NetworkId::Sepolia).unwrap().len(), 2);
     let payload = stored_payload(&dir, V3_PASSWORD);
-    assert_eq!(payload["version"], 4);
+    assert_eq!(payload["version"], 5);
     assert_eq!(payload["backupPending"], false);
 
     // Still opens by biometrics, and a second unlock writes nothing.
@@ -114,7 +114,7 @@ fn a_version_three_container_also_migrates_on_biometric_unlock() {
     std::fs::write(dir.path().join("vault.json"), V3_FIXTURE).unwrap();
     let core = open(dir.path(), &FakeClock::new());
     core.unlock_with_biometric(V3_WRAP_SECRET.to_vec()).unwrap();
-    assert_eq!(read(&dir)["version"], 4);
+    assert_eq!(read(&dir)["version"], 5);
     assert!(!core.backup_pending().unwrap());
     core.lock();
     core.unlock(V3_PASSWORD.into()).unwrap();

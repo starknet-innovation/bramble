@@ -12,7 +12,7 @@ import {
   readStrk20BalancesParams,
   readStrk20InvokeParams,
   readStrk20PrepareParams,
-  readStrk20SubaccountCommitmentParams,
+  readStrk20ShadowAccountCommitmentParams,
   type Strk20BalanceEntry,
   type Strk20CallAndProof,
 } from "../privacy/strk20-bridge";
@@ -36,11 +36,11 @@ import {
   providerStringArrayResult,
   providerSwitchChainId,
   readApiVersionParam,
-  readTypedDataParam,
   toProviderPayload as toProviderPayloadResult,
 } from "./results";
 import { invalidRequestPayload, unknownError, type WalletRpcError } from "./rpc-errors";
 import type { RuntimeMessage } from "./runtime-message";
+import { readTypedDataParam } from "./typed-data-params";
 
 /** Marker for page-to-content wallet provider requests.
  */
@@ -157,10 +157,19 @@ export const canQueueProviderRequest = (pendingCount: number): boolean =>
   pendingCount >= 0 &&
   pendingCount < MAX_PENDING_PROVIDER_REQUESTS;
 
+// `{ method, params: undefined }` is how a dapp spells "no params" when it
+// forwards an optional argument; it means the same as leaving `params` out,
+// and refusing it broke spec-following callers (Sherlock 254).
+const withoutUndefinedParams = (raw: unknown): unknown =>
+  isRecord(raw) && Object.hasOwn(raw, "params") && raw["params"] === undefined
+    ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "params"))
+    : raw;
+
 /**
  * Parses direct dapp calls to the injected provider request function.
  */
-export const readProviderRequestArguments = (value: unknown): ProviderRequestArguments | null => {
+export const readProviderRequestArguments = (raw: unknown): ProviderRequestArguments | null => {
+  const value = withoutUndefinedParams(raw);
   if (
     isRecord(value) &&
     hasOnlyKnownKeys(value, ["method", "params"]) &&
@@ -356,14 +365,14 @@ const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
     const actions = readStrk20InvokeParams(params);
     return actions ? { actions, origin, type: "wallet.strk20InvokeTransaction" } : null;
   },
-  wallet_strk20SubaccountCommitment: (params, origin) => {
-    const input = readStrk20SubaccountCommitmentParams(params);
+  wallet_strk20ShadowAccountCommitment: (params, origin) => {
+    const input = readStrk20ShadowAccountCommitmentParams(params);
     return input
       ? {
           dappName: input.dappName,
           ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
           origin,
-          type: "wallet.strk20SubaccountCommitment",
+          type: "wallet.strk20ShadowAccountCommitment",
         }
       : null;
   },
@@ -407,8 +416,8 @@ const runtimeBuilderFor = (method: ProviderMethod): RuntimeBuilder => {
       return RUNTIME_BUILDERS.wallet_strk20InvokeTransaction;
     case "wallet_strk20PrepareInvoke":
       return RUNTIME_BUILDERS.wallet_strk20PrepareInvoke;
-    case "wallet_strk20SubaccountCommitment":
-      return RUNTIME_BUILDERS.wallet_strk20SubaccountCommitment;
+    case "wallet_strk20ShadowAccountCommitment":
+      return RUNTIME_BUILDERS.wallet_strk20ShadowAccountCommitment;
     case "wallet_switchStarknetChain":
       return RUNTIME_BUILDERS.wallet_switchStarknetChain;
     case "wallet_watchAsset":

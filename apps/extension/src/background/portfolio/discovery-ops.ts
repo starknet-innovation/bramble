@@ -11,7 +11,7 @@ import { normalizeWalletOrigin } from "@bramble/core/origin";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { accountDeployment } from "@bramble/starknet/deployment";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { API_VERSION_PATTERN } from "@bramble/wallet-protocol/results";
 import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@bramble/wallet-protocol/versions";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -84,10 +84,18 @@ type DiscoveryOpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-const handleSupportedVersions: DiscoveryOpsHandler = async (_deps, messageType, message) => {
+const handleSupportedVersions: DiscoveryOpsHandler = async (deps, messageType, message, sender) => {
   const input = readDiscoveryInput(message, messageType);
   if (!input) {
     return { error: "invalid discovery request" };
+  }
+  // Same perimeter as every other dapp surface: a blocked origin learns
+  // nothing from this wallet, not even its supported versions (Sherlock 165).
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
   }
   if (!apiVersionSupported(input.apiVersion)) {
     return { error: "unsupported api version" };
@@ -134,10 +142,17 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
   }
   try {
     const deployment = accountDeployment(account);
+    // starknet.js compiles constructor calldata to decimal strings, and the
+    // provider boundary accepts only hex felts, so every entry is sent as
+    // canonical hex (Sherlock 243).
+    const calldata = deployment.constructorCalldata.map(canonicalFelt);
+    if (!calldata.every((felt): felt is string => felt !== null)) {
+      return { error: "deployment data not available" };
+    }
     return {
       deployment: {
         address: deployment.contractAddress,
-        calldata: [...deployment.constructorCalldata],
+        calldata,
         classHash: deployment.classHash,
         salt: deployment.addressSalt,
         version: 1,

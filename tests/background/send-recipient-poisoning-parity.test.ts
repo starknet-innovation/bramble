@@ -214,26 +214,53 @@ describe("NFT send", () => {
 });
 
 describe("dapp invoke", () => {
-  test("refuses a poisoned recipient instead of queueing a prompt to confirm", async () => {
+  // Queued with the poisoning flag, whose card offers Deny only, instead of
+  // refused on arrival: an instant refusal told the site which addresses the
+  // user has saved or paid (Sherlock 140). Approving it anyway is refused at the
+  // execution-time gate below, and nothing is submitted.
+  test("flags a poisoned recipient and refuses it even when approved", async () => {
     const { handler, submitted } = await makeHandler();
+    const held = handler(
+      {
+        calls: [
+          { calldata: [POISONED, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
+        ],
+        origin,
+        type: "wallet.addInvokeTransaction",
+      },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const listed = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
+      readonly pending: readonly { readonly flags?: readonly { readonly code: string }[] }[];
+    };
+    expect(listed.pending.at(-1)?.flags?.map((flag) => flag.code)).toContain("address-poisoning");
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
 
-    await expect(
-      handler(
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+
+    await expect(held).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
+    expect(submitted).toEqual([]);
+  });
+
+  test("answers a denied poisoned request exactly as a denied clean one (Sherlock 140)", async () => {
+    const denied = async (recipient: string): Promise<unknown> => {
+      const { handler } = await makeHandler();
+      const held = handler(
         {
           calls: [
-            { calldata: [POISONED, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
+            { calldata: [recipient, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
           ],
           origin,
           type: "wallet.addInvokeTransaction",
         },
         contentSender,
-      ),
-    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
-    // No approval was queued: the user is never shown a confirm button for it.
-    await expect(
-      handler({ type: "wallet.pendingApprovals" }, extensionSender),
-    ).resolves.toMatchObject({ pending: [] });
-    expect(submitted).toEqual([]);
+      );
+      const id = await latestApprovalId(handler, extensionSender);
+      await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
+      return held;
+    };
+    expect(await denied(POISONED)).toEqual(await denied(CLEAN));
   });
 
   // The request-time gate reads the address book as it stands when the site
@@ -321,7 +348,7 @@ const poolService = (): Strk20Service => ({
   async registrationStatus() {
     return "registered" as const;
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x1";
   },
   async submitActions() {

@@ -9,7 +9,8 @@
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { deriveAccount } from "@bramble/vault/accounts";
 import { decryptJson, isEncryptedEnvelope, KDF_ITERATIONS } from "@bramble/vault/encrypted-store";
-import { estimatePassphraseStrength, isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { estimatePassphraseStrength } from "@bramble/wallet-model/passphrase-strength";
 // Not a package export: the avatar is a side-panel renderer, read here only to pin the mobile port.
 import { accountAvatar } from "../packages/presentation/wallet-ui/src/sidepanel/shell/account-avatar";
 
@@ -97,6 +98,18 @@ const PASSPHRASES = [
   "correct horse battery staple",
   "correct horse battery staple!9",
   "Tr0ub4dor&3",
+  // The common-password check (guessable.ts): leet, edge padding, a repeated chunk, runs both ways,
+  // "1" as both i and l, and passphrases that only look busy.
+  "p@ssw0rd2024",
+  "1etmein!",
+  "!!monkey12",
+  "abcabcabc",
+  "qwertyuiop",
+  "zyxwvuts",
+  "Dragon$$",
+  "Shadow_99",
+  "kestrel-umber-quartz",
+  "Mx7#qLp2!vR9",
   "ünïcödé-pässphrase",
   "🔒🔒🔒🔒🔒🔒🔒🔒🔒",
   "x".repeat(1025),

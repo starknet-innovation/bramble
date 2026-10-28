@@ -23,6 +23,11 @@ const providerWith = (blocks: number[]): RpcProvider =>
     getBlockNumber: async () => blocks.shift() ?? 30,
   }) as unknown as RpcProvider;
 
+// The relay claim's WriteOnce slots (#668): every relay send records them.
+const SLOTS = ["0x5157"];
+const relaySlots = () => SLOTS;
+const relayClaim = { route: "relay" as const, state: "submitting" as const, writeOnceSlots: SLOTS };
+
 describe("STRK20 proof maturity", () => {
   test("records a pending hash before waiting for an accepted receipt", async () => {
     const store = memoryStrk20MaturityStore();
@@ -153,6 +158,7 @@ describe("STRK20 proof maturity", () => {
     const first = runtime.submitAccepted(
       providerWith([]),
       scope,
+      "account",
       async () => {
         started.push("prepare first");
         return "first";
@@ -167,6 +173,7 @@ describe("STRK20 proof maturity", () => {
     const second = runtime.submitAccepted(
       providerWith([]),
       scope,
+      "account",
       async () => {
         started.push("prepare second");
         return "second";
@@ -179,7 +186,7 @@ describe("STRK20 proof maturity", () => {
 
     await firstBroadcastStarted;
     expect(started).toEqual(["prepare first", "broadcast first"]);
-    expect(await store.read(scope)).toEqual({ state: "submitting" });
+    expect(await store.read(scope)).toEqual({ route: "account", state: "submitting" });
     releaseFirst?.();
     await expect(Promise.all([first, second])).resolves.toEqual([
       { transactionHash: "0x456" },
@@ -206,17 +213,19 @@ describe("STRK20 proof maturity", () => {
       runtime.submitAccepted(
         providerWith([]),
         scope,
+        "relay",
         async () => "prepared",
         async () => {
-          expect(await store.read(scope)).toEqual({ state: "submitting" });
+          expect(await store.read(scope)).toEqual(relayClaim);
           throw new Error("worker terminated after broadcast");
         },
+        relaySlots,
       ),
     ).rejects.toThrow("worker terminated after broadcast");
 
-    expect(await store.read(scope)).toEqual({ state: "submitting" });
+    expect(await store.read(scope)).toEqual(relayClaim);
     await expect(runtime.provingBlock(providerWith([30]), scope)).rejects.toThrow(
-      "close every browser window and reopen the browser to recover",
+      "may still be in progress",
     );
   });
 
@@ -228,14 +237,16 @@ describe("STRK20 proof maturity", () => {
       runtime.submitAccepted(
         providerWith([]),
         scope,
+        "relay",
         async () => "prepared",
         async () => {
           throw new IndeterminateRpcWriteError("safe status-unknown message");
         },
+        relaySlots,
       ),
     ).rejects.toThrow("safe status-unknown message");
 
-    expect(await store.read(scope)).toEqual({ state: "submitting" });
+    expect(await store.read(scope)).toEqual(relayClaim);
   });
 
   test("uses the built-in receipt wait when no override is injected", async () => {
@@ -301,6 +312,7 @@ describe("STRK20 proof maturity", () => {
       runtime.submitAccepted(
         providerWith([]),
         scope,
+        "account",
         async () => "prepared",
         async () => {
           throw rejected;
@@ -328,6 +340,7 @@ describe("STRK20 proof maturity", () => {
       runtime.submitAccepted(
         providerWith([]),
         scope,
+        "account",
         async () => "prepared",
         async () => {
           throw Object.assign(new Error("rejected"), {
@@ -361,6 +374,7 @@ describe("STRK20 proof maturity", () => {
       .submitAccepted(
         providerWith([]),
         scope,
+        "relay",
         async () => "prepared",
         async () =>
           submitStrk20PaymasterPlan({
@@ -368,6 +382,7 @@ describe("STRK20 proof maturity", () => {
             call: paymasterCall,
             config: paymasterConfig,
             http,
+            isAuthorized: () => true,
             nowSeconds: 2,
             plan: {
               feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
@@ -375,6 +390,7 @@ describe("STRK20 proof maturity", () => {
             proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
             signTypedData: async () => [],
           }),
+        relaySlots,
       )
       .then(
         () => null,
@@ -389,10 +405,10 @@ describe("STRK20 proof maturity", () => {
     // The relay may have forwarded the transaction, so the guard stays closed
     // and the next private action refuses rather than proving against note
     // state a landed write would have invalidated.
-    expect(await store.read(scope)).toEqual({ state: "submitting" });
+    expect(await store.read(scope)).toEqual(relayClaim);
     await expect(
       createStrk20MaturityRuntime({ store }).provingBlock(providerWith([30]), scope),
-    ).rejects.toThrow("close every browser window and reopen the browser to recover");
+    ).rejects.toThrow("may still be in progress");
   });
 
   test("releases the scope when the relay states its own refusal", async () => {

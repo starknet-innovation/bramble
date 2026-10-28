@@ -82,14 +82,14 @@ export const computeCopyVectors = () => {
         verifyCalls(
           [buildErc20TransferCall(DEFAULT_TOKENS[0]?.address ?? "", MAINNET_ACCOUNT, 1n)],
           {
-            account: { address: MAINNET_ACCOUNT } as never,
+            account: { address: MAINNET_ACCOUNT, networkId: "SN_MAIN" } as never,
             addressBook: [],
             tokens: [],
           },
         ).flags.find((flag) => flag.code === "self-transfer")?.message ?? null,
       poisonedRecipient:
         verifyCalls([buildErc20TransferCall(DEFAULT_TOKENS[0]?.address ?? "", LOOKALIKE, 1n)], {
-          account: { address: MAINNET_ACCOUNT } as never,
+          account: { address: MAINNET_ACCOUNT, networkId: "SN_MAIN" } as never,
           addressBook: [],
           tokens: [],
         }).flags.find((flag) => flag.code === "address-poisoning")?.message ?? null,

@@ -13,14 +13,15 @@ use serde_json::{json, Value};
 use starknet_types_core::felt::Felt;
 
 use crate::account_catalog::catalog;
-use crate::account_store::{VaultPayload, MAX_ACCOUNT_INDEX};
+use crate::account_store::{is_usable_account_index, VaultPayload};
+use crate::kms::Ladder;
 use crate::kms_accounts::family_address;
 use crate::networks::{self, NetworkId};
 use crate::recovery::{candidate, keep, scan_shapes, Found, RecoveryCandidate};
 use crate::rpc::{self, rpc_error, RpcRequest, RpcResponse, MAX_RESPONSE_BYTES};
 use crate::{felt, CoreError};
 
-/// Candidates one scan may accumulate (manual checks add up to six each).
+/// Candidates one scan may accumulate (a manual check adds at most one per scan shape).
 const MAX_CANDIDATES: usize = 512;
 /// JSON-RPC error code for "contract not found".
 const CONTRACT_NOT_FOUND: i64 = 20;
@@ -101,6 +102,23 @@ pub(crate) fn judge_class_hash(body: &str, id: u64) -> Result<bool, CoreError> {
     Err(paused())
 }
 
+/// How many indices the scan must cover given what it has kept (the extension's
+/// `recoveryScanTarget`): at least `defaultCount`, and always `defaultCount` past the highest
+/// index with on-chain evidence, so a ladder of real accounts keeps the search going and a quiet
+/// tail ends it. Creatable defaults extend nothing. Bounded by `maxScannedIndexes`.
+pub(crate) fn scan_target(candidates: &[Found]) -> u32 {
+    let limits = catalog().limits;
+    let reach = candidates
+        .iter()
+        .filter(|found| found.deployed || found.funded)
+        .map(|found| found.account_index.saturating_add(1 + limits.default_count))
+        .max()
+        .unwrap_or(0);
+    reach
+        .max(limits.default_count)
+        .min(limits.max_scanned_indexes)
+}
+
 impl ScanState {
     fn new(fingerprint: Felt, network: NetworkId) -> Self {
         Self {
@@ -120,7 +138,7 @@ impl ScanState {
     }
 
     fn step(&self, requests: Vec<RpcRequest>) -> RecoveryScanStep {
-        let count = catalog().limits.default_count;
+        let count = scan_target(&self.candidates);
         let complete = self.next_index >= count;
         let status = if !requests.is_empty() && self.next_index == 0 {
             "Searching every account type…".to_string()
@@ -149,7 +167,7 @@ pub(crate) fn next(
     network: NetworkId,
     manual_index: Option<u32>,
 ) -> Result<RecoveryScanStep, CoreError> {
-    let fingerprint = payload.public_key(0)?;
+    let fingerprint = payload.public_key(Ladder::Account, 0)?;
     let same =
         matches!(state, Some(scan) if scan.fingerprint == fingerprint && scan.network == network);
     if !same {
@@ -160,19 +178,19 @@ pub(crate) fn next(
     scan.batch = None;
     let limits = catalog().limits;
     let (start, end) = match manual_index {
-        Some(index) if index > MAX_ACCOUNT_INDEX.min(limits.max_index) => {
+        Some(index) if !is_usable_account_index(index) || index > limits.max_index => {
             return Err(CoreError::InvalidInput {
                 reason: "enter a valid non-negative account index".into(),
             })
         }
         Some(index) => (index, index),
-        None if scan.next_index >= limits.default_count => return Ok(scan.step(Vec::new())),
         None => {
+            let target = scan_target(&scan.candidates);
+            if scan.next_index >= target {
+                return Ok(scan.step(Vec::new()));
+            }
             let start = scan.next_index;
-            (
-                start,
-                (start + limits.batch_size - 1).min(limits.default_count - 1),
-            )
+            (start, (start + limits.batch_size - 1).min(target - 1))
         }
     };
     if scan.candidates.len() >= MAX_CANDIDATES {
@@ -181,10 +199,21 @@ pub(crate) fn next(
         });
     }
     let chain = network.chain();
+    let shapes = scan_shapes(payload.mnemonic_passphrase.is_none());
     let mut probes = Vec::new();
-    for account_index in start..=end {
-        let public_key = payload.public_key(account_index)?;
-        for shape in scan_shapes() {
+    // The walk stays far below the reserved index and a manual one is refused above; this only
+    // holds the line if either bound ever moves.
+    for account_index in (start..=end).filter(|index| is_usable_account_index(*index)) {
+        let mut keys: HashMap<Ladder, Felt> = HashMap::new();
+        for shape in &shapes {
+            let public_key = match keys.get(&shape.ladder) {
+                Some(key) => *key,
+                None => {
+                    let key = payload.public_key(shape.ladder, account_index)?;
+                    keys.insert(shape.ladder, key);
+                    key
+                }
+            };
             let placed = family_address(
                 shape.family,
                 shape.class_hash.as_ref(),
@@ -195,6 +224,7 @@ pub(crate) fn next(
             probes.push(Probe {
                 found: Found {
                     family: shape.family,
+                    ladder: shape.ladder,
                     class_hash: placed.class_hash,
                     account_index,
                     address: placed.address,
@@ -340,5 +370,46 @@ mod tests {
         assert!(ok(r#"{"jsonrpc":"2.0","id":4,"result":"0x1"}"#).is_err());
         assert!(ok(r#"{"jsonrpc":"2.0","id":3,"result":"0xZZ"}"#).is_err());
         assert!(ok("not json").is_err());
+    }
+
+    fn at(account_index: u32, deployed: bool, funded: bool) -> Found {
+        Found {
+            family: crate::account_catalog::AccountFamily::OpenZeppelin,
+            ladder: Ladder::Account,
+            class_hash: catalog().open_zeppelin_class,
+            account_index,
+            address: Felt::from(u64::from(account_index) + 1),
+            deployed,
+            funded,
+        }
+    }
+
+    // Mirrors `recoveryScanTarget` in wallet-model/tests/accounts/recovery.test.ts.
+    #[test]
+    fn scan_target_is_the_extensions_gap_limit() {
+        let limits = catalog().limits;
+        assert_eq!(scan_target(&[]), limits.default_count);
+        assert_eq!(
+            scan_target(&[at(19, true, false)]),
+            20 + limits.default_count
+        );
+        assert_eq!(
+            scan_target(&[at(25, false, true)]),
+            26 + limits.default_count
+        );
+        assert_eq!(scan_target(&[at(17, false, false)]), limits.default_count);
+        assert_eq!(
+            scan_target(&[at(5000, true, false)]),
+            limits.max_scanned_indexes
+        );
+    }
+
+    #[test]
+    fn the_reserved_agent_index_is_never_usable() {
+        let reserved = catalog().reserved_agent_index;
+        assert_eq!(reserved, 0x4147_4e54);
+        assert!(!is_usable_account_index(reserved));
+        assert!(is_usable_account_index(reserved - 1));
+        assert!(catalog().limits.max_scanned_indexes < reserved);
     }
 }

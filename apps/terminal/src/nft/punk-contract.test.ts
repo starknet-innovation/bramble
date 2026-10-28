@@ -6,6 +6,7 @@ import {
   buildPunkDeployment,
   buildPunkMintCall,
   buildPunkTransferCall,
+  isFelt,
   parsePunkId,
   punkImageUrl,
   punkMetadataUri,
@@ -71,5 +72,19 @@ describe("Punk contract helpers", () => {
     );
     const contract = readPunkContractClass(JSON.parse(source));
     expect(contract.sierra_program.length).toBeGreaterThan(4_000);
+  });
+
+  test("refuses zero written with leading zeros (Sherlock 167)", () => {
+    for (const zero of ["0x0", "0x00", "0x000", " 0X0000 "]) {
+      expect(isFelt(zero)).toBe(false);
+    }
+    expect(isFelt("0x01")).toBe(true);
+    expect(() => buildPunkDeployment("Punks", "MCP", "0x00", "0x1")).toThrow(
+      "valid non-zero Starknet felts",
+    );
+    expect(() => buildPunkMintCall("0x123", "0x000", 1)).toThrow("valid Starknet addresses");
+    expect(() => buildPunkTransferCall("0x123", "0x1", "0x00", 1)).toThrow(
+      "valid Starknet addresses",
+    );
   });
 });

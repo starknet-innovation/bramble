@@ -252,7 +252,11 @@ describe("session commit shadow", () => {
     expect(await encrypted.read(passphrase)).toEqual({ revision: 1 });
 
     await store.set(vaultKey, legacyEnvelopeShape());
-    await freshness.remove(`${vaultKey}:legacy`);
+    // The marker lives beside the envelope; delete it with the envelope swap so
+    // only the session shadow is left to refuse the downgrade.
+    await store.remove(`${vaultKey}:legacy`);
+    expect(await store.get(`${vaultKey}:legacy`)).toBeUndefined();
+    expect(await freshness.get(`${vaultKey}:legacy`)).toBeUndefined();
 
     await expect(encrypted.read(passphrase)).rejects.toThrow("Encrypted store rollback detected");
   });

@@ -13,6 +13,15 @@
 import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
+ * Stacking layers of the two repaint-surviving Ledger takeovers. The device-sign
+ * prompt sits above the onboarding overlay: when a parked device sign presents
+ * itself during Ledger onboarding, the hash the user compares on the device and
+ * its Cancel control must be the surface on top, whatever order the two mounts
+ * were created in (Sherlock 259).
+ */
+export const LEDGER_OVERLAY_LAYERS = { onboard: 40, sign: 41 } as const;
+
+/**
  * Structured-content stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on one soft surface, split by inset
@@ -27,9 +36,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     display: grid;
     padding: 0 ${SPACE.lg};
   }
+  /* Label on the first line of its value, row centred in its height: see the
+     send receipt facts, which share this grammar. */
   .receipt-row {
-    align-items: center;
+    align-content: center;
+    align-items: baseline;
     display: flex;
+    flex-wrap: wrap;
     gap: ${SPACE.md};
     justify-content: space-between;
     min-height: 44px;
@@ -54,9 +67,11 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     align-items: center;
     color: var(--bramble-text);
     display: flex;
+    flex: 1 1 0;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
     gap: 6px;
+    justify-content: flex-end;
     margin: 0;
     min-width: 0;
     text-align: right;
@@ -71,7 +86,10 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      identifier on a text line at the receipt action's compact size. The
      negative vertical margin keeps a caption or mono line at its own height,
      so a row gains a copy affordance without gaining height. */
-  .icon-button.copy-inline { flex: none; margin: -6px 0; }
+  .icon-button.copy-inline {
+    flex: none;
+    margin: calc((${TYPE.caption.size} * ${TYPE.caption.line} - ${SIZE.pill}) / 2) 0;
+  }
   /* A shortened identifier and its inline copy control on one line, for a
      surface whose own layout stacks its children (a name over its address). */
   .copy-line { align-items: center; display: flex; gap: 2px; max-width: 100%; min-width: 0; }
@@ -86,8 +104,9 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow: hidden;
     padding: 0 ${SPACE.md};
   }
+  /* Caption label and body value share a first baseline, not a top edge. */
   .request-detail > div {
-    align-items: start;
+    align-items: baseline;
     display: grid;
     gap: ${SPACE.md};
     grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
@@ -123,6 +142,9 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     justify-content: flex-end;
   }
   .request-detail dd:has(> .icon-button) > code { min-width: 0; }
+  /* The connect card leads with the account's familiar display name, stacked
+     over the address it shares, right-aligned with the receipt grammar. */
+  .request-detail dd.request-account { display: grid; justify-items: end; }
   .review-calls {
     display: grid;
     gap: ${SPACE.sm};
@@ -143,7 +165,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     gap: 3px;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
-    padding: 3px;
+    padding: ${SPACE.xxs};
   }
   button.seg-option {
     background: transparent;
@@ -237,7 +259,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     text-wrap: nowrap;
   }
   .approval-takeover { gap: ${SPACE.md}; grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
-  .approval-takeover .request-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .approval-takeover .request-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
   .approval-takeover .request-card {
     background: transparent;
     border-radius: 0;
@@ -301,7 +323,8 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-y: auto;
     padding: ${SPACE.lg};
     position: fixed;
-    z-index: 40;
+    scrollbar-gutter: stable;
+    z-index: ${LEDGER_OVERLAY_LAYERS.sign};
   }
   .ledger-sign-overlay[hidden] { display: none; }
 
@@ -318,7 +341,8 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-y: auto;
     padding: ${SPACE.lg};
     position: fixed;
-    z-index: 40;
+    scrollbar-gutter: stable;
+    z-index: ${LEDGER_OVERLAY_LAYERS.onboard};
   }
   .ledger-onboard-overlay[hidden] { display: none; }
   .onboard-hero {

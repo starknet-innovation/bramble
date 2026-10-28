@@ -25,13 +25,14 @@ import {
   isStarknetNetworkId,
   STARKNET_NETWORKS,
 } from "@bramble/wallet-model/networks";
-import type {
-  ApprovalContext,
-  ApprovalRiskFlag,
-  ConnectedSite,
-  DeclarationReview,
-  PendingApproval,
-  WatchAssetToken,
+import {
+  APPROVAL_SUMMARY_MAX_LENGTH,
+  type ApprovalContext,
+  type ApprovalRiskFlag,
+  type ConnectedSite,
+  type DeclarationReview,
+  type PendingApproval,
+  type WatchAssetToken,
 } from "@bramble/wallet-protocol/extension-responses";
 import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
@@ -84,7 +85,7 @@ const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
 
 const isSummaryText = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= 300;
+  typeof value === "string" && value.length > 0 && value.length <= APPROVAL_SUMMARY_MAX_LENGTH;
 
 const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
   isRecord(value) &&
@@ -138,7 +139,18 @@ const isDeclarationReview = (value: unknown): value is DeclarationReview =>
   value["feeEstimateFailed"] === (value["fee"] === null) &&
   isCount(value["sierraProgramLength"]);
 
+// A deploy-first review (undeployed Braavos) is exactly one shape: no fee, no
+// failure, nothing pending, and a deployment required.
+const isDeployFirstReview = (value: Readonly<Record<string, unknown>>): boolean =>
+  value["deployFirst"] === undefined ||
+  (value["deployFirst"] === true &&
+    (value["fee"] ?? null) === null &&
+    value["feeEstimateFailed"] !== true &&
+    value["feeEstimatePending"] !== true &&
+    value["requiresDeployment"] === true);
+
 const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
+  isDeployFirstReview(value) &&
   (value["fee"] === undefined || value["fee"] === null || isFee(value["fee"])) &&
   (value["feeAffordability"] === undefined ||
     value["feeAffordability"] === "insufficient" ||
@@ -163,10 +175,12 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, [
       "actionReviews",
+      "alreadyTracked",
       "blocked",
       "callReviews",
       "context",
       "declaration",
+      "deployFirst",
       "existingGrant",
       "fee",
       "feeAffordability",
@@ -176,6 +190,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "id",
       "insights",
       "kind",
+      "notice",
       "origin",
       "relayFeeAction",
       "reviewAssets",
@@ -199,7 +214,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value["kind"] !== "strk20-invoke" &&
       value["kind"] !== "strk20-prepare" &&
       value["kind"] !== "strk20-register" &&
-      value["kind"] !== "strk20-subaccount" &&
+      value["kind"] !== "strk20-shadow-account" &&
+      value["kind"] !== "strk20-unavailable" &&
       value["kind"] !== "switch-chain" &&
       value["kind"] !== "watch-asset") ||
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
@@ -230,8 +246,9 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   }
   const tokenValid =
     value["kind"] === "watch-asset"
-      ? isWatchAssetToken(value["token"])
-      : value["token"] === undefined;
+      ? isWatchAssetToken(value["token"]) &&
+        (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
+      : value["token"] === undefined && value["alreadyTracked"] === undefined;
   // The fee review travels only on invoke prompts and must be internally
   // consistent, mirroring `resolveReviewFee`: an undeployed account has no
   // estimate and no failure; a failed estimate carries no amount. Inconsistent
@@ -239,7 +256,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const feeValid =
     value["kind"] === "invoke"
       ? isInvokeFeeReview(value)
-      : value["fee"] === undefined &&
+      : value["deployFirst"] === undefined &&
+        value["fee"] === undefined &&
         value["feeAffordability"] === undefined &&
         value["feeEstimateFailed"] === undefined &&
         value["feeEstimatePending"] === undefined &&
@@ -252,7 +270,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "strk20-invoke" ||
     value["kind"] === "strk20-prepare" ||
     value["kind"] === "strk20-register" ||
-    value["kind"] === "strk20-subaccount";
+    value["kind"] === "strk20-shadow-account";
   const declarationValid =
     value["kind"] === "declare"
       ? isDeclarationReview(value["declaration"])
@@ -266,8 +284,13 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const relayFeeValid =
     relayFeeAction === undefined ||
     (value["kind"] === "strk20-invoke" && relayFeeAction?.type === "withdraw");
+  const noticeValid =
+    value["notice"] === undefined ||
+    (value["kind"] === "strk20-unavailable" &&
+      (value["notice"] === "record-limit" || value["notice"] === "request-failed"));
   return (
     actionReviewValid &&
+    noticeValid &&
     relayFeeValid &&
     tokenValid &&
     feeValid &&

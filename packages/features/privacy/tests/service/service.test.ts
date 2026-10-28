@@ -66,7 +66,7 @@ const service = (over: Partial<Strk20Service> = {}): Strk20Service => ({
   async quoteActions() {
     return plan;
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x7";
   },
   async submitActions() {
@@ -305,8 +305,8 @@ describe("STRK20 wallet policy", () => {
       }),
     ).rejects.toThrow(STRK20_PRIVACY_LEAK);
     expect(relayQuotes).toBe(0);
-    expect(summarizeStrk20Plan({ mode: "account", poolFeeFri: "0x1" })).toContain(
-      "Public account pool fee 0x1",
+    expect(summarizeStrk20Plan({ mode: "account", poolFeeFri: "0x53444835ec580000" })).toContain(
+      "Public account pool fee 6 STRK",
     );
   });
 
@@ -403,7 +403,7 @@ describe("STRK20 wallet policy", () => {
       unavailableStrk20Service.register?.({ ...context, poolFeeFri: "0x1" }),
     ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
     await expect(
-      unavailableStrk20Service.subaccountCommitment({ ...context, dappName: "test" }),
+      unavailableStrk20Service.shadowAccountCommitment({ ...context, dappName: "test" }),
     ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
     await expect(
       unavailableStrk20Service.submitActions({ ...context, actions: [], plan }),
@@ -424,7 +424,7 @@ describe("STRK20 wallet policy", () => {
         collect_policy: { type: "all" },
         dapp_name: "terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toContain("terminal");
     expect(

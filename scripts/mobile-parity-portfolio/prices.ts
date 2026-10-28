@@ -196,7 +196,12 @@ export const fiatBlock = () => {
         "usd",
       );
       return {
-        badge: firstMatch(html, /<span class="token-change [a-z]+">([^<]*)<\/span>/),
+        // The badge's whole text, its quiet window tag included (`<span>` nested inside).
+        badge:
+          firstMatch(html, /<span class="token-change [a-z]+">(.*?)<\/span><\/span>/)?.replace(
+            /<[^>]*>/g,
+            "",
+          ) ?? firstMatch(html, /<span class="token-change [a-z]+">([^<]*)<\/span>/),
         change: change ?? null,
         price: price ?? null,
         up: html.includes('class="token-change up"'),
@@ -393,6 +398,29 @@ export const pricesBlock = async () => {
         currency: "usd",
         networkId: "SN_MAIN",
         now: t0 + 1_070_000,
+      },
+    ]),
+    // b78b0507: once the feed answers an address without a usable price ({} or one currency), its
+    // cached price and change are dropped rather than freshened by the new refresh time.
+    dropped: await runPriceTimeline([
+      { addresses: [STRK, ETH], answers: fresh, currency: "usd", networkId: "SN_MAIN", now: t0 },
+      {
+        addresses: [STRK, ETH],
+        answers: {
+          [STRK]: { body: "{}", status: 200 },
+          [ETH]: { body: body(ETH, '{"usd":2600}'), status: 200 },
+        },
+        currency: "usd",
+        networkId: "SN_MAIN",
+        now: t0 + 400_000,
+      },
+      {
+        addresses: [STRK, ETH],
+        answers: {},
+        cached: true,
+        currency: "usd",
+        networkId: "SN_MAIN",
+        now: t0 + 401_000,
       },
     ]),
     checked: await runPriceTimeline([

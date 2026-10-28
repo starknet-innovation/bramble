@@ -1,9 +1,19 @@
 /** Cached fiat prices and charts with bounded, last-known-good storage. */
 import type { BoundedHttpFetch, BoundedHttpResponse } from "@bramble/core/http-json";
-import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { DisplayCurrency } from "@bramble/wallet-model/preferences";
+import {
+  cacheCovers,
+  isPriceCache,
+  mergeAnsweredPrices,
+  oldestRefresh,
+  PRICE_RETRY_BACKOFF_MS,
+  type PriceCache,
+  pricesFresh,
+  recentPriceAttempt,
+} from "./prices-cache";
 import {
   fetchAddressPrices,
   fetchChartPoints,
@@ -11,7 +21,6 @@ import {
   normalizePriceAddress,
   PRICE_CHART_POINT_LIMIT,
   type PriceEntry,
-  type PriceOutcome,
   priceFeedPlatform,
 } from "./prices-feed";
 
@@ -25,8 +34,6 @@ const PRICES_STORE_KEY = "bramble:prices";
  */
 export const CHARTS_STORE_KEY = "bramble:charts";
 
-const PRICE_TTL_MS = 5 * 60 * 1000;
-const PRICE_RETRY_BACKOFF_MS = 60_000;
 const CHART_TTL_MS = 30 * 60 * 1000;
 const MAX_ADDRESSES = 50;
 const MAX_CHART_ENTRIES = 50;
@@ -96,21 +103,12 @@ export type PriceService = {
   readonly getTokenChart: (input: TokenChartInput) => Promise<TokenChart>;
 };
 
-type PriceCache = {
-  readonly attempted?: Readonly<Record<string, number>>;
-  readonly changes?: Readonly<Record<string, number>>;
-  readonly checked?: readonly string[];
-  readonly fetchedAt: number;
-  readonly prices: Readonly<Record<string, PriceEntry>>;
-};
 type ChartEntry = {
   readonly attemptedAt?: number;
   readonly fetchedAt: number;
   readonly points: readonly number[];
 };
 type ChartCache = Readonly<Record<string, ChartEntry>>;
-
-const CURRENCIES: readonly DisplayCurrency[] = ["eur", "gbp", "usd"];
 
 const parseChartEntry = (value: unknown): ChartEntry | null => {
   if (
@@ -127,20 +125,6 @@ const parseChartEntry = (value: unknown): ChartEntry | null => {
     points: value["points"].filter(isFinitePriceNumber).slice(0, PRICE_CHART_POINT_LIMIT),
   };
 };
-
-const recentPriceAttempt = (
-  cache: PriceCache,
-  wanted: readonly string[],
-  currentTime: number,
-): boolean =>
-  wanted.every((address) => {
-    const attemptedAt = cache.attempted?.[address];
-    return (
-      attemptedAt !== undefined &&
-      attemptedAt <= currentTime &&
-      currentTime - attemptedAt < PRICE_RETRY_BACKOFF_MS
-    );
-  });
 
 const reusablePrices = (input: {
   readonly addresses: readonly string[];
@@ -164,17 +148,17 @@ const reusablePrices = (input: {
   if (cachedOnly) {
     return projectPrices({
       addresses,
-      asOf: snapshotAsOf(cache.fetchedAt),
+      asOf: oldestRefresh(cache, wanted),
       changes: cache.changes ?? {},
       currency,
       prices: cache.prices,
-      stale: !isCacheFresh(cache, currentTime),
+      stale: !pricesFresh(cache, wanted, currentTime),
     });
   }
-  if (isCacheFresh(cache, currentTime) && cacheCovers(cache, wanted)) {
+  if (pricesFresh(cache, wanted, currentTime) && cacheCovers(cache, wanted)) {
     return projectPrices({
       addresses,
-      asOf: snapshotAsOf(cache.fetchedAt),
+      asOf: oldestRefresh(cache, wanted),
       changes: cache.changes ?? {},
       currency,
       prices: cache.prices,
@@ -184,7 +168,7 @@ const reusablePrices = (input: {
   if (!recentPriceAttempt(cache, wanted, currentTime)) return null;
   return projectPrices({
     addresses,
-    asOf: snapshotAsOf(cache.fetchedAt),
+    asOf: oldestRefresh(cache, wanted),
     changes: cache.changes ?? {},
     currency,
     prices: cache.prices,
@@ -197,7 +181,8 @@ const cachedChartPoints = (
   cached: ChartEntry | undefined,
   currentTime: number,
 ): readonly number[] | null => {
-  if (!platform) return cached?.points ?? [];
+  // As with prices: the chart cache only ever holds mainnet charts.
+  if (!platform) return [];
   if (cached && cached.fetchedAt > 0 && currentTime - cached.fetchedAt < CHART_TTL_MS) {
     return cached.points;
   }
@@ -210,28 +195,6 @@ const cachedChartPoints = (
   }
   return null;
 };
-
-const snapshotAsOf = (fetchedAt: number): number | null => (fetchedAt > 0 ? fetchedAt : null);
-
-const isPriceEntry = (value: unknown): value is PriceEntry =>
-  isRecord(value) && CURRENCIES.every((currency) => isFinitePriceNumber(value[currency]));
-
-const isCheckedList = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) && value.every((entry) => typeof entry === "string");
-
-const isTimestampMap = (value: unknown): value is Readonly<Record<string, number>> =>
-  isRecord(value) && Object.values(value).every(isFinitePriceNumber);
-
-const isPriceCache = (value: unknown): value is PriceCache =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["attempted", "changes", "checked", "fetchedAt", "prices"]) &&
-  isFinitePriceNumber(value["fetchedAt"]) &&
-  (value["attempted"] === undefined || isTimestampMap(value["attempted"])) &&
-  (value["checked"] === undefined || isCheckedList(value["checked"])) &&
-  (value["changes"] === undefined ||
-    (isRecord(value["changes"]) && Object.values(value["changes"]).every(isFinitePriceNumber))) &&
-  isRecord(value["prices"]) &&
-  Object.values(value["prices"]).every(isPriceEntry);
 
 const sliceCurrency = (
   prices: Readonly<Record<string, PriceEntry>>,
@@ -260,39 +223,6 @@ const sliceChanges = (
     }
   }
   return slice;
-};
-
-const isCacheFresh = (cache: PriceCache, nowMs: number): boolean =>
-  nowMs - cache.fetchedAt < PRICE_TTL_MS;
-
-const cacheCovers = (cache: PriceCache, wanted: readonly string[]): boolean => {
-  const known = new Set([...Object.keys(cache.prices), ...(cache.checked ?? [])]);
-  return wanted.every((address) => known.has(address));
-};
-
-const mergeAnsweredPrices = (
-  cache: PriceCache,
-  answered: readonly PriceOutcome[],
-): {
-  readonly checked: readonly string[];
-  readonly mergedChanges: Record<string, number>;
-  readonly mergedPrices: Record<string, PriceEntry>;
-} => {
-  const fetched = Object.assign(
-    {},
-    ...answered.map((outcome) => (outcome.ok ? outcome.prices : {})),
-  ) as Record<string, PriceEntry>;
-  const fetchedChanges = Object.assign(
-    {},
-    ...answered.map((outcome) => (outcome.ok ? outcome.changes : {})),
-  ) as Record<string, number>;
-  return {
-    checked: [
-      ...new Set([...(cache.checked ?? []), ...answered.map((outcome) => outcome.address)]),
-    ],
-    mergedChanges: { ...(cache.changes ?? {}), ...fetchedChanges },
-    mergedPrices: { ...cache.prices, ...fetched },
-  };
 };
 
 const projectPrices = (input: {
@@ -373,43 +303,28 @@ export const createPriceService = ({
       await store.set(PRICES_STORE_KEY, { ...cache, attempted }).catch(() => undefined);
       return projectPrices({
         addresses,
-        asOf: snapshotAsOf(cache.fetchedAt),
+        asOf: oldestRefresh(cache, wanted),
         changes: cache.changes ?? {},
         currency,
         prices: cache.prices,
         stale: true,
       });
     }
-    const { checked, mergedChanges, mergedPrices } = mergeAnsweredPrices(cache, answered);
-    const answeredAddresses = new Set(answered.map((outcome) => outcome.address));
-    await store
-      .set(PRICES_STORE_KEY, {
-        attempted,
-        changes: mergedChanges,
-        checked,
-        fetchedAt: attemptedAt,
-        prices: mergedPrices,
-      })
-      .catch(() => undefined);
-    const unanswered = wanted.filter((address) => !answeredAddresses.has(address));
-    if (unanswered.length === 0) {
-      return projectPrices({
-        addresses,
-        asOf: attemptedAt,
-        changes: mergedChanges,
-        currency,
-        prices: mergedPrices,
-        stale: false,
-      });
-    }
-    const servesCachedPrice = unanswered.some((address) => mergedPrices[address] !== undefined);
+    const merged: PriceCache = {
+      ...mergeAnsweredPrices(cache, answered, attemptedAt),
+      attempted,
+      fetchedAt: attemptedAt,
+    };
+    await store.set(PRICES_STORE_KEY, merged).catch(() => undefined);
+    // Each address carries its own age, so a leg that failed this round keeps
+    // the old capture time and marks the whole answer stale.
     return projectPrices({
       addresses,
-      asOf: servesCachedPrice ? snapshotAsOf(cache.fetchedAt) : attemptedAt,
-      changes: mergedChanges,
+      asOf: oldestRefresh(merged, wanted),
+      changes: merged.changes ?? {},
       currency,
-      prices: mergedPrices,
-      stale: true,
+      prices: merged.prices,
+      stale: !pricesFresh(merged, wanted, attemptedAt),
     });
   };
 
@@ -417,18 +332,22 @@ export const createPriceService = ({
     async getPrices({ addresses, cached, currency, networkId }) {
       const platform = priceFeedPlatform(networkId);
       const wanted = [...new Set(addresses.map(normalizePriceAddress))].slice(0, MAX_ADDRESSES);
-      const cache = await readPriceCache();
-      const currentTime = now();
+      // No fiat by design on this network. The cache only ever holds mainnet
+      // prices, and ETH and STRK share their contract addresses across
+      // networks, so serving it here priced test tokens at live mainnet
+      // rates, reported as fresh (Sherlock 185).
       if (!platform) {
         return projectPrices({
           addresses,
           asOf: null,
-          changes: cache.changes ?? {},
+          changes: {},
           currency,
-          prices: cache.prices,
+          prices: {},
           stale: false,
         });
       }
+      const cache = await readPriceCache();
+      const currentTime = now();
       const reusable = reusablePrices({
         addresses,
         cache,

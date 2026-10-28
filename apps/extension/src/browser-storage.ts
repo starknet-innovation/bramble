@@ -2,7 +2,12 @@
  * Browser extension storage adapter kept behind the generic key-value boundary.
  */
 import type { Json } from "@bramble/core/json";
-import { assertJsonValue, assertStorageKey, type KeyValueStore } from "@bramble/store/kv";
+import {
+  assertJsonValue,
+  assertStorageKey,
+  type KeyValueStore,
+  storageBudgetFor,
+} from "@bramble/store/kv";
 import { resolveExtensionApi } from "./extension-api";
 
 type StorageArea = {
@@ -38,7 +43,7 @@ const createAreaStore = (storage: StorageArea): KeyValueStore => ({
   },
   async set(key, value) {
     assertStorageKey(key);
-    assertJsonValue(value);
+    assertJsonValue(value, storageBudgetFor(key));
     await storage.set({ [key]: value });
   },
 });

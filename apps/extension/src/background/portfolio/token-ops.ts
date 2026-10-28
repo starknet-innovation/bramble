@@ -5,7 +5,8 @@
  * extension-page messages.
  */
 
-import { isTokenName, isTokenSymbol } from "@bramble/core/json";
+import { isTokenName, isTokenSymbol, normalizeTokenSymbol } from "@bramble/core/json";
+import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import type { PriceService } from "@bramble/portfolio/prices";
 import { isLikelySpam, knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import type { TokenConfig, WalletPreferencesStore } from "@bramble/settings/preferences";
@@ -22,7 +23,12 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
-import { readAddTokenInput, readSetTokenHiddenInput, readTokenChartInput } from "./token-inputs";
+import {
+  readAddTokenInput,
+  readRemoveTokenInput,
+  readSetTokenHiddenInput,
+  readTokenChartInput,
+} from "./token-inputs";
 
 /**
  * Dependencies shared by the token operation handlers.
@@ -53,9 +59,7 @@ const fetchTokenMetadata = async (
     return await runtimeRpc.getTokenMetadata({ address, rpcUrls });
   } catch (error) {
     return {
-      error: isTransportRpcError(error)
-        ? "Couldn't reach the network, try again"
-        : "could not read token metadata",
+      error: isTransportRpcError(error) ? NETWORK_RETRY_MESSAGE : "could not read token metadata",
     };
   }
 };
@@ -63,14 +67,15 @@ const fetchTokenMetadata = async (
 /**
  * Parses ERC20 metadata into a storable token record, or null when the symbol
  * is unsupported. Parse-don't-validate: a caller with a record has a token
- * whose symbol already passed the on-chain symbol grammar.
+ * whose symbol already passed the on-chain symbol grammar. Shared by the manual
+ * Add and the curated held-token scan, so both apply one grammar.
  */
-const buildTokenRecord = (
+export const buildTokenRecord = (
   address: string,
   networkId: StarknetNetworkId,
   metadata: TokenMetadata,
 ): TokenRecord | null => {
-  const symbol = metadata.symbol.trim().toUpperCase();
+  const symbol = normalizeTokenSymbol(metadata.symbol);
   if (!isTokenSymbol(symbol)) {
     return null;
   }
@@ -98,6 +103,16 @@ const handleAddToken: TokenHandler = async (deps, message) => {
   }
   const preferences = await preferencesStore.read();
   const network = STARKNET_NETWORKS[preferences.activeNetworkId];
+  // An address already tracked stays one record, whatever symbol the contract
+  // reports now; re-adding it is a no-op rather than a second balance row. A
+  // record a dapp supplied (audit 171) goes on, so the store replaces it with
+  // the chain's metadata and the user's add is what makes it trusted.
+  const tracked = preferences.tokens.find(
+    (token) => token.networkId === network.id && sameFelt(token.address, input.address),
+  );
+  if (tracked && !(preferences.dappTokenIds ?? []).includes(tracked.id)) {
+    return { ok: true, preferences };
+  }
   const metadata = await fetchTokenMetadata(
     runtimeRpc,
     input.address,
@@ -110,7 +125,7 @@ const handleAddToken: TokenHandler = async (deps, message) => {
   if (!record) {
     return { error: "unsupported token symbol" };
   }
-  const preferencesWithToken = await preferencesStore.upsertToken(record);
+  const preferencesWithToken = await preferencesStore.upsertToken(record, "user");
   // Run the full spam heuristics (not just the symbol regex) so a spoofed or
   // malformed token is still added but hidden by default rather than
   // presented as trusted; the user can always reveal it later.
@@ -158,9 +173,7 @@ const handleDetectTokens: TokenHandler = async (deps, message) => {
     return { ok: true, suggestions: balances.filter((balance) => balance.balance !== "0") };
   } catch (error) {
     return {
-      error: isTransportRpcError(error)
-        ? "Couldn't reach the network, try again"
-        : "Token scan failed, try again",
+      error: isTransportRpcError(error) ? NETWORK_RETRY_MESSAGE : "Token scan failed, try again",
     };
   }
 };
@@ -171,6 +184,16 @@ const handleSetTokenHidden: TokenHandler = async (deps, message) => {
     return { error: "invalid token visibility request" };
   }
   return { ok: true, preferences: await deps.preferencesStore.setTokenHidden(input) };
+};
+
+// Recovery for a token a dapp added (Sherlock audit 134). The store refuses built-in
+// defaults and unknown ids; the router reports that refusal to the page.
+const handleRemoveToken: TokenHandler = async (deps, message) => {
+  const input = readRemoveTokenInput(message);
+  if (!input) {
+    return { error: "invalid remove token request" };
+  }
+  return { ok: true, preferences: await deps.preferencesStore.removeToken(input) };
 };
 
 const handlePrices: TokenHandler = async (deps, message) => {
@@ -221,6 +244,7 @@ const TOKEN_HANDLERS: Readonly<Record<string, TokenHandler>> = {
   "wallet.addToken": handleAddToken,
   "wallet.detectTokens": handleDetectTokens,
   "wallet.prices": handlePrices,
+  "wallet.removeToken": handleRemoveToken,
   "wallet.setTokenHidden": handleSetTokenHidden,
   "wallet.tokenChart": handleTokenChart,
 };

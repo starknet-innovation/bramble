@@ -114,7 +114,16 @@ pub fn selection(family: AccountFamily, index: u32, class_hash: Option<&str>) ->
     RecoverySelection {
         family,
         account_index: index,
+        ladder: None,
         class_hash: class_hash.map(str::to_string),
+    }
+}
+
+/// A selection on this wallet's own ladder, where every family shares the index's key.
+pub fn own(family: AccountFamily, index: u32, class_hash: Option<&str>) -> RecoverySelection {
+    RecoverySelection {
+        ladder: Some(bramble_core::Ladder::Account),
+        ..selection(family, index, class_hash)
     }
 }
 

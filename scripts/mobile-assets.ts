@@ -12,6 +12,8 @@ import { readFile } from "node:fs/promises";
 import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { BRAMBLE_MARK_PATH, BRAMBLE_MARK_VIEW_BOX } from "@bramble/ui-kit/brand-mark";
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+// Not a package export: read here only to pin the mobile meter to the extension's word list.
+import { COMMON_WORDS } from "../packages/foundation/wallet-model/src/preferences/guessable";
 import { SIDEPANEL_STYLES } from "../packages/presentation/wallet-ui/src/sidepanel/styles/index";
 import { ACCOUNTS_JSON_PATH, renderAccountsCatalog } from "./mobile-assets/accounts";
 import { renderAndroidTokenLogos } from "./mobile-assets/android-token-logos";
@@ -47,6 +49,8 @@ export const SWIFT_COPY_PATH = "mobile/ios/Bramble/DesignSystem/BrambleCopy.gene
 /** Repository-relative path of the Android security copy table. */
 export const KOTLIN_COPY_PATH =
   "mobile/android/app/src/main/java/org/bramble/wallet/design/BrambleCopy.generated.kt";
+/** Repository-relative path of the meter's common-password words the Rust core embeds. */
+export const COMMON_PASSWORDS_PATH = "mobile/core/generated/common-passwords.txt";
 /** Repository-relative path of the token registry and bundled-logo set the Rust core embeds. */
 export const TOKEN_REGISTRY_JSON_PATH = "mobile/core/generated/token-registry.json";
 
@@ -161,6 +165,7 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [MULTISIG_JSON_PATH, renderMultisigConstants()],
     [TOKEN_REGISTRY_JSON_PATH, renderTokenRegistry()],
     [PRIVACY_JSON_PATH, renderPrivacyRouting()],
+    [COMMON_PASSWORDS_PATH, `${COMMON_WORDS}\n`],
     [`${IOS_MARK_DIR}/mark.svg`, renderMarkSvg()],
     [`${IOS_MARK_DIR}/Contents.json`, renderMarkContents()],
     [ANDROID_MARK_PATH, renderMarkDrawable()],

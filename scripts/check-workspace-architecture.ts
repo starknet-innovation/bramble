@@ -87,6 +87,8 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   "@bramble/testkit": ["@bramble/settings", "@bramble/wallet-model"],
   "@bramble/transactions": [
     "@bramble/core",
+    // Token spam heuristic: the risk engine must not trust a spoofed ticker (audit 171).
+    "@bramble/portfolio",
     "@bramble/starknet",
     "@bramble/store",
     "@bramble/wallet-model",

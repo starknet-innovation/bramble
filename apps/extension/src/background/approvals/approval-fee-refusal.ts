@@ -1,6 +1,7 @@
 /** Fee-echo validation performed before an approval is consumed. */
 
 import { type FeeEstimate, sameFeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import type { PendingApproval } from "./approvals";
@@ -39,6 +40,8 @@ export const pendingFeeRefusal = (
 ): RuntimeResponse | null => {
   if (pending?.kind === "declare") return pendingDeclareFeeRefusal(pending, reviewedFee);
   if (pending?.kind !== "invoke") return null;
+  // No fee can bind it: the account deploys only through its own step.
+  if (pending.deployFirst === true) return { error: UNDEPLOYED_BRAAVOS_REFUSAL };
   if (
     !reviewedFee ||
     !pending.fee ||

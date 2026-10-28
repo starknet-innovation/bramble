@@ -12,7 +12,13 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { RpcProvider, type RpcProviderOptions } from "starknet";
-import { RpcRefusedError, RpcTransportError, timedRpcFetch } from "./rpc-transport";
+import { preserveRpcRefusals } from "./rpc-refusal-boundary";
+import {
+  BROADCAST_RPC_METHODS,
+  RpcRefusedError,
+  RpcTransportError,
+  timedRpcFetch,
+} from "./rpc-transport";
 
 export {
   type AccountHashSigner,
@@ -154,19 +160,24 @@ export const matchingAcceptedRpcWriteHash = (value: unknown, signedHash: unknown
  *
  * Every provider also gets {@link timedRpcFetch} by default, so no wallet RPC
  * call can park behind starknet.js's unbounded transport. A caller that needs a
- * tighter deadline passes its own `baseFetch` and overrides it.
+ * tighter deadline passes its own `baseFetch` and overrides it. Its channel
+ * keeps the transport's typed {@link RpcRefusedError} through starknet.js's
+ * error rewrap ({@link preserveRpcRefusals}), so a refused broadcast stays a
+ * refusal and a refused read keeps its `Retry-After`.
  */
 export const createRpcProvider = (
   nodeUrl: string,
   options: Omit<RpcProviderOptions, "nodeUrl" | "specVersion"> = {},
   makeProvider: RpcProviderFactory = createStarknetProvider,
 ): RpcProvider =>
-  makeProvider({
-    baseFetch: timedRpcFetch(),
-    ...options,
-    nodeUrl,
-    specVersion: STARKNET_RPC_SPEC_VERSION,
-  });
+  preserveRpcRefusals(
+    makeProvider({
+      baseFetch: timedRpcFetch(),
+      ...options,
+      nodeUrl,
+      specVersion: STARKNET_RPC_SPEC_VERSION,
+    }),
+  );
 
 /**
  * Checks whether an RPC failure is transport-level (node unreachable or
@@ -193,11 +204,6 @@ export const isTransportRpcError = (error: unknown): boolean => {
   return !(isRecord(baseError) && typeof baseError["code"] === "number");
 };
 
-const BROADCAST_RPC_METHODS = new Set([
-  "starknet_addDeclareTransaction",
-  "starknet_addDeployAccountTransaction",
-  "starknet_addInvokeTransaction",
-]);
 const PREPARATION_UNAVAILABLE =
   "Transaction could not be prepared. Check your connection or RPC endpoint.";
 

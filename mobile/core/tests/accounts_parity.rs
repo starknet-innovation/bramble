@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use bramble_core::testing::recovery_candidate;
 use bramble_core::{
-    account_display_name, account_label, is_account_label, AccountFamily, NetworkId,
+    account_display_name, account_label, is_account_label, AccountFamily, Ladder, NetworkId,
     RecoverySelection,
 };
 use serde_json::Value;
@@ -29,6 +29,20 @@ fn family(value: &Value) -> AccountFamily {
         "argent" => AccountFamily::Argent,
         "braavos" => AccountFamily::Braavos,
         other => panic!("unexpected family {other}"),
+    }
+}
+
+/// The ladder a vector was derived on: the extension's kind, with Braavos's `starknet-bip44`
+/// always on Braavos's address axis (`bip44Axes`).
+fn ladder(vector: &Value) -> Ladder {
+    match (
+        vector["derivation"].as_str().unwrap(),
+        vector["accountContractType"].as_str().unwrap(),
+    ) {
+        ("argentx-bip44", "argent") => Ladder::ArgentX,
+        ("starknet-bip44", "braavos") => Ladder::Address,
+        ("starknet-bip44", _) => Ladder::Account,
+        other => panic!("unexpected derivation {other:?}"),
     }
 }
 
@@ -70,6 +84,7 @@ fn every_family_and_class_derives_the_extensions_address() {
             .map(|vector| RecoverySelection {
                 family: family(&vector["accountContractType"]),
                 account_index: u32::try_from(vector["accountIndex"].as_u64().unwrap()).unwrap(),
+                ladder: Some(ladder(vector)),
                 class_hash: vector["requestedClassHash"].as_str().map(str::to_string),
             })
             .collect();
@@ -159,6 +174,7 @@ fn discovery_rows_are_worded_like_the_extension() {
     for case in vectors {
         let row = recovery_candidate(
             family(&case["accountContractType"]),
+            ladder(case),
             case["classHash"].as_str().unwrap(),
             u32::try_from(case["accountIndex"].as_u64().unwrap()).unwrap(),
             "0x1",

@@ -35,6 +35,7 @@ import {
   isApprovalSurfacePreference,
   isDisplayCurrency,
   isExplorerFallback,
+  isHiddenAccountIds,
   isHiddenTokens,
   isRpcOverrides,
   isThemeChoice,
@@ -45,6 +46,9 @@ import {
   withTokenId,
 } from "@bramble/wallet-model/preferences";
 import { type AccountGroups, isAccountGroups } from "./groups";
+import { compactStoredCustomNetworks } from "./preferences-custom-networks";
+import { withCanonicalEndpoints } from "./preferences-endpoints";
+import { dropRetiredStrk20RoutingKeys } from "./preferences-strk20-routing";
 import type { WalletPreferences } from "./preferences-types";
 
 const PREFERENCE_KEYS: readonly string[] = [
@@ -53,15 +57,18 @@ const PREFERENCE_KEYS: readonly string[] = [
   "approvalSurface",
   "addressBook",
   "customNetworks",
+  "dappTokenIds",
   "displayCurrency",
   "explorerApiUrls",
   "explorerFallback",
   "groups",
+  "hiddenAccountIds",
   "hiddenTokens",
   "nftIndexerUrl",
   "nfts",
   "nostrRelayUrl",
   "productAnalytics",
+  "removedTokens",
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
@@ -77,18 +84,27 @@ const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
   (Array.isArray(value["customNetworks"]) &&
     value["customNetworks"].every(isCustomNetwork) &&
     hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
-const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
+// Optional entries keyed by account or token ids: names, folder membership,
+// hidden accounts, the hidden-token list and the dapp-added token ids.
+const hasValidIdKeyedEntries = (value: Record<string, unknown>): boolean =>
   (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
+  (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
+  (value["hiddenAccountIds"] === undefined || isHiddenAccountIds(value["hiddenAccountIds"])) &&
+  (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
+  (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"])) &&
+  (value["removedTokens"] === undefined || isHiddenTokens(value["removedTokens"]));
+// Optional display and routing preferences written from the settings screens.
+const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["approvalSurface"] === undefined ||
     isApprovalSurfacePreference(value["approvalSurface"])) &&
   (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
   (value["explorerApiUrls"] === undefined || isRpcOverrides(value["explorerApiUrls"])) &&
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
-  (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
-  (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
+const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
+  hasValidIdKeyedEntries(value) && hasValidDisplayEntries(value);
 const hasValidTelemetryEntries = (value: Record<string, unknown>): boolean =>
   (value["productAnalytics"] === undefined || typeof value["productAnalytics"] === "boolean") &&
   (value["reliabilityDiagnostics"] === undefined ||
@@ -219,16 +235,17 @@ const rebuildCollection = (
   return { entries, renames };
 };
 
-// Only rewritten when the stored field is actually a list; an absent
-// hiddenTokens must stay absent rather than becoming an explicit `undefined`
-// the JSON guard would then reject.
-const remapHiddenTokens = (
+// Only rewritten when the stored field is actually a list; an absent token-id
+// list (hiddenTokens, dappTokenIds) must stay absent rather than becoming an
+// explicit `undefined` the JSON guard would then reject.
+const remapTokenIds = (
+  key: "dappTokenIds" | "hiddenTokens",
   value: unknown,
   renames: ReadonlyMap<string, string>,
-): { readonly hiddenTokens: readonly unknown[] } | Record<string, never> =>
+): Readonly<Record<string, readonly unknown[]>> =>
   Array.isArray(value)
     ? {
-        hiddenTokens: [
+        [key]: [
           ...new Set(
             (value as readonly unknown[]).map((id) =>
               typeof id === "string" ? (renames.get(id) ?? id) : id,
@@ -270,12 +287,50 @@ const normalizedAccountGroups = (value: unknown): unknown =>
       )
     : value;
 
+// Token, contact, account-alias, custom-network and STRK20-routing repairs.
+const normalizedEntries = (
+  value: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> => {
+  const tokens = rebuildCollection(value["tokens"], rebuiltToken);
+  const addressBook = rebuildCollection(value["addressBook"], rebuiltContact);
+  const hasAccountAliases = value["accountLabels"] !== undefined || value["groups"] !== undefined;
+  const customNetworks = compactStoredCustomNetworks(value["customNetworks"]);
+  const networksChanged = customNetworks !== value["customNetworks"];
+  const strk20Networks = dropRetiredStrk20RoutingKeys(value["strk20Networks"]);
+  const routingChanged = strk20Networks !== value["strk20Networks"];
+  if (!tokens && !addressBook && !hasAccountAliases && !networksChanged && !routingChanged) {
+    return value;
+  }
+  return {
+    ...value,
+    ...(networksChanged ? { customNetworks } : {}),
+    ...(routingChanged ? { strk20Networks } : {}),
+    ...(value["accountLabels"] === undefined
+      ? {}
+      : { accountLabels: normalizedAccountLabels(value["accountLabels"]) }),
+    ...(value["groups"] === undefined ? {} : { groups: normalizedAccountGroups(value["groups"]) }),
+    ...(addressBook ? { addressBook: addressBook.entries } : {}),
+    ...(tokens
+      ? {
+          ...remapTokenIds("hiddenTokens", value["hiddenTokens"], tokens.renames),
+          ...remapTokenIds("dappTokenIds", value["dappTokenIds"], tokens.renames),
+          tokens: tokens.entries,
+        }
+      : {}),
+  };
+};
+
 /**
  * Brings a stored preferences record to the current entry shape without any
  * user action: token and contact addresses are canonicalized, ids re-derived
  * from them, and records that name the same address on the same network are
- * collapsed to one — carrying hidden-token ids across the rename so a token
- * hidden before the collapse stays hidden.
+ * collapsed to one — carrying hidden-token and dapp-token ids across the
+ * rename so a token hidden (or dapp-supplied) before the collapse stays so.
+ * Stored custom networks are shrunk to their bounded shape (Sherlock audit
+ * 153), so a record a dapp filled is written back small on the next mutation.
+ * A pre-0.10.4 STRK20 anonymizer key is dropped from the routing map (#443).
+ * Every endpoint is then brought to its canonical spelling, which earlier
+ * builds did not require (`withCanonicalEndpoints`).
  *
  * Deterministic and total: a non-record value, or a collection this build
  * cannot read, is returned untouched for {@link isWalletPreferences} to reject.
@@ -283,28 +338,8 @@ const normalizedAccountGroups = (value: unknown): unknown =>
  * wrote in a second spelling, whose duplicate otherwise left the private
  * balance surface permanently unreadable with no in-product way out.
  */
-export const normalizeStoredPreferences = (value: unknown): unknown => {
-  if (!isRecord(value)) {
-    return value;
-  }
-  const tokens = rebuildCollection(value["tokens"], rebuiltToken);
-  const addressBook = rebuildCollection(value["addressBook"], rebuiltContact);
-  const hasAccountAliases = value["accountLabels"] !== undefined || value["groups"] !== undefined;
-  if (!tokens && !addressBook && !hasAccountAliases) {
-    return value;
-  }
-  return {
-    ...value,
-    ...(value["accountLabels"] === undefined
-      ? {}
-      : { accountLabels: normalizedAccountLabels(value["accountLabels"]) }),
-    ...(value["groups"] === undefined ? {} : { groups: normalizedAccountGroups(value["groups"]) }),
-    ...(addressBook ? { addressBook: addressBook.entries } : {}),
-    ...(tokens
-      ? { ...remapHiddenTokens(value["hiddenTokens"], tokens.renames), tokens: tokens.entries }
-      : {}),
-  };
-};
+export const normalizeStoredPreferences = (value: unknown): unknown =>
+  isRecord(value) ? withCanonicalEndpoints(normalizedEntries(value)) : value;
 
 /**
  * The organisational slice of stored preferences: naming, grouping, display,
@@ -331,6 +366,12 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
  * per-contact user action. Restoring contacts from a file needs a per-entry
  * confirmation surface that does not exist yet; until it does, silence is the
  * safe answer.
+ *
+ * `hiddenAccountIds` is excluded too. Hiding is a per-account action taken while
+ * looking at the account, and the background keeps the active account visible;
+ * a file that hid accounts would break that pairing and could leave the panel
+ * showing an account no list renders. Visibility is restored by the local user,
+ * one account at a time, so a restore leaves it exactly as stored.
  */
 export type ImportablePreferences = {
   readonly accountLabels?: AccountLabels;

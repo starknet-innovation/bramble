@@ -19,26 +19,53 @@ type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
 
 const BUCKET_NAMES = { private: "Private balance", public: "Public balance" } as const;
 
+// The full address behind a truncated one, revealed in place by a native
+// disclosure so a keyboard user can inspect it without leaving the review.
+const fullAddressReveal = (address: string, label: string): string =>
+  `<details class="address-reveal"><summary>${escapeHtml(label)}</summary><code>${escapeHtml(address)}</code></details>`;
+
+/**
+ * Copy for a name-resolved recipient that is not already saved. A name is a
+ * convenient spelling, not a saved contact, so the review says the address it
+ * resolved to is new rather than only showing it.
+ */
+const NEW_RECIPIENT_WARNING = "New recipient. Check the full address before you send.";
+
 /**
  * Renders the confirm-face summary in the order the decision is made: who it
- * leaves, who it reaches, how much. A shield or unshield has no recipient in
- * the payment sense — the account on both ends is the user's own — so it names
- * the account and the movement between its balances instead. The recipient
- * shows truncated with a copy control carrying the full canonical address, so
- * the reviewer can check it against the source they were given. The caller
+ * leaves, who it reaches, the network it travels on, how much. A shield or
+ * unshield has no recipient in the payment sense (the account on both ends is
+ * the user's own), so it names the account and the movement between its
+ * balances instead.
+ *
+ * Each party shows truncated with a copy control carrying the full canonical
+ * address, and a disclosure that reveals it in place, so the reviewer can check
+ * it against the source they were given. A recipient that came from a Starknet
+ * name is the exception: the full address the name resolved to is shown, with a
+ * line naming where it came from, because the name alone does not carry the
+ * address the reader must check. The caller
  * binds `[data-copy]` after mounting (see ./transfer-render).
  */
 export const reviewSummaryHtml = (
   fields: TransferFields,
   mode: TransferMode = "send",
   sender: { readonly address: string; readonly label: string } = { address: "", label: "" },
-): string => `
+  network = "",
+): string => {
+  const copyLabel = mode === "send" ? "Copy recipient address" : "Copy account address";
+  const recipientIdentity =
+    fields.recipientResolvedFrom === "stark-name"
+      ? `<span class="send-review-address send-review-address-full copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(fields.recipient)}</code>${inlineCopyButton(fields.recipient, copyLabel)}</span><small class="send-review-source">Resolved from Starknet ID</small>`
+      : `<span class="send-review-address copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(accountLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, copyLabel)}</span>${fields.recipient ? fullAddressReveal(fields.recipient, mode === "send" ? "Show full recipient address" : "Show full account address") : ""}`;
+  return `
   <dl class="send-review-facts">
-    <div><dt>From</dt><dd><strong>${escapeHtml(sender.label || accountLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(sender.address)}">${escapeHtml(accountLabel(sender.address))}</code></span></dd></div>
-    <div><dt>${mode === "send" ? "To" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><span class="send-review-address copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(accountLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, mode === "send" ? "Copy recipient address" : "Copy account address")}</span></dd></div>
+    <div><dt>From</dt><dd><strong>${escapeHtml(sender.label || accountLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(sender.address)}">${escapeHtml(accountLabel(sender.address))}</code></span>${sender.address ? fullAddressReveal(sender.address, "Show full sender address") : ""}</dd></div>
+    <div><dt>${mode === "send" ? "To" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong>${recipientIdentity}</dd></div>
+    ${network ? `<div><dt>Network</dt><dd>${escapeHtml(network)}</dd></div>` : ""}
     <div><dt>Amount</dt><dd><span class="send-review-amount">${tokenGlyph(fields.tokenAddress, fields.tokenSymbol)}<strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong></span><small>${escapeHtml(fields.fiatEstimate || "Fiat estimate unavailable")}</small></dd></div>
     ${mode === "send" ? "" : `<div><dt>Movement</dt><dd><strong>${BUCKET_NAMES[fields.source]} → ${BUCKET_NAMES[fields.destination]}</strong></dd></div>`}
   </dl>`;
+};
 
 /**
  * Renders the transfer fee state — the estimated amount, the pending-deployment
@@ -52,18 +79,26 @@ const reviewFeeHtml = (review: TransferReview): string =>
   reviewFeeSection(review, { id: "review-retry-fee" });
 
 /**
- * Renders only the warnings a review raised: risk flags, and the note that a
- * first send also deploys the account. Returns `""` when there is nothing to
- * warn about, so the confirm face stays quiet unless something needs saying.
- * The decoded-call list is not shown here — the summary above already names
- * the recipient and amount this transfer moves.
+ * The note that an undeployed account's first send also submits its
+ * deployment. Shared with the deploy screen, which shows it so a reader knows
+ * deploying by hand is optional (issue 662).
  */
-export const reviewRisksHtml = (review: TransferReview): string => {
+export const FIRST_SEND_DEPLOYS =
+  "This account is not deployed yet; the first send also submits its deployment.";
+
+/**
+ * Renders only the warnings a review raised: the note that a name-resolved
+ * recipient is not saved yet, risk flags, and the note that a first send also
+ * deploys the account. Returns `""` when there is nothing to warn about, so the
+ * confirm face stays quiet unless something needs saying. The decoded-call list
+ * is not shown here: the summary above already names the recipient and amount
+ * this transfer moves.
+ */
+export const reviewRisksHtml = (review: TransferReview, newResolvedRecipient = false): string => {
   const messages = [
+    ...(newResolvedRecipient ? [NEW_RECIPIENT_WARNING] : []),
     ...riskFlagMessages(review.flags),
-    ...(review.requiresDeployment
-      ? ["This account is not deployed yet; the first send also submits its deployment."]
-      : []),
+    ...(review.requiresDeployment ? [FIRST_SEND_DEPLOYS] : []),
   ];
   return messages.length === 0 ? "" : reviewPanel(messages, "");
 };
@@ -75,12 +110,7 @@ export const reviewRisksHtml = (review: TransferReview): string => {
  */
 const reviewDetailsHtml = (review: TransferReview): string =>
   `${reviewCallsList(review.summaries)}${reviewPanel(
-    [
-      ...riskFlagMessages(review.flags),
-      ...(review.requiresDeployment
-        ? ["This account is not deployed yet; the first send also submits its deployment."]
-        : []),
-    ],
+    [...riskFlagMessages(review.flags), ...(review.requiresDeployment ? [FIRST_SEND_DEPLOYS] : [])],
     "No additional wallet warnings were detected. Verify the recipient and decoded action before confirming.",
   )}`;
 

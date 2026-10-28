@@ -7,7 +7,7 @@
  */
 import { DEFAULT_GROUP_IDS, isAccountGroupIcon } from "@bramble/settings/groups";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 
 /**
  * State the group controls close over: the wallet client, a re-render callback
@@ -67,7 +67,7 @@ const bindCreateForms = (root: Element, deps: GroupControlDeps): void => {
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't create that folder"), "error", form);
+          showToast(errorDetails(error, "Couldn't create that folder"), "error", form);
           buttonBusy(button, false);
         },
       );
@@ -97,7 +97,7 @@ const bindEditForms = (root: Element, deps: GroupControlDeps): void => {
             await deps.rerender();
           },
           (error: unknown) => {
-            showToast(errorMessage(error, "Couldn't update that folder"), "error", form);
+            showToast(errorDetails(error, "Couldn't update that folder"), "error", form);
             buttonBusy(button, false);
           },
         );
@@ -128,7 +128,7 @@ const bindRemoveButtons = (root: Element, deps: GroupControlDeps): void => {
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't delete that folder"), "error", el);
+          showToast(errorDetails(error, "Couldn't delete that folder"), "error", el);
           buttonBusy(el, false);
         },
       );
@@ -157,7 +157,7 @@ const bindAssignToggles = (root: Element, deps: GroupControlDeps): void => {
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Couldn't update that folder"), "error", button);
+          showToast(errorDetails(error, "Couldn't update that folder"), "error", button);
           buttonBusy(button, false);
         },
       );

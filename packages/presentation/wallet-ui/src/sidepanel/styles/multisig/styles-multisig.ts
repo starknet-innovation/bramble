@@ -97,7 +97,8 @@ export const MULTISIG_STYLES = `
   .multisig-deploy-step-pane { display: grid; gap: ${SPACE.md}; min-width: 0; }
   #multisig-deploy-form[data-deployment-stage="participants"] .multisig-deploy-approval-step,
   #multisig-deploy-form[data-deployment-stage="approval"] .multisig-deploy-signers-step,
-  #multisig-deploy-form:not([data-deployment-stage="participants"]):not([data-deployment-stage="approval"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
+  #multisig-deploy-form[data-deployment-stage="deploy"] .multisig-deploy-signers-step,
+  #multisig-deploy-form:not([data-deployment-stage="participants"]):not([data-deployment-stage="approval"]):not([data-deployment-stage="deploy"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
     display: none;
   }
   .multisig-deploy-actions {
@@ -149,7 +150,7 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.md};
     justify-content: space-between;
   }
-  .multisig-funding-head h2 { margin: 2px 0 0; }
+  .multisig-funding-head h2 { margin: ${SPACE.xxs} 0 0; }
   .multisig-funding-token {
     align-items: center;
     background: var(--bramble-elevated);
@@ -394,6 +395,7 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.md};
     max-height: 280px;
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
   .multisig-recipient-picker .send-recipient-row,
   .multisig-asset-picker .send-asset-row { background: var(--bramble-elevated); }
@@ -474,10 +476,9 @@ export const MULTISIG_STYLES = `
   .multisig-intent-row { position: relative; }
   .multisig-intent-row.has-assets .menu-icon { visibility: hidden; }
   .multisig-intent-assets { display: inline-flex; inset-inline-start: calc(${SPACE.lg} - 4px); pointer-events: none; position: absolute; top: 50%; transform: translateY(-50%); }
-  .multisig-intent-assets > * + * { margin-left: -6px; }
+  .multisig-intent-assets > * + * { margin-left: calc(-1 * ${SPACE.sm}); }
   .multisig-intent-assets .token-logo, .multisig-intent-assets .token-mark { height: 28px; width: 28px; }
   .multisig-intent-assets .token-mark { font-size: 8px; }
-  [data-ms-exact-identity] .receipt-row { align-items: flex-start; }
   [data-ms-exact-identity] .receipt-row dd { max-width: 70%; }
   [data-ms-exact-identity] .receipt-row dd code { overflow-wrap: anywhere; text-align: left; word-break: break-word; }
   .drawer-multisig .account-groups-line {

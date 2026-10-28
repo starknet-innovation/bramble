@@ -6,8 +6,10 @@
  * dapp-poll-unlock-window.test.ts. This is the other half, and it is the one
  * that survived round one: the panel's own refresh loop re-reads state every
  * minute while it is visible, hydration rechecks only data lanes due for that
- * view, and a settling privacy registration adds a
- * three-second poll of its own. None of that is the user doing anything. If any
+ * view, a settling privacy registration adds a
+ * three-second poll of its own, and a confirmed private send arms a bounded
+ * settle poll that reads until the indexer catches up. None of that is the user
+ * doing anything. If any
  * of those reads renews the unlock, an open side panel keeps the wallet
  * unlocked forever, which is the same defeat a polling dapp page gave us.
  *
@@ -69,6 +71,7 @@ const EXPIRES_AT = UNLOCKED_AT + TTL_MS;
  */
 const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "deployment.load": "wallet.deploymentStatus",
+  "signability.load": "wallet.accountSignability",
   "multisig.loadBalances": "wallet.multisigBalances",
   "multisig.loadClassStatus": "wallet.argentMultisigClassStatus",
   "multisig.loadMultisigs": "wallet.multisigs",
@@ -84,15 +87,17 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "wallet.loadWatchedNfts": "wallet.loadWatchedNfts",
 };
 
-// The two ambient readers that live outside hydration: the always-on refresh in
+// The ambient readers that live outside hydration: the always-on refresh in
 // the panel lifecycle (status, then the queued failure notices that
-// journeys/approvals/tx-alerts-ui.ts drains behind it), and the three-second
+// journeys/approvals/tx-alerts-ui.ts drains behind it), the three-second
 // disclosure poll journeys/privacy/privacy-pending-poll.ts runs while a
-// registration settles.
+// registration settles, and the private-recipient check the Send form re-sends
+// on every repaint that rebinds it (journeys/send/transfer-ui.ts `route()`).
 const POLLED_OUTSIDE_HYDRATION: readonly string[] = [
   "wallet.status",
   "wallet.transactionAlerts",
   "wallet.strk20State",
+  "wallet.strk20RecipientStatus",
 ];
 
 const AMBIENT_MESSAGES: readonly string[] = [
@@ -244,10 +249,26 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     expect(fresh.session.isUnlocked()).toBe(false);
   });
 
+  test("a Send form re-checking its private recipient past the TTL still locks", async () => {
+    // Sherlock #176: each repaint of Send compose with a private destination
+    // rebinds the form, which re-sends the recipient check. Those re-checks must
+    // never renew the window, and the check keeps answering while unlocked.
+    const fresh = await makeProbe();
+    let renewals = 0;
+    for (let at = UNLOCKED_AT; at < EXPIRES_AT; at += TTL_MS / 4) {
+      fresh.setNow(at);
+      renewals += (await fresh.drive("wallet.strk20RecipientStatus")).renewals;
+    }
+
+    expect(renewals).toBe(0);
+    fresh.setNow(EXPIRES_AT + 1);
+    expect(fresh.session.isUnlocked()).toBe(false);
+  });
+
   test("hydration has no loader this suite does not classify", async () => {
     const source = await readFile(HYDRATE_SOURCE, "utf8");
     const called = new Set(
-      [...source.matchAll(/\b(wallet|multisig|deployment)\.([a-zA-Z]+)\(/g)].map(
+      [...source.matchAll(/\b(wallet|multisig|deployment|signability)\.([a-zA-Z]+)\(/g)].map(
         (match) => `${match[1]}.${match[2]}`,
       ),
     );
@@ -255,7 +276,7 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     expect([...called].filter((call) => HYDRATED_CALL_MESSAGES[call] === undefined)).toEqual([]);
   });
 
-  test("the three ambient readers outside hydration remain classified", async () => {
+  test("the ambient readers outside hydration remain classified", async () => {
     const [lifecycle, privacy, privacyDisclosure, transactionAlerts] = await Promise.all([
       readFile(LIFECYCLE_SOURCE, "utf8"),
       readFile(PRIVACY_SOURCE, "utf8"),
@@ -275,9 +296,15 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     expect(
       privacyDisclosure.split("\n").filter((line) => line.includes("deps.wallet.loadPrivacyState")),
     ).toEqual(["      const value = await deps.wallet.loadPrivacyState();"]);
+    // The single-flight loader is joined by two ambient disclosure polls: the
+    // pending-registration poll and the bounded settle watch a confirmed private
+    // send arms. Both read through the same observing route.
     expect(
       privacy.split("\n").filter((line) => line.includes("deps.wallet.loadPrivacyState")),
-    ).toEqual(["    load: () => deps.wallet.loadPrivacyState(),"]);
+    ).toEqual([
+      "    load: () => deps.wallet.loadPrivacyState(),",
+      "    load: () => deps.wallet.loadPrivacyState(),",
+    ]);
   });
 });
 

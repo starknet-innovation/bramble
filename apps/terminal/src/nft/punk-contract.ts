@@ -11,7 +11,7 @@ import {
   type Call,
   type CompiledSierra,
 } from "starknet";
-import { isStarkFieldElement } from "../protocols/support/networks";
+import { isNonZeroStarkFieldElement } from "../protocols/support/networks";
 
 const PUNK_LIMIT = 10_000;
 export const PUNK_CLASS_HASH = "0x5b5f364528b903513d36dce0aa5544d192c6a25865eeba9ba8a059d7f858263";
@@ -75,11 +75,13 @@ export const punkMetadataUri = (id: number): string => {
   return `data:application/json;base64,${utf8Base64(JSON.stringify(metadata))}`;
 };
 
-/** Checks a user-entered Starknet address or salt without canonicalizing it. */
-export const isFelt = (value: string): boolean => {
-  const normalized = value.trim().toLowerCase();
-  return normalized !== "0x0" && isStarkFieldElement(normalized);
-};
+/**
+ * Checks a user-entered Starknet address or salt without canonicalizing it.
+ * Zero is refused by value, so `0x00` and `0x000` are refused like `0x0`
+ * (Sherlock 167).
+ */
+export const isFelt = (value: string): boolean =>
+  isNonZeroStarkFieldElement(value.trim().toLowerCase());
 
 const byteArrayCalldata = (value: string): ReturnType<typeof byteArray.byteArrayFromString> =>
   byteArray.byteArrayFromString(value);

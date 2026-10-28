@@ -149,8 +149,12 @@ export const DeployApproval: LabStory = {
     );
     await expect(body?.querySelector(".flow-header [data-nav-back]")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();
+    await expect(body?.querySelector(".multisig-deployment-target")).toBeVisible();
+    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
+      "Maximum network fee: 0.252237 STRK",
+    );
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
-      "Check fee and address",
+      "Deploy multisig",
     );
   },
 };
@@ -165,11 +169,47 @@ export const DeployReviewed: LabStory = {
     await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
       "Maximum network fee: 0.252237 STRK",
     );
+    // The merged stage keeps the threshold and signer controls visible beside
+    // the review; the quote no longer hides the fields it was computed from.
+    await expect(body?.querySelector('input[name="threshold"]')).toBeVisible();
+    await expect(body?.querySelector(".multisig-deployment-signer-field")).toBeVisible();
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
       "Deploy multisig",
     );
     await expect(body?.querySelector(".flow-header [data-nav-back]")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();
+  },
+};
+export const DeployQuotePending: LabStory = {
+  args: { checkpointId: "deploy-quote-pending", scenarioId: "multisig" },
+  name: "Create · review in flight",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("#multisig-deploy-result")).toHaveTextContent(
+      "Preparing exact deployment fee",
+    );
+    const submit = body?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await expect(submit).toHaveTextContent("Check fee and address");
+    await expect(submit).toHaveAttribute("data-busy");
+    await expect(submit?.disabled).toBe(true);
+  },
+};
+export const DeployQuoteFailed: LabStory = {
+  args: { checkpointId: "deploy-quote-failed", scenarioId: "multisig" },
+  name: "Create · review failed",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    await expect(body?.querySelector("#multisig-deploy-result")).toHaveTextContent(
+      "Deployment review failed",
+    );
+    const submit = body?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await expect(submit).toHaveTextContent("Check fee and address");
+    await expect(submit?.disabled).toBe(false);
+    await expect(body?.querySelector(".toast.error")).toBeNull();
   },
 };
 export const DeployFunding: LabStory = {
@@ -339,7 +379,7 @@ export const HomeStaleIntent: LabStory = {
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body).toHaveTextContent("Needs attention");
-    await expect(body?.querySelector(".multisig-intent-list")).toHaveTextContent("Not submitted");
+    await expect(body?.querySelector(".multisig-intent-list")).toHaveTextContent("Out of date");
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
 };
@@ -446,7 +486,7 @@ export const IntentNoLocalSigner: LabStory = {
 };
 export const IntentStale: LabStory = {
   args: { checkpointId: "intent-stale", scenarioId: "multisig" },
-  name: "Not submitted · retry or update",
+  name: "Out of date · retry or update",
   play: async ({ canvasElement }) => {
     await assertCheckpointReady(canvasElement);
     const body =
@@ -459,7 +499,7 @@ export const IntentStale: LabStory = {
       "Try unchanged fee again",
     );
     await expect(body?.querySelector(".multisig-intent-action > :first-child")).toHaveTextContent(
-      "Nothing was sent",
+      "This may already have been sent by another signer.",
     );
     await expect(body?.querySelector(".multisig-intent-action > :nth-child(2)")).toHaveAttribute(
       "data-ms-refresh-intent",

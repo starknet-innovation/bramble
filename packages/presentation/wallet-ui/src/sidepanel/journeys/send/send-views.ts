@@ -172,10 +172,11 @@ const amountStage = (
         <span class="send-amount-shortcuts">
           <button id="send-half" type="button">Half</button>
           <button id="send-max" type="button">Max</button>
-          <button id="send-unit-toggle" type="button" aria-label="Enter an amount in ${currency.toUpperCase()}">${icon("swap")}<span id="send-unit-label">${currency.toUpperCase()}</span></button>
+          <button id="send-unit-toggle" type="button" data-currency="${currency}" aria-label="Enter an amount in ${currency.toUpperCase()}">${icon("swap")}<span id="send-unit-label">${currency.toUpperCase()}</span></button>
         </span>
       </div>
       <p class="send-fiat-estimate" id="send-fiat-estimate">Estimated value —</p>
+      <div class="send-fee-lines" id="send-fee-lines" aria-live="polite"></div>
     </div>
     <button id="send-review-button" type="submit" ${account === null || asset === undefined ? "disabled" : ""}>${icon("send")}${liquidDots("send", true)}<span id="send-review-label">${escapeHtml(copy.reviewLabel)}</span></button>
   </section>`;
@@ -213,17 +214,18 @@ const successStage = (copy: TransferModeCopy): string => `
 const failureStage = (): string => `
   <section class="send-outcome send-failure" id="send-failure" role="alert" aria-live="assertive" hidden>
     <span class="send-outcome-mark" aria-hidden="true">
-      <svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg>
+      <svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /><path class="send-unknown-mark" d="M28 17v13m0 8v1" /></svg>
     </span>
     <div class="send-outcome-copy">
       <h2 id="send-failure-title">${escapeHtml(TRANSFER_FAILURE_TITLE)}</h2>
       <span class="send-outcome-reason">
         <p id="send-failure-copy">The transaction was not sent. Your balance is unchanged.</p>
-        ${inlineCopyButton("", "Copy the error", { id: "send-failure-copy-error" })}
+        ${inlineCopyButton("", "Copy error details", { id: "send-failure-copy-error" })}
       </span>
       ${outcomeHashRow("send-failure-hash")}
     </div>
     <div class="send-actions">
+      ${button({ attributes: { hidden: true, id: "send-failure-activity" }, icon: "activity", label: "View in Activity tab" })}
       ${button({ attributes: { id: "send-retry" }, label: "Try again" })}
       ${button({ attributes: { id: "send-failure-edit" }, label: "Edit transaction", variant: "secondary" })}
     </div>
@@ -321,13 +323,14 @@ export const sendFlow = (
       `<section class="section send-flow">
         ${account ? "" : noAccountEmpty(status)}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" ${senderAttributes(account, preferences)} data-send-network="${escapeHtml(status.networkId)}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" ${senderAttributes(account, preferences)} data-send-network="${escapeHtml(status.networkId)}" data-send-network-label="${escapeHtml(status.network)}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
           <input name="fiatEstimate" type="hidden" value="" />
           <input name="recipient" type="hidden" value="${escapeHtml(scopedIntent?.recipient ?? "")}" />
           <input name="recipientLabel" type="hidden" value="${escapeHtml(scopedIntent?.recipientLabel ?? "")}" />
+          <input name="recipientResolvedFrom" type="hidden" value="" />
           <input name="source" type="hidden" value="${scopedIntent?.source ?? "public"}" />
           <input name="destination" type="hidden" value="${scopedIntent?.destination ?? "public"}" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />

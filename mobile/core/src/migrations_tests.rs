@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::container::{parse, Randomness, StoredVault};
+use crate::kms::Ladder;
 use crate::networks::NetworkId;
 use crate::vault::SealingKey;
 
@@ -25,6 +26,12 @@ fn records_json(version: u32) -> Vec<u8> {
     if version < 4 {
         // `backupPending` exists from version 4 on.
         payload.backup_pending = None;
+    }
+    if version < 5 {
+        // So does `ladder` from version 5.
+        for record in &mut payload.accounts {
+            record.ladder = None;
+        }
     }
     payload.to_json().unwrap().to_vec()
 }
@@ -82,14 +89,18 @@ fn the_accounts_branch_records_payload_is_retagged_unchanged() {
 fn a_version_three_payload_gains_a_clear_backup_flag_and_nothing_else() {
     let (payload, migrated) = migrate(stage(&records_json(3)).unwrap()).unwrap();
     assert!(migrated);
-    assert_eq!(payload.version, 4);
+    assert_eq!(payload.version, VAULT_VERSION);
     assert_eq!(
         payload.backup_pending,
         Some(false),
         "a v3 wallet is never re-prompted"
     );
     let v3 = records_value(3);
-    let v4: serde_json::Value = serde_json::from_slice(&payload.to_json().unwrap()).unwrap();
+    let mut v4: serde_json::Value = serde_json::from_slice(&payload.to_json().unwrap()).unwrap();
+    // The chain runs on to version 5, which only labels each record's ladder.
+    for record in v4["accounts"].as_array_mut().unwrap() {
+        record.as_object_mut().unwrap().remove("ladder");
+    }
     assert!(v3.get("backupPending").is_none());
     assert_eq!(v4["backupPending"], false);
     for key in [
@@ -102,6 +113,79 @@ fn a_version_three_payload_gains_a_clear_backup_flag_and_nothing_else() {
     ] {
         assert_eq!(v3[key], v4[key], "{key} is carried over unchanged");
     }
+}
+
+#[test]
+fn a_version_four_payload_labels_every_record_on_its_own_ladder_and_nothing_else() {
+    let (payload, migrated) = migrate(stage(&records_json(4)).unwrap()).unwrap();
+    assert!(migrated);
+    assert_eq!(payload.version, 5);
+    assert!(payload
+        .accounts
+        .iter()
+        .all(|record| record.ladder == Some(Ladder::Account)));
+    let v4 = records_value(4);
+    let v5: serde_json::Value = serde_json::from_slice(&payload.to_json().unwrap()).unwrap();
+    assert!(v4["accounts"][0].get("ladder").is_none());
+    assert_eq!(v5["accounts"][0]["ladder"], "account");
+    let mut unlabelled = v5.clone();
+    for record in unlabelled["accounts"].as_array_mut().unwrap() {
+        record.as_object_mut().unwrap().remove("ladder");
+    }
+    assert_eq!(unlabelled["accounts"], v4["accounts"], "no record moves");
+    for key in [
+        "activeAccountId",
+        "backupPending",
+        "groups",
+        "labels",
+        "mnemonic",
+    ] {
+        assert_eq!(v4[key], v5[key], "{key} is carried over unchanged");
+    }
+}
+
+// An earlier scan walked Braavos on this wallet's own ladder. Such a record keeps its address
+// rather than moving to Braavos's ladder, where the same index is a different account.
+#[test]
+fn a_version_four_braavos_record_off_index_zero_keeps_its_address() {
+    let mut payload = VaultPayload::new(PHRASE.into(), None, Some(NetworkId::Sepolia)).unwrap();
+    let class = crate::account_catalog::deployment_classes(AccountFamily::Braavos)
+        .next()
+        .unwrap()
+        .class_hash;
+    let legacy = payload
+        .derive(
+            AccountFamily::Braavos,
+            Ladder::Account,
+            3,
+            Some(&class),
+            None,
+            NetworkId::Sepolia,
+        )
+        .unwrap();
+    let vendor = payload
+        .derive(
+            AccountFamily::Braavos,
+            Ladder::Address,
+            3,
+            Some(&class),
+            None,
+            NetworkId::Sepolia,
+        )
+        .unwrap();
+    assert_ne!(
+        legacy.address, vendor.address,
+        "the ladders differ off index zero"
+    );
+    payload.accounts.push(legacy.clone());
+    payload.version = 4;
+    for record in &mut payload.accounts {
+        record.ladder = None;
+    }
+    let (migrated, _) = migrate(stage(&payload.to_json().unwrap()).unwrap()).unwrap();
+    let kept = migrated.record(&legacy.id).expect("the record is kept");
+    assert_eq!(kept.address, legacy.address);
+    assert_eq!(kept.ladder, Some(Ladder::Account));
 }
 
 #[test]
@@ -133,12 +217,13 @@ fn invalid_payloads_fail_closed() {
         counted_json(0, 1, PHRASE).to_vec(),  // no such version
         counted_json(3, 1, PHRASE).to_vec(),  // a count payload is never version 3
         counted_json(4, 1, PHRASE).to_vec(),  // a count payload is never version 4
-        counted_json(5, 1, PHRASE).to_vec(),  // from the future
+        counted_json(5, 1, PHRASE).to_vec(),  // a count payload is never version 5
+        counted_json(6, 1, PHRASE).to_vec(),  // from the future
         counted_json(1, 0, PHRASE).to_vec(),  // no accounts
         counted_json(1, 33, PHRASE).to_vec(), // above the old cap
         counted_json(1, 1, "not a phrase").to_vec(),
         records_json(1), // records were never version 1
-        records_json(5),
+        records_json(6),
         b"{\"version\":2}".to_vec(),
         b"[]".to_vec(),
     ] {
@@ -162,6 +247,25 @@ fn invalid_payloads_fail_closed() {
         }
         assert!(matches!(
             refused(&serde_json::to_vec(&current).unwrap()),
+            CoreError::Storage { .. }
+        ));
+    }
+    // `ladder` before version 5; missing, unknown, or on a ladder its family never walks from
+    // version 5 on.
+    let mut early = records_value(4);
+    early["accounts"][0]["ladder"] = "account".into();
+    let mut wrong_ladder = records_value(5);
+    wrong_ladder["accounts"][0]["ladder"] = "address".into(); // an OZ record
+    let mut unknown = records_value(5);
+    unknown["accounts"][0]["ladder"] = "ledger".into();
+    let mut missing = records_value(5);
+    missing["accounts"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("ladder");
+    for bad in [early, wrong_ladder, unknown, missing] {
+        assert!(matches!(
+            refused(&serde_json::to_vec(&bad).unwrap()),
             CoreError::Storage { .. }
         ));
     }
@@ -216,7 +320,7 @@ fn sealing_a_migrated_vault_is_deterministic_given_its_randomness() {
     assert_eq!(first, seal());
     // Golden: the exact file this input must produce. A change here changes stored bytes.
     let golden: serde_json::Value = serde_json::from_str(include_str!(
-        "../tests/fixtures/migration-v1-to-v4.golden.json"
+        "../tests/fixtures/migration-v1-to-v5.golden.json"
     ))
     .unwrap();
     assert_eq!(

@@ -11,7 +11,6 @@ import type { AccountContractType, LedgerPubKeyEntry } from "@bramble/wallet-mod
 import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 import {
   isCreateAccountResponse,
-  isErrorResponse,
   isLedgerAccountStatusResponse,
   isLedgerAccountsResponse,
   isLedgerSignPendingResponse,
@@ -19,6 +18,7 @@ import {
   type LedgerAccountsResponse,
   type LedgerSignRequestSummary,
 } from "../../../popup/responses/responses";
+import { refusalText } from "../../runtime/runtime-errors";
 
 /**
  * One Ledger candidate's best-effort on-chain state as the panel consumes it:
@@ -76,7 +76,7 @@ export type LedgerRuntimeClient = {
 };
 
 const failure = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
+  new Error(refusalText(response, fallback));
 
 // The scheme is sent only when the caller named one, so the envelope of every
 // pre-existing (Bramble-path) call is byte-for-byte unchanged.

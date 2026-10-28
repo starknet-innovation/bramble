@@ -105,13 +105,15 @@ final class RecoveryScanDriver {
             + " Uncheck one to choose another."
     }
 
-    /// The picked rows as restore coordinates; the class travels with every non-OZ pick.
+    /// The picked rows as restore coordinates; the class travels with every non-OZ pick, and the
+    /// ladder with every pick, so the core re-derives on the ladder the row was found on.
     var selections: [RecoverySelection] {
         candidates.filter { selected.contains($0.key) }.map { candidate in
             RecoverySelection(
                 family: candidate.family,
                 accountIndex: candidate.accountIndex,
-                classHash: candidate.family == .openZeppelin ? nil : candidate.classHash
+                classHash: candidate.family == .openZeppelin ? nil : candidate.classHash,
+                ladder: candidate.ladder
             )
         }
     }

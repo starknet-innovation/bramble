@@ -152,28 +152,28 @@
         "acceptable": true,
         "hint": "Weak",
         "level": "weak",
-        "ratio": 0.5222710797934547,
+        "ratio": 0.4,
         "value": "abcdefgh"
       },
       {
         "acceptable": true,
         "hint": "Weak",
         "level": "weak",
-        "ratio": 0.5222710797934547,
+        "ratio": 0.4,
         "value": "password"
       },
       {
         "acceptable": true,
-        "hint": "Fair",
-        "level": "fair",
-        "ratio": 0.7442745387983594,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
         "value": "Password1"
       },
       {
         "acceptable": true,
-        "hint": "Fair",
-        "level": "fair",
-        "ratio": 0.9124799456015206,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
         "value": "Password1!"
       },
       {
@@ -196,6 +196,76 @@
         "level": "strong",
         "ratio": 1,
         "value": "Tr0ub4dor&3"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "p@ssw0rd2024"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "1etmein!"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "!!monkey12"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "abcabcabc"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "qwertyuiop"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "zyxwvuts"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "Dragon$$"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "Shadow_99"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "kestrel-umber-quartz"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "Mx7#qLp2!vR9"
       },
       {
         "acceptable": true,
