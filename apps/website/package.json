@@ -1,5 +1,6 @@
 {
   "name": "@bramble/website",
+  "description": "Static public site for the Starknet wallet: marketing home, docs, support, privacy and terms.",
   "version": "0.1.0",
   "private": true,
   "type": "module",

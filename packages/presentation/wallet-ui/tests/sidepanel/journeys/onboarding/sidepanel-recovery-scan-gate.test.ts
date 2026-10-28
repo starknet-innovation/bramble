@@ -321,10 +321,10 @@ describe("recovery scan Ready gate", () => {
     );
   });
 
-  test("says Bramble cannot deploy a funded Xverse account, and never offers an unused one", async () => {
+  test("offers a funded Xverse account as ready to deploy, and never offers an unused one", async () => {
     // Issue 734: Xverse deploys on the first send, so a funded counterfactual is
-    // the common case. Deploy accepts only the pinned release, so the row must
-    // not promise a deployment; an unused Xverse address belongs to nobody.
+    // the common case. Deployment accepts Xverse's build of Argent 0.4.0, so the
+    // row can promise a deployment; an unused Xverse address belongs to nobody.
     const xverse = (address: string, accountIndex: number): DerivedAccountRef => ({
       ...brambleAccount,
       accountContractType: "argent",
@@ -344,8 +344,9 @@ describe("recovery scan Ready gate", () => {
     const funded = rows.find((row) => row.textContent?.includes("Account 1"));
     const unused = rows.find((row) => row.textContent?.includes("Account 2"));
     expect(funded?.querySelector("strong")?.textContent).toBe("Account 1 · Argent 0.4.0 (Xverse)");
-    expect(funded?.textContent).toContain("Bramble cannot deploy this Argent release");
-    expect(funded?.textContent).not.toContain("ready to deploy");
+    expect(funded?.textContent).toContain("Funded and ready to deploy");
+    expect(funded?.textContent).not.toContain("Bramble cannot deploy");
+    expect(funded?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(false);
     expect(unused?.textContent).toContain("No on-chain activity found");
     expect(unused?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(true);
   });

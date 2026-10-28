@@ -34,6 +34,20 @@ export type ReviewFeeState = {
   readonly signsTwice?: boolean;
   readonly fee: FeeEstimate | null;
   /**
+   * A shield's STRK requirement from the shared `shieldStrkNeed` helper (issue
+   * 665): `need` is every STRK figure the shield may take, with the network
+   * fee at its signing ceiling, and `short` how much the public balance lacks.
+   * `includesAmount` is set when the shielded token is STRK itself, and
+   * `blocksConfirm` when the shortfall disables Confirm. A positive `short`
+   * replaces the generic `feeAffordability` notice with the figures.
+   */
+  readonly shieldStrkNeed?: {
+    readonly blocksConfirm: boolean;
+    readonly includesAmount: boolean;
+    readonly need: bigint;
+    readonly short: bigint;
+  };
+  /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
    * "insufficient" renders a warning; "ok"/"unknown"/absent render nothing
    * extra, and no surface gates a decision on it — the guard is warn-only and
@@ -45,9 +59,32 @@ export type ReviewFeeState = {
   readonly requiresDeployment?: boolean;
 };
 
+// formatFri shows six of STRK's eighteen decimals and drops the rest. A
+// figure the user must hold or add is rounded up to that step instead, so the
+// amount shown is never less than the amount needed.
+const FRI_SHOWN_STEP = 10n ** 12n;
+const friAtLeast = (raw: bigint): string =>
+  formatFri(`0x${(((raw + FRI_SHOWN_STEP - 1n) / FRI_SHOWN_STEP) * FRI_SHOWN_STEP).toString(16)}`);
+
+// A shield short of STRK names what it needs and what to add (issue 665) in
+// place of the generic notice. "Up to", because the network share is the most
+// the wallet may sign for, not the estimate.
+const shortfallHtml = (state: ReviewFeeState): string => {
+  const shield = state.shieldStrkNeed;
+  if (shield === undefined || shield.short <= 0n) {
+    return balanceShortfallHtml(state);
+  }
+  const needs = shield.includesAmount
+    ? `This shield needs up to ${friAtLeast(shield.need)}, including the amount.`
+    : `This shield needs up to ${friAtLeast(shield.need)} in fees.`;
+  return `<p class="review-flag" role="alert">${icon("alert")}${escapeHtml(
+    `${needs} Add ${friAtLeast(shield.short)}, then review again.`,
+  )}</p>`;
+};
+
 // Warn-only shortfall notice appended under the fee line when the shared
 // predicate says the STRK balance cannot cover the transaction (issue 191).
-const shortfallHtml = (state: ReviewFeeState): string =>
+const balanceShortfallHtml = (state: ReviewFeeState): string =>
   state.feeAffordability === "insufficient"
     ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
     : "";

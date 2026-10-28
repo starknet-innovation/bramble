@@ -6,7 +6,7 @@ permalink: /architecture/
 
 # Bramble — Architecture & Internals
 
-The deep tour: how the extension is wired, the pinned account/multisig class hashes, the dApp provider surface, storage migrations, and the design system. For a quick overview and setup, see the [README](../README.md).
+The deep tour: how the extension is wired, the pinned account/multisig class hashes, the dApp provider surface, storage migrations, and the design system. For a quick overview and setup, see the [README](https://github.com/starknet-innovation/bramble/blob/main/README.md).
 
 ---
 
@@ -343,8 +343,10 @@ and reputation signals before a connection is approved:
   was to adopt a remote feed with a **fail-safe** stance:
   - `packages/features/permissions/src/phishing-feed.ts` fetches a maintained web3 phishing list from
     a configurable source (default: MetaMask's community-maintained
-    eth-phishing-detect, `https://metamask.github.io/eth-phishing-detect/v1/config.json`)
-    under an explicit new host permission (`https://metamask.github.io/*`).
+    eth-phishing-detect, read from the repository's
+    `https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json`)
+    without a host permission: the file allows any origin, so no grant (and no
+    update-time permission prompt) is needed.
   - The payload is validated before use and cached in plain (non-secret) local
     storage under `bramble:phishing-feed`. Wire format is
     `{ "blocklist": string[], "version"?: number }`; the eth-phishing-detect
@@ -413,7 +415,7 @@ Release zips and SHA-256 checksum files are written to `artifacts/` by
 CI uploads those same files as the `bramble-extension` workflow artifact.
 
 Cutting a release and submitting to the Chrome Web Store is documented in
-[`RELEASING.md`](RELEASING.md): pushing a `vX.Y.Z` tag runs
+[`RELEASING.md`](https://github.com/starknet-innovation/bramble/blob/main/RELEASING.md): pushing a `vX.Y.Z` tag runs
 `.github/workflows/release.yml` to publish a GitHub Release with the packaged
 zip + checksum, and an optional, currently-disabled job can publish to the
 Chrome Web Store once a store account and secrets exist.

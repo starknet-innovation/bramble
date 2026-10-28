@@ -1,5 +1,6 @@
 {
   "name": "@bramble/ledger-protocol",
+  "description": "Ledger public-key and signature types, errors, broker command codecs, and connection and signing state machines.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

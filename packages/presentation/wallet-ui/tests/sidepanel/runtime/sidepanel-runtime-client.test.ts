@@ -436,6 +436,7 @@ describe("token and preference wrappers", () => {
       hasVault: true,
       locked: false,
       networkId: "SN_MAIN",
+      phishingFeed: null,
       privacy: [
         { count: 1, durationMs: 41_000, kind: "deposit", outcome: "ok", phase: "proving" },
         { count: 1, durationMs: 62_500, kind: "deposit", outcome: "timeout", phase: "job" },

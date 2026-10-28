@@ -29,9 +29,12 @@ import {
   type RecoveryDerivationKind,
   recoveryScanTarget,
 } from "@bramble/wallet-model/recovery";
+import { readAccountActivity } from "../accounts/account-activity";
 import {
   readDiscoverOwnAccountsInput,
   readDiscoverRecoveryAccountsInput,
+  readFindOwnAccountByAddressInput,
+  readFindRecoveryAccountByAddressInput,
   readPreviewAccountInput,
   readRecoverAccountsInput,
   readValidateMnemonicInput,
@@ -42,6 +45,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
+import { findAccountByAddress, verifyAddressSelections } from "./address-import";
 import type { RecoveryDiscoveryCache } from "./recovery-cache";
 
 type OnboardingOpsDeps = {
@@ -59,11 +63,12 @@ const describeRecoveryAccount = async (
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
 ): Promise<RecoveryAccountCandidate> => {
-  const deployed = await deps.runtimeRpc.getDeploymentStatus({
+  const activity = await readAccountActivity(deps.runtimeRpc, {
     accountAddress: account.address,
     rpcUrls,
+    tokens,
   });
-  if (deployed) {
+  if (activity.deployed) {
     // Advisory signability verdict (issue 542): a deployed vendor account can
     // carry a guardian or strong signer, a rotated owner, or an unauthorizable
     // live class. A missing probe or a throw lists the row unlabelled — the
@@ -87,16 +92,7 @@ const describeRecoveryAccount = async (
       ...(restriction ? { restriction } : {}),
     };
   }
-  const balances = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: account.address,
-    rpcUrls,
-    tokens,
-  });
-  return {
-    account,
-    deployed: false,
-    funded: balances.some((balance) => BigInt(balance.balance) > 0n),
-  };
+  return { account, deployed: false, funded: activity.funded };
 };
 
 const discoveryFingerprint = (
@@ -116,21 +112,25 @@ const discoveryFingerprint = (
 // creates finds nobody who arrived from Ready. The wallet's own OpenZeppelin
 // class stays resolved per network by Krusty rather than listed here.
 //
-// Argent walks two ladders (issue 505): Ready derives its keys on an
-// ETH-seeded tree ("argentx-bip44"), so every Argent release is scanned
-// there, and the release this wallet creates is scanned once more on the
-// wallet's own ladder for accounts this wallet made. Xverse derives on that
-// same own ladder at its own Argent build (issue 734), so that class is scanned
-// there and never on Ready's. Braavos keys live on the plain BIP-44 address
-// axis, which the vault derivation maps to by family.
+// Argent walks two ladders, and every Argent release is scanned on both. The
+// Ready extension derives its keys on an ETH-seeded tree ("argentx-bip44",
+// issue 505). Other Argent-account apps, Ready mobile among them, derive
+// straight from the phrase on this wallet's own ladder, and their accounts
+// date from Argent 0.3.x too: one deployed at 0.3.1 and since upgraded was
+// missed because only the release this wallet creates was scanned there.
+// Xverse derives on that own ladder at its own Argent build (issue 734), so
+// that class is scanned there and never on Ready's. Braavos keys live on the
+// plain BIP-44 address axis, which the vault derivation maps to by family.
 const recoveryScanShapes = (): readonly {
   readonly accountContractType: AccountContractType;
   readonly classHash?: string;
   readonly derivation?: RecoveryDerivationKind;
 }[] => [
   { accountContractType: "openzeppelin" },
-  { accountContractType: "argent", classHash: ARGENT_ACCOUNT_CLASS_HASH },
-  { accountContractType: "argent", classHash: XVERSE_ARGENT_CLASS_HASH },
+  ...deploymentClasses("argent").map((entry) => ({
+    accountContractType: "argent" as const,
+    classHash: entry.classHash,
+  })),
   ...deploymentClasses("argent")
     .filter((entry) => !sameFelt(entry.classHash, XVERSE_ARGENT_CLASS_HASH))
     .map((entry) => ({
@@ -321,6 +321,41 @@ const discoverOwnAccounts = async (
   );
 };
 
+// Finds the account at a pasted address among the keys of the wallet's OWN
+// phrase (issue 398). As in the own-phrase rescan, the phrase is read inside
+// the vault boundary and only public candidate metadata crosses back.
+const findOwnAccountByAddress = async (
+  deps: OnboardingOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readFindOwnAccountByAddressInput(message);
+  if (!input) return { error: "invalid account lookup request" };
+  const vaultPassphrase = deps.session.getPassphrase();
+  if (!vaultPassphrase) return { error: "wallet locked" };
+  const authorized = captureSessionAuthorization(deps.session);
+  const { mnemonic } = await deps.wallet.readVault(vaultPassphrase);
+  if (mnemonic === null) {
+    return { error: "This wallet has no recovery phrase to scan" };
+  }
+  return findAccountByAddress(deps, { ...input, mnemonic }, authorized.isCurrent);
+};
+
+// The two import-by-address lookups (issue 398), or null for any other message.
+const handleAddressLookup = (
+  deps: OnboardingOpsDeps,
+  messageType: string,
+  message: unknown,
+): Promise<RuntimeResponse> | null => {
+  if (messageType === "wallet.findOwnAccountByAddress") {
+    return findOwnAccountByAddress(deps, message);
+  }
+  if (messageType !== "wallet.findRecoveryAccountByAddress") return null;
+  const input = readFindRecoveryAccountByAddressInput(message);
+  return input
+    ? findAccountByAddress(deps, input)
+    : Promise.resolve({ error: "invalid account lookup request" });
+};
+
 const recoverAccounts = async (
   deps: OnboardingOpsDeps,
   message: unknown,
@@ -329,12 +364,23 @@ const recoverAccounts = async (
   const recover = deps.wallet.recoverAccounts;
   if (!input) return { error: "invalid recover accounts request" };
   if (!recover) return { error: "wallet unavailable" };
-  const accounts = await deps.activeStateCoordinator.run(() =>
-    runVaultCreationWithNetwork(deps.session, deps.preferencesStore, input.networkId, () =>
-      recover(input),
-    ),
-  );
-  deps.session.unlock(input.vaultPassphrase);
+  // An account picked by its address is re-proved before anything is written.
+  const refusal = await verifyAddressSelections(deps, input);
+  if (refusal) return refusal;
+  // The unlock lands inside the coordinator task, as every other vault-creation
+  // path does: a queued task (a Ready-key import holding the old session's
+  // authorization) must see the new generation the moment it runs, never a
+  // replaced vault under the old one.
+  const accounts = await deps.activeStateCoordinator.run(async () => {
+    const recovered = await runVaultCreationWithNetwork(
+      deps.session,
+      deps.preferencesStore,
+      input.networkId,
+      () => recover(input),
+    );
+    deps.session.unlock(input.vaultPassphrase);
+    return recovered;
+  });
   return { accounts, ok: true };
 };
 
@@ -358,6 +404,8 @@ export const handleOnboardingOps = async (
   if (messageType === "wallet.discoverOwnAccounts") {
     return discoverOwnAccounts(deps, message);
   }
+  const addressLookup = handleAddressLookup(deps, messageType, message);
+  if (addressLookup) return addressLookup;
   if (messageType === "wallet.previewAccount") {
     const input = readPreviewAccountInput(message);
     if (!input) {

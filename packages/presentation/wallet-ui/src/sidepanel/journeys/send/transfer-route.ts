@@ -245,25 +245,34 @@ export const transferSpendable = (context: TransferRouteContext): bigint | null 
   spendableForRoute(transferRoute(context.fields), sendRouteInputFor(context));
 
 /**
- * What a shield takes from the public STRK balance besides its network fee
- * (the pool fee, plus the amount when the shielded token is STRK) and that
- * balance, so the review can warn when the balance cannot cover all three.
- * Max holds back only the pool fee, because the network fee is not known
- * until the deposit is proved. Null off the shield route or while the pool
- * fee is unknown.
+ * The inputs a shield's STRK need is computed from (issue 665): whether the
+ * shielded token is STRK itself (by its canonical address, not its symbol or
+ * amount), the amount in raw STRK units at STRK's canonical 18 decimals when
+ * it is (null when the typed amount cannot be read), the public STRK balance,
+ * and the pool fee as quoted. Figures are passed as read; `shieldStrkNeed`
+ * parses them strictly. Null off the shield route or while the pool fee is
+ * unknown.
  */
 export const shieldStrkFunding = (
   fields: TransferFields,
   publicBalances: readonly TokenBalance[] | undefined,
   poolFeeFri: string | undefined,
-): { readonly balance: string | null; readonly spent: bigint } | null => {
-  const poolFee = rawBalance(poolFeeFri);
-  if (transferRoute(fields).id !== "public-private" || poolFee === null) return null;
+): {
+  readonly amount: bigint | null;
+  readonly balance: string | null;
+  readonly poolFeeFri: string;
+  readonly shieldsStrk: boolean;
+} | null => {
+  if (transferRoute(fields).id !== "public-private" || poolFeeFri === undefined) return null;
   const strk = publicBalances?.find((entry) => sameFelt(entry.address, STRK_TOKEN_ADDRESS));
-  const amount = sameFelt(fields.tokenAddress, STRK_TOKEN_ADDRESS)
-    ? rawAmount(fields.amount, fields.tokenDecimals)
-    : 0n;
-  return { balance: strk?.balance ?? null, spent: poolFee + amount };
+  const shieldsStrk = sameFelt(fields.tokenAddress, STRK_TOKEN_ADDRESS);
+  let amount: bigint | null = null;
+  try {
+    amount = shieldsStrk ? parseTokenAmount(fields.amount, STRK_TOKEN_DECIMALS) : 0n;
+  } catch {
+    amount = null;
+  }
+  return { amount, balance: strk?.balance ?? null, poolFeeFri, shieldsStrk };
 };
 
 /**

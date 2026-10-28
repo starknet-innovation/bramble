@@ -63,6 +63,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "Bramble cannot verify this wallet. Close and reopen Bramble.",
   ],
   [
+    "account signer not supported for import",
+    "This account is controlled by a signer Bramble can't use.",
+  ],
+  [
     "this account's signer setup cannot be recovered with the recovery phrase",
     "This account's signers can't be recovered with the recovery phrase.",
   ],
