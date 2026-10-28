@@ -17,7 +17,10 @@ import {
   handleDeployAccountSponsored,
   handleDeploySponsorship,
 } from "../../../apps/extension/src/background/accounts/deploy-account-ops";
-import { DEPLOYMENT_MAY_BE_ON_ITS_WAY } from "../../../apps/extension/src/background/accounts/pending-deployments";
+import {
+  DEPLOYMENT_MAY_BE_ON_ITS_WAY,
+  memoryPendingDeployments,
+} from "../../../apps/extension/src/background/accounts/pending-deployments";
 import { DEPLOYMENT_STATUS_UNKNOWN } from "../../../apps/extension/src/background/accounts/sponsored-deployment";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -68,6 +71,38 @@ describe("sponsored deploy offer", () => {
       });
       expect(sponsor.calls).toEqual([]);
     }
+  });
+
+  test("with the bundled table (off everywhere), never calls a relay, even over stored attempts", async () => {
+    const pending = memoryPendingDeployments();
+    await pending.load();
+    pending.reserve(ozAccount, 0);
+    await pending.persist();
+    await pending.recordHash(ozAccount, "0x5ab");
+    const realFetch = globalThis.fetch;
+    const fetched: string[] = [];
+    globalThis.fetch = (async (input: string) => {
+      fetched.push(input);
+      return new Response("no network in tests", { status: 503 });
+    }) as typeof fetch;
+    try {
+      for (const now of [0, 10 * 60_000]) {
+        const { deps } = await harness({ pending, relayOn: false });
+        expect(
+          await handleDeploySponsorship(
+            { ...deps, now: () => now },
+            { type: "wallet.deploySponsorship" },
+          ),
+        ).toMatchObject({ ok: true });
+        const fresh = await harness({ relayOn: false });
+        expect(
+          await handleDeploySponsorship(fresh.deps, { type: "wallet.deploySponsorship" }),
+        ).toEqual({ ok: true, sponsorship: "none" });
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(fetched).toEqual([]);
   });
 
   test("an unreachable relay offers nothing rather than claiming the sponsor said no", async () => {
