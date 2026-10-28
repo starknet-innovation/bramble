@@ -8,9 +8,7 @@
  * message's deadline proves it can no longer run either.
  *
  * Nothing else is inferred: a failed, unexpected or missing answer leaves the
- * record as it was, and absence of evidence is never read as an outcome. A
- * row whose nonce view is not verified is not asked that question. Once the
- * chain clock is past its Execute Before, that row is expired anyway. The
+ * record as it was, and absence of evidence is never read as an outcome. The
  * read is bounded per refresh and throttled per record, and runs only from an
  * Activity refresh. Rows never read go first, then the least recently read, so
  * no row is starved by newer ones. One refresh reads the latest block at most
@@ -39,23 +37,12 @@ export const RELAY_RECHECK_MS = 60_000;
 
 const NONCE_VIEW = "is_valid_outside_execution_nonce";
 
-const recheckReady = (entry: RelaySignature, now: number): boolean =>
-  entry.checkedAt === undefined ||
-  entry.checkedAt > now ||
-  now - entry.checkedAt >= RELAY_RECHECK_MS;
-
-const due = (entry: RelaySignature, now: number): boolean => {
-  if (entry.status !== "signed" || !recheckReady(entry, now)) {
-    return false;
-  }
-  if (entry.checkable) {
-    return true;
-  }
-  return entry.executeBefore !== undefined && Math.floor(now / 1000) >= entry.executeBefore;
-};
-
-const expiredOnClock = (entry: RelaySignature, clock: ChainClock | null): boolean =>
-  clock !== null && entry.executeBefore !== undefined && clock.timestamp >= entry.executeBefore;
+const due = (entry: RelaySignature, now: number): boolean =>
+  entry.status === "signed" &&
+  entry.checkable &&
+  (entry.checkedAt === undefined ||
+    entry.checkedAt > now ||
+    now - entry.checkedAt >= RELAY_RECHECK_MS);
 
 // The view returns a Cairo bool: exactly one felt, 1 for unused and 0 for used.
 const nonceUnused = (result: readonly string[]): boolean | null => {
@@ -137,15 +124,11 @@ export const refreshRelaySignatures = async (
     : null;
   const statuses = await Promise.all(
     batch.map((entry) =>
-      entry.checkable
-        ? withRpcFallback(
-            target.rpcUrls,
-            (provider) => readOne(provider, target.address, entry, clock),
-            deps.rpcProviderFor,
-          ).catch((): RelaySignatureStatus => "signed")
-        : Promise.resolve<RelaySignatureStatus>(
-            expiredOnClock(entry, clock) ? "expired" : "signed",
-          ),
+      withRpcFallback(
+        target.rpcUrls,
+        (provider) => readOne(provider, target.address, entry, clock),
+        deps.rpcProviderFor,
+      ).catch((): RelaySignatureStatus => "signed"),
     ),
   );
   const reads = new Map(

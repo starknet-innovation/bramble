@@ -3,8 +3,7 @@
  * nonce means an outside execution with it ran; an unused nonce at a block past
  * the deadline means it can no longer run; every other answer, including a
  * failed read, leaves the row signed. Reads are bounded per refresh, throttled
- * per row. An account type whose nonce view is not verified is not asked
- * that question; once the chain clock is past its deadline the row expires.
+ * per row, and skipped for account types whose nonce view is not verified.
  */
 import { beforeEach, describe, expect, test } from "bun:test";
 import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
@@ -136,20 +135,20 @@ describe("refreshRelaySignatures", () => {
     expect(result[0]?.checkedAt).toBe(NOW);
   });
 
-  test("an account type without a verified nonce view is never asked that question", async () => {
-    const { calls, result } = await refresh({ nonce: ["0x0"] }, [
-      input({ checkable: false, executeBefore: 2e9 }),
-    ]);
+  test("an account type without a verified nonce view is never read", async () => {
+    const { calls, result } = await refresh({ nonce: ["0x0"] }, [input({ checkable: false })]);
     expect(calls).toEqual([]);
     expect(result[0]?.status).toBe("signed");
   });
 
-  test("an unchecked row past Execute Before expires from the chain clock, without a nonce read", async () => {
-    const { calls, result } = await refresh({ nonce: ["0x0"], timestamp: DEADLINE }, [
+  // Expired claims the nonce was unused; without a verified view that is not
+  // known, so an unchecked row past its deadline stays as it was.
+  test("an unchecked row past Execute Before is never called expired", async () => {
+    const { calls, result } = await refresh({ nonce: ["0x1"], timestamp: DEADLINE }, [
       input({ checkable: false }),
     ]);
-    expect(result[0]?.status).toBe("expired");
-    expect(calls).toEqual([{ block: "getBlock", requested: "latest" }]);
+    expect(calls).toEqual([]);
+    expect(result[0]?.status).toBe("signed");
   });
 
   test("a row checked within the recheck window is not read again", async () => {
