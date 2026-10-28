@@ -20,6 +20,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { feeBoundsMaxSpend, reviewedFeeCeiling } from "@bramble/starknet/fee-bounds";
 import { submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { type Call, logger, type RpcProvider } from "starknet";
@@ -291,4 +292,37 @@ describe("the reviewed fee is a ceiling on what gets signed", () => {
     expect(refused.result).toBeInstanceOf(Error);
     expect(refused.seen.broadcasts).toBe(0);
   });
+});
+
+// Issue 665: a shield review tells the user it needs "up to" the pool fee plus
+// reviewedFeeCeiling(reviewed fee), and to add the difference. That is only
+// true if no submission held to a reviewed figure can sign bounds whose spend
+// exceeds that ceiling. Swept over odd and even base-unit figures on both
+// lanes, against the bounds this function actually hands to the signer.
+describe("the signed maximum never exceeds reviewedFeeCeiling of the reviewed fee", () => {
+  for (const [speed, from, to] of [
+    ["standard", 1320, 1340],
+    ["fast", 2150, 2170],
+  ] as const) {
+    test(`${speed}: every accepted review signs at most its ceiling, the boundary exactly it`, async () => {
+      let tight = 0;
+      for (let figure = from; figure <= to; figure += 1) {
+        const reviewed = { overallFee: String(figure), unit: "FRI" };
+        const ceiling = reviewedFeeCeiling(reviewed);
+        if (ceiling === null) throw new Error("expected a ceiling");
+        const { result, seen } = await submit(speed, reviewed);
+        const signed = seen.broadcasts === 0 ? null : feeBoundsMaxSpend(seen.bounds);
+        if (signed === null) {
+          // Refused before the broadcast: only when the bounds outrun it.
+          expect(result).toBeInstanceOf(Error);
+          expect(BigInt(speed === "fast" ? FAST_AUTHORIZED : QUOTED)).toBeGreaterThan(ceiling);
+          continue;
+        }
+        expect(signed).toBeLessThanOrEqual(ceiling);
+        if (signed === ceiling) tight += 1;
+      }
+      // The bound is tight, not merely safe: at the boundary they are equal.
+      expect(tight).toBeGreaterThan(0);
+    });
+  }
 });
