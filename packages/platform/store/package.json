@@ -1,5 +1,6 @@
 {
   "name": "@bramble/store",
+  "description": "The `KeyValueStore` port, namespaced-key and JSON guards, deny-by-default storage capabilities, mutation serialization and an in-memory implementation.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

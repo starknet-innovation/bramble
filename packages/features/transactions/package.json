@@ -1,5 +1,6 @@
 {
   "name": "@bramble/transactions",
+  "description": "Activity and transaction history, allowance discovery, route and fee checks, AVNU quote and call adaptation, Ledger call verification and explorer parsing.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

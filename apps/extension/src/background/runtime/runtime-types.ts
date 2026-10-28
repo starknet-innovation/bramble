@@ -18,7 +18,11 @@ import type { SwapCatalogToken } from "@bramble/transactions/avnu";
 import type { ConnectedSite } from "@bramble/vault/service";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type { ReadOnlyReason, RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
+import type {
+  KeyAddressCandidate,
+  ReadOnlyReason,
+  RecoveryAccountCandidate,
+} from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
 import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
@@ -445,6 +449,7 @@ export type RuntimeResponse =
       readonly nextIndex: number;
       readonly ok: true;
     }
+  | { readonly candidate: KeyAddressCandidate; readonly ok: true }
   | FeeReviewResponse
   | SupportedVersionsResponse
   | TransferReviewResponse
@@ -460,6 +465,7 @@ export type RuntimeResponse =
   | NostrCoordinationResponse
   | { readonly ok: true; readonly signer: MultisigSignerAccount }
   | { readonly ok: true; readonly updateReady: boolean }
+  | { readonly notice: boolean; readonly ok: true }
   | { readonly ok: true; readonly restarting: boolean }
   | { readonly ok: true; readonly released: boolean }
   | MultisigsResponse

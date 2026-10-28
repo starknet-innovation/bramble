@@ -1,5 +1,6 @@
 {
   "name": "@bramble/starknet",
+  "description": "Generic Starknet RPC transport, timeout and failover, RPC response validation, call and value serialization, fee and resource primitives, and signer adaptation.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

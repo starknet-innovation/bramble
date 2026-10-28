@@ -26,6 +26,7 @@ import { NETWORK_RETRY_MESSAGE } from "@bramble/core/network-error";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
 
+import { ADDRESS_IMPORT_ERROR_COPY } from "./friendly-error-copy-address";
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
 import { PRIVACY_ERROR_COPY } from "./friendly-error-copy-privacy";
 import { INTERNAL_ERROR_COPY } from "./friendly-error-internal";
@@ -104,7 +105,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // table covers the authoritative transaction-path refusals behind them.
   [
     "deployed argent account guardian is not supported by this wallet",
-    "This account has a guardian, a second approver this wallet can't provide. Use it in Ready, or remove the guardian there.",
+    "This account has a guardian, a second approver this wallet can't provide. Remove it with Recover account on Home, or use the account in Ready.",
   ],
   [
     "deployed argent account owner does not match the wallet signer",
@@ -138,6 +139,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "braavos account returned a malformed signer list",
     "Couldn't read this account's signers. Try again.",
   ],
+  // The import-by-address owner read (issue 398); the lookup reports it as
+  // "Couldn't check this account", so this is the fallback wording.
+  ["account returned a malformed owner key", "Couldn't read this account's owner. Try again."],
+  ["account returned a malformed owner type", "Couldn't read this account's owner. Try again."],
   ["rpc returned an invalid account class hash", "Couldn't read this account. Try again."],
   [
     "braavos account class hash is not a release this wallet recognizes",
@@ -222,6 +227,13 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["account import failed", "Couldn't add those accounts. Try again."],
   ["import account failed", KEY_IMPORT_FAILED],
   ["create key vault failed", "Couldn't create your wallet. Try again."],
+  // A "Ready Account" key import only restores an account the chain shows in
+  // use; the scan can't prove none exists, only that it found none.
+  [
+    "no ready account found for this key",
+    "Couldn't find a Ready account for this key on this network.",
+  ],
+  ["ready account check unavailable", "Couldn't check this key's Ready accounts. Try again."],
   ["seed import failed", SEED_IMPORT_FAILED],
   ["mnemonic validation unavailable", "Couldn't check that recovery phrase. Try again."],
   ["reveal failed", "Couldn't reveal that. Re-enter your passphrase and try again."],
@@ -257,6 +269,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "account recovery unavailable",
     "Couldn't recover accounts. Check your connection and try again.",
   ],
+  ...ADDRESS_IMPORT_ERROR_COPY,
   // The 2FA / guardian removal flow's own fallbacks (runtime-recovery.ts and
   // account-recovery.ts), worded apart from the account-discovery flow above.
   [
