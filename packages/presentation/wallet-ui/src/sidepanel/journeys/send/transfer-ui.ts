@@ -3,7 +3,6 @@
 import type { SendRouteResolution } from "@bramble/transactions/send-routes";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { awaitConfirmation } from "../../shared/confirm-submitted";
 import { errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { watchDeployment } from "../../shell/shell-bindings";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
@@ -12,6 +11,7 @@ import { transitionSendStage } from "./send-transition";
 import { bindTransferBuckets } from "./transfer-buckets-ui";
 import { createComposeFee } from "./transfer-compose-fee";
 import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transfer-compose-ui";
+import { bindTransferConfirmation } from "./transfer-confirm-ui";
 import { bindTransferExits } from "./transfer-exits-ui";
 import { bindGaslessFeeChoice } from "./transfer-gasless-choice";
 import { transferMaxSpendable } from "./transfer-max";
@@ -35,7 +35,6 @@ import {
   transferRoute,
 } from "./transfer-route";
 import {
-  confirmedState,
   preparationFailure,
   preparationFor,
   preparedState,
@@ -270,36 +269,19 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   bindTransferExits(form, { complete, completionTarget, navigate });
 
   // Polls to the last checkpoint, then hands over to "Check again".
-  const confirmSubmitted = async (epoch: number): Promise<void> => {
-    const hash = transferState.transactionHash;
-    if (!hash) return;
-    const outcome = await awaitConfirmation({
-      ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
-      hash,
-      loadActivity: () => wallet.loadActivity(),
-      stillCurrent: () => epoch === transferEpoch,
-      ...(deps.waitForConfirmation ? { wait: deps.waitForConfirmation } : {}),
-    });
-    if (epoch !== transferEpoch) return;
-    if (!outcome) {
-      transferState = { ...transferState, stage: "pending" };
+  const confirmSubmitted = bindTransferConfirmation<Review>({
+    deps,
+    form,
+    nextEpoch: () => ++transferEpoch,
+    readEpoch: () => transferEpoch,
+    readState: () => transferState,
+    // A remount replaces the form; the watch must paint whichever one is live.
+    repaint: () => {
       repaintActiveTransfer?.();
-      return;
-    }
-    transferState = confirmedState(transferState, outcome);
-    repaintActiveTransfer?.();
-    // Only a confirmed private route moved a balance the indexer must catch up on.
-    const settledRoute = transferState.fields ? transferRoute(transferState.fields).id : null;
-    if (outcome.kind === "succeeded" && settledRoute !== null && settledRoute !== "public-public") {
-      deps.onPrivateSendConfirmed?.();
-    }
-    showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
-  };
-  form.querySelector("#send-check-again")?.addEventListener("click", () => {
-    const epoch = ++transferEpoch;
-    transferState = { ...transferState, stage: "confirming" };
-    repaint();
-    void confirmSubmitted(epoch);
+    },
+    writeState: (state) => {
+      transferState = state;
+    },
   });
   // Every failure has dropped the review, so this submit starts a new one.
   form.querySelector("#send-retry")?.addEventListener("click", () => {

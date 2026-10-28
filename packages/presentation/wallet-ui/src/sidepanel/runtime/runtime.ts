@@ -2,7 +2,6 @@
  * Typed runtime message client for the side panel UI.
  */
 
-import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
@@ -13,12 +12,10 @@ import {
   isApprovalDecisionResponse,
   isBalancesResponse,
   isConnectedSitesResponse,
-  isCreateAccountResponse,
   isFeeReviewResponse,
   isPreferencesResponse,
   isPricesResponse,
   isRevealSecretsResponse,
-  isSupportDiagnosticsResponse,
   isTokenChartResponse,
   isTransactionAlertsResponse,
   isTransferResponse,
@@ -60,6 +57,7 @@ import { lostReplySend, refusalText, relabelLostReply, responseError } from "./r
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
+import { createSettingsRuntimeClient } from "./runtime-settings";
 import { unavailableStatus } from "./runtime-status";
 
 /**
@@ -343,116 +341,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "wallet unavailable");
     },
-    async saveAddress(
-      label: string,
-      address: string,
-      networkId: string,
-      publicKeyX?: string,
-      nostrPublicKey?: string,
-    ): Promise<void> {
-      const response = await sendMessage({
-        address,
-        label,
-        networkId,
-        ...(nostrPublicKey ? { nostrPublicKey } : {}),
-        ...(publicKeyX ? { publicKeyX } : {}),
-        type: "wallet.saveAddress",
-      });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "address save failed");
-    },
-    async setActiveAccount(accountId: string): Promise<void> {
-      const response = await sendMessage({ accountId, type: "wallet.setActiveAccount" });
-      if (isCreateAccountResponse(response)) {
-        return;
-      }
-      throw responseError(response, "account switch failed");
-    },
-    async importPreferences(preferences: unknown): Promise<void> {
-      const response = await sendMessage({ preferences, type: "wallet.importPreferences" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "backup import failed");
-    },
-    async removeAddress(id: string): Promise<void> {
-      const response = await sendMessage({ id, type: "wallet.removeAddress" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "address removal failed");
-    },
-    async setAccountLabel(accountId: string, label: string): Promise<void> {
-      const response = await sendMessage({ accountId, label, type: "wallet.setAccountLabel" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "label update failed");
-    },
     ...createAccountGroupClient(sendMessage),
-    async setDisplay(input: {
-      readonly approvalSurface?: "popup" | "side-panel";
-      readonly displayCurrency?: "eur" | "gbp" | "usd";
-      readonly productAnalytics?: boolean;
-      readonly reliabilityDiagnostics?: boolean;
-      readonly theme?: "dark" | "light";
-    }): Promise<void> {
-      const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "display update failed");
-    },
-    async loadDiagnostics() {
-      const response = await sendMessage({ type: "wallet.diagnostics" });
-      if (isSupportDiagnosticsResponse(response)) return response.diagnostics;
-      throw responseError(response, "diagnostic export failed");
-    },
-    async setExplorerFallback(networkId: string, enabled: boolean, apiUrl?: string): Promise<void> {
-      const response = await sendMessage({
-        ...(apiUrl === undefined ? {} : { apiUrl }),
-        enabled,
-        networkId,
-        type: "wallet.setExplorerFallback",
-      });
-      if (isPreferencesResponse(response)) return;
-      throw responseError(response, "explorer fallback update failed");
-    },
-    async setRpcOverride(networkId: string, rpcUrl: string): Promise<void> {
-      const response = await sendMessage({ networkId, rpcUrl, type: "wallet.setRpcOverride" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "rpc endpoint update failed");
-    },
-    async setNostrRelayUrl(relayUrl: string): Promise<void> {
-      const response = await sendMessage({ relayUrl, type: "wallet.setNostrRelayUrl" });
-      if (isPreferencesResponse(response)) return;
-      throw responseError(response, "Nostr relay update failed");
-    },
-    async setStrk20NetworkConfig(
-      networkId: string,
-      config: Strk20NetworkConfig | null,
-    ): Promise<void> {
-      const response = await sendMessage({
-        config,
-        networkId,
-        type: "wallet.setStrk20NetworkConfig",
-      });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "privacy service configuration failed");
-    },
-    async setActiveNetwork(networkId: string): Promise<WalletStatus> {
-      const response = await sendMessage({ networkId, type: "wallet.setActiveNetwork" });
-      if (isWalletStatus(response)) {
-        return response;
-      }
-      throw responseError(response, "network switch failed");
-    },
+    ...createSettingsRuntimeClient(sendMessage),
     /** Sends under the reviewed fees. A missing ceiling is refused before signing. */
     async submitTransfer(
       accountId: string,
