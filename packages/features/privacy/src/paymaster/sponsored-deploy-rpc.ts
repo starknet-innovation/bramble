@@ -7,10 +7,10 @@
  * Trust boundary: the relay URL is wallet-configured, never dapp-supplied, and
  * everything it answers is untrusted. A broadcast is a determinate refusal only
  * for a well-formed JSON-RPC 2.0 envelope carrying this request's id and a
- * valid `error` object (an object with an integer `code`) and no `result`, on a
+ * valid `error` object (an integer `code` and a string `message`) and no `result`, on a
  * 2xx or 4xx status. Every other broadcast answer — a transport failure, the
  * deadline, an unreadable or oversized body, a 5xx, a non-2xx without that
- * clean error, a malformed error (null, a string, no code), an error beside a
+ * clean error, a malformed error (null, a string, no code or message), an error beside a
  * result — is a lost answer: the relay may already have forwarded the deploy.
  * A quote never broadcasts, so its failures are always determinate, and a bare
  * 4xx there still counts as the sponsor's refusal.
@@ -39,10 +39,14 @@ export type SponsoredRelayAnswer =
 const LOST: SponsoredRelayAnswer = { kind: "lost" };
 const REFUSED: SponsoredRelayAnswer = { kind: "refused" };
 
-// A JSON-RPC error object the relay stated for itself. `null`, a string, or an
-// object without an integer code is not one.
+// A JSON-RPC error object the relay stated for itself: an integer code and a
+// string message, as JSON-RPC 2.0 requires. `null`, a string, or an object
+// missing either is not one.
 const isRpcError = (value: unknown): boolean =>
-  isRecord(value) && typeof value["code"] === "number" && Number.isInteger(value["code"]);
+  isRecord(value) &&
+  typeof value["code"] === "number" &&
+  Number.isInteger(value["code"]) &&
+  typeof value["message"] === "string";
 
 /**
  * Classifies one HTTP answer to a relay call; `broadcast` is true for the call

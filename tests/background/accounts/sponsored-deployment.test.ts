@@ -178,6 +178,10 @@ describe("sponsored deploy submission", () => {
     ["a null error", () => Response.json({ error: null, id: "bramble-strk20", jsonrpc: "2.0" })],
     ["a bare 4xx", () => new Response("forbidden", { status: 403 })],
     [
+      "an error without a message",
+      () => Response.json({ error: { code: 163 }, id: "bramble-strk20", jsonrpc: "2.0" }),
+    ],
+    [
       "an error beside a result",
       () =>
         Response.json({

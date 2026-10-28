@@ -275,7 +275,9 @@ describe("sponsored deploy submission", () => {
     ["a null error", envelope({ error: null })],
     ["a string error", envelope({ error: "rejected" })],
     ["an error without a code", envelope({ error: { message: "rejected" } })],
-    ["an error with a non-integer code", envelope({ error: { code: "163" } })],
+    ["an error with a non-integer code", envelope({ error: { code: "163", message: "rejected" } })],
+    ["an error without a message", envelope({ error: { code: 163 } })],
+    ["an error with a non-string message", envelope({ error: { code: 163, message: 7 } })],
     ["an error beside a result", envelope({ ...REFUSAL, result: { transaction_hash: "0xabc" } })],
     [
       "an error under another id",
