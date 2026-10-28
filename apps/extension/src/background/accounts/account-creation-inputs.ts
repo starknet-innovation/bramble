@@ -171,7 +171,12 @@ export const readDiscoverRecoveryAccountsInput = (
 // that is left to the lookup, so a malformed one gets its own refusal.
 const ADDRESS_INPUT_MAX_LENGTH = 66;
 
-const isAddressInput = (value: unknown): value is string =>
+/**
+ * A pasted account address as a message may carry it: a non-empty string no
+ * longer than an address. Shared by every import-by-address message; the
+ * lookup canonicalizes it and refuses one that is not a Starknet address.
+ */
+export const isAddressInput = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= ADDRESS_INPUT_MAX_LENGTH;
 
 /**

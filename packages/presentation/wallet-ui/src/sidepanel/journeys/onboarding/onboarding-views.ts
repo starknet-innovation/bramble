@@ -12,6 +12,7 @@ import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
+import { addressFinderFields } from "./address-finder-view";
 import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 
 /**
@@ -315,6 +316,7 @@ const importKeyStep = (): string => `
       </div>
       ${networkConsequence()}
       <p id="import-key-result" role="status"></p>
+      ${addressFinderFields("key", { hidden: true })}
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -353,16 +355,7 @@ export const recoveryScanFields = (): string => `
         <div class="disclosure-body">
           <ul class="allowance-list" aria-label="Recovered Braavos accounts"></ul>
         </div>
-      </details>
-      <details class="disclosure" data-recovery-address>
-        <summary>Can't find it? Paste the account address</summary>
-        <div class="disclosure-body onboarding-fields">
-          ${textField({ autocapitalize: "none", autocomplete: "off", label: "Address or explorer link", maxlength: 200, name: "recoveryAddress", spellcheck: false })}
-          <p class="hint" data-recovery-address-network></p>
-          ${button({ attributes: { id: "recovery-address-search" }, label: "Find account", variant: "secondary" })}
-          <p id="recovery-address-result" class="hint" role="status"></p>
-        </div>
-      </details>
+      </details>${addressFinderFields("recovery")}
       <details class="disclosure">
         <summary>Advanced manual index</summary>
         <div class="disclosure-body onboarding-fields">

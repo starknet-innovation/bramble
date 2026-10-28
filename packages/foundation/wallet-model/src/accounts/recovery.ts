@@ -257,6 +257,10 @@ export const isReadOnlyReason = (value: unknown): value is ReadOnlyReason =>
   value === "undeployed" ||
   SIGNING_RESTRICTIONS.includes(value as RecoverySigningRestriction);
 
+/** Validates one advisory signing restriction at runtime boundaries. */
+export const isRecoverySigningRestriction = (value: unknown): value is RecoverySigningRestriction =>
+  SIGNING_RESTRICTIONS.includes(value as RecoverySigningRestriction);
+
 /** Validates one public discovery result before caching or rendering it. */
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>
   isRecord(value) &&
@@ -265,8 +269,7 @@ export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAcc
   (value["byAddress"] === undefined || value["byAddress"] === true) &&
   typeof value["deployed"] === "boolean" &&
   typeof value["funded"] === "boolean" &&
-  (value["restriction"] === undefined ||
-    SIGNING_RESTRICTIONS.includes(value["restriction"] as RecoverySigningRestriction));
+  (value["restriction"] === undefined || isRecoverySigningRestriction(value["restriction"]));
 
 /**
  * Why an account pasted by its address (issue 398) cannot be imported, one per
@@ -286,4 +289,37 @@ export const ADDRESS_IMPORT_REFUSALS = {
   // The two SNF-operated sources answered differently about the account.
   unconfirmed: "account lookup sources disagree",
   unsupportedClass: "account class not supported for import",
+} as const;
+
+/**
+ * The Ready account a private key was proved to control at a pasted address
+ * (issue 779): public data only — the id and address it is stored under, the
+ * class its record keeps, and the scan's advisory restriction (a guardian
+ * imports view only until it is recovered). Never carries key material.
+ */
+export type KeyAddressCandidate = {
+  readonly accountId: string;
+  readonly address: string;
+  readonly byAddress: true;
+  readonly classHash: string;
+  readonly deployed: true;
+  readonly restriction?: RecoverySigningRestriction;
+};
+
+/**
+ * Raw diagnostic for a Ready key with no account behind it on this network
+ * (issue 776). The background refuses with it; the panel offers the address
+ * finder after it (issue 779), so the two read one string.
+ */
+export const NO_READY_ACCOUNT_FOR_KEY = "No Ready account found for this key";
+
+/**
+ * The private-key variant's own refusals (issue 779). Every other reason a
+ * pasted address is refused is one of {@link ADDRESS_IMPORT_REFUSALS}; these two
+ * name the key rather than a phrase, and point a Bramble account at the
+ * account type that imports it.
+ */
+export const KEY_ADDRESS_IMPORT_REFUSALS = {
+  brambleAccount: "account is a bramble account, not a ready account",
+  noMatch: "private key does not control this account",
 } as const;

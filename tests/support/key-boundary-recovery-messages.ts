@@ -1,4 +1,5 @@
 /** Recovery requests that must remain inside the encrypted key boundary. */
+import { ARGENT_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import {
   account,
   extensionSender,
@@ -87,6 +88,30 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
       address: account.address,
       networkId: "SN_MAIN",
       type: "wallet.findOwnAccountByAddress",
+    },
+    sender: extensionSender,
+  },
+  // The private-key variant (issue 779) carries the raw key; its answer is one
+  // public row, scanned like every other.
+  {
+    message: {
+      address: account.address,
+      networkId: "SN_MAIN",
+      privateKey: SECRET_PRIVATE_KEY,
+      type: "wallet.findKeyAccountByAddress",
+    },
+    sender: extensionSender,
+  },
+  {
+    // A Ready key imported by its pasted address (issue 779): re-proved
+    // against the chain, then written; the response is scanned all the same.
+    message: {
+      accountContractType: "argent",
+      address: account.address,
+      classHash: ARGENT_ACCOUNT_CLASS_HASH,
+      networkId: "SN_MAIN",
+      privateKey: SECRET_PRIVATE_KEY,
+      type: "wallet.importAccount",
     },
     sender: extensionSender,
   },

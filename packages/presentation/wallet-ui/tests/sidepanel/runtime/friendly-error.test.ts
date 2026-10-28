@@ -4,6 +4,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
+import {
+  ADDRESS_IMPORT_REFUSALS,
+  KEY_ADDRESS_IMPORT_REFUSALS,
+} from "@bramble/wallet-model/recovery";
 
 import { friendlyError } from "../../../src/sidepanel/runtime/friendly-error";
 
@@ -59,6 +63,21 @@ describe("friendlyError", () => {
     );
     expect(friendlyError("Ready account check unavailable").message).toBe(
       "Couldn't check this key's Ready accounts. Try again.",
+    );
+  });
+
+  // The private-key import by address (issue 779) names the key, and sends a
+  // Bramble account to the account type that imports it; the other refusals
+  // are #398's own.
+  test("says a private key doesn't control a pasted account, in its own words", () => {
+    expect(friendlyError(KEY_ADDRESS_IMPORT_REFUSALS.noMatch).message).toBe(
+      "This private key doesn't control that account.",
+    );
+    expect(friendlyError(KEY_ADDRESS_IMPORT_REFUSALS.brambleAccount).message).toBe(
+      "This is a Bramble account. Choose Bramble Account to import it.",
+    );
+    expect(friendlyError(ADDRESS_IMPORT_REFUSALS.noMatch).message).toBe(
+      "This recovery phrase doesn't control that account.",
     );
   });
 

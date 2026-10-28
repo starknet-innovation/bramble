@@ -146,6 +146,15 @@ export type AddDerivedAccountInput = {
  */
 export type ImportRawKeyAccountInput = Omit<PreviewImportedAccountInput, "classHash"> & {
   /**
+   * The address of an account found by its pasted address (issue 779): the
+   * one account is stored at this address, under this id, instead of the one
+   * its key derives. Only with `classHash` and never with `classHashes`;
+   * the caller has proved the key is the account's live owner just before.
+   */
+  readonly address?: string;
+  /** The class an `address` import records; meaningless, and refused, alone. */
+  readonly classHash?: string;
+  /**
    * The releases to store, one account each, all signing with the same key.
    * Absent means the family default. Each must be a class the family was
    * deployed with; any account already stored refuses the whole import.

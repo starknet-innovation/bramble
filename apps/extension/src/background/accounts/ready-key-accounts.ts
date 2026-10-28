@@ -25,13 +25,11 @@ import { recoveryProbeTokens, type WalletPreferencesStore } from "@bramble/setti
 import type { PreviewImportedAccountInput } from "@bramble/vault/service";
 import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import { NO_READY_ACCOUNT_FOR_KEY } from "@bramble/wallet-model/recovery";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import { type AccountHolding, readAccountActivity } from "./account-activity";
 import type { WalletStatusReader } from "./wallet-reader";
-
-/** Raw diagnostic for a Ready key with no account behind it on this network. */
-export const NO_READY_ACCOUNT_FOR_KEY = "No Ready account found for this key";
 
 /** Raw diagnostic for a Ready-key check the chain could not answer. */
 export const READY_KEY_CHECK_UNAVAILABLE = "Ready account check unavailable";

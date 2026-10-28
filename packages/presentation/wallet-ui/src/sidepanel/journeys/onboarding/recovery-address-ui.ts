@@ -1,25 +1,24 @@
 /**
- * "Can't find it? Paste the account address" in the recovery picker (issue
- * 398). Reads the pasted address or explorer link, asks the background which
- * key of the phrase controls it, and hands a match to the picker. The search
- * itself, the key match, and every refusal are the background's; this only
- * turns the answer into a line the reader can act on.
+ * "Can't find it? Paste the account address" (./address-finder-view.ts), in
+ * the recovery picker (issue 398) and the private-key import forms (issue
+ * 779). Reads the pasted address or explorer link, asks the background
+ * whether the phrase or key controls it, and hands a match to the picker. The
+ * search itself, the key match, and every refusal are the background's; this
+ * only turns the answer into a line the reader can act on.
  */
 
-import {
-  ADDRESS_IMPORT_REFUSALS,
-  type RecoveryAccountCandidate,
-} from "@bramble/wallet-model/recovery";
+import { ADDRESS_IMPORT_REFUSALS } from "@bramble/wallet-model/recovery";
 import { buttonBusy, errorDetails, errorLine } from "../../shared/dom";
 import { networkName, readPastedAddress } from "./recovery-address";
 
-type RecoveryAddressFinderDeps = {
-  readonly form: HTMLFormElement;
-  /** The background lookup, bound to the phrase the picker searches. */
-  readonly lookup: (address: string) => Promise<RecoveryAccountCandidate>;
+type RecoveryAddressFinderDeps<Found> = {
+  /** The finder block (`[data-recovery-address]`); absent binds nothing. */
+  readonly root: HTMLElement | null;
+  /** The background lookup, bound to the phrase or key the picker searches. */
+  readonly lookup: (address: string) => Promise<Found>;
   readonly networkId: () => string;
   /** Adds a match to the picker and returns the line that reports it. */
-  readonly onFound: (candidate: RecoveryAccountCandidate) => string;
+  readonly onFound: (found: Found) => string;
 };
 
 /** The finder's handle: clears its input and result when the picker resets. */
@@ -41,14 +40,15 @@ const failureLine = (error: unknown, networkId: string): string =>
     ? notFoundLine(networkId)
     : errorLine(error, ADDRESS_IMPORT_REFUSALS.unavailable);
 
-/** Binds the address finder inside a recovery picker form. */
-export const bindRecoveryAddressFinder = (
-  deps: RecoveryAddressFinderDeps,
+/** Binds one address finder block. */
+export const bindRecoveryAddressFinder = <Found>(
+  deps: RecoveryAddressFinderDeps<Found>,
 ): RecoveryAddressFinder => {
-  const input = deps.form.querySelector<HTMLInputElement>('input[name="recoveryAddress"]');
-  const search = deps.form.querySelector<HTMLButtonElement>("#recovery-address-search");
-  const network = deps.form.querySelector<HTMLElement>("[data-recovery-address-network]");
-  const result = deps.form.querySelector<HTMLElement>("#recovery-address-result");
+  const input = deps.root?.querySelector<HTMLInputElement>("input") ?? null;
+  const search =
+    deps.root?.querySelector<HTMLButtonElement>("[data-recovery-address-search]") ?? null;
+  const network = deps.root?.querySelector<HTMLElement>("[data-recovery-address-network]");
+  const result = deps.root?.querySelector<HTMLElement>("[data-recovery-address-result]");
   let generation = 0;
 
   const showNetwork = (): void => {
@@ -84,8 +84,8 @@ export const bindRecoveryAddressFinder = (
     busy(true);
     say(SEARCHING_LINE);
     try {
-      const candidate = await deps.lookup(pasted.address);
-      if (active === generation) say(deps.onFound(candidate));
+      const found = await deps.lookup(pasted.address);
+      if (active === generation) say(deps.onFound(found));
     } catch (error) {
       if (active === generation) say(failureLine(error, networkId));
     } finally {
@@ -95,9 +95,7 @@ export const bindRecoveryAddressFinder = (
   };
 
   showNetwork();
-  deps.form
-    .querySelector<HTMLDetailsElement>("[data-recovery-address]")
-    ?.addEventListener("toggle", showNetwork);
+  deps.root?.addEventListener("toggle", showNetwork);
   search?.addEventListener("click", () => void find());
   // Enter in the field searches; it must not submit the surrounding form.
   input?.addEventListener("keydown", (event) => {

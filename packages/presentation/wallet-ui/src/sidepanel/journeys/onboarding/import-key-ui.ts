@@ -4,7 +4,8 @@
  * field until the single privileged `createKeyVault` request; nothing here
  * logs, stores, or echoes it, and failures surface as toast + status text.
  * A "Ready Account" key first lists the Argent releases it controls an address
- * in use at; the user ticks which to import before choosing a passphrase.
+ * in use at; the user ticks which to import before choosing a passphrase. When
+ * it is not listed, the user can paste its address instead (issue 779).
  */
 
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
@@ -12,8 +13,9 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { onNetworkChange } from "../../shared/network-change";
+import { bindReadyKeyAddressFinder } from "./ready-key-address-finder";
 import { mountReadyKeyPicker } from "./ready-key-picker";
-import { type ReadyKeyInputs, readyKeySession } from "./ready-key-session";
+import { type ReadyKeyInputs, readyKeyPick, readyKeySession } from "./ready-key-session";
 
 /** Dependencies the key-import binding closes over. */
 export type KeyImportUiDeps = {
@@ -72,10 +74,20 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
         (rawInput?.value.trim() ?? "").length === 0 || session.picked()?.length === 0;
     }
   };
+  const finder = bindReadyKeyAddressFinder({
+    form,
+    mount: (candidate) =>
+      result ? mountReadyKeyPicker(result, [candidate], new Set(), refreshGate) : null,
+    networkId: deps.networkId,
+    onFound: refreshGate,
+    session,
+    wallet,
+  });
   // A changed key, salt, or account type makes the listed accounts stale, and
-  // drops any list still on its way.
+  // drops any list or address lookup still on its way.
   const dropPicker = (): void => {
     session.invalidate();
+    finder.withdraw();
     buttonBusy(continueButton, false);
     refreshGate();
   };
@@ -125,12 +137,14 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
       .then(
         (outcome) => {
           if (outcome === "superseded") return;
+          if (outcome === "mounted") finder.offer("listed");
           buttonBusy(continueButton, false);
           refreshGate();
         },
         (error: unknown) => {
           showToast(errorDetails(error, "Account import failed"), "error", form);
           if (result) result.textContent = errorLine(error, "Account import failed");
+          finder.offer({ error });
           buttonBusy(continueButton, false);
           refreshGate();
         },
@@ -151,12 +165,13 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
     // Only ticks made for exactly this key, salt, and network are sent; a list
     // built for other inputs is dropped and the user lists the accounts again.
     const selection = contract === "argent" ? session.selection() : null;
+    const pick = selection === null ? null : readyKeyPick(selection);
     if (contract === "argent") {
       if (selection === null) {
         dropPicker();
         deps.showStep("import-key");
       }
-      if (selection === null || selection.classHashes.length === 0) {
+      if (pick === null) {
         showToast("Choose the accounts to import", "error", form);
         return;
       }
@@ -170,7 +185,7 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
         deps.passphrase(),
         contract,
         sent.salt,
-        selection?.classHashes,
+        pick ?? undefined,
       );
       showToast("Wallet created", "success", form);
       await deps.render(await wallet.loadStatus());

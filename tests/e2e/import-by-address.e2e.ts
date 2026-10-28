@@ -88,14 +88,19 @@ const reachPicker = async (page: Page): Promise<void> => {
   await page.locator('input[name="vaultPassphraseConfirm"]').fill(VAULT_PASSPHRASE);
   await page.getByRole("button", { name: "Find my accounts" }).click();
   await expect(page.locator("#recovery-scan-status")).toContainText("Search complete");
-  await page.getByText("Can't find it? Paste the account address").click();
+  await page
+    .locator('[data-recovery-address="recovery"]')
+    .getByText("Can't find it? Paste the account address")
+    .click();
 };
 
 test("finds a Ready account by its address and restores it", async ({ extension }) => {
   const page = await extension.openExtensionPage("onboarding.html");
   await mockChain(page, await ownLadderKey(page));
   await reachPicker(page);
-  await expect(page.locator("[data-recovery-address-network]")).toHaveText("On Starknet Mainnet");
+  await expect(
+    page.locator('[data-recovery-address="recovery"] [data-recovery-address-network]'),
+  ).toHaveText("On Starknet Mainnet");
   await page
     .locator('input[name="recoveryAddress"]')
     .fill(`https://starkscan.co/contract/${PASTED}`);

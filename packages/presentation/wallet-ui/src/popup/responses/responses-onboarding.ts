@@ -10,6 +10,8 @@ import { isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import {
   isRecoveryAccountCandidate,
   isRecoveryAccountIndex,
+  isRecoverySigningRestriction,
+  type KeyAddressCandidate,
   type RecoveryAccountCandidate,
 } from "@bramble/wallet-model/recovery";
 
@@ -144,3 +146,24 @@ export const isReadyKeyDiscoveryResponse = (value: unknown): value is ReadyKeyDi
   value["candidates"].length > 0 &&
   value["candidates"].every(isReadyKeyCandidate) &&
   value["ok"] === true;
+
+/**
+ * Validates a private-key import-by-address answer (issue 779): one public
+ * deployed row the picker can show, marked as found by address so its import
+ * carries that address, with at most the scan's advisory restriction.
+ */
+export const isKeyAddressLookupResponse = (
+  value: unknown,
+): value is { readonly candidate: KeyAddressCandidate; readonly ok: true } => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, ["candidate", "ok"]) || value["ok"] !== true) {
+    return false;
+  }
+  const candidate = value["candidate"];
+  if (!isRecord(candidate) || candidate["byAddress"] !== true) return false;
+  const { byAddress: _byAddress, restriction, ...row } = candidate;
+  return (
+    row["deployed"] === true &&
+    isReadyKeyCandidate(row) &&
+    (restriction === undefined || isRecoverySigningRestriction(restriction))
+  );
+};

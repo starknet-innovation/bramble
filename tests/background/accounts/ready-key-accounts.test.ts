@@ -12,9 +12,9 @@ import {
   BRAAVOS_BASE_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { NO_READY_ACCOUNT_FOR_KEY } from "@bramble/wallet-model/recovery";
 import {
   discoverReadyKeyAccounts,
-  NO_READY_ACCOUNT_FOR_KEY,
   READY_KEY_CHECK_UNAVAILABLE,
   verifyReadyKeyClasses,
 } from "../../../apps/extension/src/background/accounts/ready-key-accounts";
