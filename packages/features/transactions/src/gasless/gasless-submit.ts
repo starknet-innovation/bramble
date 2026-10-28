@@ -69,7 +69,7 @@ export type GaslessHeldToken = {
 
 /**
  * What one independent price source says the STRK estimate is worth in a
- * fee token, in that token's base units, before the 20% margin. Null hides
+ * fee token, in that token's base units, before the 7/2 margin. Null hides
  * the token.
  */
 export type GaslessPriceReference = (token: {

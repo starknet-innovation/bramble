@@ -32,17 +32,17 @@ export const NOW = 1_700_000_000;
 
 /**
  * STRK estimate whose $1/$1 conversion is {@link REFERENCE} USDC base units.
- * The 6/5 ceiling of that reference is what an over-ceiling quote must miss.
+ * The 7/2 ceiling of that reference is what an over-ceiling quote must miss.
  */
 export const STRK_FEE = "5000000000000000";
 
 /**
  * Independent USDC reference for {@link STRK_FEE} at one dollar each.
- * The happy-path quote signs this amount, which is under the 6/5 ceiling.
+ * The happy-path quote signs this amount, which is under the 7/2 ceiling.
  */
 export const REFERENCE = 5_000n;
 
-/** One base unit over the 6/5 ceiling of {@link REFERENCE}. */
+/** One base unit over the 7/2 ceiling of {@link REFERENCE}. */
 export const OVER_CEILING = gaslessFeeCeiling(REFERENCE) + 1n;
 
 /** Hash the mocked execute returns. */

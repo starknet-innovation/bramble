@@ -1,7 +1,7 @@
 # Gasless mainnet integration
 
 `bun run test:mainnet` submits one real Starknet mainnet transaction through the
-wallet's gasless path: the shipped mainnet route, the 6/5 price ceiling, the
+wallet's gasless path: the shipped mainnet route, the 7/2 price ceiling, the
 pinned forwarder, SNIP-9 v2 / SNIP-12 revision 1 signing, and
 `paymaster_executeTransaction`. It is not part of `bun run check` or CI. With
 no account configured it prints a skip message and exits 0.
@@ -126,10 +126,10 @@ estimate passes tip `0x0`, the same as the wallet, so starknet.js does not
 scan blocks for a tip.
 
 Each curated token prints why it was skipped, or the quoted fee against the
-6/5 ceiling. A build that returns `invalid_gasless_request` prints the request
+7/2 ceiling. A build that returns `invalid_gasless_request` prints the request
 and the gateway body. The private key is not in either.
 
 On success the script prints the transaction hash, a Voyager link, and a
-Starkscan link. A quote that fails the forwarder pin or the 6/5 ceiling is
+Starkscan link. A quote that fails the forwarder pin or the 7/2 ceiling is
 refused before execute and does not spend. A malformed build is checked only
 as a gateway error code (`invalid_gasless_request`) and is not submitted.

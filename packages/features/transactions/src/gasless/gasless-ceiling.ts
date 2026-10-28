@@ -1,21 +1,22 @@
 /**
  * Independent ceiling for a gasless fee. The paymaster quotes the token
  * amount; this bounds it from the wallet's own STRK estimate and fiat
- * prices, never from the paymaster's price. Twenty percent over that
- * reference is the reviewed margin.
+ * prices, never from the paymaster's price. Seven halves of that reference
+ * is the reviewed margin, wide enough for the paymaster's suggested maximum.
  */
 
 /**
- * Numerator of the gasless margin: 6/5 is 20% over the independent price.
- * Not {@link STRK20_FEE_CEILING_MULTIPLIER}, which is a separate 2× band.
+ * Numerator of the gasless margin: 7/2 is 3.5× the independent
+ * STRK-equivalent price. Not {@link STRK20_FEE_CEILING_MULTIPLIER}, which
+ * is a separate 2× band.
  */
-export const GASLESS_FEE_CEILING_NUMERATOR = 6n;
+export const GASLESS_FEE_CEILING_NUMERATOR = 7n;
 
 /**
  * Denominator of the gasless margin. Paired with
  * {@link GASLESS_FEE_CEILING_NUMERATOR}.
  */
-export const GASLESS_FEE_CEILING_DENOMINATOR = 5n;
+export const GASLESS_FEE_CEILING_DENOMINATOR = 2n;
 
 const pow10 = (decimals: number): bigint => 10n ** BigInt(decimals);
 
@@ -53,7 +54,7 @@ export const convertStrkFeeToToken = (input: {
 
 /**
  * Highest token amount the wallet will sign for `reference` base units of
- * that token. Rounds up so the 20% margin is not shortened by division.
+ * that token. Rounds up so the 7/2 margin is not shortened by division.
  * A non-positive reference yields zero, which refuses every quote.
  */
 export const gaslessFeeCeiling = (reference: bigint): bigint =>

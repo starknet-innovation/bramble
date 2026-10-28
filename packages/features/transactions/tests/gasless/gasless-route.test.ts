@@ -1,5 +1,5 @@
 /**
- * Route pins, the 20% ceiling, which accounts may sign v2, and the build
+ * Route pins, the 7/2 ceiling, which accounts may sign v2, and the build
  * request the gateway's checker accepts.
  */
 import { describe, expect, test } from "bun:test";
@@ -95,9 +95,9 @@ describe("gasless route", () => {
 });
 
 describe("gaslessFeeCeiling", () => {
-  test("is 20% over the reference, rounded up", () => {
-    expect(gaslessFeeCeiling(1000n)).toBe(1200n);
-    expect(gaslessFeeCeiling(1n)).toBe(2n);
+  test("is 7/2 of the reference, rounded up", () => {
+    expect(gaslessFeeCeiling(1000n)).toBe(3500n);
+    expect(gaslessFeeCeiling(1n)).toBe(4n);
     expect(gaslessFeeCeiling(0n)).toBe(0n);
   });
 

@@ -96,10 +96,10 @@ describe("gasless send with the mainnet route enabled only in the test", () => {
         poolFeeFri: BigInt(STRK_FEE),
       }),
     ).toBe(REFERENCE);
-    expect(GASLESS_FEE_CEILING_NUMERATOR).toBe(6n);
-    expect(GASLESS_FEE_CEILING_DENOMINATOR).toBe(5n);
-    expect(gaslessFeeCeiling(REFERENCE)).toBe(6000n);
-    expect(OVER_CEILING).toBe(gaslessFeeCeiling(REFERENCE) + 1n);
+    expect(GASLESS_FEE_CEILING_NUMERATOR).toBe(7n);
+    expect(GASLESS_FEE_CEILING_DENOMINATOR).toBe(2n);
+    expect(gaslessFeeCeiling(REFERENCE)).toBe(17_500n);
+    expect(OVER_CEILING).toBe(17_501n);
     const known = knownTokensForNetwork("SN_MAIN").find((token) => token.symbol === "USDC");
     expect(canonicalFelt(known?.address ?? "")).toBe(USDC);
     expect(known?.address.length).toBeGreaterThan(USDC.length);
@@ -156,7 +156,7 @@ describe("gasless send with the mainnet route enabled only in the test", () => {
     ]);
   });
 
-  test("refuses a fresh quote above the 6/5 ceiling before execute", async () => {
+  test("refuses a fresh quote above the 7/2 ceiling before execute", async () => {
     const harness = openGaslessHarness();
     const { offer } = await chooseUsdc(harness);
     harness.script.laterBuild = "over-ceiling";
