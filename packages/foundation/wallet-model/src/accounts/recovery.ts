@@ -315,11 +315,12 @@ export const NO_READY_ACCOUNT_FOR_KEY = "No Ready account found for this key";
 
 /**
  * The private-key variant's own refusals (issue 779). Every other reason a
- * pasted address is refused is one of {@link ADDRESS_IMPORT_REFUSALS}; these two
- * name the key rather than a phrase, and point a Bramble account at the
- * account type that imports it.
+ * pasted address is refused is one of {@link ADDRESS_IMPORT_REFUSALS}; these
+ * name the key rather than a phrase, point a Bramble account at the account
+ * type that imports it, and say a Braavos account is not a key import.
  */
 export const KEY_ADDRESS_IMPORT_REFUSALS = {
   brambleAccount: "account is a bramble account, not a ready account",
+  braavosAccount: "account is a braavos account, not a ready account",
   noMatch: "private key does not control this account",
 } as const;

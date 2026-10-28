@@ -36,11 +36,15 @@ export const ADDRESS_IMPORT_ERROR_COPY: readonly (readonly [string, string])[] =
     ADDRESS_IMPORT_REFUSALS.stale,
     "This wallet changed while the account was being checked. Search for it again.",
   ],
-  // The private-key variant (issue 779) names the key, and sends a Bramble
-  // account to the account type that imports it.
+  // The private-key variant (issue 779) names the key, sends a Bramble
+  // account to the account type that imports it, and names Braavos.
   [KEY_ADDRESS_IMPORT_REFUSALS.noMatch, "This private key doesn't control that account."],
   [
     KEY_ADDRESS_IMPORT_REFUSALS.brambleAccount,
     "This is a Bramble account. Choose Bramble Account to import it.",
+  ],
+  [
+    KEY_ADDRESS_IMPORT_REFUSALS.braavosAccount,
+    "Bramble can't import a Braavos account from a private key yet.",
   ],
 ];

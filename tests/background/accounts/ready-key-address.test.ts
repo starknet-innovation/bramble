@@ -98,7 +98,7 @@ describe("finding a private key's Ready account by its address", () => {
       family: "braavos",
     });
     await expect(handler(lookupMessage(), sender)).resolves.toEqual({
-      error: ADDRESS_IMPORT_REFUSALS.unsupportedClass,
+      error: KEY_ADDRESS_IMPORT_REFUSALS.braavosAccount,
     });
     expect(seen.previews).toEqual([]);
   });

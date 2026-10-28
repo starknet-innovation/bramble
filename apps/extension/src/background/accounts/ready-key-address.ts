@@ -61,9 +61,9 @@ const prove = async (
       ? { error: KEY_ADDRESS_IMPORT_REFUSALS.brambleAccount }
       : found;
   }
-  // Braavos private keys are out of scope (issue 779): refused as the import
-  // form refuses them, whatever the key.
-  if (found.family !== "argent") return { error: ADDRESS_IMPORT_REFUSALS.unsupportedClass };
+  // Braavos private keys are out of scope (issue 779): refused by name,
+  // whatever the key.
+  if (found.family !== "argent") return { error: KEY_ADDRESS_IMPORT_REFUSALS.braavosAccount };
   const classHash = recordClassHash(found);
   // The record keeps the class the lookup found; a pick naming another, or an
   // account upgraded since, is no longer the one shown.
