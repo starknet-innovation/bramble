@@ -53,7 +53,7 @@ export type LedgerOnboardAddKind =
  */
 export type LedgerOnboardView =
   | { readonly kind: "chooser" }
-  | { readonly kind: "import-chooser" }
+  | { readonly kind: "import-chooser"; readonly phraselessNote?: string }
   | { readonly kind: "connect" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "reading" }
@@ -61,6 +61,8 @@ export type LedgerOnboardView =
       readonly kind: "picker";
       readonly application: LedgerEip2645Application;
       readonly candidates: readonly LedgerCandidate[];
+      /** A further page is being read or is queued behind the current one. */
+      readonly loadingMore?: boolean;
       readonly message?: string;
       readonly selected: readonly string[];
     }

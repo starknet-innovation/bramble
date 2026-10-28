@@ -44,6 +44,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Privileged first-run boundary: the phrase is validated through Krusty and
   // only the boolean verdict returns; the phrase is never logged or persisted.
   "apps/extension/src/background/onboarding/onboarding-ops.ts",
+  // Import by address (issue 398): derives public keys from the phrase to match
+  // an on-chain owner; only public account metadata leaves, nothing is
+  // persisted or logged, and the phrase is never echoed.
+  "apps/extension/src/background/onboarding/address-import.ts",
   // Builds the signHash for the recovery submissions; the phrase key signs
   // in the platform layer and nothing is logged or persisted.
   "apps/extension/src/background/accounts/account-recovery.ts",

@@ -16,8 +16,9 @@ boundaries, release controls, and security posture.
 - [Start here for engineers](engineering/) is the contributor onboarding entry: a
   reading order plus the import-layer module map and the untrusted-message
   data-flow diagram.
-- [UI Lab](https://effective-adventure-qwr464j.pages.github.io/) hosts deterministic Storybook
-  scenarios for production wallet UI and Chromatic review. Its
+- [UI Lab](https://effective-adventure-qwr464j.pages.github.io/) (access-controlled: repository
+  members only) hosts deterministic Storybook scenarios for production wallet UI and Chromatic
+  review. Its
   [runbook](https://github.com/starknet-innovation/bramble/tree/main/apps/ui-lab) covers local
   setup, testing, static builds, review controls, and safety boundaries.
 - [Architecture and internals](architecture/) explains the runtime and data model.

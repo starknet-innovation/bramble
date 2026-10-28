@@ -10,6 +10,7 @@ import {
   BRAAVOS_BASE_CLASS_HASH,
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
   deploymentClasses,
+  XVERSE_ARGENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
 import { ARGENT_ACCOUNT_CLASS_HASH, type DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
@@ -137,6 +138,36 @@ const rowsIn =
 describe("recovery scan Ready gate", () => {
   beforeEach(() => {
     document.body.replaceChildren();
+  });
+
+  test("Enter in a passphrase field continues only once the passphrase is valid", async () => {
+    const app = mount();
+    click(app, "#add-existing-button");
+    click(app, "#recovery-method-button");
+    setValue(app, 'input[name="import-word-0"]', MNEMONIC);
+    click(app, "#recovery-continue");
+    await tick();
+    const step = (name: string): boolean =>
+      app.querySelector<HTMLElement>(`[data-onboarding-step="${name}"]`)?.hidden === true;
+    const enter = (name: string): boolean => {
+      const event = new window.KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Enter",
+      });
+      app.querySelector(`input[name="${name}"]`)?.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    setValue(app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(app, 'input[name="vaultPassphraseConfirm"]', `${PASSPHRASE}x`);
+    expect(enter("vaultPassphraseConfirm")).toBe(true);
+    expect(step("password")).toBe(false);
+
+    setValue(app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    expect(enter("vaultPassphraseConfirm")).toBe(true);
+    expect(step("password")).toBe(true);
+    expect(step("recovery-accounts")).toBe(false);
   });
 
   test("says it is searching every account type while the scan is still running", async () => {
@@ -378,6 +409,36 @@ describe("recovery scan Ready gate", () => {
     expect(historicalRow?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(
       false,
     );
+  });
+
+  test("offers a funded Xverse account as ready to deploy, and never offers an unused one", async () => {
+    // Issue 734: Xverse deploys on the first send, so a funded counterfactual is
+    // the common case. Deployment accepts Xverse's build of Argent 0.4.0, so the
+    // row can promise a deployment; an unused Xverse address belongs to nobody.
+    const xverse = (address: string, accountIndex: number): DerivedAccountRef => ({
+      ...brambleAccount,
+      accountContractType: "argent",
+      address,
+      classHash: XVERSE_ARGENT_CLASS_HASH,
+      deploymentSalt: "0x2",
+      derivation: { accountIndex, addressIndex: 0, kind: "starknet-bip44" },
+      id: `SN_MAIN:${address}`,
+    });
+    const app = mount([
+      { account: xverse("0x7e51", 1), deployed: false, funded: true },
+      { account: xverse("0x7e52", 2), deployed: false, funded: false },
+    ]);
+    await reachPicker(app);
+
+    const rows = rowsIn(app)("argent");
+    const funded = rows.find((row) => row.textContent?.includes("Account 1"));
+    const unused = rows.find((row) => row.textContent?.includes("Account 2"));
+    expect(funded?.querySelector("strong")?.textContent).toBe("Account 1 · Argent 0.4.0 (Xverse)");
+    expect(funded?.textContent).toContain("Funded and ready to deploy");
+    expect(funded?.textContent).not.toContain("Bramble cannot deploy");
+    expect(funded?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(false);
+    expect(unused?.textContent).toContain("No on-chain activity found");
+    expect(unused?.querySelector<HTMLInputElement>("input.select-check")?.disabled).toBe(true);
   });
 
   test("stops auto-selecting once a restore would reject the selection", async () => {

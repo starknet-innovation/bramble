@@ -1,5 +1,6 @@
 {
   "name": "@bramble/website",
+  "description": "Static public site for the Starknet wallet: marketing home, docs, support, privacy and terms.",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -30,7 +31,7 @@
     "@vitejs/plugin-react": "6.1.1",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
-    "vite": "8.3.0",
+    "vite": "8.3.3",
     "wrangler": "4.145.0"
   }
 }

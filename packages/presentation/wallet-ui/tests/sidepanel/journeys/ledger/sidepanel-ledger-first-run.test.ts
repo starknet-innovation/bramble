@@ -91,6 +91,26 @@ describe("bindLedgerFirstRun", () => {
     document.body.replaceChildren();
   });
 
+  test("Enter in a passphrase field continues only once the button is enabled", () => {
+    const { app, captured } = mountOnboarding(mainnetStatus);
+    const enter = (): boolean => {
+      const event = new window.KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Enter",
+      });
+      app.querySelector('input[name="ledgerVaultPassphraseConfirm"]')?.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', `${PASSPHRASE}x`);
+    expect(enter()).toBe(true);
+    expect(captured).toEqual([]);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
+    expect(enter()).toBe(true);
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
+  });
+
   test("gates the button on a confirmed passphrase and renders no acknowledgement", () => {
     const { app, captured } = mountOnboarding(mainnetStatus);
     const button = app.querySelector<HTMLButtonElement>("#ledger-setup-button");

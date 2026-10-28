@@ -232,6 +232,20 @@ describe("onboarding views", () => {
     expect(/data-ledger-add-selected[^>]*disabled/.test(html)).toBe(true);
   });
 
+  test('"Show more" renders busy and disabled while a further page loads', () => {
+    const row: LedgerCandidate = {
+      account: candidateAccount(0),
+      balance: null,
+      deployed: null,
+      duplicate: false,
+      funded: null,
+    };
+    expect(ledgerAccountPicker([row])).not.toMatch(/data-ledger-load-more[^>]*disabled/);
+    expect(ledgerAccountPicker([row], [], undefined, "LedgerW", true)).toMatch(
+      /data-ledger-load-more data-busy[^>]*disabled/,
+    );
+  });
+
   test("an undeployed candidate reflects needs-funding, distinct from an error", () => {
     const html = ledgerAccountPicker([
       {
@@ -291,5 +305,17 @@ describe("onboarding views", () => {
     expect(importChooser).toContain('data-add-kind="import-phrase"');
     expect(importChooser).toContain('data-add-kind="import-key"');
     expect((importChooser.match(/data-add-kind="/g) ?? []).length).toBe(3);
+  });
+
+  // Issue 740: the note says why a phrase-less wallet landed here, and the
+  // rescan, which needs the phrase it lacks, is left out.
+  test("the import chooser for a phrase-less wallet explains itself and drops the rescan", () => {
+    const html = importAccountChooser(true, "No <phrase> here.");
+    expect(html).toContain('role="status">No &lt;phrase&gt; here.</p>');
+    expect(html).not.toContain('data-add-kind="find-accounts"');
+    expect(html).toContain('data-add-kind="import-phrase"');
+    expect(html).toContain('data-add-kind="import-key"');
+    expect(html).toContain('data-add-kind="restore-ready-ledger"');
+    expect(importAccountChooser()).not.toContain('role="status"');
   });
 });

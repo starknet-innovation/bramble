@@ -6,7 +6,6 @@ import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
-  type ActivityResponse,
   type AllowanceListing,
   allowanceListingFrom,
   type ConnectedSitesResponse,
@@ -25,6 +24,7 @@ import {
   isTransferResponse,
   isTransferReviewResponse,
   isWalletStatus,
+  type LoadedActivity,
   type PendingApproval,
   type RevealSecretsResponse,
   readDetectedTokens,
@@ -39,6 +39,7 @@ import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
 import { createPrivacyUnlockClient } from "../journeys/privacy/privacy-unlock-runtime";
 import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
+import { createSidePanelNoticeClient } from "../shell/side-panel-notice";
 import { createUpdateClient } from "../shell/update-banner";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
 
@@ -80,6 +81,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createPrivacyRuntimeClient(sendMessage),
     ...createPrivacyUnlockClient(sendMessage),
     ...createUpdateClient(sendMessage),
+    ...createSidePanelNoticeClient(sendMessage),
     ...createShadowAccountsRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
@@ -166,10 +168,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       cached = false,
       refreshHistory = false,
       forceHistory = false,
-    ): Promise<{
-      readonly entries: ActivityResponse["activity"];
-      readonly historyUnavailable: boolean;
-    }> {
+    ): Promise<LoadedActivity> {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
         ...(cached ? { cached: true } : {}),
@@ -178,11 +177,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
-        return { entries: [], historyUnavailable: true };
+        return { entries: [], historyUnavailable: true, relays: [] };
       }
       return {
         entries: response.activity,
         historyUnavailable: response.historyUnavailable ?? false,
+        relays: response.relays ?? [],
       };
     },
     /**

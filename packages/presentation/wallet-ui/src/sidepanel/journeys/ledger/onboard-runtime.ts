@@ -11,7 +11,7 @@
  */
 import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { renderFragment } from "../../shared/dom";
+import { buttonBusy, renderFragment } from "../../shared/dom";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
@@ -169,9 +169,18 @@ export const createLedgerOnboardRuntime = (
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-onboard-cancel]")
       ?.addEventListener("click", () => controller.cancel());
-    mount
-      .querySelector<HTMLButtonElement>("[data-ledger-load-more]")
-      ?.addEventListener("click", () => controller.loadMore());
+    // The next page is read silently and lands inside the account groups, which
+    // stay closed when nothing in them has activity: open them, and mark the
+    // button busy while the device is read, so the click visibly does something.
+    const loadMore = mount.querySelector<HTMLButtonElement>("[data-ledger-load-more]");
+    loadMore?.addEventListener("click", () => {
+      for (const group of mount.querySelectorAll<HTMLDetailsElement>("[data-account-group]")) {
+        openGroups.add(group.dataset["accountGroup"] ?? "");
+        group.open = true;
+      }
+      buttonBusy(loadMore, true);
+      controller.loadMore();
+    });
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-add-selected]")
       ?.addEventListener("click", () => controller.addSelected());
@@ -185,7 +194,7 @@ export const createLedgerOnboardRuntime = (
       return addAccountChooser(ledgerAvailable);
     }
     if (view.kind === "import-chooser") {
-      return importAccountChooser(ledgerAvailable);
+      return importAccountChooser(ledgerAvailable, view.phraselessNote);
     }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();
@@ -197,7 +206,13 @@ export const createLedgerOnboardRuntime = (
       return ledgerDevicePicker(view.devices);
     }
     if (view.kind === "picker") {
-      return ledgerAccountPicker(view.candidates, view.selected, view.message, view.application);
+      return ledgerAccountPicker(
+        view.candidates,
+        view.selected,
+        view.message,
+        view.application,
+        view.loadingMore,
+      );
     }
     return ledgerOnboardError(view.message);
   };

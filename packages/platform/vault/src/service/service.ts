@@ -16,7 +16,7 @@ import {
   withLedgerStrk20ViewingKey,
   withoutLedgerStrk20ViewingKey,
 } from "../accounts/account-secrets";
-import { deriveAccountRef } from "../accounts/accounts";
+import { deriveAccountRef, deriveImportedAccount } from "../accounts/accounts";
 import {
   deriveNetworkAccount,
   findNetworkAccount,
@@ -55,6 +55,7 @@ export type {
   OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
+  PreviewImportedAccountInput,
   RecordShadowAccountScopeInput,
   RecoverVaultAccountsInput,
   RevealedSecrets,
@@ -229,6 +230,7 @@ export const createWalletVaultService = ({
     ...nostrWalletMethods(kms, readVault),
     ...shadowAccountScopeMethods(encryptedStore, readVaultSnapshot),
     previewAccount: (input) => deriveAccountRef(kms, input),
+    previewImportedAccount: async (input) => (await deriveImportedAccount(kms, input)).account,
     validateMnemonic: (mnemonic) => kms.validateMnemonic(mnemonic),
     async grantOrigin(input) {
       if (!isWalletOrigin(input.origin)) {

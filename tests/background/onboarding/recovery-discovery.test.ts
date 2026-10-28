@@ -192,10 +192,11 @@ describe("recovery discovery", () => {
     expect(previewedIndexes.has(40)).toBe(false);
   });
 
-  test("walks Ready's ladder for every Argent release and the wallet's own for the pinned one", async () => {
-    // Issue 505: Ready derives on an ETH-seeded tree, so the vendor shapes must
-    // carry the argentx scheme, while one extra shape keeps accounts this
-    // wallet itself created on its own ladder discoverable.
+  test("walks both Argent ladders for every Argent release", async () => {
+    // Issue 505: the Ready extension derives on an ETH-seeded tree, so the
+    // vendor shapes carry the argentx scheme. Apps that derive straight from
+    // the phrase (Ready mobile among them) deployed 0.3.x accounts on the
+    // wallet's own ladder, so every release is scanned there as well.
     const argentShapes: Array<string | undefined> = [];
     const braavosShapes: Array<string | undefined> = [];
     const deps = {
@@ -233,8 +234,10 @@ describe("recovery discovery", () => {
 
     const vendor = argentShapes.filter((shape) => shape === "argentx-bip44");
     const own = argentShapes.filter((shape) => shape === undefined);
-    expect(vendor.length).toBe(deploymentClasses("argent").length);
-    expect(own.length).toBe(1);
+    // Every Argent release on the wallet's own ladder, Xverse's build included;
+    // Ready's ladder takes all but Xverse's build (issue 734).
+    expect(vendor.length).toBe(deploymentClasses("argent").length - 1);
+    expect(own.length).toBe(deploymentClasses("argent").length);
     // Braavos never names a scheme; the vault maps its family to the vendor axis.
     expect(braavosShapes.every((shape) => shape === undefined)).toBe(true);
     expect(braavosShapes.length).toBe(deploymentClasses("braavos").length);

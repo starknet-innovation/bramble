@@ -16,7 +16,7 @@ import { bindBackupVerification } from "./backup-verify-bind";
 import { bindGeneratedPhrase } from "./generated-phrase-ui";
 import { bindKeyImport } from "./import-key-ui";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
-import { applyPassphraseMeter } from "./passphrase-meter";
+import { applyPassphraseMeter, bindEnterToContinue } from "./passphrase-meter";
 import { bindPassphraseReveal } from "./passphrase-reveal";
 import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
@@ -248,6 +248,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     .querySelector('[id="add-existing-button"]')
     ?.addEventListener("click", () => showStep("method"));
   const keyImport = bindKeyImport({
+    app: deps.app,
     form,
     networkId: selectedNetworkId,
     onEnter: () => {
@@ -355,6 +356,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   passphraseInput?.addEventListener("input", refreshPassword);
   confirmationInput?.addEventListener("input", refreshPassword);
+  // Enter takes the step's Continue, never the form's submit, which belongs to
+  // "Finish setup".
+  bindEnterToContinue([passphraseInput, confirmationInput], passwordContinue);
   passwordContinue?.addEventListener("click", () => {
     if (!passwordOk()) {
       refreshPassword();

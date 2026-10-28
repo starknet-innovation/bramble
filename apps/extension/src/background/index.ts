@@ -16,14 +16,11 @@ import {
   type PrivacySdkRuntime,
 } from "@bramble/privacy/official-sdk-service";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
-import {
-  type ApprovalSurfacePreference,
-  createPreferencesStore,
-  type WalletPreferences,
-} from "@bramble/settings/preferences";
+import { createPreferencesStore, type WalletPreferences } from "@bramble/settings/preferences";
 import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnostics";
 import { createActivityLog, systemClock } from "@bramble/transactions/activity";
 import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
+import { createRelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
@@ -48,12 +45,8 @@ import {
 } from "./analytics/gateway-analytics";
 import { createApprovalKeepAlive } from "./approvals/approval-keepalive";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
-import {
-  bindToolbarActivation,
-  configureApprovalSurface,
-  createApprovalSurfaceOpener,
-  showPendingApprovals,
-} from "./approvals/approval-surface";
+import { createApprovalSurfaceOpener, showPendingApprovals } from "./approvals/approval-surface";
+import { createApprovalSurfaceControl } from "./approvals/approval-surface-control";
 import { createApprovalQueue } from "./approvals/approvals";
 import { createSignatureWaiters } from "./approvals/signature-waiters";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
@@ -83,12 +76,17 @@ const extensionApi = resolveExtensionApi<BackgroundBrowser>();
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
 declare const __MC_BUILD_BRANCH__: string | undefined;
-let approvalSurfacePreference: ApprovalSurfacePreference = "side-panel";
 let productAnalyticsEnabled = false;
-const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
-  approvalSurfacePreference = preference;
-  void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
-};
+// The request surface: the user's choice, and the side-panel learning that
+// serves it as the popup on a browser that never draws side panels (Arc, #690).
+const approvalSurface = createApprovalSurfaceControl({
+  approvals: () => approvals.list(),
+  browser: extensionApi,
+  extensionId: runtime?.id ?? "",
+  now: systemClock,
+  store: createBrowserLocalStore,
+  wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+});
 const approvals = createApprovalQueue();
 // The held-response registry lives here rather than inside the router context
 // so the worker keepalive below can watch it alongside the approval queue: a
@@ -176,7 +174,7 @@ const preferences = storageReady
   .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
   .catch(() => null);
 const preferenceStore = createBackgroundPreferences({
-  onApprovalSurface: updateApprovalSurface,
+  onApprovalSurface: approvalSurface.update,
   onProductAnalytics: (enabled) => {
     productAnalyticsEnabled = enabled;
   },
@@ -196,8 +194,11 @@ observeTechnicalDataConsent(extensionApi?.permissions, () => {
 });
 const preferenceSignalsReady = preferences
   .then(async (store) => {
-    const stored = await store?.read();
-    updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
+    const reading = Promise.resolve(store).then((resolved) => resolved?.read() ?? null);
+    // Started exactly once whether or not the read succeeds: a failed read
+    // falls back to the side panel, and the learner still loads.
+    void approvalSurface.start(reading.then((stored) => stored?.approvalSurface));
+    const stored = await reading;
     productAnalyticsEnabled = store ? (stored?.productAnalytics ?? true) : false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
     await refreshTechnicalDataConsent();
@@ -276,7 +277,7 @@ const swapService = (() => {
 // silently accepting signatures or broadcasts into a volatile registry.
 const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
 const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
-// Live phishing feed, fetched under an explicit host permission, cached locally,
+// Live phishing feed, read through CORS with no host permission, cached locally,
 // and refreshed on worker start and on a recurring alarm once its TTL lapses.
 // The guard reads its in-memory snapshot on every check; the bundled seed list
 // in blocklist.ts is always enforced, before the first fetch and offline too.
@@ -382,10 +383,13 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   preferencesStore: preferenceStore,
   runtimeRpc,
   originGuard,
+  sidePanelLearning: approvalSurface.learner,
+  ...(phishingFeed ? { phishingFeedHealth: phishingFeed.health } : {}),
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,
   recoveryDiscovery,
+  relaySignatures: createRelaySignatureLog({ now: systemClock, store: createBrowserLocalStore() }),
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,
@@ -474,12 +478,12 @@ const openApprovalSurface = createApprovalSurfaceOpener({
   extensionId: runtime?.id ?? "",
   guard: originGuard,
   now: systemClock,
-  preference: () => approvalSurfacePreference,
+  preference: approvalSurface.effective,
+  rescue: approvalSurface.rescue,
 });
-// Firefox only: routes its toolbar button to the sidebar, which Chromium does
-// through setPanelBehavior instead. Registered at the top level because the
-// event page is torn down when idle and a listener added later would be lost.
-bindToolbarActivation(extensionApi, () => approvalSurfacePreference);
+// Toolbar listeners (Firefox's sidebar, Chromium's side-panel learning), bound
+// at the top level: an idle worker drops any listener added later.
+approvalSurface.bind();
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   openApprovalSurface(message, sender);
   void updateReady.track(runtimeReady.then(() => handleMessage(message, sender))).then(

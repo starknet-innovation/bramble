@@ -51,6 +51,26 @@ describe("friendlyError", () => {
     );
   });
 
+  // The refusals ready-key-accounts.ts throws: no account found, and a chain
+  // that could not be read, which must never read as "no account".
+  test("says a Ready key's account wasn't found instead of importing an empty one", () => {
+    expect(friendlyError("No Ready account found for this key").message).toBe(
+      "Couldn't find a Ready account for this key on this network.",
+    );
+    expect(friendlyError("Ready account check unavailable").message).toBe(
+      "Couldn't check this key's Ready accounts. Try again.",
+    );
+  });
+
+  // The guardian refusal points at the in-wallet escape that removes it.
+  test("points a guardian refusal at Recover account", () => {
+    expect(
+      friendlyError("Deployed Argent account guardian is not supported by this wallet").message,
+    ).toBe(
+      "This account has a guardian, a second approver this wallet can't provide. Remove it with Recover account on Home, or use the account in Ready.",
+    );
+  });
+
   // The exact strings argent-recovery.ts and account-recovery.ts throw.
   test("maps the recovery refusals to reviewed copy", () => {
     for (const [raw, message] of [
