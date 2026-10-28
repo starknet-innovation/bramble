@@ -351,6 +351,16 @@ describe("onboarding views", () => {
     expect(html).toContain(`data-ledger-toggle="${at(1, "argent", "LedgerW").id}"`);
     expect(html).toContain("Account 1 · Bramble path");
     expect(html).toMatch(/Ready accounts<span class="eyebrow" data-detected="1">1 found/);
+    // One whose balance read failed is listed with the failure, never hidden as
+    // unused; one still being checked stays out until its activity is known.
+    const unchecked = ledgerAccountPicker([
+      { account: at(2, "argent", "LedgerW"), ...idle, deployed: null },
+      { account: at(3, "argent", "LedgerW"), ...idle, balance: null, funded: null },
+      { account: at(0, "argent", "argentx"), ...idle },
+    ]);
+    expect(unchecked).not.toContain(`data-ledger-toggle="${at(2, "argent", "LedgerW").id}"`);
+    expect(unchecked).toContain(`data-ledger-toggle="${at(3, "argent", "LedgerW").id}"`);
+    expect(unchecked).toContain("Couldn&#39;t check this account&#39;s activity. Try again.");
   });
 
   test("an empty candidate list renders the empty state", () => {

@@ -320,7 +320,8 @@ const GROUP_LABELS = {
 // reads the device at its own path), so the Argent group is called Ready only
 // when it holds Ready's. When a scan spans both paths, an Argent account at
 // Bramble's path joins the Ready group only once it shows activity, so an
-// unused one does not double every Ready row with an unselectable twin.
+// unused one does not double every Ready row with an unselectable twin. One
+// whose balance read failed stays listed, so the failure is said, not hidden.
 const candidateGroup = (
   contractType: keyof typeof GROUP_LABELS,
   candidates: readonly LedgerCandidate[],
@@ -336,7 +337,12 @@ const candidateGroup = (
   const mixed = family.some((candidate) => !atBramblePath(candidate)) && family.some(atBramblePath);
   const rows = [
     ...(mixed
-      ? family.filter((candidate) => !atBramblePath(candidate) || ledgerCandidateActive(candidate))
+      ? family.filter(
+          (candidate) =>
+            !atBramblePath(candidate) ||
+            ledgerCandidateActive(candidate) ||
+            (candidate.deployed === false && candidate.funded === null),
+        )
       : family),
   ].sort(
     (left, right) => left.account.derivation.accountIndex - right.account.derivation.accountIndex,
