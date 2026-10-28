@@ -208,9 +208,6 @@ impl PlanState {
             Outcome::Undeployed if self.work.reviewed_deploy_fee.is_none() => {
                 self.fail(Code::ReviewedDeploymentFeeRequired, None)
             }
-            Outcome::Undeployed if self.account.is_braavos() => {
-                self.fail(Code::BraavosDeployFirst, None)
-            }
             Outcome::Undeployed if self.account.deployment.is_none() => {
                 self.fail(Code::AccountNotDeployable, None)
             }

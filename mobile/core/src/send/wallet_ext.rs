@@ -101,8 +101,7 @@ impl WalletCore {
     }
 
     /// The stored record `account_id` names plus the session generation, for a plan being
-    /// prepared. A signing plan must pass `signing_record` (no view-only record, no pending
-    /// discovery). Passive: preparing or reading never renews the idle window.
+    /// prepared. A signing plan must pass `signing_record` (a known record, no pending discovery). Passive: preparing or reading never renews the idle window.
     fn plan_account_for(
         &self,
         account_id: &str,

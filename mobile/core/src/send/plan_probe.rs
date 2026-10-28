@@ -103,7 +103,8 @@ fn braavos_signers(result: &[Felt]) -> Option<(Option<Felt>, bool)> {
                 .to_biguint(),
         )
         .ok()?;
-        let values = result.get(offset + 1..offset.checked_add(1 + length)?)?;
+        let values =
+            result.get(offset + 1..length.checked_add(1).and_then(|n| offset.checked_add(n))?)?;
         lists.push(values);
         offset += 1 + length;
     }
@@ -359,5 +360,7 @@ mod tests {
         // A length that overruns the result is malformed, as is a missing list.
         assert_eq!(braavos_signers(&f(&[2, 9, 0, 0])), None);
         assert_eq!(braavos_signers(&f(&[1, 9])), None);
+        // A length near usize::MAX (from a hostile node) is malformed, never an overflow.
+        assert_eq!(braavos_signers(&f(&[u64::MAX, 9])), None);
     }
 }

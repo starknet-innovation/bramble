@@ -8,7 +8,8 @@
 //! (plain preferences in the extension) are passive.
 //!
 //! Signing: every signature the core makes for an account passes `signing_record`, which refuses
-//! a vault still waiting for discovery, an unknown id, and a view-only (Braavos) record.
+//! a vault still waiting for discovery and an unknown id; what a record may sign is decided on
+//! chain by the send plan.
 
 use crate::account_catalog::{authorization_shape, type_label, AccountFamily};
 use crate::account_names::{display_name, normalise_label, short_label};

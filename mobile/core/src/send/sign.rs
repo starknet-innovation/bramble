@@ -185,6 +185,34 @@ mod tests {
             },
         ] {
             for network in [NetworkId::Mainnet, NetworkId::Sepolia] {
+                // A non-zero nonce pins its position (nonce and DA mode are both zero above).
+                let nonce = Felt::from(0x2au8);
+                let (l1, l2, data) = krusty_bounds(&bounds).unwrap();
+                assert_eq!(
+                    deploy_hash_at(
+                        Felt::from(3u8),
+                        network,
+                        &address,
+                        &deployment,
+                        &nonce,
+                        &bounds
+                    ),
+                    compute_deploy_account_v3_hash(
+                        &address,
+                        &deployment.class_hash,
+                        &deployment.constructor_calldata,
+                        &deployment.salt,
+                        &network.chain().as_felt(),
+                        &nonce,
+                        0,
+                        &l1,
+                        &l2,
+                        &data,
+                        &[],
+                        DaMode::L1,
+                        DaMode::L1,
+                    )
+                );
                 assert_eq!(
                     deploy_hash_at(
                         Felt::from(3u8),
