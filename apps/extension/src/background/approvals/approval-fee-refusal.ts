@@ -1,7 +1,7 @@
 /** Fee-echo validation performed before an approval is consumed. */
 
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { type FeeEstimate, sameFeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { RuntimeResponse } from "../runtime/runtime-types";

@@ -10,9 +10,10 @@
  * can never ride along, and every nested value is copied so a caller mutating
  * what it received cannot reach back into live queue state.
  */
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
+
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import type { FeeAffordability } from "@bramble/transactions/fee-funds";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import type { PendingApproval } from "@bramble/wallet-protocol/extension-responses";
 import type { ProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { type ApprovalPayload, cloneApprovalValue } from "./approval-payload";

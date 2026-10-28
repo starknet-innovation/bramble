@@ -10,8 +10,6 @@
  */
 
 import { isRecord } from "@bramble/core/json";
-import { outsideExecutionCalls } from "@bramble/transactions/outside-execution-calls";
-import { OUTSIDE_EXECUTION_DOMAIN } from "@bramble/transactions/outside-execution-terms";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -29,7 +27,9 @@ import {
   type TypedData,
   typedData,
 } from "starknet";
-import { isPaymasterAuthorizationLive } from "./paymaster-typed-data";
+import { outsideExecutionCalls } from "../routing/outside-execution-calls";
+import { OUTSIDE_EXECUTION_DOMAIN } from "../routing/outside-execution-terms";
+import { isPaymasterAuthorizationLive } from "../routing/outside-execution-window";
 
 /**
  * Longest execution window this wallet will sign. A longer `Execute Before`
@@ -230,7 +230,7 @@ export const gaslessAuthorizationWindow = (
 ): boolean => {
   if (
     !isPaymasterAuthorizationLive(
-      { caller: "0x1", executeAfter, executeBefore, publicCallCount: 1 },
+      { executeAfter, executeBefore },
       nowSeconds,
       minimumRemainingSeconds,
     )

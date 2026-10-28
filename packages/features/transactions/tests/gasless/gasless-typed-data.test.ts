@@ -4,7 +4,7 @@
  * independent ceiling. The body that passes is the one a later execute posts.
  */
 import { describe, expect, test } from "bun:test";
-import { validateGaslessTypedData } from "@bramble/privacy/gasless-typed-data";
+import { validateGaslessTypedData } from "@bramble/transactions/gasless-typed-data";
 import { type Call, OutsideExecutionVersion, outsideExecution, typedData } from "starknet";
 
 const ACCOUNT = "0x5dccf9cfdcabb9e4ef45814bda1b056bb23063d0e9b64e5a845e9dfb3d23f10";

@@ -16,12 +16,12 @@
  */
 
 import type { PriceService } from "@bramble/portfolio/prices";
-import { gaslessStrkAffordability } from "@bramble/privacy/gasless-request";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { UndeployedBraavosError } from "@bramble/starknet/deployment";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { gaslessStrkAffordability } from "@bramble/transactions/gasless-request";
 import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";

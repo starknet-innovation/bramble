@@ -3,21 +3,21 @@
  * request the gateway's checker accepts.
  */
 import { describe, expect, test } from "bun:test";
+import { accountSignsGaslessV2 } from "@bramble/transactions/gasless-account";
+import { convertStrkFeeToToken, gaslessFeeCeiling } from "@bramble/transactions/gasless-ceiling";
 import {
   GASLESS_FEES_ENABLED,
   GASLESS_FORWARDER_ADDRESS,
   GASLESS_PAYMASTER_URLS,
   gaslessRoute,
   gaslessRouteReady,
-} from "@bramble/privacy/config";
-import { accountSignsGaslessV2 } from "@bramble/privacy/gasless-account";
-import { convertStrkFeeToToken, gaslessFeeCeiling } from "@bramble/privacy/gasless-ceiling";
+} from "@bramble/transactions/gasless-config";
 import {
   gaslessBuildParams,
   gaslessDeploymentBody,
   readGaslessSupportedTokens,
-} from "@bramble/privacy/gasless-request";
-import { quoteGaslessOffers } from "@bramble/privacy/gasless-submit";
+} from "@bramble/transactions/gasless-request";
+import { quoteGaslessOffers } from "@bramble/transactions/gasless-submit";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,

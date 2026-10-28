@@ -5,12 +5,12 @@
  * never broadcasts, so its refusals stay determinate.
  */
 import { describe, expect, test } from "bun:test";
-import { GaslessRefusal } from "@bramble/privacy/gasless-errors";
-import { GASLESS_RPC_ID, postGasless } from "@bramble/privacy/gasless-rpc";
 import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
+import { GaslessRefusal } from "@bramble/transactions/gasless-errors";
+import { GASLESS_RPC_ID, postGasless } from "@bramble/transactions/gasless-rpc";
 
 const url = "https://wallet.example/api/paymaster/mainnet";
 

@@ -200,7 +200,7 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/features/privacy/src/paymaster/paymaster.ts",
   // Posts the outside-execution signature the gasless gateway requires.
   // The field is public; private signing stays in Krusty via signHash.
-  "packages/features/privacy/src/paymaster/gasless-submit.ts",
+  "packages/features/transactions/src/gasless/gasless-submit.ts",
   "packages/features/privacy/src/service.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the

@@ -12,10 +12,6 @@
 import { untrustedFetch } from "@bramble/core/http-json";
 import type { PriceService } from "@bramble/portfolio/prices";
 import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
-import { gaslessRoute, gaslessRouteReady } from "@bramble/privacy/config";
-import type { GaslessAccountClass } from "@bramble/privacy/gasless-account";
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
-import { quoteGaslessOffers, submitReviewedGaslessInvoke } from "@bramble/privacy/gasless-submit";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { accountDeployment, isCompatibleAccountDeployed } from "@bramble/starknet/deployment";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
@@ -23,6 +19,13 @@ import { withRpcFallback } from "@bramble/starknet/provider";
 import { type FeeEstimate, formatTokenAmount } from "@bramble/starknet/rpc";
 import { clampActivitySummary, systemClock } from "@bramble/transactions/activity";
 import type { FeeAffordability } from "@bramble/transactions/fee-funds";
+import type { GaslessAccountClass } from "@bramble/transactions/gasless-account";
+import { gaslessRoute, gaslessRouteReady } from "@bramble/transactions/gasless-config";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
+import {
+  quoteGaslessOffers,
+  submitReviewedGaslessInvoke,
+} from "@bramble/transactions/gasless-submit";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,

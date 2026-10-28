@@ -6,7 +6,7 @@
  * cleared on the next submit so a later send cannot reuse it.
  */
 
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 
 /**
  * Binds the send form's fee-token buttons. `take` returns the choice once.

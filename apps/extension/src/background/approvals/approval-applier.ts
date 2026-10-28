@@ -6,8 +6,8 @@
  * within the file cap; nothing here touches the queue or a dapp waiter.
  */
 
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import type { DeferredStrk20Approval } from "../privacy/strk20-approval-staging";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PendingApproval } from "./approvals";

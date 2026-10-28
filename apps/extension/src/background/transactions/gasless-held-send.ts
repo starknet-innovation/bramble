@@ -4,8 +4,8 @@
  * the amount, decimals, label, and token are the ones stored here.
  */
 
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { sameFelt } from "@bramble/wallet-model/networks";
 
 /**

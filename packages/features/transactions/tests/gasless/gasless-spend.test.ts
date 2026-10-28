@@ -3,7 +3,7 @@
  * plus a fee is short, even though the fee alone would fit.
  */
 import { describe, expect, test } from "bun:test";
-import { gaslessStrkAffordability } from "@bramble/privacy/gasless-request";
+import { gaslessStrkAffordability } from "@bramble/transactions/gasless-request";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 

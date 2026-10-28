@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@bramble/core/errors";
-import { accountSignsGaslessV2 } from "@bramble/privacy/gasless-account";
+import { accountSignsGaslessV2 } from "@bramble/transactions/gasless-account";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,

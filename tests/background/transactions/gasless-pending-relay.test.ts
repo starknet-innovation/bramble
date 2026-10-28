@@ -5,13 +5,13 @@
  */
 import { beforeEach, describe, expect, test } from "bun:test";
 import { WalletError } from "@bramble/core/errors";
-import { GASLESS_RPC_ID } from "@bramble/privacy/gasless-rpc";
-import { submitReviewedGaslessInvoke } from "@bramble/privacy/gasless-submit";
 import {
   IndeterminateRpcWriteError,
   resetRpcEndpointCooldownsForTests,
 } from "@bramble/starknet/provider";
 import { INVOKE_NOT_JOURNALED } from "@bramble/starknet/rpc-submit";
+import { GASLESS_RPC_ID } from "@bramble/transactions/gasless-rpc";
+import { submitReviewedGaslessInvoke } from "@bramble/transactions/gasless-submit";
 import { memoryRelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import { ARGENT_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import { type Call, OutsideExecutionVersion, outsideExecution, type RpcProvider } from "starknet";

@@ -18,8 +18,8 @@ import {
   JSON_BUDGETS,
 } from "@bramble/core/json";
 import { isWalletOrigin } from "@bramble/core/origin";
-import { isGaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { isFeeEstimate as isFee } from "@bramble/starknet/fee-bounds";
+import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,

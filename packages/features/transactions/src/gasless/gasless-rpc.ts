@@ -17,12 +17,12 @@ import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
-import { type GaslessGatewayCode, GaslessRefusal, isGaslessGatewayCode } from "./gasless-errors";
 import {
   PAYMASTER_TIMEOUT_MS,
   type PaymasterHttp,
   readBoundedPaymasterResponse,
-} from "./paymaster-rpc";
+} from "../routing/paymaster-http";
+import { type GaslessGatewayCode, GaslessRefusal, isGaslessGatewayCode } from "./gasless-errors";
 
 /**
  * JSON-RPC id this poster sends and requires back. A mismatched id is an

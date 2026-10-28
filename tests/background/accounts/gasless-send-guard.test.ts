@@ -5,8 +5,8 @@
  */
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { PriceService } from "@bramble/portfolio/prices";
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";

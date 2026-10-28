@@ -19,7 +19,6 @@ import {
   type StarkHashSigner,
 } from "@bramble/starknet/provider";
 import { REVIEWED_FEE_EXCEEDED } from "@bramble/starknet/rpc-submit";
-import { resolveTokenFeeAffordability } from "@bramble/transactions/fee-funds";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -28,10 +27,11 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { type Call, typedData } from "starknet";
-import type { GaslessRoute } from "../config";
-import { gaslessRouteReady } from "../config";
+import { resolveTokenFeeAffordability } from "../routing/fee-funds";
+import type { PaymasterHttp } from "../routing/paymaster-http";
 import { accountSignsGaslessV2, type GaslessAccountClass } from "./gasless-account";
 import { gaslessFeeCeiling } from "./gasless-ceiling";
+import { type GaslessRoute, gaslessRouteReady } from "./gasless-config";
 import { GaslessRefusal } from "./gasless-errors";
 import {
   type GaslessFeeOffer,
@@ -47,7 +47,6 @@ import {
 } from "./gasless-request";
 import { postGasless } from "./gasless-rpc";
 import { gaslessAuthorizationWindow, validateGaslessTypedData } from "./gasless-typed-data";
-import type { PaymasterHttp } from "./paymaster-rpc";
 
 /**
  * Seconds the execution window must still have when the signature is sent.

@@ -5,8 +5,8 @@
  */
 
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@bramble/core/json";
-import { type GaslessFeeOffer, isGaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import { type GaslessFeeOffer, isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { isAccountId } from "@bramble/wallet-model/accounts";
 import { isStarkFieldElement } from "@bramble/wallet-model/networks";
 

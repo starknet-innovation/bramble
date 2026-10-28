@@ -6,12 +6,12 @@
 import { WalletError } from "@bramble/core/errors";
 import type { MultisigStore } from "@bramble/multisig/repository";
 import type { PriceService } from "@bramble/portfolio/prices";
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { Call } from "starknet";

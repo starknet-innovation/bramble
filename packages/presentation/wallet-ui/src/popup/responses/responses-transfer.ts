@@ -3,8 +3,8 @@
  */
 
 import { hasOnlyKnownKeys, isJson, isRecord, isRiskFlagCode } from "@bramble/core/json";
-import { isGaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
 
 /**
  * Pre-sign transfer review accepted from the background boundary.

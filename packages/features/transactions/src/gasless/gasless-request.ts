@@ -8,11 +8,6 @@
 
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
-import { type FeeAffordability, resolveFeeAffordability } from "@bramble/transactions/fee-funds";
-import {
-  isApproveEntrypoint,
-  PLAIN_TRANSFER_FROM_ENTRYPOINTS,
-} from "@bramble/transactions/verify-selectors";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -22,6 +17,8 @@ import {
   uint256Felts,
 } from "@bramble/wallet-model/networks";
 import { type Call, CallData, hash } from "starknet";
+import { type FeeAffordability, resolveFeeAffordability } from "../routing/fee-funds";
+import { isApproveEntrypoint, PLAIN_TRANSFER_FROM_ENTRYPOINTS } from "../routing/verify-selectors";
 import { GaslessRefusal } from "./gasless-errors";
 
 /**

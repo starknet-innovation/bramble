@@ -3,8 +3,8 @@
  * amount in the signed quote, which may be below the reviewed maximum.
  */
 import { describe, expect, test } from "bun:test";
-import { GASLESS_RPC_ID } from "@bramble/privacy/gasless-rpc";
-import { submitReviewedGaslessInvoke } from "@bramble/privacy/gasless-submit";
+import { GASLESS_RPC_ID } from "@bramble/transactions/gasless-rpc";
+import { submitReviewedGaslessInvoke } from "@bramble/transactions/gasless-submit";
 import { ARGENT_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import { type Call, OutsideExecutionVersion, outsideExecution } from "starknet";
 

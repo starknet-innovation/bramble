@@ -4,7 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@bramble/core/errors";
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { submitHeldInvoke } from "../../../apps/extension/src/background/provider/held-invoke-submit";
 
 const offer: GaslessFeeOffer = {

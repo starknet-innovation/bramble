@@ -2,13 +2,13 @@
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { PriceService } from "@bramble/portfolio/prices";
-import type { GaslessFeeOffer } from "@bramble/privacy/gasless-request";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
