@@ -196,7 +196,12 @@ export const fiatBlock = () => {
         "usd",
       );
       return {
-        badge: firstMatch(html, /<span class="token-change [a-z]+">([^<]*)<\/span>/),
+        // The badge's whole text, its quiet window tag included (`<span>` nested inside).
+        badge:
+          firstMatch(html, /<span class="token-change [a-z]+">(.*?)<\/span><\/span>/)?.replace(
+            /<[^>]*>/g,
+            "",
+          ) ?? firstMatch(html, /<span class="token-change [a-z]+">([^<]*)<\/span>/),
         change: change ?? null,
         price: price ?? null,
         up: html.includes('class="token-change up"'),

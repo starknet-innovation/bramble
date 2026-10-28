@@ -130,7 +130,8 @@ pub fn compact_amount(formatted: String, places: Option<u32>) -> String {
 }
 
 /// The hero's 24h line (`heroDelta`): the arrow and magnitude in the up/down hue, then the
-/// muted `<percent>% · 24h` window.
+/// muted `Portfolio price · <percent>% · 24h` window (`heroChange`), which says the figure is a
+/// price move rather than a change in holdings.
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct FiatDelta {
     pub down: bool,
@@ -207,7 +208,7 @@ pub fn portfolio_hero(
             if down { "↓" } else { "↑" },
             format_fiat(abs, prices.currency)
         ),
-        window_text: format!("{}% · 24h", to_fixed(percent, 2)),
+        window_text: format!("Portfolio price · {}% · 24h", to_fixed(percent, 2)),
     });
     PortfolioHero {
         total_text: Some(format_fiat(total, prices.currency)),
@@ -240,8 +241,9 @@ pub fn token_row_fiat(balance: TokenBalance, prices: PriceView) -> TokenRowFiat 
         .filter(|c| c.is_finite())
         .map(|c| ChangeBadge {
             up: c >= 0.0,
+            // The extension tags each row's figure as a price move (`token-change-win`).
             text: format!(
-                "{} {}%",
+                "{} {}% · 24h price",
                 if c >= 0.0 { "↑" } else { "↓" },
                 to_fixed(c.abs(), 2)
             ),
