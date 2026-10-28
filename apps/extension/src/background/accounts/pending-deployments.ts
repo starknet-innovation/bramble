@@ -68,7 +68,7 @@ type Entry = {
 };
 
 /** The account an entry belongs to. */
-export type PendingAccount = { readonly address: string; readonly networkId: StarknetNetworkId };
+type PendingAccount = { readonly address: string; readonly networkId: StarknetNetworkId };
 
 /** An entry's account with the class its deployment must put at the address. */
 export type AttemptAccount = PendingAccount & { readonly classHash: string };
@@ -202,7 +202,7 @@ type AttemptDeps = {
  * the expected class there, "undeployed" only for a confirmed empty address.
  * Another class, a failed read, or no class reader wired is "unknown".
  */
-export const accountOnChain = async (
+const accountOnChain = async (
   rpc: Pick<RuntimeRpc, "verifyAccountClassHash">,
   account: AttemptAccount,
   rpcUrls: readonly string[],

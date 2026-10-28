@@ -25,7 +25,7 @@ import {
 } from "@bramble/transactions/paymaster-http";
 
 /** JSON-RPC id this client sends and requires back. */
-export const SPONSORED_DEPLOY_RPC_ID = "bramble-strk20";
+const SPONSORED_DEPLOY_RPC_ID = "bramble-strk20";
 
 /**
  * One classified relay answer: its `result`, a refusal the relay stated for
@@ -46,10 +46,9 @@ const isRpcError = (value: unknown): boolean =>
 
 /**
  * Classifies one HTTP answer to a relay call; `broadcast` is true for the call
- * that can put a deploy on the wire. Exported for its tests; the transport
- * below is the only production caller.
+ * that can put a deploy on the wire.
  */
-export const classifySponsoredRelayAnswer = (
+const classifySponsoredRelayAnswer = (
   status: number,
   body: unknown,
   broadcast: boolean,
