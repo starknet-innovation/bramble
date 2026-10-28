@@ -8,6 +8,7 @@
  * this message ran: a dapp chooses the nonce, so another message may share it.
  */
 import { escapeHtml } from "@bramble/core/html";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { RelaySignature } from "@bramble/transactions/relay-signatures";
 import { icon } from "../../shared/icons";
 import { formatUtcClock, formatUtcDate } from "../../shared/timestamp";
@@ -54,6 +55,15 @@ export const relayRow = (relay: RelaySignature): string => {
   const meta = relay.status === "signed" && !relay.checkable ? "Not tracked" : META[relay.status];
   const deadline =
     relay.executeBefore === undefined ? "" : escapeHtml(when(relay.executeBefore * 1000));
+  const fee = relay.userFee;
+  let feeText = "";
+  if (fee) {
+    try {
+      feeText = `${formatTokenAmount(BigInt(fee.amount), fee.decimals)} ${fee.token}`;
+    } catch {
+      feeText = "";
+    }
+  }
   return `
   <li class="tx-row relay-row">
     <details class="disclosure tx-disclosure" data-disclosure="relay:${escapeHtml(relay.messageHash)}">
@@ -69,6 +79,7 @@ export const relayRow = (relay: RelaySignature): string => {
           ${detail("Calls", String(relay.callCount))}
           ${detail("Signed", escapeHtml(when(relay.signedAt)))}
           ${detail("Valid until", deadline)}
+          ${detail("Network fee", escapeHtml(feeText))}
           ${detail("Message hash", `<code class="tx-hash is-plain" title="${escapeHtml(relay.messageHash)}">${escapeHtml(relay.messageHash)}</code>`)}
         </dl>
       </div>

@@ -6,6 +6,7 @@ playwright-report/
 .playwright-cli/
 .impeccable/
 .snfoundry_cache/
+snfoundry.toml
 target/
 test-results/
 .dev-profile/

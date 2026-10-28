@@ -71,6 +71,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/core",
     "@bramble/starknet",
     "@bramble/store",
+    "@bramble/transactions",
     "@bramble/wallet-model",
     "@bramble/wallet-protocol",
   ],

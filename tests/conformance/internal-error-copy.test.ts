@@ -89,7 +89,9 @@ const SENSITIVE = new RegExp(
 // Already a sentence a reader can act on; shown as written by decision.
 const READER_SENTENCES = new Set([
   "A 2FA removal is already pending for this account",
+  "A sponsored deployment of this account may already be on its way. Check activity before trying again.",
   "Account already exists",
+  "Couldn't confirm whether this account is deployed. Check your connection and try again.",
   "Account deployment status is unknown. Check the account on-chain before retrying.",
   "Account is already deployed",
   "Account not found",
@@ -105,6 +107,7 @@ const READER_SENTENCES = new Set([
   "Enter a secure WSS relay URL with no spaces, quotes, angle brackets or backticks",
   "Guardian removal is still in its waiting period",
   "Host permission controls are unavailable in this browser",
+  "No account to import",
   "No RPC endpoint answered on this network's chain",
   "Nostr coordination requires a recovery-phrase wallet",
   "Private pool fee changed. Review the transaction again.",
@@ -137,12 +140,15 @@ const READER_SENTENCES = new Set([
   "Wallet already exists",
   "Your browser did not grant access to that explorer host",
   "Your browser did not grant access to that service host",
+  "This account's sponsored deployment was already sent and may still land. Add STRK to deploy it yourself.",
+  "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.",
   "Your browser did not grant access to those service hosts",
 ]);
 
 // Facts that pass the guard unreviewed: a check that failed or could not run,
 // or a device answer. Shown as written; reviewed copy may reword, not hide.
 const GUARDED_FACTS = new Set([
+  "Account deployment parameters are invalid",
   "Account deployment requires exactly one signature",
   "Account public key unavailable for the live signer check",
   "Argent account class hash is not a release this wallet recognizes",
@@ -217,6 +223,7 @@ const SCANNED_SENTENCES = new Set([
   "Deploy this account first (Settings → Deploy account).",
   "Not enough x",
   "The network fee was not reviewed. Nothing was submitted — review the transaction again.",
+  "Paying the network fee in another token is unavailable.",
   "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.",
   "The transaction could not be recorded before sending. Nothing was submitted — try again.",
   "The account deployment fee rose above the amount you reviewed. Nothing was submitted — review it again.",

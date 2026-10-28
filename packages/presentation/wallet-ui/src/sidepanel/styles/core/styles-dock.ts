@@ -50,7 +50,7 @@ export const DOCK_STYLES = `
     justify-content: center;
     min-height: 0;
     min-width: ${CONTROL.dockItem};
-    padding: 0 ${SPACE.sm};
+    padding: 0 ${SPACE.md};
     position: relative;
     transition:
       background ${MOTION.tabMs}ms ${MOTION.ease},

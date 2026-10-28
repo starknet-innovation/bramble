@@ -78,7 +78,17 @@ for (const [name, make] of logs) {
       const log = make(() => 1);
       await log.record(input({ nonce: "not a felt" }));
       await log.record(input({ callCount: -1 }));
+      await log.record(input({ userFee: { amount: "0", decimals: 6, token: "USDC" } }));
       expect(await log.list(scope)).toEqual([]);
+    });
+
+    test("keeps a signed fee on the row", async () => {
+      const log = make(() => 5_000);
+      const userFee = { amount: "1000", decimals: 6, token: "USDC" };
+      await log.record(input({ userFee }));
+      expect(await log.list(scope)).toEqual([
+        { ...input({ userFee }), signedAt: 5_000, status: "signed" },
+      ]);
     });
 
     test("cuts a long origin to its registrable end", async () => {

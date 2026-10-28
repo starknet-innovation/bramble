@@ -49,7 +49,7 @@ export const BASE_STYLES = `
     --bramble-warning-soft: color-mix(in srgb, var(--bramble-warning) 14%, var(--bramble-panel));
     --bramble-shadow: var(--bramble-elev-lg);
     --bramble-shadow-sm: var(--bramble-elev-sm);
-    /* Floating-dock footprint from the panel's bottom edge — the pill (a 44px
+    /* Floating-dock footprint from the panel's bottom edge — the pill (a 52px
        root plus its padding) and the gap beneath it — one source of truth for
        the dock-screen scroll clearance and the toast stack offset. */
     --bramble-dock-h: calc(${CONTROL.dockItem} + ${DOCK_PADDING} * 2 + ${DOCK_OFFSET});

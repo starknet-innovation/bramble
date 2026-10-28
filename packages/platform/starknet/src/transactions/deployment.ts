@@ -4,7 +4,10 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
+import {
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  XVERSE_ARGENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   isNonZeroStarkFieldElement,
@@ -82,6 +85,14 @@ const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
       }
     : {};
 
+// The Argent classes this wallet deploys: the pinned 0.4.0 release, and Xverse's
+// build of it (issue 734). Xverse's class is byte-identical to 0.4.0 apart from
+// its name constant, with the same `(owner: Signer, guardian: Option<Signer>)`
+// constructor, so a funded Xverse account deploys with the same calldata at its
+// own class. An explicit list of reviewed classes, never "any class with this
+// constructor shape".
+const DEPLOYABLE_ARGENT_CLASSES = [ARGENT_ACCOUNT_CONTRACT.classHash, XVERSE_ARGENT_CLASS_HASH];
+
 // The constructor arguments and candidate salts one family deploys with. Split
 // from accountDeployment so each family's rule reads on its own, and so a family
 // this wallet never deploys fails here rather than reaching the address check.
@@ -108,7 +119,7 @@ const deploymentInputs = (
     };
   }
   if (account.accountContractType === "argent") {
-    if (!sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)) {
+    if (!DEPLOYABLE_ARGENT_CLASSES.some((classHash) => sameFelt(account.classHash, classHash))) {
       throw new WalletError("Argent account class hash does not match the pinned release");
     }
     return {

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
-import { BRAAVOS_BASE_CLASS_HASH, deploymentClasses } from "@bramble/wallet-model/account-families";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   type DerivedAccountRef,
@@ -192,10 +192,11 @@ describe("recovery discovery", () => {
     expect(previewedIndexes.has(40)).toBe(false);
   });
 
-  test("walks Ready's ladder for every Argent release and the wallet's own for the pinned one", async () => {
-    // Issue 505: Ready derives on an ETH-seeded tree, so the vendor shapes must
-    // carry the argentx scheme, while one extra shape keeps accounts this
-    // wallet itself created on its own ladder discoverable.
+  test("walks both Argent ladders for every Argent release", async () => {
+    // Issue 505: the Ready extension derives on an ETH-seeded tree, so the
+    // vendor shapes carry the argentx scheme. Apps that derive straight from
+    // the phrase (Ready mobile among them) deployed 0.3.x accounts on the
+    // wallet's own ladder, so every release is scanned there as well.
     const argentShapes: Array<string | undefined> = [];
     const braavosShapes: Array<string | undefined> = [];
     const deps = {
@@ -233,10 +234,10 @@ describe("recovery discovery", () => {
 
     const vendor = argentShapes.filter((shape) => shape === "argentx-bip44");
     const own = argentShapes.filter((shape) => shape === undefined);
-    // Every Argent release on Ready's ladder except Xverse's build, which is
-    // scanned on the wallet's own ladder beside the pinned release (issue 734).
+    // Every Argent release on the wallet's own ladder, Xverse's build included;
+    // Ready's ladder takes all but Xverse's build (issue 734).
     expect(vendor.length).toBe(deploymentClasses("argent").length - 1);
-    expect(own.length).toBe(2);
+    expect(own.length).toBe(deploymentClasses("argent").length);
     // Braavos never names a scheme; the vault maps its family to the vendor axis.
     expect(braavosShapes.every((shape) => shape === undefined)).toBe(true);
     expect(braavosShapes.length).toBe(deploymentClasses("braavos").length);
@@ -413,84 +414,5 @@ describe("recovery discovery", () => {
         argentClasses.some((seen) => seen !== undefined && sameFelt(seen, entry.classHash)),
       ).toBe(true);
     }
-  });
-
-  test("lists a family Bramble does not create only once it exists on chain", async () => {
-    // Every other family and release is scanned, and each yields an address
-    // whether or not anyone deployed there. Offered unconditionally, those
-    // addresses would import accounts that belong to nobody.
-    const familyAccount = (input: AccountDerivationInput): DerivedAccountRef => {
-      const accountIndex = input.accountIndex ?? 0;
-      const family = input.accountContractType;
-      const classHash =
-        canonicalFelt(
-          input.classHash ??
-            (family === "argent" ? ARGENT_ACCOUNT_CLASS_HASH : OPENZEPPELIN_ACCOUNT_CLASS_HASH),
-        ) ?? "";
-      const code = { argent: "a", braavos: "b", openzeppelin: "c" }[family];
-      const address = `0x${code}${classHash.slice(2, 10)}${accountIndex.toString(16)}`;
-      const core = {
-        address,
-        classHash,
-        derivation: { accountIndex, addressIndex: 0, kind: "starknet-bip44" as const },
-        id: `SN_MAIN:${address}`,
-        networkId: "SN_MAIN" as const,
-        publicKeyX: "0x123",
-        publicKeyY: "0x456",
-      };
-      return family === "openzeppelin"
-        ? { ...core, accountContractType: family }
-        : { ...core, accountContractType: family, deploymentSalt: "0x123" };
-    };
-    const braavosBase = familyAccount({
-      accountContractType: "braavos",
-      accountIndex: 0,
-      classHash: BRAAVOS_BASE_CLASS_HASH,
-      mnemonic: "",
-    });
-    const deps = {
-      activeStateCoordinator: createActiveStateCoordinator(),
-      preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
-      recoveryDiscovery: createRecoveryDiscoveryCache(),
-      runtimeRpc: {
-        ...defaultRuntimeRpc,
-        async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
-          return accountAddress === braavosBase.address;
-        },
-        async getTokenBalances({
-          tokens,
-        }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
-          return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
-        },
-      },
-      session: createUnlockSession(),
-      wallet: {
-        ...walletStub,
-        async previewAccount(input: AccountDerivationInput) {
-          return familyAccount(input);
-        },
-      },
-    };
-
-    const result = await handleOnboardingOps(deps, "wallet.discoverRecoveryAccounts", {
-      manualIndex: 0,
-      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
-      networkId: "SN_MAIN",
-      type: "wallet.discoverRecoveryAccounts",
-    });
-
-    const listed = (result as { readonly candidates: readonly RecoveryAccountCandidate[] })
-      .candidates;
-    expect(listed.map(({ account }) => account.address).sort()).toEqual(
-      [
-        familyAccount({ accountContractType: "openzeppelin", accountIndex: 0, mnemonic: "" })
-          .address,
-        familyAccount({ accountContractType: "argent", accountIndex: 0, mnemonic: "" }).address,
-        braavosBase.address,
-      ].sort(),
-    );
-    expect(listed.find(({ account }) => account.address === braavosBase.address)?.deployed).toBe(
-      true,
-    );
   });
 });

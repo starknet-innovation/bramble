@@ -1,5 +1,6 @@
 {
   "name": "@bramble/privacy",
+  "description": "STRK20 private balances: schemas, the official SDK adapter, note discovery and proving, registration, recipient policy, preparation and proof-boundary submission.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -27,7 +28,8 @@
     "./relay-claim-slots": "./src/policy/relay-claim-slots.ts",
     "./service": "./src/service.ts",
     "./shadow-account-copy": "./src/policy/shadow-account-copy.ts",
-    "./shadow-account-refusals": "./src/policy/shadow-account-refusals.ts"
+    "./shadow-account-refusals": "./src/policy/shadow-account-refusals.ts",
+    "./sponsored-deploy": "./src/paymaster/sponsored-deploy.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",
@@ -38,6 +40,7 @@
     "@bramble/core": "workspace:*",
     "@bramble/starknet": "workspace:*",
     "@bramble/store": "workspace:*",
+    "@bramble/transactions": "workspace:*",
     "@bramble/wallet-model": "workspace:*",
     "@bramble/wallet-protocol": "workspace:*",
     "starknet": "10.8.0"
