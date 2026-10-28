@@ -199,6 +199,76 @@
       },
       {
         "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "p@ssw0rd2024"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "1etmein!"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "!!monkey12"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "abcabcabc"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "qwertyuiop"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "zyxwvuts"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "Dragon$$"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "Shadow_99"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "kestrel-umber-quartz"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "Mx7#qLp2!vR9"
+      },
+      {
+        "acceptable": true,
         "hint": "Strong",
         "level": "strong",
         "ratio": 1,
