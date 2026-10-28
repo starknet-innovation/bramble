@@ -39,6 +39,15 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   {
+    // Ready-key discovery carries the raw key and answers public rows only.
+    message: {
+      networkId: "SN_MAIN",
+      privateKey: SECRET_PRIVATE_KEY,
+      type: "wallet.discoverReadyKeyAccounts",
+    },
+    sender: extensionSender,
+  },
+  {
     message: {
       mnemonic: SECRET_MNEMONIC,
       networkId: "SN_MAIN",
@@ -58,6 +67,26 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
       networkId: "SN_MAIN",
       selections: [{ accountContractType: "openzeppelin", accountIndex: 0 }],
       type: "wallet.importOwnAccounts",
+    },
+    sender: extensionSender,
+  },
+  // Import by address (issue 398): the phrase-bearing lookup carries the
+  // phrase, and the own-phrase lookup reaches a vault read; both responses are
+  // scanned for secret material.
+  {
+    message: {
+      address: account.address,
+      mnemonic: SECRET_MNEMONIC,
+      networkId: "SN_MAIN",
+      type: "wallet.findRecoveryAccountByAddress",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      address: account.address,
+      networkId: "SN_MAIN",
+      type: "wallet.findOwnAccountByAddress",
     },
     sender: extensionSender,
   },

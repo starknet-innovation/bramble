@@ -7,6 +7,7 @@ import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { handleApprovalDecision } from "../approvals/approval-decisions";
 import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import { handleSidePanelNoticeOps } from "../approvals/side-panel-notice-ops";
 import { handleLedgerOps } from "../ledger/ledger-ops";
 import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
 import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
@@ -48,6 +49,7 @@ import {
   readTypeOnlyInput,
   readUnlockInput,
 } from "./message-inputs";
+import { handleDiscoverReadyKeyAccounts } from "./ready-key-handlers";
 import {
   type ExtensionIdentity,
   isClaimedSenderOrigin,
@@ -403,6 +405,7 @@ const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleOriginOps(ctx, messageType, message),
   (ctx, messageType, message) => handleTokenOps(ctx, messageType, message),
   handleAccountCreationOps,
+  handleDiscoverReadyKeyAccounts,
   (ctx, messageType, message) => handleApprovalDecision(ctx, messageType, message),
   handleGenerateMnemonic,
   (ctx, messageType, message) => handleOnboardingOps(ctx, messageType, message),
@@ -410,6 +413,8 @@ const HANDLERS: readonly RouterHandler[] = [
   handleGetGrantedAccounts,
   handleDiagnostics,
   async (ctx, messageType, message) => handleUpdateOps(ctx.updates, messageType, message),
+  (ctx, messageType, message, sender) =>
+    handleSidePanelNoticeOps(ctx.sidePanelLearning, messageType, message, sender),
   handlePendingApprovals,
   handleRequestAccounts,
   handleSetActiveAccount,
