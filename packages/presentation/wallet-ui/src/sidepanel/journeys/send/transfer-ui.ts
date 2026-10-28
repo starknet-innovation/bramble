@@ -57,6 +57,8 @@ const EMPTY_BALANCES: readonly TokenBalance[] = [];
 export type TransferUiDeps = {
   readonly app: Element | null;
   readonly back?: () => void;
+  /** Overrides the shield STRK-shortfall Confirm policy; tests only (issue 665). */
+  readonly blockShieldStrkShort?: boolean;
   readonly confirmationDelaysMs?: readonly number[];
   readonly navigate?: (view: TransferExitView) => void;
   /** Invalidates the cached private balance once a private send is accepted. */
@@ -382,7 +384,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         void preparing.then(
           (preparation) => {
             if (epoch !== transferEpoch) return;
-            transferState = preparedState(preparation, fields, key, deps.publicBalances?.());
+            transferState = preparedState(preparation, fields, key, deps);
             repaintActiveTransfer?.();
           },
           (error: unknown) => {
