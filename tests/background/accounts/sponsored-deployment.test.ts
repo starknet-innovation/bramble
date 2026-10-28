@@ -139,6 +139,30 @@ describe("sponsored deploy submission", () => {
     expect(sponsor.calls).toEqual(["paymaster_buildTransaction", "paymaster_executeTransaction"]);
   });
 
+  const unclear: readonly [string, () => Response][] = [
+    ["a null error", () => Response.json({ error: null, id: "bramble-strk20", jsonrpc: "2.0" })],
+    ["a bare 4xx", () => new Response("forbidden", { status: 403 })],
+    [
+      "an error beside a result",
+      () =>
+        Response.json({
+          error: { code: 163, message: "no" },
+          id: "bramble-strk20",
+          jsonrpc: "2.0",
+          result: { transaction_hash: "0x5ab" },
+        }),
+    ],
+  ];
+  for (const [name, answer] of unclear) {
+    test(`${name} on the broadcast is status unknown and keeps the hold`, async () => {
+      const { activity, deps, pending } = await harness({ relay: relay(answer) });
+      expect(await submit(deps)).toMatchObject({ submissionUnknown: true });
+      expect(pending.entry(ozAccount)).toBeDefined();
+      expect(await activity.list()).toEqual([]);
+      expect(await submit(deps)).toEqual({ error: DEPLOYMENT_MAY_BE_ON_ITS_WAY });
+    });
+  }
+
   test("an accepted deploy also holds the account until the chain shows it deployed", async () => {
     const sponsor = relay(accepted);
     const { chain, deps, pending } = await harness({ relay: sponsor });

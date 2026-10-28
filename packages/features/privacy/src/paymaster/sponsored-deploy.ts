@@ -15,7 +15,7 @@
  * The relay URL is wallet-configured and off on every network until the
  * gateway's sponsored route ships and its budget and abuse limits are signed
  * off. Everything the relay answers is untrusted; transport and lost-reply
- * handling are the shared hardened ones in `./paymaster-rpc`.
+ * classification live in `./sponsored-deploy-rpc`.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -35,7 +35,8 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { hash } from "starknet";
-import { BROADCAST_PAYMASTER_METHOD, rpc } from "./paymaster-rpc";
+import { BROADCAST_PAYMASTER_METHOD } from "./paymaster-rpc";
+import { postSponsoredRelay } from "./sponsored-deploy-rpc";
 
 /** The injected relay transport, re-exported for background callers and tests. */
 export type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
@@ -55,7 +56,10 @@ export const SPONSORED_DEPLOY_UNSUPPORTED =
 export const SPONSORED_DEPLOY_UNREACHABLE =
   "Couldn't reach the sponsor. Nothing was sent — try again.";
 
-/** The relay explicitly refused: a JSON-RPC error object or an HTTP 4xx. */
+/**
+ * The relay explicitly refused: its own clean JSON-RPC error, or a 4xx on a
+ * quote. Nothing was sent.
+ */
 export class SponsoredDeployRefusedError extends WalletError {
   constructor() {
     super(SPONSORED_DEPLOY_REFUSED);
@@ -230,38 +234,6 @@ const isInformationalFee = (value: unknown): boolean =>
     hasOnlyKnownKeys(value, FEE_KEYS) &&
     Object.values(value).every((entry) => typeof entry === "string" && isStarkFieldElement(entry)));
 
-const MAX_REFUSAL_BYTES = 64 * 1024;
-
-// Whether the relay's own answer was a refusal: an HTTP 4xx, or a 2xx carrying
-// a JSON-RPC error object. Read from a clone, bounded, after the hardened
-// transport has already failed the request; anything unreadable is not a
-// refusal.
-const isExplicitRefusal = async (response: Response | undefined): Promise<boolean> => {
-  if (!response) return false;
-  if (response.status >= 400 && response.status < 500) return true;
-  const reader = response.ok ? response.body?.getReader() : undefined;
-  if (!reader) return false;
-  const decoder = new TextDecoder();
-  let text = "";
-  let length = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      length += value.byteLength;
-      if (length > MAX_REFUSAL_BYTES) {
-        await reader.cancel();
-        return false;
-      }
-      text += decoder.decode(value, { stream: true });
-    }
-    const body: unknown = JSON.parse(text + decoder.decode());
-    return isRecord(body) && isRecord(body["error"]);
-  } catch {
-    return false;
-  }
-};
-
 /** A sponsor's acceptance of one exact deployment; nothing is in flight. */
 export type SponsoredDeployQuote = { readonly deployment: SponsoredDeploymentData };
 
@@ -269,33 +241,24 @@ export type SponsoredDeployQuote = { readonly deployment: SponsoredDeploymentDat
  * Asks the relay to sponsor `deployment`. Resolves with the wallet's own frozen
  * copy only when the relay echoes it exactly under sponsored parameters. Every
  * failure is determinate, since a quote never broadcasts: a
- * {@link SponsoredDeployRefusedError} only for an explicit refusal (a JSON-RPC
- * error object or an HTTP 4xx), otherwise a {@link SponsoredDeployUnavailableError}.
+ * {@link SponsoredDeployRefusedError} only for the relay's own clean JSON-RPC
+ * error or a 4xx, otherwise a {@link SponsoredDeployUnavailableError}.
  */
 export const quoteSponsoredDeploy = async (input: {
   readonly config: SponsoredDeployConfig;
   readonly deployment: SponsoredDeploymentData;
   readonly http?: PaymasterHttp;
 }): Promise<SponsoredDeployQuote> => {
-  const http = input.http ?? fetch;
-  let answered: Response | undefined;
-  let result: unknown;
-  try {
-    result = await rpc(
-      async (url, init) => {
-        const response = await http(url, init);
-        answered = response.clone();
-        return response;
-      },
-      input.config.url,
-      "paymaster_buildTransaction",
-      { parameters: PARAMETERS, transaction: { deployment: input.deployment, type: "deploy" } },
-    );
-  } catch {
-    throw (await isExplicitRefusal(answered))
-      ? new SponsoredDeployRefusedError()
-      : new SponsoredDeployUnavailableError();
-  }
+  const answer = await postSponsoredRelay(
+    input.http ?? fetch,
+    input.config.url,
+    "paymaster_buildTransaction",
+    { parameters: PARAMETERS, transaction: { deployment: input.deployment, type: "deploy" } },
+    false,
+  );
+  if (answer.kind === "refused") throw new SponsoredDeployRefusedError();
+  if (answer.kind === "lost") throw new SponsoredDeployUnavailableError();
+  const result = answer.result;
   if (
     !isRecord(result) ||
     !hasOnlyKnownKeys(result, ["deployment", "fee", "parameters", "type"]) ||
@@ -310,12 +273,13 @@ export const quoteSponsoredDeploy = async (input: {
 };
 
 /**
- * Broadcasts a quoted sponsored deployment. A refusal the relay states, or a
- * request refused before it left (`isAuthorized` false: "wallet locked"), is a
- * plain error with nothing in flight. A reply the wallet could not read, or a
- * result without a usable hash, is an {@link IndeterminateRpcWriteError}: the
- * relay may already have deployed, so the caller must hold its state and never
- * retry blind.
+ * Broadcasts a quoted sponsored deployment. Only two failures are determinate:
+ * a request refused before it left (`isAuthorized` false: "wallet locked") and
+ * a clean JSON-RPC refusal (see `./sponsored-deploy-rpc`), a
+ * {@link SponsoredDeployRefusedError}. Every other answer, including a result
+ * without a usable hash, is an {@link IndeterminateRpcWriteError}: the relay
+ * may already have deployed, so the caller must hold its state and never retry
+ * blind. A returned hash is the relay's claim, not proof of this deployment.
  */
 export const submitSponsoredDeploy = async (input: {
   readonly config: SponsoredDeployConfig;
@@ -326,17 +290,17 @@ export const submitSponsoredDeploy = async (input: {
   if (!input.isAuthorized()) {
     throw new WalletError("wallet locked");
   }
-  let result: unknown;
-  try {
-    result = await rpc(input.http ?? fetch, input.config.url, BROADCAST_PAYMASTER_METHOD, {
-      parameters: PARAMETERS,
-      transaction: { deployment: input.quote.deployment, type: "deploy" },
-    });
-  } catch (error) {
-    throw error instanceof IndeterminateRpcWriteError ? error : new SponsoredDeployRefusedError();
-  }
-  // The relay answered with a result, so it accepted the deploy; without a
-  // usable hash the wallet has no handle on it, which is status unknown.
+  const answer = await postSponsoredRelay(
+    input.http ?? fetch,
+    input.config.url,
+    BROADCAST_PAYMASTER_METHOD,
+    { parameters: PARAMETERS, transaction: { deployment: input.quote.deployment, type: "deploy" } },
+    true,
+  );
+  if (answer.kind === "refused") throw new SponsoredDeployRefusedError();
+  const result = answer.kind === "result" ? answer.result : undefined;
+  // Anything but a stated refusal may have deployed. A result without a usable
+  // hash leaves the wallet no handle on it either: status unknown.
   if (
     !isRecord(result) ||
     typeof result["transaction_hash"] !== "string" ||

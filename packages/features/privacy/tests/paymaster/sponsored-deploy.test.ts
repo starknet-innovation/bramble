@@ -251,15 +251,65 @@ describe("sponsored deploy submission", () => {
     }
   });
 
-  test("a refusal the relay states is determinate, so nothing is held open", async () => {
-    const refusal = submitSponsoredDeploy({
-      config,
-      http: async () => new Response("forbidden", { status: 403 }),
-      isAuthorized: () => true,
-      quote: quote(),
-    });
-    await expect(refusal).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
-    await expect(refusal).rejects.toBeInstanceOf(WalletError);
-    await expect(refusal).rejects.not.toBeInstanceOf(IndeterminateRpcWriteError);
+  const envelope =
+    (body: Record<string, unknown>, status = 200) =>
+    async (): Promise<Response> =>
+      new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0", ...body }), { status });
+  const REFUSAL = { error: { code: 163, message: "sponsorship limit reached" } };
+
+  test("only a clean JSON-RPC error is a determinate refusal, so nothing is held open", async () => {
+    for (const http of [envelope(REFUSAL), envelope(REFUSAL, 403)]) {
+      const refusal = submitSponsoredDeploy({
+        config,
+        http,
+        isAuthorized: () => true,
+        quote: quote(),
+      });
+      await expect(refusal).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
+      await expect(refusal).rejects.toBeInstanceOf(WalletError);
+      await expect(refusal).rejects.not.toBeInstanceOf(IndeterminateRpcWriteError);
+    }
   });
+
+  const ambiguous: readonly [string, () => Promise<Response>][] = [
+    ["a null error", envelope({ error: null })],
+    ["a string error", envelope({ error: "rejected" })],
+    ["an error without a code", envelope({ error: { message: "rejected" } })],
+    ["an error with a non-integer code", envelope({ error: { code: "163" } })],
+    ["an error beside a result", envelope({ ...REFUSAL, result: { transaction_hash: "0xabc" } })],
+    [
+      "an error under another id",
+      async () => new Response(JSON.stringify({ ...REFUSAL, id: 7, jsonrpc: "2.0" })),
+    ],
+    [
+      "an error without jsonrpc 2.0",
+      async () => new Response(JSON.stringify({ ...REFUSAL, id: "bramble-strk20" })),
+    ],
+    ["a bare 4xx", async () => new Response("forbidden", { status: 403 })],
+    ["a 4xx carrying a result", envelope({ result: { transaction_hash: "0xabc" } }, 400)],
+    ["a clean error on a 5xx", envelope(REFUSAL, 503)],
+    ["an oversized body", envelope({ ...REFUSAL, padding: "x".repeat(1_100_000) })],
+    ["an empty body", async () => new Response(null)],
+    [
+      "a deadline",
+      async () => {
+        throw new DOMException("deadline", "TimeoutError");
+      },
+    ],
+    ["a result that is not an object", envelope({ result: "0xabc" })],
+    ["a non-felt hash", envelope({ result: { transaction_hash: "abc" } })],
+  ];
+
+  for (const [name, http] of ambiguous) {
+    test(`${name} on a broadcast is status unknown, never "nothing was sent"`, async () => {
+      const sending = submitSponsoredDeploy({
+        config,
+        http,
+        isAuthorized: () => true,
+        quote: quote(),
+      });
+      await expect(sending).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
+      await expect(sending).rejects.not.toThrow(SPONSORED_DEPLOY_REFUSED);
+    });
+  }
 });
