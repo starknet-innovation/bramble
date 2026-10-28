@@ -10,7 +10,9 @@
  * malformed numeric input yields "unknown" — never a fabricated verdict, and
  * callers must never block on it.
  */
-import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { isBaseUnitsAmount } from "@bramble/core/json";
+import { type FeeEstimate, reviewedFeeCeiling } from "@bramble/starknet/fee-bounds";
+import { isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 /**
  * Affordability verdict. "unknown" means no claim could be made and must be
@@ -24,6 +26,49 @@ const asBigInt = (value: string): bigint | null => {
   } catch {
     return null;
   }
+};
+
+// Strict base units: a canonical decimal (the shared amount grammar) or a
+// lowercase-hex field element, as a pool fee is quoted. Anything else, blank
+// and whitespace included, is no figure at all — `BigInt("")` would read 0.
+const strictBaseUnits = (value: string | null): bigint | null =>
+  value !== null && (isBaseUnitsAmount(value) || isStarkFieldElement(value)) ? BigInt(value) : null;
+
+/**
+ * What a shield needs from the public STRK balance, and how much of it is
+ * missing (issue 665). `need` is the pool fee (`poolFeeFri`), the most the
+ * network fee may be signed for, and — only when the shielded token is STRK
+ * (`shieldsStrk`) — the amount (`amount`, raw STRK base units).
+ *
+ * The network share is {@link reviewedFeeCeiling} of the reviewed FRI fee. The
+ * submission refuses, before signing, any resource bounds whose
+ * `max_amount x max_price_per_unit` spend exceeds that ceiling, on every speed
+ * and with a zero tip (`@bramble/starknet/rpc-submit`,
+ * `tests/starknet/rpc-submit-fee-bounds.test.ts`), so the signed maximum is
+ * never above it and "up to" is true. `short` is how far `balance` (raw STRK
+ * base units) falls below `need`, or `0n` when it covers it.
+ *
+ * Fails open: a missing, blank or malformed balance or pool fee, a non-FRI or
+ * malformed network fee, or a STRK shield without a readable amount yields
+ * `null` — no numeric claim, never a fabricated shortfall. Never throws.
+ */
+export const shieldStrkNeed = (input: {
+  readonly amount: bigint | null;
+  readonly balance: string | null;
+  readonly networkFee: FeeEstimate | null;
+  readonly poolFeeFri: string | null;
+  readonly shieldsStrk: boolean;
+}): { readonly need: bigint; readonly short: bigint } | null => {
+  const balance =
+    input.balance !== null && isBaseUnitsAmount(input.balance) ? BigInt(input.balance) : null;
+  const poolFee = strictBaseUnits(input.poolFeeFri);
+  const network = input.networkFee?.unit === "FRI" ? reviewedFeeCeiling(input.networkFee) : null;
+  const amount = input.shieldsStrk ? input.amount : 0n;
+  if (balance === null || poolFee === null || network === null || amount === null || amount < 0n) {
+    return null;
+  }
+  const need = poolFee + network + amount;
+  return { need, short: need > balance ? need - balance : 0n };
 };
 
 /**
